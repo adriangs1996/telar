@@ -2,7 +2,7 @@
 
 const config_model = @import("model.zig");
 const default_bindings = @import("default_bindings.zig");
-const generation = @import("generation.zig");
+const generation = @import("generation_support.zig");
 const loader = @import("loader.zig");
 const vm = @import("telar-lua");
 

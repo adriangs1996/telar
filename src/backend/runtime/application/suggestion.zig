@@ -24,11 +24,7 @@ const instructions =
     "no quotes around the command, no explanation. If one command cannot fulfil the request, " ++
     "reply with one line starting with '#' that says why.\n";
 
-pub const Context = struct {
-    cwd: []const u8,
-    screen: []const u8,
-    request: []const u8,
-};
+pub const Context = @import("Context.zig");
 
 /// Writes the complete engine prompt into `buffer`. The screen is
 /// truncated from the front so the newest rows survive; the request is

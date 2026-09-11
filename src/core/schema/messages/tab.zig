@@ -10,16 +10,16 @@ const tags = @import("tags.zig");
 
 const ClientTag = tags.ClientTag;
 const ServerTag = tags.ServerTag;
-const RequestId = id.RequestId;
-const PaneId = id.PaneId;
-const WorkspaceId = id.WorkspaceId;
-const TerminalSize = types.TerminalSize;
-const WorkspaceLocation = types.WorkspaceLocation;
-const TabLocation = types.TabLocation;
-const Launch = types.Launch;
-const TabMoveDirection = types.TabMoveDirection;
-const PaneDescriptor = types.PaneDescriptor;
-const LaunchView = launch_mod.LaunchView;
+pub const RequestId = id.RequestId;
+pub const PaneId = id.PaneId;
+pub const WorkspaceId = id.WorkspaceId;
+pub const TerminalSize = types.TerminalSize;
+pub const WorkspaceLocation = types.WorkspaceLocation;
+pub const TabLocation = types.TabLocation;
+pub const Launch = types.Launch;
+pub const TabMoveDirection = types.TabMoveDirection;
+pub const PaneDescriptor = types.PaneDescriptor;
+pub const LaunchView = launch_mod.LaunchView;
 const encodeDerived = codec.encodeDerived;
 const validateRequestId = codec.validateRequestId;
 const validatePaneId = codec.validatePaneId;
@@ -30,122 +30,33 @@ const encodeTabLocation = codec.encodeTabLocation;
 const decodeTabLocation = codec.decodeTabLocation;
 const encodeWorkspaceLocation = codec.encodeWorkspaceLocation;
 const decodeWorkspaceLocation = codec.decodeWorkspaceLocation;
-const decodePaneLifecycle = codec.decodePaneLifecycle;
+pub const decodePaneLifecycle = codec.decodePaneLifecycle;
 
-pub const RequestTabSnapshot = struct {
-    request_id: RequestId,
-    location: TabLocation,
-};
+pub const RequestTabSnapshot = @import("RequestTabSnapshot.zig");
 
-pub const CreateTab = struct {
-    request_id: RequestId,
-    workspace: WorkspaceLocation,
-    label: []const u8 = "",
-    size: TerminalSize,
-    launch: Launch,
-};
+pub const CreateTab = @import("CreateTab.zig");
 
-pub const CreateTabView = struct {
-    request_id: RequestId,
-    workspace: WorkspaceLocation,
-    label: []const u8,
-    size: TerminalSize,
-    launch: LaunchView,
-};
+pub const CreateTabView = @import("CreateTabView.zig");
 
-pub const RenameTab = struct {
-    request_id: RequestId,
-    location: TabLocation,
-    label: []const u8,
-};
+pub const RenameTab = @import("RenameTab.zig");
 
-pub const CloseTab = struct {
-    request_id: RequestId,
-    location: TabLocation,
-};
+pub const CloseTab = @import("CloseTab.zig");
 
-pub const MoveTab = struct {
-    request_id: RequestId,
-    location: TabLocation,
-    direction: TabMoveDirection,
-};
+pub const MoveTab = @import("MoveTab.zig");
 
-pub const TabCreated = struct {
-    request_id: RequestId,
-    location: TabLocation,
-    position: u16,
-    label: []const u8,
-    root_pane_id: PaneId,
-};
+pub const TabCreated = @import("TabCreated.zig");
 
-pub const TabRenamed = struct {
-    request_id: RequestId,
-    location: TabLocation,
-    label: []const u8,
-};
+pub const TabRenamed = @import("TabRenamed.zig");
 
-pub const TabClosed = struct {
-    /// `.none` identifies a lifecycle event emitted by the runtime rather than
-    /// the response to an explicit close request.
-    request_id: RequestId,
-    location: TabLocation,
-    workspace_closed: bool,
-    /// Canonical predecessor in the runtime's workspace order. Present only
-    /// when this close removed the workspace and another workspace survives.
-    previous_workspace: ?WorkspaceId = null,
+pub const TabClosed = @import("TabClosed.zig");
 
-    pub const wire_allow_zero_request_id = true;
+pub const TabMoved = @import("TabMoved.zig");
 
-    pub fn validateWire(message: TabClosed) !void {
-        try workspace.validateWorkspaceClosure(
-            message.location.workspace,
-            message.workspace_closed,
-            message.previous_workspace,
-        );
-    }
-};
+pub const TabSnapshot = @import("TabSnapshot.zig");
 
-pub const TabMoved = struct {
-    request_id: RequestId,
-    location: TabLocation,
-    position: u16,
-};
+pub const TabSnapshotView = @import("TabSnapshotView.zig");
 
-pub const TabSnapshot = struct {
-    request_id: RequestId,
-    location: TabLocation,
-    panes: []const PaneDescriptor,
-};
-
-pub const TabSnapshotView = struct {
-    request_id: RequestId,
-    location: TabLocation,
-    pane_count: u16,
-    encoded_panes: []const u8,
-
-    pub fn panes(snapshot: TabSnapshotView) PaneDescriptorIterator {
-        return .{
-            .decoder = .init(snapshot.encoded_panes),
-            .remaining = snapshot.pane_count,
-        };
-    }
-};
-
-pub const PaneDescriptorIterator = struct {
-    decoder: wire.Decoder,
-    remaining: u16,
-
-    pub fn next(iterator: *PaneDescriptorIterator) !?PaneDescriptor {
-        if (iterator.remaining == 0) {
-            return null;
-        }
-        iterator.remaining -= 1;
-        return .{
-            .pane_id = try id.pane(try iterator.decoder.readInt(u64)),
-            .lifecycle = try decodePaneLifecycle(try iterator.decoder.readByte()),
-        };
-    }
-};
+pub const PaneDescriptorIterator = @import("PaneDescriptorIterator.zig");
 
 pub fn encodeRequestTabSnapshot(buffer: []u8, message: RequestTabSnapshot) ![]const u8 {
     return encodeDerived(

@@ -10,20 +10,16 @@ const copy_modes = @import("copy_modes.zig");
 const clock = @import("telar-client").resources.clock;
 const pane_viewports = @import("../panes/pane_viewports.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const mouse_protocol = input_capability.mouse_protocol;
-const multiplexer = workspace_capability.multiplexer;
+pub const multiplexer = workspace_capability.multiplexer;
 const pane_mouse = input_application.pane_mouse;
-const ui = core.ui;
+pub const ui = core.ui;
 
 pub const Command = pane_mouse.Command;
 pub const Outcome = pane_mouse.Outcome;
 
-const Context = struct {
-    client: *Client,
-    model: *multiplexer.Model,
-    area: ui.Rect,
-};
+const Context = @import("PaneMouseInputsContext.zig");
 
 /// Resolves a pointer event or focused scroll without exposing pane storage
 /// or child mouse modes to the caller.

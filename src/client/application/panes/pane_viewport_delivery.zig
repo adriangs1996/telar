@@ -4,132 +4,26 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const Effects = struct {
-    context: *anyopaque,
-    set_graphics_visible: *const fn (*anyopaque, schema.PaneId, bool) anyerror!void,
-    deliver_viewport: *const fn (*anyopaque, schema.SetPaneViewport) anyerror!void,
-};
+pub const Effects = @import("PaneViewportDeliveryEffects.zig");
 
-pub const DeliverPaneViewportHandler = struct {
-    model: *const client_model.Model,
-    effects: Effects,
+pub const DeliverPaneViewportHandler = @import("DeliverPaneViewportHandler.zig");
 
-    /// Validates one exact viewport commit before synchronizing graphics and
-    /// then the runtime attachment.
-    ///
-    /// ```zig
-    /// try handler.execute(change);
-    /// ```
-    pub fn execute(handler: *const DeliverPaneViewportHandler, change: client_model.PaneViewportChange) !void {
-        const active = handler.model.workspace.activeConst() orelse return error.StalePaneViewport;
-        const pane = active.model.findConst(change.pane_id) orelse return error.StalePaneViewport;
-        if (!pane.attached or
-            pane.scroll.offset != change.offset or
-            pane.scroll.atBottom(pane.buffer.h) != change.at_bottom or
-            handler.model.version().viewport != change.viewport_revision)
-        {
-            return error.StalePaneViewport;
-        }
-
-        try handler.effects.set_graphics_visible(
-            handler.effects.context,
-            change.pane_id,
-            change.at_bottom,
-        );
-        try handler.effects.deliver_viewport(handler.effects.context, .{
-            .pane_id = change.pane_id,
-            .offset = change.offset,
-        });
-    }
-};
-
-const Event = enum {
+pub const Event = enum {
     graphics,
     runtime,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     graphics,
     runtime,
 };
 
-const TestingModel = struct {
-    model: *client_model.Model,
-    pane_id: schema.PaneId,
+const TestingModel = @import("PaneViewportDeliveryTestingModel.zig");
 
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-        const pane_id: schema.PaneId = @enumFromInt(1);
-        try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = .{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(1),
-        }, .size = .{ .cols = 10, .rows = 5 } });
-        model.workspace.findPane(pane_id).?.scroll = .{ .total_rows = 20, .offset = 10 };
-
-        return .{ .model = model, .pane_id = pane_id };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-
-    fn commitBottom(testing: *TestingModel) client_model.PaneViewportChange {
-        return testing.model.setPaneViewport(.{
-            .pane_id = testing.pane_id,
-            .target = .bottom,
-        }).?;
-    }
-};
-
-const EffectsCapture = struct {
-    events: [2]Event = undefined,
-    event_count: usize = 0,
-    graphics_pane: ?schema.PaneId = null,
-    visible: ?bool = null,
-    viewport: ?schema.SetPaneViewport = null,
-    failure: Failure = .none,
-
-    fn effects(capture: *EffectsCapture) Effects {
-        return .{
-            .context = capture,
-            .set_graphics_visible = setGraphicsVisible,
-            .deliver_viewport = deliverViewport,
-        };
-    }
-
-    fn setGraphicsVisible(context: *anyopaque, pane_id: schema.PaneId, visible: bool) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.graphics);
-        capture.graphics_pane = pane_id;
-        capture.visible = visible;
-
-        if (capture.failure == .graphics) {
-            return error.GraphicsDeliveryFailed;
-        }
-    }
-
-    fn deliverViewport(context: *anyopaque, viewport: schema.SetPaneViewport) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.runtime);
-        capture.viewport = viewport;
-
-        if (capture.failure == .runtime) {
-            return error.RuntimeDeliveryFailed;
-        }
-    }
-
-    fn append(capture: *EffectsCapture, event: Event) void {
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-};
+const EffectsCapture = @import("PaneViewportDeliveryEffectsCapture.zig");
 
 fn expectStale(handler: *const DeliverPaneViewportHandler, capture: *EffectsCapture, change: client_model.PaneViewportChange) !void {
     try std.testing.expectError(error.StalePaneViewport, handler.execute(change));

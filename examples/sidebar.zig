@@ -3,12 +3,12 @@ const Io = std.Io;
 const File = std.Io.File;
 
 const telar = @import("telar-frontend");
-const ui = telar.ui;
-const term = telar.term;
-const pace = telar.pace;
+pub const ui = telar.ui;
+pub const term = telar.term;
+pub const pace = telar.pace;
 const platform = telar.platform;
-const edit = telar.edit;
-const sel = telar.select;
+pub const edit = telar.edit;
+pub const sel = telar.select;
 
 // herdr's task sidebar, drawn without a widget framework.
 //
@@ -46,7 +46,7 @@ const red: ui.Color = .{ .rgb = .{ 0xff, 0x80, 0x80 } };
 // Model
 // ---------------------------------------------------------------------------
 
-const Section = enum {
+pub const Section = enum {
     needs_you,
     ready,
     running,
@@ -71,7 +71,7 @@ const Section = enum {
 };
 
 /// The call to action on the right of a task title.
-const Chip = enum {
+pub const Chip = enum {
     decide,
     debug,
     review,
@@ -110,29 +110,15 @@ const Chip = enum {
     }
 };
 
-const Status = enum { waiting, failed, ready, working, queued };
+pub const Status = enum { waiting, failed, ready, working, queued };
 
-const Origin = enum { agent, shell, host };
+pub const Origin = enum { agent, shell, host };
 
-const Task = struct {
-    title: []const u8,
-    chip: Chip,
-    /// Where the work is: a repository and branch, or a machine and a path.
-    place: []const u8,
-    place_detail: []const u8,
-    origin: Origin,
-    status: Status,
-    status_detail: []const u8,
-    /// The tool doing the work: `claude/opus`, `shell/vitest`.
-    tool: []const u8,
-    /// What it is saying about itself.
-    note: []const u8,
-    section: Section,
-};
+const Task = @import("Task.zig");
 
-const Tab = struct { key: u8, name: []const u8, count: u16 };
+const Tab = @import("Tab.zig");
 
-const Hint = struct { key: []const u8, label: []const u8 };
+const Hint = @import("Hint.zig");
 
 // ---------------------------------------------------------------------------
 // Hit testing
@@ -140,7 +126,7 @@ const Hint = struct { key: []const u8, label: []const u8 };
 
 /// What clicking somewhere means. Deliberately phrased in terms of the model
 /// and not the layout: `select_task`, never `sidebar_row_4`.
-const Action = union(enum) {
+pub const Action = union(enum) {
     focus_search,
     new_task,
     command_palette,
@@ -163,7 +149,7 @@ const Action = union(enum) {
 ///
 /// One hundred and twenty eight registrations is generous for a frame; past
 /// that the extras are dropped rather than allocated for on the draw path.
-const Hits = ui.Hits(Action, 128);
+pub const Hits = ui.Hits(Action, 128);
 
 /// What can hold the keyboard.
 ///
@@ -180,71 +166,13 @@ const FocusId = union(enum) {
     dialog_button: usize,
 };
 
-const FocusReg = ui.Focus(FocusId, 64);
+pub const FocusReg = ui.Focus(FocusId, 64);
 
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
-const State = struct {
-    tasks: []const Task,
-    tabs: []const Tab,
-    hints: []const Hint,
-
-    selected_tab: usize = 0,
-    selected_task: usize = 0,
-    hovered: ?Action = null,
-    scroll: u16 = 0,
-    scope_open: bool = false,
-    /// The search box. Editable whenever it holds the keyboard - there is no
-    /// separate "search mode", because focus already answers that question.
-    search: edit.Field(256) = .init(""),
-    /// Inside a bracketed paste, so a newline is text rather than Enter.
-    pasting: bool = false,
-    /// Which task's dialog is open, if any.
-    dialog: ?usize = null,
-    /// Set by an action so the footer can show what happened. A real one would
-    /// open a dialog.
-    flash: []const u8 = "",
-
-    hits: Hits = .{},
-    /// Opens on the list, not in the search box: a UI whose first keystroke has
-    /// to be Tab before any shortcut works is a UI that feels broken.
-    focus: FocusReg = .{ .initial = .{ .task = 0 } },
-    /// Where the real cursor should go this frame, set by whatever is editable.
-    cursor: ?term.Screen.Position = null,
-
-    /// The drag in progress or the one just finished.
-    selection: ?sel.Range = null,
-    dragging: bool = false,
-    clicks: sel.ClickTracker = .{},
-    /// Text waiting to go to the clipboard, and how much of it there is.
-    ///
-    /// Handed to the loop rather than written here: `update` has no writer and
-    /// keeping it that way is what makes every interaction testable.
-    clipboard: [4096]u8 = undefined,
-    clipboard_len: usize = 0,
-
-    /// The buffer the last frame drew into, for reading text back out of.
-    ///
-    /// A selection is over what the user can see, and what they can see is the
-    /// last frame. Re-deriving it from the model would copy something subtly
-    /// different from what is on screen.
-    last_buffer: ?*const ui.Buffer = null,
-
-    /// Monotonic nanoseconds, set by the loop before each batch.
-    ///
-    /// Time as data rather than as a call. Double click is a timing fact, and a
-    /// handler that reads a clock cannot be tested without one.
-    now: u64 = 0,
-    list_area: ui.Rect = .{},
-    total_rows: u16 = 0,
-
-    frames: u64 = 0,
-    last_frame: term.Screen.Stats = .{},
-    pacing: pace.Pacer.Stats = .{},
-    quit: bool = false,
-};
+const State = @import("State.zig");
 
 /// One line of the scrolling list.
 ///
@@ -292,11 +220,7 @@ fn buildRows(state: *const State, out: []Row) u16 {
 // The view
 // ---------------------------------------------------------------------------
 
-const DrawContext = struct {
-    state: *State,
-    buffer: *ui.Buffer,
-    area: ui.Rect,
-};
+const DrawContext = @import("DrawContext.zig");
 
 fn view(state: *State, buf: *ui.Buffer) void {
     state.hits.clear();
@@ -533,14 +457,7 @@ fn drawSearch(context: DrawContext, y: u16) u16 {
     return y + 1;
 }
 
-/// A bordered chip whose right edge is at `right`. Returns the columns it and
-/// its trailing gap consumed.
-const ChipDraw = struct {
-    right: u16,
-    label: []const u8,
-    color: ui.Color,
-    action: Action,
-};
+const ChipDraw = @import("ChipDraw.zig");
 
 fn drawChipAt(context: DrawContext, chip: ChipDraw) u16 {
     const state = context.state;
@@ -686,11 +603,7 @@ fn drawSectionHeader(context: DrawContext, y: u16, section: Section) void {
     } });
 }
 
-const TaskLine = struct {
-    y: u16,
-    index: usize,
-    line: u8,
-};
+const TaskLine = @import("TaskLine.zig");
 
 fn drawTaskLine(context: DrawContext, position: TaskLine) void {
     const state = context.state;
@@ -825,12 +738,7 @@ fn drawTaskChip(context: DrawContext, index: usize, chip: Chip) u16 {
     return width;
 }
 
-const StatusDraw = struct {
-    area: ui.Rect,
-    y: u16,
-    task: Task,
-    background: ui.Color,
-};
+const StatusDraw = @import("StatusDraw.zig");
 
 fn drawStatus(buf: *ui.Buffer, draw: StatusDraw) u16 {
     const area = draw.area;

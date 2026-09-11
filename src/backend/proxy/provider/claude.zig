@@ -3,14 +3,7 @@
 const std = @import("std");
 const sse = @import("../sse.zig");
 
-const MessageDelta = struct {
-    const Delta = struct {
-        stop_reason: ?[]const u8 = null,
-    };
-
-    type: ?[]const u8 = null,
-    delta: ?Delta = null,
-};
+const MessageDelta = @import("MessageDelta.zig");
 
 /// Returns whether an SSE event explicitly reports a naturally completed
 /// Claude turn.

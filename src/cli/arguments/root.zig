@@ -18,5 +18,5 @@ pub const plugin = @import("plugin.zig");
 pub const run = @import("run.zig");
 
 test {
-    _ = @import("cursor.zig");
+    _ = @import("cursor_support.zig");
 }

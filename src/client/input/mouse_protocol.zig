@@ -2,31 +2,18 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const Mouse = @import("key.zig").Mouse;
+const Mouse = @import("key_support.zig").Mouse;
 
 const schema = core.schema;
-const ui = core.ui;
+pub const ui = core.ui;
 
-pub const PixelPoint = struct {
-    x: u32,
-    y: u32,
-};
+pub const PixelPoint = @import("PixelPoint.zig");
 
-pub const CellSize = struct {
-    width: u16,
-    height: u16,
-};
+pub const CellSize = @import("CellSize.zig");
 
-pub const PixelProjection = struct {
-    cell: CellSize,
-    exact: ?PixelPoint = null,
-};
+pub const PixelProjection = @import("PixelProjection.zig");
 
-pub const SgrInput = struct {
-    event: Mouse,
-    pane_position: ui.Point,
-    pixels: ?PixelProjection = null,
-};
+pub const SgrInput = @import("SgrInput.zig");
 
 pub fn tracked(tracking: schema.frame.MouseTracking, kind: Mouse.Kind) bool {
     return switch (tracking) {

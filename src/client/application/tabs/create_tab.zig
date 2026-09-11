@@ -4,90 +4,25 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const RequestTabCreation = struct {
-    /// Empty asks the runtime aggregate to generate its canonical label.
-    label: []const u8 = "",
-    /// Empty launches the client's default command; otherwise this argv runs
-    /// in the new tab. Borrowed only for the synchronous send callback.
-    arguments: []const []const u8 = &.{},
-};
+pub const RequestTabCreation = @import("RequestTabCreation.zig");
 
-pub const TabCreationIntent = struct {
-    workspace: schema.WorkspaceLocation,
-    cwd_source: schema.PaneId,
-    /// Borrowed only for the synchronous send callback.
-    label: []const u8,
-    arguments: []const []const u8 = &.{},
-};
+pub const TabCreationIntent = @import("TabCreationIntent.zig");
 
-pub const TabOperationGate = struct {
-    context: *anyopaque,
-    pending: *const fn (*anyopaque) bool,
-};
+pub const TabOperationGate = @import("CreateTabTabOperationGate.zig");
 
-pub const CreationRequestEffects = struct {
-    context: *anyopaque,
-    send: *const fn (*anyopaque, TabCreationIntent) anyerror!void,
-};
+pub const CreationRequestEffects = @import("CreationRequestEffects.zig");
 
-pub const RequestTabCreationHandler = struct {
-    model: *const client_model.Model,
-    gate: TabOperationGate,
-    effects: CreationRequestEffects,
-
-    /// Plans a tab launch from the attached focused pane and delivers one
-    /// intent without changing the semantic model.
-    ///
-    /// ```zig
-    /// if (!try handler.execute(.{})) return;
-    /// ```
-    pub fn execute(handler: *RequestTabCreationHandler, request: RequestTabCreation) !bool {
-        if (handler.gate.pending(handler.gate.context)) {
-            return false;
-        }
-
-        try validateLabel(request.label);
-        const plan = handler.model.planTabCreation() orelse return false;
-        const intent: TabCreationIntent = .{
-            .workspace = plan.workspace,
-            .cwd_source = plan.cwd_source,
-            .label = request.label,
-            .arguments = request.arguments,
-        };
-        try handler.effects.send(handler.effects.context, intent);
-
-        return true;
-    }
-};
+pub const RequestTabCreationHandler = @import("RequestTabCreationHandler.zig");
 
 pub const ConfirmTabCreation = client_model.NewTab;
 
-pub const ConfirmationDelivery = struct {
-    context: *anyopaque,
-    deliver: *const fn (*anyopaque, client_model.TabCreation) anyerror!void,
-};
+pub const ConfirmationDelivery = @import("ConfirmationDelivery.zig");
 
-pub const ConfirmTabCreationHandler = struct {
-    model: *client_model.Model,
-    delivery: ConfirmationDelivery,
+pub const ConfirmTabCreationHandler = @import("ConfirmTabCreationHandler.zig");
 
-    /// Commits the canonical tab before delegating its exact result.
-    /// Model failures do not deliver; delivery failures preserve the commit.
-    ///
-    /// ```zig
-    /// const creation = try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *ConfirmTabCreationHandler, command: ConfirmTabCreation) !client_model.TabCreation {
-        const creation = try handler.model.createTab(command);
-        try handler.delivery.deliver(handler.delivery.context, creation);
-
-        return creation;
-    }
-};
-
-fn validateLabel(label: []const u8) !void {
+pub fn validateLabel(label: []const u8) !void {
     if (label.len > schema.max_tab_label_bytes) {
         return error.InvalidTabLabel;
     }
@@ -101,128 +36,11 @@ fn validateLabel(label: []const u8) !void {
     }
 }
 
-const RequestCapture = struct {
-    blocked: bool = false,
-    fail: bool = false,
-    calls: usize = 0,
-    workspace: ?schema.WorkspaceLocation = null,
-    cwd_source: ?schema.PaneId = null,
-    label: [schema.max_tab_label_bytes]u8 = undefined,
-    label_len: u8 = 0,
+const RequestCapture = @import("CreateTabRequestCapture.zig");
 
-    fn gate(capture: *RequestCapture) TabOperationGate {
-        return .{ .context = capture, .pending = pending };
-    }
+const DeliveryCapture = @import("DeliveryCapture.zig");
 
-    fn effects(capture: *RequestCapture) CreationRequestEffects {
-        return .{ .context = capture, .send = send };
-    }
-
-    fn pending(context: *anyopaque) bool {
-        const capture: *RequestCapture = @ptrCast(@alignCast(context));
-        return capture.blocked;
-    }
-
-    fn send(context: *anyopaque, intent: TabCreationIntent) !void {
-        const capture: *RequestCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.workspace = intent.workspace;
-        capture.cwd_source = intent.cwd_source;
-        capture.label_len = @intCast(intent.label.len);
-        @memcpy(capture.label[0..intent.label.len], intent.label);
-
-        if (capture.fail) {
-            return error.DeliveryFailed;
-        }
-    }
-
-    fn labelSlice(capture: *const RequestCapture) []const u8 {
-        return capture.label[0..capture.label_len];
-    }
-};
-
-const DeliveryCapture = struct {
-    model: *client_model.Model,
-    expected: schema.TabLocation,
-    calls: usize = 0,
-    observed_commit: bool = false,
-    fail: bool = false,
-
-    fn port(capture: *DeliveryCapture) ConfirmationDelivery {
-        return .{ .context = capture, .deliver = deliver };
-    }
-
-    fn deliver(context: *anyopaque, creation: client_model.TabCreation) !void {
-        const capture: *DeliveryCapture = @ptrCast(@alignCast(context));
-        const version = capture.model.version();
-        const previous = capture.model.workspace.find(creation.previous.tab_id);
-        const created = capture.model.workspace.find(creation.created.tab_id);
-        capture.calls += 1;
-        capture.observed_commit = std.meta.eql(capture.model.activeTabLocation(), capture.expected) and
-            capture.model.workspace.count == 2 and
-            std.meta.eql(creation.created, capture.expected) and
-            previous != null and
-            created != null and
-            previous.?.model.layout.currentRevision() == creation.previous_layout_revision and
-            created.?.model.layout.currentRevision() == creation.created_layout_revision and
-            created.?.model.findConst(creation.created_root_pane_id) != null and
-            version.workspace == creation.workspace_revision and
-            version.tabs == creation.tabs_revision and
-            version.active_tab == creation.active_tab_revision and
-            version.panes == creation.panes_revision and
-            version.copy == creation.copy_revision and
-            creation.tabs_revision_before +% 1 == creation.tabs_revision and
-            creation.active_tab_revision_before +% 1 == creation.active_tab_revision and
-            creation.copy_revision_before +% @intFromBool(creation.copy_released) == creation.copy_revision;
-
-        if (capture.fail) {
-            return error.CreationSyncFailed;
-        }
-    }
-};
-
-const TestingModel = struct {
-    model: *client_model.Model,
-    first: schema.TabLocation,
-    second: schema.TabLocation,
-
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-        const first: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(1),
-        };
-        const second: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(2),
-        };
-        try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
-
-        return .{ .model = model, .first = first, .second = second };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-
-    fn command(testing: *const TestingModel) ConfirmTabCreation {
-        return .{
-            .created = .{
-                .location = testing.second,
-                .position = 1,
-                .label = "logs",
-                .root_pane_id = @enumFromInt(2),
-            },
-            .size = .{ .cols = 20, .rows = 5 },
-        };
-    }
-};
+const TestingModel = @import("CreateTabTestingModel.zig");
 
 test "tab creation request sends the current workspace and focused pane without mutation" {
     var testing = try TestingModel.init();

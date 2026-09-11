@@ -5,14 +5,9 @@ const core = @import("telar-core");
 const notifications = @import("../../root.zig").notifications;
 const client_requests = @import("../../connection/root.zig").requests;
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const Command = struct {
-    continuation: client_requests.Continuation,
-    code: schema.FailureCode,
-    /// Borrowed only for the synchronous notification publication.
-    message: []const u8,
-};
+pub const Command = @import("Command.zig");
 
 pub const SplitRecovery = enum {
     current,
@@ -24,28 +19,13 @@ pub const InitialOpenRecovery = enum {
     unrecoverable,
 };
 
-pub const InitialOpenFailure = struct {
-    open: client_requests.InitialOpen,
-    code: schema.FailureCode,
-};
+pub const InitialOpenFailure = @import("InitialOpenFailure.zig");
 
-pub const RecoveryEffects = struct {
-    context: *anyopaque,
-    split: *const fn (*anyopaque, client_requests.Split) anyerror!SplitRecovery,
-    attachment: *const fn (*anyopaque, client_requests.PaneOperation) anyerror!void,
-    close_tab: *const fn (*anyopaque, schema.TabLocation) anyerror!void,
-    initial_open: *const fn (*anyopaque, InitialOpenFailure) anyerror!InitialOpenRecovery,
-};
+pub const RecoveryEffects = @import("RecoveryEffects.zig");
 
-pub const NotificationEffects = struct {
-    context: *anyopaque,
-    publish: *const fn (*anyopaque, notifications.Input) anyerror!void,
-};
+pub const NotificationEffects = @import("NotificationEffects.zig");
 
-pub const ReportingEffects = struct {
-    context: *anyopaque,
-    report: *const fn (*anyopaque, []const u8) void,
-};
+pub const ReportingEffects = @import("ReportingEffects.zig");
 
 pub const Outcome = enum {
     ignored,
@@ -54,75 +34,9 @@ pub const Outcome = enum {
     fatal,
 };
 
-pub const HandleRequestFailureHandler = struct {
-    recovery: RecoveryEffects,
-    notifications: NotificationEffects,
-    reporting: ReportingEffects,
+pub const HandleRequestFailureHandler = @import("HandleRequestFailureHandler.zig");
 
-    /// Applies recovery policy before publishing any user-visible failure.
-    /// Fatal outcomes and processing errors report the runtime message once.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *HandleRequestFailureHandler, command: Command) !Outcome {
-        const outcome = handler.apply(command) catch |err| {
-            handler.reporting.report(handler.reporting.context, command.message);
-
-            return err;
-        };
-        if (outcome == .fatal) {
-            handler.reporting.report(handler.reporting.context, command.message);
-        }
-
-        return outcome;
-    }
-
-    fn apply(handler: *HandleRequestFailureHandler, command: Command) !Outcome {
-        switch (command.continuation) {
-            .ignored => return .ignored,
-            .workspace_snapshot, .tab_snapshot => return .fatal,
-            .initial_open => |open| {
-                const recovery = try handler.recovery.initial_open(handler.recovery.context, .{
-                    .open = open,
-                    .code = command.code,
-                });
-
-                return switch (recovery) {
-                    .retried => .recovered,
-                    .unrecoverable => .fatal,
-                };
-            },
-            .split => |split| {
-                const recovery = try handler.recovery.split(handler.recovery.context, split);
-                if (recovery == .stale) {
-                    return .ignored;
-                }
-            },
-            .attach_pane => |attachment| {
-                if (command.code == .pane_not_found) {
-                    try handler.recovery.attachment(handler.recovery.context, attachment);
-                }
-            },
-            .close_tab => |location| {
-                try handler.recovery.close_tab(handler.recovery.context, location);
-            },
-            .close_pane,
-            .create_workspace,
-            .rename_workspace,
-            .create_tab,
-            .rename_tab,
-            .move_tab,
-            .notification,
-            => {},
-        }
-
-        try handler.notifications.publish(handler.notifications.context, notification(command));
-        return .notified;
-    }
-};
-
-fn notification(command: Command) notifications.Input {
+pub fn notification(command: Command) notifications.Input {
     return .{
         .level = .failure,
         .title = failureTitle(command.continuation),
@@ -169,7 +83,7 @@ fn workspaceNotificationTarget(location: schema.WorkspaceLocation) notifications
     };
 }
 
-const EffectEvent = enum {
+pub const EffectEvent = enum {
     split,
     attachment,
     close_tab,
@@ -178,103 +92,7 @@ const EffectEvent = enum {
     report,
 };
 
-const EffectsCapture = struct {
-    events: [3]EffectEvent = undefined,
-    event_count: usize = 0,
-    split_recovery: SplitRecovery = .current,
-    initial_open_recovery: InitialOpenRecovery = .retried,
-    notification: ?notifications.Input = null,
-    reported_message: ?[]const u8 = null,
-    fail_recovery: bool = false,
-    fail_notification: bool = false,
-
-    fn recoveryPort(capture: *EffectsCapture) RecoveryEffects {
-        return .{
-            .context = capture,
-            .split = recoverSplit,
-            .attachment = recoverAttachment,
-            .close_tab = recoverCloseTab,
-            .initial_open = recoverInitialOpen,
-        };
-    }
-
-    fn notificationPort(capture: *EffectsCapture) NotificationEffects {
-        return .{ .context = capture, .publish = publish };
-    }
-
-    fn reportingPort(capture: *EffectsCapture) ReportingEffects {
-        return .{ .context = capture, .report = report };
-    }
-
-    fn handler(capture: *EffectsCapture) HandleRequestFailureHandler {
-        return .{
-            .recovery = capture.recoveryPort(),
-            .notifications = capture.notificationPort(),
-            .reporting = capture.reportingPort(),
-        };
-    }
-
-    fn record(capture: *EffectsCapture, event: EffectEvent) !void {
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-
-        switch (event) {
-            .split, .attachment, .close_tab, .initial_open => if (capture.fail_recovery) {
-                return error.RecoveryFailed;
-            },
-            .publish => if (capture.fail_notification) {
-                return error.NotificationFailed;
-            },
-            .report => {},
-        }
-    }
-
-    fn recoverSplit(context: *anyopaque, split: client_requests.Split) !SplitRecovery {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        _ = split;
-        try capture.record(.split);
-
-        return capture.split_recovery;
-    }
-
-    fn recoverAttachment(context: *anyopaque, attachment: client_requests.PaneOperation) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        _ = attachment;
-        try capture.record(.attachment);
-    }
-
-    fn recoverCloseTab(context: *anyopaque, location: schema.TabLocation) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        _ = location;
-        try capture.record(.close_tab);
-    }
-
-    fn recoverInitialOpen(context: *anyopaque, failure: InitialOpenFailure) !InitialOpenRecovery {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        _ = failure;
-        try capture.record(.initial_open);
-
-        return capture.initial_open_recovery;
-    }
-
-    fn publish(context: *anyopaque, input: notifications.Input) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.notification = input;
-        try capture.record(.publish);
-    }
-
-    fn report(context: *anyopaque, message: []const u8) void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.reported_message = message;
-        capture.record(.report) catch unreachable;
-    }
-
-    fn reset(capture: *EffectsCapture) void {
-        capture.event_count = 0;
-        capture.notification = null;
-        capture.reported_message = null;
-    }
-};
+const EffectsCapture = @import("RequestFailureEffectsCapture.zig");
 
 const testing_location: schema.TabLocation = .{
     .workspace = .{ .workspace = @enumFromInt(1) },

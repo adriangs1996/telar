@@ -1,6 +1,6 @@
 const std = @import("std");
-const Io = std.Io;
-const net = std.Io.net;
+pub const Io = std.Io;
+pub const net = std.Io.net;
 
 const tlsz = @import("tls");
 const ca = @import("ca.zig");
@@ -45,133 +45,13 @@ const alpn_offer = [_][]const u8{ "h2", "http/1.1" };
 const alpn_h2_only = [_][]const u8{"h2"};
 const alpn_http11_only = [_][]const u8{"http/1.1"};
 
-/// The trust store used to verify real origins, loaded once per process.
-///
-/// Rescanning the platform roots costs a few milliseconds and an allocation per
-/// connection, and every connection wants the same answer.
-pub const Roots = struct {
-    bundle: tlsz.config.cert.Bundle,
+pub const Roots = @import("Roots.zig");
 
-    pub fn load(io: Io, gpa: std.mem.Allocator) !Roots {
-        return .{ .bundle = try tlsz.config.cert.fromSystem(gpa, io) };
-    }
+pub const Session = @import("Session.zig");
 
-    pub fn deinit(self: *Roots, gpa: std.mem.Allocator) void {
-        self.bundle.deinit(gpa);
-    }
-};
+pub const InterceptResources = @import("InterceptResources.zig");
 
-/// One terminated connection: a TLS server towards the child and a TLS client
-/// towards the real host.
-///
-/// Heap allocated and initialised in place. `tlsz.Connection` holds pointers
-/// into the reader and writer next to it, which hold pointers into the buffers
-/// next to those, so a Session must never be copied or moved after `intercept`.
-pub const Session = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    rng_source: std.Random.IoSource,
-    auth: tlsz.config.CertKeyPair,
-    child: End,
-    origin: End,
-
-    const End = struct {
-        stream: net.Stream,
-        in_buf: [tlsz.input_buffer_len]u8 = undefined,
-        out_buf: [tlsz.output_buffer_len]u8 = undefined,
-        reader: net.Stream.Reader = undefined,
-        writer: net.Stream.Writer = undefined,
-        conn: tlsz.Connection = undefined,
-
-        fn wire(self: *End, io: Io) void {
-            self.reader = self.stream.reader(io, &self.in_buf);
-            self.writer = self.stream.writer(io, &self.out_buf);
-        }
-
-        /// `Io.Reader`/`Io.Writer` collapse every transport failure into one
-        /// error and stash the real one on the side. A handshake that died
-        /// because the peer reset the socket and one that died because we sent
-        /// something wrong are very different findings, so dig the real error
-        /// back out before reporting.
-        fn concrete(self: *End, err: anyerror) anyerror {
-            if (err == error.WriteFailed) {
-                return self.writer.err orelse err;
-            }
-            if (err == error.ReadFailed) {
-                return self.reader.err orelse err;
-            }
-            return err;
-        }
-    };
-
-    pub const Side = enum { child, origin };
-    pub const Protocol = enum { http11, h2 };
-
-    pub fn deinit(self: *Session) void {
-        // Best effort close_notify; a peer that has already gone away makes
-        // this fail, which is not worth reporting.
-        self.child.conn.close() catch {};
-        self.origin.conn.close() catch {};
-        self.auth.deinit(self.gpa);
-        self.gpa.destroy(self);
-    }
-
-    /// Reads cleartext into `buf`. Null on end of stream or error, which the
-    /// relays treat identically: the conversation is over either way.
-    pub fn read(self: *Session, side: Side, buf: []u8) ?usize {
-        const n = self.end(side).conn.read(buf) catch return null;
-        if (n == 0) {
-            return null;
-        }
-        return n;
-    }
-
-    /// Encrypts and sends `bytes`. Each record is flushed as it is produced, so
-    /// a streaming response (SSE, chunked) still arrives token by token.
-    pub fn writeAll(self: *Session, side: Side, bytes: []const u8) bool {
-        self.end(side).conn.writeAll(bytes) catch return false;
-        return true;
-    }
-
-    /// Half-closes one side so a peer blocked reading it gives up.
-    ///
-    /// Without this a full-duplex relay outlives the conversation: the client
-    /// goes away, but the origin holds a keep-alive connection open and the
-    /// direction reading it blocks until a timeout that may never come.
-    pub fn halfClose(self: *Session, side: Side) void {
-        self.end(side).stream.shutdown(self.io, .both) catch {};
-    }
-
-    /// Which protocol the two ends settled on. Both agree by construction: the
-    /// origin is offered exactly what the child negotiated.
-    pub fn negotiated(self: *Session) Protocol {
-        const selected = self.child.conn.alpn_protocol orelse return .http11;
-        return if (std.mem.eql(u8, selected, "h2")) .h2 else .http11;
-    }
-
-    fn end(self: *Session, side: Side) *End {
-        return switch (side) {
-            .child => &self.child,
-            .origin => &self.origin,
-        };
-    }
-};
-
-/// Handshakes both ends. `host` is the CONNECT target, used both to mint the
-/// certificate the child will check and to verify the real server. `cause`
-/// receives the underlying failure, which the returned `Error` only categorises.
-pub const InterceptResources = struct {
-    io: Io,
-    allocator: std.mem.Allocator,
-    authority: ca.Authority,
-    roots: Roots,
-};
-
-pub const InterceptConnection = struct {
-    host: []const u8,
-    child: net.Stream,
-    origin: net.Stream,
-};
+pub const InterceptConnection = @import("InterceptConnection.zig");
 
 pub fn intercept(resources: InterceptResources, connection: InterceptConnection, cause: *anyerror) Error!*Session {
     const io = resources.io;
@@ -356,32 +236,7 @@ const handshake_record: u8 = 0x16;
 const client_hello: u8 = 0x01;
 const alpn_extension: u16 = 16;
 
-/// Bounds-checked forward reader over a byte slice. Every length in a
-/// ClientHello arrives from the wire, so every step has to be able to fail.
-const Cursor = struct {
-    bytes: []const u8,
-    idx: usize = 0,
-
-    fn left(self: Cursor) usize {
-        return self.bytes.len - self.idx;
-    }
-
-    fn take(self: *Cursor, n: usize) ![]const u8 {
-        if (self.left() < n) {
-            return error.Truncated;
-        }
-        defer self.idx += n;
-        return self.bytes[self.idx..][0..n];
-    }
-
-    fn byte(self: *Cursor) !u8 {
-        return (try self.take(1))[0];
-    }
-
-    fn big16(self: *Cursor) !u16 {
-        return std.mem.readInt(u16, (try self.take(2))[0..2], .big);
-    }
-};
+const Cursor = @import("Cursor.zig");
 
 /// Mints a leaf for `host` and turns it into something a Zig TLS stack accepts.
 ///

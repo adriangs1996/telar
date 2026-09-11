@@ -1,11 +1,11 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const Io = std.Io;
-const File = std.Io.File;
+pub const Io = std.Io;
+pub const File = std.Io.File;
 
 const ca = @import("ca.zig");
-const capture_mod = @import("capture.zig");
+const capture_mod = @import("capture_support.zig");
 const db = @import("db.zig");
 const event = @import("event.zig");
 const osc = @import("osc.zig");
@@ -94,10 +94,7 @@ fn makeRaw(fd: std.c.fd_t, termio: *std.posix.termios) !void {
 // PTY
 // ---------------------------------------------------------------------------
 
-const Pty = struct {
-    master: std.c.fd_t,
-    slave: std.c.fd_t,
-};
+const Pty = @import("Pty.zig");
 
 fn openPty(host_tty: std.c.fd_t) !Pty {
     var ws: std.posix.winsize = undefined;
@@ -210,18 +207,7 @@ fn inputActor(io: Io, stdin: File, queue: *event.Queue) Io.Cancelable!void {
     }
 }
 
-/// Drains the pty master onto the host terminal. This is herdr's PtyIoActor read
-/// side: the tap runs here, in the actor, so only parsed events reach the main
-/// loop rather than every byte of output.
-const OutputActorContext = struct {
-    io: Io,
-    allocator: std.mem.Allocator,
-    master: File,
-    host_tty: File,
-    rows: u16,
-    cols: u16,
-    queue: *event.Queue,
-};
+const OutputActorContext = @import("OutputActorContext.zig");
 
 fn outputActor(context: OutputActorContext) Io.Cancelable!void {
     const io = context.io;
@@ -347,39 +333,11 @@ fn installWindowChangeHandler(write_fd: std.c.fd_t) void {
 // Main
 // ---------------------------------------------------------------------------
 
-const default_shell = "/bin/zsh";
+pub const default_shell = "/bin/zsh";
 const timeline_path = "timeline.db";
-const max_argv = 32;
+pub const max_argv = 32;
 
-/// The command to run in the pty. `pty_proxy claude --resume` runs Claude Code
-/// under the taps; with no arguments it falls back to an interactive shell,
-/// which is what the OSC 133 command log is written against.
-const Child = struct {
-    file: [*:0]const u8,
-    argv: [max_argv:null]?[*:0]const u8,
-
-    fn fromArgs(init: std.process.Init) Child {
-        var child: Child = .{ .file = default_shell, .argv = @splat(null) };
-        var it = init.minimal.args.iterate();
-        _ = it.next(); // argv[0], ours
-
-        var n: usize = 0;
-        while (it.next()) |arg| {
-            if (n == max_argv - 1) {
-                break;
-            }
-            if (n == 0) {
-                child.file = arg.ptr;
-            }
-            child.argv[n] = arg.ptr;
-            n += 1;
-        }
-        if (n == 0) {
-            child.argv[0] = default_shell;
-        }
-        return child;
-    }
-};
+const Child = @import("Child.zig");
 
 /// No shell emits OSC 133 on its own; terminal emulators ship an rc file that
 /// installs the hooks. Borrowing Ghostty's is enough here — a real herdr ships
@@ -470,11 +428,7 @@ fn drainQueue(io: Io, gpa: std.mem.Allocator, queue: *event.Queue) void {
     }
 }
 
-/// A command between its OSC 133 C and D markers.
-const Running = struct {
-    id: i64,
-    started_at: Io.Timestamp,
-};
+const Running = @import("Running.zig");
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;

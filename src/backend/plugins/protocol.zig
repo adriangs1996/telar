@@ -8,39 +8,11 @@ const proxy = @import("../proxy/root.zig");
 pub const prefix_bytes = 4;
 pub const overhead_bytes = 64 * 1024;
 
-pub const Half = struct {
-    head: []const u8,
-    body: []const u8,
-    encoding: []const u8,
-    decoded: bool,
-    head_truncated: bool,
-    body_truncated: bool,
-    status_code: u16,
-    outcome: proxy.CaptureOutcome,
-    finished_at_ms: i64,
-};
+pub const Half = @import("Half.zig");
 
-pub const Exchange = struct {
-    id: u64,
-    generation: u64,
-    pane: core.schema.PaneId,
-    pane_generation: u64,
-    host: []const u8,
-    protocol: proxy.ObservationProtocol,
-    dialect: proxy.ApiDialect,
-    connection_id: u64,
-    stream_id: u32,
-    method: []const u8,
-    target: []const u8,
-    started_at_ms: i64,
-    request: ?Half,
-    response: ?Half,
-};
+pub const Exchange = @import("Exchange.zig");
 
-pub const ExchangeIdentity = struct {
-    id: u64,
-    generation: u64,
-};
+pub const ExchangeIdentity = @import("ExchangeIdentity.zig");
 
 /// Encodes one captured exchange into caller-owned frame payload storage.
 ///
@@ -288,43 +260,7 @@ fn writeInt(writer: *std.Io.Writer, comptime T: type, value: T) !void {
     try writer.writeAll(&bytes);
 }
 
-const Cursor = struct {
-    bytes: []const u8,
-    offset: usize = 0,
-
-    fn byte(cursor: *Cursor) !u8 {
-        if (cursor.offset == cursor.bytes.len) {
-            return error.TruncatedFrame;
-        }
-        defer cursor.offset += 1;
-        return cursor.bytes[cursor.offset];
-    }
-
-    fn boolean(cursor: *Cursor) !bool {
-        return switch (try cursor.byte()) {
-            0 => false,
-            1 => true,
-            else => error.InvalidBoolean,
-        };
-    }
-
-    fn int(cursor: *Cursor, comptime T: type) !T {
-        if (cursor.bytes.len -| cursor.offset < @sizeOf(T)) {
-            return error.TruncatedFrame;
-        }
-        defer cursor.offset += @sizeOf(T);
-        return std.mem.readInt(T, cursor.bytes[cursor.offset..][0..@sizeOf(T)], .little);
-    }
-
-    fn sized(cursor: *Cursor) ![]const u8 {
-        const len = try cursor.int(u32);
-        if (cursor.bytes.len -| cursor.offset < len) {
-            return error.TruncatedFrame;
-        }
-        defer cursor.offset += len;
-        return cursor.bytes[cursor.offset..][0..len];
-    }
-};
+const Cursor = @import("Cursor.zig");
 
 test "effect protocol round trips all effect variants and rejects trailing bytes" {
     var batch: effects.Batch = .{ .len = 3 };

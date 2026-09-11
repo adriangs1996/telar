@@ -6,58 +6,9 @@ const attachment_mod = @import("../attachment/root.zig");
 const detach_pane_commands = @import("../application/commands/detach_pane.zig");
 const detach_pane_controller = @import("../entrypoints/requests/detach_pane.zig");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-const Effects = struct {
-    detached: attachment_mod.PaneDetached,
-    attachment_committed: bool = false,
-    workspace_left: bool = false,
-    geometry_released: bool = false,
-    stale_count: usize = 0,
-
-    fn attachments(effects: *Effects) detach_pane_commands.Attachments {
-        return .{
-            .context = effects,
-            .detach = detach,
-            .leave_workspace = leaveWorkspace,
-        };
-    }
-
-    fn geometry(effects: *Effects) detach_pane_commands.GeometryLease {
-        return .{ .context = effects, .release = release };
-    }
-
-    fn staleMessages(effects: *Effects) detach_pane_controller.StaleMessages {
-        return .{ .context = effects, .record = recordStale };
-    }
-
-    fn detach(context: *anyopaque, pane_id: schema.PaneId) ?attachment_mod.PaneDetached {
-        const effects: *Effects = @ptrCast(@alignCast(context));
-        std.debug.assert(pane_id == effects.detached.pane_id);
-        effects.attachment_committed = true;
-        return effects.detached;
-    }
-
-    fn release(context: *anyopaque, workspace: schema.WorkspaceLocation) void {
-        const effects: *Effects = @ptrCast(@alignCast(context));
-        std.debug.assert(effects.workspace_left);
-        std.debug.assert(std.meta.eql(workspace, effects.detached.workspace));
-        effects.geometry_released = true;
-    }
-
-    fn leaveWorkspace(context: *anyopaque, workspace: schema.WorkspaceLocation) bool {
-        const effects: *Effects = @ptrCast(@alignCast(context));
-        std.debug.assert(effects.attachment_committed);
-        std.debug.assert(std.meta.eql(workspace, effects.detached.workspace));
-        effects.workspace_left = true;
-        return true;
-    }
-
-    fn recordStale(context: *anyopaque) void {
-        const effects: *Effects = @ptrCast(@alignCast(context));
-        effects.stale_count += 1;
-    }
-};
+const Effects = @import("DetachPaneTestEffects.zig");
 
 test "a detach request commits session state before releasing geometry" {
     const pane_id = try schema.id.pane(7);

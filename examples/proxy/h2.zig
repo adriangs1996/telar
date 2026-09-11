@@ -1,7 +1,7 @@
 const std = @import("std");
 const tls = @import("tls.zig");
 
-const c = @cImport({
+pub const c = @cImport({
     @cInclude("nghttp2/nghttp2.h");
 });
 
@@ -43,91 +43,13 @@ const flag_end_headers: u8 = 0x4;
 const flag_padded: u8 = 0x8;
 const flag_priority: u8 = 0x20;
 
-/// One direction's HPACK state. The dynamic table is per-direction and strictly
-/// ordered, so a decoder must see every header block in sequence — which is
-/// exactly what sitting inline gives us.
-pub const Decoder = struct {
-    inflater: ?*c.nghttp2_hd_inflater = null,
-    /// Header blocks can span CONTINUATION frames; they are only inflated once
-    /// END_HEADERS arrives.
-    block: std.ArrayList(u8) = .empty,
-    gpa: std.mem.Allocator,
+pub const Decoder = @import("Decoder.zig");
 
-    pub fn init(gpa: std.mem.Allocator) !Decoder {
-        var self: Decoder = .{ .gpa = gpa };
-        if (c.nghttp2_hd_inflate_new(&self.inflater) != 0) {
-            return error.InflaterFailed;
-        }
-        return self;
-    }
+pub const Observed = @import("Observed.zig");
 
-    pub fn deinit(self: *Decoder) void {
-        if (self.inflater) |inf| {
-            c.nghttp2_hd_inflate_del(inf);
-        }
-        self.block.deinit(self.gpa);
-    }
+pub const Route = @import("Route.zig");
 
-    /// Inflates one complete header block into `out` as `name: value` lines.
-    fn emit(self: *Decoder, out: *std.Io.Writer) void {
-        const inf = self.inflater orelse return;
-        var input = self.block.items;
-
-        while (true) {
-            var nv: c.nghttp2_nv = undefined;
-            var flags: c_int = 0;
-            const consumed = c.nghttp2_hd_inflate_hd2(
-                inf,
-                &nv,
-                &flags,
-                input.ptr,
-                input.len,
-                1, // in_final
-            );
-            if (consumed < 0) {
-                break;
-            }
-            input = input[@intCast(consumed)..];
-
-            if (flags & c.NGHTTP2_HD_INFLATE_EMIT != 0) {
-                out.print("{s}: {s}\n", .{
-                    nv.name[0..nv.namelen],
-                    nv.value[0..nv.valuelen],
-                }) catch {};
-            }
-            if (flags & c.NGHTTP2_HD_INFLATE_FINAL != 0) {
-                break;
-            }
-            if (input.len == 0) {
-                break;
-            }
-        }
-
-        _ = c.nghttp2_hd_inflate_end_headers(inf);
-        self.block.clearRetainingCapacity();
-    }
-};
-
-/// What one direction saw. Bodies are capped by the caller's buffer.
-pub const Observed = struct {
-    frames: usize = 0,
-    headers: usize = 0,
-    data_bytes: u64 = 0,
-    truncated: bool = false,
-};
-
-pub const Route = struct {
-    from: tls.Session.Side,
-    to: tls.Session.Side,
-};
-
-pub const Capture = struct {
-    decoder: *Decoder,
-    text: *std.Io.Writer,
-    body: []u8,
-    body_len: *usize,
-    seen: *Observed,
-};
+pub const Capture = @import("H2Capture.zig");
 
 /// Relays one direction and reports what went by.
 ///

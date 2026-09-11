@@ -6,32 +6,9 @@ const runtime_stop_controller = @import("../entrypoints/requests/runtime_stop.zi
 const delivery_mod = @import("../delivery/root.zig");
 const shutdown_mod = @import("../lifecycle/root.zig").shutdown_authority;
 
-const Recipient = struct {
-    active: bool,
-    delivery: *delivery_mod.Delivery,
-};
+const Recipient = @import("Recipient.zig");
 
-const Broadcaster = struct {
-    recipients: [3]*Recipient,
-    calls: usize = 0,
-    event: ?shutdown_mod.StopRequested = null,
-
-    fn notifications(broadcaster: *Broadcaster) runtime_stop_commands.Notifications {
-        return .{ .context = broadcaster, .publish_fn = publish };
-    }
-
-    fn publish(context: *anyopaque, event: shutdown_mod.StopRequested) void {
-        const broadcaster: *Broadcaster = @ptrCast(@alignCast(context));
-        broadcaster.calls += 1;
-        broadcaster.event = event;
-
-        for (broadcaster.recipients) |recipient| {
-            if (recipient.active) {
-                recipient.delivery.requestStop();
-            }
-        }
-    }
-};
+const Broadcaster = @import("RuntimeStopTestBroadcaster.zig");
 
 test "the first runtime-stop request notifies every active recipient once" {
     const gpa = std.testing.allocator;

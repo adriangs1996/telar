@@ -9,7 +9,7 @@ const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const agent_navigation = agents_application.agent_navigation;
 const schema = core.schema;
 

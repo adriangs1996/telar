@@ -7,84 +7,13 @@ const agents = @import("../../root.zig").agents;
 const attachments = @import("../../attachments/root.zig");
 const client_model = @import("../../root.zig").model;
 
-const ui = core.ui;
+pub const ui = core.ui;
 
-pub const Effects = struct {
-    context: *anyopaque,
-    sync_attachment_target: *const fn (*anyopaque, ?attachments.Target) ?ui.Rect,
-    sync_focus_reporting: *const fn (*anyopaque) anyerror!void,
-    invalidate_graphics_placements: *const fn (*anyopaque) void,
-    offer_pane_geometry: *const fn (*anyopaque, ui.Rect) anyerror!void,
-    request_visible_attachments: *const fn (*anyopaque, ui.Rect) anyerror!void,
-    acknowledge_agent: *const fn (*anyopaque, agents.AgentKey) anyerror!void,
-};
+pub const Effects = @import("ActivePaneResourceDeliveryEffects.zig");
 
-pub const DeliverActivePaneResourcesHandler = struct {
-    model: *client_model.Model,
-    effects: Effects,
+pub const DeliverActivePaneResourcesHandler = @import("DeliverActivePaneResourcesHandler.zig");
 
-    /// Acknowledges a focused `done` agent, then reconciles only the focused
-    /// attachment shelf and re-offers geometry when its visibility changes
-    /// the workbench.
-    ///
-    /// ```zig
-    /// _ = try handler.synchronizeAttachments();
-    /// ```
-    pub fn synchronizeAttachments(handler: *DeliverActivePaneResourcesHandler) !bool {
-        if (handler.model.takeAgentAcknowledgement()) |key| {
-            try handler.effects.acknowledge_agent(handler.effects.context, key);
-        }
-
-        const area = handler.effects.sync_attachment_target(
-            handler.effects.context,
-            handler.model.focusedAttachmentTarget(),
-        ) orelse return false;
-
-        try handler.effects.offer_pane_geometry(handler.effects.context, area);
-        return true;
-    }
-
-    /// Synchronizes attachment geometry before child focus reporting.
-    ///
-    /// ```zig
-    /// try handler.synchronize();
-    /// ```
-    pub fn synchronize(handler: *DeliverActivePaneResourcesHandler) !void {
-        _ = try handler.synchronizeAttachments();
-        try handler.effects.sync_focus_reporting(handler.effects.context);
-    }
-
-    /// Validates one committed focus and delivers its active-pane resources.
-    /// Fullscreen geometry follows attachment and focus-report synchronization,
-    /// then newly visible detached panes request runtime attachments.
-    ///
-    /// ```zig
-    /// try handler.deliverFocus(focus, area);
-    /// ```
-    pub fn deliverFocus(handler: *DeliverActivePaneResourcesHandler, focus: client_model.PaneFocus, area: ui.Rect) !void {
-        try handler.validateFocus(focus);
-        try handler.synchronize();
-        if (!focus.geometry_changed) {
-            return;
-        }
-
-        handler.effects.invalidate_graphics_placements(handler.effects.context);
-        try handler.effects.offer_pane_geometry(handler.effects.context, area);
-        try handler.effects.request_visible_attachments(handler.effects.context, area);
-    }
-
-    fn validateFocus(handler: *const DeliverActivePaneResourcesHandler, focus: client_model.PaneFocus) !void {
-        const active = handler.model.workspace.activeConst() orelse return error.StalePaneFocus;
-        if (!std.meta.eql(active.location, focus.location) or
-            active.model.layout.focused() != focus.focused or
-            handler.model.version().panes != focus.panes_revision)
-        {
-            return error.StalePaneFocus;
-        }
-    }
-};
-
-const Event = enum {
+pub const Event = enum {
     acknowledge_agent,
     attachment_target,
     focus_reporting,
@@ -93,7 +22,7 @@ const Event = enum {
     request_attachments,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     focus_reporting,
     first_geometry,
@@ -101,105 +30,7 @@ const Failure = enum {
     attachments,
 };
 
-const EffectCapture = struct {
-    model: *const client_model.Model,
-    expected_focus: ?client_model.PaneFocus = null,
-    attachment_area: ?ui.Rect = null,
-    attachment_target: ?attachments.Target = null,
-    events: [7]Event = undefined,
-    event_count: usize = 0,
-    geometry_areas: [2]ui.Rect = undefined,
-    geometry_count: usize = 0,
-    committed_focus_observed: bool = true,
-    failure: Failure = .none,
-    acknowledged: ?agents.AgentKey = null,
-
-    fn effects(capture: *EffectCapture) Effects {
-        return .{
-            .context = capture,
-            .sync_attachment_target = syncAttachmentTarget,
-            .sync_focus_reporting = syncFocusReporting,
-            .invalidate_graphics_placements = invalidateGraphicsPlacements,
-            .offer_pane_geometry = offerPaneGeometry,
-            .request_visible_attachments = requestVisibleAttachments,
-            .acknowledge_agent = acknowledgeAgent,
-        };
-    }
-
-    fn acknowledgeAgent(raw_context: *anyopaque, key: agents.AgentKey) !void {
-        const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
-        capture.append(.acknowledge_agent);
-        capture.acknowledged = key;
-    }
-
-    fn syncAttachmentTarget(raw_context: *anyopaque, target: ?attachments.Target) ?ui.Rect {
-        const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
-        capture.append(.attachment_target);
-        capture.attachment_target = target;
-
-        return capture.attachment_area;
-    }
-
-    fn syncFocusReporting(raw_context: *anyopaque) !void {
-        const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
-        capture.append(.focus_reporting);
-
-        if (capture.failure == .focus_reporting) {
-            return error.FocusReportingFailed;
-        }
-    }
-
-    fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
-        const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
-        capture.append(.invalidate_placements);
-    }
-
-    fn offerPaneGeometry(raw_context: *anyopaque, area: ui.Rect) !void {
-        const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
-        capture.append(.pane_geometry);
-        capture.geometry_areas[capture.geometry_count] = area;
-        capture.geometry_count += 1;
-
-        if (capture.failure == .first_geometry and capture.geometry_count == 1) {
-            return error.PaneGeometryFailed;
-        }
-        if (capture.failure == .second_geometry and capture.geometry_count == 2) {
-            return error.PaneGeometryFailed;
-        }
-    }
-
-    fn requestVisibleAttachments(raw_context: *anyopaque, _: ui.Rect) !void {
-        const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
-        capture.append(.request_attachments);
-
-        if (capture.failure == .attachments) {
-            return error.PaneAttachmentFailed;
-        }
-    }
-
-    fn append(capture: *EffectCapture, event: Event) void {
-        capture.observeFocus();
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn observeFocus(capture: *EffectCapture) void {
-        const focus = capture.expected_focus orelse return;
-        const active = capture.model.workspace.activeConst() orelse {
-            capture.committed_focus_observed = false;
-            return;
-        };
-
-        capture.committed_focus_observed = capture.committed_focus_observed and
-            std.meta.eql(active.location, focus.location) and
-            active.model.layout.focused() == focus.focused and
-            capture.model.version().panes == focus.panes_revision;
-    }
-
-    fn eventSlice(capture: *const EffectCapture) []const Event {
-        return capture.events[0..capture.event_count];
-    }
-};
+const EffectCapture = @import("ActivePaneResourceDeliveryEffectCapture.zig");
 
 fn prepareModel(model: *client_model.Model, fullscreen: bool) !client_model.PaneFocus {
     const location: core.schema.TabLocation = .{

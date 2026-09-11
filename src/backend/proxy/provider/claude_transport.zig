@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const middleware = @import("../middleware.zig");
-const request = @import("request.zig");
+const request = @import("request_support.zig");
 
 var stateless_context: u8 = 0;
 
@@ -58,14 +58,7 @@ fn uniqueHeader(fields: []const middleware.HeaderView, wanted: []const u8) ?[]co
     return found;
 }
 
-const TransformCase = struct {
-    dialect: request.ApiDialect = .anthropic_messages,
-    direction: middleware.Direction = .request,
-    kind: middleware.HeaderKind = .request,
-    method: []const u8 = "POST",
-    target: []const u8 = "/v1/messages",
-    encoding: ?[]const u8 = "gzip, br",
-};
+const TransformCase = @import("TransformCase.zig");
 
 fn apply(case: TransformCase, effects: *middleware.EffectBatch) middleware.TransformStatus {
     var fields: [3]middleware.HeaderView = undefined;

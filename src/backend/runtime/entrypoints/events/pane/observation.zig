@@ -10,234 +10,31 @@ const agent_process = @import("../../../../process/root.zig");
 const telemetry_mod = @import("../../../observability/root.zig").telemetry;
 const test_support = @import("../../../tests/support.zig");
 
-const Io = std.Io;
-const diagnostics = core.diagnostics;
-const schema = core.schema;
-const Pane = pane_mod.Pane;
-const PaneKey = pane_mod.PaneKey;
-const PaneStore = pane_mod.PaneStore;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+pub const Io = std.Io;
+pub const diagnostics = core.diagnostics;
+pub const schema = core.schema;
+pub const Pane = pane_mod.Pane;
+pub const PaneKey = pane_mod.PaneKey;
+pub const PaneStore = pane_mod.PaneStore;
+pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 
-pub const Work = struct {
-    pane: *Pane,
-    current_size: schema.TerminalSize,
-    process_cache: agent_process.Cache,
-};
+pub const Work = @import("ObservationWork.zig");
 
-pub const Completion = struct {
-    pane: PaneKey,
-    stats: history.observer.Stats,
-    process_probe: agent_process.Probe,
-};
+pub const Completion = @import("ObservationCompletion.zig");
 
-pub const Resources = struct {
-    io: Io,
-    panes: *PaneStore,
-    agents: *agent_mod.Tracker,
-    metrics: *RuntimeMetrics,
-};
+pub const Resources = @import("ObservationResources.zig");
 
-const ProcessReconciliation = struct {
-    pane: *Pane,
-    probe: agent_process.Probe,
-    transition: pane_mod.HistoryObservationCompletion,
-};
+const ProcessReconciliation = @import("ProcessReconciliation.zig");
 
-const ScreenReconciliation = struct {
-    pane: *Pane,
-    stats: history.observer.Stats,
-    shell_foreground: bool,
-};
+const ScreenReconciliation = @import("ScreenReconciliation.zig");
 
-/// Defines observation actor startup and runtime-owned projection effects.
-///
-/// ```zig
-/// const port: RuntimePort(Context) = .{ ... };
-/// ```
-pub fn RuntimePort(comptime Context: type) type {
-    return struct {
-        start: *const fn (*Context, Work) anyerror!void,
-        publish_sound: *const fn (*Context, schema.AgentSoundNotification) void,
-        schedule_description: *const fn (*Context) void,
-        collect: *const fn (*Context) void,
-        pump_clients: *const fn (*Context) void,
-    };
-}
+pub const RuntimePort = @import("GenericObservationRuntimePort.zig").Type;
 
-/// Creates a statically dispatched observation coordinator.
-///
-/// ```zig
-/// const ObservationCoordinator = Coordinator(Context, port);
-/// ```
-pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) type {
-    return struct {
-        const Self = @This();
-
-        context: *Context,
-        resources: Resources,
-
-        /// Binds one runtime's pane, agent, and telemetry stores.
-        ///
-        /// ```zig
-        /// var coordinator = ObservationCoordinator.init(&context, resources);
-        /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
-            return .{ .context = context, .resources = resources };
-        }
-
-        /// Starts at most one history observation actor. Async-start failure
-        /// releases the pane and sealed-batch borrow.
-        ///
-        /// ```zig
-        /// try coordinator.schedule(pane);
-        /// ```
-        pub fn schedule(coordinator: *Self, pane: *Pane) !void {
-            const borrow = pane.beginHistoryObservation() orelse return;
-            const work: Work = .{
-                .pane = pane,
-                .current_size = borrow.current_size,
-                .process_cache = borrow.process_cache,
-            };
-
-            port.start(coordinator.context, work) catch |err| {
-                pane.cancelHistoryObservation();
-                return err;
-            };
-        }
-
-        /// Applies one generation-matched completion, reconciles process and
-        /// screen evidence, publishes exact status-transition sounds, then
-        /// rearms pending observation work before lifecycle effects.
-        ///
-        /// ```zig
-        /// try coordinator.handle(completion);
-        /// ```
-        pub fn handle(coordinator: *Self, completion: Completion) !void {
-            const pane = coordinator.resources.panes.resolve(completion.pane) orelse {
-                coordinator.resources.metrics.stale_pane_events += 1;
-                return;
-            };
-
-            const transition = pane.completeHistoryObservation(completion.process_probe.cache);
-            if (transition.cwd_changed) {
-                coordinator.resources.agents.touch();
-            }
-
-            coordinator.observeProcessMetrics(completion.process_probe);
-            coordinator.reconcileProcess(.{
-                .pane = pane,
-                .probe = completion.process_probe,
-                .transition = transition,
-            });
-            coordinator.observeHistoryMetrics(completion.stats);
-            coordinator.reconcileScreen(.{
-                .pane = pane,
-                .stats = completion.stats,
-                .shell_foreground = transition.shell_foreground,
-            });
-
-            port.schedule_description(coordinator.context);
-            try coordinator.schedule(pane);
-            port.collect(coordinator.context);
-            port.pump_clients(coordinator.context);
-        }
-
-        fn observeProcessMetrics(coordinator: *Self, probe: agent_process.Probe) void {
-            if (comptime !diagnostics.enabled) {
-                return;
-            }
-
-            if (!probe.inspected) {
-                return;
-            }
-
-            coordinator.resources.metrics.agent_process_inspections +|= 1;
-            if (probe.cache.provider == .unknown) {
-                coordinator.resources.metrics.agent_process_misses +|= 1;
-            }
-        }
-
-        fn reconcileProcess(coordinator: *Self, reconciliation: ProcessReconciliation) void {
-            if (!reconciliation.probe.changed) {
-                return;
-            }
-
-            if (reconciliation.probe.cache.provider != .unknown) {
-                _ = coordinator.resources.agents.observeProcess(.{
-                    .identity = agent_identity.fromPane(reconciliation.pane),
-                    .provider = reconciliation.probe.cache.provider,
-                    .process_id = reconciliation.probe.cache.process_group_id.?,
-                    .observed_at_ms = coordinator.nowMs(),
-                });
-                return;
-            }
-
-            if (reconciliation.transition.shell_foreground) {
-                _ = coordinator.resources.agents.remove(reconciliation.pane.key());
-                return;
-            }
-
-            if (reconciliation.transition.previous_process.provider != .unknown) {
-                _ = coordinator.resources.agents.clearProcess(reconciliation.pane.key());
-            }
-        }
-
-        fn observeHistoryMetrics(coordinator: *Self, stats: history.observer.Stats) void {
-            if (comptime !diagnostics.enabled) {
-                return;
-            }
-
-            coordinator.resources.metrics.history_candidate_input_bytes +|= stats.input_bytes;
-            coordinator.resources.metrics.history_captured +|= stats.captured;
-            coordinator.resources.metrics.history_dropped +|= stats.dropped;
-
-            if (stats.failed) {
-                coordinator.resources.metrics.history_observation_failures +|= 1;
-            }
-
-            if (stats.reset) {
-                coordinator.resources.metrics.history_observation_resets +|= 1;
-            }
-        }
-
-        fn reconcileScreen(coordinator: *Self, reconciliation: ScreenReconciliation) void {
-            const observation = reconciliation.stats.agent_observation orelse return;
-            if (reconciliation.shell_foreground) {
-                return;
-            }
-
-            const identity = agent_identity.fromPane(reconciliation.pane);
-            const previous_status = coordinator.resources.agents.projectedStatus(identity.key);
-            const changed = coordinator.resources.agents.observeScreen(.{
-                .identity = identity,
-                .signal = observation.signal,
-                .observed_at_ms = observation.observed_at_ms,
-                .observed_at_ns = observation.observed_at_ns,
-            });
-            if (!changed) {
-                return;
-            }
-
-            const sound = soundForTransition(
-                previous_status,
-                coordinator.resources.agents.projectedStatus(identity.key),
-            ) orelse return;
-            port.publish_sound(coordinator.context, .{
-                .pane_id = identity.key.id,
-                .pane_generation = identity.key.generation,
-                .sound = sound,
-            });
-        }
-
-        fn nowMs(coordinator: *const Self) i64 {
-            return Io.Timestamp.now(coordinator.resources.io, .real).toMilliseconds();
-        }
-    };
-}
+pub const Coordinator = @import("GenericObservationCoordinator.zig").Type;
 
 pub const soundForTransition = agent_mod.soundForTransition;
 
-const Step = enum {
+pub const Step = enum {
     sound,
     description,
     observation,
@@ -245,47 +42,7 @@ const Step = enum {
     pump_clients,
 };
 
-const Capture = struct {
-    steps: [5]Step = undefined,
-    len: usize = 0,
-    start_failure: bool = false,
-    started_work: ?Work = null,
-    start_saw_borrow: bool = false,
-    sound: ?schema.AgentSoundNotification = null,
-
-    fn record(capture: *Capture, step: Step) void {
-        std.debug.assert(capture.len < capture.steps.len);
-        capture.steps[capture.len] = step;
-        capture.len += 1;
-    }
-
-    fn start(capture: *Capture, work: Work) !void {
-        capture.record(.observation);
-        capture.started_work = work;
-        capture.start_saw_borrow = work.pane.history_observer.worker != null and work.pane.actor_count != 0;
-
-        if (capture.start_failure) {
-            return error.SchedulerUnavailable;
-        }
-    }
-
-    fn publishSound(capture: *Capture, notification: schema.AgentSoundNotification) void {
-        capture.record(.sound);
-        capture.sound = notification;
-    }
-
-    fn scheduleDescription(capture: *Capture) void {
-        capture.record(.description);
-    }
-
-    fn collect(capture: *Capture) void {
-        capture.record(.collect);
-    }
-
-    fn pumpClients(capture: *Capture) void {
-        capture.record(.pump_clients);
-    }
-};
+const Capture = @import("ObservationCapture.zig");
 
 const test_port: RuntimePort(Capture) = .{
     .start = Capture.start,
@@ -332,15 +89,7 @@ fn expectSteps(capture: *const Capture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
 }
 
-const ExpectedMetrics = struct {
-    inspections: u64 = 0,
-    misses: u64 = 0,
-    input_bytes: u64 = 0,
-    captured: u64 = 0,
-    dropped: u64 = 0,
-    failures: u64 = 0,
-    resets: u64 = 0,
-};
+const ExpectedMetrics = @import("ObservationExpectedMetrics.zig");
 
 fn expectMetrics(metrics: *const RuntimeMetrics, expected: ExpectedMetrics) !void {
     const actual = if (comptime diagnostics.enabled) expected else ExpectedMetrics{};

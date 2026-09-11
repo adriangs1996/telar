@@ -10,20 +10,20 @@ const tags = @import("tags.zig");
 
 const ClientTag = tags.ClientTag;
 const ServerTag = tags.ServerTag;
-const RequestId = id.RequestId;
-const PaneId = id.PaneId;
+pub const RequestId = id.RequestId;
+pub const PaneId = id.PaneId;
 const AgentProvider = types.AgentProvider;
 const AgentAttachmentMarkers = types.AgentAttachmentMarkers;
 const AgentStatus = types.AgentStatus;
-const AgentReportState = types.AgentReportState;
+pub const AgentReportState = types.AgentReportState;
 const AgentSound = types.AgentSound;
 const AgentSoundNotification = types.AgentSoundNotification;
 const AgentSource = types.AgentSource;
 const AgentAuthority = types.AgentAuthority;
 const AgentTitleSource = types.AgentTitleSource;
 const AgentTitleState = types.AgentTitleState;
-const AgentSessionFileKind = types.AgentSessionFileKind;
-const AgentSnapshotEntry = types.AgentSnapshotEntry;
+pub const AgentSessionFileKind = types.AgentSessionFileKind;
+pub const AgentSnapshotEntry = types.AgentSnapshotEntry;
 const encodeDerived = codec.encodeDerived;
 const validateRequestId = codec.validateRequestId;
 const validatePaneId = codec.validatePaneId;
@@ -31,103 +31,28 @@ const validateBytes = codec.validateBytes;
 const encodeTabLocation = codec.encodeTabLocation;
 const decodeTabLocation = codec.decodeTabLocation;
 
-/// Marks one exact agent generation as seen so a `done` status returns to
-/// `ready`. A stale generation is ignored by the runtime.
-pub const AcknowledgeAgent = struct {
-    pane_id: PaneId,
-    pane_generation: u64,
-};
+pub const AcknowledgeAgent = @import("AcknowledgeAgent.zig");
 
-/// One-shot request for the current agent snapshot. The reply is the same
-/// `agent_snapshot` message that runtime-state subscribers receive.
-pub const QueryAgents = struct {
-    request_id: RequestId,
-};
+pub const QueryAgents = @import("QueryAgents.zig");
 
-/// An agent's own session identifier, reported by its lifecycle hooks so a
-/// restart can resume the conversation. Only the exact pane generation that
-/// hosts the agent accepts it.
-pub const ReportAgentSession = struct {
-    request_id: RequestId,
-    pane_id: PaneId,
-    pane_generation: u64,
-    session: []const u8,
-};
+pub const ReportAgentSession = @import("ReportAgentSession.zig");
 
-/// An official lifecycle report from an agent's hooks: its state and,
-/// optionally, its own session reference and the file it records the session
-/// in. Only the exact pane generation that hosts the agent accepts it.
-pub const ReportAgent = struct {
-    request_id: RequestId,
-    pane_id: PaneId,
-    pane_generation: u64,
-    state: AgentReportState,
-    session: []const u8 = "",
-    session_file: []const u8 = "",
-    session_file_kind: AgentSessionFileKind = .claude_transcript,
-};
+pub const ReportAgent = @import("ReportAgent.zig");
 
 pub const AgentCommandPhase = enum(u8) {
     started = 0,
     finished = 1,
 };
 
-/// One shell command observed by an official agent hook. Start and finish
-/// reports share a tool-call identifier so persistence can close the row
-/// idempotently.
-pub const ReportAgentCommand = struct {
-    request_id: RequestId,
-    pane_id: PaneId,
-    pane_generation: u64,
-    phase: AgentCommandPhase,
-    provider: []const u8,
-    tool_call_id: []const u8 = "",
-    command: []const u8,
-    cwd: []const u8 = "",
-    session: []const u8 = "",
-    exit_code: ?i32 = null,
-};
+pub const ReportAgentCommand = @import("ReportAgentCommand.zig");
 
-/// The name an agent's own session carries, reported by its hooks when the
-/// user renames it inside the agent. An empty title clears an earlier agent
-/// title. Only the exact pane generation that hosts the agent accepts it.
-pub const ReportAgentTitle = struct {
-    request_id: RequestId,
-    pane_id: PaneId,
-    pane_generation: u64,
-    title: []const u8 = "",
-};
+pub const ReportAgentTitle = @import("ReportAgentTitle.zig");
 
-pub const AgentSnapshot = struct {
-    revision: u64,
-    entries: []const AgentSnapshotEntry,
-};
+pub const AgentSnapshot = @import("AgentSnapshot.zig");
 
-pub const AgentSnapshotView = struct {
-    revision: u64,
-    entry_count: u16,
-    encoded_entries: []const u8,
+pub const AgentSnapshotView = @import("AgentSnapshotView.zig");
 
-    pub fn entries(snapshot: AgentSnapshotView) AgentSnapshotIterator {
-        return .{
-            .decoder = .init(snapshot.encoded_entries),
-            .remaining = snapshot.entry_count,
-        };
-    }
-};
-
-pub const AgentSnapshotIterator = struct {
-    decoder: wire.Decoder,
-    remaining: u16,
-
-    pub fn next(iterator: *AgentSnapshotIterator) !?AgentSnapshotEntry {
-        if (iterator.remaining == 0) {
-            return null;
-        }
-        iterator.remaining -= 1;
-        return try decodeAgentSnapshotEntry(&iterator.decoder);
-    }
-};
+pub const AgentSnapshotIterator = @import("AgentSnapshotIterator.zig");
 
 /// A session reference is an opaque token: letters, digits, `.`, `_`, `-`
 /// and `:`, so it can never carry options or shell syntax into a relaunch.
@@ -492,7 +417,7 @@ fn encodeAgentSnapshotEntry(encoder: *wire.Encoder, entry: AgentSnapshotEntry) !
     try encoder.writeInt(i64, entry.expires_at_ms);
 }
 
-fn decodeAgentSnapshotEntry(decoder: *wire.Decoder) !AgentSnapshotEntry {
+pub fn decodeAgentSnapshotEntry(decoder: *wire.Decoder) !AgentSnapshotEntry {
     const entry: AgentSnapshotEntry = .{
         .pane_id = try id.pane(try decoder.readInt(u64)),
         .pane_generation = try decoder.readInt(u64),

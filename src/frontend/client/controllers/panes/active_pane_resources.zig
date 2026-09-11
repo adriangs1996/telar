@@ -10,7 +10,7 @@ const pane_geometry = @import("pane_geometry.zig");
 const tab_snapshots = @import("../tabs/tab_snapshots.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const active_pane_resource_delivery = panes_application.active_pane_resource_delivery;
 const ui = core.ui;
 

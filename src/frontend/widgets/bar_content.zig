@@ -1,7 +1,7 @@
 //! Allocation-free rendering for validated configured bar segments.
 
 const bars = @import("../bars/root.zig");
-const widget = @import("context.zig");
+const widget = @import("context_support.zig");
 const ui = @import("../ui/root.zig");
 
 pub fn render(context: *widget.Context, area: ui.Rect, input: Input) void {
@@ -29,10 +29,7 @@ pub fn render(context: *widget.Context, area: ui.Rect, input: Input) void {
     }
 }
 
-pub const Input = struct {
-    content: *const bars.Content,
-    alignment: bars.Alignment,
-};
+pub const Input = @import("BarContentInput.zig");
 
 fn resolveStyle(context: *const widget.Context, configured: bars.Style) ui.Style {
     return .{

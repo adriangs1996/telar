@@ -111,10 +111,7 @@ fn ensureColorFields(state: *lua.lua_State, index: c_int, diagnostic: *config_mo
     }
 }
 
-const ColorInput = struct {
-    index: c_int,
-    field: []const u8,
-};
+const ColorInput = @import("ColorInput.zig");
 
 fn parseColor(state: *lua.lua_State, input: ColorInput, diagnostic: *config_model.Diagnostic) !core.ui.Color {
     const text = value.string(state, input.index) orelse {

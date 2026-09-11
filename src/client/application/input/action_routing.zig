@@ -6,9 +6,9 @@ const lua_config = @import("../../config/root.zig");
 const input = @import("../../input/root.zig");
 const lua_action = @import("lua_action.zig");
 
-const Action = input.action.Action;
-const PluginAction = input.action.PluginAction;
-const keybind = input.keybind;
+pub const Action = input.action.Action;
+pub const PluginAction = input.action.PluginAction;
+pub const keybind = input.keybind;
 
 pub const Authority = union(enum) {
     suppressed,
@@ -23,14 +23,7 @@ pub const Control = enum {
     stop,
 };
 
-pub const Effects = struct {
-    context: *anyopaque,
-    native: *const fn (*anyopaque, Action) anyerror!Control,
-    lua: *const fn (*anyopaque, lua_action.Command) anyerror!lua_action.Outcome,
-    plugin: *const fn (*anyopaque, PluginAction) anyerror!void,
-    key: *const fn (*anyopaque, keybind.Key) anyerror!void,
-    paste: *const fn (*anyopaque, []const u8) anyerror!void,
-};
+pub const Effects = @import("ActionRoutingEffects.zig");
 
 /// Only native wheel-step actions may repeat, at most ten steps per second.
 /// For example: `const policy = repeatPolicy(.{ .scroll_pane = .up }, pane_id);`.
@@ -41,67 +34,9 @@ pub fn repeatPolicy(value: Action, pane_id: core.schema.PaneId) ?keybind.RepeatP
     };
 }
 
-pub const ActionRoutingHandler = struct {
-    effects: Effects,
+pub const ActionRoutingHandler = @import("ActionRoutingHandler.zig");
 
-    /// Routes one configured action without exposing source-specific policy to
-    /// the host input entrypoint.
-    ///
-    /// ```zig
-    /// const control = try handler.execute(action, authority);
-    /// ```
-    pub fn execute(self: *ActionRoutingHandler, value: Action, authority: Authority) !Control {
-        const available = switch (authority) {
-            .suppressed => return .continue_routing,
-            .available => |state| state,
-        };
-
-        if (available.agent_mode_active and value != .toggle_agent_mode and value != .detach) {
-            return .continue_routing;
-        }
-
-        return switch (value) {
-            .lua_callback => |reference| self.executeLua(
-                .{ .callback = reference },
-                available.copy_mode_active,
-            ),
-            .lua_expr => |reference| self.executeLua(
-                .{ .expression = reference },
-                available.copy_mode_active,
-            ),
-            .plugin => |requested| plugin: {
-                try self.effects.plugin(self.effects.context, requested);
-
-                break :plugin .continue_routing;
-            },
-            else => self.effects.native(self.effects.context, value),
-        };
-    }
-
-    fn executeLua(handler: *ActionRoutingHandler, command: lua_action.Command, copy_mode_active: bool) !Control {
-        const outcome = try handler.effects.lua(handler.effects.context, command);
-
-        switch (outcome) {
-            .applied, .unavailable, .invocation_failed, .validation_failed => return .continue_routing,
-            .exit => return .stop,
-            .input => |decision| switch (decision) {
-                .consume => {},
-                .forward_binding, .keys => |keys| for (keys.slice()) |key_value| {
-                    try handler.effects.key(handler.effects.context, key_value);
-                },
-                .paste => |paste| {
-                    if (!copy_mode_active) {
-                        try handler.effects.paste(handler.effects.context, paste.slice());
-                    }
-                },
-            },
-        }
-
-        return .continue_routing;
-    }
-};
-
-const Event = enum {
+pub const Event = enum {
     native,
     lua,
     plugin,
@@ -109,7 +44,7 @@ const Event = enum {
     paste,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     native,
     lua,
@@ -118,92 +53,7 @@ const Failure = enum {
     paste,
 };
 
-const Capture = struct {
-    events: [lua_config.max_expression_keys + 1]Event = undefined,
-    event_count: usize = 0,
-    native_control: Control = .continue_routing,
-    lua_outcome: lua_action.Outcome = .applied,
-    lua_command: ?lua_action.Command = null,
-    plugin_action: PluginAction = undefined,
-    keys: [lua_config.max_expression_keys]keybind.Key = undefined,
-    key_count: usize = 0,
-    paste_bytes: [32]u8 = undefined,
-    paste_len: usize = 0,
-    failure: Failure = .none,
-
-    fn port(capture: *Capture) Effects {
-        return .{
-            .context = capture,
-            .native = native,
-            .lua = lua,
-            .plugin = plugin,
-            .key = key,
-            .paste = paste,
-        };
-    }
-
-    fn record(capture: *Capture, event: Event) void {
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn native(raw_context: *anyopaque, value: Action) !Control {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        _ = value;
-        capture.record(.native);
-
-        if (capture.failure == .native) {
-            return error.NativeActionFailed;
-        }
-
-        return capture.native_control;
-    }
-
-    fn lua(raw_context: *anyopaque, command: lua_action.Command) !lua_action.Outcome {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.record(.lua);
-        capture.lua_command = command;
-
-        if (capture.failure == .lua) {
-            return error.LuaActionFailed;
-        }
-
-        return capture.lua_outcome;
-    }
-
-    fn plugin(raw_context: *anyopaque, requested: PluginAction) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.record(.plugin);
-        capture.plugin_action = requested;
-
-        if (capture.failure == .plugin) {
-            return error.PluginActionFailed;
-        }
-    }
-
-    fn key(raw_context: *anyopaque, value: keybind.Key) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.record(.key);
-        capture.keys[capture.key_count] = value;
-        capture.key_count += 1;
-
-        if (capture.failure == .key) {
-            return error.KeyRoutingFailed;
-        }
-    }
-
-    fn paste(raw_context: *anyopaque, text: []const u8) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.record(.paste);
-        std.debug.assert(text.len <= capture.paste_bytes.len);
-        @memcpy(capture.paste_bytes[0..text.len], text);
-        capture.paste_len = text.len;
-
-        if (capture.failure == .paste) {
-            return error.PasteRoutingFailed;
-        }
-    }
-};
+const Capture = @import("ActionRoutingCapture.zig");
 
 fn routingAuthority(copy_mode_active: bool) Authority {
     return .{ .available = .{ .copy_mode_active = copy_mode_active } };

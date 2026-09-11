@@ -5,22 +5,9 @@ const core = @import("telar-core");
 
 const schema = core.schema;
 
-pub const Diff = struct {
-    span_count: usize = 0,
-    damaged_rows: usize = 0,
-    scanned_cells: usize = 0,
-    coalesced_spans: usize = 0,
-    bridged_cells: usize = 0,
-    bytes_saved: usize = 0,
-    snapshot_required: bool = false,
-};
+pub const Diff = @import("Diff.zig");
 
-pub const Input = struct {
-    current: []const core.ui.Cell,
-    acknowledged: []const core.ui.Cell,
-    cols: u16,
-    damaged_rows: []const bool,
-};
+pub const Input = @import("Input.zig");
 
 /// Compares only rows which RenderState reported as dirty.
 ///

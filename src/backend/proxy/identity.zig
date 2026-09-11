@@ -3,14 +3,10 @@
 const std = @import("std");
 const core = @import("telar-core");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
 pub const token_bytes = 16;
-pub const Credential = struct {
-    pane_id: schema.PaneId,
-    pane_generation: u64,
-    token: [token_bytes]u8,
-};
+pub const Credential = @import("Credential.zig");
 
 /// Generates one cryptographically random credential token.
 ///

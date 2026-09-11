@@ -48,11 +48,7 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
     runtime.session_path_len = @intCast(path.len);
 }
 
-const OptionalBoolean = struct {
-    table: c_int,
-    field: [*:0]const u8,
-    default: bool,
-};
+const OptionalBoolean = @import("OptionalBoolean.zig");
 
 fn optionalBoolean(state: *lua.lua_State, input: OptionalBoolean, diagnostic: *config_model.Diagnostic) !bool {
     _ = lua.lua_getfield(state, input.table, input.field);

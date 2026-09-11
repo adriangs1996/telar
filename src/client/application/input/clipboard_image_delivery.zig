@@ -4,58 +4,11 @@ const std = @import("std");
 const notification_capability = @import("../../root.zig").notifications;
 const clipboard_image = @import("clipboard_image.zig");
 
-pub const Effects = struct {
-    context: *anyopaque,
-    publish_notification: *const fn (*anyopaque, notification_capability.Input) anyerror!void,
-};
+pub const Effects = @import("ClipboardImageDeliveryEffects.zig");
 
-pub const DeliverClipboardImageCompletionHandler = struct {
-    effects: Effects,
+pub const DeliverClipboardImageCompletionHandler = @import("DeliverClipboardImageCompletionHandler.zig");
 
-    /// Keeps expected and stale results quiet while translating classified
-    /// media failures into bounded notifications.
-    ///
-    /// ```zig
-    /// try handler.execute(outcome);
-    /// ```
-    pub fn execute(handler: *DeliverClipboardImageCompletionHandler, outcome: clipboard_image.CompletionOutcome) !void {
-        const input: notification_capability.Input = switch (outcome) {
-            .applied, .stale, .ignored, .no_image => return,
-            .too_large => .{
-                .level = .failure,
-                .title = "Image preview skipped",
-                .message = "The clipboard image exceeds Telar's local preview limit",
-            },
-            .worker_failed, .adoption_failed => |err| .{
-                .level = .failure,
-                .title = "Image preview failed",
-                .message = @errorName(err),
-            },
-        };
-
-        try handler.effects.publish_notification(handler.effects.context, input);
-    }
-};
-
-const Capture = struct {
-    calls: usize = 0,
-    input: ?notification_capability.Input = null,
-    fail: bool = false,
-
-    fn effects(capture: *Capture) Effects {
-        return .{ .context = capture, .publish_notification = publishNotification };
-    }
-
-    fn publishNotification(context: *anyopaque, input: notification_capability.Input) !void {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.input = input;
-
-        if (capture.fail) {
-            return error.NotificationPublicationFailed;
-        }
-    }
-};
+const Capture = @import("ClipboardImageDeliveryCapture.zig");
 
 fn deliveryHandler(capture: *Capture) DeliverClipboardImageCompletionHandler {
     return .{ .effects = capture.effects() };

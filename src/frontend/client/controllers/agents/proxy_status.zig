@@ -5,7 +5,7 @@ const agents_application = @import("telar-client").application.agents;
 const client_model = @import("telar-client").model;
 const notifications = @import("telar-client").notifications;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const notification_flow = @import("../notifications/notifications.zig");
 const proxy_status = agents_application.proxy_status;
 const proxy_status_delivery = agents_application.proxy_status_delivery;

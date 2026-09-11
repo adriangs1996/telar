@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const edit = @import("telar-client").input.edit;
 const modal = @import("modal.zig");
-const widget = @import("context.zig");
+const widget = @import("context_support.zig");
 const ui = @import("../ui/root.zig");
 
 const schema = core.schema;
@@ -13,32 +13,11 @@ pub const Field = edit.Field(schema.max_tab_label_bytes);
 pub const max_rows = 12;
 pub const max_row_bytes = 160;
 
-pub const Row = struct {
-    text: [max_row_bytes]u8 = undefined,
-    len: u8 = 0,
-    selected: bool = false,
+pub const Row = @import("Row.zig");
 
-    pub fn slice(row: *const Row) []const u8 {
-        return row.text[0..row.len];
-    }
-};
+pub const Input = @import("GotoPickerInput.zig");
 
-pub const Input = struct {
-    title: []const u8,
-    field: *Field,
-    rows: []const Row,
-    total: u16,
-    /// Short status shown in the bottom border, e.g. the active scope.
-    hint: []const u8 = "",
-    /// True when a pixel-aligned frame already surrounds the modal, so the
-    /// cell border must not be drawn on top of it.
-    graphical_frame: bool = false,
-};
-
-pub const Output = struct {
-    area: ui.Rect,
-    cursor: ?widget.Cursor,
-};
+pub const Output = @import("GotoPickerOutput.zig");
 
 /// Application-level rectangle shared by picker and attachment modals.
 ///

@@ -5,8 +5,8 @@ const session_file = @import("../session_file.zig");
 const c = @cImport({
     @cInclude("sqlite3.h");
 });
-const Io = std.Io;
-const schema = core.schema;
+pub const Io = std.Io;
+pub const schema = core.schema;
 pub const Job = @import("types.zig").Job;
 pub const Completion = @import("types.zig").Completion;
 
@@ -25,32 +25,7 @@ pub fn probe(job: Job) Completion {
     return completion;
 }
 
-const TestDirectory = struct {
-    temp: std.testing.TmpDir,
-    buffer: [std.fs.max_path_bytes]u8 = undefined,
-    len: usize = 0,
-
-    fn init(io: Io) !TestDirectory {
-        var directory: TestDirectory = .{ .temp = std.testing.tmpDir(.{}) };
-        directory.len = try directory.temp.dir.realPath(io, &directory.buffer);
-        return directory;
-    }
-
-    fn deinit(directory: *TestDirectory) void {
-        directory.temp.cleanup();
-    }
-
-    fn watch(directory: *const TestDirectory, kind: session_file.Kind, name: []const u8) !session_file.Watch {
-        var value: session_file.Watch = .{
-            .key = .{ .id = try schema.id.pane(7), .generation = 3 },
-            .session = try @import("../types.zig").SessionReference.init("abc", 1),
-            .kind = kind,
-        };
-        const path = try std.fmt.bufPrint(&value.path, "{s}/{s}", .{ directory.buffer[0..directory.len], name });
-        value.path_len = @intCast(path.len);
-        return value;
-    }
-};
+const TestDirectory = @import("TestDirectory.zig");
 
 test "transcript probe seeds at the end, then reads only appended lines and resumes after a rewrite" {
     const io = std.testing.io;

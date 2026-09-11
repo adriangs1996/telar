@@ -5,206 +5,36 @@ const core = @import("telar-core");
 const workspace_capability = @import("../../workspace/root.zig");
 const client_model = @import("../../root.zig").model;
 
-const layout_mod = workspace_capability.layout;
-const multiplexer = workspace_capability.multiplexer;
-const schema = core.schema;
-const ui = core.ui;
+pub const layout_mod = workspace_capability.layout;
+pub const multiplexer = workspace_capability.multiplexer;
+pub const schema = core.schema;
+pub const ui = core.ui;
 
-pub const OfferEffects = struct {
-    context: *anyopaque,
-    deliver_resize: *const fn (*anyopaque, schema.PaneResize) anyerror!void,
-    bottom_reservation: *const fn (*anyopaque) ?layout_mod.PaneBottomReservation = noBottomReservation,
-};
+pub const OfferEffects = @import("OfferEffects.zig");
 
-pub const Effects = struct {
-    context: *anyopaque,
-    invalidate_graphics_placements: *const fn (*anyopaque) void,
-    request_visible_attachments: *const fn (*anyopaque, ui.Rect) anyerror!void,
-    deliver_resize: *const fn (*anyopaque, schema.PaneResize) anyerror!void,
-    bottom_reservation: *const fn (*anyopaque) ?layout_mod.PaneBottomReservation = noBottomReservation,
-};
+pub const Effects = @import("PaneGeometryDeliveryEffects.zig");
 
-pub const OfferPaneGeometryHandler = struct {
-    effects: OfferEffects,
+pub const OfferPaneGeometryHandler = @import("OfferPaneGeometryHandler.zig");
 
-    /// Offers every attached pane that has visible content in the supplied
-    /// layout rectangle.
-    ///
-    /// ```zig
-    /// const count = try handler.execute(model, area);
-    /// ```
-    pub fn execute(handler: *OfferPaneGeometryHandler, model: *multiplexer.Model, area: ui.Rect) !usize {
-        var count: usize = 0;
-        var layout = model.layoutSnapshot(area).*;
-        _ = layout.reserveBelowPane(handler.effects.bottom_reservation(handler.effects.context));
-        var panes = model.paneIterator();
-        while (panes.next()) |pane| {
-            if (!pane.attached) {
-                continue;
-            }
+pub const OfferActivePaneGeometryHandler = @import("OfferActivePaneGeometryHandler.zig");
 
-            const view = layout.find(pane.id) orelse continue;
-            var size = multiplexer.rectSize(view.content) orelse continue;
-            size.cell_width_px = model.cell_width_px;
-            size.cell_height_px = model.cell_height_px;
-            try handler.effects.deliver_resize(handler.effects.context, .{
-                .pane_id = pane.id,
-                .size = size,
-            });
-            count += 1;
-        }
+pub const DeliverPaneGeometryHandler = @import("DeliverPaneGeometryHandler.zig");
 
-        return count;
-    }
-};
-
-pub const OfferActivePaneGeometryHandler = struct {
-    model: *client_model.Model,
-    effects: OfferEffects,
-
-    /// Selects the active tab once and offers its attached visible panes.
-    /// An empty client has no geometry to deliver.
-    ///
-    /// ```zig
-    /// const count = try handler.execute(area);
-    /// ```
-    pub fn execute(handler: *OfferActivePaneGeometryHandler, area: ui.Rect) !usize {
-        const active = handler.model.workspace.active() orelse return 0;
-        var offer: OfferPaneGeometryHandler = .{ .effects = handler.effects };
-
-        return offer.execute(&active.model, area);
-    }
-};
-
-pub const DeliverPaneGeometryHandler = struct {
-    model: *client_model.Model,
-    effects: Effects,
-
-    /// Validates one committed geometry change before invalidating placements
-    /// and offering its visible attached pane sizes, then requests attachments
-    /// for detached panes revealed by the new geometry.
-    ///
-    /// ```zig
-    /// const count = try handler.execute(change);
-    /// ```
-    pub fn execute(handler: *DeliverPaneGeometryHandler, change: client_model.PaneGeometryChange) !usize {
-        const active = handler.model.workspace.active() orelse return error.StalePaneGeometry;
-        if (!std.meta.eql(active.location, change.location) or
-            active.model.layout.focused() != change.focused or
-            active.model.layout.isFullscreen() != change.fullscreen or
-            handler.model.version().panes != change.panes_revision)
-        {
-            return error.StalePaneGeometry;
-        }
-
-        handler.effects.invalidate_graphics_placements(handler.effects.context);
-        var offer: OfferPaneGeometryHandler = .{ .effects = .{
-            .context = handler.effects.context,
-            .deliver_resize = handler.effects.deliver_resize,
-            .bottom_reservation = handler.effects.bottom_reservation,
-        } };
-
-        const count = try offer.execute(&active.model, change.area);
-        try handler.effects.request_visible_attachments(handler.effects.context, change.area);
-
-        return count;
-    }
-};
-
-fn noBottomReservation(context: *anyopaque) ?layout_mod.PaneBottomReservation {
+pub fn noBottomReservation(context: *anyopaque) ?layout_mod.PaneBottomReservation {
     _ = context;
 
     return null;
 }
 
-const Event = enum {
+pub const Event = enum {
     invalidate_placements,
     resize,
     request_attachments,
 };
 
-const EffectCapture = struct {
-    model: ?*const client_model.Model = null,
-    expected_revision: u64 = 0,
-    events: [5]Event = undefined,
-    event_count: usize = 0,
-    resizes: [multiplexer.max_panes]schema.PaneResize = undefined,
-    resize_count: usize = 0,
-    committed_geometry_observed: bool = true,
-    fail_resize: ?usize = null,
-    bottom_reservation: ?layout_mod.PaneBottomReservation = null,
+const EffectCapture = @import("PaneGeometryDeliveryEffectCapture.zig");
 
-    fn offerEffects(capture: *EffectCapture) OfferEffects {
-        return .{
-            .context = capture,
-            .deliver_resize = deliverResize,
-            .bottom_reservation = bottomReservation,
-        };
-    }
-
-    fn effects(capture: *EffectCapture) Effects {
-        return .{
-            .context = capture,
-            .invalidate_graphics_placements = invalidateGraphicsPlacements,
-            .request_visible_attachments = requestVisibleAttachments,
-            .deliver_resize = deliverResize,
-            .bottom_reservation = bottomReservation,
-        };
-    }
-
-    fn bottomReservation(raw_context: *anyopaque) ?layout_mod.PaneBottomReservation {
-        const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
-
-        return capture.bottom_reservation;
-    }
-
-    fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
-        const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
-        capture.append(.invalidate_placements);
-    }
-
-    fn requestVisibleAttachments(raw_context: *anyopaque, _: ui.Rect) !void {
-        const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
-        capture.append(.request_attachments);
-    }
-
-    fn deliverResize(raw_context: *anyopaque, resize: schema.PaneResize) !void {
-        const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
-        capture.append(.resize);
-        capture.resizes[capture.resize_count] = resize;
-        capture.resize_count += 1;
-
-        if (capture.fail_resize == capture.resize_count) {
-            return error.PaneResizeDeliveryFailed;
-        }
-    }
-
-    fn append(capture: *EffectCapture, event: Event) void {
-        if (capture.model) |model| {
-            capture.committed_geometry_observed = capture.committed_geometry_observed and
-                model.version().panes == capture.expected_revision;
-        }
-
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn reset(capture: *EffectCapture) void {
-        capture.event_count = 0;
-        capture.resize_count = 0;
-    }
-
-    fn eventSlice(capture: *const EffectCapture) []const Event {
-        return capture.events[0..capture.event_count];
-    }
-};
-
-const TestingLayout = struct {
-    location: schema.TabLocation,
-    first: schema.PaneId,
-    second: schema.PaneId,
-    area: ui.Rect,
-};
+const TestingLayout = @import("TestingLayout.zig");
 
 fn prepareModel(model: *client_model.Model) !TestingLayout {
     const testing: TestingLayout = .{

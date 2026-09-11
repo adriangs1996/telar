@@ -6,69 +6,12 @@ const core = @import("telar-core");
 const pane_viewport_commands = @import("../../application/commands/pane_viewport.zig");
 const telemetry_mod = @import("../../observability/root.zig").telemetry;
 
-const schema = core.schema;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+pub const schema = core.schema;
+pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 
-/// Builds a statically dispatched viewport controller for the cell delivery
-/// path.
-///
-/// ```zig
-/// const ViewportController = Controller(*pane_viewport_commands.SetPaneViewportHandler);
-/// var controller = ViewportController.init(&metrics, &handler);
-/// ```
-pub fn Controller(comptime Executor: type) type {
-    return struct {
-        const Self = @This();
+pub const Controller = @import("GenericPaneViewportController.zig").Type;
 
-        metrics: *RuntimeMetrics,
-        executor: Executor,
-
-        /// Creates one controller bound to the requesting client and handler.
-        ///
-        /// ```zig
-        /// var controller = ViewportController.init(&metrics, &handler);
-        /// ```
-        pub fn init(metrics: *RuntimeMetrics, executor: Executor) Self {
-            return .{ .metrics = metrics, .executor = executor };
-        }
-
-        /// Maps the wire viewport to its command and counts only a missing
-        /// attachment as stale. Allocation failures remain infrastructure
-        /// errors after the attachment restores its previous state.
-        ///
-        /// ```zig
-        /// try controller.setPaneViewport(viewport);
-        /// ```
-        pub inline fn setPaneViewport(controller: *Self, viewport: schema.SetPaneViewport) !void {
-            const result = try controller.executor.execute(.{
-                .pane_id = viewport.pane_id,
-                .offset = viewport.offset,
-            });
-
-            if (result == .pane_not_attached) {
-                controller.metrics.stale_client_messages += 1;
-            }
-        }
-    };
-}
-
-const StubExecutor = struct {
-    result: pane_viewport_commands.SetPaneViewportResult = .changed,
-    failure: ?anyerror = null,
-    call_count: usize = 0,
-    command: ?pane_viewport_commands.SetPaneViewport = null,
-
-    fn execute(stub: *StubExecutor, command: pane_viewport_commands.SetPaneViewport) !pane_viewport_commands.SetPaneViewportResult {
-        stub.call_count += 1;
-        stub.command = command;
-
-        if (stub.failure) |failure| {
-            return failure;
-        }
-
-        return stub.result;
-    }
-};
+const StubExecutor = @import("PaneViewportStubExecutor.zig");
 
 const TestController = Controller(*StubExecutor);
 

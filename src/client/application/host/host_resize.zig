@@ -6,61 +6,11 @@ const client_model = @import("../../root.zig").model;
 
 const schema = core.schema;
 
-pub const Effects = struct {
-    context: *anyopaque,
-    deliver: *const fn (*anyopaque, client_model.HostCommit) anyerror!void,
-};
+pub const Effects = @import("HostResizeEffects.zig");
 
-pub const ResizeHostHandler = struct {
-    model: *client_model.Model,
-    effects: Effects,
+pub const ResizeHostHandler = @import("ResizeHostHandler.zig");
 
-    /// Commits one measured host state before synchronizing disposable resources.
-    ///
-    /// ```zig
-    /// const commit = try handler.execute(update) orelse return;
-    /// ```
-    pub fn execute(handler: *ResizeHostHandler, update: client_model.HostUpdate) !?client_model.HostCommit {
-        const commit = try handler.model.reconcileHost(update) orelse return null;
-
-        try handler.effects.deliver(handler.effects.context, commit);
-        return commit;
-    }
-};
-
-const EffectsCapture = struct {
-    model: *const client_model.Model,
-    calls: usize = 0,
-    observed_commit: bool = false,
-    commit: ?client_model.HostCommit = null,
-    fail: bool = false,
-
-    fn port(capture: *EffectsCapture) Effects {
-        return .{ .context = capture, .deliver = deliver };
-    }
-
-    fn deliver(context: *anyopaque, commit: client_model.HostCommit) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.commit = commit;
-        const resize_observed = if (commit.resize) |resize|
-            std.meta.eql(capture.model.hostSize(), resize.current) and
-                capture.model.version().host == resize.host_revision
-        else
-            true;
-        const capabilities_observed = if (commit.capabilities) |capabilities|
-            std.meta.eql(capture.model.hostCapabilities(), capabilities.current) and
-                capture.model.version().host_capabilities ==
-                    capabilities.host_capabilities_revision
-        else
-            true;
-        capture.observed_commit = resize_observed and capabilities_observed;
-
-        if (capture.fail) {
-            return error.HostResizeEffectsFailed;
-        }
-    }
-};
+const EffectsCapture = @import("HostResizeEffectsCapture.zig");
 
 test "ResizeHostHandler commits before synchronizing client resources" {
     var model = client_model.Model.init(std.testing.allocator, true);

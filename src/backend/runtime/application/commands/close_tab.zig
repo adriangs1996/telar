@@ -4,115 +4,24 @@ const std = @import("std");
 const core = @import("telar-core");
 const workspace_mod = @import("../../../workspace/root.zig");
 
-const schema = core.schema;
-const WorkspaceRepository = workspace_mod.Repository;
+pub const schema = core.schema;
+pub const WorkspaceRepository = workspace_mod.Repository;
 
-pub const CloseTab = struct {
-    location: schema.TabLocation,
-};
+pub const CloseTab = @import("CloseTab.zig");
 
 pub const CloseTabResult = workspace_mod.TabRemoved;
 
-/// Infallible runtime effect that starts closing every pane owned by a tab.
-pub const PaneCloser = struct {
-    context: *anyopaque,
-    close_all: *const fn (*anyopaque, schema.TabLocation) void,
-};
+pub const PaneCloser = @import("PaneCloser.zig");
 
-/// Synchronous post-commit port. Implementations may retain the event value.
-pub const EventPublisher = struct {
-    context: *anyopaque,
-    publish: *const fn (*anyopaque, workspace_mod.TabRemoved) void,
-};
+pub const EventPublisher = @import("CloseTabEventPublisher.zig");
 
-pub const CloseTabExecutor = struct {
-    context: *anyopaque,
-    execute_fn: *const fn (*anyopaque, CloseTab) anyerror!CloseTabResult,
+pub const CloseTabExecutor = @import("CloseTabExecutor.zig");
 
-    /// Executes tab closure through the bound application handler.
-    ///
-    /// ```zig
-    /// const removed = try executor.execute(.{ .location = location });
-    /// ```
-    pub fn execute(executor: CloseTabExecutor, command: CloseTab) !CloseTabResult {
-        return executor.execute_fn(executor.context, command);
-    }
-};
+pub const CloseTabHandler = @import("CloseTabHandler.zig");
 
-pub const CloseTabHandler = struct {
-    workspaces: *WorkspaceRepository,
-    panes: PaneCloser,
-    events: EventPublisher,
+const PaneCapture = @import("CloseTabPaneCapture.zig");
 
-    /// Commits one tab removal, starts closing its runtime panes, then
-    /// publishes the resulting domain fact. A missing tab has no effects.
-    /// Pane closure and event publication are infallible post-commit ports.
-    ///
-    /// ```zig
-    /// const removed = try handler.execute(.{ .location = location });
-    /// ```
-    pub fn execute(handler: *CloseTabHandler, command: CloseTab) !CloseTabResult {
-        const removed = workspace_mod.removeTab(handler.workspaces, command.location) orelse return error.TabNotFound;
-
-        handler.panes.close_all(handler.panes.context, removed.location);
-        handler.events.publish(handler.events.context, removed);
-        return removed;
-    }
-
-    /// Erases the concrete handler behind the command interface consumed by
-    /// request controllers.
-    ///
-    /// ```zig
-    /// const executor = handler.executor();
-    /// ```
-    pub fn executor(handler: *CloseTabHandler) CloseTabExecutor {
-        return .{ .context = handler, .execute_fn = executeErased };
-    }
-
-    fn executeErased(context: *anyopaque, command: CloseTab) !CloseTabResult {
-        const handler: *CloseTabHandler = @ptrCast(@alignCast(context));
-        return handler.execute(command);
-    }
-};
-
-const PaneCapture = struct {
-    close_count: usize = 0,
-    last_location: ?schema.TabLocation = null,
-
-    fn port(capture: *PaneCapture) PaneCloser {
-        return .{ .context = capture, .close_all = closeAll };
-    }
-
-    fn closeAll(context: *anyopaque, location: schema.TabLocation) void {
-        const capture: *PaneCapture = @ptrCast(@alignCast(context));
-        capture.close_count += 1;
-        capture.last_location = location;
-    }
-};
-
-const EventCapture = struct {
-    reader: workspace_mod.Reader,
-    pane_close_count: *const usize,
-    count: usize = 0,
-    last: ?workspace_mod.TabRemoved = null,
-    observed_committed_state: bool = false,
-    observed_closed_panes: bool = false,
-
-    fn publisher(capture: *EventCapture) EventPublisher {
-        return .{ .context = capture, .publish = publish };
-    }
-
-    fn publish(context: *anyopaque, event: workspace_mod.TabRemoved) void {
-        const capture: *EventCapture = @ptrCast(@alignCast(context));
-        const workspace_exists = capture.reader.containsWorkspace(event.location.workspace);
-
-        capture.count += 1;
-        capture.last = event;
-        capture.observed_committed_state = !capture.reader.contains(event.location) and
-            (if (event.workspace_removed) !workspace_exists else workspace_exists);
-        capture.observed_closed_panes = capture.pane_close_count.* == 1;
-    }
-};
+const EventCapture = @import("CloseTabEventCapture.zig");
 
 fn testingRepository(state: *workspace_mod.State) WorkspaceRepository {
     return WorkspaceRepository.init(state, std.testing.allocator);

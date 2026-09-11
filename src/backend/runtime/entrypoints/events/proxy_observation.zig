@@ -9,81 +9,18 @@ const proxy_mod = @import("../../../proxy/root.zig");
 const telemetry_mod = @import("../../observability/root.zig").telemetry;
 const test_support = @import("../../tests/support.zig");
 
-const diagnostics = core.diagnostics;
+pub const diagnostics = core.diagnostics;
 const Pane = pane_mod.Pane;
-const PaneStore = pane_mod.PaneStore;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+pub const PaneStore = pane_mod.PaneStore;
+pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 
-pub const Resources = struct {
-    panes: *PaneStore,
-    agents: *agent_mod.Tracker,
-    metrics: *RuntimeMetrics,
-};
+pub const Resources = @import("ProxyObservationResources.zig");
 
-/// Defines proxy receive scheduling and downstream effects bound by the
-/// runtime instance.
-///
-/// ```zig
-/// const port: RuntimePort(Context) = .{ ... };
-/// ```
-pub fn RuntimePort(comptime Context: type) type {
-    return struct {
-        rearm_receive: *const fn (*Context) anyerror!void,
-        schedule_description: *const fn (*Context) void,
-        pump_clients: *const fn (*Context) void,
-    };
-}
+pub const RuntimePort = @import("GenericProxyObservationRuntimePort.zig").Type;
 
-/// Creates a statically dispatched proxy-observation adapter.
-///
-/// ```zig
-/// const ProxyObservationAdapter = Adapter(Context, port);
-/// ```
-pub fn Adapter(comptime Context: type, comptime port: RuntimePort(Context)) type {
-    return struct {
-        const Self = @This();
+pub const Adapter = @import("GenericProxyObservationAdapter.zig").Type;
 
-        context: *Context,
-        resources: Resources,
-
-        /// Binds one runtime's pane, agent, and telemetry stores.
-        ///
-        /// ```zig
-        /// var adapter = ProxyObservationAdapter.init(&context, resources);
-        /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
-            return .{ .context = context, .resources = resources };
-        }
-
-        /// Rearms successful proxy receives before validating their pane
-        /// generation. Live inference events are translated into agent-domain
-        /// evidence; receive failures and auxiliary traffic are discarded.
-        ///
-        /// ```zig
-        /// try adapter.handle(receive_result);
-        /// ```
-        pub fn handle(adapter: *Self, result: anyerror!proxy_mod.Observation) !void {
-            const event = result catch return;
-            try port.rearm_receive(adapter.context);
-
-            const pane = adapter.resources.panes.resolve(event.pane) orelse {
-                adapter.resources.metrics.stale_pane_events += 1;
-                return;
-            };
-
-            if (comptime diagnostics.enabled) {
-                adapter.resources.metrics.proxy_observations +|= 1;
-            }
-
-            const observation = translate(event, pane) orelse return;
-            _ = adapter.resources.agents.observeProxy(observation);
-            port.schedule_description(adapter.context);
-            port.pump_clients(adapter.context);
-        }
-    };
-}
-
-fn translate(event: proxy_mod.Observation, pane: *const Pane) ?agent_mod.ProxyObservation {
+pub fn translate(event: proxy_mod.Observation, pane: *const Pane) ?agent_mod.ProxyObservation {
     const phase: agent_mod.ProxyPhase = switch (event.phase) {
         .request_started => .request_started,
         .auxiliary_request_started => return null,
@@ -112,44 +49,13 @@ fn translate(event: proxy_mod.Observation, pane: *const Pane) ?agent_mod.ProxyOb
     };
 }
 
-const Step = enum {
+pub const Step = enum {
     rearm_receive,
     schedule_description,
     pump_clients,
 };
 
-const Capture = struct {
-    steps: [3]Step = undefined,
-    len: usize = 0,
-    rearm_failure: bool = false,
-    agents: ?*const agent_mod.Tracker = null,
-    pane: pane_mod.PaneKey = undefined,
-    status_at_description_schedule: ?core.schema.AgentStatus = null,
-
-    fn record(capture: *Capture, step: Step) void {
-        std.debug.assert(capture.len < capture.steps.len);
-        capture.steps[capture.len] = step;
-        capture.len += 1;
-    }
-
-    fn rearmReceive(capture: *Capture) !void {
-        capture.record(.rearm_receive);
-
-        if (capture.rearm_failure) {
-            return error.SchedulerUnavailable;
-        }
-    }
-
-    fn scheduleDescription(capture: *Capture) void {
-        capture.record(.schedule_description);
-        const agents = capture.agents orelse return;
-        capture.status_at_description_schedule = agents.projectedStatus(capture.pane);
-    }
-
-    fn pumpClients(capture: *Capture) void {
-        capture.record(.pump_clients);
-    }
-};
+const Capture = @import("ProxyObservationCapture.zig");
 
 const test_port: RuntimePort(Capture) = .{
     .rearm_receive = Capture.rearmReceive,
@@ -157,9 +63,9 @@ const test_port: RuntimePort(Capture) = .{
     .pump_clients = Capture.pumpClients,
 };
 
-const TestAdapter = Adapter(Capture, test_port);
+pub const TestAdapter = Adapter(Capture, test_port);
 
-fn eventFor(pane: *const Pane, phase: proxy_mod.ObservationPhase, protocol: proxy_mod.ObservationProtocol) proxy_mod.Observation {
+pub fn eventFor(pane: *const Pane, phase: proxy_mod.ObservationPhase, protocol: proxy_mod.ObservationProtocol) proxy_mod.Observation {
     return .{
         .pane = pane.key(),
         .dialect = .openai_responses,
@@ -172,35 +78,7 @@ fn eventFor(pane: *const Pane, phase: proxy_mod.ObservationPhase, protocol: prox
     };
 }
 
-const Fixture = struct {
-    support: test_support.PaneFixture = .{},
-    panes: PaneStore = .{},
-    capture: Capture = .{},
-
-    fn init(fixture: *Fixture) !void {
-        try fixture.support.init();
-        errdefer fixture.support.deinit();
-        try fixture.panes.insert(fixture.support.pane);
-        fixture.capture.agents = &fixture.support.agents;
-        fixture.capture.pane = fixture.support.pane.key();
-    }
-
-    fn deinit(fixture: *Fixture) void {
-        fixture.support.deinit();
-    }
-
-    fn adapter(fixture: *Fixture) TestAdapter {
-        return TestAdapter.init(&fixture.capture, .{
-            .panes = &fixture.panes,
-            .agents = &fixture.support.agents,
-            .metrics = &fixture.support.metrics,
-        });
-    }
-
-    fn event(fixture: *const Fixture, phase: proxy_mod.ObservationPhase, protocol: proxy_mod.ObservationProtocol) proxy_mod.Observation {
-        return eventFor(fixture.support.pane, phase, protocol);
-    }
-};
+const Fixture = @import("Fixture.zig");
 
 fn expectSteps(capture: *const Capture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);

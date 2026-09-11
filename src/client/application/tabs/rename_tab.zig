@@ -4,75 +4,23 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const RequestRenameTab = struct {
-    tab_id: schema.TabId,
-    label: []const u8,
-};
+pub const RequestRenameTab = @import("RequestRenameTab.zig");
 
-pub const TabRenameIntent = struct {
-    location: schema.TabLocation,
-    /// Borrowed only for the synchronous send callback.
-    label: []const u8,
-};
+pub const TabRenameIntent = @import("TabRenameIntent.zig");
 
-pub const TabOperationGate = struct {
-    context: *anyopaque,
-    pending: *const fn (*anyopaque) bool,
-};
+pub const TabOperationGate = @import("RenameTabTabOperationGate.zig");
 
-pub const RenameRequestEffects = struct {
-    context: *anyopaque,
-    send: *const fn (*anyopaque, TabRenameIntent) anyerror!void,
-};
+pub const RenameRequestEffects = @import("RenameRequestEffects.zig");
 
-pub const RequestRenameTabHandler = struct {
-    model: *const client_model.Model,
-    gate: TabOperationGate,
-    effects: RenameRequestEffects,
-
-    /// Validates the label, resolves the prompt's tab identity and sends one
-    /// rename intent. Blocked or vanished targets return false without effects.
-    ///
-    /// ```zig
-    /// if (!try handler.execute(command)) {
-    ///     return;
-    /// }
-    /// ```
-    pub fn execute(handler: *RequestRenameTabHandler, command: RequestRenameTab) !bool {
-        if (handler.gate.pending(handler.gate.context)) {
-            return false;
-        }
-
-        try validateLabel(command.label);
-        const location = handler.model.tabLocation(command.tab_id) orelse return false;
-        try handler.effects.send(handler.effects.context, .{
-            .location = location,
-            .label = command.label,
-        });
-
-        return true;
-    }
-};
+pub const RequestRenameTabHandler = @import("RequestRenameTabHandler.zig");
 
 pub const ConfirmTabRename = client_model.RenameTab;
 
-pub const ConfirmTabRenameHandler = struct {
-    model: *client_model.Model,
+pub const ConfirmTabRenameHandler = @import("ConfirmTabRenameHandler.zig");
 
-    /// Commits the canonical runtime label. Repeating the current label leaves
-    /// the model version unchanged.
-    ///
-    /// ```zig
-    /// const change = try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *ConfirmTabRenameHandler, command: ConfirmTabRename) !client_model.Change {
-        return handler.model.renameTab(command);
-    }
-};
-
-fn validateLabel(label: []const u8) !void {
+pub fn validateLabel(label: []const u8) !void {
     if (label.len == 0 or label.len > schema.max_tab_label_bytes) {
         return error.InvalidTabLabel;
     }
@@ -86,81 +34,9 @@ fn validateLabel(label: []const u8) !void {
     }
 }
 
-const RequestCapture = struct {
-    blocked: bool = false,
-    failure: ?anyerror = null,
-    calls: usize = 0,
-    location: ?schema.TabLocation = null,
-    label: [schema.max_tab_label_bytes]u8 = undefined,
-    label_len: u8 = 0,
+const RequestCapture = @import("RenameTabRequestCapture.zig");
 
-    fn gate(capture: *RequestCapture) TabOperationGate {
-        return .{ .context = capture, .pending = pending };
-    }
-
-    fn effects(capture: *RequestCapture) RenameRequestEffects {
-        return .{ .context = capture, .send = send };
-    }
-
-    fn pending(context: *anyopaque) bool {
-        const capture: *RequestCapture = @ptrCast(@alignCast(context));
-        return capture.blocked;
-    }
-
-    fn send(context: *anyopaque, requested: TabRenameIntent) !void {
-        const capture: *RequestCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.location = requested.location;
-        capture.label_len = @intCast(requested.label.len);
-        @memcpy(capture.label[0..requested.label.len], requested.label);
-
-        if (capture.failure) |failure| {
-            return failure;
-        }
-    }
-
-    fn labelSlice(capture: *const RequestCapture) []const u8 {
-        return capture.label[0..capture.label_len];
-    }
-};
-
-const TestingModel = struct {
-    model: *client_model.Model,
-    first: schema.TabLocation,
-    second: schema.TabLocation,
-
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-        const first: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(1),
-        };
-        const second: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(2),
-        };
-        try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
-        _ = try model.workspace.addCreated(.{
-            .location = second,
-            .position = 1,
-            .label = "logs",
-            .root_pane_id = @enumFromInt(2),
-        }, .{ .cols = 20, .rows = 5 });
-        try std.testing.expect(model.workspace.select(first.tab_id));
-
-        return .{ .model = model, .first = first, .second = second };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
+const TestingModel = @import("RenameTabTestingModel.zig");
 
 test "tab rename request resolves an inactive target without mutation" {
     var testing = try TestingModel.init();

@@ -8,7 +8,7 @@ const platform = @import("../platform/root.zig");
 const Io = std.Io;
 const diagnostics = core.diagnostics;
 
-const Client = @import("client.zig");
+const Client = @import("Client.zig");
 const client_events = @import("entrypoints/events.zig");
 const client_startup = @import("controllers/session/client_startup.zig");
 const host_resizes = @import("controllers/host/host_resizes.zig");

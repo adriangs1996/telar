@@ -3,76 +3,24 @@
 const std = @import("std");
 const core = @import("telar-core");
 const workspace = @import("../workspace/root.zig");
-const multiplexer = workspace.multiplexer;
-const tabs_mod = workspace.tabs;
-const widget = @import("context.zig");
+pub const multiplexer = workspace.multiplexer;
+pub const tabs_mod = workspace.tabs;
+const widget = @import("context_support.zig");
 const ui = @import("../ui/root.zig");
 const bars = @import("../bars/root.zig");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
 /// One empty cell keeps neighbouring tabs from reading as a single label.
 const tab_gap: u16 = 1;
 /// The fullscreen marker is one icon cell plus the trailing padding cell.
-const fullscreen_marker_width: u16 = 2;
+pub const fullscreen_marker_width: u16 = 2;
 
-pub const Input = struct {
-    area: ui.Rect,
-    tabs: ?*const tabs_mod.Model,
-    model: *const multiplexer.Model,
-    alignment: bars.Alignment = .right,
-    animation_frame: u8 = 0,
-};
+pub const Input = @import("TabBarInput.zig");
 
-/// The text a tab shows: its display number, its name and, while one of its
-/// panes is fullscreen, a marker drawn after the name.
-const Label = struct {
-    buffer: [schema.max_tab_label_bytes + 16]u8 = undefined,
-    len: usize = 0,
-    fullscreen: bool,
+const Label = @import("Label.zig");
 
-    fn init(tab: *const tabs_mod.Tab, index: usize) Label {
-        var label: Label = .{ .fullscreen = tab.model.layout.isFullscreen() };
-        const written = std.fmt.bufPrint(&label.buffer, " {d}:{s} ", .{
-            index + 1,
-            tab.labelSlice(),
-        }) catch fallback: {
-            const placeholder = " tab ";
-            @memcpy(label.buffer[0..placeholder.len], placeholder);
-            break :fallback label.buffer[0..placeholder.len];
-        };
-        label.len = written.len;
-        return label;
-    }
-
-    fn text(label: *const Label) []const u8 {
-        return label.buffer[0..label.len];
-    }
-
-    fn width(label: *const Label) u16 {
-        const marker: u16 = if (label.fullscreen) fullscreen_marker_width else 0;
-        return ui.measure(label.text()) + marker;
-    }
-
-    /// Draws the text, then the marker when the whole marker fits.
-    fn draw(label: *const Label, context: *widget.Context, placement: Placement) void {
-        const rect = placement.rect;
-        const text_width = @min(ui.measure(label.text()), rect.w);
-        _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = rect.x, .y = rect.y }, .text = label.text(), .max_width = text_width, .style = placement.style });
-        if (!label.fullscreen or rect.w < text_width + fullscreen_marker_width) {
-            return;
-        }
-
-        const marker_x = rect.x + text_width;
-        _ = context.drawIcon(.{ .area = rect, .point = .{ .x = marker_x, .y = rect.y }, .icon = .pane_fullscreen, .style = placement.style });
-        _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = marker_x + 1, .y = rect.y }, .text = " ", .max_width = 1, .style = placement.style });
-    }
-};
-
-const Placement = struct {
-    rect: ui.Rect,
-    style: ui.Style,
-};
+const Placement = @import("Placement.zig");
 
 pub fn render(context: *widget.Context, input: Input) void {
     if (input.tabs) |collection| {

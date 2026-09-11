@@ -5,14 +5,14 @@ const core = @import("telar-core");
 const identity = @import("../identity.zig");
 const middleware = @import("../middleware.zig");
 const observation_queue = @import("../observation_queue.zig");
-const service_mod = @import("service.zig");
+const service_mod = @import("service_support.zig");
 
-const Io = std.Io;
-const net = Io.net;
+pub const Io = std.Io;
+pub const net = Io.net;
 const schema = core.schema;
 const event_capacity = observation_queue.capacity;
 const Pane = service_mod.Pane;
-const Service = service_mod.Service;
+pub const Service = service_mod.Service;
 const basic_raw_capacity = 128;
 const basic_encoded_capacity = std.base64.standard.Encoder.calcSize(basic_raw_capacity);
 
@@ -27,32 +27,7 @@ fn encodeBasic(credential: *const identity.Credential, raw_buffer: *[basic_raw_c
     return std.base64.standard.Encoder.encode(encoded_buffer[0..encoded_len], raw);
 }
 
-const TestServiceFixture = struct {
-    temp: std.testing.TmpDir = undefined,
-    key: [std.fs.max_path_bytes]u8 = undefined,
-    certificate: [std.fs.max_path_bytes]u8 = undefined,
-    bundle: [std.fs.max_path_bytes]u8 = undefined,
-    service: ?*Service = null,
-
-    fn init(fixture: *TestServiceFixture, io: Io, gpa: std.mem.Allocator) !void {
-        fixture.temp = std.testing.tmpDir(.{});
-        errdefer fixture.temp.cleanup();
-
-        var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const directory_len = try fixture.temp.dir.realPath(io, &directory_buffer);
-        const directory = directory_buffer[0..directory_len];
-        fixture.service = try Service.create(io, gpa, .{
-            .key = try std.fmt.bufPrint(&fixture.key, "{s}/ca-key.pem", .{directory}),
-            .certificate = try std.fmt.bufPrint(&fixture.certificate, "{s}/ca-cert.pem", .{directory}),
-            .bundle = try std.fmt.bufPrint(&fixture.bundle, "{s}/ca-bundle.pem", .{directory}),
-        });
-    }
-
-    fn deinit(fixture: *TestServiceFixture) void {
-        fixture.service.?.destroy();
-        fixture.temp.cleanup();
-    }
-};
+const TestServiceFixture = @import("TestServiceFixture.zig");
 
 test "pane registration creates one live capability for the requested generation" {
     const io = std.testing.io;
@@ -143,7 +118,7 @@ fn rejectTlsHandshake(io: Io, listener: *net.Server) !void {
     try writer.interface.flush();
 }
 
-const TestOrigin = struct { listener: net.Server, port: u16 };
+const TestOrigin = @import("TestOrigin.zig");
 
 fn listenTestOrigin(io: Io) !TestOrigin {
     var port: u16 = 49_152;

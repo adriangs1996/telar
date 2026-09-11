@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const tabs_application = @import("telar-client").application.tabs;
 const client_model = @import("telar-client").model;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const move_tab = tabs_application.move_tab;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const schema = core.schema;

@@ -11,12 +11,7 @@ const pane = @import("../../pane/root.zig");
 const workspace = @import("../../workspace/root.zig");
 const client_layout_store = @import("client_layout_store.zig");
 
-pub const RuntimeModel = struct {
-    workspaces: workspace.State = .{},
-    panes: pane.PaneStore,
-    agents: agent.Tracker = .{},
-    client_layouts: client_layout_store.Store = .{},
-};
+pub const RuntimeModel = @import("RuntimeModel.zig");
 
 test "runtime model starts with empty configured capability roots" {
     const graphics_limits: pane.GraphicsLimits = .{

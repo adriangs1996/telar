@@ -9,7 +9,7 @@ const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const close_tab = tabs_application.close_tab;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const schema = core.schema;

@@ -4,91 +4,20 @@ const std = @import("std");
 const core = @import("telar-core");
 const workspace_mod = @import("../../../workspace/root.zig");
 
-const schema = core.schema;
-const WorkspaceRepository = workspace_mod.Repository;
+pub const schema = core.schema;
+pub const WorkspaceRepository = workspace_mod.Repository;
 
-pub const RenameWorkspace = struct {
-    location: schema.WorkspaceLocation,
-    /// Borrowed only for the synchronous `execute` call.
-    name: []const u8,
-};
+pub const RenameWorkspace = @import("RenameWorkspace.zig");
 
 pub const RenameWorkspaceResult = workspace_mod.WorkspaceRenamed;
 
-pub const EventPublisher = struct {
-    context: *anyopaque,
-    publish: *const fn (*anyopaque, workspace_mod.WorkspaceRenamed) void,
-};
+pub const EventPublisher = @import("RenameWorkspaceEventPublisher.zig");
 
-pub const RenameWorkspaceExecutor = struct {
-    context: *anyopaque,
-    execute_fn: *const fn (*anyopaque, RenameWorkspace) anyerror!RenameWorkspaceResult,
+pub const RenameWorkspaceExecutor = @import("RenameWorkspaceExecutor.zig");
 
-    /// Executes a workspace rename through the bound application handler.
-    ///
-    /// ```zig
-    /// const renamed = try executor.execute(.{ .location = location, .name = "backend" });
-    /// ```
-    pub fn execute(executor: RenameWorkspaceExecutor, command: RenameWorkspace) !RenameWorkspaceResult {
-        return executor.execute_fn(executor.context, command);
-    }
-};
+pub const RenameWorkspaceHandler = @import("RenameWorkspaceHandler.zig");
 
-pub const RenameWorkspaceHandler = struct {
-    workspaces: *WorkspaceRepository,
-    events: EventPublisher,
-
-    /// Commits an aggregate rename and repository revision before publishing
-    /// the owned workspace event. Failed commands have no effects.
-    ///
-    /// ```zig
-    /// const renamed = try handler.execute(.{ .location = location, .name = "backend" });
-    /// ```
-    pub fn execute(handler: *RenameWorkspaceHandler, command: RenameWorkspace) !RenameWorkspaceResult {
-        const renamed = try workspace_mod.renameWorkspace(
-            handler.workspaces,
-            command.location,
-            command.name,
-        );
-
-        handler.events.publish(handler.events.context, renamed);
-        return renamed;
-    }
-
-    /// Exposes this handler through the command interface used by controllers.
-    ///
-    /// ```zig
-    /// const executor = handler.executor();
-    /// ```
-    pub fn executor(handler: *RenameWorkspaceHandler) RenameWorkspaceExecutor {
-        return .{ .context = handler, .execute_fn = executeErased };
-    }
-
-    fn executeErased(context: *anyopaque, command: RenameWorkspace) !RenameWorkspaceResult {
-        const handler: *RenameWorkspaceHandler = @ptrCast(@alignCast(context));
-        return handler.execute(command);
-    }
-};
-
-const EventCapture = struct {
-    reader: workspace_mod.Reader,
-    count: usize = 0,
-    last: ?workspace_mod.WorkspaceRenamed = null,
-    observed_committed_state: bool = false,
-
-    fn publisher(capture: *EventCapture) EventPublisher {
-        return .{ .context = capture, .publish = publish };
-    }
-
-    fn publish(context: *anyopaque, event: workspace_mod.WorkspaceRenamed) void {
-        const capture: *EventCapture = @ptrCast(@alignCast(context));
-        const committed_name = capture.reader.workspaceName(event.location) orelse return;
-
-        capture.count += 1;
-        capture.last = event;
-        capture.observed_committed_state = std.mem.eql(u8, committed_name, event.nameSlice());
-    }
-};
+const EventCapture = @import("RenameWorkspaceEventCapture.zig");
 
 fn testingRepository(state: *workspace_mod.State) WorkspaceRepository {
     return WorkspaceRepository.init(state, std.testing.allocator);

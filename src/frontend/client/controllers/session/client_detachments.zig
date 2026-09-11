@@ -3,7 +3,7 @@
 const core = @import("telar-core");
 const session_application = @import("telar-client").application.session;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const tab_attachments = @import("../tabs/tab_attachments.zig");
 
 const client_detachment = session_application.client_detachment;

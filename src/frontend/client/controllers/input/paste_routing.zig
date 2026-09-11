@@ -4,7 +4,7 @@ const input_application = @import("telar-client").application.input;
 const name_prompts = @import("name_prompts.zig");
 const pane_pastes = @import("pane_pastes.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const paste_routing = input_application.paste_routing;
 
 pub const Outcome = paste_routing.Outcome;

@@ -21,8 +21,8 @@ const File = Io.File;
 const schema = core.schema;
 const term = presentation.screen;
 
-const Client = @import("../client.zig");
-const InputHandler = @import("../resources/input_handler.zig");
+const Client = @import("../Client.zig");
+const InputHandler = @import("../resources/InputHandler.zig");
 const active_pane_resources = @import("../controllers/panes/active_pane_resources.zig");
 const client_actions = @import("../controllers/input/actions.zig");
 const agent_navigation = @import("../controllers/agents/agent_navigation.zig");
@@ -228,11 +228,7 @@ test "Claude marker disappearance in a committed frame retires its paired previe
 
 const pi_test_path = "/var/folders/8x/abc/T/pi-clipboard-3f2a9c1e-7b4d-4e8f-9a0b-1c2d3e4f5a6b.png";
 
-const PiFrame = struct {
-    target: attachments.Target,
-    prompt: []const u8,
-    id: u64,
-};
+const PiFrame = @import("PiFrame.zig");
 
 fn adoptPiPreview(client: *Client, target: attachments.Target) !void {
     const capture = try client.gpa.create(attachments.Capture);

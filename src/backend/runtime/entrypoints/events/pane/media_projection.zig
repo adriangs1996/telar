@@ -7,13 +7,11 @@ const media_mod = @import("../../../../media/root.zig");
 const pane_mod = @import("../../../../pane/root.zig");
 const test_support = @import("../../../tests/support.zig");
 
-const AttachmentStore = attachment_mod.AttachmentStore;
+pub const AttachmentStore = attachment_mod.AttachmentStore;
 const Pane = pane_mod.Pane;
 const shared_memory_supported = pane_mod.shared_transfer.shared_memory_supported;
 
-pub const Stats = struct {
-    staged: u64 = 0,
-};
+pub const Stats = @import("Stats.zig");
 
 /// Invalidates reset projections first, then freezes at most one transfer per
 /// client while the pane's media storage is idle. A failed freeze abandons
@@ -84,29 +82,7 @@ fn wanted(key: core.graphics.ImageKey, pane_id: core.schema.PaneId, stores: []co
     return false;
 }
 
-const Consumers = struct {
-    pane_id: core.schema.PaneId,
-    stores: []const *AttachmentStore,
-
-    /// Example: `const needed = consumers.wants(key, true);`.
-    pub fn wants(consumers: Consumers, key: core.graphics.ImageKey, shared: bool) bool {
-        for (consumers.stores) |store| {
-            const attachment = store.find(consumers.pane_id) orelse continue;
-            if (attachment.graphics.shared_transport != shared or attachment_mod.knowsImage(attachment, key)) {
-                continue;
-            }
-            if (attachment.graphics.transfer) |transfer| {
-                if (std.meta.eql(transfer.metadata.key, key)) {
-                    continue;
-                }
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-};
+const Consumers = @import("Consumers.zig");
 
 fn objectExists(name: core.graphics.ShmName) bool {
     const fd = std.c.shm_open(name.sliceZ(), @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));

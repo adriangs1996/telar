@@ -14,12 +14,7 @@ pub const DamageRow = damage.DamageRow;
 pub const CellSpan = damage.CellSpan;
 pub const markRows = damage.markRows;
 
-pub const RowSync = struct {
-    source: []const ui.Cell,
-    reference: []const ui.Cell,
-    start: u16,
-    end: u16,
-};
+pub const RowSync = @import("RowSync.zig");
 
 /// Walks [start, end) of one row, finds each run where `source` and
 /// `reference` disagree, and hands it to `sink.copyRun(run_start, count)`.

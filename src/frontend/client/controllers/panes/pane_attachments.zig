@@ -4,7 +4,7 @@ const core = @import("telar-core");
 const panes_application = @import("telar-client").application.panes;
 const tabs_application = @import("telar-client").application.tabs;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const attach_pane = panes_application.attach_pane;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const schema = core.schema;

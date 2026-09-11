@@ -33,11 +33,7 @@ pub const Keymap = @import("telar-client").input.keybind.Keymap;
 
 pub const RouterLimits = @import("telar-client").input.keybind.RouterLimits;
 
-/// Builds a fixed-capacity key router for one semantic action type.
-/// For example: `const InputRouter = Router(Action, .{ .max_bindings = 16, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 });`.
-pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
-    return @import("telar-client").input.keybind.Router(Action, limits, term);
-}
+pub const Router = @import("GenericRouter.zig").Type;
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -45,91 +41,15 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
 
 const testing = std.testing;
 
-const TestAction = enum { detach, palette, next };
+pub const TestAction = enum { detach, palette, next };
 const TestBinding = Binding(TestAction, 4);
 const TestRouter = Router(TestAction, .{ .max_bindings = 16, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 });
 
-const Capture = struct {
-    bytes: [256]u8 = undefined,
-    len: usize = 0,
-    actions: [8]TestAction = undefined,
-    action_len: usize = 0,
-    stop_on_action: bool = false,
+const Capture = @import("Capture.zig");
 
-    pub fn forward(capture: *Capture, bytes: []const u8) !void {
-        if (capture.len + bytes.len > capture.bytes.len) {
-            return error.CaptureOverflow;
-        }
-        @memcpy(capture.bytes[capture.len..][0..bytes.len], bytes);
-        capture.len += bytes.len;
-    }
+const GreedyCapture = @import("GreedyCapture.zig");
 
-    pub fn action(capture: *Capture, value: TestAction) !Control {
-        capture.actions[capture.action_len] = value;
-        capture.action_len += 1;
-        return if (capture.stop_on_action) .stop else .continue_routing;
-    }
-
-    pub fn slice(capture: *const Capture) []const u8 {
-        return capture.bytes[0..capture.len];
-    }
-};
-
-const GreedyCapture = struct {
-    keys: [8]Key = undefined,
-    key_count: usize = 0,
-    action_count: usize = 0,
-
-    pub fn capturesKeys(_: *const GreedyCapture) bool {
-        return true;
-    }
-
-    pub fn key(capture: *GreedyCapture, value: Key) !void {
-        capture.keys[capture.key_count] = value;
-        capture.key_count += 1;
-    }
-
-    pub fn forward(_: *GreedyCapture, _: []const u8) !void {}
-
-    pub fn action(capture: *GreedyCapture, _: TestAction) !Control {
-        capture.action_count += 1;
-        return .continue_routing;
-    }
-};
-
-const SemanticCapture = struct {
-    keys: [128]Key = undefined,
-    key_count: usize = 0,
-    action_count: usize = 0,
-    fail_key: bool = false,
-    fail_action: bool = false,
-    repeat_policy: ?RepeatPolicy = null,
-
-    pub fn repeatPolicy(capture: *const SemanticCapture, value: TestAction) ?RepeatPolicy {
-        return if (value == .next) capture.repeat_policy else null;
-    }
-
-    pub fn key(capture: *SemanticCapture, value: Key) !void {
-        if (capture.fail_key) {
-            return error.KeyDeliveryFailed;
-        }
-
-        capture.keys[capture.key_count] = value;
-        capture.key_count += 1;
-    }
-
-    pub fn forward(_: *SemanticCapture, _: []const u8) !void {}
-
-    pub fn action(capture: *SemanticCapture, _: TestAction) !Control {
-        if (capture.fail_action) {
-            return error.ActionFailed;
-        }
-
-        capture.action_count += 1;
-
-        return .continue_routing;
-    }
-};
+const SemanticCapture = @import("SemanticCapture.zig");
 
 test "terminal decoding and direct semantic input produce identical routing" {
     const shared = @import("telar-client").input.keybind;
@@ -159,46 +79,9 @@ test "terminal decoding and direct semantic input produce identical routing" {
     try std.testing.expectEqualDeep(decoded.keys[0..decoded.key_count], semantic.keys[0..semantic.key_count]);
 }
 
-const MouseCapture = struct {
-    forwarded: usize = 0,
-    mouse_events: usize = 0,
+const MouseCapture = @import("MouseCapture.zig");
 
-    pub fn forward(capture: *MouseCapture, bytes: []const u8) !void {
-        capture.forwarded += bytes.len;
-    }
-
-    pub fn action(_: *MouseCapture, _: TestAction) !Control {
-        return .continue_routing;
-    }
-
-    pub fn mouse(capture: *MouseCapture, _: term.Event.Mouse) !void {
-        capture.mouse_events += 1;
-    }
-};
-
-const TerminalResponseCapture = struct {
-    forwarded: usize = 0,
-    responses: usize = 0,
-    actions: usize = 0,
-    supported: bool = false,
-
-    pub fn forward(capture: *TerminalResponseCapture, bytes: []const u8) !void {
-        capture.forwarded += bytes.len;
-    }
-
-    pub fn action(capture: *TerminalResponseCapture, _: TestAction) !Control {
-        capture.actions += 1;
-        return .continue_routing;
-    }
-
-    pub fn terminalResponse(capture: *TerminalResponseCapture, response: term.Event.TerminalResponse) !void {
-        switch (response) {
-            .kitty_graphics => |kitty| capture.supported = kitty.supported,
-            else => {},
-        }
-        capture.responses += 1;
-    }
-};
+const TerminalResponseCapture = @import("TerminalResponseCapture.zig");
 
 test "configuration keys parse into semantic chords" {
     const ctrl_b = try parseKey("Ctrl+B");

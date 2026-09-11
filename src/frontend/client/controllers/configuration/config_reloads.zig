@@ -9,7 +9,7 @@ const notification_flow = @import("../notifications/notifications.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 const sidebar_projection = @import("../notifications/sidebar_projection.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const reload_worker = @import("../../resources/config_reload.zig");
 const config_use_case = configuration_application.config_reload;
 const config_delivery = configuration_application.config_reload_delivery;
@@ -77,16 +77,7 @@ pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Out
     return use_case.execute(resolution);
 }
 
-const DeliveryContext = struct {
-    client: *Client,
-    adoption: ?Adoption = null,
-
-    fn releaseOwned(context: *DeliveryContext) void {
-        if (context.adoption) |adoption| {
-            adoption.deinit(context.client.gpa);
-        }
-    }
-};
+const DeliveryContext = @import("DeliveryContext.zig");
 
 /// Adopts one validated generation through the client application boundary.
 ///
@@ -128,48 +119,7 @@ pub fn apply(client: *Client, adoption: Adoption) !client_model.ConfigurationCom
     return commit;
 }
 
-const AdoptionContext = struct {
-    client: *Client,
-    adoption: Adoption,
-    consumed: bool = false,
-
-    fn releaseOwned(context: *AdoptionContext) void {
-        if (!context.consumed) {
-            context.adoption.deinit(context.client.gpa);
-        }
-    }
-
-    fn swap(context: *AdoptionContext) void {
-        const client = context.client;
-        const snapshot = &context.adoption.generation.snapshot;
-        const previous_generation = client.lua_generation;
-        const previous_registry = client.plugin_registry;
-        const previous_trust = client.trust_store;
-
-        client.lua_generation = context.adoption.generation;
-        client.plugin_registry = context.adoption.registry;
-        client.trust_store = context.adoption.trust_store;
-        client.host_input.replaceRouter(client.io, context.adoption.router);
-        client.sidebar_rendering = context.adoption.sidebar_rendering;
-        client.sound_playback.configure(snapshot.sound);
-        client.notification_delivery = snapshot.notification_delivery;
-        client.history_show_agent_commands = snapshot.history_show_agent_commands;
-        client.history_enter_runs = snapshot.history_enter_runs;
-        client.history_match_fts = snapshot.history_match_fts;
-        client.appearance_themes = .{ .light = snapshot.theme_light, .dark = snapshot.theme_dark };
-        context.consumed = true;
-
-        if (previous_generation) |generation| {
-            generation.deinit();
-        }
-        if (previous_registry) |registry| {
-            client.gpa.destroy(registry);
-        }
-        if (previous_trust) |trust| {
-            client.gpa.destroy(trust);
-        }
-    }
-};
+const AdoptionContext = @import("AdoptionContext.zig");
 
 fn adoptResources(raw_context: *anyopaque, commit: client_model.ConfigurationCommit) void {
     const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));

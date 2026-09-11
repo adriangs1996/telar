@@ -9,7 +9,7 @@ const pane_pastes = @import("../input/pane_pastes.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const tab_attachments = @import("tab_attachments.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const schema = core.schema;
 const select_tab = tabs_application.select_tab;
 const tab_selection_delivery = tabs_application.tab_selection_delivery;

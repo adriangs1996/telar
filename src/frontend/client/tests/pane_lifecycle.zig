@@ -13,16 +13,16 @@ const plugin_broker = @import("../../plugins/root.zig");
 const presentation = @import("../../presentation/root.zig");
 const sound_capability = @import("../../sound/root.zig");
 const workspace_capability = @import("../../workspace/root.zig");
-const keybind = input_capability.keybind;
+pub const keybind = input_capability.keybind;
 const kitty = graphics.kitty;
 
 const Io = std.Io;
 const File = Io.File;
-const schema = core.schema;
+pub const schema = core.schema;
 const term = presentation.screen;
 
-const Client = @import("../client.zig");
-const InputHandler = @import("../resources/input_handler.zig");
+const Client = @import("../Client.zig");
+const InputHandler = @import("../resources/InputHandler.zig");
 const active_pane_resources = @import("../controllers/panes/active_pane_resources.zig");
 const client_actions = @import("../controllers/input/actions.zig");
 const agent_navigation = @import("../controllers/agents/agent_navigation.zig");
@@ -76,7 +76,7 @@ const expectNonCopyVersionEqual = support.expectNonCopyVersionEqual;
 const expectNonCopyOrViewportVersionEqual = support.expectNonCopyOrViewportVersionEqual;
 const expectNonViewportVersionEqual = support.expectNonViewportVersionEqual;
 const expectOnlyNotificationVersionChanged = support.expectOnlyNotificationVersionChanged;
-const TestHarness = support.TestHarness;
+pub const TestHarness = support.TestHarness;
 const encodeTestingAgentSnapshot = support.encodeTestingAgentSnapshot;
 const testingConfigAdoption = support.testingConfigAdoption;
 const testingConfigAdoptionSource = support.testingConfigAdoptionSource;
@@ -159,64 +159,7 @@ test "pane focus commits before reports resize and presentation" {
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
-const FullscreenReattachment = struct {
-    harness: *TestHarness,
-
-    fn selectTab(scenario: FullscreenReattachment, index: u8, panes: []const schema.PaneDescriptor) !void {
-        const client = scenario.harness.client;
-        _ = try client_actions.apply(client, .{ .select_tab = index });
-        try scenario.harness.settle();
-        var buffer: [512]u8 = undefined;
-        const request = request: while (true) {
-            switch (try scenario.harness.nextClientMessage(&buffer)) {
-                .detach_pane => {},
-                .request_tab_snapshot => |request| break :request request,
-                else => return error.UnexpectedClientMessage,
-            }
-        };
-        const snapshot = try schema.encodeTabSnapshot(&buffer, .{
-            .request_id = request.request_id,
-            .location = request.location,
-            .panes = panes,
-        });
-        _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
-        try scenario.confirmAttachment(client.model.workspace.active().?.model.layout.focused().?);
-    }
-
-    fn confirmAttachment(scenario: FullscreenReattachment, pane_id: schema.PaneId) !void {
-        const client = scenario.harness.client;
-        try std.testing.expect(client.request_lifecycle.tracker.hasPane(.attachment, pane_id));
-        try scenario.harness.settle();
-        var buffer: [256]u8 = undefined;
-        const message = try scenario.harness.nextClientMessage(&buffer);
-        try std.testing.expect(message == .open_pane);
-        try std.testing.expectEqualDeep(schema.PaneTarget{ .pane = pane_id }, message.open_pane.target);
-        try std.testing.expectEqualDeep(
-            client.model.workspace.active().?.model.contentSize(pane_id, client.view.workbench()).?,
-            message.open_pane.size,
-        );
-        const opened = try schema.encodePaneOpened(&buffer, .{
-            .request_id = message.open_pane.request_id,
-            .pane_id = pane_id,
-            .location = client.model.activeTabLocation().?,
-            .created = false,
-        });
-        _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
-        try std.testing.expect(client.model.workspace.findPane(pane_id).?.attached);
-    }
-
-    fn expectInput(scenario: FullscreenReattachment, pane_id: schema.PaneId) !void {
-        var handler: InputHandler = .{ .client = scenario.harness.client };
-        try std.testing.expectEqual(pane_id, handler.client.model.planPaneInput(.focused).?.pane_id);
-        try handler.key(try keybind.parseKey("x"));
-        try scenario.harness.settle();
-        var buffer: [256]u8 = undefined;
-        const message = try scenario.harness.nextClientMessage(&buffer);
-        try std.testing.expect(message == .pane_input);
-        try std.testing.expectEqual(pane_id, message.pane_input.pane_id);
-        try std.testing.expectEqualStrings("x", message.pane_input.bytes);
-    }
-};
+const FullscreenReattachment = @import("FullscreenReattachment.zig");
 
 test "fullscreen tab round trip reconnects panes revealed by focus or tiled layout" {
     for ([_]bool{ false, true }) |exit_fullscreen| {

@@ -7,7 +7,7 @@ const active_pane_resources = @import("active_pane_resources.zig");
 const attachment_prompts = @import("../input/attachment_prompts.zig");
 const pane_geometry = @import("pane_geometry.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const diagnostics = core.diagnostics;
 const pane_frame = panes_application.pane_frame;
 const pane_frame_delivery = panes_application.pane_frame_delivery;

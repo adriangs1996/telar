@@ -6,12 +6,9 @@ const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 const tab_snapshot_recovery = @import("../tabs/root.zig").tab_snapshot_recovery;
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const Effects = struct {
-    context: *anyopaque,
-    show_pane_graphics: *const fn (*anyopaque, schema.PaneId) anyerror!void,
-};
+pub const Effects = @import("WorkspaceHandoffRestorationEffects.zig");
 
 pub const Outcome = enum {
     no_active_tab,
@@ -19,148 +16,23 @@ pub const Outcome = enum {
     snapshot_requested,
 };
 
-pub const RestoreWorkspaceHandoffHandler = struct {
-    effects: Effects,
-    snapshots: tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler,
+pub const RestoreWorkspaceHandoffHandler = @import("RestoreWorkspaceHandoffHandler.zig");
 
-    /// Restores active-pane graphics in captured order and requests one
-    /// canonical tab snapshot unless recovery is already pending.
-    ///
-    /// ```zig
-    /// _ = try handler.execute(model);
-    /// ```
-    pub fn execute(handler: *RestoreWorkspaceHandoffHandler, model: *const client_model.Model) !Outcome {
-        const location = model.activeTabLocation() orelse return .no_active_tab;
-        const plan = try model.planTabDetachment(location);
-
-        for (plan.slice()) |pane| {
-            try handler.effects.show_pane_graphics(handler.effects.context, pane.pane_id);
-        }
-
-        return switch (try handler.snapshots.execute(location)) {
-            .coalesced => .snapshot_coalesced,
-            .requested => .snapshot_requested,
-        };
-    }
-};
-
-const Event = union(enum) {
+pub const Event = union(enum) {
     show_graphics: schema.PaneId,
     snapshot_pending,
     request_snapshot: schema.TabLocation,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     sibling_graphics,
     snapshot,
 };
 
-const TestingModel = struct {
-    model: *client_model.Model,
-    active: schema.TabLocation,
-    root: schema.PaneId,
-    sibling: schema.PaneId,
-    inactive_pane: schema.PaneId,
+const TestingModel = @import("WorkspaceHandoffRestorationTestingModel.zig");
 
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-        const active: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(1),
-        };
-        const inactive: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(2),
-        };
-        const root: schema.PaneId = @enumFromInt(1);
-        const sibling: schema.PaneId = @enumFromInt(2);
-        const inactive_pane: schema.PaneId = @enumFromInt(3);
-        try model.workspace.bootstrap(.{ .pane_id = root, .location = active, .size = .{ .cols = 40, .rows = 10 } });
-        try model.workspace.active().?.model.split(.{ .existing_pane = root, .new_pane = sibling, .location = active, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
-        _ = try model.workspace.addCreated(.{
-            .location = inactive,
-            .position = 1,
-            .label = "logs",
-            .root_pane_id = inactive_pane,
-        }, .{ .cols = 40, .rows = 10 });
-        if (!model.workspace.select(active.tab_id)) {
-            return error.ActiveTabNotRestored;
-        }
-
-        return .{
-            .model = model,
-            .active = active,
-            .root = root,
-            .sibling = sibling,
-            .inactive_pane = inactive_pane,
-        };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
-
-const Capture = struct {
-    sibling: schema.PaneId,
-    pending: bool = false,
-    failure: Failure = .none,
-    events: [4]Event = undefined,
-    event_count: usize = 0,
-
-    fn handler(capture: *Capture) RestoreWorkspaceHandoffHandler {
-        return .{
-            .effects = .{
-                .context = capture,
-                .show_pane_graphics = showPaneGraphics,
-            },
-            .snapshots = .{ .effects = .{
-                .context = capture,
-                .pending = tabSnapshotPending,
-                .request = requestTabSnapshot,
-            } },
-        };
-    }
-
-    fn showPaneGraphics(context: *anyopaque, pane_id: schema.PaneId) !void {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.append(.{ .show_graphics = pane_id });
-        if (capture.failure == .sibling_graphics and pane_id == capture.sibling) {
-            return error.GraphicsVisibilityFailed;
-        }
-    }
-
-    fn tabSnapshotPending(context: *anyopaque) bool {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.append(.snapshot_pending);
-
-        return capture.pending;
-    }
-
-    fn requestTabSnapshot(context: *anyopaque, location: schema.TabLocation) !void {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.append(.{ .request_snapshot = location });
-        if (capture.failure == .snapshot) {
-            return error.SnapshotRequestFailed;
-        }
-    }
-
-    fn append(capture: *Capture, event: Event) void {
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn eventSlice(capture: *const Capture) []const Event {
-        return capture.events[0..capture.event_count];
-    }
-};
+const Capture = @import("WorkspaceHandoffRestorationCapture.zig");
 
 test "RestoreWorkspaceHandoffHandler shows only active panes before snapshot recovery" {
     var testing = try TestingModel.init();

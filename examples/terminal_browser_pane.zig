@@ -12,34 +12,29 @@ const core = @import("telar-core");
 const backend = @import("telar-backend");
 const frontend = @import("telar-frontend");
 
-const Io = std.Io;
+pub const Io = std.Io;
 const File = Io.File;
-const schema = core.schema;
-const ui = core.ui;
-const pty = backend.pty;
-const media = backend.media;
-const blit = backend.blit;
-const term = frontend.term;
-const kitty = frontend.kitty;
+pub const schema = core.schema;
+pub const ui = core.ui;
+pub const pty = backend.pty;
+pub const media = backend.media;
+pub const blit = backend.blit;
+pub const term = frontend.term;
+pub const kitty = frontend.kitty;
 const platform = frontend.platform;
-const multiplexer = frontend.multiplexer;
-const HostCapabilities = frontend.client.HostCapabilities;
+pub const multiplexer = frontend.multiplexer;
+pub const HostCapabilities = frontend.client.HostCapabilities;
 
 pub const std_options: std.Options = .{ .log_level = .err };
 
-const pane_id: schema.PaneId = @enumFromInt(1);
+pub const pane_id: schema.PaneId = @enumFromInt(1);
 const location: schema.TabLocation = .{
     .workspace = .{ .workspace = @enumFromInt(1) },
     .tab_id = @enumFromInt(1),
 };
 const frame_interval_ns = std.time.ns_per_s / 60;
 
-const FrameGeometry = struct {
-    /// Exactly half of the host in both dimensions, rounded down.
-    outer: ui.Rect,
-    /// The PTY geometry after reserving a one-cell border.
-    content: ui.Rect,
-};
+const FrameGeometry = @import("FrameGeometry.zig");
 
 fn centeredFrame(cols: u16, rows: u16) !FrameGeometry {
     if (cols < 8 or rows < 8) {
@@ -84,360 +79,17 @@ fn observePlatformPixels(capabilities: *HostCapabilities, size: platform.Size) v
     }
 }
 
-const ResponseQueue = struct {
-    const capacity = 64;
-    const max_response_bytes = 1024;
+const ResponseQueue = @import("ResponseQueue.zig");
 
-    bytes: [capacity][max_response_bytes]u8 = undefined,
-    lengths: [capacity]u16 = @splat(0),
-    head: u8 = 0,
-    len: u8 = 0,
-    overflowed: bool = false,
+const Emulator = @import("Emulator.zig");
 
-    fn push(queue: *ResponseQueue, response: []const u8) void {
-        if (response.len > max_response_bytes or queue.len == capacity) {
-            queue.overflowed = true;
-            return;
-        }
-        const index = (@as(usize, queue.head) + queue.len) % capacity;
-        @memcpy(queue.bytes[index][0..response.len], response);
-        queue.lengths[index] = @intCast(response.len);
-        queue.len += 1;
-    }
+const GraphicsMirror = @import("GraphicsMirror.zig");
 
-    fn peek(queue: *const ResponseQueue) ?[]const u8 {
-        if (queue.len == 0) {
-            return null;
-        }
-        return queue.bytes[queue.head][0..queue.lengths[queue.head]];
-    }
+const ExteriorGraphics = @import("ExteriorGraphics.zig");
 
-    fn pop(queue: *ResponseQueue) void {
-        std.debug.assert(queue.len != 0);
-        queue.lengths[queue.head] = 0;
-        queue.head = @intCast((@as(usize, queue.head) + 1) % capacity);
-        queue.len -= 1;
-    }
-};
+const HostInput = @import("HostInput.zig");
 
-/// One canonical emulator for both cells and graphics. Production isolates KGP
-/// parsing behind its media queue; this example intentionally removes that
-/// concurrency while preserving the same parser and placement semantics.
-const Emulator = struct {
-    gpa: std.mem.Allocator,
-    size: schema.TerminalSize,
-    terminal: vt.Terminal,
-    stream: vt.TerminalStream,
-    render_state: vt.RenderState = .empty,
-    responses: ResponseQueue = .{},
-
-    const InitOptions = struct {
-        io: Io,
-        allocator: std.mem.Allocator,
-        size: schema.TerminalSize,
-    };
-
-    const DrawOptions = struct {
-        area: ui.Rect,
-        force: bool,
-    };
-
-    fn init(emulator: *Emulator, options: InitOptions) !void {
-        const io = options.io;
-        const gpa = options.allocator;
-        const size = options.size;
-        emulator.* = .{
-            .gpa = gpa,
-            .size = size,
-            .terminal = undefined,
-            .stream = undefined,
-        };
-        emulator.terminal = try .init(io, gpa, .{
-            .cols = size.cols,
-            .rows = size.rows,
-            .kitty_image_storage_limit = core.graphics.max_image_bytes_per_screen,
-            .kitty_image_loading_limits = media.image_loading_limits,
-        });
-        errdefer emulator.terminal.deinit(gpa);
-
-        var handler = emulator.terminal.vtHandler();
-        handler.apc_handler.max_bytes.put(.kitty, core.graphics.max_encoded_chunk_bytes);
-        handler.apc_handler.enable(.glyph, false);
-        handler.effects.write_pty = writePty;
-        handler.effects.size = reportSize;
-        emulator.stream = .init(.{ .allocator = gpa, .handler = handler });
-        errdefer emulator.stream.deinit();
-        try emulator.resize(size);
-    }
-
-    fn deinit(emulator: *Emulator) void {
-        emulator.render_state.deinit(emulator.gpa);
-        emulator.stream.deinit();
-        emulator.terminal.deinit(emulator.gpa);
-    }
-
-    fn ingest(emulator: *Emulator, bytes: []const u8) void {
-        emulator.stream.nextSlice(bytes);
-    }
-
-    fn resize(emulator: *Emulator, size: schema.TerminalSize) !void {
-        try emulator.stream.handler.resize(.{
-            .cols = size.cols,
-            .rows = size.rows,
-            .cell_size_px = if (size.cell_width_px != 0 and size.cell_height_px != 0) .{
-                .width = size.cell_width_px,
-                .height = size.cell_height_px,
-            } else null,
-        });
-        emulator.size = size;
-    }
-
-    fn draw(emulator: *Emulator, buffer: *ui.Buffer, options: DrawOptions) !?term.Screen.Position {
-        const area = options.area;
-        try emulator.render_state.update(emulator.gpa, &emulator.terminal);
-        _ = blit.blit(.{
-            .buffer = buffer,
-            .area = area,
-            .terminal = &emulator.terminal,
-            .state = &emulator.render_state,
-            .options = .{ .force = options.force },
-        });
-        const cursor = emulator.render_state.cursor;
-        if (!cursor.visible or cursor.viewport == null or
-            cursor.viewport.?.x >= area.w or cursor.viewport.?.y >= area.h)
-        {
-            return null;
-        }
-        return .{
-            .x = area.x + cursor.viewport.?.x,
-            .y = area.y + cursor.viewport.?.y,
-        };
-    }
-
-    fn writePty(handler: *vt.TerminalStream.Handler, response: [:0]const u8) void {
-        const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
-        const emulator: *Emulator = @fieldParentPtr("stream", stream);
-        emulator.responses.push(response);
-    }
-
-    fn reportSize(handler: *vt.TerminalStream.Handler) ?vt.size_report.Size {
-        const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
-        const emulator: *Emulator = @fieldParentPtr("stream", stream);
-        const size = emulator.size;
-        if (size.cell_width_px == 0 or size.cell_height_px == 0) {
-            return null;
-        }
-        return .{
-            .rows = size.rows,
-            .columns = size.cols,
-            .cell_width = size.cell_width_px,
-            .cell_height = size.cell_height_px,
-        };
-    }
-};
-
-/// Latest-wins in-memory bridge from Ghostty VT storage to Telar's exterior
-/// graphics store. Updating the store does not write to the host; its Kitty
-/// writer alone owns and completes any open multipart stream.
-const GraphicsMirror = struct {
-    revision: u64 = 0,
-    image: ?core.graphics.ImageKey = null,
-    placement: ?core.graphics.Placement = null,
-
-    fn ready(mirror: *const GraphicsMirror, emulator: *const Emulator) bool {
-        _ = mirror;
-        const storage = &emulator.terminal.screens.active.kitty_images;
-        return storage.dirty and storage.loading == null;
-    }
-
-    fn sync(mirror: *GraphicsMirror, emulator: *Emulator, store: *kitty.Store) !bool {
-        if (!mirror.ready(emulator)) {
-            return false;
-        }
-        const storage = &emulator.terminal.screens.active.kitty_images;
-        mirror.revision +%= 1;
-        if (mirror.revision == 0) {
-            mirror.revision = 1;
-        }
-        const revision = mirror.revision;
-        var next_image: ?struct {
-            metadata: core.graphics.Image,
-            pixels: []const u8,
-        } = null;
-        var images = storage.images.iterator();
-        while (images.next()) |entry| {
-            const image = entry.value_ptr;
-            const pixels = image.data.bytes() orelse continue;
-            const format: core.graphics.Format = switch (image.format) {
-                .rgb => .rgb,
-                .rgba => .rgba,
-                else => continue,
-            };
-            const metadata: core.graphics.Image = .{
-                .key = .{ .image_id = image.id, .generation = image.generation },
-                .format = format,
-                .width = image.width,
-                .height = image.height,
-                .byte_len = @intCast(pixels.len),
-            };
-            if (next_image != null) {
-                return error.ExampleImageLimitExceeded;
-            }
-            next_image = .{ .metadata = metadata, .pixels = pixels };
-        }
-
-        if (next_image) |next| {
-            if (mirror.image == null or !std.meta.eql(mirror.image.?, next.metadata.key)) {
-                try store.applyImage(.{
-                    .pane_id = pane_id,
-                    .revision = revision,
-                    .image = next.metadata,
-                });
-                var offset: usize = 0;
-                while (offset < next.pixels.len) {
-                    const take = @min(core.graphics.max_ipc_chunk_bytes, next.pixels.len - offset);
-                    try store.applyChunk(.{
-                        .pane_id = pane_id,
-                        .revision = revision,
-                        .key = next.metadata.key,
-                        .offset = offset,
-                        .bytes = next.pixels[offset..][0..take],
-                    });
-                    offset += take;
-                }
-            }
-        }
-
-        var next_placement: ?core.graphics.Placement = null;
-        if (next_image) |next| {
-            var placements = storage.placements.iterator();
-            while (placements.next()) |entry| {
-                if (entry.key_ptr.image_id != next.metadata.key.image_id) {
-                    continue;
-                }
-                const image = storage.imageById(entry.key_ptr.image_id) orelse continue;
-                const placement = media.placementValue(&emulator.terminal, .{
-                    .key = entry.key_ptr.*,
-                    .placement = entry.value_ptr.*,
-                    .image = image,
-                }) orelse continue;
-                if (next_placement != null) {
-                    return error.ExamplePlacementLimitExceeded;
-                }
-                next_placement = placement;
-            }
-        }
-
-        if (next_placement) |next| {
-            if (mirror.placement == null or !std.meta.eql(mirror.placement.?, next)) {
-                try store.applyPlacement(.{
-                    .pane_id = pane_id,
-                    .revision = revision,
-                    .placement = next,
-                });
-            }
-        }
-        if (mirror.placement) |previous| {
-            if (next_placement == null or previous.virtual_id != next_placement.?.virtual_id) {
-                try store.deletePlacement(.{
-                    .pane_id = pane_id,
-                    .revision = revision,
-                    .key = previous.key,
-                    .virtual_id = previous.virtual_id,
-                    .placement_id = previous.placement_id,
-                });
-            }
-        }
-        if (mirror.image) |previous| {
-            if (next_image == null or previous.image_id != next_image.?.metadata.key.image_id) {
-                try store.deleteImage(.{
-                    .pane_id = pane_id,
-                    .revision = revision,
-                    .key = previous,
-                });
-            }
-        }
-
-        mirror.image = if (next_image) |next| next.metadata.key else null;
-        mirror.placement = next_placement;
-        storage.dirty = false;
-        return true;
-    }
-};
-
-const ExteriorGraphics = struct {
-    writer: kitty.KittyGraphicsWriter,
-
-    fn writeOpaque(context: *anyopaque, writer: *Io.Writer) Io.Writer.Error!usize {
-        const exterior: *ExteriorGraphics = @ptrCast(@alignCast(context));
-        return exterior.writer.write(writer);
-    }
-};
-
-const HostInput = struct {
-    pending: [4096]u8 = undefined,
-    len: usize = 0,
-
-    const Result = struct {
-        stop: bool = false,
-        capabilities_changed: bool = false,
-    };
-
-    const FeedContext = struct {
-        io: Io,
-        session: *pty.Session,
-        capabilities: *HostCapabilities,
-    };
-
-    fn feed(input: *HostInput, context: FeedContext, bytes: []const u8) !Result {
-        if (bytes.len > input.pending.len - input.len) {
-            return error.HostInputOverflow;
-        }
-        @memcpy(input.pending[input.len..][0..bytes.len], bytes);
-        input.len += bytes.len;
-
-        var result: Result = .{};
-        while (input.len != 0) {
-            const parsed = term.parse(input.pending[0..input.len]) orelse break;
-            if (parsed.len == 0) {
-                break;
-            }
-            const raw = input.pending[0..parsed.len];
-            switch (parsed.event) {
-                .terminal_response => |response| {
-                    result.capabilities_changed = observeHostCapability(context.capabilities, response) or
-                        result.capabilities_changed;
-                },
-                // Unknown host responses are not child input.
-                .incomplete => {},
-                else => {
-                    // Ctrl+] is the reproducer's only local binding.
-                    if (raw.len == 1 and raw[0] == 0x1d) {
-                        result.stop = true;
-                    } else {
-                        try context.session.writeAll(context.io, raw);
-                    }
-                },
-            }
-            input.discard(parsed.len);
-            if (result.stop) {
-                break;
-            }
-        }
-        return result;
-    }
-
-    fn discard(input: *HostInput, count: usize) void {
-        std.mem.copyForwards(
-            u8,
-            input.pending[0 .. input.len - count],
-            input.pending[count..input.len],
-        );
-        input.len -= count;
-    }
-};
-
-fn observeHostCapability(capabilities: *HostCapabilities, response: term.Event.TerminalResponse) bool {
+pub fn observeHostCapability(capabilities: *HostCapabilities, response: term.Event.TerminalResponse) bool {
     const observation = frontend.client.translateHostCapability(response) orelse return false;
     const next = capabilities.withObservation(observation);
     if (std.meta.eql(capabilities.*, next)) {
@@ -458,15 +110,9 @@ fn expireHostCapabilities(capabilities: *HostCapabilities) bool {
     return true;
 }
 
-const InputChunk = struct {
-    bytes: [512]u8 = undefined,
-    len: u16 = 0,
-};
+const InputChunk = @import("InputChunk.zig");
 
-const OutputChunk = struct {
-    bytes: [16 * 1024]u8 = undefined,
-    len: u16 = 0,
-};
+const OutputChunk = @import("OutputChunk.zig");
 
 const Message = union(enum) {
     input: InputChunk,
@@ -575,10 +221,7 @@ fn drainResponses(io: Io, session: *pty.Session, emulator: *Emulator) !void {
     }
 }
 
-const CellDrawOptions = struct {
-    frame: FrameGeometry,
-    rebuild_frame: bool,
-};
+const CellDrawOptions = @import("CellDrawOptions.zig");
 
 fn drawCells(screen: *term.Screen, emulator: *Emulator, options: CellDrawOptions) !void {
     const frame = options.frame;
@@ -590,16 +233,7 @@ fn drawCells(screen: *term.Screen, emulator: *Emulator, options: CellDrawOptions
     screen.cursor = try emulator.draw(buffer, .{ .area = frame.content, .force = rebuild_frame });
 }
 
-const PresentContext = struct {
-    screen: *term.Screen,
-    writer: *Io.Writer,
-    emulator: *Emulator,
-    mirror: *GraphicsMirror,
-    graphics_store: *kitty.Store,
-    model: *multiplexer.Model,
-    frame: FrameGeometry,
-    capabilities: *const HostCapabilities,
-};
+const PresentContext = @import("PresentContext.zig");
 
 fn present(context: PresentContext) !void {
     const screen = context.screen;
@@ -629,12 +263,7 @@ fn present(context: PresentContext) !void {
     _ = try screen.flush(writer);
 }
 
-const GraphicsReadiness = struct {
-    capabilities: *const HostCapabilities,
-    emulator: *const Emulator,
-    mirror: *const GraphicsMirror,
-    store: *const kitty.Store,
-};
+const GraphicsReadiness = @import("GraphicsReadiness.zig");
 
 fn graphicsReady(state: GraphicsReadiness) bool {
     const cell = state.capabilities.cellSize(0, 0);
@@ -644,14 +273,7 @@ fn graphicsReady(state: GraphicsReadiness) bool {
     return state.store.damage or state.mirror.ready(state.emulator);
 }
 
-const PaneGeometryContext = struct {
-    session: *pty.Session,
-    emulator: *Emulator,
-    model: *multiplexer.Model,
-    graphics_store: *kitty.Store,
-    frame: FrameGeometry,
-    capabilities: *const HostCapabilities,
-};
+const PaneGeometryContext = @import("PaneGeometryContext.zig");
 
 fn applyPaneGeometry(context: PaneGeometryContext) !bool {
     const next = paneTerminalSize(context.frame, context.capabilities);

@@ -34,37 +34,13 @@ pub fn battery(percent: u8) Icon {
         .battery_full;
 }
 
-pub const Mark = struct {
-    area: shared.Rect,
-    icon: Icon,
-    foreground: [3]u8,
-    background: [3]u8,
-};
+pub const Mark = @import("Mark.zig");
 
 /// Sixty-four visible agents can each contribute a provider and a status
 /// mark. The remaining slots cover the fixed top and bottom chrome.
 pub const max_marks = 160;
 
-pub const Plan = struct {
-    marks: [max_marks]Mark = undefined,
-    len: u8 = 0,
-
-    pub fn reset(plan: *Plan) void {
-        plan.len = 0;
-    }
-
-    pub fn add(plan: *Plan, mark: Mark) void {
-        if (plan.len == plan.marks.len) {
-            return;
-        }
-        plan.marks[plan.len] = mark;
-        plan.len += 1;
-    }
-
-    pub fn slice(plan: *const Plan) []const Mark {
-        return plan.marks[0..plan.len];
-    }
-};
+pub const Plan = @import("Plan.zig");
 
 test "icon theme names have one canonical spelling" {
     try std.testing.expectEqual(Theme.nerd_font, try Theme.parse("NerdFont"));

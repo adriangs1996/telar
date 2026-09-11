@@ -7,7 +7,7 @@ const shared = @import("telar-core").ui;
 const hits = @import("hits.zig");
 const focus = @import("focus.zig");
 
-pub const theme = @import("theme.zig");
+pub const theme = @import("theme_support.zig");
 pub const icons = @import("icons.zig");
 pub const sidebar = @import("telar-client").layout.sidebar;
 

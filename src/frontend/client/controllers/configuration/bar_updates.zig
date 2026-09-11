@@ -8,137 +8,29 @@ const configuration_application = @import("telar-client").application.configurat
 const client_clock = @import("telar-client").resources.clock;
 const deadline_timer = @import("telar-client").resources.deadline_timer;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const apply_bar_update = configuration_application.bar_update;
-const no_deadline: u64 = std.math.maxInt(u64);
-const position_count = @typeInfo(bars.Position).@"enum".fields.len;
+pub const no_deadline: u64 = std.math.maxInt(u64);
+pub const position_count = @typeInfo(bars.Position).@"enum".fields.len;
 
 pub const CommandExecutionId = enum(u64) {
     none = 0,
     _,
 };
 
-pub const Completion = struct {
-    execution_id: CommandExecutionId,
-    result: anyerror!bars.command.Output,
-};
+pub const Completion = @import("BarUpdatesCompletion.zig");
 
-const CommandExecution = struct {
-    id: CommandExecutionId,
-    generation: u64,
-    position: bars.Position,
-};
+const CommandExecution = @import("CommandExecution.zig");
 
-const Job = struct {
-    execution_id: CommandExecutionId,
-    command: bars.Command,
-};
+const Job = @import("BarUpdatesJob.zig");
 
-const Synchronization = struct {
-    generation: u64,
-    configuration: ?*const bars.Configuration,
-    now_ns: u64,
-};
+const Synchronization = @import("Synchronization.zig");
 
-const DueInput = struct {
-    generation: u64,
-    configuration: *const bars.Configuration,
-    now_ns: u64,
-};
+const DueInput = @import("DueInput.zig");
 
-const Due = struct {
-    dynamic_mask: u8 = 0,
-    command_mask: u8 = 0,
-};
+const Due = @import("Due.zig");
 
-pub const State = struct {
-    scheduler: deadline_timer.Scheduler = .{},
-    generation: u64 = 0,
-    deadlines: [position_count]u64 = @splat(no_deadline),
-    pending_callbacks: u8 = 0,
-    pending_commands: u8 = 0,
-    command_execution: ?CommandExecution = null,
-    next_command_execution_id: u64 = 1,
-
-    fn synchronize(state: *State, input: Synchronization) void {
-        state.generation = input.generation;
-        state.deadlines = @splat(no_deadline);
-        state.pending_callbacks = 0;
-        state.pending_commands = 0;
-        const configuration = input.configuration orelse return;
-
-        for (std.enums.values(bars.Position)) |position| {
-            if (configuration.source(position).interval() != null) {
-                state.deadlines[@intFromEnum(position)] = input.now_ns;
-            }
-        }
-    }
-
-    fn takeDue(state: *State, input: DueInput) Due {
-        if (state.generation != input.generation) {
-            return .{};
-        }
-
-        var due: Due = .{};
-        for (std.enums.values(bars.Position)) |position| {
-            const index = @intFromEnum(position);
-            const deadline_ns = state.deadlines[index];
-            if (deadline_ns == no_deadline or deadline_ns > input.now_ns) {
-                continue;
-            }
-
-            const source = input.configuration.source(position);
-            const interval_ns = source.interval() orelse {
-                state.deadlines[index] = no_deadline;
-                continue;
-            };
-            state.deadlines[index] = followingDeadline(deadline_ns, interval_ns, input.now_ns);
-            switch (source.*) {
-                .dynamic => due.dynamic_mask |= position.bit(),
-                .command => due.command_mask |= position.bit(),
-                else => state.deadlines[index] = no_deadline,
-            }
-        }
-
-        return due;
-    }
-
-    fn nextDeadline(state: *const State) ?u64 {
-        var next: u64 = no_deadline;
-        for (state.deadlines) |deadline_ns| {
-            next = @min(next, deadline_ns);
-        }
-
-        return if (next == no_deadline) null else next;
-    }
-
-    fn reserveCommand(state: *State, generation: u64, position: bars.Position) !CommandExecution {
-        std.debug.assert(state.command_execution == null);
-        if (state.next_command_execution_id == 0) {
-            return error.BarCommandExecutionIdExhausted;
-        }
-
-        const execution: CommandExecution = .{
-            .id = @enumFromInt(state.next_command_execution_id),
-            .generation = generation,
-            .position = position,
-        };
-        state.next_command_execution_id +%= 1;
-        state.command_execution = execution;
-
-        return execution;
-    }
-
-    fn finishCommand(state: *State, execution_id: CommandExecutionId) ?CommandExecution {
-        const execution = state.command_execution orelse return null;
-        if (execution.id != execution_id) {
-            return null;
-        }
-
-        state.command_execution = null;
-        return execution;
-    }
-};
+pub const State = @import("State.zig");
 
 /// Replaces all deadlines from the active typed configuration generation.
 ///
@@ -217,11 +109,7 @@ pub fn completeCommand(client: *Client, completion: Completion) !void {
     try startNextCommand(client);
 }
 
-const CallbackRequest = struct {
-    position: bars.Position,
-    reference: bars.CallbackRef,
-    output: ?[]const u8 = null,
-};
+const CallbackRequest = @import("CallbackRequest.zig");
 
 fn invokeCallback(client: *Client, request: CallbackRequest) !apply_bar_update.Outcome {
     const generation = client.lua_generation orelse return .stale;
@@ -248,11 +136,7 @@ fn invokeCallback(client: *Client, request: CallbackRequest) !apply_bar_update.O
     });
 }
 
-const CommandOutput = struct {
-    execution: CommandExecution,
-    command: bars.Command,
-    output: bars.command.Output,
-};
+const CommandOutput = @import("CommandOutput.zig");
 
 fn applyCommandOutput(client: *Client, completed: CommandOutput) !void {
     if (completed.command.render) |reference| {
@@ -275,12 +159,7 @@ fn applyCommandOutput(client: *Client, completed: CommandOutput) !void {
     });
 }
 
-const Failure = struct {
-    generation: u64,
-    position: bars.Position,
-    reason: anyerror,
-    kind: []const u8,
-};
+const Failure = @import("Failure.zig");
 
 fn publishFailure(client: *Client, failure: Failure) !apply_bar_update.Outcome {
     var diagnostic: lua_config.Diagnostic = .{};
@@ -415,7 +294,7 @@ fn rearm(client: *Client) !void {
     }
 }
 
-fn followingDeadline(deadline_ns: u64, interval_ns: u64, now_ns: u64) u64 {
+pub fn followingDeadline(deadline_ns: u64, interval_ns: u64, now_ns: u64) u64 {
     std.debug.assert(interval_ns != 0);
     const elapsed = now_ns - deadline_ns;
     const skipped = elapsed / interval_ns;

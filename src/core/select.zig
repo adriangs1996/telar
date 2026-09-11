@@ -26,7 +26,7 @@ pub const Point = ui.Point;
 
 /// Reading order, which is what makes a range comparable at all: a selection
 /// dragged upwards has its anchor after its head.
-fn pointBefore(a: Point, b: Point) bool {
+pub fn pointBefore(a: Point, b: Point) bool {
     if (a.y != b.y) {
         return a.y < b.y;
     }
@@ -50,75 +50,7 @@ pub const Mode = enum {
 /// that gets it subtly wrong feels wrong without the user being able to say why.
 pub const Granularity = enum { character, word, line };
 
-pub const Range = struct {
-    anchor: Point,
-    head: Point,
-    mode: Mode = .linear,
-    granularity: Granularity = .character,
-
-    /// A bare click before any drag. A word or line selection collapsed onto
-    /// one cell still selects that cell.
-    pub fn isEmpty(r: Range) bool {
-        return r.anchor.x == r.head.x and r.anchor.y == r.head.y and r.granularity == .character;
-    }
-
-    /// Anchor and head in reading order.
-    pub fn ordered(r: Range) [2]Point {
-        return if (pointBefore(r.anchor, r.head) or
-            (r.anchor.x == r.head.x and r.anchor.y == r.head.y))
-            .{ r.anchor, r.head }
-        else
-            .{ r.head, r.anchor };
-    }
-
-    /// Whether a cell is inside, which is all the highlighting needs to know.
-    pub fn contains(r: Range, x: u16, y: u16) bool {
-        const from, const to = r.ordered();
-        return switch (r.mode) {
-            .block => x >= @min(from.x, to.x) and x <= @max(from.x, to.x) and
-                y >= from.y and y <= to.y,
-            .linear => {
-                if (y < from.y or y > to.y) {
-                    return false;
-                }
-                if (from.y == to.y) {
-                    return x >= from.x and x <= to.x;
-                }
-                if (y == from.y) {
-                    return x >= from.x;
-                }
-                if (y == to.y) {
-                    return x <= to.x;
-                }
-                return true;
-            },
-        };
-    }
-
-    /// Grows the range to whole words or whole rows.
-    ///
-    /// Applied on every drag rather than once at the start, because a
-    /// double-click-and-drag selects by word all the way along - the behaviour
-    /// people rely on without noticing it exists.
-    pub fn expanded(r: Range, b: *const ui.Buffer) Range {
-        var from, var to = r.ordered();
-        switch (r.granularity) {
-            .character => {},
-            .word => {
-                from.x = wordStart(b, from);
-                to.x = wordEnd(b, to);
-            },
-            .line => {
-                from.x = 0;
-                to.x = if (b.w == 0) 0 else b.w - 1;
-            },
-        }
-        // The granularity survives so that a word or line selection collapsed
-        // onto a single cell is not mistaken for a bare click by `isEmpty`.
-        // Expansion is idempotent, so re-expanding the result is harmless.
-        return .{ .anchor = from, .head = to, .mode = r.mode, .granularity = r.granularity };
-    }
-};
+pub const Range = @import("Range.zig");
 
 fn isWordByte(cell: *const ui.Cell) bool {
     if (cell.width == 0) {
@@ -135,7 +67,7 @@ fn isWordByte(cell: *const ui.Cell) bool {
     return glyph[0] != ' ';
 }
 
-fn wordStart(b: *const ui.Buffer, at: Point) u16 {
+pub fn wordStart(b: *const ui.Buffer, at: Point) u16 {
     const current = cellAt(b, at.x, at.y) orelse return at.x;
     const word = isWordByte(current);
     var x = at.x;
@@ -148,7 +80,7 @@ fn wordStart(b: *const ui.Buffer, at: Point) u16 {
     return x;
 }
 
-fn wordEnd(b: *const ui.Buffer, at: Point) u16 {
+pub fn wordEnd(b: *const ui.Buffer, at: Point) u16 {
     const current = cellAt(b, at.x, at.y) orelse return at.x;
     const word = isWordByte(current);
     var x = at.x;
@@ -235,38 +167,7 @@ pub fn text(b: *const ui.Buffer, range: Range, out: []u8) []const u8 {
     return out[0..len];
 }
 
-/// Turns a stream of presses into a granularity.
-///
-/// Double and triple click are a *timing* fact, not a mouse fact: the terminal
-/// reports three presses and nothing else. The threshold is time and position
-/// together, because two clicks far apart are two clicks no matter how quickly
-/// they arrived.
-pub const ClickTracker = struct {
-    /// The interval every desktop has used since the 1980s. Shorter feels
-    /// broken to anyone who types slowly; longer turns two deliberate clicks
-    /// into a double.
-    interval_ns: u64 = 500 * std.time.ns_per_ms,
-    last_ns: u64 = 0,
-    last: Point = .{ .x = 0, .y = 0 },
-    count: u8 = 0,
-
-    pub fn press(t: *ClickTracker, at: Point, now_ns: u64) Granularity {
-        const near = at.y == t.last.y and (if (at.x > t.last.x) at.x - t.last.x else t.last.x - at.x) <= 1;
-        const soon = t.count > 0 and now_ns -| t.last_ns <= t.interval_ns;
-
-        t.count = if (near and soon) @min(t.count +| 1, 3) else 1;
-        t.last = at;
-        t.last_ns = now_ns;
-
-        return switch (t.count) {
-            1 => .character,
-            2 => .word,
-            // Past three it stays on line rather than cycling: a user holding
-            // down the button is asking for more, never for less.
-            else => .line,
-        };
-    }
-};
+pub const ClickTracker = @import("ClickTracker.zig");
 
 // ---------------------------------------------------------------------------
 // Tests

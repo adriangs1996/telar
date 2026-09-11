@@ -10,11 +10,7 @@ pub fn defaultPath(environ: std.process.Environ, buffer: []u8) ![]const u8 {
     }, buffer);
 }
 
-const Environment = struct {
-    development: ?[]const u8,
-    xdg_config_home: ?[]const u8,
-    home: ?[]const u8,
-};
+const Environment = @import("Environment.zig");
 
 fn resolveDefaultPath(environment: Environment, buffer: []u8) ![]const u8 {
     if (environment.development) |path| {

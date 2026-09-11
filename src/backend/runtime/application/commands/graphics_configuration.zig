@@ -3,33 +3,16 @@
 const std = @import("std");
 const attachment_mod = @import("../../attachment/root.zig");
 
-const AttachmentStore = attachment_mod.AttachmentStore;
+pub const AttachmentStore = attachment_mod.AttachmentStore;
 
-pub const ConfigureGraphics = struct {
-    shared: bool,
-};
+pub const ConfigureGraphics = @import("ConfigureGraphics.zig");
 
 pub const ConfigureGraphicsResult = enum {
     changed,
     unchanged,
 };
 
-pub const ConfigureGraphicsHandler = struct {
-    attachments: *AttachmentStore,
-
-    /// Changes one client attachment aggregate so current and future panes use
-    /// the same graphics transport policy.
-    ///
-    /// ```zig
-    /// const result = try handler.execute(.{ .shared = true });
-    /// ```
-    pub fn execute(handler: *ConfigureGraphicsHandler, command: ConfigureGraphics) !ConfigureGraphicsResult {
-        return switch (handler.attachments.configureGraphics(command.shared)) {
-            .changed => .changed,
-            .unchanged => .unchanged,
-        };
-    }
-};
+pub const ConfigureGraphicsHandler = @import("ConfigureGraphicsHandler.zig");
 
 test "ConfigureGraphicsHandler is idempotent on an empty client aggregate" {
     var attachments: AttachmentStore = .{};

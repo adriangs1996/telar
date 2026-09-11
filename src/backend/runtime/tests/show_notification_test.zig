@@ -6,46 +6,13 @@ const show_notification_commands = @import("../application/commands/show_notific
 const show_notification_controller = @import("../entrypoints/requests/show_notification.zig");
 const delivery_mod = @import("../delivery/root.zig");
 
-const schema = core.schema;
-const PendingNotification = delivery_mod.PendingNotification;
-const ResponseQueue = delivery_mod.ResponseQueue;
+pub const schema = core.schema;
+pub const PendingNotification = delivery_mod.PendingNotification;
+pub const ResponseQueue = delivery_mod.ResponseQueue;
 
-const Broadcaster = struct {
-    recipients: [3]*ResponseQueue,
-    call_count: usize = 0,
+const Broadcaster = @import("ShowNotificationTestBroadcaster.zig");
 
-    fn publisher(broadcaster: *Broadcaster) show_notification_commands.NotificationPublisher {
-        return .{ .context = broadcaster, .publish_fn = publish };
-    }
-
-    fn publish(context: *anyopaque, notification: schema.Notification) u8 {
-        const broadcaster: *Broadcaster = @ptrCast(@alignCast(context));
-        const pending = PendingNotification.init(notification);
-        var delivered: u8 = 0;
-        broadcaster.call_count += 1;
-
-        for (broadcaster.recipients) |recipient| {
-            if (recipient.pushNotification(pending)) {
-                delivered += 1;
-            }
-        }
-
-        return delivered;
-    }
-};
-
-const PumpCapture = struct {
-    count: usize = 0,
-
-    fn delivery(capture: *PumpCapture) show_notification_controller.Delivery {
-        return .{ .context = capture, .pump_all_fn = pumpAll };
-    }
-
-    fn pumpAll(context: *anyopaque) void {
-        const capture: *PumpCapture = @ptrCast(@alignCast(context));
-        capture.count += 1;
-    }
-};
+const PumpCapture = @import("PumpCapture.zig");
 
 fn fill(queue: *ResponseQueue) !void {
     while (queue.len < queue.items.len) {

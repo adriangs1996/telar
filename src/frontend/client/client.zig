@@ -17,23 +17,23 @@ const client_model = @import("telar-client").model;
 const lua_config = @import("../config/root.zig");
 const link_capability = @import("../links/root.zig");
 const sound_capability = @import("../sound/root.zig");
-const theme_capability = @import("../ui/theme.zig");
+const theme_capability = @import("../ui/theme_support.zig");
 const notification_capability = @import("telar-client").notifications;
-const keybind = input_capability.keybind;
-const kitty = graphics.kitty;
+pub const keybind = input_capability.keybind;
+pub const kitty = graphics.kitty;
 const toast_graphics = graphics.toast;
 const navigation = workspace_capability.navigation;
 const term = presentation.screen;
 const plugin_broker = @import("../plugins/root.zig");
 const ui_capability = @import("../ui/root.zig");
-const icons = ui_capability.icons;
-const theme = ui_capability.theme;
+pub const icons = ui_capability.icons;
+pub const theme = ui_capability.theme;
 
-const Io = std.Io;
-const File = Io.File;
-const schema = core.schema;
+pub const Io = std.Io;
+pub const File = Io.File;
+pub const schema = core.schema;
 
-const ConfiguredBinding = lua_config.ConfiguredBinding;
+pub const ConfiguredBinding = lua_config.ConfiguredBinding;
 pub const InputRouter = host_inputs.Router;
 pub const InputChunk = host_inputs.Chunk;
 
@@ -41,34 +41,7 @@ comptime {
     std.debug.assert(lua_config.max_expression_paste_bytes + 16 <= runtime_transport_mod.max_input_bytes);
 }
 
-pub const Options = struct {
-    arguments: []const []const u8,
-    cwd: []const u8,
-    endpoint: []const u8,
-    prefix: keybind.Key = keybind.default_prefix,
-    bindings: []const ConfiguredBinding = &.{},
-    theme: theme.Theme = theme.default_theme,
-    icon_theme: icons.Theme = .unicode,
-    sidebar_rendering: kitty.SidebarRendering = .automatic,
-    sidebar_visible: bool = true,
-    pane_gaps: bool = true,
-    sound: lua_config.SoundConfig = .{},
-    bars: bars_capability.Layout = .{},
-    host_shared_memory: bool = false,
-    input_escape_timeout_ns: u64 = keybind.default_escape_timeout_ns,
-    input_sequence_timeout_ns: u64 = keybind.default_sequence_timeout_ns,
-    lua_generation: ?*lua_config.Generation = null,
-    config_path: ?[]const u8 = null,
-    config_mtime_ns: i128 = 0,
-    theme_locked: bool = false,
-    sidebar_renderer_locked: bool = false,
-    plugin_registry: ?*plugin_broker.Registry = null,
-    trust_store: ?*core.plugin.TrustStore = null,
-    trust_path: ?[]const u8 = null,
-    profile: ?[]const u8 = null,
-    /// Executable used for local `file://` links. Empty disables file opening.
-    editor: []const u8 = "",
-};
+pub const Options = @import("Options.zig");
 
 const clipboard_images = @import("controllers/host/clipboard_images.zig");
 const bar_updates_controller = @import("controllers/configuration/bar_updates.zig");
@@ -77,16 +50,13 @@ const host_inputs = @import("controllers/input/host_inputs.zig");
 const notification_timers = @import("resources/notification_timers.zig");
 const plugin_actions = @import("controllers/configuration/plugin_actions.zig");
 const presentation_lifecycle = @import("presentation/presentation_lifecycle.zig");
-const presenter_mod = @import("presentation/presenter.zig");
+const presenter_mod = @import("presentation/Presenter.zig");
 const request_lifecycle_mod = @import("connection/request_lifecycle.zig");
 const runtime_transport_mod = @import("telar-client").connection.runtime_transport;
 const sidebar_animations = @import("controllers/notifications/sidebar_animations.zig");
 const host_output = @import("resources/host_output.zig");
 
-pub const AppearanceThemes = struct {
-    light: ?theme_capability.Theme = null,
-    dark: ?theme_capability.Theme = null,
-};
+pub const AppearanceThemes = @import("AppearanceThemes.zig");
 
 pub const ClientEvent = union(enum) {
     /// Bytes read into `host_input.chunk`; zero is EOF.
@@ -117,25 +87,7 @@ pub const ClientEvent = union(enum) {
 
 const client_event_count = @typeInfo(ClientEvent).@"union".fields.len;
 
-/// The platform resources a client cannot fabricate: everything else it
-/// owns. Substituting these — a pipe for the tty's read handle, a
-/// fixed-buffer writer, a scripted socket peer — is what makes the client
-/// constructible in a test.
-const Params = struct {
-    gpa: std.mem.Allocator,
-    io: Io,
-    connection: *core.transport.SocketChannel,
-    input_file: File,
-    writer: *Io.Writer,
-    async_output: bool = false,
-    fast_output: ?host_output.FastWrite = null,
-    /// Host terminal geometry measured by the platform adapter.
-    host_size: schema.TerminalSize,
-    window_width_px: u32 = 0,
-    window_height_px: u32 = 0,
-    client_identity: schema.ClientIdentity = @enumFromInt(1),
-    options: Options,
-};
+const Params = @import("Params.zig");
 
 io: Io,
 gpa: std.mem.Allocator,

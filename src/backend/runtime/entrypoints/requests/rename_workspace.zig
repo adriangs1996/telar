@@ -5,100 +5,14 @@ const core = @import("telar-core");
 const rename_workspace_commands = @import("../../application/commands/rename_workspace.zig");
 const delivery_mod = @import("../../delivery/root.zig");
 
-const schema = core.schema;
-const ResponseQueue = delivery_mod.ResponseQueue;
+pub const schema = core.schema;
+pub const ResponseQueue = delivery_mod.ResponseQueue;
 
-pub const Controller = struct {
-    responses: *ResponseQueue,
-    rename_workspace: rename_workspace_commands.RenameWorkspaceExecutor,
+pub const Controller = @import("RenameWorkspaceController.zig");
 
-    /// Creates a controller scoped to one workspace rename request.
-    ///
-    /// ```zig
-    /// var controller = Controller.init(&responses, handler.executor());
-    /// ```
-    pub fn init(responses: *ResponseQueue, rename_workspace: rename_workspace_commands.RenameWorkspaceExecutor) Controller {
-        return .{ .responses = responses, .rename_workspace = rename_workspace };
-    }
+const Failure = @import("RenameWorkspaceFailure.zig");
 
-    /// Maps a wire request into a rename command and queues the workspace
-    /// snapshot reference or the same protocol failures as the legacy flow.
-    ///
-    /// ```zig
-    /// try controller.renameWorkspace(request);
-    /// ```
-    pub fn renameWorkspace(controller: *Controller, request: schema.RenameWorkspace) !void {
-        const renamed = controller.rename_workspace.execute(.{
-            .location = request.workspace,
-            .name = request.name,
-        }) catch |err| {
-            switch (err) {
-                error.WorkspaceNotFound => try controller.queueFailure(request.request_id, .{
-                    .code = .workspace_not_found,
-                    .message = "workspace not found",
-                }),
-                error.InvalidWorkspaceName => try controller.queueFailure(request.request_id, .{
-                    .code = .internal,
-                    .message = "could not rename workspace",
-                }),
-                else => return err,
-            }
-
-            return;
-        };
-
-        try controller.responses.push(.{ .workspace_snapshot = .{
-            .request_id = request.request_id,
-            .workspace = renamed.location,
-        } });
-    }
-
-    fn queueFailure(controller: *Controller, request_id: schema.RequestId, failure: Failure) !void {
-        try controller.responses.push(.{ .request_failed = .{
-            .request_id = request_id,
-            .code = failure.code,
-            .message = failure.message,
-        } });
-    }
-};
-
-const Failure = struct {
-    code: schema.FailureCode,
-    message: []const u8,
-};
-
-const StubRenameWorkspace = struct {
-    result: ?rename_workspace_commands.RenameWorkspaceResult = null,
-    failure: ?anyerror = null,
-    call_count: usize = 0,
-    last_location: ?schema.WorkspaceLocation = null,
-    last_name: [schema.max_tab_label_bytes]u8 = undefined,
-    last_name_len: u8 = 0,
-
-    fn executor(stub: *StubRenameWorkspace) rename_workspace_commands.RenameWorkspaceExecutor {
-        return .{ .context = stub, .execute_fn = execute };
-    }
-
-    fn execute(context: *anyopaque, command: rename_workspace_commands.RenameWorkspace) anyerror!rename_workspace_commands.RenameWorkspaceResult {
-        const stub: *StubRenameWorkspace = @ptrCast(@alignCast(context));
-        std.debug.assert(command.name.len <= stub.last_name.len);
-
-        stub.call_count += 1;
-        stub.last_location = command.location;
-        stub.last_name_len = @intCast(command.name.len);
-        @memcpy(stub.last_name[0..command.name.len], command.name);
-
-        if (stub.failure) |failure| {
-            return failure;
-        }
-
-        return stub.result.?;
-    }
-
-    fn lastName(stub: *const StubRenameWorkspace) []const u8 {
-        return stub.last_name[0..stub.last_name_len];
-    }
-};
+const StubRenameWorkspace = @import("StubRenameWorkspace.zig");
 
 fn testingLocation() !schema.WorkspaceLocation {
     return .{ .workspace = try schema.id.workspace(3) };

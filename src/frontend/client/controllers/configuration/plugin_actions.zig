@@ -8,30 +8,19 @@ const input_application = @import("telar-client").application.input;
 const client_model = @import("telar-client").model;
 const notifications = @import("telar-client").notifications;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const client_actions = @import("../input/actions.zig");
 const notification_flow = @import("../notifications/notifications.zig");
 const plugin_action = input_application.plugin_action;
 const plugin_action_delivery = input_application.plugin_action_delivery;
 
-pub const Completion = struct {
-    execution_id: client_model.PluginExecutionId,
-    result: anyerror!plugin_broker.WorkerResult,
-};
+pub const Completion = @import("PluginActionsCompletion.zig");
 
 pub const StartOutcome = plugin_action.StartOutcome;
 
-const Job = struct {
-    execution_id: client_model.PluginExecutionId,
-    request: plugin_broker.WorkerRequest,
-};
+const Job = @import("PluginActionsJob.zig");
 
-const StartContext = struct {
-    client: *Client,
-    requested: input.action.PluginAction,
-    callback_context: config.CallbackContext,
-    request: ?plugin_broker.WorkerRequest = null,
-};
+const StartContext = @import("StartContext.zig");
 
 /// Resolves one configured action and schedules its work outside the input path.
 ///

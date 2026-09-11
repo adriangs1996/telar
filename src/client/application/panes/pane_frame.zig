@@ -4,70 +4,16 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 
-const schema = core.schema;
-const ui = core.ui;
+pub const schema = core.schema;
+pub const ui = core.ui;
 
-pub const PaneFrameEffects = struct {
-    context: *anyopaque,
-    recover: *const fn (*anyopaque, client_model.PaneFrameRecovery) anyerror!void,
-    deliver: *const fn (*anyopaque, client_model.PaneFrameCommit) anyerror!void,
-};
+pub const PaneFrameEffects = @import("PaneFrameEffects.zig");
 
-pub const ApplyPaneFrameHandler = struct {
-    model: *client_model.Model,
-    effects: PaneFrameEffects,
+pub const ApplyPaneFrameHandler = @import("ApplyPaneFrameHandler.zig");
 
-    /// Commits a valid attached frame before updating client resources. A
-    /// broken patch base requests a snapshot without mutation, while a frame
-    /// made stale by detach has no effects.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(frame);
-    /// ```
-    pub fn execute(handler: *ApplyPaneFrameHandler, frame: schema.frame.FrameView) !client_model.PaneFrameOutcome {
-        const outcome = try handler.model.applyPaneFrame(frame);
-        switch (outcome) {
-            .detached => {},
-            .resync => |recovery| try handler.effects.recover(handler.effects.context, recovery),
-            .applied => |commit| try handler.effects.deliver(handler.effects.context, commit),
-        }
+const TestingModel = @import("PaneFrameTestingModel.zig");
 
-        return outcome;
-    }
-};
-
-const TestingModel = struct {
-    model: *client_model.Model,
-    pane_id: schema.PaneId,
-
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const location: schema.TabLocation = .{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(1),
-        };
-        const pane_id: schema.PaneId = @enumFromInt(1);
-        try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
-
-        return .{ .model = model, .pane_id = pane_id };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
-
-const TestingFrame = struct {
-    pane_id: schema.PaneId,
-    frame_id: u64 = 1,
-    base_frame_id: u64 = 0,
-    cells: ?[]const ui.Cell = null,
-};
+const TestingFrame = @import("TestingFrame.zig");
 
 fn testingFrame(buffer: []u8, input: TestingFrame) !schema.frame.FrameView {
     var spans: [1]schema.frame.Span = undefined;
@@ -88,57 +34,12 @@ fn testingFrame(buffer: []u8, input: TestingFrame) !schema.frame.FrameView {
     return (try schema.decodeServer(encoded)).pane_frame;
 }
 
-const EffectEvent = enum {
+pub const EffectEvent = enum {
     recover,
     deliver,
 };
 
-const EffectsCapture = struct {
-    model: *client_model.Model,
-    events: [1]EffectEvent = undefined,
-    event_count: usize = 0,
-    recovery: ?client_model.PaneFrameRecovery = null,
-    commit: ?client_model.PaneFrameCommit = null,
-    observed_commit: bool = false,
-    fail_recovery: bool = false,
-    fail_delivery: bool = false,
-
-    fn port(capture: *EffectsCapture) PaneFrameEffects {
-        return .{
-            .context = capture,
-            .recover = recover,
-            .deliver = deliver,
-        };
-    }
-
-    fn record(capture: *EffectsCapture, event: EffectEvent) void {
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn recover(context: *anyopaque, recovery: client_model.PaneFrameRecovery) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.record(.recover);
-        capture.recovery = recovery;
-
-        if (capture.fail_recovery) {
-            return error.RecoveryFailed;
-        }
-    }
-
-    fn deliver(context: *anyopaque, commit: client_model.PaneFrameCommit) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        const pane = capture.model.workspace.findPane(commit.pane_id).?;
-        capture.record(.deliver);
-        capture.commit = commit;
-        capture.observed_commit = pane.applied_frame_id == commit.frame_id and
-            capture.model.version().frame == commit.frame_revision;
-
-        if (capture.fail_delivery) {
-            return error.ResourceSyncFailed;
-        }
-    }
-};
+const EffectsCapture = @import("PaneFrameEffectsCapture.zig");
 
 test "ApplyPaneFrameHandler commits before delivering client resources" {
     var testing = try TestingModel.init();

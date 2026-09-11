@@ -7,62 +7,12 @@ const core = @import("telar-core");
 const acknowledge_agent_commands = @import("../../application/commands/acknowledge_agent.zig");
 const telemetry_mod = @import("../../observability/root.zig").telemetry;
 
-const schema = core.schema;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+pub const schema = core.schema;
+pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 
-/// Builds a statically dispatched acknowledgement controller.
-///
-/// ```zig
-/// const AcknowledgeController = Controller(*acknowledge_agent_commands.AcknowledgeAgentHandler);
-/// var controller = AcknowledgeController.init(&metrics, &handler);
-/// ```
-pub fn Controller(comptime Executor: type) type {
-    return struct {
-        const Self = @This();
+pub const Controller = @import("GenericAcknowledgeAgentController.zig").Type;
 
-        metrics: *RuntimeMetrics,
-        executor: Executor,
-
-        /// Creates one controller bound to the runtime metrics and handler.
-        ///
-        /// ```zig
-        /// var controller = AcknowledgeController.init(&metrics, &handler);
-        /// ```
-        pub fn init(metrics: *RuntimeMetrics, executor: Executor) Self {
-            return .{ .metrics = metrics, .executor = executor };
-        }
-
-        /// Maps the wire acknowledgement to its command and counts only an
-        /// unknown generation as stale.
-        ///
-        /// ```zig
-        /// controller.acknowledgeAgent(acknowledgement, now_ms);
-        /// ```
-        pub inline fn acknowledgeAgent(controller: *Self, acknowledgement: schema.AcknowledgeAgent, now_ms: i64) void {
-            const result = controller.executor.execute(.{
-                .pane_id = acknowledgement.pane_id,
-                .pane_generation = acknowledgement.pane_generation,
-                .now_ms = now_ms,
-            });
-
-            if (result == .unknown_agent) {
-                controller.metrics.stale_client_messages += 1;
-            }
-        }
-    };
-}
-
-const StubExecutor = struct {
-    result: acknowledge_agent_commands.AcknowledgeAgentResult = .acknowledged,
-    call_count: usize = 0,
-    command: ?acknowledge_agent_commands.AcknowledgeAgent = null,
-
-    fn execute(stub: *StubExecutor, command: acknowledge_agent_commands.AcknowledgeAgent) acknowledge_agent_commands.AcknowledgeAgentResult {
-        stub.call_count += 1;
-        stub.command = command;
-        return stub.result;
-    }
-};
+const StubExecutor = @import("AcknowledgeAgentStubExecutor.zig");
 
 const TestController = Controller(*StubExecutor);
 

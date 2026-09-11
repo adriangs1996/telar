@@ -7,13 +7,13 @@ const native = @cImport({
 const backend = @import("telar-backend");
 const parser = @import("parser.zig");
 
-const Io = std.Io;
+pub const Io = std.Io;
 const File = Io.File;
-const ca = backend.proxy.ca;
+pub const ca = backend.proxy.ca;
 const rotation_window_seconds: u64 = 24 * 60 * 60;
-const record_name = "trust-install.json";
-const system_key_name = "ca-system-key.pem";
-const system_cert_name = "ca-system-cert.pem";
+pub const record_name = "trust-install.json";
+pub const system_key_name = "ca-system-key.pem";
+pub const system_cert_name = "ca-system-cert.pem";
 const linux_certificate_path = "/usr/local/share/ca-certificates/telar-proxy.crt";
 
 pub const TrustBackend = enum {
@@ -28,82 +28,13 @@ pub const Status = enum {
     stale,
 };
 
-pub const Record = struct {
-    backend: TrustBackend,
-    fingerprint: [40]u8,
-    store_path: [std.fs.max_path_bytes]u8 = undefined,
-    store_path_len: u16 = 0,
+pub const Record = @import("Record.zig");
 
-    /// Borrows the validated absolute trust-store path from this fixed record.
-    ///
-    /// ```zig
-    /// const destination = record.storePath();
-    /// ```
-    pub fn storePath(record: *const Record) []const u8 {
-        return record.store_path[0..record.store_path_len];
-    }
-};
+const JsonRecord = @import("JsonRecord.zig");
 
-const JsonRecord = struct {
-    version: u8,
-    backend: []const u8,
-    fingerprint: []const u8,
-    store_path: []const u8,
-};
+const AuthorityPaths = @import("AuthorityPaths.zig");
 
-const AuthorityPaths = struct {
-    key: [std.fs.max_path_bytes]u8 = undefined,
-    key_len: usize,
-    certificate: [std.fs.max_path_bytes]u8 = undefined,
-    certificate_len: usize,
-    record: [std.fs.max_path_bytes]u8 = undefined,
-    record_len: usize,
-
-    fn init(directory: []const u8) !AuthorityPaths {
-        var paths: AuthorityPaths = .{ .key_len = 0, .certificate_len = 0, .record_len = 0 };
-        paths.key_len = (try std.fmt.bufPrint(&paths.key, "{s}/{s}", .{ directory, system_key_name })).len;
-        paths.certificate_len = (try std.fmt.bufPrint(&paths.certificate, "{s}/{s}", .{ directory, system_cert_name })).len;
-        paths.record_len = (try std.fmt.bufPrint(&paths.record, "{s}/{s}", .{ directory, record_name })).len;
-        return paths;
-    }
-
-    fn files(paths: *const AuthorityPaths) ca.AuthorityFiles {
-        return .{ .key = paths.key[0..paths.key_len], .certificate = paths.certificate[0..paths.certificate_len] };
-    }
-
-    fn recordPath(paths: *const AuthorityPaths) []const u8 {
-        return paths.record[0..paths.record_len];
-    }
-};
-
-const PreparedAuthority = struct {
-    authority: ca.Authority,
-    temporary_key: [std.fs.max_path_bytes]u8 = undefined,
-    temporary_key_len: usize = 0,
-    temporary_certificate: [std.fs.max_path_bytes]u8 = undefined,
-    temporary_certificate_len: usize = 0,
-    temporary: bool = false,
-
-    fn files(prepared: *const PreparedAuthority, canonical: *const AuthorityPaths) ca.AuthorityFiles {
-        if (!prepared.temporary) {
-            return canonical.files();
-        }
-
-        return .{
-            .key = prepared.temporary_key[0..prepared.temporary_key_len],
-            .certificate = prepared.temporary_certificate[0..prepared.temporary_certificate_len],
-        };
-    }
-
-    fn cleanup(prepared: *PreparedAuthority, io: Io) void {
-        if (!prepared.temporary) {
-            return;
-        }
-
-        Io.Dir.deleteFileAbsolute(io, prepared.temporary_key[0..prepared.temporary_key_len]) catch {};
-        Io.Dir.deleteFileAbsolute(io, prepared.temporary_certificate[0..prepared.temporary_certificate_len]) catch {};
-    }
-};
+const PreparedAuthority = @import("PreparedAuthority.zig");
 
 /// Runs `telar proxy trust install|uninstall|status` without contacting the
 /// runtime.
@@ -174,43 +105,17 @@ pub fn run(init: std.process.Init, options: parser.ProxyOptions) !u8 {
     }
 }
 
-const Inspection = struct {
-    status: Status,
-    record: ?Record,
-};
+const Inspection = @import("Inspection.zig");
 
-const InspectionContext = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    environ: std.process.Environ,
+const InspectionContext = @import("InspectionContext.zig");
 
-    fn fromProcess(init: std.process.Init) InspectionContext {
-        return .{ .io = init.io, .gpa = init.gpa, .environ = init.minimal.environ };
-    }
-};
+const InstallOptions = @import("InstallOptions.zig");
 
-const InstallOptions = struct {
-    paths: AuthorityPaths,
-    previous: ?Record,
-    backend: TrustBackend,
-    writer: *Io.Writer,
-};
+const AuthorityTarget = @import("AuthorityTarget.zig");
 
-const AuthorityTarget = struct {
-    backend: TrustBackend,
-    certificate: []const u8,
-};
+const AuthorityCommand = @import("AuthorityCommand.zig");
 
-const AuthorityCommand = struct {
-    init: std.process.Init,
-    writer: *Io.Writer,
-};
-
-const AuthorityRemoval = struct {
-    target: AuthorityTarget,
-    fingerprint: []const u8,
-    destination: []const u8,
-};
+const AuthorityRemoval = @import("AuthorityRemoval.zig");
 
 /// Reports whether the record, files, fingerprint, and lifetime prove that
 /// Telar's system authority is installed.

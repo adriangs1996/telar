@@ -18,142 +18,26 @@ pub const Outcome = union(enum) {
     adopted: client_model.ConfigurationCommit,
 };
 
-pub const Effects = struct {
-    context: *anyopaque,
-    apply_adoption: *const fn (*anyopaque) anyerror!client_model.ConfigurationCommit,
-    publish_notification: *const fn (*anyopaque, notification_capability.Input) anyerror!void,
-    rearm: *const fn (*anyopaque) anyerror!void,
-};
+pub const Effects = @import("ConfigReloadDeliveryEffects.zig");
 
-pub const DeliverConfigReloadHandler = struct {
-    model: *client_model.Model,
-    effects: Effects,
+pub const DeliverConfigReloadHandler = @import("DeliverConfigReloadHandler.zig");
 
-    /// Delivers one resolved reload and rearms its watcher only after every
-    /// outcome-specific effect has succeeded.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(resolution);
-    /// ```
-    pub fn execute(handler: *DeliverConfigReloadHandler, resolution: Resolution) !Outcome {
-        const outcome: Outcome = switch (resolution) {
-            .unchanged => .unchanged,
-            .rejected => |diagnostic| try handler.deliverRejection(diagnostic),
-            .adopted => try handler.deliverAdoption(),
-        };
-
-        try handler.effects.rearm(handler.effects.context);
-
-        return outcome;
-    }
-
-    fn deliverRejection(handler: *DeliverConfigReloadHandler, diagnostic: lua_config.Diagnostic) !Outcome {
-        var diagnostic_handler: client_diagnostic.ClientDiagnosticHandler = .{ .model = handler.model };
-        _ = try diagnostic_handler.replace(.{
-            .diagnostic = diagnostic,
-            .invalid_fallback = client_diagnostic.formatted(
-                "configuration reload failed: invalid diagnostic text",
-                .{},
-            ),
-        });
-        const message = handler.model.diagnostic() orelse return error.ClientDiagnosticMissing;
-        try handler.effects.publish_notification(handler.effects.context, .{
-            .level = .failure,
-            .title = "Configuration rejected",
-            .message = message,
-            .duration_ns = 7 * std.time.ns_per_s,
-        });
-
-        return .rejected;
-    }
-
-    fn deliverAdoption(handler: *DeliverConfigReloadHandler) !Outcome {
-        const commit = try handler.effects.apply_adoption(handler.effects.context);
-        try handler.effects.publish_notification(handler.effects.context, .{
-            .level = .success,
-            .title = "Configuration reloaded",
-            .message = "The new settings are active",
-        });
-
-        return .{ .adopted = commit };
-    }
-};
-
-const Event = enum {
+pub const Event = enum {
     apply_adoption,
     publish_notification,
     rearm,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     apply_adoption,
     publish_notification,
     rearm,
 };
 
-const Capture = struct {
-    model: *const client_model.Model,
-    events: [3]Event = undefined,
-    event_count: usize = 0,
-    notification: ?notification_capability.Input = null,
-    diagnostic_observed: bool = false,
-    failure: Failure = .none,
+const Capture = @import("Capture.zig");
 
-    fn effects(capture: *Capture) Effects {
-        return .{
-            .context = capture,
-            .apply_adoption = applyAdoption,
-            .publish_notification = publishNotification,
-            .rearm = rearm,
-        };
-    }
-
-    fn applyAdoption(raw_context: *anyopaque) !client_model.ConfigurationCommit {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.record(.apply_adoption);
-
-        if (capture.failure == .apply_adoption) {
-            return error.ConfigurationAdoptionFailed;
-        }
-
-        return testingCommit();
-    }
-
-    fn publishNotification(raw_context: *anyopaque, input: notification_capability.Input) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.record(.publish_notification);
-        capture.notification = input;
-        capture.diagnostic_observed = if (capture.model.diagnostic()) |diagnostic|
-            std.mem.eql(u8, diagnostic, input.message)
-        else
-            false;
-
-        if (capture.failure == .publish_notification) {
-            return error.NotificationPublicationFailed;
-        }
-    }
-
-    fn rearm(raw_context: *anyopaque) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.record(.rearm);
-
-        if (capture.failure == .rearm) {
-            return error.ConfigReloadRearmFailed;
-        }
-    }
-
-    fn record(capture: *Capture, event: Event) void {
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn eventSlice(capture: *const Capture) []const Event {
-        return capture.events[0..capture.event_count];
-    }
-};
-
-fn testingCommit() client_model.ConfigurationCommit {
+pub fn testingCommit() client_model.ConfigurationCommit {
     return .{
         .generation = 2,
         .configuration_revision = 1,

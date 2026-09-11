@@ -4,14 +4,10 @@ const std = @import("std");
 const history = @import("../../history/root.zig");
 const worker_lifecycle = @import("worker_lifecycle.zig");
 
-const Io = std.Io;
+pub const Io = std.Io;
 const Worker = Io.Future(anyerror!void);
 
-const RuntimeState = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    service: history.Service,
-};
+const RuntimeState = @import("HistoryRuntimeState.zig");
 
 fn startWorker(state: *RuntimeState) !Worker {
     return state.io.concurrent(history.Service.run, .{ &state.service, state.io });
@@ -38,54 +34,9 @@ const lifecycle_port: worker_lifecycle.Port(RuntimeState, Worker) = .{
     .destroy = destroyState,
 };
 
-const HistoryLifecycle = worker_lifecycle.Lifecycle(RuntimeState, Worker, lifecycle_port);
+pub const HistoryLifecycle = worker_lifecycle.Lifecycle(RuntimeState, Worker, lifecycle_port);
 
-pub const Runtime = struct {
-    lifecycle: HistoryLifecycle,
-
-    pub const Config = history.Service.Config;
-
-    /// Creates the history service at a stable address and starts its worker.
-    /// A database-open failure keeps the service alive in degraded mode.
-    ///
-    /// ```zig
-    /// var history_runtime = try Runtime.init(io, gpa, .{ .database_path = ":memory:" });
-    /// defer history_runtime.deinit();
-    /// ```
-    pub fn init(io: Io, gpa: std.mem.Allocator, config: Config) !Runtime {
-        const state = try gpa.create(RuntimeState);
-        const history_service = history.Service.init(gpa, config) catch |err| {
-            gpa.destroy(state);
-            return err;
-        };
-        state.* = .{
-            .io = io,
-            .gpa = gpa,
-            .service = history_service,
-        };
-
-        return .{ .lifecycle = try HistoryLifecycle.start(state) };
-    }
-
-    /// Borrows the history service for as long as this runtime remains alive.
-    ///
-    /// ```zig
-    /// const service = history_runtime.service();
-    /// ```
-    pub fn service(runtime: *Runtime) *history.Service {
-        return &runtime.lifecycle.state.service;
-    }
-
-    /// Stops the service, joins its worker, and releases every value still
-    /// owned by the history runtime.
-    ///
-    /// ```zig
-    /// history_runtime.deinit();
-    /// ```
-    pub fn deinit(runtime: *Runtime) void {
-        runtime.lifecycle.deinit();
-    }
-};
+pub const Runtime = @import("HistoryRuntime.zig");
 
 fn createAndDestroy(gpa: std.mem.Allocator) !void {
     var runtime = try Runtime.init(std.testing.io, gpa, .{ .database_path = ":memory:" });

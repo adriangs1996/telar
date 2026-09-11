@@ -8,15 +8,9 @@ const link_capability = @import("../../links/root.zig");
 const set_pane_viewport = @import("../panes/root.zig").set_pane_viewport;
 
 const keybind = input_capability.keybind;
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const CopyModeEffects = struct {
-    context: *anyopaque,
-    copy: *const fn (*anyopaque, schema.CopySelection) anyerror!void,
-    open_search: *const fn (*anyopaque, input_capability.copy_mode.Direction) anyerror!void,
-    open_link: *const fn (*anyopaque, link_capability.Target) anyerror!void,
-    viewport: set_pane_viewport.PaneViewportEffects,
-};
+pub const CopyModeEffects = @import("CopyModeEffects.zig");
 
 pub const Outcome = enum {
     unchanged,
@@ -24,161 +18,11 @@ pub const Outcome = enum {
     exited,
 };
 
-pub const CopyModeHandler = struct {
-    model: *client_model.Model,
-    effects: CopyModeEffects,
+pub const CopyModeHandler = @import("CopyModeHandler.zig");
 
-    /// Enters copy mode without performing runtime or presentation effects.
-    ///
-    /// ```zig
-    /// if (handler.enter()) observe(handler.model.version());
-    /// ```
-    pub fn enter(handler: *CopyModeHandler) bool {
-        return handler.model.enterCopyMode();
-    }
+const TestingModel = @import("CopyModeTestingModel.zig");
 
-    /// Starts a client-owned mouse gesture without entering keyboard copy mode.
-    /// Example: `_ = handler.beginPointer(press);`.
-    pub fn beginPointer(handler: *CopyModeHandler, press: input_capability.copy_mode.PointerPress) bool {
-        return handler.model.beginPointerSelection(press);
-    }
-
-    /// Delivers a requested selection before closing local state, then
-    /// synchronizes a committed viewport. A failed copy keeps the mode open;
-    /// a failed viewport leaves the semantic commit intact.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(.{ .key = key });
-    /// ```
-    pub fn execute(handler: *CopyModeHandler, command: client_model.CopyModeCommand) !Outcome {
-        defer {
-            if (command == .cancel_pointer or (command == .pointer and command.pointer.release)) {
-                handler.model.finishPointerGesture();
-            }
-        }
-
-        const plan = handler.model.planCopyMode(command) orelse return .unchanged;
-        if (plan.open_link) |target| {
-            try handler.effects.open_link(handler.effects.context, target);
-
-            return .unchanged;
-        }
-        if (plan.selection) |selection| {
-            try handler.effects.copy(handler.effects.context, selection);
-        }
-
-        const commit = handler.model.commitCopyMode(plan) orelse return .unchanged;
-        if (commit.viewport) |viewport| {
-            try handler.effects.viewport.sync(handler.effects.viewport.context, viewport);
-        }
-        if (plan.search) |direction| {
-            try handler.effects.open_search(handler.effects.context, direction);
-        }
-
-        return if (commit.active) .changed else .exited;
-    }
-};
-
-const TestingModel = struct {
-    model: *client_model.Model,
-    pane_id: schema.PaneId,
-
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const location: schema.TabLocation = .{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(1),
-        };
-        const pane_id: schema.PaneId = @enumFromInt(1);
-        try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 10, .rows = 5 } });
-        const pane = model.workspace.findPane(pane_id).?;
-        pane.scroll = .{ .total_rows = 15, .offset = 10 };
-        pane.cursor = .{ .visible = true, .x = 0, .y = 4 };
-
-        return .{ .model = model, .pane_id = pane_id };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
-
-const EffectsCapture = struct {
-    model: *client_model.Model,
-    copy_calls: usize = 0,
-    viewport_calls: usize = 0,
-    copy_observed_active: bool = false,
-    viewport_observed_commit: bool = false,
-    viewport_observed_active: bool = false,
-    copied: ?schema.CopySelection = null,
-    viewport: ?client_model.PaneViewportChange = null,
-    fail_copy: bool = false,
-    search_opened: ?input_capability.copy_mode.Direction = null,
-    link_opened: ?link_capability.Target = null,
-    fail_viewport: bool = false,
-
-    fn port(capture: *EffectsCapture) CopyModeEffects {
-        return .{
-            .context = capture,
-            .copy = copy,
-            .open_search = openSearch,
-            .open_link = openLink,
-            .viewport = .{
-                .context = capture,
-                .sync = syncViewport,
-            },
-        };
-    }
-
-    fn openSearch(context: *anyopaque, direction: input_capability.copy_mode.Direction) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.search_opened = direction;
-    }
-
-    fn openLink(context: *anyopaque, target: link_capability.Target) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.link_opened = target;
-    }
-
-    fn copy(context: *anyopaque, selection: schema.CopySelection) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.copy_calls += 1;
-        capture.copy_observed_active = capture.model.copyModeActive();
-        capture.copied = selection;
-
-        if (capture.fail_copy) {
-            return error.CopyDeliveryFailed;
-        }
-    }
-
-    fn syncViewport(context: *anyopaque, viewport: client_model.PaneViewportChange) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        const pane = capture.model.workspace.findPane(viewport.pane_id).?;
-        capture.viewport_calls += 1;
-        capture.viewport = viewport;
-        capture.viewport_observed_commit = pane.scroll.offset == viewport.offset;
-        capture.viewport_observed_active = capture.model.copyModeActive();
-
-        if (capture.fail_viewport) {
-            return error.ViewportSyncFailed;
-        }
-    }
-
-    fn reset(capture: *EffectsCapture) void {
-        capture.copy_calls = 0;
-        capture.viewport_calls = 0;
-        capture.copy_observed_active = false;
-        capture.viewport_observed_commit = false;
-        capture.viewport_observed_active = false;
-        capture.copied = null;
-        capture.viewport = null;
-    }
-};
+const EffectsCapture = @import("CopyModeEffectsCapture.zig");
 
 test "mouse clicks expand words and lines and copy only once on release" {
     var testing = try TestingModel.init();

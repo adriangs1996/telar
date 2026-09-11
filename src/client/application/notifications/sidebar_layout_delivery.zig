@@ -4,121 +4,21 @@ const std = @import("std");
 const workspace_capability = @import("../../workspace/root.zig");
 const client_model = @import("../../root.zig").model;
 
-const multiplexer = workspace_capability.multiplexer;
+pub const multiplexer = workspace_capability.multiplexer;
 
-pub const Effects = struct {
-    context: *anyopaque,
-    project_view: *const fn (*anyopaque, bool, u16) void,
-    invalidate_graphics_placements: *const fn (*anyopaque) void,
-    offer_pane_geometry: *const fn (*anyopaque, *multiplexer.Model) anyerror!void,
-};
+pub const Effects = @import("SidebarLayoutDeliveryEffects.zig");
 
-pub const DeliverSidebarLayoutHandler = struct {
-    model: *client_model.Model,
-    effects: Effects,
+pub const DeliverSidebarLayoutHandler = @import("DeliverSidebarLayoutHandler.zig");
 
-    /// Validates one exact sidebar commit before projecting the view,
-    /// invalidating graphics and re-offering active pane geometry.
-    ///
-    /// ```zig
-    /// try handler.execute(change);
-    /// ```
-    pub fn execute(handler: *const DeliverSidebarLayoutHandler, change: client_model.SidebarLayout) !void {
-        if (handler.model.sidebarVisible() != change.visible or handler.model.sidebarWidth() != change.width or
-            handler.model.version().chrome != change.chrome_revision)
-        {
-            return error.StaleSidebarLayout;
-        }
-
-        handler.effects.project_view(handler.effects.context, change.visible, change.width);
-        handler.effects.invalidate_graphics_placements(handler.effects.context);
-        const active = handler.model.workspace.active() orelse return;
-
-        try handler.effects.offer_pane_geometry(handler.effects.context, &active.model);
-    }
-};
-
-const Event = enum {
+pub const Event = enum {
     project_view,
     invalidate_graphics,
     pane_geometry,
 };
 
-const TestingModel = struct {
-    model: *client_model.Model,
+const TestingModel = @import("TestingModel.zig");
 
-    fn init(active: bool) !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-        if (active) {
-            try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
-                .workspace = .{ .workspace = @enumFromInt(1) },
-                .tab_id = @enumFromInt(1),
-            }, .size = .{ .cols = 20, .rows = 5 } });
-        }
-
-        return .{ .model = model };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
-
-const EffectsCapture = struct {
-    model: *const client_model.Model,
-    expected: client_model.SidebarLayout,
-    events: [3]Event = undefined,
-    event_count: usize = 0,
-    projected_visible: ?bool = null,
-    projected_width: ?u16 = null,
-    offered_model: ?*multiplexer.Model = null,
-    observed_commit: bool = true,
-    fail_geometry: bool = false,
-
-    fn effects(capture: *EffectsCapture) Effects {
-        return .{
-            .context = capture,
-            .project_view = projectView,
-            .invalidate_graphics_placements = invalidateGraphicsPlacements,
-            .offer_pane_geometry = offerPaneGeometry,
-        };
-    }
-
-    fn projectView(context: *anyopaque, visible: bool, width: u16) void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.record(.project_view);
-        capture.projected_visible = visible;
-        capture.projected_width = width;
-    }
-
-    fn invalidateGraphicsPlacements(context: *anyopaque) void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.record(.invalidate_graphics);
-    }
-
-    fn offerPaneGeometry(context: *anyopaque, model: *multiplexer.Model) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.record(.pane_geometry);
-        capture.offered_model = model;
-
-        if (capture.fail_geometry) {
-            return error.PaneGeometryDeliveryFailed;
-        }
-    }
-
-    fn record(capture: *EffectsCapture, event: Event) void {
-        capture.observed_commit = capture.observed_commit and
-            capture.model.sidebarVisible() == capture.expected.visible and
-            capture.model.sidebarWidth() == capture.expected.width and
-            capture.model.version().chrome == capture.expected.chrome_revision;
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-};
+const EffectsCapture = @import("SidebarLayoutDeliveryEffectsCapture.zig");
 
 fn expectStale(handler: *const DeliverSidebarLayoutHandler, capture: *const EffectsCapture, change: client_model.SidebarLayout) !void {
     try std.testing.expectError(error.StaleSidebarLayout, handler.execute(change));

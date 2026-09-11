@@ -1,7 +1,7 @@
 //! Client-owned host audio policy, bounded playback and platform worker.
 
 const types = @import("types.zig");
-const playback = @import("playback.zig");
+const playback = @import("playback_support.zig");
 const worker = @import("worker.zig");
 
 pub const Kind = types.Kind;

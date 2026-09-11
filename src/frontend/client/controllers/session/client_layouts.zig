@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const workspace = @import("../../../workspace/root.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const sidebar_projection = @import("../notifications/sidebar_projection.zig");
 

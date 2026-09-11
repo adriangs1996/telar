@@ -9,14 +9,7 @@ pub const max_keys = config_model.max_binding_keys;
 pub const count = 42;
 pub const Binding = keybind.Binding(action.Action, max_keys);
 
-pub const Resolved = struct {
-    bindings: [config_model.max_bindings]Binding = undefined,
-    len: u16 = 0,
-
-    pub fn slice(resolved: *const Resolved) []const Binding {
-        return resolved.bindings[0..resolved.len];
-    }
-};
+pub const Resolved = @import("Resolved.zig");
 
 pub fn load(prefix: keybind.Key) ![count]Binding {
     return .{

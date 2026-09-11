@@ -6,183 +6,23 @@ const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 const tab_attachment_retirement = @import("../tabs/root.zig").tab_attachment_retirement;
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const RequestCapacity = struct {
-    context: *anyopaque,
-    ensure: *const fn (*anyopaque, u64) anyerror!void,
-};
+pub const RequestCapacity = @import("RequestCapacity.zig");
 
-pub const DeliveryCapacity = struct {
-    context: *anyopaque,
-    available: *const fn (*anyopaque) usize,
-};
+pub const DeliveryCapacity = @import("DeliveryCapacity.zig");
 
-pub const PrepareWorkspaceHandoffHandler = struct {
-    model: *client_model.Model,
-    requests: RequestCapacity,
-    deliveries: DeliveryCapacity,
-    pending_attachments: tab_attachment_retirement.PendingAttachments,
+pub const PrepareWorkspaceHandoffHandler = @import("PrepareWorkspaceHandoffHandler.zig");
 
-    /// Reserves one open request, its recovery identity and every outbound
-    /// delivery required to retire the current workspace without effects.
-    ///
-    /// ```zig
-    /// try handler.execute();
-    /// ```
-    pub fn execute(handler: *const PrepareWorkspaceHandoffHandler) !void {
-        try handler.requests.ensure(handler.requests.context, 2);
-
-        const required_capacity = try handler.requiredDeliveryCapacity();
-        if (required_capacity > handler.deliveries.available(handler.deliveries.context)) {
-            return error.ClientOutboxFull;
-        }
-    }
-
-    fn requiredDeliveryCapacity(handler: *const PrepareWorkspaceHandoffHandler) !usize {
-        var required: usize = 1;
-
-        var tabs = handler.model.workspace.tabIterator();
-        while (tabs.next()) |tab| {
-            const plan = try handler.model.planTabDetachment(tab.location);
-            required += tab_attachment_retirement.requiredDeliveryCapacity(
-                &plan,
-                handler.pending_attachments,
-            );
-        }
-
-        return required;
-    }
-};
-
-const Event = union(enum) {
+pub const Event = union(enum) {
     ensure_requests: u64,
     attachment_pending: schema.PaneId,
     available_deliveries,
 };
 
-const TestingModel = struct {
-    model: *client_model.Model,
-    root: schema.PaneId,
-    sibling: schema.PaneId,
-    other_root: schema.PaneId,
+const TestingModel = @import("WorkspaceHandoffPreparationTestingModel.zig");
 
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-        const active: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(1),
-        };
-        const other: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(2),
-        };
-        const root: schema.PaneId = @enumFromInt(1);
-        const sibling: schema.PaneId = @enumFromInt(2);
-        const other_root: schema.PaneId = @enumFromInt(3);
-        try model.workspace.bootstrap(.{ .pane_id = root, .location = active, .size = .{ .cols = 40, .rows = 10 } });
-        try model.workspace.active().?.model.split(.{ .existing_pane = root, .new_pane = sibling, .location = active, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
-        _ = try model.workspace.addCreated(.{
-            .location = other,
-            .position = 1,
-            .label = "other",
-            .root_pane_id = other_root,
-        }, .{ .cols = 40, .rows = 10 });
-        if (!model.workspace.select(active.tab_id)) {
-            return error.ActiveTabNotRestored;
-        }
-        if (!model.workspace.active().?.model.focusPane(root)) {
-            return error.ActiveFocusNotRestored;
-        }
-
-        const root_pane = model.workspace.findPane(root).?;
-        root_pane.input_modes.bracketed_paste = true;
-        root_pane.input_modes.focus_events = true;
-        model.workspace.findPane(sibling).?.attached = false;
-        _ = model.beginPanePaste().?;
-        _ = model.syncReportedPaneFocus().?;
-
-        return .{
-            .model = model,
-            .root = root,
-            .sibling = sibling,
-            .other_root = other_root,
-        };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
-
-const Capture = struct {
-    model: *client_model.Model,
-    pending_pane: ?schema.PaneId,
-    available: usize,
-    request_failure: ?anyerror = null,
-    events: [5]Event = undefined,
-    event_count: usize = 0,
-    queries_observed_unchanged: bool = true,
-
-    fn handler(capture: *Capture) PrepareWorkspaceHandoffHandler {
-        return .{
-            .model = capture.model,
-            .requests = .{
-                .context = capture,
-                .ensure = ensureRequests,
-            },
-            .deliveries = .{
-                .context = capture,
-                .available = availableDeliveries,
-            },
-            .pending_attachments = .{
-                .context = capture,
-                .pending = attachmentPending,
-            },
-        };
-    }
-
-    fn ensureRequests(context: *anyopaque, count: u64) !void {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.append(.{ .ensure_requests = count });
-        if (capture.request_failure) |failure| {
-            return failure;
-        }
-    }
-
-    fn availableDeliveries(context: *anyopaque) usize {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.append(.available_deliveries);
-
-        return capture.available;
-    }
-
-    fn attachmentPending(context: *anyopaque, pane_id: schema.PaneId) bool {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.queries_observed_unchanged = capture.queries_observed_unchanged and
-            capture.model.panePasteActive() and
-            capture.model.reportedPaneFocus() != null and
-            capture.model.workspace.findPane(pane_id) != null;
-        capture.append(.{ .attachment_pending = pane_id });
-
-        return capture.pending_pane == pane_id;
-    }
-
-    fn append(capture: *Capture, event: Event) void {
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn eventSlice(capture: *const Capture) []const Event {
-        return capture.events[0..capture.event_count];
-    }
-};
+const Capture = @import("WorkspaceHandoffPreparationCapture.zig");
 
 fn expectModelUnchanged(testing: *const TestingModel) !void {
     try std.testing.expect(testing.model.panePasteActive());

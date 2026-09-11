@@ -7,11 +7,11 @@ const workspace = @import("../workspace/root.zig");
 const core = @import("telar-core");
 const agents = @import("telar-client").agents;
 const bars = @import("../bars/root.zig");
-const layout_mod = workspace.layout;
-const multiplexer = workspace.multiplexer;
-const tabs_mod = workspace.tabs;
-const workspace_list = workspace.workspace_list;
-const context_mod = @import("context.zig");
+pub const layout_mod = workspace.layout;
+pub const multiplexer = workspace.multiplexer;
+pub const tabs_mod = workspace.tabs;
+pub const workspace_list = workspace.workspace_list;
+const context_mod = @import("context_support.zig");
 const bar_content = @import("bar_content.zig");
 const bar_layout = @import("bar_layout.zig");
 const layout = @import("layout.zig");
@@ -23,34 +23,11 @@ const top_bar = @import("top_bar.zig");
 const ui = @import("../ui/root.zig");
 const workbench = @import("workbench.zig");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const Input = struct {
-    regions: layout.Regions,
-    tabs: ?*const tabs_mod.Model,
-    model: *const multiplexer.Model,
-    layout: *const layout_mod.Snapshot,
-    rename_field: ?*tab_rename.Field,
-    rename_kind: tab_rename.Kind,
-    sidebar_snapshot: *const agents.Snapshot,
-    sidebar_state: *sidebar.State,
-    sidebar_transparent: bool,
-    sidebar_rounded_focus: bool,
-    sidebar_animation_frame: u8,
-    proxy_tls_active: bool,
-    proxy_tls_scope: schema.ProxyScope = .exact,
-    proxy_system_trusted: bool = false,
-    system_metrics: ?status_bar.Metrics,
-    status_mode: status_bar.Mode,
-    workspaces: *const workspace_list.Snapshot,
-    workspace_list_collapsed: bool,
-    bar_state: *const bars.State,
-};
+pub const Input = @import("CompositionInput.zig");
 
-pub const Output = struct {
-    sidebar: sidebar.Semantic,
-    cursor: ?context_mod.Cursor,
-};
+pub const Output = @import("CompositionOutput.zig");
 
 pub fn render(context: *context_mod.Context, input: Input) Output {
     top_bar.render(context, .{

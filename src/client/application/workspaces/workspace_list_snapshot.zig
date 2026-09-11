@@ -20,26 +20,9 @@ pub const Outcome = union(enum) {
     applied: client_model.WorkspaceListCommit,
 };
 
-pub const ReconcileWorkspaceListHandler = struct {
-    model: *client_model.Model,
+pub const ReconcileWorkspaceListHandler = @import("ReconcileWorkspaceListHandler.zig");
 
-    /// Classifies one decoded domain snapshot without deciding presentation.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(snapshot);
-    /// ```
-    pub fn execute(handler: *ReconcileWorkspaceListHandler, snapshot: workspace_list.SnapshotInput) !Outcome {
-        const commit = handler.model.reconcileWorkspaceList(snapshot) catch |err| {
-            const rejection = classifyRejection(err) orelse return err;
-
-            return .{ .rejected = rejection };
-        };
-
-        return if (commit) |value| .{ .applied = value } else .stale;
-    }
-};
-
-fn classifyRejection(err: anyerror) ?Rejection {
+pub fn classifyRejection(err: anyerror) ?Rejection {
     return switch (err) {
         error.TooManyWorkspaces => .too_many_workspaces,
         error.WorkspacePathTooLong => .workspace_path_too_long,

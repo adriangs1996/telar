@@ -10,18 +10,7 @@ const tls = @import("tls.zig");
 
 pub const Framing = enum { length, chunked, until_close, none };
 
-pub const Summary = struct {
-    /// The full head, borrowed from the caller's scratch buffer and therefore
-    /// only valid until the next `relay` call that reuses it.
-    head: []const u8,
-    /// First line, verbatim: "POST /v1/messages HTTP/1.1" or "HTTP/1.1 200 OK".
-    start_line: []const u8,
-    body_bytes: usize,
-    /// Body text, truncated to the caller's budget. Auth headers never reach
-    /// here — see `redactedHead`.
-    body: []const u8,
-    truncated: bool,
-};
+pub const Summary = @import("Summary.zig");
 
 /// Headers whose value is a credential. Dropped before anything is recorded:
 /// not redacted late, never captured at all.
@@ -119,40 +108,11 @@ fn withoutCompression(head: []const u8, out: []u8) ?usize {
     return len - 2;
 }
 
-/// Reads one message from `from`, forwards it to `to`, and reports what it was.
-/// `scratch` holds the head; `capture` receives up to its own length of body.
-/// Returns null when the peer is done talking.
-pub const Direction = struct {
-    from: tls.Session.Side,
-    to: tls.Session.Side,
-    is_response: bool,
-};
+pub const Direction = @import("Direction.zig");
 
-pub const Buffers = struct {
-    scratch: []u8,
-    capture: []u8,
-};
+pub const Buffers = @import("Buffers.zig");
 
-const CaptureState = struct {
-    buffer: []u8,
-    kept: usize = 0,
-    truncated: bool = false,
-
-    fn keep(state: *CaptureState, bytes: []const u8) void {
-        if (state.kept >= state.buffer.len) {
-            state.truncated = true;
-            return;
-        }
-
-        const room = state.buffer.len - state.kept;
-        const take = @min(room, bytes.len);
-        @memcpy(state.buffer[state.kept .. state.kept + take], bytes[0..take]);
-        state.kept += take;
-        if (take < bytes.len) {
-            state.truncated = true;
-        }
-    }
-};
+const CaptureState = @import("CaptureState.zig");
 
 pub fn relay(session: *tls.Session, direction: Direction, buffers: Buffers) ?Summary {
     const from = direction.from;

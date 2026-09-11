@@ -3,7 +3,7 @@
 const std = @import("std");
 const attachments = @import("../attachments/root.zig");
 const modal = @import("modal.zig");
-const widget = @import("context.zig");
+const widget = @import("context_support.zig");
 const ui = @import("../ui/root.zig");
 
 const card_width: u16 = 18;
@@ -82,12 +82,7 @@ pub fn modalArea(application: ui.Rect) ui.Rect {
     return modal.area(application);
 }
 
-pub const ModalInput = struct {
-    application: ui.Rect,
-    snapshot: *const attachments.Snapshot,
-    plan: *attachments.Plan,
-    graphical_frame: bool,
-};
+pub const ModalInput = @import("ModalInput.zig");
 
 /// Draws the image preview and publishes its graphics placement.
 ///
@@ -144,7 +139,7 @@ test "shelf publishes one bounded image placement and two hit targets" {
     var context: widget.Context = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &@import("../ui/theme.zig").default_theme.palette,
+        .palette = &@import("../ui/theme_support.zig").default_theme.palette,
         .hovered = null,
     };
     var snapshot: attachments.Snapshot = .{ .len = 1 };
@@ -158,7 +153,7 @@ test "cell modal draws a connected border" {
     var buffer = try ui.Buffer.init(std.testing.allocator, 40, 10);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    const palette = &@import("../ui/theme.zig").default_theme.palette;
+    const palette = &@import("../ui/theme_support.zig").default_theme.palette;
     var context: widget.Context = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -194,7 +189,7 @@ test "graphical modal leaves corner cells to its rounded frame" {
     defer buffer.deinit();
     buffer.fill(buffer.area(), .{ .glyph = ".", .style = .{} });
     var hits: widget.Hits = .{};
-    const palette = &@import("../ui/theme.zig").default_theme.palette;
+    const palette = &@import("../ui/theme_support.zig").default_theme.palette;
     var context: widget.Context = .{
         .buffer = &buffer,
         .hits = &hits,

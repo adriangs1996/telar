@@ -6,23 +6,23 @@ const wire = @import("../wire.zig");
 const id = @import("../id.zig");
 const types = @import("../types.zig");
 const codec = @import("../codec.zig");
-const frame = @import("../frame.zig");
+const frame = @import("../frame_support.zig");
 const launch_mod = @import("launch.zig");
 const tags = @import("tags.zig");
 
 const ClientTag = tags.ClientTag;
 const ServerTag = tags.ServerTag;
-const RequestId = id.RequestId;
-const PaneId = id.PaneId;
-const TerminalSize = types.TerminalSize;
-const PaneTarget = types.PaneTarget;
-const TabLocation = types.TabLocation;
-const Launch = types.Launch;
-const ExitKind = types.ExitKind;
-const PaneTextSource = types.PaneTextSource;
-const PaneTextMode = types.PaneTextMode;
-const SearchMatch = types.SearchMatch;
-const LaunchView = launch_mod.LaunchView;
+pub const RequestId = id.RequestId;
+pub const PaneId = id.PaneId;
+pub const TerminalSize = types.TerminalSize;
+pub const PaneTarget = types.PaneTarget;
+pub const TabLocation = types.TabLocation;
+pub const Launch = types.Launch;
+pub const ExitKind = types.ExitKind;
+pub const PaneTextSource = types.PaneTextSource;
+pub const PaneTextMode = types.PaneTextMode;
+pub const SearchMatch = types.SearchMatch;
+pub const LaunchView = launch_mod.LaunchView;
 const encodeDerived = codec.encodeDerived;
 const validateRequestId = codec.validateRequestId;
 const validatePaneId = codec.validatePaneId;
@@ -34,197 +34,53 @@ const decodeTabLocation = codec.decodeTabLocation;
 
 pub const max_clipboard_bytes = 64 * 1024;
 
-/// Opens the default pane in the workspace implied by `launch.cwd`, creating
-/// it when none exists, or attaches to a specific existing pane. This makes
-/// attach-or-create atomic.
-pub const OpenPane = struct {
-    request_id: RequestId,
-    target: PaneTarget = .default,
-    size: TerminalSize,
-    launch: ?Launch,
-};
+pub const OpenPane = @import("OpenPane.zig");
 
-pub const OpenPaneView = struct {
-    request_id: RequestId,
-    target: PaneTarget,
-    size: TerminalSize,
-    launch: ?LaunchView,
-};
+pub const OpenPaneView = @import("OpenPaneView.zig");
 
-pub const PaneInput = struct {
-    pane_id: PaneId,
-    bytes: []const u8,
-};
+pub const PaneInput = @import("PaneInput.zig");
 
-pub const PaneResize = struct {
-    pane_id: PaneId,
-    size: TerminalSize,
-};
+pub const PaneResize = @import("PaneResize.zig");
 
-pub const FrameAck = struct {
-    pane_id: PaneId,
-    frame_id: u64,
+pub const FrameAck = @import("FrameAck.zig");
 
-    pub fn validateWire(message: FrameAck) !void {
-        if (message.frame_id == 0) {
-            return error.InvalidFrameId;
-        }
-    }
-};
+pub const RequestSnapshot = @import("RequestSnapshot.zig");
 
-pub const RequestSnapshot = struct {
-    pane_id: PaneId,
-    /// Last frame applied by the client. Zero means it has no pane state.
-    known_frame_id: u64,
-};
+pub const DetachPane = @import("DetachPane.zig");
 
-pub const DetachPane = struct {
-    pane_id: PaneId,
-};
+pub const CreatePane = @import("CreatePane.zig");
 
-pub const CreatePane = struct {
-    request_id: RequestId,
-    location: TabLocation,
-    size: TerminalSize,
-    launch: Launch,
-};
+pub const CreatePaneView = @import("CreatePaneView.zig");
 
-pub const CreatePaneView = struct {
-    request_id: RequestId,
-    location: TabLocation,
-    size: TerminalSize,
-    launch: LaunchView,
-};
+pub const ClosePane = @import("ClosePane.zig");
 
-pub const ClosePane = struct {
-    request_id: RequestId,
-    pane_id: PaneId,
-};
+pub const SetPaneViewport = @import("SetPaneViewport.zig");
 
-/// Absolute scrollback row to place at the top of one client attachment.
-pub const SetPaneViewport = struct {
-    pane_id: PaneId,
-    offset: u32,
-};
+pub const ReadPane = @import("ReadPane.zig");
 
-/// Bounded plain-text read of one exact pane generation.
-pub const ReadPane = struct {
-    request_id: RequestId,
-    pane_id: PaneId,
-    pane_generation: u64,
-    rows: u16,
-    source: PaneTextSource,
+pub const SendPaneText = @import("SendPaneText.zig");
 
-    pub fn validateWire(message: ReadPane) !void {
-        if (message.rows == 0 or message.rows > types.max_pane_text_rows) {
-            return error.InvalidPaneTextRows;
-        }
-    }
-};
+pub const SearchPane = @import("SearchPane.zig");
 
-/// Text delivered to one exact pane generation without a client attachment.
-pub const SendPaneText = struct {
-    request_id: RequestId,
-    pane_id: PaneId,
-    pane_generation: u64,
-    mode: PaneTextMode,
-    text: []const u8,
-};
+pub const PaneMatches = @import("PaneMatches.zig");
 
-/// Copy-mode text search over one attached pane's retained history.
-pub const SearchPane = struct {
-    request_id: RequestId,
-    pane_id: PaneId,
-    needle: []const u8,
-};
+pub const PaneMatchesView = @import("PaneMatchesView.zig");
 
-/// Reply to `search_pane`: every match in document order, at most
-/// `max_search_matches`. `truncated` reports that older rows or later
-/// matches were not examined.
-pub const PaneMatches = struct {
-    request_id: RequestId,
-    pane_id: PaneId,
-    truncated: bool,
-    matches: []const SearchMatch,
-};
+pub const SearchMatchIterator = @import("SearchMatchIterator.zig");
 
-pub const PaneMatchesView = struct {
-    request_id: RequestId,
-    pane_id: PaneId,
-    truncated: bool,
-    match_count: u16,
-    encoded_matches: []const u8,
+pub const PaneText = @import("PaneText.zig");
 
-    pub fn matches(view: PaneMatchesView) SearchMatchIterator {
-        return .{ .decoder = .init(view.encoded_matches), .remaining = view.match_count };
-    }
-};
+pub const PaneTitle = @import("PaneTitle.zig");
 
-pub const SearchMatchIterator = struct {
-    decoder: wire.Decoder,
-    remaining: u16,
+pub const CopySelection = @import("CopySelection.zig");
 
-    pub fn next(iterator: *SearchMatchIterator) !?SearchMatch {
-        if (iterator.remaining == 0) {
-            return null;
-        }
-        iterator.remaining -= 1;
-        return .{
-            .x = try iterator.decoder.readInt(u16),
-            .y = try iterator.decoder.readInt(u32),
-            .len = try iterator.decoder.readInt(u16),
-        };
-    }
-};
+pub const PaneOpened = @import("PaneOpened.zig");
 
-/// Reply to `read_pane`. `truncated` reports that older rows were omitted to
-/// respect `max_pane_text_bytes`.
-pub const PaneText = struct {
-    request_id: RequestId,
-    pane_id: PaneId,
-    truncated: bool,
-    text: []const u8,
-};
+pub const PaneExited = @import("PaneExited.zig");
 
-/// The child's window title as last set through OSC 0 or OSC 2. An empty
-/// title means the child cleared it.
-pub const PaneTitle = struct {
-    pane_id: PaneId,
-    title: []const u8,
-};
+pub const PaneCwd = @import("PaneCwd.zig");
 
-/// Selection coordinates use the full screen history, not viewport rows.
-pub const CopySelection = struct {
-    pane_id: PaneId,
-    start_x: u16,
-    start_y: u32,
-    end_x: u16,
-    end_y: u32,
-    linewise: bool = false,
-};
-
-pub const PaneOpened = struct {
-    request_id: RequestId,
-    pane_id: PaneId,
-    location: TabLocation,
-    created: bool,
-};
-
-pub const PaneExited = struct {
-    pane_id: PaneId,
-    kind: ExitKind,
-    value: u32,
-};
-
-pub const PaneCwd = struct {
-    pane_id: PaneId,
-    cwd: []const u8,
-};
-
-pub const PaneForeground = struct {
-    pane_id: PaneId,
-    name: []const u8,
-};
+pub const PaneForeground = @import("PaneForeground.zig");
 
 pub const PaneProgressState = enum(u8) {
     remove,
@@ -234,39 +90,9 @@ pub const PaneProgressState = enum(u8) {
     pause,
 };
 
-pub const PaneProgress = struct {
-    pane_id: PaneId,
-    state: PaneProgressState,
-    percent: ?u8 = null,
+pub const PaneProgress = @import("PaneProgress.zig");
 
-    /// Rejects state and percentage combinations that have no protocol meaning.
-    ///
-    /// ```zig
-    /// try progress.validateWire();
-    /// ```
-    pub fn validateWire(message: PaneProgress) !void {
-        if (message.percent) |percent| {
-            if (percent > 100) {
-                return error.InvalidProgressPercent;
-            }
-        }
-
-        switch (message.state) {
-            .remove, .indeterminate => if (message.percent != null) {
-                return error.UnexpectedProgressPercent;
-            },
-            .set => if (message.percent == null) {
-                return error.MissingProgressPercent;
-            },
-            .@"error", .pause => {},
-        }
-    }
-};
-
-pub const PaneClipboard = struct {
-    pane_id: PaneId,
-    bytes: []const u8,
-};
+pub const PaneClipboard = @import("PaneClipboard.zig");
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
     try validateRequestId(message.request_id);

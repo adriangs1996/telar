@@ -7,21 +7,17 @@ const agent_mod = @import("../../../agent/root.zig");
 const pane_mod = @import("../../../pane/root.zig");
 const pane_input_commands = @import("pane_input.zig");
 
-const schema = core.schema;
-const PaneKey = pane_mod.PaneKey;
-const PaneStore = pane_mod.PaneStore;
-const Tracker = agent_mod.Tracker;
+pub const schema = core.schema;
+pub const PaneKey = pane_mod.PaneKey;
+pub const PaneStore = pane_mod.PaneStore;
+pub const Tracker = agent_mod.Tracker;
 
 const paste_start = "\x1b[200~";
 const paste_end = "\x1b[201~";
 const enter = "\r";
 pub const prompt_overhead = paste_start.len + paste_end.len + enter.len;
 
-pub const SendPaneText = struct {
-    pane: PaneKey,
-    mode: schema.PaneTextMode,
-    text: []const u8,
-};
+pub const SendPaneText = @import("SendPaneText.zig");
 
 pub const SendPaneTextResult = enum {
     handled,
@@ -30,45 +26,7 @@ pub const SendPaneTextResult = enum {
     agent_blocked,
 };
 
-pub const SendPaneTextHandler = struct {
-    panes: *PaneStore,
-    agents: *const Tracker,
-    input: pane_input_commands.Forwarder,
-
-    /// Resolves the exact pane generation and forwards the text. A prompt is
-    /// refused while the projected agent is blocked, wrapped in bracketed paste
-    /// when the child enabled that mode, and followed by Enter.
-    ///
-    /// ```zig
-    /// const result = try handler.execute(.{ .pane = key, .mode = .prompt, .text = "run the tests" });
-    /// ```
-    pub fn execute(handler: *SendPaneTextHandler, command: SendPaneText) !SendPaneTextResult {
-        const pane = handler.panes.resolveControl(command.pane) orelse return .pane_not_found;
-
-        if (pane.exit != null) {
-            return .pane_exited;
-        }
-
-        var storage: [schema.max_pane_text_input_bytes + prompt_overhead]u8 = undefined;
-        const bytes = switch (command.mode) {
-            .raw => command.text,
-            .prompt => prompt: {
-                if (handler.agents.projectedStatus(command.pane) == .blocked) {
-                    return .agent_blocked;
-                }
-
-                break :prompt promptBytes(&storage, command.text, pane.terminal.modes.get(.bracketed_paste));
-            },
-        };
-
-        try handler.input.forward(pane, bytes);
-        if (command.mode == .prompt or std.mem.indexOfScalar(u8, bytes, '\r') != null) {
-            pane.noteInjectedSubmission();
-        }
-
-        return .handled;
-    }
-};
+pub const SendPaneTextHandler = @import("SendPaneTextHandler.zig");
 
 /// Frames one prompt the way a terminal paste followed by Enter would arrive.
 ///

@@ -35,18 +35,11 @@ pub const RejectReason = enum(u8) {
     incompatible_schema = 1,
 };
 
-pub const ClientHello = struct {
-    schema: SchemaId = schema_id,
-};
+pub const ClientHello = @import("ClientHello.zig");
 
-pub const ServerAccept = struct {
-    schema: SchemaId,
-};
+pub const ServerAccept = @import("ServerAccept.zig");
 
-pub const ServerReject = struct {
-    reason: RejectReason,
-    expected_schema: SchemaId,
-};
+pub const ServerReject = @import("ServerReject.zig");
 
 pub const ServerResponse = union(enum) {
     accepted: ServerAccept,

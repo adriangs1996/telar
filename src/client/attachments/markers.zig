@@ -3,8 +3,8 @@
 const std = @import("std");
 const core = @import("telar-core");
 const Io = std.Io;
-const schema = core.schema;
-const ui = core.ui;
+pub const schema = core.schema;
+pub const ui = core.ui;
 const path_marker = @import("../root.zig").attachments.path_marker;
 const types = @import("../root.zig").attachments.types;
 const max_items = types.max_items;
@@ -25,7 +25,7 @@ const Id = types.Id;
 const Item = types.Item;
 const Snapshot = types.Snapshot;
 const MarkerScreen = types.MarkerScreen;
-const MarkerDeletion = types.MarkerDeletion;
+pub const MarkerDeletion = types.MarkerDeletion;
 const MarkerRemoval = types.MarkerRemoval;
 const DeletionProbe = types.DeletionProbe;
 const PendingDeletion = types.PendingDeletion;
@@ -33,49 +33,14 @@ const PlanItem = types.PlanItem;
 const Plan = types.Plan;
 
 const marker_head = "[Image";
-const marker_head_width: u16 = marker_head.len;
+pub const marker_head_width: u16 = marker_head.len;
 const marker_separator = " #";
 const marker_separator_width: u16 = marker_separator.len;
 pub const minimum_marker_width: u16 = marker_head_width + marker_separator_width + 2;
 
-pub const MarkerPosition = struct {
-    number: u16,
-    /// The `[` cell.
-    start: ui.Point,
-    /// One past the `]` cell, on the row holding it.
-    end: ui.Point,
+pub const MarkerPosition = @import("MarkerPosition.zig");
 
-    pub fn contiguous(marker: MarkerPosition) bool {
-        return marker.start.y == marker.end.y;
-    }
-};
-
-/// Visits every `[Image #N]` marker on the screen in row-major order of its
-/// head cell, including markers wrapped onto a second row.
-pub const MarkerScan = struct {
-    buffer: *const ui.Buffer,
-    x: u16 = 0,
-    y: u16 = 0,
-
-    pub fn next(scan: *MarkerScan) ?MarkerPosition {
-        const buffer = scan.buffer;
-        while (scan.y < buffer.h and scan.x + marker_head_width <= buffer.w) {
-            const at: ui.Point = .{ .x = scan.x, .y = scan.y };
-            if (scan.x + marker_head_width < buffer.w) {
-                scan.x += 1;
-            } else {
-                scan.x = 0;
-                scan.y += 1;
-            }
-
-            if (parseMarker(buffer, at)) |marker| {
-                return marker;
-            }
-        }
-
-        return null;
-    }
-};
+pub const MarkerScan = @import("MarkerScan.zig");
 
 /// The cursor must share a row with the marker's end or start. A wrapped
 /// marker spans two rows, and steps across the wrap cannot be counted from
@@ -193,11 +158,7 @@ pub fn markerPresent(buffer: *const ui.Buffer, number: u16) bool {
     return false;
 }
 
-pub const MarkerBoundary = struct {
-    ordinal: u16,
-    cursor: schema.frame.Cursor,
-    deletion: MarkerDeletion,
-};
+pub const MarkerBoundary = @import("MarkerBoundary.zig");
 
 pub fn markerTouchesCursor(buffer: *const ui.Buffer, boundary: MarkerBoundary) bool {
     const cursor: ui.Point = .{ .x = boundary.cursor.x, .y = boundary.cursor.y };
@@ -249,10 +210,7 @@ pub fn parseMarker(buffer: *const ui.Buffer, at: ui.Point) ?MarkerPosition {
     return .{ .number = tail.number, .start = at, .end = tail.end };
 }
 
-pub const MarkerTail = struct {
-    number: u16,
-    end: ui.Point,
-};
+pub const MarkerTail = @import("MarkerTail.zig");
 
 /// Reads the `N]` that closes a marker, starting at its first digit.
 pub fn parseMarkerTail(buffer: *const ui.Buffer, at: ui.Point) ?MarkerTail {

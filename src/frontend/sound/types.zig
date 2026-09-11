@@ -5,29 +5,7 @@ const core = @import("telar-core");
 
 pub const Kind = core.schema.AgentSound;
 
-pub const Config = struct {
-    enabled: bool = true,
-    ready: bool = true,
-    needs_input: bool = true,
-
-    /// Reports whether local policy permits one semantic sound.
-    ///
-    /// ```zig
-    /// if (configuration.allows(.ready)) {
-    ///     _ = playback.request(.ready);
-    /// }
-    /// ```
-    pub fn allows(configuration: Config, kind: Kind) bool {
-        if (!configuration.enabled) {
-            return false;
-        }
-
-        return switch (kind) {
-            .ready => configuration.ready,
-            .needs_input => configuration.needs_input,
-        };
-    }
-};
+pub const Config = @import("Config.zig");
 
 test "sound configuration can disable each transition independently" {
     const configuration: Config = .{ .ready = false };

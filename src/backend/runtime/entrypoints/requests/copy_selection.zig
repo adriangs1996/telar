@@ -5,117 +5,14 @@ const core = @import("telar-core");
 const copy_selection_commands = @import("../../application/commands/copy_selection.zig");
 const telemetry_mod = @import("../../observability/root.zig").telemetry;
 
-const schema = core.schema;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+pub const schema = core.schema;
+pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 
-/// Builds a statically dispatched selection controller. `Clipboard` owns only
-/// confirmed output; extraction uses request-scoped scratch storage.
-///
-/// ```zig
-/// const SelectionController = Controller(*copy_selection_commands.CopySelectionHandler, *Delivery);
-/// var controller = SelectionController.init(&metrics, &handler, &delivery);
-/// ```
-pub fn Controller(comptime Executor: type, comptime Clipboard: type) type {
-    return struct {
-        const Self = @This();
+pub const Controller = @import("GenericCopySelectionController.zig").Type;
 
-        metrics: *RuntimeMetrics,
-        executor: Executor,
-        clipboard: Clipboard,
-        scratch: [copy_selection_commands.scratch_bytes]u8 = undefined,
+const StubExecutor = @import("CopySelectionStubExecutor.zig");
 
-        /// Creates one request-scoped controller without modifying pending
-        /// clipboard delivery.
-        ///
-        /// ```zig
-        /// var controller = SelectionController.init(&metrics, &handler, &delivery);
-        /// ```
-        pub fn init(metrics: *RuntimeMetrics, executor: Executor, clipboard: Clipboard) Self {
-            return .{
-                .metrics = metrics,
-                .executor = executor,
-                .clipboard = clipboard,
-            };
-        }
-
-        /// Maps absolute scrollback coordinates, extracts bounded text, and
-        /// replaces pending clipboard output only after successful extraction.
-        /// A request for a pane outside this client's attachments is stale;
-        /// unavailable and oversized selections are ignored.
-        ///
-        /// ```zig
-        /// controller.copySelection(request);
-        /// ```
-        pub fn copySelection(controller: *Self, request: schema.CopySelection) void {
-            const result = controller.executor.execute(.{
-                .pane_id = request.pane_id,
-                .start_x = request.start_x,
-                .start_y = request.start_y,
-                .end_x = request.end_x,
-                .end_y = request.end_y,
-                .linewise = request.linewise,
-            }, &controller.scratch);
-
-            switch (result) {
-                .copied => |bytes| {
-                    const accepted = controller.clipboard.setClipboard(request.pane_id, bytes);
-                    std.debug.assert(accepted);
-                },
-                .pane_not_attached => controller.metrics.stale_client_messages += 1,
-                .unavailable, .too_large => {},
-            }
-        }
-    };
-}
-
-const StubExecutor = struct {
-    outcome: enum { copied, pane_not_attached, unavailable, too_large } = .copied,
-    bytes: []const u8 = "selected",
-    call_count: usize = 0,
-    scratch_len: usize = 0,
-    command: ?copy_selection_commands.CopySelection = null,
-
-    fn execute(stub: *StubExecutor, command: copy_selection_commands.CopySelection, scratch: []u8) copy_selection_commands.CopySelectionResult {
-        stub.call_count += 1;
-        stub.scratch_len = scratch.len;
-        stub.command = command;
-
-        return switch (stub.outcome) {
-            .copied => copied: {
-                std.debug.assert(stub.bytes.len <= scratch.len);
-                @memcpy(scratch[0..stub.bytes.len], stub.bytes);
-                break :copied .{ .copied = scratch[0..stub.bytes.len] };
-            },
-            .pane_not_attached => .pane_not_attached,
-            .unavailable => .unavailable,
-            .too_large => .too_large,
-        };
-    }
-};
-
-const StubClipboard = struct {
-    accepted: bool = true,
-    call_count: usize = 0,
-    pane_id: schema.PaneId = .invalid,
-    bytes: [32]u8 = undefined,
-    len: usize = 0,
-
-    fn setClipboard(clipboard: *StubClipboard, pane_id: schema.PaneId, bytes: []const u8) bool {
-        clipboard.call_count += 1;
-        if (!clipboard.accepted or bytes.len > clipboard.bytes.len) {
-            return false;
-        }
-
-        clipboard.pane_id = pane_id;
-        @memcpy(clipboard.bytes[0..bytes.len], bytes);
-        clipboard.len = bytes.len;
-        return true;
-    }
-
-    fn slice(clipboard: *const StubClipboard) []const u8 {
-        return clipboard.bytes[0..clipboard.len];
-    }
-};
+const StubClipboard = @import("StubClipboard.zig");
 
 const TestController = Controller(*StubExecutor, *StubClipboard);
 

@@ -29,10 +29,7 @@ pub fn run(init: std.process.Init, options: parser.ApiOptions) !void {
     }
 }
 
-const Bound = struct {
-    name: []const u8,
-    value: usize,
-};
+const Bound = @import("Bound.zig");
 
 const bounds = [_]Bound{
     .{ .name = "max_frame_bytes", .value = core.transport.max_frame_size },

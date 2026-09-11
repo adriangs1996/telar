@@ -1,6 +1,6 @@
-const analyzer = @import("analyzer.zig");
+const analyzer = @import("analyzer_support.zig");
 const diagnostic = @import("diagnostic.zig");
-const fixer = @import("fixer.zig");
+const fixer = @import("fixer_support.zig");
 
 pub const Rule = diagnostic.Rule;
 pub const Violation = diagnostic.Violation;

@@ -8,21 +8,15 @@ const notification_capability = @import("telar-client").notifications;
 const notification_flow = @import("../notifications/notifications.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const clipboard_image = input_application.clipboard_image;
 const clipboard_image_delivery = input_application.clipboard_image_delivery;
 
-pub const Completion = struct {
-    execution_id: client_model.ClipboardCaptureId,
-    result: anyerror!*attachments.Capture,
-};
+pub const Completion = @import("Completion.zig");
 
 pub const StartOutcome = clipboard_image.StartOutcome;
 
-const CompletionContext = struct {
-    client: *Client,
-    capture: ?*attachments.Capture = null,
-};
+const CompletionContext = @import("CompletionContext.zig");
 
 /// Resolves the current target and schedules one best-effort media capture.
 ///

@@ -12,71 +12,13 @@ const send_pane_text_controller = @import("../entrypoints/requests/send_pane_tex
 const test_support = @import("support.zig");
 
 const schema = core.schema;
-const Pane = pane_mod.Pane;
-const PaneFixture = test_support.PaneFixture;
+pub const Pane = pane_mod.Pane;
+pub const PaneFixture = test_support.PaneFixture;
 const SendPaneTextController = send_pane_text_controller.Controller(*send_pane_text_commands.SendPaneTextHandler);
 
-const ScheduleCapture = struct {
-    observation_calls: usize = 0,
-    input_calls: usize = 0,
-    queued: ?[]const u8 = null,
-    queued_storage: [256]u8 = undefined,
+const ScheduleCapture = @import("SendPaneTextTestScheduleCapture.zig");
 
-    fn scheduler(capture: *ScheduleCapture) pane_input_commands.Scheduler {
-        return .{
-            .context = capture,
-            .observation = scheduleObservation,
-            .input = scheduleInput,
-        };
-    }
-
-    fn scheduleObservation(context: *anyopaque, _: *Pane) !void {
-        const capture: *ScheduleCapture = @ptrCast(@alignCast(context));
-        capture.observation_calls += 1;
-    }
-
-    fn scheduleInput(context: *anyopaque, pane: *Pane) !void {
-        const capture: *ScheduleCapture = @ptrCast(@alignCast(context));
-        capture.input_calls += 1;
-        const chunk = pane.input_queue.nextChunk() orelse return error.MissingQueuedInput;
-        @memcpy(capture.queued_storage[0..chunk.len], chunk);
-        capture.queued = capture.queued_storage[0..chunk.len];
-    }
-};
-
-const Harness = struct {
-    fixture: PaneFixture = .{},
-    panes: pane_mod.PaneStore = .{},
-    capture: ScheduleCapture = .{},
-    responses: delivery_mod.ResponseQueue = .{},
-
-    fn init(harness: *Harness) !void {
-        try harness.fixture.init();
-        errdefer harness.fixture.deinit();
-        try harness.panes.insert(harness.fixture.pane);
-    }
-
-    fn deinit(harness: *Harness) void {
-        harness.fixture.deinit();
-    }
-
-    fn handler(harness: *Harness) send_pane_text_commands.SendPaneTextHandler {
-        return .{
-            .panes = &harness.panes,
-            .agents = &harness.fixture.agents,
-            .input = .{
-                .io = std.testing.io,
-                .metrics = &harness.fixture.metrics,
-                .agent_input = &harness.fixture.agents,
-                .scheduler = harness.capture.scheduler(),
-            },
-        };
-    }
-
-    fn key(harness: *const Harness) pane_mod.PaneKey {
-        return harness.fixture.pane.key();
-    }
-};
+const Harness = @import("Harness.zig");
 
 fn blockAgent(harness: *Harness) !void {
     const identity = agent_identity.fromPane(harness.fixture.pane);

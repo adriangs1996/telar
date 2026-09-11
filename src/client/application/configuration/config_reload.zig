@@ -5,56 +5,13 @@ const bars = @import("../../bars/root.zig");
 const client_diagnostic = @import("client_diagnostic.zig");
 const client_model = @import("../../root.zig").model;
 
-pub const Command = struct {
-    configuration: client_model.ConfigurationInput,
-    theme_locked: bool,
-};
+pub const Command = @import("ConfigReloadCommand.zig");
 
-pub const Effects = struct {
-    context: *anyopaque,
-    adopt_resources: *const fn (*anyopaque, client_model.ConfigurationCommit) void,
-    synchronize_bars: *const fn (*anyopaque) anyerror!void,
-    project_appearance: *const fn (*anyopaque, bool) void,
-    configure_sidebar: *const fn (*anyopaque) anyerror!void,
-    apply_sidebar: *const fn (*anyopaque, client_model.SidebarLayout) anyerror!void,
-    invalidate_graphics_placements: *const fn (*anyopaque) void,
-    offer_active_pane_geometry: *const fn (*anyopaque) anyerror!void,
-};
+pub const Effects = @import("ConfigReloadEffects.zig");
 
-pub const ApplyConfigHandler = struct {
-    model: *client_model.Model,
-    effects: Effects,
+pub const ApplyConfigHandler = @import("ApplyConfigHandler.zig");
 
-    /// Commits semantic configuration, clears an obsolete diagnostic and
-    /// delivers concrete resources in deterministic application order.
-    ///
-    /// ```zig
-    /// const commit = try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *ApplyConfigHandler, command: Command) !client_model.ConfigurationCommit {
-        const commit = try handler.model.applyConfiguration(command.configuration);
-        var diagnostic_handler: client_diagnostic.ClientDiagnosticHandler = .{ .model = handler.model };
-        _ = diagnostic_handler.clear();
-
-        handler.effects.adopt_resources(handler.effects.context, commit);
-        if (commit.bars_changed) {
-            try handler.effects.synchronize_bars(handler.effects.context);
-        }
-        handler.effects.project_appearance(handler.effects.context, !command.theme_locked);
-        try handler.effects.configure_sidebar(handler.effects.context);
-
-        if (commit.sidebar) |sidebar| {
-            try handler.effects.apply_sidebar(handler.effects.context, sidebar);
-        } else if (commit.pane_gaps_changed) {
-            handler.effects.invalidate_graphics_placements(handler.effects.context);
-            try handler.effects.offer_active_pane_geometry(handler.effects.context);
-        }
-
-        return commit;
-    }
-};
-
-const Event = enum {
+pub const Event = enum {
     adopt_resources,
     synchronize_bars,
     project_appearance,
@@ -64,7 +21,7 @@ const Event = enum {
     offer_active_pane_geometry,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     synchronize_bars,
     configure_sidebar,
@@ -72,113 +29,7 @@ const Failure = enum {
     pane_geometry,
 };
 
-const EffectsCapture = struct {
-    model: *const client_model.Model,
-    events: [7]Event = undefined,
-    event_count: usize = 0,
-    commit: ?client_model.ConfigurationCommit = null,
-    apply_theme: ?bool = null,
-    sidebar: ?client_model.SidebarLayout = null,
-    observed_commit: bool = true,
-    failure: Failure = .none,
-
-    fn port(capture: *EffectsCapture) Effects {
-        return .{
-            .context = capture,
-            .adopt_resources = adoptResources,
-            .synchronize_bars = synchronizeBars,
-            .project_appearance = projectAppearance,
-            .configure_sidebar = configureSidebar,
-            .apply_sidebar = applySidebar,
-            .invalidate_graphics_placements = invalidateGraphicsPlacements,
-            .offer_active_pane_geometry = offerActivePaneGeometry,
-        };
-    }
-
-    fn adoptResources(context: *anyopaque, commit: client_model.ConfigurationCommit) void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.commit = commit;
-        capture.record(.adopt_resources);
-        capture.observeCommit();
-    }
-
-    fn projectAppearance(context: *anyopaque, apply_theme: bool) void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.apply_theme = apply_theme;
-        capture.record(.project_appearance);
-        capture.observeCommit();
-    }
-
-    fn synchronizeBars(context: *anyopaque) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.record(.synchronize_bars);
-        capture.observeCommit();
-
-        if (capture.failure == .synchronize_bars) {
-            return error.BarSynchronizationFailed;
-        }
-    }
-
-    fn configureSidebar(context: *anyopaque) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.record(.configure_sidebar);
-        capture.observeCommit();
-
-        if (capture.failure == .configure_sidebar) {
-            return error.SidebarConfigurationFailed;
-        }
-    }
-
-    fn applySidebar(context: *anyopaque, sidebar: client_model.SidebarLayout) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.sidebar = sidebar;
-        capture.record(.apply_sidebar);
-        capture.observeCommit();
-
-        if (capture.failure == .apply_sidebar) {
-            return error.SidebarProjectionFailed;
-        }
-    }
-
-    fn invalidateGraphicsPlacements(context: *anyopaque) void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.record(.invalidate_graphics_placements);
-        capture.observeCommit();
-    }
-
-    fn offerActivePaneGeometry(context: *anyopaque) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.record(.offer_active_pane_geometry);
-        capture.observeCommit();
-
-        if (capture.failure == .pane_geometry) {
-            return error.PaneGeometryFailed;
-        }
-    }
-
-    fn observeCommit(capture: *EffectsCapture) void {
-        const commit = capture.commit orelse {
-            capture.observed_commit = false;
-            return;
-        };
-
-        capture.observed_commit = capture.observed_commit and
-            capture.model.configurationGeneration() == commit.generation and
-            capture.model.version().configuration == commit.configuration_revision and
-            capture.model.version().panes == commit.panes_revision and
-            capture.model.version().bars == commit.bars_revision and
-            capture.model.diagnostic() == null;
-    }
-
-    fn record(capture: *EffectsCapture, event: Event) void {
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn eventSlice(capture: *const EffectsCapture) []const Event {
-        return capture.events[0..capture.event_count];
-    }
-};
+const EffectsCapture = @import("EffectsCapture.zig");
 
 fn installDiagnostic(model: *client_model.Model) !void {
     _ = try model.replaceDiagnostic(client_diagnostic.formatted("previous configuration failed", .{}));

@@ -4,10 +4,10 @@
 //! the child has successfully replaced its process image. The session owns
 //! both the child lifecycle and the PTY master until `deinit`.
 
-const command = @import("command.zig");
+const command = @import("command_support.zig");
 const environment = @import("environment.zig");
 const exit = @import("exit.zig");
-const session = @import("session.zig");
+const session = @import("session_support.zig");
 
 pub const max_args = command.max_args;
 pub const Command = command.Command;

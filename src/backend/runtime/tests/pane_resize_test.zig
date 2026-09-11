@@ -8,141 +8,24 @@ const pane_resize_controller = @import("../entrypoints/requests/pane_resize.zig"
 const test_support = @import("support.zig");
 const telemetry_mod = @import("../observability/root.zig").telemetry;
 
-const schema = core.schema;
+pub const schema = core.schema;
 const Pane = @import("../../pane/root.zig").Pane;
-const AttachmentStore = attachment_mod.AttachmentStore;
-const PaneFixture = test_support.PaneFixture;
+pub const AttachmentStore = attachment_mod.AttachmentStore;
+pub const PaneFixture = test_support.PaneFixture;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const ResizeController = pane_resize_controller.Controller(*pane_resize_commands.PaneResizeHandler);
 
 const resized_size: schema.TerminalSize = .{ .cols = 30, .rows = 8, .cell_width_px = 9, .cell_height_px = 18 };
 
-const Effect = enum { geometry_check, observation, media, geometry_release, response };
+pub const Effect = enum { geometry_check, observation, media, geometry_release, response };
 
-const Trace = struct {
-    effects: [8]Effect = undefined,
-    len: usize = 0,
+const Trace = @import("Trace.zig");
 
-    fn record(trace: *Trace, effect: Effect) void {
-        std.debug.assert(trace.len < trace.effects.len);
-        trace.effects[trace.len] = effect;
-        trace.len += 1;
-    }
-};
+const GeometryCapture = @import("GeometryCapture.zig");
 
-const GeometryCapture = struct {
-    trace: *Trace,
-    attachments: *AttachmentStore,
-    holds_result: bool = true,
-    holds_calls: usize = 0,
-    release_calls: usize = 0,
-    checked_workspace: ?schema.WorkspaceLocation = null,
-    released_workspace: ?schema.WorkspaceLocation = null,
-    release_saw_empty_store: bool = false,
-    release_saw_departed_workspace: bool = false,
+const SchedulerCapture = @import("SchedulerCapture.zig");
 
-    fn lease(capture: *GeometryCapture) pane_resize_commands.GeometryLease {
-        return .{
-            .context = capture,
-            .holds = holds,
-            .release = release,
-        };
-    }
-
-    fn holds(context: *anyopaque, workspace: schema.WorkspaceLocation) bool {
-        const capture: *GeometryCapture = @ptrCast(@alignCast(context));
-        capture.trace.record(.geometry_check);
-        capture.holds_calls += 1;
-        capture.checked_workspace = workspace;
-        return capture.holds_result;
-    }
-
-    fn release(context: *anyopaque, workspace: schema.WorkspaceLocation) void {
-        const capture: *GeometryCapture = @ptrCast(@alignCast(context));
-        capture.trace.record(.geometry_release);
-        capture.release_calls += 1;
-        capture.released_workspace = workspace;
-        capture.release_saw_empty_store = capture.attachments.len() == 0;
-        capture.release_saw_departed_workspace = capture.attachments.currentWorkspace() == null;
-    }
-};
-
-const SchedulerCapture = struct {
-    trace: *Trace,
-    attachments: *AttachmentStore,
-    expected_size: schema.TerminalSize,
-    observation_failure: ?anyerror = null,
-    media_failure: ?anyerror = null,
-    response_failure: ?anyerror = null,
-    observation_saw_resized_pane: bool = false,
-    observation_saw_old_attachment: bool = false,
-    response_saw_resized_attachment: bool = false,
-
-    fn scheduler(capture: *SchedulerCapture) pane_resize_commands.Scheduler {
-        return .{
-            .context = capture,
-            .observation = scheduleObservation,
-            .media = scheduleMedia,
-            .response = scheduleResponse,
-        };
-    }
-
-    fn scheduleObservation(context: *anyopaque, pane: *Pane) !void {
-        const capture: *SchedulerCapture = @ptrCast(@alignCast(context));
-        capture.trace.record(.observation);
-        capture.observation_saw_resized_pane = std.meta.eql(pane.size, capture.expected_size);
-        const attachment = capture.attachments.find(pane.id) orelse return error.MissingAttachment;
-        capture.observation_saw_old_attachment = attachment.cells.acknowledged.w == PaneFixture.initial_size.cols and
-            attachment.cells.acknowledged.h == PaneFixture.initial_size.rows;
-
-        if (capture.observation_failure) |failure| {
-            return failure;
-        }
-    }
-
-    fn scheduleMedia(context: *anyopaque, _: *Pane) !void {
-        const capture: *SchedulerCapture = @ptrCast(@alignCast(context));
-        capture.trace.record(.media);
-
-        if (capture.media_failure) |failure| {
-            return failure;
-        }
-    }
-
-    fn scheduleResponse(context: *anyopaque, pane: *Pane) !void {
-        const capture: *SchedulerCapture = @ptrCast(@alignCast(context));
-        capture.trace.record(.response);
-        const attachment = capture.attachments.find(pane.id) orelse return error.MissingAttachment;
-        capture.response_saw_resized_attachment = attachment.cells.acknowledged.w == capture.expected_size.cols and
-            attachment.cells.acknowledged.h == capture.expected_size.rows;
-
-        if (capture.response_failure) |failure| {
-            return failure;
-        }
-    }
-};
-
-const ResizeHarness = struct {
-    trace: Trace = .{},
-    geometry: GeometryCapture = undefined,
-    scheduler: SchedulerCapture = undefined,
-    handler: pane_resize_commands.PaneResizeHandler = undefined,
-
-    fn init(harness: *ResizeHarness, attachments: *AttachmentStore, expected_size: schema.TerminalSize) void {
-        harness.trace = .{};
-        harness.geometry = .{ .trace = &harness.trace, .attachments = attachments };
-        harness.scheduler = .{
-            .trace = &harness.trace,
-            .attachments = attachments,
-            .expected_size = expected_size,
-        };
-        harness.handler = .{
-            .attachments = attachments,
-            .geometry = harness.geometry.lease(),
-            .scheduler = harness.scheduler.scheduler(),
-        };
-    }
-};
+const ResizeHarness = @import("ResizeHarness.zig");
 
 fn expectEffects(trace: *const Trace, expected: []const Effect) !void {
     try std.testing.expectEqualSlices(Effect, expected, trace.effects[0..trace.len]);

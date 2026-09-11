@@ -6,67 +6,12 @@ const core = @import("telar-core");
 const request_snapshot_commands = @import("../../application/commands/request_snapshot.zig");
 const telemetry_mod = @import("../../observability/root.zig").telemetry;
 
-const schema = core.schema;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+pub const schema = core.schema;
+pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 
-/// Builds a statically dispatched snapshot controller for the cell delivery
-/// path.
-///
-/// ```zig
-/// const SnapshotController = Controller(*request_snapshot_commands.RequestCellSnapshotHandler);
-/// var controller = SnapshotController.init(&metrics, &handler);
-/// ```
-pub fn Controller(comptime Executor: type) type {
-    return struct {
-        const Self = @This();
+pub const Controller = @import("GenericRequestSnapshotController.zig").Type;
 
-        metrics: *RuntimeMetrics,
-        executor: Executor,
-
-        /// Creates one controller bound to the requesting client and handler.
-        ///
-        /// ```zig
-        /// var controller = SnapshotController.init(&metrics, &handler);
-        /// ```
-        pub fn init(metrics: *RuntimeMetrics, executor: Executor) Self {
-            return .{ .metrics = metrics, .executor = executor };
-        }
-
-        /// Requests a fresh server baseline for one pane. `known_frame_id` is
-        /// advisory: recovery never trusts or replays the client's local
-        /// baseline, so the pending recovery frame is always a full snapshot.
-        ///
-        /// ```zig
-        /// try controller.requestSnapshot(request);
-        /// ```
-        pub inline fn requestSnapshot(controller: *Self, request: schema.RequestSnapshot) !void {
-            _ = request.known_frame_id;
-            const result = try controller.executor.execute(.{ .pane_id = request.pane_id });
-
-            if (result == .pane_not_attached) {
-                controller.metrics.stale_client_messages += 1;
-            }
-        }
-    };
-}
-
-const StubExecutor = struct {
-    result: request_snapshot_commands.RequestCellSnapshotResult = .requested,
-    failure: ?anyerror = null,
-    call_count: usize = 0,
-    command: ?request_snapshot_commands.RequestCellSnapshot = null,
-
-    fn execute(stub: *StubExecutor, command: request_snapshot_commands.RequestCellSnapshot) !request_snapshot_commands.RequestCellSnapshotResult {
-        stub.call_count += 1;
-        stub.command = command;
-
-        if (stub.failure) |failure| {
-            return failure;
-        }
-
-        return stub.result;
-    }
-};
+const StubExecutor = @import("RequestSnapshotStubExecutor.zig");
 
 const TestController = Controller(*StubExecutor);
 

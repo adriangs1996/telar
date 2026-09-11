@@ -5,10 +5,7 @@ const Mouse = @import("../../input/root.zig").Mouse;
 const core = @import("telar-core");
 const copy_mode = @import("../../input/root.zig").copy_mode;
 
-pub const Command = struct {
-    kind: Mouse.Kind,
-    left_button: bool = true,
-};
+pub const Command = @import("CopyModePointerCommand.zig");
 
 pub const Authority = union(enum) {
     unowned,
@@ -29,146 +26,24 @@ pub const Outcome = enum {
     exited,
 };
 
-pub const Effects = struct {
-    context: *anyopaque,
-    leave: *const fn (*anyopaque) anyerror!void,
-    vertical: *const fn (*anyopaque, i32) anyerror!void,
-    pointer: *const fn (*anyopaque, copy_mode.PointerMotion) anyerror!void,
-    cancel_pointer: *const fn (*anyopaque) anyerror!void,
-};
+pub const Effects = @import("CopyModePointerEffects.zig");
 
-pub const CopyModePointerHandler = struct {
-    effects: Effects,
+pub const CopyModePointerHandler = @import("CopyModePointerHandler.zig");
 
-    /// Routes captured selection gestures before chrome or child input.
-    /// Keyboard copy mode consumes non-wheel events; its inside wheel moves
-    /// the copy cursor. Missing mouse geometry cancels on release.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(command, authority);
-    /// ```
-    pub fn execute(handler: *CopyModePointerHandler, command: Command, authority: Authority) !Outcome {
-        const pointer_inside = switch (authority) {
-            .unowned => return .unowned,
-            .target_missing => {
-                try handler.effects.leave(handler.effects.context);
-
-                return .exited;
-            },
-            .selection => |selection| {
-                if (selection.dragging and command.kind == .press and command.left_button) {
-                    try handler.effects.cancel_pointer(handler.effects.context);
-
-                    return .unowned;
-                }
-
-                if (!selection.dragging) {
-                    if (command.kind == .press or command.kind == .scroll_up or command.kind == .scroll_down) {
-                        try handler.effects.cancel_pointer(handler.effects.context);
-                    }
-
-                    return .unowned;
-                }
-
-                if (!command.left_button or (command.kind != .drag and command.kind != .release)) {
-                    return .consumed;
-                }
-
-                const position = selection.position orelse {
-                    if (command.kind == .release) {
-                        try handler.effects.cancel_pointer(handler.effects.context);
-                    }
-
-                    return .consumed;
-                };
-                try handler.effects.pointer(handler.effects.context, .{
-                    .position = position,
-                    .release = command.kind == .release,
-                });
-                return .moved;
-            },
-            .owned => |owned| owned.pointer_inside,
-        };
-
-        const delta: i32 = switch (command.kind) {
-            .scroll_up => -3,
-            .scroll_down => 3,
-            else => return .consumed,
-        };
-
-        if (!pointer_inside) {
-            return .consumed;
-        }
-
-        try handler.effects.vertical(handler.effects.context, delta);
-        return .moved;
-    }
-};
-
-const Event = enum {
+pub const Event = enum {
     leave,
     vertical,
     pointer,
     cancel_pointer,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     leave,
     vertical,
 };
 
-const EffectsCapture = struct {
-    events: [2]Event = undefined,
-    event_count: usize = 0,
-    delta: i32 = 0,
-    failure: Failure = .none,
-    motion: ?copy_mode.PointerMotion = null,
-
-    fn effects(capture: *EffectsCapture) Effects {
-        return .{
-            .context = capture,
-            .leave = leave,
-            .vertical = vertical,
-            .pointer = pointer,
-            .cancel_pointer = cancelPointer,
-        };
-    }
-
-    fn cancelPointer(raw_context: *anyopaque) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
-        capture.events[capture.event_count] = .cancel_pointer;
-        capture.event_count += 1;
-    }
-
-    fn pointer(raw_context: *anyopaque, motion: copy_mode.PointerMotion) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
-        capture.events[capture.event_count] = .pointer;
-        capture.event_count += 1;
-        capture.motion = motion;
-    }
-
-    fn leave(raw_context: *anyopaque) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
-        capture.events[capture.event_count] = .leave;
-        capture.event_count += 1;
-
-        if (capture.failure == .leave) {
-            return error.CopyModeLeaveFailed;
-        }
-    }
-
-    fn vertical(raw_context: *anyopaque, delta: i32) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
-        capture.events[capture.event_count] = .vertical;
-        capture.event_count += 1;
-        capture.delta = delta;
-
-        if (capture.failure == .vertical) {
-            return error.CopyModeMovementFailed;
-        }
-    }
-};
+const EffectsCapture = @import("CopyModePointerEffectsCapture.zig");
 
 test "mouse selection consumes unrelated buttons and clips through resolved pane coordinates" {
     var capture: EffectsCapture = .{};

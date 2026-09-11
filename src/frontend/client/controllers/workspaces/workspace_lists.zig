@@ -4,7 +4,7 @@ const core = @import("telar-core");
 const workspaces_application = @import("telar-client").application.workspaces;
 const workspace_list = @import("telar-client").workspace.workspace_list;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const schema = core.schema;
 const workspace_list_snapshot = workspaces_application.workspace_list_snapshot;
 

@@ -6,11 +6,7 @@ const protocol = @import("protocol.zig");
 
 const Io = std.Io;
 
-pub const Input = struct {
-    entry_path: []const u8,
-    action_name: []const u8,
-    context: lua_config.CallbackContext,
-};
+pub const Input = @import("Input.zig");
 
 /// Runs one validated plugin callback and writes its encoded effect batch.
 /// For example: `try run(init, .{ .entry_path = entry, .action_name = action, .context = context });`.

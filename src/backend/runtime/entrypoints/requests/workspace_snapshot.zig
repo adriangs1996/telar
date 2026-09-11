@@ -5,71 +5,12 @@ const core = @import("telar-core");
 const workspace_snapshot_query = @import("../../application/queries/workspace_snapshot.zig");
 const delivery_mod = @import("../../delivery/root.zig");
 
-const schema = core.schema;
-const ResponseQueue = delivery_mod.ResponseQueue;
+pub const schema = core.schema;
+pub const ResponseQueue = delivery_mod.ResponseQueue;
 
-pub const Controller = struct {
-    responses: *ResponseQueue,
-    query: workspace_snapshot_query.Executor,
+pub const Controller = @import("WorkspaceSnapshotController.zig");
 
-    /// Creates a controller scoped to one workspace-snapshot request.
-    ///
-    /// ```zig
-    /// var controller = Controller.init(&responses, handler.executor());
-    /// ```
-    pub fn init(responses: *ResponseQueue, query: workspace_snapshot_query.Executor) Controller {
-        return .{ .responses = responses, .query = query };
-    }
-
-    /// Maps a wire request to the workspace query and queues its canonical
-    /// reference or a `workspace_not_found` failure.
-    ///
-    /// ```zig
-    /// try controller.requestWorkspaceSnapshot(request);
-    /// ```
-    pub fn requestWorkspaceSnapshot(controller: *Controller, request: schema.RequestWorkspaceSnapshot) !void {
-        const snapshot = controller.query.execute(.{ .location = request.workspace }) catch |err| {
-            if (err == error.WorkspaceNotFound) {
-                try controller.responses.push(.{ .request_failed = .{
-                    .request_id = request.request_id,
-                    .code = .workspace_not_found,
-                    .message = "workspace not found",
-                } });
-                return;
-            }
-
-            return err;
-        };
-
-        try controller.responses.push(.{ .workspace_snapshot = .{
-            .request_id = request.request_id,
-            .workspace = snapshot.location,
-        } });
-    }
-};
-
-const StubQuery = struct {
-    result: ?workspace_snapshot_query.Result = null,
-    failure: ?anyerror = null,
-    call_count: usize = 0,
-    last_request: ?workspace_snapshot_query.Request = null,
-
-    fn executor(stub: *StubQuery) workspace_snapshot_query.Executor {
-        return .{ .context = stub, .execute_fn = execute };
-    }
-
-    fn execute(context: *anyopaque, request: workspace_snapshot_query.Request) anyerror!workspace_snapshot_query.Result {
-        const stub: *StubQuery = @ptrCast(@alignCast(context));
-        stub.call_count += 1;
-        stub.last_request = request;
-
-        if (stub.failure) |failure| {
-            return failure;
-        }
-
-        return stub.result.?;
-    }
-};
+const StubQuery = @import("WorkspaceSnapshotStubQuery.zig");
 
 fn testingLocation() !schema.WorkspaceLocation {
     return .{ .workspace = try schema.id.workspace(3) };

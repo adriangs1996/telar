@@ -4,201 +4,38 @@ const std = @import("std");
 const notification_capability = @import("../../root.zig").notifications;
 const client_model = @import("../../root.zig").model;
 
-pub const TimerEffects = struct {
-    context: *anyopaque,
-    reschedule: *const fn (*anyopaque) anyerror!void,
-};
+pub const TimerEffects = @import("TimerEffects.zig");
 
-pub const ActivationEffects = struct {
-    timers: TimerEffects,
-    context: *anyopaque,
-    navigate: *const fn (*anyopaque, notification_capability.Target) anyerror!void,
-};
+pub const ActivationEffects = @import("ActivationEffects.zig");
 
-pub const PublishCommand = struct {
-    now_ns: u64,
-    input: notification_capability.Input,
-};
+pub const PublishCommand = @import("PublishCommand.zig");
 
-pub const InteractionCommand = struct {
-    id: notification_capability.Id,
-    now_ns: u64,
-};
+pub const InteractionCommand = @import("InteractionCommand.zig");
 
-pub const DeliveryReport = struct {
-    delivered_clients: u8,
-};
+pub const DeliveryReport = @import("DeliveryReport.zig");
 
 pub const DeliveryOutcome = enum {
     delivered,
     undelivered,
 };
 
-pub const DeliveryEffects = struct {
-    context: *anyopaque,
-    publish: *const fn (*anyopaque, notification_capability.Input) anyerror!void,
-};
+pub const DeliveryEffects = @import("DeliveryEffects.zig");
 
-pub const PublishNotificationHandler = struct {
-    model: *client_model.Model,
-    effects: TimerEffects,
+pub const PublishNotificationHandler = @import("PublishNotificationHandler.zig");
 
-    /// Commits owned notification state before rearming its lifecycle timer.
-    ///
-    /// ```zig
-    /// const publication = try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *PublishNotificationHandler, command: PublishCommand) !client_model.NotificationPublication {
-        const publication = handler.model.publishNotification(command.now_ns, command.input);
+pub const AdvanceNotificationsHandler = @import("AdvanceNotificationsHandler.zig");
 
-        try handler.effects.reschedule(handler.effects.context);
-        return publication;
-    }
-};
+pub const ActivateNotificationHandler = @import("ActivateNotificationHandler.zig");
 
-pub const AdvanceNotificationsHandler = struct {
-    model: *client_model.Model,
-    effects: TimerEffects,
+pub const DismissNotificationHandler = @import("DismissNotificationHandler.zig");
 
-    /// Advances every transition before scheduling the next useful deadline.
-    ///
-    /// ```zig
-    /// _ = try handler.execute(now_ns);
-    /// ```
-    pub fn execute(handler: *AdvanceNotificationsHandler, now_ns: u64) !?client_model.NotificationChange {
-        const change = handler.model.advanceNotifications(now_ns);
+pub const HandleNotificationDeliveryHandler = @import("HandleNotificationDeliveryHandler.zig");
 
-        try handler.effects.reschedule(handler.effects.context);
-        return change;
-    }
-};
+const EffectsCapture = @import("NotificationsEffectsCapture.zig");
 
-pub const ActivateNotificationHandler = struct {
-    model: *client_model.Model,
-    effects: ActivationEffects,
+const DeliveryCapture = @import("DeliveryCapture.zig");
 
-    /// Commits an exit transition, rearms time and then follows its target.
-    ///
-    /// ```zig
-    /// const activation = try handler.execute(command) orelse return;
-    /// ```
-    pub fn execute(handler: *ActivateNotificationHandler, command: InteractionCommand) !?client_model.NotificationActivation {
-        const activation = handler.model.activateNotification(command.id, command.now_ns) orelse return null;
-
-        try handler.effects.timers.reschedule(handler.effects.timers.context);
-        switch (activation.target) {
-            .none => {},
-            else => try handler.effects.navigate(handler.effects.context, activation.target),
-        }
-        return activation;
-    }
-};
-
-pub const DismissNotificationHandler = struct {
-    model: *client_model.Model,
-    effects: TimerEffects,
-
-    /// Commits an exit transition without activating the notification.
-    ///
-    /// ```zig
-    /// const change = try handler.execute(command) orelse return;
-    /// ```
-    pub fn execute(handler: *DismissNotificationHandler, command: InteractionCommand) !?client_model.NotificationChange {
-        const change = handler.model.dismissNotification(command.id, command.now_ns) orelse return null;
-
-        try handler.effects.reschedule(handler.effects.context);
-        return change;
-    }
-};
-
-pub const HandleNotificationDeliveryHandler = struct {
-    effects: DeliveryEffects,
-
-    /// Publishes a local failure only when the runtime reached no clients.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(report);
-    /// ```
-    pub fn execute(handler: *HandleNotificationDeliveryHandler, report: DeliveryReport) !DeliveryOutcome {
-        if (report.delivered_clients != 0) {
-            return .delivered;
-        }
-
-        try handler.effects.publish(handler.effects.context, .{
-            .level = .failure,
-            .title = "Notification not delivered",
-            .message = "No connected client could accept the notification",
-        });
-
-        return .undelivered;
-    }
-};
-
-const EffectsCapture = struct {
-    model: *const client_model.Model,
-    expected_revision: u64 = 0,
-    calls: usize = 0,
-    observed_commit: bool = false,
-    fail: bool = false,
-
-    fn port(capture: *EffectsCapture) TimerEffects {
-        return .{ .context = capture, .reschedule = reschedule };
-    }
-
-    fn reschedule(context: *anyopaque) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.observed_commit = capture.model.version().notifications == capture.expected_revision;
-
-        if (capture.fail) {
-            return error.TimerScheduleFailed;
-        }
-    }
-};
-
-const DeliveryCapture = struct {
-    calls: usize = 0,
-    input: ?notification_capability.Input = null,
-    failure: ?anyerror = null,
-
-    fn effects(capture: *DeliveryCapture) DeliveryEffects {
-        return .{ .context = capture, .publish = publish };
-    }
-
-    fn publish(context: *anyopaque, input: notification_capability.Input) !void {
-        const capture: *DeliveryCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.input = input;
-
-        if (capture.failure) |failure| {
-            return failure;
-        }
-    }
-};
-
-const NavigationCapture = struct {
-    calls: usize = 0,
-    target: ?notification_capability.Target = null,
-    fail: bool = false,
-
-    fn effects(capture: *NavigationCapture, timers: TimerEffects) ActivationEffects {
-        return .{
-            .timers = timers,
-            .context = capture,
-            .navigate = navigate,
-        };
-    }
-
-    fn navigate(context: *anyopaque, target: notification_capability.Target) !void {
-        const capture: *NavigationCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.target = target;
-
-        if (capture.fail) {
-            return error.NavigationFailed;
-        }
-    }
-};
+const NavigationCapture = @import("NavigationCapture.zig");
 
 test "notification delivery publishes a failure only when every target rejected it" {
     var capture: DeliveryCapture = .{};

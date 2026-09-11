@@ -5,71 +5,12 @@ const core = @import("telar-core");
 const tab_snapshot_query = @import("../../application/queries/tab_snapshot.zig");
 const delivery_mod = @import("../../delivery/root.zig");
 
-const schema = core.schema;
-const ResponseQueue = delivery_mod.ResponseQueue;
+pub const schema = core.schema;
+pub const ResponseQueue = delivery_mod.ResponseQueue;
 
-pub const Controller = struct {
-    responses: *ResponseQueue,
-    query: tab_snapshot_query.Executor,
+pub const Controller = @import("TabSnapshotController.zig");
 
-    /// Creates a controller scoped to one tab-snapshot request.
-    ///
-    /// ```zig
-    /// var controller = Controller.init(&responses, handler.executor());
-    /// ```
-    pub fn init(responses: *ResponseQueue, query: tab_snapshot_query.Executor) Controller {
-        return .{ .responses = responses, .query = query };
-    }
-
-    /// Maps a wire request to the tab query and queues its canonical response
-    /// or a `tab_not_found` failure.
-    ///
-    /// ```zig
-    /// try controller.requestTabSnapshot(request);
-    /// ```
-    pub fn requestTabSnapshot(controller: *Controller, request: schema.RequestTabSnapshot) !void {
-        const snapshot = controller.query.execute(.{ .location = request.location }) catch |err| {
-            if (err == error.TabNotFound) {
-                try controller.responses.push(.{ .request_failed = .{
-                    .request_id = request.request_id,
-                    .code = .tab_not_found,
-                    .message = "tab not found",
-                } });
-                return;
-            }
-
-            return err;
-        };
-
-        try controller.responses.push(.{ .tab_snapshot = .{
-            .request_id = request.request_id,
-            .location = snapshot.location,
-        } });
-    }
-};
-
-const StubQuery = struct {
-    result: ?tab_snapshot_query.Result = null,
-    failure: ?anyerror = null,
-    call_count: usize = 0,
-    last_request: ?tab_snapshot_query.Request = null,
-
-    fn executor(stub: *StubQuery) tab_snapshot_query.Executor {
-        return .{ .context = stub, .execute_fn = execute };
-    }
-
-    fn execute(context: *anyopaque, request: tab_snapshot_query.Request) anyerror!tab_snapshot_query.Result {
-        const stub: *StubQuery = @ptrCast(@alignCast(context));
-        stub.call_count += 1;
-        stub.last_request = request;
-
-        if (stub.failure) |failure| {
-            return failure;
-        }
-
-        return stub.result.?;
-    }
-};
+const StubQuery = @import("TabSnapshotStubQuery.zig");
 
 fn testingLocation() !schema.TabLocation {
     return .{

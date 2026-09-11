@@ -1,31 +1,11 @@
 const std = @import("std");
 const input = @import("root.zig");
-const keybind = input.keybind;
-const Action = enum { next, detach };
+pub const keybind = input.keybind;
+pub const Action = enum { next, detach };
 const Binding = keybind.Binding(Action, 4);
 const Router = keybind.Router(Action, .{ .max_bindings = 8, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 }, struct {});
 
-const Capture = struct {
-    actions: [8]Action = undefined,
-    action_count: usize = 0,
-    keys: [8]input.Key = undefined,
-    key_count: usize = 0,
-
-    pub fn action(capture: *Capture, value: Action) !keybind.Control {
-        capture.actions[capture.action_count] = value;
-        capture.action_count += 1;
-        return .continue_routing;
-    }
-
-    pub fn key(capture: *Capture, value: input.Key) !void {
-        capture.keys[capture.key_count] = value;
-        capture.key_count += 1;
-    }
-
-    pub fn forward(_: *Capture, _: []const u8) !void {
-        return error.UnexpectedRawInput;
-    }
-};
+const Capture = @import("Capture.zig");
 
 test "native key routing needs no decoder and retains binding ownership through release" {
     var router = try Router.init(&.{try Binding.parse(&.{"ctrl+n"}, .next)});

@@ -9,28 +9,16 @@ const tags = @import("tags.zig");
 
 const ClientTag = tags.ClientTag;
 const ServerTag = tags.ServerTag;
-const RequestId = id.RequestId;
-const PaneId = id.PaneId;
-const SuggestionStatus = types.SuggestionStatus;
+pub const RequestId = id.RequestId;
+pub const PaneId = id.PaneId;
+pub const SuggestionStatus = types.SuggestionStatus;
 const validateRequestId = codec.validateRequestId;
 const validatePaneId = codec.validatePaneId;
 const validateBytes = codec.validateBytes;
 
-/// Asks the runtime's engine for one shell command that fulfils `text` in
-/// the context of `pane_id` (its cwd and visible screen).
-pub const SuggestCommand = struct {
-    request_id: RequestId,
-    pane_id: PaneId,
-    text: []const u8,
-};
+pub const SuggestCommand = @import("SuggestCommand.zig");
 
-/// The engine's answer to `suggest_command`. `text` is empty unless
-/// `status == .ready`.
-pub const CommandSuggestion = struct {
-    request_id: RequestId,
-    status: SuggestionStatus,
-    text: []const u8 = "",
-};
+pub const CommandSuggestion = @import("CommandSuggestion.zig");
 
 /// Encodes one command-suggestion request.
 ///

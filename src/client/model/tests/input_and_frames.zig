@@ -12,24 +12,14 @@ const client_model = @import("../root.zig");
 const copy_mode = input_capability.copy_mode;
 const keybind = input_capability;
 const capability_support = graphics;
-const schema = core.schema;
+pub const schema = core.schema;
 const layout_mod = workspace_capability.layout;
 const multiplexer = workspace_capability.multiplexer;
 const tabs_mod = workspace_capability.tabs;
 const workspace_list_mod = workspace_capability.workspace_list;
-const ui = core.ui;
+pub const ui = core.ui;
 
-const TestingPaneFrame = struct {
-    pane_id: schema.PaneId,
-    frame_id: u64 = 1,
-    base_frame_id: u64 = 0,
-    cols: u16 = 2,
-    rows: u16 = 2,
-    cursor: schema.frame.Cursor = .{},
-    input_modes: schema.frame.InputModes = .{},
-    scroll: schema.frame.Scroll = .{ .total_rows = 2, .offset = 0 },
-    cells: ?[]const ui.Cell = null,
-};
+const TestingPaneFrame = @import("TestingPaneFrame.zig");
 
 fn testingPaneFrame(buffer: []u8, input: TestingPaneFrame) !schema.frame.FrameView {
     var spans: [1]schema.frame.Span = undefined;

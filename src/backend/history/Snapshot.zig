@@ -1,0 +1,15 @@
+const Snapshot = @This();
+
+queued: u64,
+queue_high_water: u64,
+dropped: u64,
+sqlite_writes: u64,
+sqlite_write_failures: u64,
+sqlite_write_ns: u64,
+sqlite_write_max_ns: u64,
+sqlite_queries: u64,
+sqlite_query_failures: u64,
+sqlite_query_ns: u64,
+sqlite_query_max_ns: u64,
+sqlite_open_failures: u64,
+available: bool,

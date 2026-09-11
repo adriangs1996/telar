@@ -13,7 +13,7 @@ const action_mod = input_capability.action;
 const keybind = input_capability.keybind;
 const mouse_protocol = input_capability.mouse_protocol;
 
-pub const Client = @import("client.zig");
+pub const Client = @import("Client.zig");
 pub const run = @import("run.zig").run;
 
 pub const Action = action_mod.Action;
@@ -37,7 +37,7 @@ const mouseTracked = mouse_protocol.tracked;
 test {
     // The client capability's own files, collected for the suite.
     _ = @import("telar-client").application;
-    _ = @import("client.zig");
+    _ = @import("Client.zig");
     _ = @import("connection/root.zig");
     _ = @import("controllers/root.zig");
     _ = @import("entrypoints/events.zig");

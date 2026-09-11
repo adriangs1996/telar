@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const term = @import("screen.zig");
+const term = @import("screen_support.zig");
 
 const schema = core.schema;
 

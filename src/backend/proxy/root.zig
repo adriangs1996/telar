@@ -15,7 +15,7 @@ const service_mod = @import("service/root.zig");
 
 pub const ca = @import("ca.zig");
 
-const Io = std.Io;
+pub const Io = std.Io;
 
 pub const PaneKey = pane_mod.PaneKey;
 pub const ObservationPhase = middleware.Phase;
@@ -27,56 +27,15 @@ pub const CaptureHalf = capture_mod.Half;
 pub const CaptureJoiner = capture_mod.Joiner;
 pub const CaptureOutcome = capture_mod.Outcome;
 
-pub const Config = struct {
-    key_path: []const u8,
-    certificate_path: []const u8,
-    bundle_path: []const u8,
-    system_authority: bool = false,
-    intercept_hosts: []const []const u8 = &.{},
-    capture: capture_mod.Config = .{},
-};
+pub const Config = @import("Config.zig");
 
-pub const Observation = struct {
-    pane: PaneKey,
-    dialect: middleware.ApiDialect,
-    phase: ObservationPhase,
-    protocol: ObservationProtocol,
-    connection_id: u64,
-    stream_id: u32 = 0,
-    status_code: u16 = 0,
-    observed_at_ms: i64,
-};
+pub const Observation = @import("Observation.zig");
 
 pub const MetricsSnapshot = metrics_mod.Snapshot;
 
-/// Ephemeral child environment. Its proxy credential is scrubbed by
-/// `pty.ChildEnvironment.deinit`; the runtime must not retain or inspect it.
-pub const PaneEnvironment = struct {
-    value: pty.ChildEnvironment,
+pub const PaneEnvironment = @import("PaneEnvironment.zig");
 
-    /// Borrows the environment while this owner remains alive.
-    ///
-    /// ```zig
-    /// const child_environment = pane_environment.environment();
-    /// ```
-    pub fn environment(pane_environment: *const PaneEnvironment) *const pty.ChildEnvironment {
-        return &pane_environment.value;
-    }
-
-    /// Scrubs and releases the ephemeral child environment.
-    ///
-    /// ```zig
-    /// pane_environment.deinit();
-    /// ```
-    pub fn deinit(pane_environment: *PaneEnvironment) void {
-        pane_environment.value.deinit();
-    }
-};
-
-pub const PaneEnvironmentOptions = struct {
-    inherited: std.process.Environ,
-    overrides: []const pty.ChildEnvironment.Override,
-};
+pub const PaneEnvironmentOptions = @import("PaneEnvironmentOptions.zig");
 
 const lifecycle_port: lifecycle_mod.Port(service_mod.Service, service_mod.Worker) = .{
     .start = service_mod.Service.start,
@@ -85,159 +44,17 @@ const lifecycle_port: lifecycle_mod.Port(service_mod.Service, service_mod.Worker
     .destroy = service_mod.Service.destroy,
 };
 
-const ServiceLifecycle = lifecycle_mod.Lifecycle(service_mod.Service, service_mod.Worker, lifecycle_port);
+pub const ServiceLifecycle = lifecycle_mod.Lifecycle(service_mod.Service, service_mod.Worker, lifecycle_port);
 
-pub const Proxy = struct {
-    gpa: std.mem.Allocator,
-    lifecycle: ServiceLifecycle,
+pub const Proxy = @import("Proxy.zig");
 
-    /// Creates and starts the complete proxy capability.
-    ///
-    /// ```zig
-    /// const proxy = try Proxy.create(io, gpa, config);
-    /// defer proxy.destroy();
-    /// ```
-    pub fn create(io: Io, gpa: std.mem.Allocator, config: Config) !*Proxy {
-        const proxy = try gpa.create(Proxy);
-        errdefer gpa.destroy(proxy);
-
-        const service = try service_mod.Service.create(io, gpa, .{
-            .key = config.key_path,
-            .certificate = config.certificate_path,
-            .bundle = config.bundle_path,
-            .system_authority = config.system_authority,
-            .intercept_hosts = config.intercept_hosts,
-            .capture = config.capture,
-        });
-
-        proxy.* = .{
-            .gpa = gpa,
-            .lifecycle = try ServiceLifecycle.start(service),
-        };
-
-        return proxy;
-    }
-
-    /// Cancels proxy traffic, closes observation delivery, and releases the
-    /// capability. The caller must first cancel its outstanding `receive`
-    /// operations.
-    ///
-    /// ```zig
-    /// proxy.destroy();
-    /// ```
-    pub fn destroy(proxy: *Proxy) void {
-        const gpa = proxy.gpa;
-        proxy.lifecycle.deinit();
-        gpa.destroy(proxy);
-    }
-
-    /// Waits for one live, heap-owned captured exchange half.
-    ///
-    /// ```zig
-    /// const half = try proxy.receiveCapture(io);
-    /// ```
-    pub fn receiveCapture(proxy: *Proxy, io: Io) anyerror!*capture_mod.Half {
-        return proxy.lifecycle.service.receiveCapture(io);
-    }
-
-    /// Decodes one captured body on the runtime observation path.
-    ///
-    /// ```zig
-    /// proxy.decodeCapture(half);
-    /// ```
-    pub fn decodeCapture(proxy: *Proxy, half: *capture_mod.Half) void {
-        proxy.lifecycle.service.decodeCapture(half);
-    }
-
-    /// Registers one pane generation and returns its owned child environment.
-    /// `pane_overrides` carries the pane's identity variables; the proxy adds
-    /// its own credentials and trust configuration after them.
-    ///
-    /// ```zig
-    /// var pane_environment = try proxy.registerPane(key, .{ .inherited = inherited, .overrides = pane_overrides });
-    /// defer pane_environment.deinit();
-    /// ```
-    pub fn registerPane(proxy: *Proxy, key: PaneKey, options: PaneEnvironmentOptions) !PaneEnvironment {
-        std.debug.assert(options.overrides.len <= max_pane_overrides);
-        const service = proxy.lifecycle.service;
-        var credential = try service.registerPane(.{ .id = key.id, .generation = key.generation });
-        defer std.crypto.secureZero(u8, &credential.token);
-        errdefer service.unregisterCredential(&credential);
-
-        var url_buffer: [256]u8 = undefined;
-        defer std.crypto.secureZero(u8, &url_buffer);
-        const proxy_url = try service.credentialUrl(&url_buffer, &credential);
-        const client = service.clientConfiguration();
-        const proxy_overrides = environmentOverrides(
-            proxy_url,
-            client.certificate_path,
-            client.bundle_path,
-        );
-        var overrides: [max_pane_overrides + environment_override_count]pty.ChildEnvironment.Override = undefined;
-        @memcpy(overrides[0..options.overrides.len], options.overrides);
-        @memcpy(overrides[options.overrides.len .. options.overrides.len + proxy_overrides.len], &proxy_overrides);
-        return .{ .value = try pty.ChildEnvironment.initWithOverrides(proxy.gpa, options.inherited, .{
-            .telar_term_program = "telar",
-            .overrides = overrides[0 .. options.overrides.len + proxy_overrides.len],
-        }) };
-    }
-
-    /// Revokes new tunnels and observations for one exact pane generation.
-    ///
-    /// ```zig
-    /// proxy.revokePane(key);
-    /// ```
-    pub fn revokePane(proxy: *Proxy, key: PaneKey) void {
-        proxy.lifecycle.service.unregisterPane(.{ .id = key.id, .generation = key.generation });
-    }
-
-    /// Revocation rejects new tunnels and filters both queued and subsequent
-    /// observations. A tunnel already authenticated keeps forwarding bytes.
-    ///
-    /// ```zig
-    /// const observation = try proxy.receive(io);
-    /// ```
-    pub fn receive(proxy: *Proxy, io: Io) anyerror!Observation {
-        var event = try proxy.lifecycle.service.receive(io);
-        defer std.crypto.secureZero(u8, &event.credential.token);
-        return .{
-            .pane = .{
-                .id = event.credential.pane_id,
-                .generation = event.credential.pane_generation,
-            },
-            .dialect = event.dialect,
-            .phase = event.phase,
-            .protocol = event.protocol,
-            .connection_id = event.connection_id,
-            .stream_id = event.stream_id,
-            .status_code = event.status_code,
-            .observed_at_ms = event.observed_at_ms,
-        };
-    }
-
-    /// Returns a lock-free snapshot of proxy counters.
-    ///
-    /// ```zig
-    /// const snapshot = proxy.metrics();
-    /// ```
-    pub fn metrics(proxy: *const Proxy) MetricsSnapshot {
-        return proxy.lifecycle.service.metrics();
-    }
-
-    fn address(proxy: *const Proxy) Io.net.IpAddress {
-        const client = proxy.lifecycle.service.clientConfiguration();
-
-        return Io.net.IpAddress.parse("127.0.0.1", client.port) catch unreachable;
-    }
-};
-
-const environment_override_count = 11;
+pub const environment_override_count = 11;
 
 /// Upper bound on identity variables a pane launch may add before the proxy's
 /// own overrides.
 pub const max_pane_overrides = 6;
 
-fn environmentOverrides(proxy_url: []const u8, certificate_path: []const u8, bundle_path: []const u8) [environment_override_count]pty.ChildEnvironment.Override {
+pub fn environmentOverrides(proxy_url: []const u8, certificate_path: []const u8, bundle_path: []const u8) [environment_override_count]pty.ChildEnvironment.Override {
     return .{
         .{ .name = "HTTPS_PROXY", .value = proxy_url },
         .{ .name = "https_proxy", .value = proxy_url },
@@ -253,41 +70,7 @@ fn environmentOverrides(proxy_url: []const u8, certificate_path: []const u8, bun
     };
 }
 
-const ProxyTestFiles = struct {
-    temp: std.testing.TmpDir,
-    key: [std.fs.max_path_bytes]u8 = undefined,
-    key_len: usize = 0,
-    certificate: [std.fs.max_path_bytes]u8 = undefined,
-    certificate_len: usize = 0,
-    bundle: [std.fs.max_path_bytes]u8 = undefined,
-    bundle_len: usize = 0,
-
-    fn init(io: Io) !ProxyTestFiles {
-        var files: ProxyTestFiles = .{ .temp = std.testing.tmpDir(.{}) };
-        errdefer files.temp.cleanup();
-
-        var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const directory_len = try files.temp.dir.realPath(io, &directory_buffer);
-        const directory = directory_buffer[0..directory_len];
-        files.key_len = (try std.fmt.bufPrint(&files.key, "{s}/ca-key.pem", .{directory})).len;
-        files.certificate_len = (try std.fmt.bufPrint(&files.certificate, "{s}/ca-cert.pem", .{directory})).len;
-        files.bundle_len = (try std.fmt.bufPrint(&files.bundle, "{s}/ca-bundle.pem", .{directory})).len;
-
-        return files;
-    }
-
-    fn deinit(files: *ProxyTestFiles) void {
-        files.temp.cleanup();
-    }
-
-    fn config(files: *const ProxyTestFiles) Config {
-        return .{
-            .key_path = files.key[0..files.key_len],
-            .certificate_path = files.certificate[0..files.certificate_len],
-            .bundle_path = files.bundle[0..files.bundle_len],
-        };
-    }
-};
+const ProxyTestFiles = @import("ProxyTestFiles.zig");
 
 fn waitForConnectionMetrics(proxy: *const Proxy, expected_active: u32, expected_limit_drops: u64) !void {
     for (0..1000) |_| {

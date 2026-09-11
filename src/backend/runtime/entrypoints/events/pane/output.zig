@@ -6,140 +6,25 @@ const pane_mod = @import("../../../../pane/root.zig");
 const telemetry_mod = @import("../../../observability/root.zig").telemetry;
 const test_support = @import("../../../tests/support.zig");
 
-const Io = std.Io;
-const diagnostics = core.diagnostics;
-const schema = core.schema;
-const Pane = pane_mod.Pane;
-const PaneKey = pane_mod.PaneKey;
-const PaneStore = pane_mod.PaneStore;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+pub const Io = std.Io;
+pub const diagnostics = core.diagnostics;
+pub const schema = core.schema;
+pub const Pane = pane_mod.Pane;
+pub const PaneKey = pane_mod.PaneKey;
+pub const PaneStore = pane_mod.PaneStore;
+pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 
-pub const Completion = struct {
-    pane: PaneKey,
-    result: anyerror!u16,
-};
+pub const Completion = @import("OutputCompletion.zig");
 
-/// Output-buffer borrow handed to the VT ingest actor.
-pub const Ingest = struct {
-    io: Io,
-    pane: *Pane,
-    bytes: []const u8,
-};
+pub const Ingest = @import("OutputIngest.zig");
 
-pub const Resources = struct {
-    io: Io,
-    panes: *PaneStore,
-    metrics: *RuntimeMetrics,
-};
+pub const Resources = @import("OutputResources.zig");
 
-/// Defines the schedulers, client-state query, and lifecycle effects bound by
-/// the runtime instance.
-///
-/// ```zig
-/// const port: RuntimePort(Context) = .{ ... };
-/// ```
-pub fn RuntimePort(comptime Context: type) type {
-    return struct {
-        schedule_observation: *const fn (*Context, *Pane) anyerror!void,
-        schedule_media: *const fn (*Context, *Pane) anyerror!void,
-        start_ingest: *const fn (*Context, Ingest) anyerror!void,
-        has_outstanding_frame: *const fn (*Context, schema.PaneId) bool,
-        collect: *const fn (*Context) void,
-        pump_clients: *const fn (*Context) void,
-    };
-}
+pub const RuntimePort = @import("GenericOutputRuntimePort.zig").Type;
 
-/// Creates a statically dispatched PTY output pipeline.
-///
-/// ```zig
-/// const OutputPipeline = Pipeline(Context, port);
-/// ```
-pub fn Pipeline(comptime Context: type, comptime port: RuntimePort(Context)) type {
-    return struct {
-        const Self = @This();
+pub const Pipeline = @import("GenericPipeline.zig").Type;
 
-        context: *Context,
-        resources: Resources,
-
-        /// Binds one runtime's pane repository and telemetry.
-        ///
-        /// ```zig
-        /// var pipeline = OutputPipeline.init(&context, resources);
-        /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
-            return .{ .context = context, .resources = resources };
-        }
-
-        /// Completes one read. EOF/error settles the output lifecycle; data is
-        /// copied into observation/media queues before its buffer is borrowed
-        /// by the VT ingest actor. Scheduler errors cross unchanged.
-        ///
-        /// ```zig
-        /// try pipeline.handle(completion);
-        /// ```
-        pub fn handle(pipeline: *Self, completion: Completion) !void {
-            const pane = pipeline.resources.panes.resolve(completion.pane) orelse {
-                pipeline.resources.metrics.stale_pane_events += 1;
-                return;
-            };
-            const output_len = completion.result catch {
-                pane.completePtyOutputRead(.finished);
-                return pipeline.finishOutput(pane);
-            };
-
-            if (output_len == 0) {
-                pane.completePtyOutputRead(.finished);
-                return pipeline.finishOutput(pane);
-            }
-
-            pane.completePtyOutputRead(.data);
-
-            if (comptime diagnostics.enabled) {
-                pipeline.resources.metrics.pty_events += 1;
-                pipeline.resources.metrics.pty_bytes += output_len;
-
-                if (port.has_outstanding_frame(pipeline.context, pane.id)) {
-                    pipeline.resources.metrics.folded_pty_events += 1;
-                }
-            }
-
-            const bytes = pane.output_buffer[0..output_len];
-            const shell_foreground = pane.session.shellForeground();
-            pane.expireProgress(shell_foreground orelse false);
-            pane.queueHistoryOutput(.{
-                .bytes = bytes,
-                .shell_foreground = shell_foreground,
-                .clock = pane_mod.historyClock(pipeline.resources.io),
-            });
-            try port.schedule_observation(pipeline.context, pane);
-
-            pane.queueMediaOutput(bytes);
-            try port.schedule_media(pipeline.context, pane);
-
-            const ingest: Ingest = .{
-                .io = pipeline.resources.io,
-                .pane = pane,
-                .bytes = pane.beginOutputIngest(output_len),
-            };
-            port.start_ingest(pipeline.context, ingest) catch |err| {
-                pane.cancelOutputIngest();
-                return err;
-            };
-        }
-
-        fn finishOutput(pipeline: *Self, pane: *Pane) !void {
-            if (pane.exit) |exit| {
-                pane.queueExitedHistory(exit);
-                try port.schedule_observation(pipeline.context, pane);
-            }
-
-            port.collect(pipeline.context);
-            port.pump_clients(pipeline.context);
-        }
-    };
-}
-
-const Step = enum {
+pub const Step = enum {
     observation,
     media,
     ingest,
@@ -147,56 +32,7 @@ const Step = enum {
     pump_clients,
 };
 
-const Capture = struct {
-    steps: [5]Step = undefined,
-    len: usize = 0,
-    failure: ?Step = null,
-    outstanding_frame: bool = false,
-    outstanding_frame_queries: usize = 0,
-    observation_saw_history: bool = false,
-    media_saw_output: bool = false,
-    ingest_saw_borrow: bool = false,
-    ingest_bytes: []const u8 = "",
-
-    fn record(capture: *Capture, step: Step) !void {
-        std.debug.assert(capture.len < capture.steps.len);
-        capture.steps[capture.len] = step;
-        capture.len += 1;
-
-        if (capture.failure == step) {
-            return error.SchedulerUnavailable;
-        }
-    }
-
-    fn scheduleObservation(capture: *Capture, pane: *Pane) !void {
-        capture.observation_saw_history = pane.history_observer.hasPending();
-        try capture.record(.observation);
-    }
-
-    fn scheduleMedia(capture: *Capture, pane: *Pane) !void {
-        capture.media_saw_output = pane.media.hasPending();
-        try capture.record(.media);
-    }
-
-    fn startIngest(capture: *Capture, ingest: Ingest) !void {
-        capture.ingest_saw_borrow = ingest.pane.ingest_pending;
-        capture.ingest_bytes = ingest.bytes;
-        try capture.record(.ingest);
-    }
-
-    fn hasOutstandingFrame(capture: *Capture, _: schema.PaneId) bool {
-        capture.outstanding_frame_queries += 1;
-        return capture.outstanding_frame;
-    }
-
-    fn collect(capture: *Capture) void {
-        capture.record(.collect) catch unreachable;
-    }
-
-    fn pumpClients(capture: *Capture) void {
-        capture.record(.pump_clients) catch unreachable;
-    }
-};
+const Capture = @import("OutputCapture.zig");
 
 const test_port: RuntimePort(Capture) = .{
     .schedule_observation = Capture.scheduleObservation,
@@ -222,11 +58,7 @@ fn insertFixturePane(fixture: *test_support.PaneFixture, panes: *PaneStore) !voi
     try std.testing.expect(fixture.pane.beginPtyOutputRead());
 }
 
-const ExpectedPtyMetrics = struct {
-    events: u64,
-    bytes: u64,
-    folded: u64,
-};
+const ExpectedPtyMetrics = @import("ExpectedPtyMetrics.zig");
 
 fn expectPtyMetrics(metrics: *const RuntimeMetrics, expected: ExpectedPtyMetrics) !void {
     const expected_events = if (comptime diagnostics.enabled) expected.events else 0;

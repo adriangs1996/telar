@@ -10,12 +10,12 @@ const tags = @import("tags.zig");
 
 const ClientTag = tags.ClientTag;
 const ServerTag = tags.ServerTag;
-const RequestId = id.RequestId;
-const PaneId = id.PaneId;
-const HistoryScope = types.HistoryScope;
-const HistoryEntry = types.HistoryEntry;
+pub const RequestId = id.RequestId;
+pub const PaneId = id.PaneId;
+pub const HistoryScope = types.HistoryScope;
+pub const HistoryEntry = types.HistoryEntry;
 const HistoryAuthor = types.HistoryAuthor;
-const HistoryAuthorFilter = types.HistoryAuthorFilter;
+pub const HistoryAuthorFilter = types.HistoryAuthorFilter;
 const encodeDerived = codec.encodeDerived;
 const validateRequestId = codec.validateRequestId;
 const validatePaneId = codec.validatePaneId;
@@ -34,196 +34,41 @@ pub const HistoryMatch = enum(u8) {
     fuzzy = 1,
 };
 
-pub const QueryHistory = struct {
-    request_id: RequestId,
-    query: []const u8 = "",
-    scope: HistoryScope = .global,
-    scope_value: []const u8 = "",
-    pane_id: PaneId = .invalid,
-    failed_only: bool = false,
-    author: HistoryAuthorFilter = .all,
-    match: HistoryMatch = .fts,
-    distinct: bool = false,
-    limit: u16 = 20,
-    offset: u32 = 0,
-    snapshot_id: u64 = 0,
-    entry_id: u64 = 0,
-};
+pub const QueryHistory = @import("QueryHistory.zig");
 
-pub const HistoryResults = struct {
-    request_id: RequestId,
-    entries: []const HistoryEntry,
-    snapshot_id: u64 = 0,
-    has_more: bool = false,
-};
+pub const HistoryResults = @import("HistoryResults.zig");
 
-pub const HistoryResultsView = struct {
-    request_id: RequestId,
-    entry_count: u16,
-    encoded_entries: []const u8,
-    snapshot_id: u64 = 0,
-    has_more: bool = false,
+pub const HistoryResultsView = @import("HistoryResultsView.zig");
 
-    pub fn entries(results: HistoryResultsView) HistoryEntryIterator {
-        return .{
-            .decoder = .init(results.encoded_entries),
-            .remaining = results.entry_count,
-        };
-    }
-};
+pub const HistoryEntryIterator = @import("HistoryEntryIterator.zig");
 
-pub const HistoryEntryIterator = struct {
-    decoder: wire.Decoder,
-    remaining: u16,
+pub const ImportHistory = @import("ImportHistory.zig");
 
-    pub fn next(iterator: *HistoryEntryIterator) !?HistoryEntry {
-        if (iterator.remaining == 0) {
-            return null;
-        }
-        iterator.remaining -= 1;
-        return try decodeHistoryEntry(&iterator.decoder);
-    }
-};
+pub const ImportEntry = @import("ImportEntry.zig");
 
-/// One bounded batch of foreign shell history. `source` is the stable
-/// identity of the imported file (e.g. `zsh:/home/u/.zsh_history`); the
-/// runtime derives one deterministic session from it so re-imports are
-/// idempotent, and `base_sequence` orders batches within that session.
-pub const ImportHistory = struct {
-    request_id: RequestId,
-    source: []const u8,
-    base_sequence: u64,
-    entries: []const ImportEntry,
-};
+pub const ImportHistoryView = @import("ImportHistoryView.zig");
 
-pub const ImportEntry = struct {
-    started_at_ms: i64,
-    command: []const u8,
-};
+pub const ImportEntryIterator = @import("ImportEntryIterator.zig");
 
-pub const ImportHistoryView = struct {
-    request_id: RequestId,
-    source: []const u8,
-    base_sequence: u64,
-    entry_count: u16,
-    encoded_entries: []const u8,
+pub const DeleteHistory = @import("DeleteHistory.zig");
 
-    pub fn entries(view: ImportHistoryView) ImportEntryIterator {
-        return .{
-            .decoder = .init(view.encoded_entries),
-            .remaining = view.entry_count,
-        };
-    }
-};
+pub const PruneHistory = @import("PruneHistory.zig");
 
-pub const ImportEntryIterator = struct {
-    decoder: wire.Decoder,
-    remaining: u16,
+pub const HistoryPruned = @import("HistoryPruned.zig");
 
-    pub fn next(iterator: *ImportEntryIterator) !?ImportEntry {
-        if (iterator.remaining == 0) {
-            return null;
-        }
-        iterator.remaining -= 1;
-        const started_at_ms = try iterator.decoder.readInt(i64);
-        const command = try iterator.decoder.readSized16();
-        if (command.len == 0 or command.len > max_import_command_bytes) {
-            return error.InvalidByteString;
-        }
-        return .{ .started_at_ms = started_at_ms, .command = command };
-    }
-};
+pub const ReadHistoryOutput = @import("ReadHistoryOutput.zig");
 
-/// Deletes one exact history entry.
-pub const DeleteHistory = struct {
-    request_id: RequestId,
-    id: u64,
-};
+pub const HistoryOutput = @import("HistoryOutput.zig");
 
-/// Deletes every history entry matching the bounded filters. `before_ms = 0`
-/// means no time bound and an empty `match` means no text filter.
-pub const PruneHistory = struct {
-    request_id: RequestId,
-    scope: HistoryScope = .global,
-    scope_value: []const u8 = "",
-    pane_id: PaneId = .invalid,
-    before_ms: i64 = 0,
-    failed_only: bool = false,
-    match: []const u8 = "",
-};
+pub const HistoryStatsQuery = @import("HistoryStatsQuery.zig");
 
-/// How many entries a delete or prune removed.
-pub const HistoryPruned = struct {
-    request_id: RequestId,
-    removed: u64,
-};
+pub const HistoryStatsTop = @import("HistoryStatsTop.zig");
 
-/// Reads the captured output of one exact history entry.
-pub const ReadHistoryOutput = struct {
-    request_id: RequestId,
-    id: u64,
-};
+pub const HistoryStats = @import("HistoryStats.zig");
 
-/// The bounded raw output tail stored for one history entry; empty when
-/// capture was off or the command printed nothing.
-pub const HistoryOutput = struct {
-    request_id: RequestId,
-    id: u64,
-    truncated: bool,
-    observed_bytes: u64,
-    content: []const u8,
-};
+pub const HistoryStatsView = @import("HistoryStatsView.zig");
 
-/// Aggregates command history in one scope since a timestamp (0 = all).
-pub const HistoryStatsQuery = struct {
-    request_id: RequestId,
-    scope: HistoryScope = .global,
-    scope_value: []const u8 = "",
-    pane_id: PaneId = .invalid,
-    since_ms: i64 = 0,
-};
-
-pub const HistoryStatsTop = struct {
-    count: u64,
-    command: []const u8,
-};
-
-pub const HistoryStats = struct {
-    request_id: RequestId,
-    total: u64,
-    unique: u64,
-    top: []const HistoryStatsTop,
-};
-
-pub const HistoryStatsView = struct {
-    request_id: RequestId,
-    total: u64,
-    unique: u64,
-    top_count: u8,
-    encoded_top: []const u8,
-
-    pub fn top(view: HistoryStatsView) HistoryStatsTopIterator {
-        return .{ .decoder = .init(view.encoded_top), .remaining = view.top_count };
-    }
-};
-
-pub const HistoryStatsTopIterator = struct {
-    decoder: wire.Decoder,
-    remaining: u8,
-
-    pub fn next(iterator: *HistoryStatsTopIterator) !?HistoryStatsTop {
-        if (iterator.remaining == 0) {
-            return null;
-        }
-        iterator.remaining -= 1;
-        const count = try iterator.decoder.readInt(u64);
-        const command = try iterator.decoder.readSized16();
-        if (command.len == 0 or command.len > types.max_history_command_bytes) {
-            return error.InvalidByteString;
-        }
-        return .{ .count = count, .command = command };
-    }
-};
+pub const HistoryStatsTopIterator = @import("HistoryStatsTopIterator.zig");
 
 pub fn encodeQueryHistory(buffer: []u8, message: QueryHistory) ![]const u8 {
     try validateRequestId(message.request_id);
@@ -630,7 +475,7 @@ fn encodeHistoryEntry(encoder: *wire.Encoder, entry: HistoryEntry) !void {
     try encoder.writeByte(@intFromBool(entry.command_truncated));
 }
 
-fn decodeHistoryEntry(decoder: *wire.Decoder) !HistoryEntry {
+pub fn decodeHistoryEntry(decoder: *wire.Decoder) !HistoryEntry {
     const history_id = try decoder.readInt(u64);
     if (history_id == 0) {
         return error.InvalidHistoryId;

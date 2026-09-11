@@ -10,10 +10,7 @@ pub const Authority = union(enum) {
     available: PointerCommand,
 };
 
-pub const ViewOutcome = struct {
-    consume_pane_input: bool,
-    pointer_inside: bool,
-};
+pub const ViewOutcome = @import("ViewOutcome.zig");
 
 pub const Outcome = enum {
     unavailable,
@@ -23,54 +20,18 @@ pub const Outcome = enum {
     pane,
 };
 
-pub const Effects = struct {
-    context: *anyopaque,
-    copy_mode: *const fn (*anyopaque, PointerCommand) anyerror!bool,
-    view: *const fn (*anyopaque, PointerCommand) anyerror!ViewOutcome,
-    link: *const fn (*anyopaque, PointerCommand) anyerror!bool,
-    pane: *const fn (*anyopaque, PointerCommand) anyerror!void,
-};
+pub const Effects = @import("PointerRoutingEffects.zig");
 
-pub const PointerRoutingHandler = struct {
-    effects: Effects,
+pub const PointerRoutingHandler = @import("PointerRoutingHandler.zig");
 
-    /// Gives each pointer event to the first owner that accepts it.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(authority);
-    /// ```
-    pub fn execute(handler: *PointerRoutingHandler, authority: Authority) !Outcome {
-        const command = switch (authority) {
-            .unavailable => return .unavailable,
-            .available => |available| available,
-        };
-
-        if (try handler.effects.copy_mode(handler.effects.context, command)) {
-            return .copy_mode;
-        }
-
-        const view = try handler.effects.view(handler.effects.context, command);
-        if (view.consume_pane_input or !view.pointer_inside) {
-            return .view;
-        }
-
-        if (try handler.effects.link(handler.effects.context, command)) {
-            return .link;
-        }
-
-        try handler.effects.pane(handler.effects.context, command);
-        return .pane;
-    }
-};
-
-const Event = enum {
+pub const Event = enum {
     copy_mode,
     view,
     link,
     pane,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     copy_mode,
     view,
@@ -78,78 +39,7 @@ const Failure = enum {
     pane,
 };
 
-const Capture = struct {
-    events: [4]Event = undefined,
-    event_count: usize = 0,
-    copy_consumed: bool = false,
-    link_consumed: bool = false,
-    view_outcome: ViewOutcome = .{
-        .consume_pane_input = false,
-        .pointer_inside = true,
-    },
-    failure: Failure = .none,
-
-    fn port(capture: *Capture) Effects {
-        return .{
-            .context = capture,
-            .copy_mode = copyMode,
-            .view = view,
-            .link = link,
-            .pane = pane,
-        };
-    }
-
-    fn record(capture: *Capture, event: Event) void {
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn copyMode(raw_context: *anyopaque, command: PointerCommand) !bool {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        _ = command;
-        capture.record(.copy_mode);
-
-        if (capture.failure == .copy_mode) {
-            return error.CopyModePointerFailed;
-        }
-
-        return capture.copy_consumed;
-    }
-
-    fn view(raw_context: *anyopaque, command: PointerCommand) !ViewOutcome {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        _ = command;
-        capture.record(.view);
-
-        if (capture.failure == .view) {
-            return error.ViewPointerFailed;
-        }
-
-        return capture.view_outcome;
-    }
-
-    fn pane(raw_context: *anyopaque, command: PointerCommand) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        _ = command;
-        capture.record(.pane);
-
-        if (capture.failure == .pane) {
-            return error.PanePointerFailed;
-        }
-    }
-
-    fn link(raw_context: *anyopaque, command: PointerCommand) !bool {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        _ = command;
-        capture.record(.link);
-
-        if (capture.failure == .link) {
-            return error.LinkPointerFailed;
-        }
-
-        return capture.link_consumed;
-    }
-};
+const Capture = @import("PointerRoutingCapture.zig");
 
 fn testingCommand() PointerCommand {
     return .{

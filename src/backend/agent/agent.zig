@@ -6,7 +6,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const description = @import("description.zig");
-const evidence_mod = @import("evidence.zig");
+const evidence_mod = @import("evidence_support.zig");
 const pane_mod = @import("../pane/root.zig");
 const providers = @import("providers/root.zig");
 const proxy_state_mod = @import("proxy_state.zig");
@@ -23,13 +23,9 @@ const DescriptionFinished = types.DescriptionFinished;
 const ProxyState = proxy_state_mod.ProxyState;
 const ReportObservation = types.ReportObservation;
 const ScreenObservation = types.ScreenObservation;
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const ProjectionContext = struct {
-    sequence: u64,
-    now_ms: i64,
-    can_queue_description: bool,
-};
+pub const ProjectionContext = @import("ProjectionContext.zig");
 
 pub const ProjectionResult = enum {
     no_evidence,
@@ -43,7 +39,7 @@ pub const DescriptionJobResult = union(enum) {
     started: description.Job,
 };
 
-const TitlePhase = enum {
+pub const TitlePhase = enum {
     waiting_query,
     waiting_work,
     queued,
@@ -52,22 +48,7 @@ const TitlePhase = enum {
     failed,
 };
 
-const Title = struct {
-    bytes: [schema.max_agent_session_title_bytes]u8 = undefined,
-    len: u8 = 0,
-    source: schema.AgentTitleSource = .telar,
-    state: schema.AgentTitleState = .placeholder,
-    phase: TitlePhase = .waiting_query,
-    capture: description.Capture = .{},
-
-    fn slice(title: *const Title) []const u8 {
-        return title.bytes[0..title.len];
-    }
-
-    fn clearSensitive(title: *Title) void {
-        title.capture.clear();
-    }
-};
+const Title = @import("Title.zig");
 
 key: PaneKey,
 process_id: u32,

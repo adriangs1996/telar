@@ -3,20 +3,11 @@ const std = @import("std");
 const core = @import("telar-core");
 const pane_mod = @import("../../pane/root.zig");
 const history = @import("../../history/root.zig");
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const Pending = struct {
-    request_id: schema.RequestId,
-    pane: pane_mod.PaneKey,
-    cursor: pane_mod.TextSearch,
-    deadline_ns: i128,
-};
+pub const Pending = @import("Pending.zig");
 
-pub const Wake = struct {
-    client: history.model.ClientKey,
-    request_id: schema.RequestId,
-    result: anyerror!void = {},
-};
+pub const Wake = @import("Wake.zig");
 
 /// Starts a search, replacing only this client's previous search.
 /// Example: `try start(application, session, request);`.

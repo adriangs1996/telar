@@ -6,7 +6,7 @@ const input_application = @import("telar-client").application.input;
 const pane_viewports = @import("../panes/pane_viewports.zig");
 const client_model = @import("telar-client").model;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const diagnostics = core.diagnostics;
 const pane_input = input_application.pane_input;
 const pane_paste = input_application.pane_paste;

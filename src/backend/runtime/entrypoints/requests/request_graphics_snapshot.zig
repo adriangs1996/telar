@@ -6,64 +6,12 @@ const core = @import("telar-core");
 const request_graphics_snapshot_commands = @import("../../application/commands/request_graphics_snapshot.zig");
 const telemetry_mod = @import("../../observability/root.zig").telemetry;
 
-const schema = core.schema;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+pub const schema = core.schema;
+pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 
-/// Builds a statically dispatched controller for graphics recovery requests.
-///
-/// ```zig
-/// const GraphicsSnapshotController = Controller(*request_graphics_snapshot_commands.RequestGraphicsSnapshotHandler);
-/// var controller = GraphicsSnapshotController.init(&metrics, &handler);
-/// ```
-pub fn Controller(comptime Executor: type) type {
-    return struct {
-        const Self = @This();
+pub const Controller = @import("GenericRequestGraphicsSnapshotController.zig").Type;
 
-        metrics: *RuntimeMetrics,
-        executor: Executor,
-
-        /// Creates one controller bound to the requesting client and handler.
-        ///
-        /// ```zig
-        /// var controller = GraphicsSnapshotController.init(&metrics, &handler);
-        /// ```
-        pub fn init(metrics: *RuntimeMetrics, executor: Executor) Self {
-            return .{ .metrics = metrics, .executor = executor };
-        }
-
-        /// Maps the wire request to an unconditional graphics recovery command
-        /// and counts only a pane outside this client's attachments as stale.
-        ///
-        /// ```zig
-        /// try controller.requestGraphicsSnapshot(request);
-        /// ```
-        pub inline fn requestGraphicsSnapshot(controller: *Self, request: schema.RequestGraphicsSnapshot) !void {
-            const result = try controller.executor.execute(.{ .pane_id = request.pane_id });
-
-            if (result == .pane_not_attached) {
-                controller.metrics.stale_client_messages += 1;
-            }
-        }
-    };
-}
-
-const StubExecutor = struct {
-    result: request_graphics_snapshot_commands.RequestGraphicsSnapshotResult = .requested,
-    failure: ?anyerror = null,
-    call_count: usize = 0,
-    command: ?request_graphics_snapshot_commands.RequestGraphicsSnapshot = null,
-
-    fn execute(stub: *StubExecutor, command: request_graphics_snapshot_commands.RequestGraphicsSnapshot) !request_graphics_snapshot_commands.RequestGraphicsSnapshotResult {
-        stub.call_count += 1;
-        stub.command = command;
-
-        if (stub.failure) |failure| {
-            return failure;
-        }
-
-        return stub.result;
-    }
-};
+const StubExecutor = @import("RequestGraphicsSnapshotStubExecutor.zig");
 
 const TestController = Controller(*StubExecutor);
 

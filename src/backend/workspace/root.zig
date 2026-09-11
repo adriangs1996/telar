@@ -5,9 +5,9 @@
 
 const commands = @import("commands.zig");
 const events = @import("events.zig");
-const repository = @import("repository.zig");
-const state = @import("state.zig");
-const workspace = @import("workspace.zig");
+const repository = @import("repository_support.zig");
+const state = @import("state_support.zig");
+const workspace = @import("workspace_support.zig");
 
 pub const GitProbe = @import("git_observation.zig").Probe;
 pub const State = state.State;
@@ -35,7 +35,7 @@ pub const removeTab = commands.removeTab;
 test {
     _ = @import("commands.zig");
     _ = @import("events.zig");
-    _ = @import("repository.zig");
-    _ = @import("state.zig");
-    _ = @import("workspace.zig");
+    _ = @import("repository_support.zig");
+    _ = @import("state_support.zig");
+    _ = @import("workspace_support.zig");
 }

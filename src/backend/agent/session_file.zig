@@ -9,185 +9,22 @@ const core = @import("telar-core");
 const pane_mod = @import("../pane/root.zig");
 const types = @import("types.zig");
 
-const schema = core.schema;
-const PaneKey = pane_mod.PaneKey;
-const SessionReference = types.SessionReference;
+pub const schema = core.schema;
+pub const PaneKey = pane_mod.PaneKey;
+pub const SessionReference = types.SessionReference;
 
 pub const max_path_bytes = schema.max_agent_session_file_bytes;
 pub const Kind = schema.AgentSessionFileKind;
 
-/// One agent's session file and the probe state that belongs to it.
-pub const Watch = struct {
-    key: PaneKey,
-    session: SessionReference,
-    kind: Kind,
-    path: [max_path_bytes]u8 = undefined,
-    path_len: u16 = 0,
-    /// Transcript scan position. Null until the first probe seeds it at the
-    /// end of the file, so only names given after the watch began are read.
-    offset: ?u64 = null,
-    /// The last name handed to the agent, so a state database read every
-    /// second reports only changes.
-    name: [schema.max_agent_session_title_bytes]u8 = undefined,
-    name_len: u8 = 0,
-    name_known: bool = false,
-    checked_at_ms: i64 = 0,
-    pending: bool = false,
+pub const Watch = @import("Watch.zig");
 
-    pub fn pathSlice(watch: *const Watch) []const u8 {
-        return watch.path[0..watch.path_len];
-    }
+pub const Completion = @import("Completion.zig");
 
-    pub fn nameSlice(watch: *const Watch) []const u8 {
-        return watch.name[0..watch.name_len];
-    }
+pub const Registration = @import("Registration.zig");
 
-    /// Records a name as handed over and reports whether it differs from the
-    /// previous one.
-    ///
-    /// ```zig
-    /// if (watch.remember(title)) apply(title);
-    /// ```
-    pub fn remember(watch: *Watch, value: []const u8) bool {
-        if (watch.name_known and std.mem.eql(u8, watch.nameSlice(), value)) {
-            return false;
-        }
+pub const Watches = @import("Watches.zig");
 
-        @memcpy(watch.name[0..value.len], value);
-        watch.name_len = @intCast(value.len);
-        watch.name_known = true;
-        return true;
-    }
-};
-
-/// What one probe found: the next transcript offset and, when a name was
-/// read, the current one. An empty name clears the title.
-pub const Completion = struct {
-    key: PaneKey,
-    offset: ?u64,
-    title: [schema.max_agent_session_title_bytes]u8 = undefined,
-    title_len: u8 = 0,
-    has_title: bool = false,
-
-    pub fn titleSlice(completion: *const Completion) []const u8 {
-        return completion.title[0..completion.title_len];
-    }
-
-    pub fn setTitle(completion: *Completion, value: []const u8) void {
-        @memcpy(completion.title[0..value.len], value);
-        completion.title_len = @intCast(value.len);
-        completion.has_title = true;
-    }
-};
-
-/// The session file one agent's hooks point at.
-pub const Registration = struct {
-    key: PaneKey,
-    session: SessionReference,
-    kind: Kind,
-    path: []const u8,
-};
-
-pub const Watches = struct {
-    slots: [types.max_records]?Watch = @splat(null),
-
-    /// Registers or refreshes the session file of one pane generation. A
-    /// changed path, kind or session restarts the watch; the same ones keep
-    /// their progress. Returns `false` when every slot is taken or the path
-    /// exceeds the bound.
-    ///
-    /// ```zig
-    /// _ = watches.put(.{ .key = pane.key(), .session = reference, .kind = .claude_transcript, .path = path });
-    /// ```
-    pub fn put(watches: *Watches, registration: Registration) bool {
-        const path = registration.path;
-        if (path.len == 0 or path.len > max_path_bytes) {
-            return false;
-        }
-
-        if (watches.find(registration.key)) |watch| {
-            if (watch.kind == registration.kind and std.mem.eql(u8, watch.pathSlice(), path) and
-                std.mem.eql(u8, watch.session.slice(), registration.session.slice()))
-            {
-                return true;
-            }
-
-            watch.* = fresh(registration);
-            return true;
-        }
-
-        for (&watches.slots) |*slot| {
-            if (slot.* != null) {
-                continue;
-            }
-
-            slot.* = fresh(registration);
-            return true;
-        }
-
-        return false;
-    }
-
-    pub fn find(watches: *Watches, key: PaneKey) ?*Watch {
-        for (&watches.slots) |*slot| {
-            if (slot.*) |*watch| {
-                if (watch.key.id == key.id and watch.key.generation == key.generation) {
-                    return watch;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    pub fn remove(watches: *Watches, key: PaneKey) bool {
-        for (&watches.slots) |*slot| {
-            if (slot.*) |watch| {
-                if (watch.key.id == key.id and watch.key.generation == key.generation) {
-                    slot.* = null;
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    /// The due watch whose last probe is the oldest, or null when none is
-    /// due. A pending watch is never returned twice.
-    ///
-    /// ```zig
-    /// const watch = watches.stalest(now_ms, 1_000) orelse return;
-    /// ```
-    pub fn stalest(watches: *Watches, now_ms: i64, interval_ms: i64) ?*Watch {
-        var chosen: ?*Watch = null;
-        for (&watches.slots) |*slot| {
-            const watch = if (slot.*) |*value| value else continue;
-            if (watch.pending or now_ms - watch.checked_at_ms < interval_ms) {
-                continue;
-            }
-
-            if (chosen == null or watch.checked_at_ms < chosen.?.checked_at_ms) {
-                chosen = watch;
-            }
-        }
-
-        return chosen;
-    }
-
-    pub fn count(watches: *const Watches) usize {
-        var total: usize = 0;
-        for (&watches.slots) |slot| {
-            if (slot != null) {
-                total += 1;
-            }
-        }
-
-        return total;
-    }
-};
-
-fn fresh(registration: Registration) Watch {
+pub fn fresh(registration: Registration) Watch {
     var watch: Watch = .{ .key = registration.key, .session = registration.session, .kind = registration.kind };
     @memcpy(watch.path[0..registration.path.len], registration.path);
     watch.path_len = @intCast(registration.path.len);

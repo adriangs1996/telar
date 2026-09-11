@@ -1,0 +1,26 @@
+const PluginWorkerOptions = @This();
+const frontend = @import("telar-frontend");
+const source_namespace = @import("plugin_worker.zig");
+const std = @import("std");
+entry: [*:0]const u8,
+action: [*:0]const u8,
+context: frontend.config.CallbackContext,
+
+/// Example: `const options = try PluginWorkerOptions.parse(args);`.
+pub fn parse(args: []const [*:0]const u8) !PluginWorkerOptions {
+    if (args.len != 7) {
+        return error.InvalidPluginWorkerArguments;
+    }
+
+    return .{
+        .entry = args[0],
+        .action = args[1],
+        .context = .{
+            .sidebar_visible = try source_namespace.parseWorkerBool(args[2]),
+            .tab_count = try std.fmt.parseUnsigned(u16, std.mem.span(args[3]), 10),
+            .active_tab_index = try std.fmt.parseUnsigned(u16, std.mem.span(args[4]), 10),
+            .pane_count = try std.fmt.parseUnsigned(u16, std.mem.span(args[5]), 10),
+            .focused_pane_id = try std.fmt.parseUnsigned(u64, std.mem.span(args[6]), 10),
+        },
+    };
+}

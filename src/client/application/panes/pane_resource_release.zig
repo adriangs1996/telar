@@ -5,63 +5,15 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const ReleasedResources = struct {
-    copy_mode: bool,
-    pane_paste: bool,
-    reported_focus: bool,
-};
+pub const ReleasedResources = @import("ReleasedResources.zig");
 
-pub const Effects = struct {
-    context: *anyopaque,
-    clear_graphics: *const fn (*anyopaque, schema.PaneId) void,
-};
+pub const Effects = @import("PaneResourceReleaseEffects.zig");
 
-pub const ReleasePaneResourcesHandler = struct {
-    model: *client_model.Model,
-    effects: Effects,
+pub const ReleasePaneResourcesHandler = @import("ReleasePaneResourcesHandler.zig");
 
-    /// Releases exact model-owned authorities before clearing physical pane
-    /// graphics. Repeated or unknown identities still clear stale graphics.
-    ///
-    /// ```zig
-    /// const released = handler.execute(pane_id);
-    /// ```
-    pub fn execute(handler: *ReleasePaneResourcesHandler, pane_id: schema.PaneId) ReleasedResources {
-        const released: ReleasedResources = .{
-            .copy_mode = handler.model.releaseCopyMode(pane_id),
-            .pane_paste = handler.model.releasePanePaste(pane_id),
-            .reported_focus = handler.model.releaseReportedPaneFocus(pane_id),
-        };
-
-        handler.effects.clear_graphics(handler.effects.context, pane_id);
-
-        return released;
-    }
-};
-
-const EffectCapture = struct {
-    model: ?*const client_model.Model = null,
-    calls: usize = 0,
-    pane_id: ?schema.PaneId = null,
-    observed_released: bool = false,
-
-    fn effects(capture: *EffectCapture) Effects {
-        return .{ .context = capture, .clear_graphics = clearGraphics };
-    }
-
-    fn clearGraphics(context: *anyopaque, pane_id: schema.PaneId) void {
-        const capture: *EffectCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.pane_id = pane_id;
-
-        if (capture.model) |model| {
-            capture.observed_released = !model.copyModeActive() and
-                !model.panePasteActive() and model.reportedPaneFocus() == null;
-        }
-    }
-};
+const EffectCapture = @import("PaneResourceReleaseEffectCapture.zig");
 
 test "ReleasePaneResourcesHandler retires exact pane authorities before graphics" {
     var model = client_model.Model.init(std.testing.allocator, true);

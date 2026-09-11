@@ -9,8 +9,8 @@ const std = @import("std");
 const core = @import("telar-core");
 const workspace = @import("../../workspace/root.zig");
 
-const Io = std.Io;
-const schema = core.schema;
+pub const Io = std.Io;
+pub const schema = core.schema;
 
 pub const probe_interval_ms: i64 = 5_000;
 pub const max_status_bytes = 64 * 1024;
@@ -19,22 +19,9 @@ const status_timeout: Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(2) },
 };
 
-pub const Job = struct {
-    io: Io,
-    request: workspace.GitProbe,
-};
+pub const Job = @import("Job.zig");
 
-pub const Completion = struct {
-    workspace: schema.WorkspaceId,
-    present: bool = false,
-    branch: [schema.max_git_branch_bytes]u8 = undefined,
-    branch_len: u8 = 0,
-    dirty: bool = false,
-
-    pub fn branchSlice(completion: *const Completion) []const u8 {
-        return completion.branch[0..completion.branch_len];
-    }
-};
+pub const Completion = @import("Completion.zig");
 
 /// Runs on a worker: never touches runtime state.
 ///

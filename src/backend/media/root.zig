@@ -24,8 +24,8 @@ pub const PaneMediaAllocator = @import("allocator.zig").PaneMediaAllocator;
 pub const Ingestion = @import("ingestion.zig").State;
 pub const Processor = @import("ingestion.zig").Processor;
 
-const Io = std.Io;
-const schema = core.schema;
+pub const Io = std.Io;
+pub const schema = core.schema;
 
 pub const batch_bytes = 4 * 16 * 1024;
 pub const batch_events = 64;
@@ -43,425 +43,43 @@ pub const image_loading_limits: vt.kitty.graphics.LoadingImage.Limits = .{
 /// Where a complete frame's pixels live before the runtime copies them.
 pub const Medium = enum { shared, file };
 
-pub const Stats = struct {
-    output_bytes: u64 = 0,
-    /// Shared frames folded because a newer frame of the same placement was
-    /// available in the batch: latest-wins working as designed.
-    discarded_frames: u64 = 0,
-    /// Shared frames dropped because no frame of their placement passed the
-    /// availability probe: the producer's object was gone or over the limit.
-    /// Sustained growth here means the pane shows a stale image.
-    unavailable_frames: u64 = 0,
-    /// Shared frames actually fed to the media terminal. Together with the
-    /// two counters above this partitions every frame, so `forwarded` moving
-    /// while the graphics revision stays still isolates a silent load
-    /// failure inside the emulator.
-    forwarded_frames: u64 = 0,
-    /// Wall time the media actor spent on this batch, including every shared
-    /// frame it mapped, copied into pane storage and unlinked.
-    elapsed_ns: u64 = 0,
-    /// Generations the actor froze into runtime-owned shared objects for
-    /// local clients to adopt without another copy.
-    prepared_frames: u64 = 0,
-    /// Shared frames copied once, from the child's object straight into the
-    /// runtime-owned object that then serves as emulator storage.
-    direct_frames: u64 = 0,
-    /// The subset of `direct_frames` whose pixels came from a child file.
-    file_frames: u64 = 0,
-    reset: bool = false,
-    failed: bool = false,
-};
+pub const Stats = @import("Stats.zig");
 
-pub const Initialization = struct {
-    io: Io,
-    allocator: std.mem.Allocator,
-    size: schema.TerminalSize,
-    storage_limit: usize,
-    payload_limit: usize,
-    write_pty: ?*const fn (*vt.TerminalStream.Handler, [:0]const u8) void,
-};
+pub const Initialization = @import("Initialization.zig");
 
-pub const Processing = struct {
-    current_size: schema.TerminalSize,
-    stats: *Stats,
-};
+pub const Processing = @import("Processing.zig");
 
-pub const PlacementSource = struct {
-    key: vt.kitty.graphics.ImageStorage.PlacementKey,
-    placement: vt.kitty.graphics.ImageStorage.Placement,
-    image: vt.kitty.graphics.Image,
-};
+pub const PlacementSource = @import("PlacementSource.zig");
 
 const atomic_shared_prefix = "\x1b[?2026h\x1b[H\x1b_G";
 const atomic_shared_suffix = "\x1b\\\x1b[?2026l";
 
-const SharedFrameKey = struct {
-    image_id: u32,
-    placement_id: u32,
-};
+const SharedFrameKey = @import("SharedFrameKey.zig");
 
-const SharedFrame = struct {
-    start: usize,
-    end: usize,
-    /// The KGP command inside the envelope, APC introducer to terminator.
-    apc_start: usize,
-    apc_end: usize,
-    payload_start: usize,
-    payload_end: usize,
-    key: SharedFrameKey,
-    byte_len: usize,
-    format: core.graphics.Format,
-    width: u32,
-    height: u32,
-    medium: Medium,
-};
+const SharedFrame = @import("SharedFrame.zig");
 
-/// One complete shared-memory frame the filter selected, handed to a sink
-/// that can load it without the emulator's parser. `bytes` spans the whole
-/// synchronized envelope; the APC command sits at `apc_start..apc_end`.
-///
-/// ```zig
-/// pub fn observeSharedFrame(sink: *Sink, frame: SharedFrameView) bool
-/// ```
-pub const SharedFrameView = struct {
-    bytes: []const u8,
-    apc_start: usize,
-    apc_end: usize,
-    encoded_name: []const u8,
-    image_id: u32,
-    placement_id: u32,
-    format: core.graphics.Format,
-    width: u32,
-    height: u32,
-    byte_len: usize,
-    medium: Medium,
-};
+pub const SharedFrameView = @import("SharedFrameView.zig");
 
-/// A `a=q,t=f` capability query the pane answers itself, since the emulator
-/// never opens child paths. `bytes` is the whole APC command.
-///
-/// ```zig
-/// pub fn observeFileQuery(sink: *Sink, query: FileQueryView) bool
-/// ```
-pub const FileQueryView = struct {
-    bytes: []const u8,
-    encoded_path: []const u8,
-    image_id: u32,
-    byte_len: usize,
-};
+pub const FileQueryView = @import("FileQueryView.zig");
 
-const SelectedSharedFrame = struct {
-    key: SharedFrameKey,
-    recent_starts: [8]usize = undefined,
-    recent_count: u4,
-    start: ?usize = null,
-};
+const SelectedSharedFrame = @import("SelectedSharedFrame.zig");
 
-const Event = union(enum) {
+pub const Event = union(enum) {
     output: struct { offset: u32, len: u32 },
     resize: schema.TerminalSize,
 };
 
-const Batch = struct {
-    bytes: [batch_bytes]u8 = undefined,
-    len: usize = 0,
-    events: [batch_events]Event = undefined,
-    event_count: usize = 0,
-    reset_before: bool = false,
+const Batch = @import("Batch.zig");
 
-    fn reset(batch: *Batch) void {
-        batch.len = 0;
-        batch.event_count = 0;
-        batch.reset_before = false;
-    }
+pub const Pipeline = @import("Pipeline.zig");
 
-    fn pushOutput(batch: *Batch, bytes: []const u8) bool {
-        if (bytes.len > batch.bytes.len - batch.len) {
-            return false;
-        }
-        const offset = batch.len;
-        @memcpy(batch.bytes[offset..][0..bytes.len], bytes);
-        batch.len += bytes.len;
+pub const FilterStats = @import("FilterStats.zig");
 
-        // Output slices are one byte stream. Merge adjacent PTY reads so the
-        // event bound measures output/resize ordering rather than scheduler
-        // granularity; TerminalStream is required to be slice-independent.
-        if (batch.event_count != 0) {
-            switch (batch.events[batch.event_count - 1]) {
-                .output => |output| {
-                    if (@as(usize, output.offset) + output.len == offset) {
-                        batch.events[batch.event_count - 1].output.len += @intCast(bytes.len);
-                        return true;
-                    }
-                },
-                .resize => {},
-            }
-        }
-        if (batch.event_count == batch.events.len) {
-            batch.len = offset;
-            return false;
-        }
-        batch.events[batch.event_count] = .{ .output = .{
-            .offset = @intCast(offset),
-            .len = @intCast(bytes.len),
-        } };
-        batch.event_count += 1;
-        return true;
-    }
+const FilterInput = @import("FilterInput.zig");
 
-    fn pushResize(batch: *Batch, size: schema.TerminalSize) bool {
-        if (batch.event_count == batch.events.len) {
-            return false;
-        }
-        batch.events[batch.event_count] = .{ .resize = size };
-        batch.event_count += 1;
-        return true;
-    }
-};
+const FrameResource = @import("FrameResource.zig");
 
-pub const Pipeline = struct {
-    terminal: vt.Terminal,
-    stream: vt.TerminalStream,
-    allocator: std.mem.Allocator,
-    write_pty: ?*const fn (*vt.TerminalStream.Handler, [:0]const u8) void,
-    payload_limit: usize,
-    storage_limit: usize,
-    batches: [2]Batch = .{ .{}, .{} },
-    /// Batch bytes with answered file queries removed, when any were.
-    scratch: [batch_bytes]u8 = undefined,
-    active: u1 = 0,
-    worker: ?u1 = null,
-    enabled: bool,
-    dropped_events: u64 = 0,
-    dropped_bytes: u64 = 0,
-    queue_event_high_water: usize = 0,
-    queue_byte_high_water: usize = 0,
-    resets: u64 = 0,
-    failures: u64 = 0,
-
-    /// Initializes the bounded graphics-only terminal for one pane.
-    ///
-    /// ```zig
-    /// try pipeline.init(.{ .io = io, .allocator = allocator, .size = size, .storage_limit = storage_limit, .payload_limit = payload_limit, .write_pty = write_pty });
-    /// ```
-    pub fn init(pipeline: *Pipeline, initialization: Initialization) !void {
-        png.install();
-
-        const io = initialization.io;
-        const allocator = initialization.allocator;
-        const size = initialization.size;
-        const storage_limit = initialization.storage_limit;
-        const payload_limit = initialization.payload_limit;
-        const write_pty = initialization.write_pty;
-
-        pipeline.allocator = allocator;
-        pipeline.write_pty = write_pty;
-        pipeline.payload_limit = payload_limit;
-        pipeline.storage_limit = storage_limit;
-        pipeline.terminal = try .init(io, allocator, .{
-            .cols = size.cols,
-            .rows = size.rows,
-            .kitty_image_storage_limit = storage_limit,
-            .kitty_image_loading_limits = image_loading_limits,
-        });
-        errdefer pipeline.terminal.deinit(allocator);
-        pipeline.stream = pipeline.newStream();
-        errdefer pipeline.stream.deinit();
-        try pipeline.stream.handler.resize(vtResize(size));
-        pipeline.batches = .{ .{}, .{} };
-        pipeline.active = 0;
-        pipeline.worker = null;
-        pipeline.enabled = true;
-        pipeline.dropped_events = 0;
-        pipeline.dropped_bytes = 0;
-        pipeline.queue_event_high_water = 0;
-        pipeline.queue_byte_high_water = 0;
-        pipeline.resets = 0;
-        pipeline.failures = 0;
-    }
-
-    pub fn deinit(pipeline: *Pipeline) void {
-        if (pipeline.worker) |index| {
-            pipeline.batches[index].reset();
-        }
-        pipeline.worker = null;
-        if (pipeline.enabled) {
-            pipeline.stream.deinit();
-        }
-        pipeline.terminal.deinit(pipeline.allocator);
-    }
-
-    pub fn queueOutput(pipeline: *Pipeline, bytes: []const u8) void {
-        if (bytes.len > batch_bytes) {
-            pipeline.dropActive(bytes.len, 1);
-            return;
-        }
-        var batch = &pipeline.batches[pipeline.active];
-        if (!batch.pushOutput(bytes)) {
-            pipeline.dropActive(bytes.len, 1);
-            batch = &pipeline.batches[pipeline.active];
-            _ = batch.pushOutput(bytes);
-        }
-        pipeline.observeQueueDepth();
-    }
-
-    pub fn queueResize(pipeline: *Pipeline, size: schema.TerminalSize) void {
-        var batch = &pipeline.batches[pipeline.active];
-        if (!batch.pushResize(size)) {
-            pipeline.dropActive(0, 1);
-            batch = &pipeline.batches[pipeline.active];
-            _ = batch.pushResize(size);
-        }
-        pipeline.observeQueueDepth();
-    }
-
-    pub fn hasPending(pipeline: *const Pipeline) bool {
-        return pipeline.worker == null and pipeline.batches[pipeline.active].event_count != 0;
-    }
-
-    pub fn seal(pipeline: *Pipeline) bool {
-        if (!pipeline.hasPending()) {
-            return false;
-        }
-        const sealed = pipeline.active;
-        pipeline.active ^= 1;
-        std.debug.assert(pipeline.batches[pipeline.active].event_count == 0);
-        pipeline.worker = sealed;
-        return true;
-    }
-
-    /// Reports whether ingestion state must be reset before replaying the seal.
-    /// Example: `if (pipeline.sealedRequiresReset()) resetIngestion();`.
-    pub fn sealedRequiresReset(pipeline: *const Pipeline) bool {
-        return pipeline.batches[pipeline.worker.?].reset_before;
-    }
-
-    pub fn finishSealed(pipeline: *Pipeline) void {
-        const index = pipeline.worker orelse unreachable;
-        pipeline.batches[index].reset();
-        pipeline.worker = null;
-    }
-
-    /// Replays one sealed media batch through a sink exposing
-    /// `observe([]const u8)` after folding obsolete shared-memory frames.
-    ///
-    /// ```zig
-    /// pipeline.processSealed(.{ .current_size = size, .stats = stats }, &sink);
-    /// ```
-    pub fn processSealed(pipeline: *Pipeline, processing: Processing, sink: anytype) void {
-        const current_size = processing.current_size;
-        const stats = processing.stats;
-
-        const batch = &pipeline.batches[pipeline.worker orelse return];
-        if (batch.reset_before or !pipeline.enabled) {
-            pipeline.resetState(current_size) catch {
-                pipeline.failures +|= 1;
-                stats.failed = true;
-                return;
-            };
-            pipeline.resets +|= 1;
-            stats.reset = true;
-        }
-
-        for (batch.events[0..batch.event_count]) |event| switch (event) {
-            .output => |output| {
-                const start: usize = output.offset;
-                const bytes = batch.bytes[start..][0..output.len];
-                const remaining = stripFileQueries(bytes, &pipeline.scratch, sink);
-                const filtered = filterAtomicSharedFrames(.{
-                    .bytes = remaining,
-                    .storage_limit = pipeline.storage_limit,
-                }, sink, SharedMemoryAvailability{});
-                stats.discarded_frames +|= filtered.discarded;
-                stats.unavailable_frames +|= filtered.unavailable;
-                stats.forwarded_frames +|= filtered.forwarded;
-                stats.direct_frames +|= filtered.direct;
-                stats.file_frames +|= filtered.file;
-                stats.output_bytes +|= bytes.len;
-            },
-            .resize => |size| pipeline.stream.handler.resize(vtResize(size)) catch {
-                pipeline.failures +|= 1;
-                stats.failed = true;
-            },
-        };
-    }
-
-    fn dropActive(pipeline: *Pipeline, incoming_bytes: usize, incoming_events: usize) void {
-        const batch = &pipeline.batches[pipeline.active];
-        pipeline.dropped_events +|= batch.event_count + incoming_events;
-        pipeline.dropped_bytes +|= batch.len + incoming_bytes;
-        batch.reset();
-        batch.reset_before = true;
-    }
-
-    fn observeQueueDepth(pipeline: *Pipeline) void {
-        var events: usize = 0;
-        var bytes: usize = 0;
-        for (&pipeline.batches) |*batch| {
-            events += batch.event_count;
-            bytes += batch.len;
-        }
-        pipeline.queue_event_high_water = @max(pipeline.queue_event_high_water, events);
-        pipeline.queue_byte_high_water = @max(pipeline.queue_byte_high_water, bytes);
-    }
-
-    fn resetState(pipeline: *Pipeline, size: schema.TerminalSize) !void {
-        if (pipeline.enabled) {
-            pipeline.stream.deinit();
-        }
-        pipeline.enabled = false;
-        pipeline.terminal.fullReset();
-        pipeline.stream = pipeline.newStream();
-        errdefer pipeline.stream.deinit();
-        try pipeline.stream.handler.resize(vtResize(size));
-        pipeline.enabled = true;
-    }
-
-    fn newStream(pipeline: *Pipeline) vt.TerminalStream {
-        var handler = pipeline.terminal.vtHandler();
-        handler.apc_handler.max_bytes.put(.kitty, pipeline.payload_limit);
-        handler.apc_handler.enable(.glyph, false);
-        handler.effects.write_pty = pipeline.write_pty;
-        return .init(.{ .allocator = pipeline.allocator, .handler = handler });
-    }
-};
-
-/// Terminal-browser publishes complete shared-memory replacements inside one
-/// synchronized-output envelope. A busy media actor only needs the newest
-/// replacement for each placement; mapping older frames would spend the pane
-/// quota and then overwrite the result. Bytes outside this exact shape remain
-/// untouched and therefore keep Ghostty as the sole terminal emulator.
-pub const FilterStats = struct {
-    discarded: u64 = 0,
-    unavailable: u64 = 0,
-    forwarded: u64 = 0,
-    /// The subset of `forwarded` the sink loaded without the parser.
-    direct: u64 = 0,
-    /// The subset of `direct` whose pixels came from a child file.
-    file: u64 = 0,
-};
-
-const FilterInput = struct {
-    bytes: []const u8,
-    storage_limit: usize,
-};
-
-const FrameResource = struct {
-    encoded_name: []const u8,
-    byte_len: usize,
-    limit: usize,
-    medium: Medium,
-};
-
-const SharedMemoryAvailability = struct {
-    pub fn available(_: SharedMemoryAvailability, resource: FrameResource) bool {
-        return switch (resource.medium) {
-            .shared => sharedFrameAvailable(resource),
-            .file => resource.byte_len <= resource.limit and
-                shared_transfer.validateChildFile(resource.encoded_name, resource.byte_len),
-        };
-    }
-};
+const SharedMemoryAvailability = @import("SharedMemoryAvailability.zig");
 
 /// Removes `a=q,t=f` queries the sink answered from `bytes`, so the emulator
 /// never sees a file query it would refuse. Returns `bytes` untouched when
@@ -470,7 +88,7 @@ const SharedMemoryAvailability = struct {
 /// ```zig
 /// const remaining = stripFileQueries(bytes, &pipeline.scratch, sink);
 /// ```
-fn stripFileQueries(bytes: []const u8, scratch: []u8, sink: anytype) []const u8 {
+pub fn stripFileQueries(bytes: []const u8, scratch: []u8, sink: anytype) []const u8 {
     var kept: usize = 0;
     var copied_until: usize = 0;
     var search_from: usize = 0;
@@ -508,10 +126,7 @@ fn stripFileQueries(bytes: []const u8, scratch: []u8, sink: anytype) []const u8 
     return scratch[0 .. kept + tail.len];
 }
 
-const FileQueryControl = struct {
-    image_id: u32,
-    byte_len: usize,
-};
+const FileQueryControl = @import("FileQueryControl.zig");
 
 fn parseFileQueryControl(control: []const u8) ?FileQueryControl {
     var image_id: ?u32 = null;
@@ -572,7 +187,7 @@ fn parseFileQueryControl(control: []const u8) ?FileQueryControl {
     };
 }
 
-fn filterAtomicSharedFrames(input: FilterInput, sink: anytype, availability: anytype) FilterStats {
+pub fn filterAtomicSharedFrames(input: FilterInput, sink: anytype, availability: anytype) FilterStats {
     const bytes = input.bytes;
     const storage_limit = input.storage_limit;
 
@@ -703,7 +318,7 @@ fn selectedFrameStart(selected: []const SelectedSharedFrame, key: SharedFrameKey
     return null;
 }
 
-fn sharedFrameAvailable(resource: FrameResource) bool {
+pub fn sharedFrameAvailable(resource: FrameResource) bool {
     if (resource.byte_len > resource.limit) {
         return false;
     }
@@ -779,14 +394,7 @@ fn sharedFrameAt(bytes: []const u8, start: usize) ?SharedFrame {
     };
 }
 
-const SharedFrameControl = struct {
-    key: SharedFrameKey,
-    byte_len: usize,
-    format: core.graphics.Format,
-    width: u32,
-    height: u32,
-    medium: Medium,
-};
+const SharedFrameControl = @import("SharedFrameControl.zig");
 
 fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
     var image_id: ?u32 = null;
@@ -945,7 +553,7 @@ pub fn placementValue(terminal: *vt.Terminal, source_value: PlacementSource) ?co
     };
 }
 
-fn vtResize(size: schema.TerminalSize) vt.Terminal.Resize {
+pub fn vtResize(size: schema.TerminalSize) vt.Terminal.Resize {
     return .{
         .cols = size.cols,
         .rows = size.rows,
@@ -956,44 +564,7 @@ fn vtResize(size: schema.TerminalSize) vt.Terminal.Resize {
     };
 }
 
-const TestOutput = struct {
-    bytes: [4096]u8 = undefined,
-    len: usize = 0,
-    direct: bool = false,
-    direct_frames: usize = 0,
-    last_direct: ?SharedFrameView = null,
-    queries: usize = 0,
-    last_query_id: u32 = 0,
-    last_query_len: usize = 0,
-
-    pub fn observe(output: *TestOutput, bytes: []const u8) void {
-        @memcpy(output.bytes[output.len..][0..bytes.len], bytes);
-        output.len += bytes.len;
-    }
-
-    pub fn observeSharedFrame(output: *TestOutput, frame: SharedFrameView) bool {
-        if (!output.direct) {
-            return false;
-        }
-        output.direct_frames += 1;
-        output.last_direct = frame;
-        return true;
-    }
-
-    pub fn observeFileQuery(output: *TestOutput, query: FileQueryView) bool {
-        if (!output.direct) {
-            return false;
-        }
-        output.queries += 1;
-        output.last_query_id = query.image_id;
-        output.last_query_len = query.byte_len;
-        return true;
-    }
-
-    fn slice(output: *const TestOutput) []const u8 {
-        return output.bytes[0..output.len];
-    }
-};
+const TestOutput = @import("TestOutput.zig");
 
 test "file frames parse like shared ones and are never handed to the emulator" {
     const frame = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=2,v=1,t=f,i=7,p=1,C=1,q=2;L3RtcC9m\x1b\\\x1b[?2026l";

@@ -5,45 +5,10 @@ const core = @import("telar-core");
 const history_mod = @import("../../../history/root.zig");
 const delivery_mod = @import("../../delivery/root.zig");
 
-const schema = core.schema;
-const ResponseQueue = delivery_mod.ResponseQueue;
+pub const schema = core.schema;
+pub const ResponseQueue = delivery_mod.ResponseQueue;
 
-pub const Controller = struct {
-    responses: *ResponseQueue,
-    service: *history_mod.Service,
-
-    /// Creates a controller scoped to one import batch.
-    ///
-    /// ```zig
-    /// var controller = Controller.init(&responses, application.history_service);
-    /// ```
-    pub fn init(responses: *ResponseQueue, service: *history_mod.Service) Controller {
-        return .{ .responses = responses, .service = service };
-    }
-
-    /// Copies the batch into the bounded history queue and acknowledges it.
-    /// The acknowledgement means the batch was accepted, not that it is
-    /// durable yet: imports share the fire-and-forget write contract that
-    /// live command captures use.
-    ///
-    /// ```zig
-    /// try controller.importHistory(io, batch);
-    /// ```
-    pub fn importHistory(controller: *Controller, io: std.Io, batch: schema.ImportHistoryView) !void {
-        if (!controller.service.importBatch(io, batch)) {
-            try controller.responses.push(.{ .request_failed = .{
-                .request_id = batch.request_id,
-                .code = .resource_limit,
-                .message = "history import was not accepted",
-            } });
-            return;
-        }
-
-        try controller.responses.push(.{ .request_completed = .{
-            .request_id = batch.request_id,
-        } });
-    }
-};
+pub const Controller = @import("ImportHistoryController.zig");
 
 test "Controller acknowledges an accepted batch" {
     const gpa = std.testing.allocator;

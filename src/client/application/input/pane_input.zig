@@ -6,9 +6,9 @@ const input_capability = @import("../../input/root.zig");
 const client_model = @import("../../root.zig").model;
 const set_pane_viewport = @import("../panes/root.zig").set_pane_viewport;
 
-const host_input = input_capability.encoding;
-const keybind = input_capability.keybind;
-const schema = core.schema;
+pub const host_input = input_capability.encoding;
+pub const keybind = input_capability.keybind;
+pub const schema = core.schema;
 
 pub const max_bytes = input_capability.max_encoded_bytes;
 /// Keys one synthetic sequence may carry; each key encodes to at most 32 bytes.
@@ -25,204 +25,22 @@ pub const Payload = union(enum) {
     key: keybind.Key,
 };
 
-pub const Command = struct {
-    target: client_model.PaneInputTarget,
-    source: Source,
-    payload: Payload,
-};
+pub const Command = @import("PaneInputCommand.zig");
 
 pub const PasteMarker = enum {
     start,
     finish,
 };
 
-pub const PasteMarkerCommand = struct {
-    target: client_model.PaneInputTarget,
-    marker: PasteMarker,
-};
+pub const PasteMarkerCommand = @import("PasteMarkerCommand.zig");
 
-pub const PaneInputEffect = struct {
-    pane_id: schema.PaneId,
-    /// Borrowed only for the synchronous send effect.
-    bytes: []const u8,
-};
+pub const PaneInputEffect = @import("PaneInputEffect.zig");
 
-pub const Delivery = struct {
-    pane_id: schema.PaneId,
-    byte_count: usize,
-    source: Source,
-};
+pub const Delivery = @import("Delivery.zig");
 
-pub const PaneInputEffects = struct {
-    context: *anyopaque,
-    send: *const fn (*anyopaque, PaneInputEffect) anyerror!void,
-    viewport: set_pane_viewport.PaneViewportEffects,
-};
+pub const PaneInputEffects = @import("PaneInputEffects.zig");
 
-pub const PaneInputHandler = struct {
-    model: *client_model.Model,
-    effects: PaneInputEffects,
-
-    /// Encodes semantic keys before any commit, restores live output for key
-    /// presses, repeats and paste, then delivers bytes to the resolved pane.
-    /// Releases and mouse reports preserve the user's current viewport.
-    ///
-    /// ```zig
-    /// const delivery = try handler.execute(command) orelse return;
-    /// ```
-    pub fn execute(handler: *PaneInputHandler, command: Command) !?Delivery {
-        const plan = handler.model.planPaneInput(command.target) orelse return null;
-        var encoded: [32]u8 = undefined;
-        const prepared: Prepared = switch (command.payload) {
-            .bytes => |value| .{ .source = command.source, .bytes = value },
-            .key => |value| .{
-                .source = command.source,
-                .bytes = try host_input.encodeKey(&encoded, value, plan.input_modes),
-                .restore_viewport = value.phase != .release,
-                .empty_is_noop = true,
-            },
-        };
-        if (prepared.bytes.len == 0 and prepared.empty_is_noop) {
-            return null;
-        }
-
-        return try handler.deliver(plan, prepared);
-    }
-
-    /// Encodes one bounded synthetic key sequence as a single pane-input
-    /// transaction. This keeps cursor motion plus marker deletion atomic with
-    /// respect to Telar's outbox.
-    ///
-    /// ```zig
-    /// _ = try handler.executeKeys(.{ .pane = pane_id }, keys);
-    /// ```
-    pub fn executeKeys(handler: *PaneInputHandler, target: client_model.PaneInputTarget, keys: []const keybind.Key) !?Delivery {
-        if (keys.len == 0 or keys.len > max_keys) {
-            return error.InvalidInputLength;
-        }
-
-        const plan = handler.model.planPaneInput(target) orelse return null;
-        var encoded: [max_bytes]u8 = undefined;
-        var len: usize = 0;
-        for (keys) |key| {
-            var key_bytes: [32]u8 = undefined;
-            const bytes = try host_input.encodeKey(&key_bytes, key, plan.input_modes);
-            if (bytes.len > encoded.len - len) {
-                return error.InvalidInputLength;
-            }
-
-            @memcpy(encoded[len..][0..bytes.len], bytes);
-            len += bytes.len;
-        }
-
-        return try handler.deliver(plan, .{ .source = .host, .bytes = encoded[0..len] });
-    }
-
-    /// Frames one bounded paste against the target child's current mode and
-    /// delivers it through the same viewport policy as streamed paste.
-    ///
-    /// ```zig
-    /// const delivery = try handler.executePaste(.focused, "text");
-    /// ```
-    pub fn executePaste(handler: *PaneInputHandler, target: client_model.PaneInputTarget, text: []const u8) !?Delivery {
-        const plan = handler.model.planPaneInput(target) orelse return null;
-        const framing_bytes: usize = if (plan.input_modes.bracketed_paste) 12 else 0;
-        if (text.len > max_bytes - framing_bytes) {
-            return error.InvalidInputLength;
-        }
-
-        var encoded: [max_bytes]u8 = undefined;
-        const bytes = try host_input.encodePaste(&encoded, text, plan.input_modes);
-
-        return try handler.deliver(plan, .{
-            .source = .paste,
-            .bytes = bytes,
-        });
-    }
-
-    pub const HistoryPaste = struct {
-        target: client_model.PaneInputTarget,
-        text: []const u8,
-        run: bool,
-    };
-
-    /// Frames a complete history command and puts execution after the paste boundary.
-    /// The send port must atomically reserve the resulting bounded input batch.
-    /// Example: `_ = try handler.executeHistoryPaste(.{ .target = .focused, .text = command, .run = false });`.
-    pub fn executeHistoryPaste(handler: *PaneInputHandler, request: HistoryPaste) !?Delivery {
-        const plan = handler.model.planPaneInput(request.target) orelse return null;
-        try validateHistoryText(request.text, plan.input_modes.bracketed_paste);
-        var encoded: [schema.max_history_command_bytes + 13]u8 = undefined;
-        const paste = try host_input.encodePaste(&encoded, request.text, plan.input_modes);
-        var len = paste.len;
-        if (request.run) {
-            encoded[len] = '\r';
-            len += 1;
-        }
-
-        return try handler.deliver(plan, .{ .source = .paste, .bytes = encoded[0..len], .limit = encoded.len });
-    }
-
-    /// Delivers one explicit streamed-paste marker to an already captured
-    /// session. Framing policy belongs to the pane-paste use case.
-    ///
-    /// ```zig
-    /// _ = try handler.executePasteMarker(command) orelse return;
-    /// ```
-    pub fn executePasteMarker(handler: *PaneInputHandler, command: PasteMarkerCommand) !?Delivery {
-        const plan = handler.model.planPaneInput(command.target) orelse return null;
-
-        const bytes = switch (command.marker) {
-            .start => "\x1b[200~",
-            .finish => "\x1b[201~",
-        };
-
-        return try handler.deliver(plan, .{
-            .source = .paste,
-            .bytes = bytes,
-        });
-    }
-
-    const Prepared = struct {
-        source: Source,
-        bytes: []const u8,
-        restore_viewport: bool = true,
-        limit: usize = max_bytes,
-        empty_is_noop: bool = false,
-    };
-
-    fn deliver(handler: *PaneInputHandler, plan: client_model.PaneInputPlan, prepared: Prepared) !Delivery {
-        if (prepared.bytes.len == 0 or prepared.bytes.len > prepared.limit) {
-            return error.InvalidInputLength;
-        }
-
-        if (prepared.source != .mouse) {
-            _ = handler.model.clearPointerSelection();
-        }
-
-        if (prepared.source != .mouse and prepared.restore_viewport) {
-            var viewport: set_pane_viewport.SetPaneViewportHandler = .{
-                .model = handler.model,
-                .effects = handler.effects.viewport,
-            };
-            _ = try viewport.execute(.{
-                .pane_id = plan.pane_id,
-                .target = .bottom,
-            });
-        }
-
-        try handler.effects.send(handler.effects.context, .{
-            .pane_id = plan.pane_id,
-            .bytes = prepared.bytes,
-        });
-
-        return .{
-            .pane_id = plan.pane_id,
-            .byte_count = prepared.bytes.len,
-            .source = prepared.source,
-        };
-    }
-};
+pub const PaneInputHandler = @import("PaneInputHandler.zig");
 
 /// Rejects terminal controls and unframed multiline text before history can send input.
 /// Example: `try validateHistoryText(command, modes.bracketed_paste);`.
@@ -257,98 +75,14 @@ test "history paste cannot smuggle terminal keys or escape its bracketed boundar
     try std.testing.expectError(error.UnsafeHistoryText, validateHistoryText("echo \xc2\x9b", true));
 }
 
-const TestingModel = struct {
-    model: *client_model.Model,
-    pane_id: schema.PaneId,
+const TestingModel = @import("PaneInputTestingModel.zig");
 
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const location: schema.TabLocation = .{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(1),
-        };
-        const pane_id: schema.PaneId = @enumFromInt(1);
-        try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 10, .rows = 5 } });
-        const pane = model.workspace.findPane(pane_id).?;
-        pane.scroll = .{ .total_rows = 20, .offset = 10 };
-        pane.input_modes.cursor_keys = true;
-
-        return .{ .model = model, .pane_id = pane_id };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
-
-const EffectEvent = enum {
+pub const EffectEvent = enum {
     viewport,
     input,
 };
 
-const EffectsCapture = struct {
-    model: *const client_model.Model,
-    events: [2]EffectEvent = undefined,
-    event_count: usize = 0,
-    viewport_calls: usize = 0,
-    input_calls: usize = 0,
-    viewport_observed_commit: bool = false,
-    input_observed_bottom: bool = false,
-    pane_id: ?schema.PaneId = null,
-    input: [64]u8 = undefined,
-    input_len: usize = 0,
-    fail_viewport: bool = false,
-    fail_input: bool = false,
-
-    fn port(capture: *EffectsCapture) PaneInputEffects {
-        return .{
-            .context = capture,
-            .send = send,
-            .viewport = .{
-                .context = capture,
-                .sync = syncViewport,
-            },
-        };
-    }
-
-    fn record(capture: *EffectsCapture, event: EffectEvent) void {
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn syncViewport(context: *anyopaque, change: client_model.PaneViewportChange) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        const pane = capture.model.workspace.activeConst().?.model.findConst(change.pane_id).?;
-        capture.record(.viewport);
-        capture.viewport_calls += 1;
-        capture.viewport_observed_commit = pane.scroll.offset == change.offset and
-            capture.model.version().viewport == change.viewport_revision;
-
-        if (capture.fail_viewport) {
-            return error.ViewportSyncFailed;
-        }
-    }
-
-    fn send(context: *anyopaque, effect: PaneInputEffect) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        const pane = capture.model.workspace.activeConst().?.model.findConst(effect.pane_id).?;
-        capture.record(.input);
-        capture.input_calls += 1;
-        capture.input_observed_bottom = pane.scroll.atBottom(pane.buffer.h);
-        capture.pane_id = effect.pane_id;
-        capture.input_len = effect.bytes.len;
-        @memcpy(capture.input[0..effect.bytes.len], effect.bytes);
-
-        if (capture.fail_input) {
-            return error.InputDeliveryFailed;
-        }
-    }
-};
+const EffectsCapture = @import("PaneInputEffectsCapture.zig");
 
 test "PaneInputHandler encodes keys after resolution and restores live output" {
     var testing = try TestingModel.init();

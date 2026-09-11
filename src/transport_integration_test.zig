@@ -2,53 +2,24 @@ const std = @import("std");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
 const frontend = @import("telar-frontend");
-const handshake = core.handshake;
+pub const handshake = core.handshake;
 
 const test_receive_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(15) },
 };
 
-const TestReceiveEvent = union(enum) {
+pub const TestReceiveEvent = union(enum) {
     received: anyerror![]u8,
     expired: anyerror!void,
 };
 
-/// Runtime integration reads must fail instead of hanging the whole test
-/// process. A timeout makes the framed stream unusable because the reader may
-/// have consumed part of a frame, so the failure path shuts the channel down.
-const RuntimeTestChannel = struct {
-    channel: core.transport.SocketChannel,
+const RuntimeTestChannel = @import("RuntimeTestChannel.zig");
 
-    fn send(self: *RuntimeTestChannel, io: std.Io, payload: []const u8) !void {
-        return self.channel.send(io, payload);
-    }
-
-    fn receive(self: *RuntimeTestChannel, io: std.Io, buffer: []u8) ![]u8 {
-        var storage: [2]TestReceiveEvent = undefined;
-        var select = std.Io.Select(TestReceiveEvent).init(io, &storage);
-        defer select.cancelDiscard();
-        try select.concurrent(.received, receiveRuntimeFrame, .{ io, &self.channel, buffer });
-        try select.concurrent(.expired, waitForTestReceiveDeadline, .{io});
-        return switch (try select.await()) {
-            .received => |result| try result,
-            .expired => |result| {
-                try result;
-                self.channel.shutdown(io);
-                return error.TestReceiveDeadlineExceeded;
-            },
-        };
-    }
-
-    fn deinit(self: *RuntimeTestChannel, io: std.Io) void {
-        self.channel.deinit(io);
-    }
-};
-
-fn receiveRuntimeFrame(io: std.Io, connection: *core.transport.SocketChannel, buffer: []u8) anyerror![]u8 {
+pub fn receiveRuntimeFrame(io: std.Io, connection: *core.transport.SocketChannel, buffer: []u8) anyerror![]u8 {
     return connection.receive(io, buffer);
 }
 
-fn waitForTestReceiveDeadline(io: std.Io) anyerror!void {
+pub fn waitForTestReceiveDeadline(io: std.Io) anyerror!void {
     return test_receive_timeout.sleep(io);
 }
 
@@ -67,24 +38,7 @@ fn waitForFile(io: std.Io, path: []const u8, attempts: usize) !bool {
     return false;
 }
 
-const HandshakeWorker = struct {
-    io: std.Io,
-    connection: *core.transport.SocketChannel,
-    supported: handshake.SchemaId,
-    response: ?handshake.ServerResponse = null,
-    failure: ?anyerror = null,
-
-    fn run(worker: *@This()) void {
-        worker.response = backend.transport.handshake.performSchema(
-            worker.io,
-            worker.connection,
-            worker.supported,
-        ) catch |err| {
-            worker.failure = err;
-            return;
-        };
-    }
-};
+const HandshakeWorker = @import("HandshakeWorker.zig");
 
 test "frontend and backend exchange framed messages over a local socket" {
     const io = std.testing.io;

@@ -7,37 +7,11 @@ const close_tab_controller = @import("../entrypoints/requests/close_tab.zig");
 const delivery_mod = @import("../delivery/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-const PaneCapture = struct {
-    close_count: usize = 0,
-    last_location: ?schema.TabLocation = null,
+const PaneCapture = @import("CloseTabTestPaneCapture.zig");
 
-    fn port(capture: *PaneCapture) close_tab_commands.PaneCloser {
-        return .{ .context = capture, .close_all = closeAll };
-    }
-
-    fn closeAll(context: *anyopaque, location: schema.TabLocation) void {
-        const capture: *PaneCapture = @ptrCast(@alignCast(context));
-        capture.close_count += 1;
-        capture.last_location = location;
-    }
-};
-
-const EventCapture = struct {
-    count: usize = 0,
-    last: ?workspace_mod.TabRemoved = null,
-
-    fn publisher(capture: *EventCapture) close_tab_commands.EventPublisher {
-        return .{ .context = capture, .publish = publish };
-    }
-
-    fn publish(context: *anyopaque, event: workspace_mod.TabRemoved) void {
-        const capture: *EventCapture = @ptrCast(@alignCast(context));
-        capture.count += 1;
-        capture.last = event;
-    }
-};
+const EventCapture = @import("CloseTabTestEventCapture.zig");
 
 test "a committed tab removal survives response queue backpressure" {
     var state: workspace_mod.State = .{};

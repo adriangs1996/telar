@@ -13,7 +13,7 @@ const lua = @import("lua-api").c;
 const config_model = @import("model.zig");
 const value = @import("lua_value.zig");
 
-const Manifest = core.agent_manifest.Manifest;
+pub const Manifest = core.agent_manifest.Manifest;
 
 const phrase_fields = .{ "process_names", "process_paths", "brand", "identity", "working", "blocked", "ready_prompt" };
 const text_fields = .{ "display_name", "placeholder", "icon" };
@@ -110,22 +110,11 @@ fn parseCommandTools(state: *lua.lua_State, input: EntryInput, diagnostic: *conf
     }
 }
 
-const EntryInput = struct {
-    entry: c_int,
-    manifest: *Manifest,
-    position: usize,
-};
+const EntryInput = @import("EntryInput.zig");
 
-const FieldLookup = struct {
-    entry: c_int,
-    position: usize,
-    field: [:0]const u8,
-};
+const FieldLookup = @import("FieldLookup.zig");
 
-const TextValue = struct {
-    field: []const u8,
-    text: []const u8,
-};
+const TextValue = @import("TextValue.zig");
 
 /// Reads the optional display fields and the attachment policy of one entry.
 fn parsePresentation(state: *lua.lua_State, input: EntryInput, diagnostic: *config_model.Diagnostic) !void {

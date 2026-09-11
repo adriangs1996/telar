@@ -11,96 +11,23 @@ const parser = @import("parser.zig");
 
 const Io = std.Io;
 const File = Io.File;
-const schema = core.schema;
+pub const schema = core.schema;
 
 pub const max_input_bytes = 64 * 1024;
 
-pub const Report = struct {
-    state: schema.AgentReportState,
-    session: []const u8 = "",
-    /// Where the agent records its session, when the hook knows it.
-    session_file: []const u8 = "",
-    session_file_kind: schema.AgentSessionFileKind = .claude_transcript,
-};
+pub const Report = @import("Report.zig");
 
-/// The subset of Claude Code hook input telar reads.
-pub const ClaudeHookInput = struct {
-    hook_event_name: []const u8 = "",
-    session_id: []const u8 = "",
-    agent_id: ?[]const u8 = null,
-    transcript_path: []const u8 = "",
-    /// Present on `SessionStart` when the session already has a name.
-    session_title: []const u8 = "",
-    notification_type: []const u8 = "",
-    tool_name: []const u8 = "",
-    tool_use_id: []const u8 = "",
-    tool_input: std.json.Value = .null,
-    cwd: []const u8 = "",
-};
+pub const ClaudeHookInput = @import("ClaudeHookInput.zig");
 
-/// The subset of Codex hook input telar reads.
-pub const CodexHookInput = struct {
-    hook_event_name: []const u8 = "",
-    session_id: []const u8 = "",
-    agent_id: ?[]const u8 = null,
-    source: []const u8 = "",
-    tool_name: []const u8 = "",
-    tool_use_id: []const u8 = "",
-    tool_input: std.json.Value = .null,
-    cwd: []const u8 = "",
-    /// Not part of Codex's payload: the state database `run` resolves from
-    /// `CODEX_HOME`, where `/rename` lands as `threads.name`.
-    state_database: []const u8 = "",
-};
+pub const CodexHookInput = @import("CodexHookInput.zig");
 
-/// The payload the Telar extension for Pi sends. Pi has no hook files: the
-/// extension installed by `telar integration install pi` runs
-/// `telar hook pi` on Pi's own extension events.
-pub const PiHookInput = struct {
-    event: []const u8 = "",
-    session_id: []const u8 = "",
-    /// Whether Pi had no run in progress when the event fired.
-    idle: ?bool = null,
-    blocked: bool = false,
-    tool_name: []const u8 = "",
-    tool_call_id: []const u8 = "",
-    tool_input: std.json.Value = .null,
-    cwd: []const u8 = "",
-    exit_code: ?i32 = null,
-    /// The session name on `session_start` and `session_info_changed`.
-    /// Absent on `session_info_changed` means the name was cleared.
-    name: ?[]const u8 = null,
-};
+pub const PiHookInput = @import("PiHookInput.zig");
 
-/// Everything one hook invocation may send: at most one lifecycle report,
-/// one command report and one title report.
-const Reports = struct {
-    lifecycle: ?Report = null,
-    command: ?CommandReport = null,
-    /// Empty clears an earlier agent title.
-    title: ?[]const u8 = null,
-};
+const Reports = @import("Reports.zig");
 
-const CommandReport = struct {
-    phase: schema.AgentCommandPhase,
-    provider: []const u8,
-    tool_call_id: []const u8,
-    command: []const u8,
-    cwd: []const u8,
-    session: []const u8,
-    exit_code: ?i32,
-};
+const CommandReport = @import("CommandReport.zig");
 
-const ToolHookInput = struct {
-    event: []const u8,
-    agent_id: ?[]const u8 = null,
-    tool_name: []const u8,
-    tool_call_id: []const u8,
-    tool_input: std.json.Value,
-    cwd: []const u8,
-    session: []const u8,
-    exit_code: ?i32,
-};
+const ToolHookInput = @import("ToolHookInput.zig");
 
 /// Extracts a shell command using the provider's manifest mapping.
 ///
@@ -428,11 +355,7 @@ pub fn run(init: std.process.Init, options: parser.HookOptions) !void {
     }
 }
 
-/// The runtime socket and the pane generation a hook reports for.
-const Target = struct {
-    socket: ?[*:0]const u8,
-    pane: control.Session.PaneRef,
-};
+const Target = @import("Target.zig");
 
 fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
     if (reports.lifecycle == null and reports.command == null and reports.title == null) {

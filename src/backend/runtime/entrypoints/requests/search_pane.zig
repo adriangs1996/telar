@@ -6,54 +6,12 @@ const core = @import("telar-core");
 const delivery_mod = @import("../../delivery/root.zig");
 const search_commands = @import("../../application/commands/search_pane.zig");
 
-const schema = core.schema;
-const ResponseQueue = delivery_mod.ResponseQueue;
+pub const schema = core.schema;
+pub const ResponseQueue = delivery_mod.ResponseQueue;
 
-/// Builds a statically dispatched controller around one executor.
-///
-/// ```zig
-/// const SearchController = Controller(*search_commands.SearchPaneHandler);
-/// ```
-pub fn Controller(comptime Executor: type) type {
-    return struct {
-        const Self = @This();
+pub const Controller = @import("GenericSearchPaneController.zig").Type;
 
-        responses: *ResponseQueue,
-        executor: Executor,
-
-        pub fn init(responses: *ResponseQueue, executor: Executor) Self {
-            return .{ .responses = responses, .executor = executor };
-        }
-
-        /// Maps the wire search to its command and queues the reply.
-        ///
-        /// ```zig
-        /// try controller.searchPane(request);
-        /// ```
-        pub fn searchPane(controller: *Self, request: schema.SearchPane) !void {
-            switch (controller.executor.execute(.{ .pane_id = request.pane_id, .needle = request.needle })) {
-                .found => |matches| try controller.responses.push(.{ .pane_matches = .{
-                    .request_id = request.request_id,
-                    .pane_id = request.pane_id,
-                    .matches = matches,
-                } }),
-                .pane_not_attached => try controller.responses.push(.{ .request_failed = .{
-                    .request_id = request.request_id,
-                    .code = .pane_not_found,
-                    .message = "pane is not attached",
-                } }),
-            }
-        }
-    };
-}
-
-const StubExecutor = struct {
-    result: search_commands.SearchPaneResult = .pane_not_attached,
-
-    fn execute(stub: *StubExecutor, _: search_commands.SearchPane) search_commands.SearchPaneResult {
-        return stub.result;
-    }
-};
+const StubExecutor = @import("SearchPaneStubExecutor.zig");
 
 test "Controller queues matches or a failure" {
     var responses: ResponseQueue = .{};

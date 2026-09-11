@@ -3,11 +3,11 @@
 const std = @import("std");
 const core = @import("telar-core");
 const transport = @import("../connection/root.zig").runtime_transport;
-const Client = @import("../client.zig");
+const Client = @import("../Client.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 const server_messages = @import("runtime_messages.zig");
 const Io = std.Io;
-const schema = core.schema;
+pub const schema = core.schema;
 const diagnostics = core.diagnostics;
 const State = transport.State;
 pub const Message = transport.Message;
@@ -220,11 +220,7 @@ fn send(io: Io, state: *State, payload: []const u8) anyerror!void {
     return state.send(io, payload);
 }
 
-const DecodedObservation = struct {
-    payload_len: usize,
-    message: schema.ServerMessage,
-    decode_started_ns: u64,
-};
+const DecodedObservation = @import("DecodedObservation.zig");
 
 fn recordMessage(client: *Client, observation: DecodedObservation) void {
     if (comptime !diagnostics.enabled) {

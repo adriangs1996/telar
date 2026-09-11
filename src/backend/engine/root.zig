@@ -11,8 +11,8 @@
 //! one child and its dialogue, and `rpc.zig` the wire codec and framing.
 
 const std = @import("std");
-const service = @import("service.zig");
-const session = @import("session.zig");
+const service = @import("service_support.zig");
+const session = @import("session_support.zig");
 const types = @import("types.zig");
 
 pub const rpc = @import("rpc.zig");

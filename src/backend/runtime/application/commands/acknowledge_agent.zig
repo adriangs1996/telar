@@ -5,36 +5,14 @@ const core = @import("telar-core");
 const agent_mod = @import("../../../agent/root.zig");
 const pane_mod = @import("../../../pane/root.zig");
 
-const schema = core.schema;
-const Tracker = agent_mod.Tracker;
+pub const schema = core.schema;
+pub const Tracker = agent_mod.Tracker;
 
-pub const AcknowledgeAgent = struct {
-    pane_id: schema.PaneId,
-    pane_generation: u64,
-    now_ms: i64,
-};
+pub const AcknowledgeAgent = @import("AcknowledgeAgent.zig");
 
 pub const AcknowledgeAgentResult = agent_mod.AcknowledgeResult;
 
-pub const AcknowledgeAgentHandler = struct {
-    agents: *Tracker,
-
-    /// Resolves the exact pane generation and lets the tracker turn an unseen
-    /// completion back into `ready`. The tracker revision advances only when
-    /// the projection changes.
-    ///
-    /// ```zig
-    /// const result = handler.execute(.{ .pane_id = pane_id, .pane_generation = 3, .now_ms = now_ms });
-    /// ```
-    pub fn execute(handler: *AcknowledgeAgentHandler, command: AcknowledgeAgent) AcknowledgeAgentResult {
-        const key: pane_mod.PaneKey = .{
-            .id = command.pane_id,
-            .generation = command.pane_generation,
-        };
-
-        return handler.agents.acknowledge(key, command.now_ms);
-    }
-};
+pub const AcknowledgeAgentHandler = @import("AcknowledgeAgentHandler.zig");
 
 test "AcknowledgeAgentHandler reports an unknown generation without touching the tracker" {
     var agents: Tracker = .{};

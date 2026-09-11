@@ -5,7 +5,7 @@ const notifications_application = @import("telar-client").application.notificati
 const client_model = @import("telar-client").model;
 const pane_geometry = @import("../panes/pane_geometry.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const multiplexer = workspace_capability.multiplexer;
 const sidebar_layout_delivery = notifications_application.sidebar_layout_delivery;
 

@@ -7,7 +7,7 @@ const session_application = @import("telar-client").application.session;
 const notifications = @import("telar-client").notifications;
 const client_requests = @import("telar-client").connection.requests;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const notification_flow = @import("../notifications/notifications.zig");
 const pane_attachments = @import("../panes/pane_attachments.zig");
 const pane_splits = @import("../panes/pane_splits.zig");

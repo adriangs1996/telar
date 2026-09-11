@@ -4,7 +4,7 @@ const vt = @import("ghostty-vt");
 const backend = @import("telar-backend");
 const frontend = @import("telar-frontend");
 
-const Link = struct { input: std.c.fd_t, output: std.c.fd_t };
+const Link = @import("Link.zig");
 
 fn writeAll(fd: std.c.fd_t, bytes: []const u8) !void {
     var offset: usize = 0;

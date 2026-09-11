@@ -3,30 +3,18 @@
 const std = @import("std");
 const core = @import("telar-core");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const Reconciliation = struct {
-    required_workspace: schema.WorkspaceLocation,
-    projected_workspace: ?schema.WorkspaceLocation,
-    snapshot_pending: bool,
-};
+pub const Reconciliation = @import("Reconciliation.zig");
 
-pub const WorkspaceClosure = struct {
-    workspace: schema.WorkspaceLocation,
-    previous_workspace: ?schema.WorkspaceId,
-};
+pub const WorkspaceClosure = @import("WorkspaceClosure.zig");
 
 pub const Command = union(enum) {
     reconcile: Reconciliation,
     workspace_closed: WorkspaceClosure,
 };
 
-pub const Effects = struct {
-    context: *anyopaque,
-    forget_workspace: *const fn (*anyopaque, schema.WorkspaceLocation) void,
-    request_snapshot: *const fn (*anyopaque, schema.WorkspaceLocation) anyerror!void,
-    request_handoff: *const fn (*anyopaque, schema.WorkspaceId) anyerror!void,
-};
+pub const Effects = @import("ResyncRequiredEffects.zig");
 
 pub const Outcome = enum {
     coalesced,
@@ -35,105 +23,15 @@ pub const Outcome = enum {
     exit,
 };
 
-pub const HandleResyncRequiredHandler = struct {
-    effects: Effects,
+pub const HandleResyncRequiredHandler = @import("HandleResyncRequiredHandler.zig");
 
-    /// Reconciles the current workspace or follows the runtime after closure.
-    /// A closed workspace loses its bookmark before handoff or exit.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *HandleResyncRequiredHandler, command: Command) !Outcome {
-        return switch (command) {
-            .reconcile => |state| handler.reconcile(state),
-            .workspace_closed => |closure| handler.closeWorkspace(closure),
-        };
-    }
-
-    fn reconcile(handler: *HandleResyncRequiredHandler, command: Reconciliation) !Outcome {
-        const projected = command.projected_workspace orelse return error.UnexpectedResync;
-        if (!std.meta.eql(projected, command.required_workspace)) {
-            return error.UnexpectedResync;
-        }
-
-        if (command.snapshot_pending) {
-            return .coalesced;
-        }
-
-        try handler.effects.request_snapshot(handler.effects.context, command.required_workspace);
-        return .snapshot_requested;
-    }
-
-    fn closeWorkspace(handler: *HandleResyncRequiredHandler, command: WorkspaceClosure) !Outcome {
-        handler.effects.forget_workspace(handler.effects.context, command.workspace);
-
-        const previous = command.previous_workspace orelse return .exit;
-        try handler.effects.request_handoff(handler.effects.context, previous);
-
-        return .handoff_requested;
-    }
-};
-
-const EffectEvent = enum {
+pub const EffectEvent = enum {
     forget_workspace,
     request_snapshot,
     request_handoff,
 };
 
-const EffectsCapture = struct {
-    events: [2]EffectEvent = undefined,
-    event_count: usize = 0,
-    forgotten_workspace: ?schema.WorkspaceLocation = null,
-    snapshot_workspace: ?schema.WorkspaceLocation = null,
-    handoff_workspace: ?schema.WorkspaceId = null,
-    fail_snapshot: bool = false,
-    fail_handoff: bool = false,
-
-    fn port(capture: *EffectsCapture) Effects {
-        return .{
-            .context = capture,
-            .forget_workspace = forgetWorkspace,
-            .request_snapshot = requestSnapshot,
-            .request_handoff = requestHandoff,
-        };
-    }
-
-    fn handler(capture: *EffectsCapture) HandleResyncRequiredHandler {
-        return .{ .effects = capture.port() };
-    }
-
-    fn record(capture: *EffectsCapture, event: EffectEvent) void {
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn forgetWorkspace(context: *anyopaque, workspace: schema.WorkspaceLocation) void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.record(.forget_workspace);
-        capture.forgotten_workspace = workspace;
-    }
-
-    fn requestSnapshot(context: *anyopaque, workspace: schema.WorkspaceLocation) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.record(.request_snapshot);
-        capture.snapshot_workspace = workspace;
-
-        if (capture.fail_snapshot) {
-            return error.SnapshotRequestFailed;
-        }
-    }
-
-    fn requestHandoff(context: *anyopaque, workspace: schema.WorkspaceId) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.record(.request_handoff);
-        capture.handoff_workspace = workspace;
-
-        if (capture.fail_handoff) {
-            return error.HandoffRequestFailed;
-        }
-    }
-};
+const EffectsCapture = @import("ResyncRequiredEffectsCapture.zig");
 
 const testing_workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(7) };
 

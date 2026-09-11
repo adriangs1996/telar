@@ -4,121 +4,21 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const RequestRenameWorkspace = struct {
-    workspace: schema.WorkspaceLocation,
-    name: []const u8,
-};
+pub const RequestRenameWorkspace = @import("RequestRenameWorkspace.zig");
 
-pub const RequestedRename = struct {
-    workspace: schema.WorkspaceLocation,
-    /// Borrowed only for the synchronous send callback.
-    name: []const u8,
-};
+pub const RequestedRename = @import("RequestedRename.zig");
 
-pub const WorkspaceOperationGate = struct {
-    context: *anyopaque,
-    pending: *const fn (*anyopaque) bool,
-};
+pub const WorkspaceOperationGate = @import("RenameWorkspaceWorkspaceOperationGate.zig");
 
-pub const RenameRequestEffects = struct {
-    context: *anyopaque,
-    send: *const fn (*anyopaque, RequestedRename) anyerror!void,
-};
+pub const RenameRequestEffects = @import("RenameRequestEffects.zig");
 
-pub const RequestRenameWorkspaceHandler = struct {
-    model: *const client_model.Model,
-    gate: WorkspaceOperationGate,
-    effects: RenameRequestEffects,
+pub const RequestRenameWorkspaceHandler = @import("RequestRenameWorkspaceHandler.zig");
 
-    /// Validates the prompt target and sends one rename intent. Pending
-    /// operations and stale workspace targets return false without effects.
-    ///
-    /// ```zig
-    /// if (!try handler.execute(command)) return;
-    /// ```
-    pub fn execute(handler: *RequestRenameWorkspaceHandler, command: RequestRenameWorkspace) !bool {
-        if (handler.gate.pending(handler.gate.context)) {
-            return false;
-        }
+const RequestCapture = @import("RenameWorkspaceRequestCapture.zig");
 
-        const current = handler.model.workspaceLocation() orelse return false;
-        if (!std.meta.eql(current, command.workspace)) {
-            return false;
-        }
-
-        try handler.effects.send(handler.effects.context, .{
-            .workspace = command.workspace,
-            .name = command.name,
-        });
-
-        return true;
-    }
-};
-
-const RequestCapture = struct {
-    blocked: bool = false,
-    failure: ?anyerror = null,
-    calls: usize = 0,
-    workspace: ?schema.WorkspaceLocation = null,
-    name: [schema.max_tab_label_bytes]u8 = undefined,
-    name_len: u8 = 0,
-
-    fn gate(capture: *RequestCapture) WorkspaceOperationGate {
-        return .{ .context = capture, .pending = pending };
-    }
-
-    fn effects(capture: *RequestCapture) RenameRequestEffects {
-        return .{ .context = capture, .send = send };
-    }
-
-    fn pending(context: *anyopaque) bool {
-        const capture: *RequestCapture = @ptrCast(@alignCast(context));
-        return capture.blocked;
-    }
-
-    fn send(context: *anyopaque, requested: RequestedRename) !void {
-        const capture: *RequestCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.workspace = requested.workspace;
-        capture.name_len = @intCast(requested.name.len);
-        @memcpy(capture.name[0..requested.name.len], requested.name);
-
-        if (capture.failure) |failure| {
-            return failure;
-        }
-    }
-
-    fn nameSlice(capture: *const RequestCapture) []const u8 {
-        return capture.name[0..capture.name_len];
-    }
-};
-
-const TestingModel = struct {
-    model: *client_model.Model,
-    workspace: schema.WorkspaceLocation,
-
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-        try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(1),
-        }, .size = .{ .cols = 20, .rows = 5 } });
-
-        return .{ .model = model, .workspace = workspace };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
+const TestingModel = @import("RenameWorkspaceTestingModel.zig");
 
 test "RequestRenameWorkspaceHandler sends the current target without provisional mutation" {
     var testing = try TestingModel.init();

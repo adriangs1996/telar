@@ -2,66 +2,16 @@
 const std = @import("std");
 const lua = @import("lua-api").c;
 const Vm = @import("telar-lua").Vm;
-const Io = std.Io;
+pub const Io = std.Io;
 const values = @import("lua_value.zig");
 const string = values.string;
 const pop = values.pop;
 const raiseLua = values.raise;
 pub const max_local_modules = 64;
 
-pub const State = struct {
-    vm: *Vm,
-    config_dir: [std.fs.max_path_bytes]u8 = undefined,
-    config_dir_len: u16 = 0,
-    module_cache_ref: c_int = lua.LUA_NOREF,
-    dependencies: [max_local_modules][std.fs.max_path_bytes]u8 = undefined,
-    dependency_lens: [max_local_modules]u16 = undefined,
-    dependency_mtimes: [max_local_modules]i128 = undefined,
-    dependency_count: u8 = 0,
+pub const State = @import("State.zig");
 
-    /// Creates the loader before any closure can borrow its stable address.
-    /// Example: `modules = try State.init(vm, config_dir);`.
-    pub fn init(vm: *Vm, path: []const u8) !State {
-        var modules: State = .{ .vm = vm };
-        if (path.len > modules.config_dir.len) {
-            return error.NameTooLong;
-        }
-
-        @memcpy(modules.config_dir[0..path.len], path);
-        modules.config_dir_len = @intCast(path.len);
-        return modules;
-    }
-
-    pub fn dependencyPath(modules: *const State, index: usize) ?[]const u8 {
-        if (index >= modules.dependency_count) {
-            return null;
-        }
-        return modules.dependencies[index][0..modules.dependency_lens[index]];
-    }
-
-    pub fn watchFingerprint(modules: *const State, io: Io, config_path: []const u8) i128 {
-        var hasher = std.hash.Wyhash.init(0x74656c61722d6c75);
-        updatePathFingerprint(&hasher, io, config_path);
-        for (0..modules.dependency_count) |index|
-            updatePathFingerprint(&hasher, io, modules.dependencyPath(index).?);
-        return @intCast(hasher.final());
-    }
-
-    pub fn configDir(modules: *const State) []const u8 {
-        return modules.config_dir[0..modules.config_dir_len];
-    }
-
-    pub fn installRequire(modules: *State) void {
-        const state = modules.vm.state;
-        lua.lua_createtable(state, 0, max_local_modules);
-        modules.module_cache_ref = lua.luaL_ref(state, lua.LUA_REGISTRYINDEX);
-        lua.lua_pushlightuserdata(state, modules);
-        lua.lua_pushcclosure(state, requireLocal, 1);
-        lua.lua_setglobal(state, "require");
-    }
-};
-
-fn requireLocal(state: ?*lua.lua_State) callconv(.c) c_int {
+pub fn requireLocal(state: ?*lua.lua_State) callconv(.c) c_int {
     const lua_state = state.?;
     const context_ptr = lua.lua_touserdata(lua_state, lua.lua_upvalueindex(1)) orelse
         return raiseLua(lua_state, "missing Telar require context");
@@ -184,7 +134,7 @@ fn pathInside(root: []const u8, candidate: []const u8) bool {
         (candidate.len > root.len and candidate[root.len] == std.fs.path.sep);
 }
 
-fn updatePathFingerprint(hasher: *std.hash.Wyhash, io: Io, path: []const u8) void {
+pub fn updatePathFingerprint(hasher: *std.hash.Wyhash, io: Io, path: []const u8) void {
     hasher.update(path);
     const stat = Io.Dir.cwd().statFile(io, path, .{}) catch {
         hasher.update("\x00missing");

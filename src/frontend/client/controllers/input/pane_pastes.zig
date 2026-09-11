@@ -3,7 +3,7 @@
 const input_application = @import("telar-client").application.input;
 const pane_inputs = @import("pane_inputs.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const pane_paste = input_application.pane_paste;
 
 pub const Outcome = pane_paste.Outcome;

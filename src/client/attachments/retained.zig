@@ -3,9 +3,9 @@ const std = @import("std");
 const attachments = @import("root.zig");
 
 pub const Store = attachments.Catalog(@This());
-pub const State = struct {};
-pub const SlotState = struct { leases: u32 = 0 };
-pub const Lease = struct { id: attachments.Id, png: []const u8 };
+pub const State = @import("State.zig");
+pub const SlotState = @import("SlotState.zig");
+pub const Lease = @import("Lease.zig");
 
 /// Pins one active PNG without borrowing its catalog slot.
 /// Example: `const lease = try retain(&store, id); defer release(&store, lease);`.

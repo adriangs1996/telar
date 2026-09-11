@@ -1,53 +1,29 @@
-//! Bounded latest-wins state for host link-opening workers.
-
-const std = @import("std");
+const Opening = @This();
 const target_mod = @import("root.zig").target;
+const source_namespace = @import("opening_support.zig");
+active: bool = false,
+pending: ?target_mod.Target = null,
 
-pub const Request = union(enum) {
-    start: target_mod.Target,
-    queued,
-};
+pub fn request(opening: *Opening, target: target_mod.Target) source_namespace.Request {
+    if (!opening.active) {
+        opening.active = true;
 
-pub const Opening = struct {
-    active: bool = false,
-    pending: ?target_mod.Target = null,
-
-    pub fn request(opening: *Opening, target: target_mod.Target) Request {
-        if (!opening.active) {
-            opening.active = true;
-
-            return .{ .start = target };
-        }
-
-        opening.pending = target;
-
-        return .queued;
+        return .{ .start = target };
     }
 
-    pub fn complete(opening: *Opening) ?target_mod.Target {
-        const next = opening.pending;
-        opening.pending = null;
-        opening.active = next != null;
+    opening.pending = target;
 
-        return next;
-    }
+    return .queued;
+}
 
-    pub fn schedulingFailed(opening: *Opening) void {
-        opening.active = false;
-    }
-};
+pub fn complete(opening: *Opening) ?target_mod.Target {
+    const next = opening.pending;
+    opening.pending = null;
+    opening.active = next != null;
 
-test "opening state runs one worker and keeps only the latest request" {
-    var opening: Opening = .{};
-    const first = try target_mod.Target.init("https://one.example");
-    const second = try target_mod.Target.init("https://two.example");
-    const third = try target_mod.Target.init("https://three.example");
+    return next;
+}
 
-    try std.testing.expect(opening.request(first) == .start);
-    try std.testing.expect(opening.request(second) == .queued);
-    try std.testing.expect(opening.request(third) == .queued);
-    try std.testing.expectEqualStrings(third.uri(), opening.complete().?.uri());
-    try std.testing.expect(opening.active);
-    try std.testing.expect(opening.complete() == null);
-    try std.testing.expect(!opening.active);
+pub fn schedulingFailed(opening: *Opening) void {
+    opening.active = false;
 }

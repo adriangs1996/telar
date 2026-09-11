@@ -6,80 +6,12 @@ const core = @import("telar-core");
 const delivery_mod = @import("../../delivery/root.zig");
 const send_pane_text_commands = @import("../../application/commands/send_pane_text.zig");
 
-const schema = core.schema;
-const ResponseQueue = delivery_mod.ResponseQueue;
+pub const schema = core.schema;
+pub const ResponseQueue = delivery_mod.ResponseQueue;
 
-/// Builds a statically dispatched controller around one executor.
-///
-/// ```zig
-/// const SendPaneTextController = Controller(*send_pane_text_commands.SendPaneTextHandler);
-/// var controller = SendPaneTextController.init(&responses, &handler);
-/// ```
-pub fn Controller(comptime Executor: type) type {
-    return struct {
-        const Self = @This();
+pub const Controller = @import("GenericSendPaneTextController.zig").Type;
 
-        responses: *ResponseQueue,
-        executor: Executor,
-
-        /// Creates one controller bound to the requesting client's responses.
-        ///
-        /// ```zig
-        /// var controller = SendPaneTextController.init(&responses, &handler);
-        /// ```
-        pub fn init(responses: *ResponseQueue, executor: Executor) Self {
-            return .{ .responses = responses, .executor = executor };
-        }
-
-        /// Maps the wire request to its command and queues the terminal reply.
-        ///
-        /// ```zig
-        /// try controller.sendPaneText(request);
-        /// ```
-        pub fn sendPaneText(controller: *Self, request: schema.SendPaneText) !void {
-            const result = try controller.executor.execute(.{
-                .pane = .{ .id = request.pane_id, .generation = request.pane_generation },
-                .mode = request.mode,
-                .text = request.text,
-            });
-
-            switch (result) {
-                .handled => try controller.responses.push(.{ .request_completed = .{
-                    .request_id = request.request_id,
-                } }),
-                .pane_not_found => try controller.fail(.{
-                    .request_id = request.request_id,
-                    .code = .pane_not_found,
-                    .message = "pane not found",
-                }),
-                .pane_exited => try controller.fail(.{
-                    .request_id = request.request_id,
-                    .code = .pane_exited,
-                    .message = "pane already exited",
-                }),
-                .agent_blocked => try controller.fail(.{
-                    .request_id = request.request_id,
-                    .code = .agent_blocked,
-                    .message = "agent is waiting for a decision",
-                }),
-            }
-        }
-
-        fn fail(controller: *Self, failure: delivery_mod.PendingFailure) !void {
-            try controller.responses.push(.{ .request_failed = failure });
-        }
-    };
-}
-
-const StubExecutor = struct {
-    result: send_pane_text_commands.SendPaneTextResult = .handled,
-    command: ?send_pane_text_commands.SendPaneText = null,
-
-    fn execute(stub: *StubExecutor, command: send_pane_text_commands.SendPaneText) !send_pane_text_commands.SendPaneTextResult {
-        stub.command = command;
-        return stub.result;
-    }
-};
+const StubExecutor = @import("SendPaneTextStubExecutor.zig");
 
 const TestController = Controller(*StubExecutor);
 

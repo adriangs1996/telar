@@ -2,182 +2,25 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const Client = @import("../client.zig");
+const Client = @import("../Client.zig");
 const client_model = @import("telar-client").model;
 const runtime_transport = @import("../entrypoints/runtime_io.zig");
 const kitty = @import("../../graphics/root.zig").kitty;
 const pace = @import("../../presentation/root.zig").pace;
 
-const Io = std.Io;
-const diagnostics = core.diagnostics;
-const schema = core.schema;
+pub const Io = std.Io;
+pub const diagnostics = core.diagnostics;
+pub const schema = core.schema;
 
-const buffer_size = 8192;
+pub const buffer_size = 8192;
 
-pub const Metrics = struct {
-    started_ns: u64,
-    input_events: u64 = 0,
-    input_bytes: u64 = 0,
-    key_lease_overflows: u64 = 0,
-    server_messages: u64 = 0,
-    server_bytes: u64 = 0,
-    graphics_messages: u64 = 0,
-    graphics_bytes: u64 = 0,
-    /// Image transfers received from the runtime (headers and shared names).
-    graphics_images: u64 = 0,
-    /// Pane images handed to the host as a shared-memory name.
-    pane_shared_images: u64 = 0,
-    /// Pane images whose inline transmission closed, compressed or raw.
-    pane_inline_images: u64 = 0,
-    /// The subset of `pane_inline_images` shipped as a zlib stream.
-    pane_compressed_images: u64 = 0,
-    /// Chunk-emission calls; against `pane_inline_images` this measures the
-    /// passes-per-image pacing of the transmission budget.
-    pane_transmission_passes: u64 = 0,
-    /// Writer passes that advanced an image deflate by at least one slice.
-    pane_compress_passes: u64 = 0,
-    frames: u64 = 0,
-    frame_cells: u64 = 0,
-    frame_spans: u64 = 0,
-    snapshots: u64 = 0,
-    composed_panes: u64 = 0,
-    composed_cells: u64 = 0,
-    composed_damage_cells: u64 = 0,
-    full_compositions: u64 = 0,
-    flushes: u64 = 0,
-    scanned_cells: u64 = 0,
-    flushed_cells: u64 = 0,
-    flushed_bytes: u64 = 0,
-    graphics_flushed_bytes: u64 = 0,
-    pane_graphics_flushed_bytes: u64 = 0,
-    toast_graphics_flushed_bytes: u64 = 0,
-    sidebar_graphics_flushed_bytes: u64 = 0,
-    icon_graphics_flushed_bytes: u64 = 0,
-    modal_graphics_flushed_bytes: u64 = 0,
-    pill_graphics_flushed_bytes: u64 = 0,
-    attachment_graphics_flushed_bytes: u64 = 0,
-    media_flushes: u64 = 0,
-    /// Media passes that yielded to a pending cell frame and re-armed a
-    /// whole pacer interval later.
-    media_deferrals: u64 = 0,
-    max_pending_updates: u64 = 0,
-    mouse_events: u64 = 0,
-    chrome_scanned_cells: u64 = 0,
-    chrome_damaged_cells: u64 = 0,
-    decode: diagnostics.Timing = .{},
-    apply: diagnostics.Timing = .{},
-    compose: diagnostics.Timing = .{},
-    ack_enqueue: diagnostics.Timing = .{},
-    input_enqueue: diagnostics.Timing = .{},
-    flush: diagnostics.Timing = .{},
-    media_flush: diagnostics.Timing = .{},
-    draw_lateness: diagnostics.Timing = .{},
-    paced_interval: diagnostics.Timing = .{},
-    /// Time between consecutive pane images handed to the host.
-    pane_present_interval: diagnostics.Timing = .{},
-};
+pub const Metrics = @import("Metrics.zig");
 
-pub const State = struct {
-    metrics: Metrics,
-    sink: diagnostics.Sink,
-    buffer: [buffer_size]u8 = undefined,
-    write_pending: bool = false,
-    enabled: bool,
+pub const State = @import("TelemetryState.zig");
 
-    /// Creates the client's fail-closed diagnostics sink and metrics epoch.
-    ///
-    /// ```zig
-    /// var telemetry = State.init(io, runtime_endpoint);
-    /// ```
-    pub fn init(io: Io, endpoint: []const u8) State {
-        if (!diagnostics.enabled or endpoint.len == 0) {
-            return .{
-                .metrics = .{ .started_ns = diagnostics.now(io) },
-                .sink = .{},
-                .enabled = false,
-            };
-        }
+pub const Snapshot = @import("Snapshot.zig");
 
-        var suffix_buffer: [64]u8 = undefined;
-        const suffix = std.fmt.bufPrint(&suffix_buffer, "client-{d}", .{std.c.getpid()}) catch "client";
-        var sink = diagnostics.Sink.init(io, endpoint, suffix);
-
-        return .{
-            .metrics = .{ .started_ns = diagnostics.now(io) },
-            .sink = sink,
-            .enabled = sink.available(),
-        };
-    }
-
-    /// Closes the diagnostics sink after the client has cancelled its tasks.
-    ///
-    /// ```zig
-    /// telemetry.deinit(io);
-    /// ```
-    pub fn deinit(state: *State, io: Io) void {
-        state.write_pending = false;
-        state.enabled = false;
-        state.sink.deinit(io);
-    }
-
-    fn available(state: *const State) bool {
-        return state.enabled and state.sink.available();
-    }
-
-    fn reserveWrite(state: *State) bool {
-        if (!state.available() or state.write_pending) {
-            return false;
-        }
-
-        state.write_pending = true;
-
-        return true;
-    }
-
-    fn disable(state: *State, io: Io) void {
-        state.enabled = false;
-
-        if (!state.write_pending) {
-            state.sink.deinit(io);
-        }
-    }
-};
-
-pub const Snapshot = struct {
-    theme_name: []const u8,
-    icon_theme_name: []const u8,
-    active_tab: schema.TabId,
-    tab_count: usize,
-    focused_pane: schema.PaneId,
-    pane_count: usize,
-    pending_updates: usize,
-    draw_pending: bool,
-    media_pending: bool,
-    outbox: runtime_transport.Snapshot,
-    capabilities: client_model.HostCapabilities,
-    zlib_support: kitty.Support = .unknown,
-    sidebar_rendering: kitty.ResolvedSidebarRendering,
-    lua_used: usize,
-    lua_limit: usize,
-    kitty_store_bytes: usize,
-    toast_cache_bytes: usize,
-    sidebar_cache_bytes: usize,
-    icon_cache_bytes: usize,
-    modal_cache_bytes: usize,
-    pill_cache_bytes: usize = 0,
-    attachment_cache_bytes: usize,
-    screen_bytes: usize,
-    shared_expiries: u8,
-    shared_retire_latency: diagnostics.Timing,
-    heap: diagnostics.Heap.Snapshot,
-};
-
-pub const FormatRequest = struct {
-    io: Io,
-    metrics: *const Metrics,
-    pacer: *const pace.Pacer,
-    snapshot: Snapshot,
-};
+pub const FormatRequest = @import("FormatRequest.zig");
 
 /// Projects one immutable client observation into a bounded JSON line.
 ///

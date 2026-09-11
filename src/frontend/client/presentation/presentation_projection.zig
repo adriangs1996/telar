@@ -1,9 +1,9 @@
 //! Immutable semantic projection and explicit presentation-owned resources for
 //! one synchronous client frame.
 
-const presenter = @import("presenter.zig");
+const presenter = @import("Presenter.zig");
 
-const Client = @import("../client.zig");
+const Client = @import("../Client.zig");
 
 /// Captures the bounded revisions observed by the presenter after one client
 /// event without exposing the client aggregate.

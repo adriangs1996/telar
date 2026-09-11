@@ -6,151 +6,23 @@ const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 const tab_attachment_retirement = @import("tab_attachment_retirement.zig");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const RequestCapacity = struct {
-    context: *anyopaque,
-    ensure: *const fn (*anyopaque, u64) anyerror!void,
-};
+pub const RequestCapacity = @import("RequestCapacity.zig");
 
-pub const DeliveryCapacity = struct {
-    context: *anyopaque,
-    available: *const fn (*anyopaque) usize,
-};
+pub const DeliveryCapacity = @import("DeliveryCapacity.zig");
 
-pub const PrepareTabCloseHandler = struct {
-    requests: RequestCapacity,
-    deliveries: DeliveryCapacity,
-    pending_attachments: tab_attachment_retirement.PendingAttachments,
+pub const PrepareTabCloseHandler = @import("PrepareTabCloseHandler.zig");
 
-    /// Reserves one close request, its recovery identity and every outbound
-    /// delivery required to retire the exact tab without changing state.
-    ///
-    /// ```zig
-    /// try handler.execute(model, location);
-    /// ```
-    pub fn execute(handler: *const PrepareTabCloseHandler, model: *const client_model.Model, location: schema.TabLocation) !void {
-        const plan = try model.planTabDetachment(location);
-
-        try handler.requests.ensure(handler.requests.context, 2);
-
-        const retirement_capacity = tab_attachment_retirement.requiredDeliveryCapacity(
-            &plan,
-            handler.pending_attachments,
-        );
-        const required_capacity = 1 + retirement_capacity;
-        if (required_capacity > handler.deliveries.available(handler.deliveries.context)) {
-            return error.ClientOutboxFull;
-        }
-    }
-};
-
-const Event = union(enum) {
+pub const Event = union(enum) {
     ensure_requests: u64,
     attachment_pending: schema.PaneId,
     available_deliveries,
 };
 
-const TestingModel = struct {
-    model: *client_model.Model,
-    location: schema.TabLocation,
-    root: schema.PaneId,
-    sibling: schema.PaneId,
+const TestingModel = @import("TabClosePreparationTestingModel.zig");
 
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const location: schema.TabLocation = .{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(1),
-        };
-        const root: schema.PaneId = @enumFromInt(1);
-        const sibling: schema.PaneId = @enumFromInt(2);
-        try model.workspace.bootstrap(.{ .pane_id = root, .location = location, .size = .{ .cols = 40, .rows = 10 } });
-        try model.workspace.active().?.model.split(.{ .existing_pane = root, .new_pane = sibling, .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
-        if (!model.workspace.active().?.model.focusPane(root)) {
-            return error.FocusNotChanged;
-        }
-
-        const root_pane = model.workspace.findPane(root).?;
-        root_pane.input_modes.bracketed_paste = true;
-        root_pane.input_modes.focus_events = true;
-        model.workspace.findPane(sibling).?.attached = false;
-        _ = model.beginPanePaste().?;
-        _ = model.syncReportedPaneFocus().?;
-
-        return .{
-            .model = model,
-            .location = location,
-            .root = root,
-            .sibling = sibling,
-        };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
-
-const Capture = struct {
-    pending_pane: ?schema.PaneId,
-    available: usize,
-    request_failure: ?anyerror = null,
-    events: [4]Event = undefined,
-    event_count: usize = 0,
-
-    fn handler(capture: *Capture) PrepareTabCloseHandler {
-        return .{
-            .requests = .{
-                .context = capture,
-                .ensure = ensureRequests,
-            },
-            .deliveries = .{
-                .context = capture,
-                .available = availableDeliveries,
-            },
-            .pending_attachments = .{
-                .context = capture,
-                .pending = attachmentPending,
-            },
-        };
-    }
-
-    fn ensureRequests(context: *anyopaque, count: u64) !void {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.append(.{ .ensure_requests = count });
-        if (capture.request_failure) |failure| {
-            return failure;
-        }
-    }
-
-    fn availableDeliveries(context: *anyopaque) usize {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.append(.available_deliveries);
-
-        return capture.available;
-    }
-
-    fn attachmentPending(context: *anyopaque, pane_id: schema.PaneId) bool {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.append(.{ .attachment_pending = pane_id });
-
-        return capture.pending_pane == pane_id;
-    }
-
-    fn append(capture: *Capture, event: Event) void {
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn eventSlice(capture: *const Capture) []const Event {
-        return capture.events[0..capture.event_count];
-    }
-};
+const Capture = @import("TabClosePreparationCapture.zig");
 
 test "PrepareTabCloseHandler accepts the exact required capacity without effects" {
     var testing = try TestingModel.init();

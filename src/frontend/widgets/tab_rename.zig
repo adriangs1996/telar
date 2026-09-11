@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const edit = @import("telar-client").input.edit;
-const widget = @import("context.zig");
+const widget = @import("context_support.zig");
 const ui = @import("../ui/root.zig");
 
 const schema = core.schema;
@@ -12,11 +12,7 @@ pub const Kind = enum { rename_tab, create_workspace, rename_workspace, copy_sea
 
 pub const Output = widget.Cursor;
 
-pub const Input = struct {
-    area: ui.Rect,
-    field: *Field,
-    kind: Kind,
-};
+pub const Input = @import("TabRenameInput.zig");
 
 /// Renders one tab or workspace name prompt and returns its cursor.
 /// For example: `const cursor = render(context, .{ .area = area, .field = field, .kind = .rename_tab });`.

@@ -6,67 +6,12 @@ const core = @import("telar-core");
 const graphics_credit_commands = @import("../../application/commands/graphics_credit.zig");
 const telemetry_mod = @import("../../observability/root.zig").telemetry;
 
-const schema = core.schema;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+pub const schema = core.schema;
+pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 
-/// Builds a statically dispatched controller for graphics flow control.
-///
-/// ```zig
-/// const GraphicsCreditController = Controller(*graphics_credit_commands.ReturnGraphicsCreditHandler);
-/// var controller = GraphicsCreditController.init(&metrics, &handler);
-/// ```
-pub fn Controller(comptime Executor: type) type {
-    return struct {
-        const Self = @This();
+pub const Controller = @import("GenericGraphicsCreditController.zig").Type;
 
-        metrics: *RuntimeMetrics,
-        executor: Executor,
-
-        /// Creates one controller bound to the requesting client and handler.
-        ///
-        /// ```zig
-        /// var controller = GraphicsCreditController.init(&metrics, &handler);
-        /// ```
-        pub fn init(metrics: *RuntimeMetrics, executor: Executor) Self {
-            return .{ .metrics = metrics, .executor = executor };
-        }
-
-        /// Returns the exact wire amount and counts missing attachments or
-        /// amounts outside the attachment's outstanding credit as stale.
-        ///
-        /// ```zig
-        /// try controller.graphicsCredit(credit);
-        /// ```
-        pub inline fn graphicsCredit(controller: *Self, credit: schema.GraphicsCredit) !void {
-            const result = try controller.executor.execute(.{
-                .pane_id = credit.pane_id,
-                .bytes = credit.bytes,
-            });
-
-            if (result != .returned) {
-                controller.metrics.stale_client_messages += 1;
-            }
-        }
-    };
-}
-
-const StubExecutor = struct {
-    result: graphics_credit_commands.ReturnGraphicsCreditResult = .returned,
-    failure: ?anyerror = null,
-    call_count: usize = 0,
-    command: ?graphics_credit_commands.ReturnGraphicsCredit = null,
-
-    fn execute(stub: *StubExecutor, command: graphics_credit_commands.ReturnGraphicsCredit) !graphics_credit_commands.ReturnGraphicsCreditResult {
-        stub.call_count += 1;
-        stub.command = command;
-
-        if (stub.failure) |failure| {
-            return failure;
-        }
-
-        return stub.result;
-    }
-};
+const StubExecutor = @import("GraphicsCreditStubExecutor.zig");
 
 const TestController = Controller(*StubExecutor);
 

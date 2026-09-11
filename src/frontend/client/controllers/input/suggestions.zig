@@ -11,7 +11,7 @@ const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const connection_outbox = @import("telar-client").connection.outbox;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const schema = core.schema;
 
 /// Opens the palette with an empty request and no suggestion.

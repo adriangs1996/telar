@@ -10,15 +10,15 @@ const client_clock = @import("telar-client").resources.clock;
 const deadline_timer = @import("telar-client").resources.deadline_timer;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
-const Client = @import("../../client.zig");
-const InputHandler = @import("../../resources/input_handler.zig");
-const Io = std.Io;
-const File = Io.File;
-const Action = input_capability.action.Action;
-const keybind = input_capability.keybind;
-const key_routing = input_application.key_routing;
+const Client = @import("../../Client.zig");
+const InputHandler = @import("../../resources/InputHandler.zig");
+pub const Io = std.Io;
+pub const File = Io.File;
+pub const Action = input_capability.action.Action;
+pub const keybind = input_capability.keybind;
+pub const key_routing = input_application.key_routing;
 
-const chunk_size = 4096;
+pub const chunk_size = 4096;
 const held_binding_bytes = 128;
 
 pub const Router = keybind.Router(
@@ -35,21 +35,9 @@ comptime {
     std.debug.assert(chunk_size <= runtime_transport.max_input_bytes);
 }
 
-pub const Chunk = struct {
-    bytes: [chunk_size]u8 = undefined,
-    len: u16 = 0,
+pub const Chunk = @import("Chunk.zig");
 
-    fn slice(chunk: *const Chunk) []const u8 {
-        return chunk.bytes[0..chunk.len];
-    }
-};
-
-pub const Config = struct {
-    prefix: keybind.Key,
-    bindings: []const lua_config.ConfiguredBinding,
-    escape_timeout_ns: u64,
-    sequence_timeout_ns: u64,
-};
+pub const Config = @import("Config.zig");
 
 /// Compiles an owned, allocation-free router from validated configuration.
 ///
@@ -65,91 +53,7 @@ pub fn buildRouter(config: Config) !Router {
     return router;
 }
 
-pub const State = struct {
-    file: File,
-    router: Router,
-    /// The one in-flight TTY read lands here. The read task owns it until
-    /// its `.input` completion, and routing finishes before the next read is
-    /// armed, so the event carries a length instead of 4 KiB of bytes.
-    chunk: Chunk = .{},
-    read_pending: bool = false,
-    presentation_revision: u64 = 0,
-    input_timeout: deadline_timer.Scheduler = .{},
-    binding_timeout: deadline_timer.Scheduler = .{},
-    application_leases: key_routing.Leases = .{},
-    startup_input: @import("../../resources/startup_input.zig").State = .{},
-
-    /// Creates the host input state around the client-owned TTY handle.
-    ///
-    /// ```zig
-    /// const state = try State.init(input_file, config);
-    /// ```
-    pub fn init(file: File, config: Config) !State {
-        return .{ .file = file, .router = try buildRouter(config) };
-    }
-
-    /// Replaces the native router and wakes timers that still follow its old
-    /// partial input.
-    ///
-    /// ```zig
-    /// state.replaceRouter(io, replacement);
-    /// ```
-    pub fn replaceRouter(state: *State, io: Io, replacement: Router) void {
-        const prefix_was_pending = state.router.prefixPending();
-        var inherited = replacement;
-        inherited.inheritPhysicalLeases(&state.router);
-        state.router = inherited;
-        if (prefix_was_pending != state.router.prefixPending()) {
-            state.presentation_revision +%= 1;
-        }
-        _ = state.input_timeout.update(io, null);
-        _ = state.binding_timeout.update(io, null);
-    }
-
-    /// Returns the revision of visible host-input routing state.
-    ///
-    /// ```zig
-    /// const revision = state.presentationVersion();
-    /// ```
-    pub fn presentationVersion(state: *const State) u64 {
-        return state.presentation_revision;
-    }
-
-    /// Projects prefix help from the effective router without exposing its
-    /// matching state to the presenter.
-    ///
-    /// ```zig
-    /// const mode = state.statusMode(copy_mode_active);
-    /// ```
-    pub fn statusMode(state: *const State, copy_mode_active: bool) widgets.status_bar.Mode {
-        if (!state.router.prefixPending()) {
-            return if (copy_mode_active) .copy else .normal;
-        }
-
-        const DescribedAction = struct {
-            action: Action,
-            label: []const u8,
-        };
-        const useful = [_]DescribedAction{
-            .{ .action = .{ .split_pane = .horizontal }, .label = "split right" },
-            .{ .action = .{ .split_pane = .vertical }, .label = "split down" },
-            .{ .action = .new_tab, .label = "new tab" },
-            .{ .action = .new_workspace, .label = "new workspace" },
-            .{ .action = .rename_tab, .label = "rename tab" },
-            .{ .action = .rename_workspace, .label = "rename workspace" },
-            .{ .action = .close_pane, .label = "close pane" },
-            .{ .action = .enter_copy_mode, .label = "copy mode" },
-        };
-        var hints: widgets.status_bar.Hints = .{};
-        for (useful) |described| {
-            const key = state.router.prefixedKeyForAction(described.action) orelse continue;
-
-            hints.append(.{ .key = key, .label = described.label });
-        }
-
-        return .{ .prefix = hints };
-    }
-};
+pub const State = @import("State.zig");
 
 const Expiry = enum {
     input,

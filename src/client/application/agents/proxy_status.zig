@@ -4,55 +4,11 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 
-pub const ProxyStatusDelivery = struct {
-    context: *anyopaque,
-    deliver: *const fn (*anyopaque, client_model.ProxyStatusCommit) anyerror!void,
-};
+pub const ProxyStatusDelivery = @import("ProxyStatusDelivery.zig");
 
-pub const ApplyProxyStatusHandler = struct {
-    model: *client_model.Model,
-    delivery: ProxyStatusDelivery,
+pub const ApplyProxyStatusHandler = @import("ApplyProxyStatusHandler.zig");
 
-    /// Commits a changed proxy state before delivering its exact transition.
-    /// Repeated values produce neither a commit nor a delivery.
-    ///
-    /// ```zig
-    /// const commit = try handler.execute(.{ .active = true, .scope = .exact, .system_trusted = false }) orelse return;
-    /// ```
-    pub fn execute(handler: *ApplyProxyStatusHandler, status: core.schema.ProxyStatus) !?client_model.ProxyStatusCommit {
-        const commit = handler.model.reconcileProxyStatus(status) orelse return null;
-
-        try handler.delivery.deliver(handler.delivery.context, commit);
-        return commit;
-    }
-};
-
-const DeliveryCapture = struct {
-    model: *const client_model.Model,
-    calls: usize = 0,
-    observed_commit: bool = false,
-    commit: ?client_model.ProxyStatusCommit = null,
-    fail: bool = false,
-
-    fn port(capture: *DeliveryCapture) ProxyStatusDelivery {
-        return .{ .context = capture, .deliver = deliver };
-    }
-
-    fn deliver(context: *anyopaque, commit: client_model.ProxyStatusCommit) !void {
-        const capture: *DeliveryCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.commit = commit;
-        capture.observed_commit = capture.model.proxyTlsActive() == commit.active and
-            capture.model.proxyTlsScope() == commit.scope and
-            capture.model.proxySystemTrusted() == commit.system_trusted and
-            capture.model.version().proxy_status == commit.proxy_status_revision and
-            commit.proxy_status_revision_before +% 1 == commit.proxy_status_revision;
-
-        if (capture.fail) {
-            return error.ProxyStatusDeliveryFailed;
-        }
-    }
-};
+const DeliveryCapture = @import("ProxyStatusDeliveryCapture.zig");
 
 test "ApplyProxyStatusHandler commits before delivering each changed state" {
     var model = client_model.Model.init(std.testing.allocator, true);

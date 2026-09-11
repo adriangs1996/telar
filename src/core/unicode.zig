@@ -16,15 +16,7 @@
 
 const vt = @import("ghostty-vt");
 
-/// One grapheme cluster's extent.
-pub const Measured = struct {
-    /// How many codepoints the cluster spans.
-    len: usize,
-    /// How many columns it occupies. Zero for a control character, which the
-    /// caller turns into a blank column - a zero width cell cannot be
-    /// addressed by a cursor.
-    width: u8,
-};
+pub const Measured = @import("UnicodeMeasured.zig");
 
 /// Measures the first grapheme cluster in `codepoints`.
 ///

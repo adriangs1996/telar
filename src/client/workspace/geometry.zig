@@ -4,30 +4,9 @@
 const std = @import("std");
 const ui = @import("telar-core").ui;
 
-pub const Region = struct {
-    area: ui.Rect,
-    revision: u64,
+pub const Region = @import("Region.zig");
 
-    /// Rejects input captured before a host-region change, including ABA.
-    /// Example: `if (!captured.matches(current)) return;`.
-    pub fn matches(captured: Region, current: Region) bool {
-        return captured.revision == current.revision and std.meta.eql(captured.area, current.area);
-    }
-};
-
-pub const State = struct {
-    current: Region = .{ .area = .{}, .revision = 0 },
-
-    /// Publishes a region only when its geometry changes. No storage is borrowed.
-    /// Example: `geometry.update(workbench);`.
-    pub fn update(state: *State, area: ui.Rect) void {
-        if (std.meta.eql(state.current.area, area)) {
-            return;
-        }
-
-        state.current = .{ .area = area, .revision = state.current.revision +% 1 };
-    }
-};
+pub const State = @import("State.zig");
 
 test "geometry changes invalidate captured input even when the area returns" {
     var state: State = .{};

@@ -106,11 +106,7 @@ pub fn parseBarContent(state: *lua.lua_State, index: c_int, diagnostic: *Diagnos
     return content;
 }
 
-pub const ParsedBarSegment = struct {
-    text: []const u8,
-    icon: ?icons.Icon,
-    style: bars.Style,
-};
+pub const ParsedBarSegment = @import("ParsedBarSegment.zig");
 
 pub fn parseBarSegment(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic) !ParsedBarSegment {
     const absolute = lua.lua_absindex(state, index);

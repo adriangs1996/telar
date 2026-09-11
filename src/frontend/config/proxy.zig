@@ -171,11 +171,7 @@ fn parseCapture(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, d
     }
 }
 
-const PositiveField = struct {
-    table: c_int,
-    name: [*:0]const u8,
-    default: usize,
-};
+const PositiveField = @import("PositiveField.zig");
 
 fn positiveBytesField(state: *lua.lua_State, field: PositiveField, diagnostic: *config_model.Diagnostic) !usize {
     _ = lua.lua_getfield(state, field.table, field.name);

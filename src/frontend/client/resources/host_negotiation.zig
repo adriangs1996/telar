@@ -9,51 +9,7 @@ pub const pixel_query = "\x1b[14t\x1b[16t";
 pub const color_query = "\x1b]10;?\x07\x1b]11;?\x07";
 pub const Color = enum { foreground, background };
 
-pub const State = struct {
-    zlib_support: @import("telar-client").environment.Support = .unknown,
-    deadline_ns: ?u64 = null,
-    received: std.EnumSet(Color) = .initEmpty(),
-    initial_settled: bool = false,
-    timer: deadline_timer.Scheduler = .{},
-
-    /// Example: `if (state.begin(now_ns)) try writer.writeAll(color_query);`.
-    pub fn begin(state: *State, now_ns: u64) bool {
-        if (state.deadline_ns != null) {
-            return false;
-        }
-
-        state.deadline_ns = now_ns +| timeout_ns;
-        state.received = .initEmpty();
-        return true;
-    }
-
-    /// Example: `if (!state.accept(.foreground, now_ns)) return;`.
-    pub fn accept(state: *State, color: Color, now_ns: u64) bool {
-        const deadline = state.deadline_ns orelse return false;
-        if (now_ns >= deadline or state.received.contains(color)) {
-            return false;
-        }
-
-        state.received.insert(color);
-        if (state.received.count() == 2) {
-            state.initial_settled = true;
-        }
-
-        return true;
-    }
-
-    /// Example: `if (state.expire(now_ns)) settleUnansweredCapabilities();`.
-    pub fn expire(state: *State, now_ns: u64) bool {
-        const deadline = state.deadline_ns orelse return false;
-        if (now_ns < deadline) {
-            return false;
-        }
-
-        state.deadline_ns = null;
-        state.initial_settled = true;
-        return true;
-    }
-};
+pub const State = @import("HostNegotiationState.zig");
 
 /// Resolves unanswered terminal probes without putting probe policy in the model.
 /// Example: `const next = settledCapabilities(current);`.

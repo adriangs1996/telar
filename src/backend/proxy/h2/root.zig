@@ -4,7 +4,7 @@ const std = @import("std");
 const connection = @import("connection.zig");
 const relay_mod = @import("relay.zig");
 const middleware = @import("../middleware.zig");
-const provider = @import("../provider/request.zig");
+const provider = @import("../provider/request_support.zig");
 const tls = @import("../tls.zig");
 
 pub const Direction = relay_mod.Direction;
@@ -22,36 +22,15 @@ pub const Settings = connection.Settings;
 pub const ConnectionPort = connection.ConnectionPort;
 pub const Connection = connection.Connection;
 
-pub const Route = struct {
-    from: tls.Session.Side,
-    to: tls.Session.Side,
-    direction: Direction,
-};
+pub const Route = @import("H2Route.zig");
 
-pub const Transformation = struct {
-    source_settings: *PeerSettings,
-    target_settings: *PeerSettings,
-    pipeline: *const middleware.TransformPipeline,
-    io: std.Io,
-    context: middleware.TransformContext,
-};
+pub const Transformation = @import("Transformation.zig");
 
-pub const Transform = struct {
-    pipeline: *const middleware.TransformPipeline,
-    io: std.Io,
-    context: middleware.TransformContext,
-};
+pub const Transform = @import("Transform.zig");
 
-pub const RelayOptions = struct {
-    route: Route,
-    dialect: provider.ApiDialect,
-    transformation: ?Transformation = null,
-};
+pub const RelayOptions = @import("RelayOptions.zig");
 
-pub const RelayConfiguration = struct {
-    dialect: provider.ApiDialect,
-    transformation: ?Transform = null,
-};
+pub const RelayConfiguration = @import("RelayConfiguration.zig");
 
 /// Builds the route and crossed peer settings for one relay direction.
 ///
@@ -163,107 +142,9 @@ test "relay options map direction and peer settings" {
     try std.testing.expect(response.transformation.?.target_settings == &settings.child);
 }
 
-const FakeSession = struct {
-    child_input: []const u8,
-    origin_input: []const u8,
-    child_offset: usize = 0,
-    origin_offset: usize = 0,
-    child_output: [128]u8 = undefined,
-    child_output_len: usize = 0,
-    origin_output: [128]u8 = undefined,
-    origin_output_len: usize = 0,
-    child_half_closed: bool = false,
-    origin_half_closed: bool = false,
+const FakeSession = @import("FakeSession.zig");
 
-    pub fn read(session: *FakeSession, side: tls.Session.Side, output: []u8) ?usize {
-        const input, const offset = switch (side) {
-            .child => .{ session.child_input, &session.child_offset },
-            .origin => .{ session.origin_input, &session.origin_offset },
-        };
-
-        if (offset.* == input.len) {
-            return null;
-        }
-
-        const len = @min(output.len, input.len - offset.*);
-        @memcpy(output[0..len], input[offset.*..][0..len]);
-        offset.* += len;
-        return len;
-    }
-
-    pub fn writeAll(session: *FakeSession, side: tls.Session.Side, input: []const u8) bool {
-        const output, const len = switch (side) {
-            .child => .{ &session.child_output, &session.child_output_len },
-            .origin => .{ &session.origin_output, &session.origin_output_len },
-        };
-
-        if (input.len > output.len - len.*) {
-            return false;
-        }
-
-        @memcpy(output[len.*..][0..input.len], input);
-        len.* += input.len;
-        return true;
-    }
-
-    pub fn halfClose(session: *FakeSession, side: tls.Session.Side) void {
-        switch (side) {
-            .child => session.child_half_closed = true,
-            .origin => session.origin_half_closed = true,
-        }
-    }
-
-    fn childOutput(session: *const FakeSession) []const u8 {
-        return session.child_output[0..session.child_output_len];
-    }
-
-    fn originOutput(session: *const FakeSession) []const u8 {
-        return session.origin_output[0..session.origin_output_len];
-    }
-};
-
-const IntegrationContext = struct {
-    session: FakeSession,
-    request_done: *std.Io.Queue(u8),
-    event_count: std.atomic.Value(u32) = .init(0),
-    request_phase: ?middleware.Phase = null,
-    decode_failures: u8 = 0,
-    settlements: u8 = 0,
-
-    fn io(_: *IntegrationContext) std.Io {
-        return std.testing.io;
-    }
-
-    fn relayRequest(context: *IntegrationContext, settings: *Settings) Stats {
-        const stats = relay(&context.session, relayOptions(.request, settings, .{ .dialect = .anthropic_messages }), context);
-        context.request_done.putOneUncancelable(std.testing.io, 0) catch unreachable;
-        return stats;
-    }
-
-    fn relayResponse(context: *IntegrationContext, settings: *Settings) Stats {
-        _ = context.request_done.getOne(std.testing.io) catch return .{ .decode_failed = true };
-        return relay(&context.session, relayOptions(.response, settings, .{ .dialect = .anthropic_messages }), context);
-    }
-
-    fn recordDecodeFailure(context: *IntegrationContext, _: Direction) void {
-        context.decode_failures += 1;
-    }
-
-    fn settle(context: *IntegrationContext) void {
-        context.settlements += 1;
-    }
-
-    pub fn emit(context: *IntegrationContext, event: Event) void {
-        _ = context.event_count.fetchAdd(1, .monotonic);
-
-        switch (event) {
-            .lifecycle => |observed| if (observed.stream_id == 1) {
-                context.request_phase = observed.phase;
-            },
-            .request_headers, .request_body, .request_finished, .response_headers, .response_body => {},
-        }
-    }
-};
+const IntegrationContext = @import("IntegrationContext.zig");
 
 const integration_port: ConnectionPort(IntegrationContext) = .{
     .io = IntegrationContext.io,

@@ -3,10 +3,7 @@
 const std = @import("std");
 const name_prompt = @import("../../root.zig").model.name_prompt;
 
-pub const SubmitEffects = struct {
-    context: *anyopaque,
-    submit: *const fn (*anyopaque, name_prompt.Submission) anyerror!bool,
-};
+pub const SubmitEffects = @import("SubmitEffects.zig");
 
 pub const Outcome = enum {
     unchanged,
@@ -20,67 +17,9 @@ pub const Outcome = enum {
     finished,
 };
 
-pub const NamePromptHandler = struct {
-    prompt: *name_prompt.State,
-    effects: SubmitEffects,
+pub const NamePromptHandler = @import("NamePromptHandler.zig");
 
-    /// Applies one editor command and closes the prompt only after its submit
-    /// effect accepts the borrowed submission.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(.submit);
-    /// ```
-    pub fn execute(handler: *NamePromptHandler, command: name_prompt.Command) !Outcome {
-        return switch (handler.prompt.apply(command)) {
-            .unchanged => .unchanged,
-            .routing_changed => .routing_changed,
-            .changed => .changed,
-            .cancelled => .cancelled,
-            .removed => .removed,
-            .submitted => |submission| if (!try handler.effects.submit(
-                handler.effects.context,
-                submission,
-            ))
-                .blocked
-            else blk: {
-                std.debug.assert(handler.prompt.finish(submission.target));
-                break :blk .finished;
-            },
-        };
-    }
-};
-
-const EffectsCapture = struct {
-    prompt: *const name_prompt.State,
-    accept: bool = true,
-    fail: bool = false,
-    calls: usize = 0,
-    observed_active: bool = false,
-    name: [32]u8 = undefined,
-    name_len: u8 = 0,
-
-    fn port(capture: *EffectsCapture) SubmitEffects {
-        return .{ .context = capture, .submit = submit };
-    }
-
-    fn submit(context: *anyopaque, submission: name_prompt.Submission) !bool {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.observed_active = capture.prompt.active();
-        capture.name_len = @intCast(submission.name.len);
-        @memcpy(capture.name[0..submission.name.len], submission.name);
-
-        if (capture.fail) {
-            return error.SubmitFailed;
-        }
-
-        return capture.accept;
-    }
-
-    fn nameSlice(capture: *const EffectsCapture) []const u8 {
-        return capture.name[0..capture.name_len];
-    }
-};
+const EffectsCapture = @import("NamePromptEffectsCapture.zig");
 
 test "accepted submission stays borrowed and active until the effect returns" {
     var prompt: name_prompt.State = .{};

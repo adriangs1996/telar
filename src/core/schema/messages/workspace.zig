@@ -9,13 +9,13 @@ const tags = @import("tags.zig");
 
 const ClientTag = tags.ClientTag;
 const ServerTag = tags.ServerTag;
-const RequestId = id.RequestId;
-const WorkspaceId = id.WorkspaceId;
-const TerminalSize = types.TerminalSize;
-const WorkspaceLocation = types.WorkspaceLocation;
-const Launch = types.Launch;
-const TabDescriptor = types.TabDescriptor;
-const LaunchView = launch_mod.LaunchView;
+pub const RequestId = id.RequestId;
+pub const WorkspaceId = id.WorkspaceId;
+pub const TerminalSize = types.TerminalSize;
+pub const WorkspaceLocation = types.WorkspaceLocation;
+pub const Launch = types.Launch;
+pub const TabDescriptor = types.TabDescriptor;
+pub const LaunchView = launch_mod.LaunchView;
 const encodeDerived = codec.encodeDerived;
 const validateRequestId = codec.validateRequestId;
 const validateBytes = codec.validateBytes;
@@ -25,129 +25,29 @@ const decodeSize = codec.decodeSize;
 const encodeWorkspaceLocation = codec.encodeWorkspaceLocation;
 const decodeWorkspaceLocation = codec.decodeWorkspaceLocation;
 
-/// Forces a named workspace identity at `launch.cwd`. Unlike `open_pane`, this
-/// never attaches to an existing workspace with the same path. The name is
-/// explicit and remains independent from pane cwd changes.
-pub const CreateWorkspace = struct {
-    request_id: RequestId,
-    size: TerminalSize,
-    name: []const u8,
-    launch: Launch,
-};
+pub const CreateWorkspace = @import("CreateWorkspace.zig");
 
-pub const CreateWorkspaceView = struct {
-    request_id: RequestId,
-    size: TerminalSize,
-    name: []const u8,
-    launch: LaunchView,
-};
+pub const CreateWorkspaceView = @import("CreateWorkspaceView.zig");
 
-pub const RenameWorkspace = struct {
-    request_id: RequestId,
-    workspace: WorkspaceLocation,
-    name: []const u8,
-};
+pub const RenameWorkspace = @import("RenameWorkspace.zig");
 
-pub const RequestWorkspaceSnapshot = struct {
-    request_id: RequestId,
-    workspace: WorkspaceLocation,
-};
+pub const RequestWorkspaceSnapshot = @import("RequestWorkspaceSnapshot.zig");
 
-pub const WorkspaceSnapshot = struct {
-    request_id: RequestId,
-    workspace: WorkspaceLocation,
-    name: []const u8,
-    tabs: []const TabDescriptor,
-};
+pub const WorkspaceSnapshot = @import("WorkspaceSnapshot.zig");
 
-pub const WorkspaceSnapshotView = struct {
-    request_id: RequestId,
-    workspace: WorkspaceLocation,
-    name: []const u8,
-    tab_count: u16,
-    encoded_tabs: []const u8,
+pub const WorkspaceSnapshotView = @import("WorkspaceSnapshotView.zig");
 
-    pub fn tabs(snapshot: WorkspaceSnapshotView) TabDescriptorIterator {
-        return .{
-            .decoder = .init(snapshot.encoded_tabs),
-            .remaining = snapshot.tab_count,
-        };
-    }
-};
+pub const TabDescriptorIterator = @import("TabDescriptorIterator.zig");
 
-pub const TabDescriptorIterator = struct {
-    decoder: wire.Decoder,
-    remaining: u16,
+pub const ResyncRequired = @import("ResyncRequired.zig");
 
-    pub fn next(iterator: *TabDescriptorIterator) !?TabDescriptor {
-        if (iterator.remaining == 0) {
-            return null;
-        }
-        iterator.remaining -= 1;
-        return .{
-            .tab_id = try id.tab(try iterator.decoder.readInt(u64)),
-            .position = try iterator.decoder.readInt(u16),
-            .pane_count = try iterator.decoder.readInt(u16),
-            .label = try iterator.decoder.readSized16(),
-        };
-    }
-};
+pub const WorkspaceListEntry = @import("WorkspaceListEntry.zig");
 
-pub const ResyncRequired = struct {
-    workspace: WorkspaceLocation,
-    workspace_closed: bool,
-    previous_workspace: ?WorkspaceId = null,
+pub const WorkspaceList = @import("WorkspaceList.zig");
 
-    pub fn validateWire(message: ResyncRequired) !void {
-        try validateWorkspaceClosure(
-            message.workspace,
-            message.workspace_closed,
-            message.previous_workspace,
-        );
-    }
-};
+pub const WorkspaceListView = @import("WorkspaceListView.zig");
 
-pub const WorkspaceListEntry = struct {
-    workspace: WorkspaceId,
-    name: []const u8,
-    path: []const u8,
-    tab_count: u16,
-    /// Current git branch (or short commit), empty when the workspace is not
-    /// a repository or has not been probed yet.
-    branch: []const u8 = "",
-    dirty: bool = false,
-};
-
-pub const WorkspaceList = struct {
-    revision: u64,
-    entries: []const WorkspaceListEntry,
-};
-
-pub const WorkspaceListView = struct {
-    revision: u64,
-    entry_count: u16,
-    encoded_entries: []const u8,
-
-    pub fn entries(list: WorkspaceListView) WorkspaceListIterator {
-        return .{
-            .decoder = .init(list.encoded_entries),
-            .remaining = list.entry_count,
-        };
-    }
-};
-
-pub const WorkspaceListIterator = struct {
-    decoder: wire.Decoder,
-    remaining: u16,
-
-    pub fn next(iterator: *WorkspaceListIterator) !?WorkspaceListEntry {
-        if (iterator.remaining == 0) {
-            return null;
-        }
-        iterator.remaining -= 1;
-        return try decodeWorkspaceListEntry(&iterator.decoder);
-    }
-};
+pub const WorkspaceListIterator = @import("WorkspaceListIterator.zig");
 
 /// A close that removed a workspace names the surviving predecessor; any
 /// other close must not.
@@ -356,7 +256,7 @@ pub fn decodeWorkspaceList(decoder: *wire.Decoder) !WorkspaceListView {
     };
 }
 
-fn decodeWorkspaceListEntry(decoder: *wire.Decoder) !WorkspaceListEntry {
+pub fn decodeWorkspaceListEntry(decoder: *wire.Decoder) !WorkspaceListEntry {
     const workspace = try id.workspace(try decoder.readInt(u64));
     const name = try decoder.readSized16();
     try validateBytes(name, types.max_workspace_name_bytes, false);

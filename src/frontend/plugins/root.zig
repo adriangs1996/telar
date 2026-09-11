@@ -9,8 +9,8 @@ const action_mod = @import("telar-client").input.action;
 const lua_config = @import("../config/root.zig");
 const protocol = @import("protocol.zig");
 
-const Io = std.Io;
-const plugin = core.plugin;
+pub const Io = std.Io;
+pub const plugin = core.plugin;
 
 pub const runWorker = @import("worker.zig").run;
 
@@ -18,230 +18,23 @@ pub const max_packages = lua_config.max_plugins;
 pub const max_package_files = 256;
 pub const max_package_bytes = 16 * 1024 * 1024;
 
-pub const LoadContext = struct {
-    gpa: std.mem.Allocator,
-    io: Io,
-    config_dir: []const u8,
-};
+pub const LoadContext = @import("LoadContext.zig");
 
-pub const BatchAuthorization = struct {
-    package_index: u8,
-    plugin_id: u64,
-    digest: plugin.Digest,
-    batch: *const lua_config.EffectBatch,
-};
+pub const BatchAuthorization = @import("BatchAuthorization.zig");
 
-pub const Installation = struct {
-    package: *const Package,
-    destination: []const u8,
-};
+pub const Installation = @import("Installation.zig");
 
-const FingerprintUpdate = struct {
-    hasher: *std.hash.Wyhash,
-    root: []const u8,
-};
+const FingerprintUpdate = @import("FingerprintUpdate.zig");
 
-pub const Package = struct {
-    manifest: plugin.Manifest,
-    digest: plugin.Digest,
-    root_bytes: [std.fs.max_path_bytes]u8 = undefined,
-    root_len: u16,
-    entry_bytes: [std.fs.max_path_bytes]u8 = undefined,
-    entry_len: u16,
+pub const Package = @import("Package.zig");
 
-    pub fn root(package: *const Package) []const u8 {
-        return package.root_bytes[0..package.root_len];
-    }
+pub const Registry = @import("Registry.zig");
 
-    pub fn entryPath(package: *const Package) []const u8 {
-        return package.entry_bytes[0..package.entry_len];
-    }
-};
+pub const Invocation = @import("Invocation.zig");
 
-pub const Registry = struct {
-    packages: [max_packages]Package = undefined,
-    count: u8 = 0,
-    grants: [plugin.max_grants]plugin.Grant = undefined,
-    grant_count: u8 = 0,
+pub const WorkerRequest = @import("WorkerRequest.zig");
 
-    /// Loads enabled plugin packages without persisted capability grants.
-    /// For example: `const registry = try Registry.load(context, specs);`.
-    pub fn load(context: LoadContext, specs: []const lua_config.PluginSpec) !Registry {
-        const empty: plugin.TrustStore = .{};
-        return loadWithTrust(context, specs, &empty);
-    }
-
-    /// Loads enabled plugin packages and their persisted capability grants.
-    /// For example: `const registry = try Registry.loadWithTrust(context, specs, trust);`.
-    pub fn loadWithTrust(context: LoadContext, specs: []const lua_config.PluginSpec, trust: *const plugin.TrustStore) !Registry {
-        var registry: Registry = .{};
-        registry.grant_count = trust.count;
-        for (trust.entries[0..trust.count], 0..) |entry, index|
-            registry.grants[index] = entry.grant;
-        for (specs) |*spec| {
-            if (!spec.enabled) {
-                continue;
-            }
-            if (registry.count == max_packages) {
-                return error.TooManyPlugins;
-            }
-            const package = try loadPackage(context, spec.path());
-            for (registry.packages[0..registry.count]) |*existing| {
-                if (std.mem.eql(u8, existing.manifest.id(), package.manifest.id())) {
-                    return error.DuplicatePluginId;
-                }
-                if (plugin.stableId(existing.manifest.id()) == plugin.stableId(package.manifest.id())) {
-                    return error.PluginIdHashCollision;
-                }
-            }
-            registry.packages[registry.count] = package;
-            registry.count += 1;
-        }
-        return registry;
-    }
-
-    pub fn resolve(registry: *const Registry, requested: action_mod.PluginAction) !Invocation {
-        for (registry.packages[0..registry.count], 0..) |*package, package_index| {
-            if (plugin.stableId(package.manifest.id()) != requested.plugin) {
-                continue;
-            }
-            for (package.manifest.actions[0..package.manifest.action_count], 0..) |*name, action_index| {
-                if (plugin.stableId(name.slice()) == requested.action) {
-                    return .{
-                        .package_index = @intCast(package_index),
-                        .action_index = @intCast(action_index),
-                        .plugin_id = requested.plugin,
-                        .action_id = requested.action,
-                    };
-                }
-            }
-            return error.UnknownPluginAction;
-        }
-        return error.PluginNotConfigured;
-    }
-
-    pub fn validateConfiguredActions(registry: *const Registry, bindings: []const lua_config.ConfiguredBinding) !void {
-        for (bindings) |binding| switch (binding.action) {
-            .plugin => |requested| _ = try registry.resolve(requested),
-            else => {},
-        };
-    }
-
-    pub fn workerRequest(registry: *const Registry, invocation: Invocation, context: lua_config.CallbackContext) !WorkerRequest {
-        if (invocation.package_index >= registry.count) {
-            return error.PluginNotConfigured;
-        }
-        const package = &registry.packages[invocation.package_index];
-        if (invocation.action_index >= package.manifest.action_count) {
-            return error.UnknownPluginAction;
-        }
-        const action_name = package.manifest.actions[invocation.action_index].slice();
-        var request: WorkerRequest = .{
-            .package_index = invocation.package_index,
-            .plugin_id = plugin.stableId(package.manifest.id()),
-            .digest = package.digest,
-            .package = package.*,
-            .action_len = @intCast(action_name.len),
-            .context = context,
-        };
-        @memcpy(request.action_bytes[0..action_name.len], action_name);
-        return request;
-    }
-
-    pub fn authorize(registry: *const Registry, package_index: u8, capability: plugin.Capability) !void {
-        if (package_index >= registry.count) {
-            return error.PluginNotConfigured;
-        }
-        const package = &registry.packages[package_index];
-        if (!package.manifest.capabilities.contains(capability)) {
-            return error.CapabilityNotDeclared;
-        }
-        for (registry.grants[0..registry.grant_count]) |grant| {
-            if (grant.allows(.{ .id = package.manifest.id(), .digest = package.digest }, capability)) {
-                return;
-            }
-        }
-
-        return error.CapabilityNotGranted;
-    }
-
-    /// Authorizes a worker batch against its immutable package identity.
-    /// For example: `try registry.authorizeBatch(.{ .package_index = index, .plugin_id = id, .digest = digest, .batch = batch });`.
-    pub fn authorizeBatch(registry: *const Registry, authorization: BatchAuthorization) !void {
-        if (authorization.package_index >= registry.count) {
-            return error.PluginNotConfigured;
-        }
-        const package = &registry.packages[authorization.package_index];
-        if (plugin.stableId(package.manifest.id()) != authorization.plugin_id or
-            !std.mem.eql(u8, &package.digest, &authorization.digest))
-        {
-            return error.StalePluginWorker;
-        }
-        for (authorization.batch.slice()) |effect| {
-            const capability: ?plugin.Capability = switch (effect) {
-                .split_pane, .close_pane, .new_workspace, .rename_workspace, .new_tab, .rename_tab, .close_tab, .move_tab, .detach => .runtime_control,
-                .focus_pane,
-                .navigate_pane,
-                .resize_pane,
-                .toggle_pane_fullscreen,
-                .toggle_sidebar,
-                .resize_sidebar,
-                .toggle_workspace_list,
-                .select_workspace,
-                .select_tab_offset,
-                .select_tab,
-                .enter_copy_mode,
-                .command_tab,
-                .goto_picker,
-                .history_palette,
-                .suggest_command,
-                => null,
-                .notification => .notifications,
-                .scroll_pane, .lua_callback, .lua_expr, .plugin, .toggle_agent_mode => return error.InvalidPluginEffect,
-            };
-            if (capability) |required| {
-                try registry.authorize(authorization.package_index, required);
-            }
-        }
-    }
-
-    /// Hashes every configured package path and readable file for reload detection.
-    /// For example: `const fingerprint = registry.watchFingerprint(gpa, io);`.
-    pub fn watchFingerprint(registry: *const Registry, gpa: std.mem.Allocator, io: Io) u64 {
-        var hasher = std.hash.Wyhash.init(0x74656c61722d706c);
-        for (registry.packages[0..registry.count]) |*package|
-            updatePackageFingerprint(gpa, io, .{ .hasher = &hasher, .root = package.root() });
-        return hasher.final();
-    }
-};
-
-pub const Invocation = struct {
-    package_index: u8,
-    action_index: u8,
-    plugin_id: u64,
-    action_id: u64,
-};
-
-pub const WorkerRequest = struct {
-    package_index: u8,
-    plugin_id: u64,
-    digest: plugin.Digest,
-    package: Package,
-    action_bytes: [plugin.max_action_bytes]u8 = undefined,
-    action_len: u8,
-    context: lua_config.CallbackContext,
-
-    pub fn action(request: *const WorkerRequest) []const u8 {
-        return request.action_bytes[0..request.action_len];
-    }
-};
-
-pub const WorkerResult = struct {
-    package_index: u8,
-    plugin_id: u64,
-    digest: plugin.Digest,
-    batch: lua_config.EffectBatch,
-};
+pub const WorkerResult = @import("WorkerResult.zig");
 
 pub fn executeWorker(io: Io, gpa: std.mem.Allocator, request: WorkerRequest) !WorkerResult {
     var nonce: [16]u8 = undefined;
@@ -315,7 +108,7 @@ pub fn executeWorker(io: Io, gpa: std.mem.Allocator, request: WorkerRequest) !Wo
     };
 }
 
-fn loadPackage(context: LoadContext, configured_path: []const u8) !Package {
+pub fn loadPackage(context: LoadContext, configured_path: []const u8) !Package {
     const gpa = context.gpa;
     const io = context.io;
     const joined = if (std.fs.path.isAbsolute(configured_path))
@@ -535,7 +328,7 @@ fn pathInside(root: []const u8, candidate: []const u8) bool {
         (candidate.len > root.len and candidate[root.len] == std.fs.path.sep);
 }
 
-fn updatePackageFingerprint(gpa: std.mem.Allocator, io: Io, update: FingerprintUpdate) void {
+pub fn updatePackageFingerprint(gpa: std.mem.Allocator, io: Io, update: FingerprintUpdate) void {
     const hasher = update.hasher;
     const root = update.root;
 

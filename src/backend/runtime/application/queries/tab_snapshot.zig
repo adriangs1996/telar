@@ -3,101 +3,19 @@
 const std = @import("std");
 const core = @import("telar-core");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const Request = struct {
-    location: schema.TabLocation,
-};
+pub const Request = @import("TabSnapshotRequest.zig");
 
-pub const Result = struct {
-    location: schema.TabLocation,
-};
+pub const Result = @import("TabSnapshotResult.zig");
 
-pub const Source = struct {
-    context: *anyopaque,
-    contains_tab: *const fn (*anyopaque, schema.TabLocation) bool,
-    running_panes: *const fn (*anyopaque, schema.TabLocation) u16,
-};
+pub const Source = @import("Source.zig");
 
-pub const Executor = struct {
-    context: *anyopaque,
-    execute_fn: *const fn (*anyopaque, Request) anyerror!Result,
+pub const Executor = @import("TabSnapshotExecutor.zig");
 
-    /// Executes the tab-snapshot query through its bound handler.
-    ///
-    /// ```zig
-    /// const snapshot = try executor.execute(.{ .location = location });
-    /// ```
-    pub fn execute(executor: Executor, request: Request) !Result {
-        return executor.execute_fn(executor.context, request);
-    }
-};
+pub const Handler = @import("TabSnapshotHandler.zig");
 
-pub const Handler = struct {
-    source: Source,
-
-    /// Returns a snapshot reference only while both its tab and at least one
-    /// running pane exist. The later encoder owns materializing pane details.
-    ///
-    /// ```zig
-    /// const snapshot = try handler.execute(.{ .location = location });
-    /// ```
-    pub fn execute(handler: *Handler, request: Request) !Result {
-        if (!handler.source.contains_tab(handler.source.context, request.location)) {
-            return error.TabNotFound;
-        }
-
-        if (handler.source.running_panes(handler.source.context, request.location) == 0) {
-            return error.TabNotFound;
-        }
-
-        return .{ .location = request.location };
-    }
-
-    /// Exposes this handler through the query interface used by controllers.
-    ///
-    /// ```zig
-    /// const executor = handler.executor();
-    /// ```
-    pub fn executor(handler: *Handler) Executor {
-        return .{ .context = handler, .execute_fn = executeErased };
-    }
-
-    fn executeErased(context: *anyopaque, request: Request) !Result {
-        const handler: *Handler = @ptrCast(@alignCast(context));
-        return handler.execute(request);
-    }
-};
-
-const SourceCapture = struct {
-    contains: bool,
-    pane_count: u16,
-    contains_calls: usize = 0,
-    pane_calls: usize = 0,
-    last_location: ?schema.TabLocation = null,
-
-    fn source(capture: *SourceCapture) Source {
-        return .{
-            .context = capture,
-            .contains_tab = containsTab,
-            .running_panes = runningPanes,
-        };
-    }
-
-    fn containsTab(context: *anyopaque, location: schema.TabLocation) bool {
-        const capture: *SourceCapture = @ptrCast(@alignCast(context));
-        capture.contains_calls += 1;
-        capture.last_location = location;
-        return capture.contains;
-    }
-
-    fn runningPanes(context: *anyopaque, location: schema.TabLocation) u16 {
-        const capture: *SourceCapture = @ptrCast(@alignCast(context));
-        capture.pane_calls += 1;
-        capture.last_location = location;
-        return capture.pane_count;
-    }
-};
+const SourceCapture = @import("SourceCapture.zig");
 
 fn testingLocation() !schema.TabLocation {
     return .{

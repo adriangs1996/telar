@@ -4,141 +4,25 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const RequestTabMove = struct {
-    direction: schema.TabMoveDirection,
-};
+pub const RequestTabMove = @import("RequestTabMove.zig");
 
-pub const TabMoveIntent = struct {
-    location: schema.TabLocation,
-    direction: schema.TabMoveDirection,
-};
+pub const TabMoveIntent = @import("TabMoveIntent.zig");
 
-pub const TabOperationGate = struct {
-    context: *anyopaque,
-    pending: *const fn (*anyopaque) bool,
-};
+pub const TabOperationGate = @import("MoveTabTabOperationGate.zig");
 
-pub const MoveRequestEffects = struct {
-    context: *anyopaque,
-    send: *const fn (*anyopaque, TabMoveIntent) anyerror!void,
-};
+pub const MoveRequestEffects = @import("MoveRequestEffects.zig");
 
-pub const RequestTabMoveHandler = struct {
-    model: *const client_model.Model,
-    gate: TabOperationGate,
-    effects: MoveRequestEffects,
+pub const RequestTabMoveHandler = @import("RequestTabMoveHandler.zig");
 
-    /// Sends one move intent for the active tab without changing its local
-    /// position. Blocked requests and an empty projection have no effects.
-    ///
-    /// ```zig
-    /// if (!try handler.execute(.{ .direction = .previous })) {
-    ///     return;
-    /// }
-    /// ```
-    pub fn execute(handler: *RequestTabMoveHandler, request: RequestTabMove) !bool {
-        if (handler.gate.pending(handler.gate.context)) {
-            return false;
-        }
+pub const ConfirmTabMove = @import("ConfirmTabMove.zig");
 
-        const location = handler.model.activeTabLocation() orelse return false;
-        try handler.effects.send(handler.effects.context, .{
-            .location = location,
-            .direction = request.direction,
-        });
+pub const ConfirmTabMoveHandler = @import("ConfirmTabMoveHandler.zig");
 
-        return true;
-    }
-};
+const RequestCapture = @import("MoveTabRequestCapture.zig");
 
-pub const ConfirmTabMove = struct {
-    location: schema.TabLocation,
-    position: u16,
-};
-
-pub const ConfirmTabMoveHandler = struct {
-    model: *client_model.Model,
-
-    /// Commits the canonical runtime position. A repeated position is a
-    /// semantic no-op and leaves the model version unchanged.
-    ///
-    /// ```zig
-    /// const change = try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *ConfirmTabMoveHandler, command: ConfirmTabMove) !client_model.Change {
-        return handler.model.applyTabPosition(command.location, command.position);
-    }
-};
-
-const RequestCapture = struct {
-    blocked: bool = false,
-    fail: bool = false,
-    calls: usize = 0,
-    intent: ?TabMoveIntent = null,
-
-    fn gate(capture: *RequestCapture) TabOperationGate {
-        return .{ .context = capture, .pending = pending };
-    }
-
-    fn effects(capture: *RequestCapture) MoveRequestEffects {
-        return .{ .context = capture, .send = send };
-    }
-
-    fn pending(context: *anyopaque) bool {
-        const capture: *RequestCapture = @ptrCast(@alignCast(context));
-        return capture.blocked;
-    }
-
-    fn send(context: *anyopaque, intent: TabMoveIntent) !void {
-        const capture: *RequestCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.intent = intent;
-
-        if (capture.fail) {
-            return error.DeliveryFailed;
-        }
-    }
-};
-
-const TestingModel = struct {
-    model: *client_model.Model,
-    first: schema.TabLocation,
-    second: schema.TabLocation,
-
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-        const first: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(1),
-        };
-        const second: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(2),
-        };
-        try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
-        _ = try model.workspace.addCreated(.{
-            .location = second,
-            .position = 1,
-            .label = "logs",
-            .root_pane_id = @enumFromInt(2),
-        }, .{ .cols = 20, .rows = 5 });
-        _ = model.workspace.select(second.tab_id);
-
-        return .{ .model = model, .first = first, .second = second };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
+const TestingModel = @import("MoveTabTestingModel.zig");
 
 test "tab move request sends the active identity without provisional mutation" {
     var testing = try TestingModel.init();

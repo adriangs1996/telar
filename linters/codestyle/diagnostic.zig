@@ -6,9 +6,4 @@ pub const Rule = enum {
     braced_if_branch,
 };
 
-pub const Violation = struct {
-    rule: Rule,
-    line: usize,
-    column: usize,
-    detail: usize = 0,
-};
+pub const Violation = @import("Violation.zig");

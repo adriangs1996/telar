@@ -1,0 +1,15 @@
+const QueryHistory = @This();
+const source_namespace = @import("history.zig");
+request_id: source_namespace.RequestId,
+query: []const u8 = "",
+scope: source_namespace.HistoryScope = .global,
+scope_value: []const u8 = "",
+pane_id: source_namespace.PaneId = .invalid,
+failed_only: bool = false,
+author: source_namespace.HistoryAuthorFilter = .all,
+match: source_namespace.HistoryMatch = .fts,
+distinct: bool = false,
+limit: u16 = 20,
+offset: u32 = 0,
+snapshot_id: u64 = 0,
+entry_id: u64 = 0,

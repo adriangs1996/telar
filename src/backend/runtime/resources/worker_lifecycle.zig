@@ -7,77 +7,22 @@
 
 const std = @import("std");
 
-/// Defines how one service starts its worker and tears it down.
-///
-/// ```zig
-/// const port: Port(State, Worker) = .{ ... };
-/// ```
-pub fn Port(comptime StateType: type, comptime WorkerType: type) type {
-    return struct {
-        start: *const fn (*StateType) anyerror!WorkerType,
-        close: *const fn (*StateType) void,
-        join: *const fn (*StateType, *WorkerType) void,
-        destroy: *const fn (*StateType) void,
-    };
-}
+pub const Port = @import("GenericPort.zig").Type;
 
-/// Owns one started worker and its state until `deinit`.
-///
-/// ```zig
-/// const ServiceLifecycle = Lifecycle(State, Worker, port);
-/// var lifecycle = try ServiceLifecycle.start(state);
-/// defer lifecycle.deinit();
-/// ```
-pub fn Lifecycle(comptime StateType: type, comptime WorkerType: type, comptime port: Port(StateType, WorkerType)) type {
-    return struct {
-        const Self = @This();
+pub const Lifecycle = @import("GenericLifecycle.zig").Type;
 
-        state: *StateType,
-        worker: WorkerType,
-
-        pub fn start(state: *StateType) !Self {
-            errdefer port.destroy(state);
-
-            return .{
-                .state = state,
-                .worker = try port.start(state),
-            };
-        }
-
-        pub fn deinit(lifecycle: *Self) void {
-            port.close(lifecycle.state);
-            port.join(lifecycle.state, &lifecycle.worker);
-            port.destroy(lifecycle.state);
-        }
-    };
-}
-
-const Step = enum {
+pub const Step = enum {
     start,
     close,
     join,
     destroy,
 };
 
-const Capture = struct {
-    steps: [4]Step = undefined,
-    len: usize = 0,
-    start_fails: bool = false,
-    closed: bool = false,
-    joined: bool = false,
+const Capture = @import("Capture.zig");
 
-    fn record(capture: *Capture, step: Step) void {
-        std.debug.assert(capture.len < capture.steps.len);
-        capture.steps[capture.len] = step;
-        capture.len += 1;
-    }
-};
+const FakeState = @import("FakeState.zig");
 
-const FakeState = struct {
-    capture: *Capture,
-};
-
-const FakeWorker = struct {};
+const FakeWorker = @import("FakeWorker.zig");
 
 fn startFakeWorker(state: *FakeState) !FakeWorker {
     state.capture.record(.start);

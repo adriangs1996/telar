@@ -31,206 +31,24 @@ pub const AttachmentMarkers = schema.AgentAttachmentMarkers;
 
 pub const Status = enum { working, blocked, ready };
 
-/// One screen heuristic result. Heuristics change presentation only; they
-/// never authorize input.
-pub const Signal = struct {
-    provider: AgentProvider = .unknown,
-    status: Status,
-    confidence: u8,
-    identity_confirmed: bool = false,
-    /// The sample contains an input prompt which proves the agent is waiting.
-    /// Provider branding alone confirms identity, not readiness.
-    ready_confirmed: bool = false,
-};
+pub const Signal = @import("Signal.zig");
 
 pub const ListError = error{ TooManyEntries, EntryTooLong, EmptyEntry };
 
-/// Fixed-capacity list of short byte strings.
-pub fn BoundedList(comptime capacity: usize, comptime entry_bytes: usize) type {
-    return struct {
-        const Self = @This();
-
-        pub const max_entries = capacity;
-
-        items: [capacity][entry_bytes]u8 = undefined,
-        lens: [capacity]u8 = undefined,
-        count: u8 = 0,
-
-        pub fn append(list: *Self, text: []const u8) ListError!void {
-            if (text.len == 0) {
-                return error.EmptyEntry;
-            }
-            if (text.len > entry_bytes) {
-                return error.EntryTooLong;
-            }
-            if (list.count == capacity) {
-                return error.TooManyEntries;
-            }
-            @memcpy(list.items[list.count][0..text.len], text);
-            list.lens[list.count] = @intCast(text.len);
-            list.count += 1;
-        }
-
-        pub fn get(list: *const Self, index: usize) []const u8 {
-            return list.items[index][0..list.lens[index]];
-        }
-
-        /// Reports whether any entry occurs in `haystack`, ASCII
-        /// case-insensitively.
-        pub fn matches(list: *const Self, haystack: []const u8) bool {
-            for (0..list.count) |index| {
-                if (containsAsciiInsensitive(haystack, list.get(index))) {
-                    return true;
-                }
-            }
-            return false;
-        }
-    };
-}
+pub const BoundedList = @import("GenericBoundedList.zig").Type;
 
 pub const PhraseList = BoundedList(max_phrases, max_phrase_bytes);
 pub const PathList = BoundedList(max_paths, max_path_bytes);
 
-pub const CommandTool = struct {
-    tool: [max_tool_name_bytes]u8 = undefined,
-    tool_len: u8,
-    field: [max_command_field_bytes]u8 = undefined,
-    field_len: u8,
+pub const CommandTool = @import("CommandTool.zig");
 
-    pub fn toolSlice(mapping: *const CommandTool) []const u8 {
-        return mapping.tool[0..mapping.tool_len];
-    }
-
-    pub fn fieldSlice(mapping: *const CommandTool) []const u8 {
-        return mapping.field[0..mapping.field_len];
-    }
-};
-
-pub const CommandTools = struct {
-    items: [max_command_tools]CommandTool = undefined,
-    count: u8 = 0,
-
-    pub fn append(mappings: *CommandTools, tool: []const u8, field: []const u8) ListError!void {
-        if (tool.len == 0 or field.len == 0) {
-            return error.EmptyEntry;
-        }
-        if (tool.len > max_tool_name_bytes or field.len > max_command_field_bytes) {
-            return error.EntryTooLong;
-        }
-        if (mappings.count == max_command_tools) {
-            return error.TooManyEntries;
-        }
-
-        const mapping = &mappings.items[mappings.count];
-        @memcpy(mapping.tool[0..tool.len], tool);
-        mapping.tool_len = @intCast(tool.len);
-        @memcpy(mapping.field[0..field.len], field);
-        mapping.field_len = @intCast(field.len);
-        mappings.count += 1;
-    }
-
-    pub fn commandField(mappings: *const CommandTools, tool: []const u8) ?[]const u8 {
-        for (mappings.items[0..mappings.count]) |*mapping| {
-            if (std.mem.eql(u8, mapping.toolSlice(), tool)) {
-                return mapping.fieldSlice();
-            }
-        }
-
-        return null;
-    }
-};
+pub const CommandTools = @import("CommandTools.zig");
 
 pub const TextError = error{ EmptyText, TextTooLong };
 
-pub const Manifest = struct {
-    provider: AgentProvider,
-    name: [max_name_bytes]u8 = undefined,
-    name_len: u8 = 0,
-    /// Human label shown wherever the agent is named; defaults to `name`.
-    display_name: [max_display_name_bytes]u8 = undefined,
-    display_name_len: u8 = 0,
-    /// Session title shown until the agent has a real one; defaults to
-    /// "New <display name> session".
-    placeholder: [max_placeholder_bytes]u8 = undefined,
-    placeholder_len: u8 = 0,
-    /// One sidebar glyph. Empty leaves the choice to the client, which has
-    /// artwork for the built-in agents and a generic mark for the rest.
-    icon: [max_icon_bytes]u8 = undefined,
-    icon_len: u8 = 0,
-    /// How the agent's prompt identifies pasted images; `none` disables the
-    /// image shelf for this agent.
-    attachments: AttachmentMarkers = .none,
-    /// Executable basenames, compared without `.exe`, `.cmd`, `.bat` or `.js`.
-    process_names: PathList = .{},
-    /// Path fragments of an interpreter-launched entry point.
-    process_paths: PathList = .{},
-    /// Words that attribute a generic working or blocked phrase to this agent.
-    brand: PhraseList = .{},
-    /// Phrases that confirm the agent's identity on screen without proving
-    /// readiness.
-    identity: PhraseList = .{},
-    working: PhraseList = .{},
-    blocked: PhraseList = .{},
-    /// Prompt text that proves the agent is idle and waiting for input.
-    ready_prompt: PhraseList = .{},
-    /// Tool names whose object input contains a shell command field.
-    command_tools: CommandTools = .{},
+pub const Manifest = @import("AgentManifestManifest.zig");
 
-    pub fn nameSlice(manifest: *const Manifest) []const u8 {
-        return manifest.name[0..manifest.name_len];
-    }
-
-    /// The label to show for this agent: the configured display name, or
-    /// the manifest name when none was configured.
-    ///
-    /// ```zig
-    /// const label = manifest.displayName();
-    /// ```
-    pub fn displayName(manifest: *const Manifest) []const u8 {
-        if (manifest.display_name_len != 0) {
-            return manifest.display_name[0..manifest.display_name_len];
-        }
-
-        return manifest.nameSlice();
-    }
-
-    pub fn iconSlice(manifest: *const Manifest) []const u8 {
-        return manifest.icon[0..manifest.icon_len];
-    }
-
-    /// Writes the session title shown before the agent has a real one.
-    ///
-    /// ```zig
-    /// var buffer: [max_placeholder_bytes]u8 = undefined;
-    /// const title = manifest.placeholderTitle(&buffer);
-    /// ```
-    pub fn placeholderTitle(manifest: *const Manifest, buffer: *[max_placeholder_bytes]u8) []const u8 {
-        if (manifest.placeholder_len != 0) {
-            return manifest.placeholder[0..manifest.placeholder_len];
-        }
-
-        return std.fmt.bufPrint(buffer, "New {s} session", .{manifest.displayName()}) catch unreachable;
-    }
-
-    pub fn setDisplayName(manifest: *Manifest, text: []const u8) TextError!void {
-        manifest.display_name_len = try copyText(&manifest.display_name, text);
-    }
-
-    pub fn setPlaceholder(manifest: *Manifest, text: []const u8) TextError!void {
-        manifest.placeholder_len = try copyText(&manifest.placeholder, text);
-    }
-
-    pub fn setIcon(manifest: *Manifest, text: []const u8) TextError!void {
-        manifest.icon_len = try copyText(&manifest.icon, text);
-    }
-
-    comptime {
-        // "New " + display name + " session" must always fit the placeholder.
-        std.debug.assert(4 + max_display_name_bytes + 8 <= max_placeholder_bytes);
-    }
-};
-
-fn copyText(storage: []u8, text: []const u8) TextError!u8 {
+pub fn copyText(storage: []u8, text: []const u8) TextError!u8 {
     if (text.len == 0) {
         return error.EmptyText;
     }
@@ -243,231 +61,7 @@ fn copyText(storage: []u8, text: []const u8) TextError!u8 {
 
 pub const AddError = error{ TooManyAgents, InvalidName, DuplicateName };
 
-pub const Table = struct {
-    items: [max_agents]Manifest = undefined,
-    count: u8 = 0,
-
-    /// Registers one agent. Built-in names return their existing manifest so
-    /// configuration can extend the phrases; new names receive the next
-    /// custom provider index.
-    ///
-    /// ```zig
-    /// const gemini = try table.add("gemini");
-    /// try gemini.process_names.append("gemini");
-    /// ```
-    pub fn add(table: *Table, name: []const u8) AddError!*Manifest {
-        if (!validName(name)) {
-            return error.InvalidName;
-        }
-        if (table.findByName(name)) |existing| {
-            if (isBuiltinProvider(existing.provider)) {
-                return existing;
-            }
-            return error.DuplicateName;
-        }
-        if (table.count == max_agents) {
-            return error.TooManyAgents;
-        }
-
-        const provider: AgentProvider = builtinProvider(name) orelse
-            @enumFromInt(first_custom_provider + table.customCount());
-        const manifest = &table.items[table.count];
-        manifest.* = .{ .provider = provider };
-        @memcpy(manifest.name[0..name.len], name);
-        manifest.name_len = @intCast(name.len);
-        table.count += 1;
-        return manifest;
-    }
-
-    pub fn slice(table: *const Table) []const Manifest {
-        return table.items[0..table.count];
-    }
-
-    pub fn find(table: *const Table, provider: AgentProvider) ?*const Manifest {
-        for (table.slice()) |*manifest| {
-            if (manifest.provider == provider) {
-                return manifest;
-            }
-        }
-        return null;
-    }
-
-    pub fn findByName(table: *Table, name: []const u8) ?*Manifest {
-        for (table.items[0..table.count]) |*manifest| {
-            if (std.mem.eql(u8, manifest.nameSlice(), name)) {
-                return manifest;
-            }
-        }
-        return null;
-    }
-
-    /// Display name for a provider index; unknown indexes read as "unknown".
-    ///
-    /// ```zig
-    /// const name = table.providerName(entry.provider);
-    /// ```
-    pub fn providerName(table: *const Table, provider: AgentProvider) []const u8 {
-        const manifest = table.find(provider) orelse return "unknown";
-        return manifest.nameSlice();
-    }
-
-    /// Human label for a provider index; unknown indexes read as "Agent".
-    ///
-    /// ```zig
-    /// const label = table.displayName(entry.provider);
-    /// ```
-    pub fn displayName(table: *const Table, provider: AgentProvider) []const u8 {
-        const manifest = table.find(provider) orelse return generic_display_name;
-        return manifest.displayName();
-    }
-
-    /// Session title shown before an agent has a real one.
-    ///
-    /// ```zig
-    /// var buffer: [max_placeholder_bytes]u8 = undefined;
-    /// const title = table.placeholderTitle(entry.provider, &buffer);
-    /// ```
-    pub fn placeholderTitle(table: *const Table, provider: AgentProvider, buffer: *[max_placeholder_bytes]u8) []const u8 {
-        const manifest = table.find(provider) orelse return generic_placeholder;
-        return manifest.placeholderTitle(buffer);
-    }
-
-    /// Configured sidebar glyph; empty when the client should pick artwork.
-    ///
-    /// ```zig
-    /// const glyph = table.icon(entry.provider);
-    /// ```
-    pub fn icon(table: *const Table, provider: AgentProvider) []const u8 {
-        const manifest = table.find(provider) orelse return "";
-        return manifest.iconSlice();
-    }
-
-    /// How the agent's prompt identifies pasted images.
-    ///
-    /// ```zig
-    /// if (table.attachments(entry.provider) == .none) hideImageShelf();
-    /// ```
-    pub fn attachments(table: *const Table, provider: AgentProvider) AttachmentMarkers {
-        const manifest = table.find(provider) orelse return .none;
-        return manifest.attachments;
-    }
-
-    /// Returns the object field holding a command for one provider tool.
-    ///
-    /// ```zig
-    /// const field = table.commandField(.claude, "Bash") orelse return;
-    /// ```
-    pub fn commandField(table: *const Table, provider: AgentProvider, tool: []const u8) ?[]const u8 {
-        const manifest = table.find(provider) orelse return null;
-        return manifest.command_tools.commandField(tool);
-    }
-
-    /// Reports whether the agent's manifest proves readiness by itself, so a
-    /// generic screen scan must not override its stream signal.
-    ///
-    /// ```zig
-    /// if (!table.declaresReadyPrompt(signal.provider)) mergeScreenScan();
-    /// ```
-    pub fn declaresReadyPrompt(table: *const Table, provider: AgentProvider) bool {
-        const manifest = table.find(provider) orelse return false;
-        return manifest.ready_prompt.count != 0;
-    }
-
-    /// Applies the screen heuristics to one plain-text sample. Blocked
-    /// outranks working; a prompt outranks identity alone.
-    ///
-    /// ```zig
-    /// const signal = table.detect(sample) orelse return;
-    /// ```
-    pub fn detect(table: *const Table, text: []const u8) ?Signal {
-        for (table.slice()) |*manifest| {
-            if (manifest.blocked.matches(text)) {
-                return .{ .provider = table.inferProvider(text), .status = .blocked, .confidence = 88 };
-            }
-        }
-
-        for (table.slice()) |*manifest| {
-            if (manifest.working.matches(text)) {
-                return .{ .provider = table.inferProvider(text), .status = .working, .confidence = 78 };
-            }
-        }
-
-        for (table.slice()) |*manifest| {
-            if (manifest.ready_prompt.matches(text)) {
-                return .{
-                    .provider = manifest.provider,
-                    .status = .ready,
-                    .confidence = 94,
-                    .identity_confirmed = true,
-                    .ready_confirmed = true,
-                };
-            }
-        }
-
-        for (table.slice()) |*manifest| {
-            if (manifest.identity.matches(text)) {
-                return .{
-                    .provider = manifest.provider,
-                    .status = .ready,
-                    .confidence = 90,
-                    .identity_confirmed = true,
-                };
-            }
-        }
-
-        return null;
-    }
-
-    /// Identifies an agent from an executable name, ignoring platform
-    /// launcher suffixes.
-    ///
-    /// ```zig
-    /// const provider = table.providerFromExecutable("claude.exe") orelse return;
-    /// ```
-    pub fn providerFromExecutable(table: *const Table, basename: []const u8) ?AgentProvider {
-        for (table.slice()) |*manifest| {
-            for (0..manifest.process_names.count) |index| {
-                if (equalExecutableName(basename, manifest.process_names.get(index))) {
-                    return manifest.provider;
-                }
-            }
-        }
-        return null;
-    }
-
-    /// Identifies an agent from a path fragment of its entry point.
-    ///
-    /// ```zig
-    /// const provider = table.providerFromPath(argument) orelse return;
-    /// ```
-    pub fn providerFromPath(table: *const Table, path: []const u8) ?AgentProvider {
-        for (table.slice()) |*manifest| {
-            if (manifest.process_paths.matches(path)) {
-                return manifest.provider;
-            }
-        }
-        return null;
-    }
-
-    fn inferProvider(table: *const Table, text: []const u8) AgentProvider {
-        for (table.slice()) |*manifest| {
-            if (manifest.brand.matches(text)) {
-                return manifest.provider;
-            }
-        }
-        return .unknown;
-    }
-
-    fn customCount(table: *const Table) u8 {
-        var count: u8 = 0;
-        for (table.slice()) |*manifest| {
-            if (@intFromEnum(manifest.provider) >= first_custom_provider) {
-                count += 1;
-            }
-        }
-        return count;
-    }
-};
+pub const Table = @import("Table.zig");
 
 /// Reports whether a provider ships with Telar. Only built-in providers may
 /// carry a session resume command and keep their index across configurations.
@@ -482,7 +76,7 @@ pub fn isBuiltinProvider(provider: AgentProvider) bool {
     };
 }
 
-fn builtinProvider(name: []const u8) ?AgentProvider {
+pub fn builtinProvider(name: []const u8) ?AgentProvider {
     if (std.mem.eql(u8, name, "claude")) {
         return .claude;
     }
@@ -563,7 +157,7 @@ fn buildBuiltin() Table {
     return table;
 }
 
-fn validName(name: []const u8) bool {
+pub fn validName(name: []const u8) bool {
     if (name.len == 0 or name.len > max_name_bytes) {
         return false;
     }

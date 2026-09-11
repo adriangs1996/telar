@@ -6,18 +6,12 @@
 
 const std = @import("std");
 const input = @import("../input/root.zig");
-const widget = @import("context.zig");
+const widget = @import("context_support.zig");
 const ui = @import("../ui/root.zig");
 
 const keybind = input.keybind;
 
-/// Presentation values, already reduced by the transport layer. Memory is in
-/// tenths of a GiB so formatting never touches floating point.
-pub const Metrics = struct {
-    cpu_percent: u8,
-    memory_used_decigib: u16,
-    battery_percent: ?u8,
-};
+pub const Metrics = @import("Metrics.zig");
 
 pub const max_prefix_hints = @import("telar-client").input.hints.max_prefix_hints;
 
@@ -135,19 +129,9 @@ fn renderModeLabel(context: *widget.Context, area: ui.Rect, label: []const u8) u
     } });
 }
 
-const PairInput = struct {
-    area: ui.Rect,
-    x: *u16,
-    key: []const u8,
-    label: []const u8,
-};
+const PairInput = @import("PairInput.zig");
 
-const WriteInput = struct {
-    area: ui.Rect,
-    x: *u16,
-    text: []const u8,
-    style: ui.Style,
-};
+const WriteInput = @import("WriteInput.zig");
 
 fn renderPair(context: *widget.Context, pair: PairInput) void {
     const area = pair.area;

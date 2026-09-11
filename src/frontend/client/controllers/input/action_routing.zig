@@ -8,16 +8,14 @@ const lua_actions = @import("../configuration/lua_actions.zig");
 const pane_inputs = @import("pane_inputs.zig");
 const plugin_actions = @import("../configuration/plugin_actions.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const action_routing = input_application.action_routing;
 const lua_action = input_application.lua_action;
 const Action = input.action.Action;
 const PluginAction = input.action.PluginAction;
 const keybind = input.keybind;
 
-const Context = struct {
-    client: *Client,
-};
+const Context = @import("ActionRoutingContext.zig");
 
 /// Routes one configured action through native, Lua or plugin policy.
 ///

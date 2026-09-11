@@ -6,39 +6,14 @@ const metrics = @import("../metrics.zig");
 const interception_policy = @import("../interception_policy.zig");
 const tls_transport = @import("../tls.zig");
 const tls_tunnel = @import("../tls_tunnel.zig");
-const exchange_mod = @import("exchange.zig");
+const exchange_mod = @import("exchange_support.zig");
 
-const Io = std.Io;
-const net = Io.net;
+pub const Io = std.Io;
+pub const net = Io.net;
 
-pub const Resources = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    authority: *ca.Authority,
-    roots: *tls_transport.Roots,
-    intercept_hosts: *const interception_policy.Policy,
-    telemetry: *metrics.Counters,
-};
+pub const Resources = @import("Resources.zig");
 
-pub const Establisher = struct {
-    resources: Resources,
-    exchange: *exchange_mod.Exchange,
-
-    /// Applies the interception allowlist or establishes an opaque tunnel.
-    /// Interception failures record their exact stage and publish one failed
-    /// exchange.
-    ///
-    /// ```zig
-    /// const route = establisher.establish(.{
-    ///     .host = host,
-    ///     .child = child,
-    ///     .origin = origin,
-    /// });
-    /// ```
-    pub fn establish(establisher: *Establisher, attempt: tls_tunnel.Attempt(net.Stream)) ?tls_tunnel.Route(*tls_transport.Session) {
-        return Establish.execute(establisher, attempt);
-    }
-};
+pub const Establisher = @import("Establisher.zig");
 
 const port: tls_tunnel.Port(Establisher, net.Stream, *tls_transport.Session) = .{
     .should_intercept = shouldIntercept,
@@ -48,7 +23,7 @@ const port: tls_tunnel.Port(Establisher, net.Stream, *tls_transport.Session) = .
     .publish_failure = publishFailure,
 };
 
-const Establish = tls_tunnel.Command(Establisher, port);
+pub const Establish = tls_tunnel.Command(Establisher, port);
 
 fn shouldIntercept(establisher: *Establisher, host: []const u8) bool {
     return establisher.resources.intercept_hosts.contains(host);

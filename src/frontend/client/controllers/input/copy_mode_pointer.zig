@@ -6,17 +6,13 @@ const workspace_capability = @import("../../../workspace/root.zig");
 const input_application = @import("telar-client").application.input;
 const copy_modes = @import("copy_modes.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const copy_mode_pointer = input_application.copy_mode_pointer;
-const multiplexer = workspace_capability.multiplexer;
+pub const multiplexer = workspace_capability.multiplexer;
 const term = presentation.screen;
-const ui = core.ui;
+pub const ui = core.ui;
 
-const Context = struct {
-    client: *Client,
-    model: *multiplexer.Model,
-    area: ui.Rect,
-};
+const Context = @import("CopyModePointerContext.zig");
 
 /// Gives copy mode first refusal for one cell-based pointer event.
 ///

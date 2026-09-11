@@ -5,7 +5,7 @@ const panes_application = @import("telar-client").application.panes;
 const client_model = @import("telar-client").model;
 const active_pane_resources = @import("active_pane_resources.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const focus_pane = panes_application.focus_pane;
 const ui = core.ui;
 

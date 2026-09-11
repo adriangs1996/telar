@@ -3,7 +3,7 @@
 const client_clock = @import("telar-client").resources.clock;
 const deadline_timer = @import("telar-client").resources.deadline_timer;
 
-const Client = @import("../client.zig");
+const Client = @import("../Client.zig");
 
 pub const Scheduler = deadline_timer.Scheduler;
 

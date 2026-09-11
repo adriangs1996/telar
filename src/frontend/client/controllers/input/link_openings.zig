@@ -8,7 +8,7 @@ const input_application = @import("telar-client").application.input;
 const notification_flow = @import("../notifications/notifications.zig");
 const tab_creations = @import("../tabs/tab_creations.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const multiplexer = workspace_capability.multiplexer;
 const open_link = input_application.open_link;
 const term = presentation.screen;

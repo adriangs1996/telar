@@ -16,16 +16,9 @@ const std = @import("std");
 
 const slots = 8;
 
-const Transport = enum { shm, file };
+pub const Transport = enum { shm, file };
 
-const Options = struct {
-    width: u32 = 3840,
-    height: u32 = 2160,
-    fps: u32 = 120,
-    seconds: u32 = 20,
-    image_id: u32 = 1,
-    transport: Transport = .shm,
-};
+const Options = @import("Options.zig");
 
 fn parse(args: []const [:0]const u8) !Options {
     var options: Options = .{};
@@ -107,53 +100,7 @@ fn publish(name: [:0]const u8, pixels: []const u8) !void {
     @memcpy(map[0..pixels.len], pixels);
 }
 
-/// One regular file the source rewrites in place, mapped for its lifetime.
-const FrameFile = struct {
-    path: [std.fs.max_path_bytes]u8 = undefined,
-    path_len: usize = 0,
-    map: []align(std.heap.page_size_min) u8 = &.{},
-
-    const CreateOptions = struct {
-        slot: usize,
-        byte_len: usize,
-    };
-
-    fn create(file: *FrameFile, directory: []const u8, options: CreateOptions) !void {
-        const pid: u32 = @bitCast(std.c.getpid());
-        const printed = try std.fmt.bufPrintZ(&file.path, "{s}/telar-frame-source-{x}-{d}.rgba", .{ directory, pid, options.slot });
-        file.path_len = printed.len;
-        _ = std.c.unlink(printed);
-        const fd = std.c.open(printed, .{ .ACCMODE = .RDWR, .CREAT = true, .EXCL = true }, @as(std.c.mode_t, 0o600));
-        if (fd < 0) {
-            return error.FrameFileUnavailable;
-        }
-        defer _ = std.c.close(fd);
-        if (std.c.ftruncate(fd, @intCast(options.byte_len)) != 0) {
-            return error.FrameFileUnavailable;
-        }
-        file.map = try std.posix.mmap(
-            null,
-            options.byte_len,
-            .{ .READ = true, .WRITE = true },
-            std.c.MAP{ .TYPE = .SHARED },
-            fd,
-            0,
-        );
-    }
-
-    fn name(file: *const FrameFile) [:0]const u8 {
-        return file.path[0..file.path_len :0];
-    }
-
-    fn destroy(file: *FrameFile) void {
-        if (file.map.len != 0) {
-            std.posix.munmap(file.map);
-        }
-        if (file.path_len != 0) {
-            _ = std.c.unlink(file.name());
-        }
-    }
-};
+const FrameFile = @import("FrameFile.zig");
 
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;

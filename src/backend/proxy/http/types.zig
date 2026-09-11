@@ -4,7 +4,7 @@
 //! scratch storage used to parse or transform an HTTP message head.
 
 const std = @import("std");
-const provider = @import("../provider/request.zig");
+const provider = @import("../provider/request_support.zig");
 
 /// How an HTTP message body is delimited on the wire.
 pub const BodyPlan = union(enum) {
@@ -49,22 +49,9 @@ pub const ConnectionPolicy = enum {
     close,
 };
 
-/// Owned metadata derived from one forwarded request head.
-pub const RequestHead = struct {
-    classification: RequestClass,
-    body: BodyPlan,
-    response_context: ResponseContext,
-};
+pub const RequestHead = @import("RequestHead.zig");
 
-/// Owned metadata derived from one forwarded response head.
-pub const ResponseHead = struct {
-    /// Valid HTTP status code in the inclusive range 100...599.
-    status_code: u16,
-
-    body: BodyPlan,
-    kind: ResponseKind,
-    connection: ConnectionPolicy,
-};
+pub const ResponseHead = @import("ResponseHead.zig");
 
 test "body plans report whether payload relay is required" {
     try std.testing.expect(!BodyPlan.hasBody(.none));

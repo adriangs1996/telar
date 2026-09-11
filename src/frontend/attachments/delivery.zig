@@ -6,9 +6,9 @@ const Io = std.Io;
 const attachments = @import("root.zig");
 const kitty = @import("../graphics/root.zig").kitty;
 const presentation = @import("presentation.zig");
-const PlacementState = presentation.PlacementState;
+pub const PlacementState = presentation.PlacementState;
 const Plan = attachments.Plan;
-const max_items = attachments.max_items;
+pub const max_items = attachments.max_items;
 pub const Store = @import("telar-client").attachments.Catalog(@This());
 const Slot = Store.Slot;
 const first_image_id: u32 = 0x90000000;
@@ -17,25 +17,8 @@ const first_modal_placement_id: u32 = 0xb0000000;
 const max_host_ids: u32 = 0x0fffffff;
 const thumbnail_z: i32 = 1500;
 const modal_z: i32 = 2000;
-pub const State = struct {
-    supported: bool = false,
-    cell_width: u16 = 0,
-    cell_height: u16 = 0,
-    next_host_id: u32 = 1,
-    partial: ?u8 = null,
-    abort_pending: bool = false,
-    delete_ids: [max_items * 2]u32 = undefined,
-    delete_count: u8 = 0,
-    delete_all_pending: bool = false,
-};
-pub const SlotState = struct {
-    image_id: u32,
-    thumbnail: PlacementState,
-    modal: PlacementState,
-    image_emitted: bool = false,
-    image_dirty: bool = true,
-    transfer_offset: usize = 0,
-};
+pub const State = @import("State.zig");
+pub const SlotState = @import("SlotState.zig");
 pub fn configure(store: *Store, configuration: kitty.Configuration) bool {
     const supported = configuration.support == .supported;
     if (store.delivery.supported == supported and store.delivery.cell_width == configuration.cell_width and

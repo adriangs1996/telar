@@ -3,7 +3,7 @@
 const workspaces_application = @import("telar-client").application.workspaces;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const rename_workspace = workspaces_application.rename_workspace;
 
 /// Wires a workspace rename to the client's continuation tracker and outbox.

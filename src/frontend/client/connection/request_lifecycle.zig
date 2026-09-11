@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const client_requests = @import("telar-client").connection.requests;
 const runtime_transport = @import("../entrypoints/runtime_io.zig");
 
-const Client = @import("../client.zig");
+const Client = @import("../Client.zig");
 const schema = core.schema;
 
 /// The request that opens the first pane. Generated request identities start

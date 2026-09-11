@@ -4,25 +4,14 @@
 //! from the head and keeps all buffers fixed-size.
 
 const std = @import("std");
-const head = @import("head.zig");
+const head = @import("head_support.zig");
 const tls = @import("../tls.zig");
 
 pub const max_chunk_line_bytes = 128;
 
-pub const Route = struct {
-    from: tls.Session.Side,
-    to: tls.Session.Side,
-    framing: head.Framing,
-};
+pub const Route = @import("Route.zig");
 
-/// One successfully forwarded body fragment.
-///
-/// `payload` excludes HTTP chunk framing. `forwarded_bytes` includes bytes
-/// that count as body activity, including the CRLF after chunk data.
-pub const Fragment = struct {
-    payload: []const u8,
-    forwarded_bytes: usize,
-};
+pub const Fragment = @import("Fragment.zig");
 
 /// Relays one body according to its parsed route and reports forwarded
 /// fragments without giving the observer control over traffic.
@@ -49,16 +38,9 @@ pub fn relay(session: anytype, route: Route, observer: anytype) bool {
     };
 }
 
-const Direction = struct {
-    from: tls.Session.Side,
-    to: tls.Session.Side,
-};
+const Direction = @import("Direction.zig");
 
-const Exact = struct {
-    direction: Direction,
-    count: usize,
-    payload: bool,
-};
+const Exact = @import("Exact.zig");
 
 fn relayUntilClose(session: anytype, direction: Direction, observer: anytype) bool {
     var buffer: [16 * 1024]u8 = undefined;
@@ -191,20 +173,7 @@ test "an incomplete chunk line forwards its prefix once" {
     try std.testing.expectEqual(@as(usize, 1), fake.write_calls);
 }
 
-const Activity = struct {
-    bytes: usize = 0,
-    calls: usize = 0,
-    payload: [64]u8 = undefined,
-    payload_len: usize = 0,
-
-    fn observe(activity: *Activity, fragment: Fragment) void {
-        activity.bytes += fragment.forwarded_bytes;
-        activity.calls += 1;
-
-        @memcpy(activity.payload[activity.payload_len..][0..fragment.payload.len], fragment.payload);
-        activity.payload_len += fragment.payload.len;
-    }
-};
+const Activity = @import("Activity.zig");
 
 fn testRoute(from: tls.Session.Side, to: tls.Session.Side, framing: head.Framing) Route {
     return .{ .from = from, .to = to, .framing = framing };

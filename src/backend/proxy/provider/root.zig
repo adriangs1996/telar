@@ -9,7 +9,7 @@ const core = @import("telar-core");
 const claude = @import("claude.zig");
 const dialect_mod = @import("dialect.zig");
 const claude_transport = @import("claude_transport.zig");
-const request = @import("request.zig");
+const request = @import("request_support.zig");
 const request_body = @import("request_body.zig");
 const sse = @import("../sse.zig");
 
@@ -26,164 +26,9 @@ pub const claudeRequestTransformer = claude_transport.requestTransformer;
 
 pub const max_concurrent_responses = 128;
 
-/// Bounded interpreter for one streamed provider response.
-pub const ResponseObserver = struct {
-    dialect: ApiDialect = .unknown,
-    decoder: sse.Decoder = .{},
-    completed: bool = false,
+pub const ResponseObserver = @import("ResponseObserver.zig");
 
-    /// Starts observing one response from `provider`.
-    ///
-    /// ```zig
-    /// var observer = ResponseObserver.init(.anthropic_messages);
-    /// defer observer.deinit();
-    /// ```
-    pub fn init(dialect: ApiDialect) ResponseObserver {
-        return .{ .dialect = dialect };
-    }
-
-    /// Consumes the next response payload fragment and returns `true` exactly
-    /// once when it contains verified provider-turn completion.
-    ///
-    /// Fragments may split the SSE stream at any byte. Unsupported providers,
-    /// malformed data, and later input after completion return `false`.
-    ///
-    /// ```zig
-    /// const completed = observer.feed(
-    ///     "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}\n\n",
-    /// );
-    /// ```
-    pub fn feed(observer: *ResponseObserver, input: []const u8) bool {
-        if (observer.completed or observer.dialect != .anthropic_messages) {
-            return false;
-        }
-
-        const EventSink = struct {
-            observer: *ResponseObserver,
-
-            pub fn emit(sink: *@This(), event: sse.Event) void {
-                sink.observer.inspectEvent(event);
-            }
-        };
-        var sink: EventSink = .{ .observer = observer };
-        observer.decoder.feed(input, &sink);
-        return observer.completed;
-    }
-
-    /// Securely erases buffered provider response data.
-    ///
-    /// ```zig
-    /// observer.deinit();
-    /// ```
-    pub fn deinit(observer: *ResponseObserver) void {
-        std.crypto.secureZero(u8, std.mem.asBytes(observer));
-    }
-
-    fn inspectEvent(observer: *ResponseObserver, event: sse.Event) void {
-        if (claude.completesTurn(event)) {
-            observer.completed = true;
-        }
-    }
-};
-
-/// Bounded collection of response interpreters keyed by HTTP/2 stream ID.
-pub const ResponseStreams = struct {
-    const Slot = struct {
-        stream_id: u32 = 0,
-        response: ?*ResponseObserver = null,
-    };
-
-    allocator: std.mem.Allocator,
-    dialect: ApiDialect,
-    slots: [max_concurrent_responses]Slot = @splat(.{}),
-
-    /// Starts an empty set for one provider connection.
-    ///
-    /// ```zig
-    /// var streams = ResponseStreams.init(allocator, .anthropic_messages);
-    /// defer streams.deinit();
-    /// ```
-    pub fn init(allocator: std.mem.Allocator, dialect: ApiDialect) ResponseStreams {
-        return .{ .allocator = allocator, .dialect = dialect };
-    }
-
-    /// Feeds one response payload fragment to its stream and reports a newly
-    /// verified completion exactly once for that stream.
-    ///
-    /// A zero stream ID, unsupported provider, or capacity exhaustion drops
-    /// only semantic observation; transport forwarding remains unaffected.
-    ///
-    /// ```zig
-    /// if (streams.feed(stream_id, bytes)) {
-    ///     publishCompletion(stream_id);
-    /// }
-    /// ```
-    pub fn feed(streams: *ResponseStreams, stream_id: u32, input: []const u8) bool {
-        if (stream_id == 0 or streams.dialect != .anthropic_messages) {
-            return false;
-        }
-
-        const slot = streams.find(stream_id) orelse streams.create(stream_id) orelse return false;
-        return slot.response.?.feed(input);
-    }
-
-    /// Erases the parser state retained for a completed or failed stream.
-    ///
-    /// ```zig
-    /// streams.finish(stream_id);
-    /// ```
-    pub fn finish(streams: *ResponseStreams, stream_id: u32) void {
-        const slot = streams.find(stream_id) orelse return;
-        const response = slot.response orelse return;
-        response.deinit();
-        streams.allocator.destroy(response);
-        slot.* = .{};
-    }
-
-    /// Securely erases every retained stream fragment.
-    ///
-    /// ```zig
-    /// streams.deinit();
-    /// ```
-    pub fn deinit(streams: *ResponseStreams) void {
-        for (&streams.slots) |*slot| {
-            const response = slot.response orelse continue;
-            response.deinit();
-            streams.allocator.destroy(response);
-            slot.* = .{};
-        }
-
-        streams.dialect = .unknown;
-    }
-
-    fn find(streams: *ResponseStreams, stream_id: u32) ?*Slot {
-        for (&streams.slots) |*slot| {
-            if (slot.stream_id == stream_id) {
-                return slot;
-            }
-        }
-
-        return null;
-    }
-
-    fn create(streams: *ResponseStreams, stream_id: u32) ?*Slot {
-        for (&streams.slots) |*slot| {
-            if (slot.stream_id != 0) {
-                continue;
-            }
-
-            const response = streams.allocator.create(ResponseObserver) catch return null;
-            response.* = .init(streams.dialect);
-            slot.* = .{
-                .stream_id = stream_id,
-                .response = response,
-            };
-            return slot;
-        }
-
-        return null;
-    }
-};
+pub const ResponseStreams = @import("ResponseStreams.zig");
 
 const end_turn_event =
     "event: message_delta\n" ++

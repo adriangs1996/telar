@@ -2,51 +2,14 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const Io = std.Io;
+pub const Io = std.Io;
 const schema = core.schema;
 const ui = core.ui;
 const path_marker = @import("telar-client").attachments.path_marker;
 const kitty = @import("../graphics/root.zig").kitty;
-const Size = struct { width: u32, height: u32 };
+const Size = @import("Size.zig");
 
-pub const PlacementState = struct {
-    id: u32,
-    z: i32,
-    desired: ?kitty.OutputPlacement = null,
-    emitted: ?kitty.OutputPlacement = null,
-
-    pub fn wanted(placement: *const PlacementState) bool {
-        return placement.desired != null;
-    }
-
-    pub fn damaged(placement: *const PlacementState) bool {
-        return !optionalPlacementEql(placement.desired, placement.emitted);
-    }
-
-    pub fn write(placement: *PlacementState, writer: *Io.Writer, image_id: u32) Io.Writer.Error!usize {
-        if (!placement.damaged()) {
-            return 0;
-        }
-
-        var written: usize = 0;
-        if (placement.emitted != null) {
-            written += try kitty.writeDeletePlacement(writer, image_id, placement.id);
-        }
-
-        if (placement.desired) |desired| {
-            written += try kitty.writeUiPlacement(writer, .{
-                .image_id = image_id,
-                .placement_id = placement.id,
-                .value = desired,
-                .z = placement.z,
-            });
-        }
-
-        placement.emitted = placement.desired;
-
-        return written;
-    }
-};
+pub const PlacementState = @import("PlacementState.zig");
 
 /// Example: `const placement = fitPlacement(image_size, cell_size, area);`.
 pub fn fitPlacement(image: Size, cell: Size, area: ui.Rect) ?kitty.OutputPlacement {
@@ -87,7 +50,7 @@ pub fn fitPlacement(image: Size, cell: Size, area: ui.Rect) ?kitty.OutputPlaceme
     };
 }
 
-fn optionalPlacementEql(a: ?kitty.OutputPlacement, b: ?kitty.OutputPlacement) bool {
+pub fn optionalPlacementEql(a: ?kitty.OutputPlacement, b: ?kitty.OutputPlacement) bool {
     if (a == null or b == null) {
         return a == null and b == null;
     }

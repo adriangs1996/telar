@@ -3,7 +3,7 @@
 const core = @import("telar-core");
 const client_model = @import("telar-client").model;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const schema = core.schema;
 
 /// Maps one validated wire value into the model-owned metrics replica.

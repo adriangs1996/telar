@@ -1,8 +1,8 @@
 const std = @import("std");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
-const ui = core.ui;
-const sel = core.select;
+pub const ui = core.ui;
+pub const sel = core.select;
 
 // Copying an emulated screen into our cell grid.
 //
@@ -28,66 +28,17 @@ const sel = core.select;
 //   - A wide character owns two columns and the emulator marks the second one
 //     `spacer_tail`. Emitting anything there prints half a glyph twice.
 
-pub const Options = struct {
-    /// Cells to draw as selected, in coordinates relative to `area`.
-    ///
-    /// Passed in rather than read off the render state because the gesture
-    /// belongs to the application: the emulator has a selection concept, but
-    /// which drag the user is making, and whether it is even aimed at this
-    /// pane, is not something it can know.
-    selection: ?sel.Range = null,
+pub const Options = @import("Options.zig");
 
-    /// Draw the pane's cursor. Off for unfocused panes: two visible cursors in
-    /// one screen is worse than none, and the real cursor is placed by `term`.
-    cursor: bool = false,
+pub const Operation = @import("Operation.zig");
 
-    /// Copy every row regardless of its dirty flag.
-    ///
-    /// Needed whenever the destination changed without the source changing -
-    /// the pane moved, the window resized, a modal that covered it closed -
-    /// because the emulator has no idea any of that happened.
-    force: bool = false,
+pub const Stats = @import("Stats.zig");
 
-    /// Destination rows copied by this blit.
-    ///
-    /// A runtime can retain this slice until it builds a frame, then compare
-    /// only the rows which may have changed. The slice belongs to the caller
-    /// and must cover the destination buffer's height. Marks accumulate so
-    /// several blits can be folded without losing earlier damage.
-    damaged_rows: ?[]bool = null,
-};
+const ColorSource = @import("ColorSource.zig");
 
-pub const Operation = struct {
-    buffer: *ui.Buffer,
-    area: ui.Rect,
-    terminal: *const vt.Terminal,
-    state: *vt.RenderState,
-    options: Options,
-};
+const RowTarget = @import("RowTarget.zig");
 
-pub const Stats = struct {
-    /// Rows whose cells were translated.
-    copied: u16 = 0,
-    /// Rows skipped because neither the emulator nor the caller marked them.
-    skipped: u16 = 0,
-};
-
-const ColorSource = struct {
-    terminal: *const vt.Terminal,
-    colors: vt.RenderState.Colors,
-};
-
-const RowTarget = struct {
-    buffer: *ui.Buffer,
-    area: ui.Rect,
-    y: u16,
-};
-
-const RowProjection = struct {
-    target: RowTarget,
-    cells: std.MultiArrayList(vt.RenderState.Cell).Slice,
-    colors: ColorSource,
-};
+const RowProjection = @import("RowProjection.zig");
 
 /// Copies the viewport of `state` into `area` of `b`.
 ///
@@ -402,37 +353,9 @@ fn drawCursor(b: *ui.Buffer, area: ui.Rect, state: *const vt.RenderState) void {
 // Tests
 // ---------------------------------------------------------------------------
 
-const testing = std.testing;
+pub const testing = std.testing;
 
-/// A pane, driven by writing to it the way an agent would.
-///
-/// No pty and no process: the emulator takes bytes, so a test can produce any
-/// screen state a real agent could by writing the same escape sequences.
-const Pane = struct {
-    term: vt.Terminal,
-    state: vt.RenderState,
-    gpa: std.mem.Allocator,
-
-    fn init(gpa: std.mem.Allocator, cols: u16, rows: u16) !Pane {
-        return .{
-            .term = try vt.Terminal.init(testing.io, gpa, .{ .cols = cols, .rows = rows }),
-            .state = .empty,
-            .gpa = gpa,
-        };
-    }
-
-    fn deinit(p: *Pane) void {
-        p.state.deinit(p.gpa);
-        p.term.deinit(p.gpa);
-    }
-
-    fn write(p: *Pane, bytes: []const u8) !void {
-        var stream = p.term.vtStream();
-        defer stream.deinit();
-        stream.nextSlice(bytes);
-        try p.state.update(p.gpa, &p.term);
-    }
-};
+const Pane = @import("BlitPane.zig");
 
 fn textOf(b: *ui.Buffer, x: u16, y: u16) []const u8 {
     return (b.at(x, y) orelse unreachable).text();

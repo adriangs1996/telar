@@ -4,35 +4,17 @@ const std = @import("std");
 const core = @import("telar-core");
 const attachment_mod = @import("../../attachment/root.zig");
 
-const schema = core.schema;
-const AttachmentStore = attachment_mod.AttachmentStore;
+pub const schema = core.schema;
+pub const AttachmentStore = attachment_mod.AttachmentStore;
 
-pub const RequestGraphicsSnapshot = struct {
-    pane_id: schema.PaneId,
-};
+pub const RequestGraphicsSnapshot = @import("RequestGraphicsSnapshot.zig");
 
 pub const RequestGraphicsSnapshotResult = enum {
     requested,
     pane_not_attached,
 };
 
-pub const RequestGraphicsSnapshotHandler = struct {
-    attachments: *AttachmentStore,
-
-    /// Discards one attachment's graphics baseline and schedules a complete
-    /// replacement. Repeated requests coalesce into the same pending snapshot.
-    ///
-    /// ```zig
-    /// const result = try handler.execute(.{ .pane_id = pane_id });
-    /// ```
-    pub fn execute(handler: *RequestGraphicsSnapshotHandler, command: RequestGraphicsSnapshot) !RequestGraphicsSnapshotResult {
-        if (!handler.attachments.requestGraphicsSnapshot(command.pane_id)) {
-            return .pane_not_attached;
-        }
-
-        return .requested;
-    }
-};
+pub const RequestGraphicsSnapshotHandler = @import("RequestGraphicsSnapshotHandler.zig");
 
 test "RequestGraphicsSnapshotHandler rejects a pane outside the client attachments" {
     var attachments: AttachmentStore = .{};

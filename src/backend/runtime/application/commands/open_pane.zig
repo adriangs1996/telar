@@ -5,191 +5,37 @@ const core = @import("telar-core");
 const pane_mod = @import("../../../pane/root.zig");
 const workspace_mod = @import("../../../workspace/root.zig");
 
-const schema = core.schema;
-const WorkspaceRepository = workspace_mod.Repository;
+pub const schema = core.schema;
+pub const WorkspaceRepository = workspace_mod.Repository;
 
-pub const OpenPane = struct {
-    target: schema.PaneTarget,
-    size: schema.TerminalSize,
-    launch: ?schema.LaunchView,
-};
+pub const OpenPane = @import("OpenPane.zig");
 
-pub const OpenPaneResult = struct {
-    pane: pane_mod.PaneLaunched,
-    created: bool,
-};
+pub const OpenPaneResult = @import("OpenPaneResult.zig");
 
-pub const PrepareLaunch = struct {
-    launch: schema.LaunchView,
-};
+pub const PrepareLaunch = @import("OpenPanePrepareLaunch.zig");
 
-pub const LaunchPane = struct {
-    location: schema.TabLocation,
-    size: schema.TerminalSize,
-    launch: schema.LaunchView,
-    launch_cwd: []const u8,
-    workspace_path: []const u8,
-};
+pub const LaunchPane = @import("OpenPaneLaunchPane.zig");
 
-pub const PrepareView = struct {
-    pane: pane_mod.PaneLaunched,
-    size: schema.TerminalSize,
-};
+pub const PrepareView = @import("PrepareView.zig");
 
 pub const RuntimeEvent = union(enum) {
     workspace_created: workspace_mod.WorkspaceCreated,
     pane_launched: pane_mod.PaneLaunched,
 };
 
-pub const Panes = struct {
-    context: *anyopaque,
-    find: *const fn (*anyopaque, schema.PaneId) ?pane_mod.PaneLaunched,
-    first: *const fn (*anyopaque, schema.TabLocation) ?pane_mod.PaneLaunched,
-    launch: *const fn (*anyopaque, LaunchPane) anyerror!pane_mod.PaneLaunched,
-    prepare_view: *const fn (*anyopaque, PrepareView) anyerror!void,
-    attach: *const fn (*anyopaque, pane_mod.PaneLaunched) anyerror!void,
-};
+pub const Panes = @import("Panes.zig");
 
-pub const LaunchAuthority = struct {
-    context: *anyopaque,
-    prepare: *const fn (*anyopaque, PrepareLaunch) anyerror![]const u8,
-};
+pub const LaunchAuthority = @import("OpenPaneLaunchAuthority.zig");
 
-pub const GeometryLease = struct {
-    context: *anyopaque,
-    acquire: *const fn (*anyopaque, schema.WorkspaceLocation) bool,
-    release: *const fn (*anyopaque, schema.WorkspaceLocation) void,
-};
+pub const GeometryLease = @import("OpenPaneGeometryLease.zig");
 
-pub const EventPublisher = struct {
-    context: *anyopaque,
-    publish: *const fn (*anyopaque, RuntimeEvent) void,
-};
+pub const EventPublisher = @import("OpenPaneEventPublisher.zig");
 
-pub const OpenPaneExecutor = struct {
-    context: *anyopaque,
-    execute_fn: *const fn (*anyopaque, OpenPane) anyerror!OpenPaneResult,
+pub const OpenPaneExecutor = @import("OpenPaneExecutor.zig");
 
-    /// Executes pane opening through the bound application handler.
-    ///
-    /// ```zig
-    /// const result = try executor.execute(command);
-    /// ```
-    pub fn execute(executor: OpenPaneExecutor, command: OpenPane) !OpenPaneResult {
-        return executor.execute_fn(executor.context, command);
-    }
-};
+pub const OpenPaneHandler = @import("OpenPaneHandler.zig");
 
-pub const OpenPaneHandler = struct {
-    workspaces: *WorkspaceRepository,
-    panes: Panes,
-    authority: LaunchAuthority,
-    geometry: GeometryLease,
-    events: EventPublisher,
-
-    /// Selects an existing pane by pane or workspace, or atomically reuses or
-    /// launches the default pane for a launch cwd. New workspaces stay
-    /// invisible until pane launch commits. A geometry owner prepares the
-    /// selected view before every client attachment.
-    ///
-    /// ```zig
-    /// const result = try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *OpenPaneHandler, command: OpenPane) !OpenPaneResult {
-        var created = false;
-        const active = switch (command.target) {
-            .pane => |pane_id| handler.panes.find(handler.panes.context, pane_id) orelse return error.PaneNotFound,
-            .workspace => |workspace_id| workspace: {
-                const workspace_location: schema.WorkspaceLocation = .{ .workspace = workspace_id };
-                const tab_id = handler.workspaces.reader().defaultTab(workspace_location) orelse return error.WorkspaceNotFound;
-                const location: schema.TabLocation = .{
-                    .workspace = workspace_location,
-                    .tab_id = tab_id,
-                };
-                break :workspace handler.panes.first(handler.panes.context, location) orelse return error.WorkspaceHasNoPane;
-            },
-            .default => try handler.openDefault(command, &created),
-        };
-
-        if (handler.geometry.acquire(handler.geometry.context, active.location.workspace)) {
-            try handler.panes.prepare_view(handler.panes.context, .{
-                .pane = active,
-                .size = command.size,
-            });
-        }
-
-        try handler.panes.attach(handler.panes.context, active);
-        return .{ .pane = active, .created = created };
-    }
-
-    /// Exposes this handler through the command interface used by controllers.
-    ///
-    /// ```zig
-    /// const executor = handler.executor();
-    /// ```
-    pub fn executor(handler: *OpenPaneHandler) OpenPaneExecutor {
-        return .{ .context = handler, .execute_fn = executeErased };
-    }
-
-    fn openDefault(handler: *OpenPaneHandler, command: OpenPane, created: *bool) !pane_mod.PaneLaunched {
-        const launch = command.launch orelse return error.InvalidOpenRequest;
-        const launch_cwd = try handler.authority.prepare(handler.authority.context, .{ .launch = launch });
-        var proposal: ?workspace_mod.WorkspaceProposal = null;
-        defer if (proposal) |*candidate| {
-            candidate.rollback();
-        };
-
-        const location = handler.workspaces.reader().locationByPath(launch_cwd) orelse location: {
-            proposal = handler.workspaces.propose(.{ .path = launch_cwd }) catch return error.WorkspaceCreateFailed;
-            break :location proposal.?.location();
-        };
-
-        if (handler.panes.first(handler.panes.context, location)) |existing| {
-            return existing;
-        }
-
-        var provisional_lease = false;
-        var committed = false;
-        defer if (!committed and provisional_lease and proposal != null) {
-            handler.geometry.release(handler.geometry.context, location.workspace);
-        };
-
-        if (!handler.geometry.acquire(handler.geometry.context, location.workspace)) {
-            return error.GeometryUnavailable;
-        }
-        provisional_lease = true;
-
-        const workspace_path = if (proposal) |*candidate|
-            candidate.path()
-        else
-            handler.workspaces.reader().workspacePath(location.workspace).?;
-        const launched = handler.panes.launch(handler.panes.context, .{
-            .location = location,
-            .size = command.size,
-            .launch = launch,
-            .launch_cwd = launch_cwd,
-            .workspace_path = workspace_path,
-        }) catch |err| return mapLaunchError(err);
-
-        if (proposal) |*candidate| {
-            const workspace_created = workspace_mod.WorkspaceCreated.init(location, candidate.name()) catch unreachable;
-            _ = candidate.commit();
-            handler.events.publish(handler.events.context, .{ .workspace_created = workspace_created });
-        }
-
-        committed = true;
-        created.* = true;
-        handler.events.publish(handler.events.context, .{ .pane_launched = launched });
-        return launched;
-    }
-
-    fn executeErased(context: *anyopaque, command: OpenPane) !OpenPaneResult {
-        const handler: *OpenPaneHandler = @ptrCast(@alignCast(context));
-        return handler.execute(command);
-    }
-};
-
-fn mapLaunchError(spawn_error: anyerror) anyerror {
+pub fn mapLaunchError(spawn_error: anyerror) anyerror {
     return switch (spawn_error) {
         error.PaneLimitReached => error.PaneLimitReached,
         error.UnsupportedEnvironment => error.UnsupportedEnvironment,
@@ -197,136 +43,13 @@ fn mapLaunchError(spawn_error: anyerror) anyerror {
     };
 }
 
-const PanesCapture = struct {
-    pane_result: ?pane_mod.PaneLaunched = null,
-    first_result: ?pane_mod.PaneLaunched = null,
-    launch_result: ?pane_mod.PaneLaunched = null,
-    launch_failure: ?anyerror = null,
-    view_failure: ?anyerror = null,
-    attach_failure: ?anyerror = null,
-    find_count: usize = 0,
-    first_count: usize = 0,
-    launch_count: usize = 0,
-    view_count: usize = 0,
-    attach_count: usize = 0,
-    last_launch: ?LaunchPane = null,
-    last_view: ?PrepareView = null,
+const PanesCapture = @import("PanesCapture.zig");
 
-    fn port(capture: *PanesCapture) Panes {
-        return .{
-            .context = capture,
-            .find = find,
-            .first = first,
-            .launch = launch,
-            .prepare_view = prepareView,
-            .attach = attach,
-        };
-    }
+const AuthorityCapture = @import("OpenPaneAuthorityCapture.zig");
 
-    fn find(context: *anyopaque, _: schema.PaneId) ?pane_mod.PaneLaunched {
-        const capture: *PanesCapture = @ptrCast(@alignCast(context));
-        capture.find_count += 1;
-        return capture.pane_result;
-    }
+const GeometryCapture = @import("OpenPaneGeometryCapture.zig");
 
-    fn first(context: *anyopaque, _: schema.TabLocation) ?pane_mod.PaneLaunched {
-        const capture: *PanesCapture = @ptrCast(@alignCast(context));
-        capture.first_count += 1;
-        return capture.first_result;
-    }
-
-    fn launch(context: *anyopaque, request: LaunchPane) !pane_mod.PaneLaunched {
-        const capture: *PanesCapture = @ptrCast(@alignCast(context));
-        capture.launch_count += 1;
-        capture.last_launch = request;
-
-        if (capture.launch_failure) |failure| {
-            return failure;
-        }
-
-        return capture.launch_result.?;
-    }
-
-    fn prepareView(context: *anyopaque, request: PrepareView) !void {
-        const capture: *PanesCapture = @ptrCast(@alignCast(context));
-        capture.view_count += 1;
-        capture.last_view = request;
-
-        if (capture.view_failure) |failure| {
-            return failure;
-        }
-    }
-
-    fn attach(context: *anyopaque, _: pane_mod.PaneLaunched) !void {
-        const capture: *PanesCapture = @ptrCast(@alignCast(context));
-        capture.attach_count += 1;
-
-        if (capture.attach_failure) |failure| {
-            return failure;
-        }
-    }
-};
-
-const AuthorityCapture = struct {
-    failure: ?anyerror = null,
-    cwd: []const u8 = "/work/project",
-    count: usize = 0,
-
-    fn port(capture: *AuthorityCapture) LaunchAuthority {
-        return .{ .context = capture, .prepare = prepare };
-    }
-
-    fn prepare(context: *anyopaque, _: PrepareLaunch) ![]const u8 {
-        const capture: *AuthorityCapture = @ptrCast(@alignCast(context));
-        capture.count += 1;
-
-        if (capture.failure) |failure| {
-            return failure;
-        }
-
-        return capture.cwd;
-    }
-};
-
-const GeometryCapture = struct {
-    available: bool = true,
-    acquire_count: usize = 0,
-    release_count: usize = 0,
-
-    fn port(capture: *GeometryCapture) GeometryLease {
-        return .{
-            .context = capture,
-            .acquire = acquire,
-            .release = release,
-        };
-    }
-
-    fn acquire(context: *anyopaque, _: schema.WorkspaceLocation) bool {
-        const capture: *GeometryCapture = @ptrCast(@alignCast(context));
-        capture.acquire_count += 1;
-        return capture.available;
-    }
-
-    fn release(context: *anyopaque, _: schema.WorkspaceLocation) void {
-        const capture: *GeometryCapture = @ptrCast(@alignCast(context));
-        capture.release_count += 1;
-    }
-};
-
-const EventCapture = struct {
-    events: [2]RuntimeEvent = undefined,
-    len: usize = 0,
-
-    fn publisher(capture: *EventCapture) EventPublisher {
-        return .{ .context = capture, .publish = publish };
-    }
-
-    fn publish(context: *anyopaque, event: RuntimeEvent) void {
-        const capture: *EventCapture = @ptrCast(@alignCast(context));
-        capture.events[capture.len] = event;
-        capture.len += 1;
-    }
-};
+const EventCapture = @import("OpenPaneEventCapture.zig");
 
 fn testingLaunch() schema.LaunchView {
     return .{
@@ -346,12 +69,7 @@ fn testingPane(location: schema.TabLocation) !pane_mod.PaneLaunched {
     };
 }
 
-const TestingPorts = struct {
-    panes: *PanesCapture,
-    authority: *AuthorityCapture,
-    geometry: *GeometryCapture,
-    events: *EventCapture,
-};
+const TestingPorts = @import("TestingPorts.zig");
 
 fn testingHandler(workspaces: *WorkspaceRepository, ports: TestingPorts) OpenPaneHandler {
     return .{

@@ -6,7 +6,7 @@ const input = @import("../../../input/root.zig");
 const workspace = @import("../../../workspace/root.zig");
 const input_application = @import("telar-client").application.input;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const client_detachments = @import("../session/client_detachments.zig");
 const client_layouts = @import("../../resources/client_layouts.zig");
 const copy_modes = @import("copy_modes.zig");

@@ -29,7 +29,7 @@ pub const Step = enum {
     destroy_child_environment,
 };
 
-const shutdown_order = [_]Step{
+pub const shutdown_order = [_]Step{
     .stop_listener,
     .stop_client_connections,
     .stop_pending_admission,
@@ -50,67 +50,9 @@ const shutdown_order = [_]Step{
     .destroy_child_environment,
 };
 
-pub fn Coordinator(comptime Context: type) type {
-    return struct {
-        const Self = @This();
+pub const Coordinator = @import("GenericShutdownCoordinatorCoordinator.zig").Type;
 
-        context: *Context,
-        state: *State,
-        execute_fn: *const fn (*Context, Step) void,
-
-        /// Binds one runtime and its lifecycle state to a concrete step
-        /// executor. The coordinator does not own either borrow.
-        ///
-        /// ```zig
-        /// var shutdown = Coordinator(Runtime).init(&runtime, &state, executeStep);
-        /// ```
-        pub fn init(context: *Context, state: *State, execute_fn: *const fn (*Context, Step) void) Self {
-            return .{ .context = context, .state = state, .execute_fn = execute_fn };
-        }
-
-        /// Executes the complete teardown order at most once. The state moves
-        /// to `shutting_down` before the first effect, so recursive calls are
-        /// harmless, and reaches `stopped` only after the last effect.
-        ///
-        /// ```zig
-        /// shutdown.run();
-        /// ```
-        pub fn run(coordinator: *Self) void {
-            if (coordinator.state.* != .running) {
-                return;
-            }
-
-            coordinator.state.* = .shutting_down;
-            for (shutdown_order) |step| {
-                coordinator.execute_fn(coordinator.context, step);
-            }
-            coordinator.state.* = .stopped;
-        }
-    };
-}
-
-const Capture = struct {
-    state: *const State,
-    steps: [shutdown_order.len]Step = undefined,
-    len: usize = 0,
-    observed_wrong_state: bool = false,
-    coordinator: ?*Coordinator(Capture) = null,
-    reenter: bool = false,
-
-    fn execute(capture: *Capture, step: Step) void {
-        if (capture.state.* != .shutting_down) {
-            capture.observed_wrong_state = true;
-        }
-
-        std.debug.assert(capture.len < capture.steps.len);
-        capture.steps[capture.len] = step;
-        capture.len += 1;
-
-        if (capture.reenter and capture.len == 1) {
-            capture.coordinator.?.run();
-        }
-    }
-};
+const Capture = @import("Capture.zig");
 
 const TestCoordinator = Coordinator(Capture);
 

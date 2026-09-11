@@ -4,107 +4,21 @@ const std = @import("std");
 const core = @import("telar-core");
 const agent_mod = @import("../../../agent/root.zig");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const Resources = struct {
-    agents: *agent_mod.Tracker,
-};
+pub const Resources = @import("AgentMaintenanceResources.zig");
 
-/// Defines timer rearming, clock access, and client delivery bound by the
-/// runtime instance.
-///
-/// ```zig
-/// const port: RuntimePort(Context) = .{ ... };
-/// ```
-pub fn RuntimePort(comptime Context: type) type {
-    return struct {
-        rearm_tick: *const fn (*Context) anyerror!void,
-        now_ms: *const fn (*Context) i64,
-        pump_clients: *const fn (*Context) void,
-    };
-}
+pub const RuntimePort = @import("GenericAgentMaintenanceRuntimePort.zig").Type;
 
-/// Creates a statically dispatched agent-maintenance coordinator.
-///
-/// ```zig
-/// const AgentMaintenanceCoordinator = Coordinator(Context, port);
-/// ```
-pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) type {
-    return struct {
-        const Self = @This();
+pub const Coordinator = @import("GenericAgentMaintenanceCoordinator.zig").Type;
 
-        context: *Context,
-        resources: Resources,
-
-        /// Binds periodic maintenance to one runtime-owned agent tracker.
-        ///
-        /// ```zig
-        /// var coordinator = AgentMaintenanceCoordinator.init(&context, resources);
-        /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
-            return .{ .context = context, .resources = resources };
-        }
-
-        /// Rearms a successful timer before expiring evidence against one wall
-        /// clock reading. Timer failures preserve every projection; successful
-        /// maintenance always gives clients a delivery opportunity.
-        ///
-        /// ```zig
-        /// try coordinator.handle(tick_result);
-        /// ```
-        pub fn handle(coordinator: *Self, result: anyerror!void) !void {
-            result catch return;
-            try port.rearm_tick(coordinator.context);
-
-            _ = coordinator.resources.agents.expire(port.now_ms(coordinator.context));
-            port.pump_clients(coordinator.context);
-        }
-    };
-}
-
-const Step = enum {
+pub const Step = enum {
     rearm_tick,
     clock,
     pump_clients,
 };
 
-const Capture = struct {
-    steps: [3]Step = undefined,
-    len: usize = 0,
-    rearm_failure: bool = false,
-    now: i64 = 0,
-    agents: ?*const agent_mod.Tracker = null,
-    identity: agent_mod.Identity = undefined,
-    pump_saw_status: ?schema.AgentStatus = null,
-    pump_called: bool = false,
-
-    fn record(capture: *Capture, step: Step) void {
-        std.debug.assert(capture.len < capture.steps.len);
-        capture.steps[capture.len] = step;
-        capture.len += 1;
-    }
-
-    fn rearmTick(capture: *Capture) !void {
-        capture.record(.rearm_tick);
-
-        if (capture.rearm_failure) {
-            return error.SchedulerUnavailable;
-        }
-    }
-
-    fn nowMs(capture: *Capture) i64 {
-        capture.record(.clock);
-        return capture.now;
-    }
-
-    fn pumpClients(capture: *Capture) void {
-        capture.record(.pump_clients);
-        capture.pump_called = true;
-
-        const agents = capture.agents orelse return;
-        capture.pump_saw_status = agents.projectedStatus(capture.identity.key);
-    }
-};
+const Capture = @import("AgentMaintenanceCapture.zig");
 
 const test_port: RuntimePort(Capture) = .{
     .rearm_tick = Capture.rearmTick,

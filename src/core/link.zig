@@ -11,25 +11,9 @@ pub const Scheme = enum {
     https,
 };
 
-pub const Match = struct {
-    scheme: Scheme,
-    start: usize,
-    end: usize,
+pub const Match = @import("Match.zig");
 
-    /// Returns the matched URI from the source passed to `extractAt`.
-    ///
-    /// ```zig
-    /// const uri = match.text(line);
-    /// ```
-    pub fn text(match: Match, source: []const u8) []const u8 {
-        return source[match.start..match.end];
-    }
-};
-
-const Prefix = struct {
-    text: []const u8,
-    scheme: Scheme,
-};
+const Prefix = @import("Prefix.zig");
 
 const prefixes = [_]Prefix{
     .{ .text = "https://", .scheme = .https },
@@ -190,14 +174,7 @@ fn trimEnd(uri: []const u8) usize {
     return end;
 }
 
-const DelimiterCounts = struct {
-    open_parentheses: usize = 0,
-    close_parentheses: usize = 0,
-    open_brackets: usize = 0,
-    close_brackets: usize = 0,
-    open_braces: usize = 0,
-    close_braces: usize = 0,
-};
+const DelimiterCounts = @import("DelimiterCounts.zig");
 
 fn delimiterCounts(uri: []const u8) DelimiterCounts {
     var counts: DelimiterCounts = .{};

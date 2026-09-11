@@ -4,114 +4,21 @@ const std = @import("std");
 const core = @import("telar-core");
 const identity = @import("identity.zig");
 
-const Io = std.Io;
-const schema = core.schema;
+pub const Io = std.Io;
+pub const schema = core.schema;
 
 pub const capacity = schema.max_agent_snapshot_entries;
 
-pub const PaneGeneration = struct {
-    id: schema.PaneId,
-    generation: u64,
-};
+pub const PaneGeneration = @import("PaneGeneration.zig");
 
-pub const Registry = struct {
-    mutex: Io.Mutex = .init,
-    slots: [capacity]?identity.Credential = @splat(null),
+pub const Registry = @import("Registry.zig");
 
-    /// Copies one live capability into bounded registry storage. Exact
-    /// duplicate credentials are rejected.
-    ///
-    /// ```zig
-    /// try registry.register(io, &credential);
-    /// ```
-    pub fn register(registry: *Registry, io: Io, credential: *const identity.Credential) !void {
-        registry.mutex.lockUncancelable(io);
-        defer registry.mutex.unlock(io);
-
-        var free: ?*?identity.Credential = null;
-
-        for (&registry.slots) |*slot| {
-            if (slot.*) |*existing| {
-                if (sameCredential(existing, credential)) {
-                    return error.DuplicateProxyCredential;
-                }
-            } else if (free == null) {
-                free = slot;
-            }
-        }
-
-        const destination = free orelse return error.TooManyProxyCredentials;
-        destination.* = credential.*;
-    }
-
-    /// Revokes one exact credential and scrubs its stored token.
-    ///
-    /// ```zig
-    /// registry.remove(io, &credential);
-    /// ```
-    pub fn remove(registry: *Registry, io: Io, credential: *const identity.Credential) void {
-        registry.mutex.lockUncancelable(io);
-        defer registry.mutex.unlock(io);
-
-        for (&registry.slots) |*slot| {
-            const existing = if (slot.*) |*value| value else continue;
-            if (!sameCredential(existing, credential)) {
-                continue;
-            }
-
-            erase(slot, existing);
-            return;
-        }
-    }
-
-    /// Revokes every capability owned by one exact pane generation while
-    /// preserving credentials for reused pane IDs.
-    ///
-    /// ```zig
-    /// registry.removePane(io, .{ .id = pane_id, .generation = generation });
-    /// ```
-    pub fn removePane(registry: *Registry, io: Io, pane: PaneGeneration) void {
-        registry.mutex.lockUncancelable(io);
-        defer registry.mutex.unlock(io);
-
-        for (&registry.slots) |*slot| {
-            const existing = if (slot.*) |*value| value else continue;
-            if (existing.pane_id != pane.id or existing.pane_generation != pane.generation) {
-                continue;
-            }
-
-            erase(slot, existing);
-        }
-    }
-
-    /// Checks one complete capability using constant-time token comparison.
-    ///
-    /// ```zig
-    /// if (!registry.contains(io, &credential)) {
-    ///     rejectTunnel();
-    /// }
-    /// ```
-    pub fn contains(registry: *Registry, io: Io, credential: *const identity.Credential) bool {
-        registry.mutex.lockUncancelable(io);
-        defer registry.mutex.unlock(io);
-
-        for (&registry.slots) |*slot| {
-            const existing = if (slot.*) |*value| value else continue;
-            if (sameCredential(existing, credential)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-};
-
-fn erase(slot: *?identity.Credential, credential: *identity.Credential) void {
+pub fn erase(slot: *?identity.Credential, credential: *identity.Credential) void {
     std.crypto.secureZero(u8, &credential.token);
     slot.* = null;
 }
 
-fn sameCredential(left: *const identity.Credential, right: *const identity.Credential) bool {
+pub fn sameCredential(left: *const identity.Credential, right: *const identity.Credential) bool {
     if (left.pane_id != right.pane_id or left.pane_generation != right.pane_generation) {
         return false;
     }

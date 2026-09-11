@@ -20,23 +20,23 @@ const client_view = @import("view.zig");
 const name_prompt = @import("telar-client").model.name_prompt;
 const history_palette_state = @import("telar-client").model.history_palette;
 const suggestion_state = @import("telar-client").model.suggestion;
-const kitty = graphics.kitty;
-const modal_graphics = graphics.modal;
-const pill_graphics = graphics.pill;
-const toast_graphics = graphics.toast;
-const multiplexer = workspace_capability.multiplexer;
+pub const kitty = graphics.kitty;
+pub const modal_graphics = graphics.modal;
+pub const pill_graphics = graphics.pill;
+pub const toast_graphics = graphics.toast;
+pub const multiplexer = workspace_capability.multiplexer;
 const tabs = workspace_capability.tabs;
 const workspace_list = workspace_capability.workspace_list;
 const pace = presentation.pace;
 const term = presentation.screen;
 
-const Io = std.Io;
+pub const Io = std.Io;
 const monotonic = client_clock.monotonic;
 const schema = core.schema;
-const diagnostics = core.diagnostics;
-const icon_graphics = graphics.icons;
+pub const diagnostics = core.diagnostics;
+pub const icon_graphics = graphics.icons;
 
-const ClientMetrics = client_telemetry.Metrics;
+pub const ClientMetrics = client_telemetry.Metrics;
 
 const Presenter = @This();
 const lifecycle = @import("telar-client").presentation.lifecycle;
@@ -48,21 +48,9 @@ pub const PresentationIngress = @import("telar-client").presentation.Presentatio
 
 pub const Projection = @import("telar-client").presentation.Projection;
 
-pub const Resources = struct {
-    view: *client_view.State,
-    graphics_store: *kitty.Store,
-    writer: *Io.Writer,
-};
+pub const Resources = @import("Resources.zig");
 
-pub const Scheduler = struct {
-    context: *anyopaque,
-    /// Arms one draw at an absolute deadline; the owner delivers `.draw`.
-    draw: *const fn (*anyopaque, u64) anyerror!void,
-    /// Presents synchronously, on the caller's thread, before returning. A
-    /// frame the pacer lets through does not pay a timer task and a wakeup.
-    draw_now: *const fn (*anyopaque) anyerror!void,
-    media: *const fn (*anyopaque, u64) anyerror!void,
-};
+pub const Scheduler = @import("Scheduler.zig");
 
 io: Io,
 scheduler: Scheduler,
@@ -487,17 +475,9 @@ fn observePresentation(presenter: *Presenter, presented_ns: u64) void {
 
 pub const Delivery = @import("telar-client").presentation.Delivery;
 
-const Presented = struct {
-    presented_ns: u64,
-    commit: multiplexer.PresentationCommit,
-};
+const Presented = @import("Presented.zig");
 
-const CellPresentation = struct {
-    projection: Projection,
-    resources: Resources,
-    model: *const multiplexer.Model,
-    force: bool,
-};
+const CellPresentation = @import("CellPresentation.zig");
 
 fn present(presenter: *Presenter, input: CellPresentation) !Presented {
     const compose_started = diagnostics.now(presenter.io);
@@ -598,89 +578,9 @@ fn presentEmpty(presenter: *Presenter, projection: Projection, resources: Resour
     return .{ .presented_ns = monotonic(presenter.io), .commit = .{} };
 }
 
-const CellGraphicsWriter = struct {
-    panes: ?kitty.KittyGraphicsWriter = null,
-    pill: *pill_graphics.Renderer,
-    pill_bytes: usize = 0,
+const CellGraphicsWriter = @import("CellGraphicsWriter.zig");
 
-    fn writeOpaque(context: *anyopaque, writer: *Io.Writer) Io.Writer.Error!usize {
-        const self: *CellGraphicsWriter = @ptrCast(@alignCast(context));
-        self.pill_bytes = try self.pill.writeRetirements(writer);
-        const pane_bytes = if (self.panes) |*panes| try panes.write(writer) else 0;
-        return self.pill_bytes + pane_bytes;
-    }
-};
-
-const CombinedGraphicsWriter = struct {
-    panes: kitty.KittyGraphicsWriter,
-    sidebar: *kitty.KittySidebarRenderer,
-    icons: *icon_graphics.Renderer,
-    toasts: *toast_graphics.Renderer,
-    modal: *modal_graphics.Renderer,
-    pill: *pill_graphics.Renderer,
-    attachments: *attachments.Store,
-    allow_toast_transmission: bool,
-    metrics: *ClientMetrics,
-
-    fn writeOpaque(context: *anyopaque, writer: *Io.Writer) Io.Writer.Error!usize {
-        const self: *CombinedGraphicsWriter = @ptrCast(@alignCast(context));
-        var pane_bytes: usize = 0;
-        var toast_bytes: usize = 0;
-        var sidebar_bytes: usize = 0;
-        var icon_bytes: usize = 0;
-        var modal_bytes: usize = 0;
-        var pill_bytes: usize = 0;
-        var attachment_bytes: usize = 0;
-
-        // KGP continuation chunks do not identify their image. Whichever
-        // renderer opened a transfer owns the graphics stream until it closes;
-        // a pane, toast, or icon atlas can never interleave another transfer.
-        if (@import("../../attachments/root.zig").delivery.transferInProgress(self.attachments)) {
-            attachment_bytes = try @import("../../attachments/root.zig").delivery.write(self.attachments, writer);
-        } else if (self.pill.transferInProgress()) {
-            pill_bytes = try self.pill.write(writer);
-        } else if (self.modal.transferInProgress()) {
-            modal_bytes = try self.modal.write(writer);
-        } else if (self.toasts.transferInProgress()) {
-            toast_bytes = try self.toasts.write(
-                writer,
-                true,
-            );
-        } else if (self.icons.transferInProgress()) {
-            icon_bytes = try self.icons.write(writer);
-        } else {
-            pane_bytes = try self.panes.write(writer);
-            if (pane_bytes == 0 and self.panes.store.delivery.partial == null) {
-                modal_bytes = try self.modal.write(writer);
-                if (modal_bytes == 0) {
-                    attachment_bytes = try @import("../../attachments/root.zig").delivery.write(self.attachments, writer);
-                    if (attachment_bytes == 0) {
-                        toast_bytes = try self.toasts.write(writer, self.allow_toast_transmission);
-                        if (toast_bytes == 0) {
-                            sidebar_bytes = try self.sidebar.write(writer);
-                            if (sidebar_bytes == 0) {
-                                pill_bytes = try self.pill.write(writer);
-                                if (pill_bytes == 0) {
-                                    icon_bytes = try self.icons.write(writer);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if (comptime diagnostics.enabled) {
-            self.metrics.pane_graphics_flushed_bytes += pane_bytes;
-            self.metrics.toast_graphics_flushed_bytes += toast_bytes;
-            self.metrics.sidebar_graphics_flushed_bytes += sidebar_bytes;
-            self.metrics.icon_graphics_flushed_bytes += icon_bytes;
-            self.metrics.modal_graphics_flushed_bytes += modal_bytes;
-            self.metrics.pill_graphics_flushed_bytes += pill_bytes;
-            self.metrics.attachment_graphics_flushed_bytes += attachment_bytes;
-        }
-        return pane_bytes + toast_bytes + sidebar_bytes + icon_bytes + modal_bytes + pill_bytes + attachment_bytes;
-    }
-};
+const CombinedGraphicsWriter = @import("CombinedGraphicsWriter.zig");
 
 /// Sends the host window title when the rendered template changes. The
 /// bytes join the frame already being flushed, so a title never costs an

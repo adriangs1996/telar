@@ -5,35 +5,10 @@ const std = @import("std");
 const core = @import("telar-core");
 const delivery_mod = @import("../../delivery/root.zig");
 
-const schema = core.schema;
-const ResponseQueue = delivery_mod.ResponseQueue;
+pub const schema = core.schema;
+pub const ResponseQueue = delivery_mod.ResponseQueue;
 
-pub const Controller = struct {
-    responses: *ResponseQueue,
-
-    /// Creates one controller bound to the requesting client's responses.
-    ///
-    /// ```zig
-    /// var controller = Controller.init(&responses);
-    /// ```
-    pub fn init(responses: *ResponseQueue) Controller {
-        return .{ .responses = responses };
-    }
-
-    /// Queues one late-bound text read for the exact pane generation.
-    ///
-    /// ```zig
-    /// try controller.readPane(request);
-    /// ```
-    pub fn readPane(controller: *Controller, request: schema.ReadPane) !void {
-        try controller.responses.push(.{ .pane_text = .{
-            .request_id = request.request_id,
-            .pane = .{ .id = request.pane_id, .generation = request.pane_generation },
-            .rows = request.rows,
-            .source = request.source,
-        } });
-    }
-};
+pub const Controller = @import("ReadPaneController.zig");
 
 test "Controller queues the exact read for late binding" {
     var responses: ResponseQueue = .{};

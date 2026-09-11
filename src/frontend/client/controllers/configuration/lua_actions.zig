@@ -4,7 +4,7 @@ const lua_config = @import("../../../config/root.zig");
 const input = @import("../../../input/root.zig");
 const input_application = @import("telar-client").application.input;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const client_actions = @import("../input/actions.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const lua_action = input_application.lua_action;
@@ -12,10 +12,7 @@ const lua_action = input_application.lua_action;
 pub const Command = lua_action.Command;
 pub const Outcome = lua_action.Outcome;
 
-const EvaluationContext = struct {
-    client: *Client,
-    diagnostic: lua_config.Diagnostic = .{},
-};
+const EvaluationContext = @import("EvaluationContext.zig");
 
 /// Evaluates one configured Lua action against a model value snapshot.
 ///

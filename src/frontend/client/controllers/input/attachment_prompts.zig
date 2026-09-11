@@ -7,7 +7,7 @@ const input_capability = @import("../../../input/root.zig");
 const input_application = @import("telar-client").application.input;
 const pane_inputs = @import("pane_inputs.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const attachment_prompt = input_application.attachment_prompt;
 const key_routing = input_application.key_routing;
 const pane_input = input_application.pane_input;

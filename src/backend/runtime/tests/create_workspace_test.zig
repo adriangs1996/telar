@@ -7,66 +7,9 @@ const create_workspace_controller = @import("../entrypoints/requests/create_work
 const delivery_mod = @import("../delivery/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-const Effects = struct {
-    pane_id: schema.PaneId,
-    attachment_count: usize = 0,
-    event_count: usize = 0,
-    last_event: ?workspace_mod.WorkspaceCreated = null,
-
-    fn authority(effects: *Effects) create_workspace_commands.LaunchAuthority {
-        return .{ .context = effects, .prepare = prepare };
-    }
-
-    fn geometry(effects: *Effects) create_workspace_commands.GeometryLease {
-        return .{
-            .context = effects,
-            .acquire = acquire,
-            .release = release,
-        };
-    }
-
-    fn launcher(effects: *Effects) create_workspace_commands.PaneLauncher {
-        return .{ .context = effects, .launch = launch };
-    }
-
-    fn attachment(effects: *Effects) create_workspace_commands.ClientAttachment {
-        return .{ .context = effects, .replace = replace };
-    }
-
-    fn publisher(effects: *Effects) create_workspace_commands.EventPublisher {
-        return .{ .context = effects, .publish = publish };
-    }
-
-    fn prepare(_: *anyopaque, _: create_workspace_commands.PrepareLaunch) ![]const u8 {
-        return "/work/new";
-    }
-
-    fn acquire(_: *anyopaque, _: schema.WorkspaceLocation) bool {
-        return true;
-    }
-
-    fn release(_: *anyopaque, _: schema.WorkspaceLocation) void {
-        unreachable;
-    }
-
-    fn launch(context: *anyopaque, _: create_workspace_commands.LaunchPane) !create_workspace_commands.LaunchedPane {
-        const effects: *Effects = @ptrCast(@alignCast(context));
-        return .{ .id = effects.pane_id };
-    }
-
-    fn replace(context: *anyopaque, _: create_workspace_commands.LaunchedPane) !void {
-        const effects: *Effects = @ptrCast(@alignCast(context));
-        effects.attachment_count += 1;
-    }
-
-    fn publish(context: *anyopaque, event: workspace_mod.WorkspaceCreated) void {
-        const effects: *Effects = @ptrCast(@alignCast(context));
-        effects.event_count += 1;
-        effects.last_event = event;
-    }
-};
+const Effects = @import("CreateWorkspaceTestEffects.zig");
 
 test "a committed workspace creation survives response queue backpressure" {
     var state: workspace_mod.State = .{};

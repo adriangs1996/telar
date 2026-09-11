@@ -1,7 +1,7 @@
 //! Hit-test projection for pane content rendered by the multiplexer.
 
 const layout = @import("telar-client").workspace.layout;
-const widget = @import("context.zig");
+const widget = @import("context_support.zig");
 
 pub fn register(context: *widget.Context, snapshot: *const layout.Snapshot) void {
     for (snapshot.views()) |view| {

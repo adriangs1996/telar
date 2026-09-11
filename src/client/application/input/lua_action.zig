@@ -7,7 +7,7 @@ const input = @import("../../input/root.zig");
 const client_diagnostic = @import("../configuration/root.zig").client_diagnostic;
 const client_model = @import("../../root.zig").model;
 
-const Action = input.action.Action;
+pub const Action = input.action.Action;
 const schema = core.schema;
 
 pub const Command = union(enum) {
@@ -15,10 +15,7 @@ pub const Command = union(enum) {
     expression: input.action.CallbackRef,
 };
 
-pub const Failure = struct {
-    reason: anyerror,
-    diagnostic: lua_config.Diagnostic,
-};
+pub const Failure = @import("Failure.zig");
 
 pub const Invocation = union(enum) {
     callback: lua_config.EffectBatch,
@@ -46,130 +43,11 @@ pub const Outcome = union(enum) {
     validation_failed: anyerror,
 };
 
-pub const Effects = struct {
-    context: *anyopaque,
-    invoke: *const fn (*anyopaque, Command, lua_config.CallbackContext) Invocation,
-    validate: *const fn (*anyopaque, *const lua_config.EffectBatch) Validation,
-    apply: *const fn (*anyopaque, Action) anyerror!Disposition,
-};
+pub const Effects = @import("LuaActionEffects.zig");
 
-pub const LuaActionHandler = struct {
-    model: *client_model.Model,
-    effects: Effects,
+pub const LuaActionHandler = @import("LuaActionHandler.zig");
 
-    /// Evaluates one current Lua action and applies only a fully valid batch.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *LuaActionHandler, command: Command) !Outcome {
-        const invocation = handler.effects.invoke(
-            handler.effects.context,
-            command,
-            handler.model.callbackContext(),
-        );
-
-        return switch (invocation) {
-            .unavailable => .unavailable,
-            .failed => |failure| failed: {
-                try handler.publishFailure(failure);
-                break :failed .{ .invocation_failed = failure.reason };
-            },
-            .expression => |decision| expression: {
-                var diagnostics = handler.diagnosticHandler();
-                _ = diagnostics.clear();
-                break :expression .{ .input = decision };
-            },
-            .callback => |batch| callback: {
-                switch (handler.effects.validate(handler.effects.context, &batch)) {
-                    .valid => {},
-                    .failed => |failure| {
-                        try handler.publishFailure(failure);
-                        break :callback .{ .validation_failed = failure.reason };
-                    },
-                }
-
-                var diagnostics = handler.diagnosticHandler();
-                _ = diagnostics.clear();
-                for (batch.slice()) |effect| {
-                    if (try handler.effects.apply(handler.effects.context, effect) == .exit_client) {
-                        break :callback .exit;
-                    }
-                }
-
-                break :callback .applied;
-            },
-        };
-    }
-
-    fn publishFailure(handler: *LuaActionHandler, failure: Failure) !void {
-        var diagnostics = handler.diagnosticHandler();
-
-        _ = try diagnostics.replace(.{
-            .diagnostic = failure.diagnostic,
-            .invalid_fallback = client_diagnostic.formatted(
-                "Lua action failed: {s}",
-                .{@errorName(failure.reason)},
-            ),
-        });
-    }
-
-    fn diagnosticHandler(handler: *LuaActionHandler) client_diagnostic.ClientDiagnosticHandler {
-        return .{ .model = handler.model };
-    }
-};
-
-const Capture = struct {
-    invocation: Invocation,
-    validation: Validation = .valid,
-    invoke_calls: usize = 0,
-    validate_calls: usize = 0,
-    apply_calls: usize = 0,
-    exit_after: ?usize = null,
-    observed_context: lua_config.CallbackContext = undefined,
-    diagnostic_cleared_before_apply: bool = true,
-    model: *const client_model.Model,
-    applied: [lua_config.max_callback_effects]Action = undefined,
-
-    fn port(capture: *Capture) Effects {
-        return .{
-            .context = capture,
-            .invoke = invoke,
-            .validate = validate,
-            .apply = apply,
-        };
-    }
-
-    fn invoke(raw_context: *anyopaque, command: Command, context: lua_config.CallbackContext) Invocation {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        _ = command;
-        capture.invoke_calls += 1;
-        capture.observed_context = context;
-        return capture.invocation;
-    }
-
-    fn validate(raw_context: *anyopaque, batch: *const lua_config.EffectBatch) Validation {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        _ = batch;
-        capture.validate_calls += 1;
-        return capture.validation;
-    }
-
-    fn apply(raw_context: *anyopaque, effect: Action) !Disposition {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.diagnostic_cleared_before_apply = capture.diagnostic_cleared_before_apply and
-            capture.model.diagnostic() == null;
-        capture.applied[capture.apply_calls] = effect;
-        capture.apply_calls += 1;
-        if (capture.exit_after) |index| {
-            if (capture.apply_calls == index) {
-                return .exit_client;
-            }
-        }
-
-        return .continue_client;
-    }
-};
+const Capture = @import("LuaActionCapture.zig");
 
 fn diagnosticFailure(reason: anyerror, message: []const u8) Failure {
     var diagnostic: lua_config.Diagnostic = .{};

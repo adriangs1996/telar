@@ -4,97 +4,18 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 
-const schema = core.schema;
-const ui = core.ui;
+pub const schema = core.schema;
+pub const ui = core.ui;
 
 pub const ResizePane = client_model.ResizePaneRequest;
 
-pub const ResizeEffects = struct {
-    context: *anyopaque,
-    deliver: *const fn (*anyopaque, client_model.PaneGeometryChange) anyerror!void,
-};
+pub const ResizeEffects = @import("ResizeEffects.zig");
 
-pub const ResizePaneHandler = struct {
-    model: *client_model.Model,
-    effects: ResizeEffects,
+pub const ResizePaneHandler = @import("ResizePaneHandler.zig");
 
-    /// Commits one split-edge change before delivering runtime geometry.
-    /// Directions without a matching movable edge have no effects.
-    ///
-    /// ```zig
-    /// const resize = try handler.execute(.{ .direction = .right, .area = area });
-    /// ```
-    pub fn execute(handler: *ResizePaneHandler, command: ResizePane) !?client_model.PaneGeometryChange {
-        const resize = handler.model.resizePane(command) orelse return null;
+const TestingModel = @import("ResizePaneTestingModel.zig");
 
-        try handler.effects.deliver(handler.effects.context, resize);
-        return resize;
-    }
-};
-
-const TestingModel = struct {
-    model: *client_model.Model,
-    location: schema.TabLocation,
-    first: schema.PaneId,
-    area: ui.Rect = .{ .w = 101, .h = 41 },
-
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const location: schema.TabLocation = .{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(1),
-        };
-        const first: schema.PaneId = @enumFromInt(1);
-        const second: schema.PaneId = @enumFromInt(2);
-        try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 101, .rows = 41 } });
-        try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = .{ .w = 101, .h = 41 } });
-        try std.testing.expect(model.workspace.active().?.model.focusPane(first));
-
-        return .{
-            .model = model,
-            .location = location,
-            .first = first,
-        };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
-
-const EffectsCapture = struct {
-    model: *client_model.Model,
-    expected_focused: schema.PaneId,
-    width_before: u16,
-    calls: usize = 0,
-    observed_commit: bool = false,
-    resize: ?client_model.PaneGeometryChange = null,
-    fail: bool = false,
-
-    fn port(capture: *EffectsCapture) ResizeEffects {
-        return .{ .context = capture, .deliver = deliver };
-    }
-
-    fn deliver(context: *anyopaque, resize: client_model.PaneGeometryChange) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        const active = capture.model.workspace.active().?;
-        capture.calls += 1;
-        capture.resize = resize;
-        capture.observed_commit = active.model.layout.focused() == capture.expected_focused and
-            capture.model.version().panes == resize.panes_revision and
-            active.model.contentSize(capture.expected_focused, resize.area).?.cols > capture.width_before and
-            capture.model.version().panes == 1;
-
-        if (capture.fail) {
-            return error.ResizeSyncFailed;
-        }
-    }
-};
+const EffectsCapture = @import("ResizePaneEffectsCapture.zig");
 
 test "ResizePaneHandler commits before delivering runtime geometry" {
     var testing = try TestingModel.init();

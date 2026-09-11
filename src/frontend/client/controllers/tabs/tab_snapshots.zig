@@ -9,7 +9,7 @@ const active_pane_resources = @import("../panes/active_pane_resources.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const pane_attachment_requests = panes_application.pane_attachment_requests;
 const schema = core.schema;
 const tab_snapshot = tabs_application.tab_snapshot;

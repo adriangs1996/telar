@@ -8,7 +8,7 @@ const pane_graphics = @import("../panes/pane_graphics.zig");
 const tab_snapshots = @import("../tabs/tab_snapshots.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const host_resource_delivery = host_application.host_resource_delivery;
 const schema = core.schema;
 

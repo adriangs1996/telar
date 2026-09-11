@@ -6,9 +6,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const Io = std.Io;
-const File = Io.File;
-const Allocator = std.mem.Allocator;
+pub const Io = std.Io;
+pub const File = Io.File;
+pub const Allocator = std.mem.Allocator;
 
 const root = @import("root");
 
@@ -20,73 +20,9 @@ pub const enabled = builtin.mode == .Debug or
     (@hasDecl(root, "telar_diagnostics") and root.telar_diagnostics);
 pub const interval_ns: u64 = std.time.ns_per_s;
 
-pub const Timing = struct {
-    count: u64 = 0,
-    total_ns: u64 = 0,
-    max_ns: u64 = 0,
+pub const Timing = @import("Timing.zig");
 
-    pub fn observe(timing: *Timing, elapsed_ns: u64) void {
-        timing.count += 1;
-        timing.total_ns +|= elapsed_ns;
-        timing.max_ns = @max(timing.max_ns, elapsed_ns);
-    }
-
-    pub fn average(timing: Timing) u64 {
-        return if (timing.count == 0) 0 else timing.total_ns / timing.count;
-    }
-
-    /// Folds samples collected elsewhere into this timing, so a per-object
-    /// timing drained on a boundary can feed one process-wide aggregate.
-    ///
-    /// ```zig
-    /// metrics.graphics_freeze.merge(counts.freeze);
-    /// ```
-    pub fn merge(timing: *Timing, other: Timing) void {
-        timing.count +|= other.count;
-        timing.total_ns +|= other.total_ns;
-        timing.max_ns = @max(timing.max_ns, other.max_ns);
-    }
-};
-
-pub const Sink = struct {
-    file: if (enabled) ?File else void = if (enabled) null else {},
-
-    pub fn init(io: Io, endpoint: []const u8, suffix: []const u8) Sink {
-        if (!enabled) {
-            return .{};
-        }
-
-        var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const path = std.fmt.bufPrint(&path_buffer, "{s}.{s}.log", .{ endpoint, suffix }) catch
-            return .{};
-        const file = Io.Dir.createFileAbsolute(io, path, .{
-            .exclusive = true,
-            .permissions = File.Permissions.fromMode(0o600),
-        }) catch return .{};
-        return .{ .file = file };
-    }
-
-    pub fn deinit(sink: *Sink, io: Io) void {
-        if (!enabled) {
-            return;
-        }
-        if (sink.file) |file| {
-            file.close(io);
-        }
-        sink.file = null;
-    }
-
-    pub fn available(sink: *const Sink) bool {
-        return if (enabled) sink.file != null else false;
-    }
-
-    pub fn write(sink: *Sink, io: Io, bytes: []const u8) !void {
-        if (!enabled or sink.file == null) {
-            return;
-        }
-        try sink.file.?.writeStreamingAll(io, bytes);
-    }
-};
+pub const Sink = @import("Sink.zig");
 
 pub fn now(io: Io) u64 {
     if (!enabled) {
@@ -112,21 +48,12 @@ pub const Path = enum(u2) {
     other,
 };
 
-const path_count = std.meta.tags(Path).len;
+pub const path_count = std.meta.tags(Path).len;
 
-threadlocal var current_path: Path = .other;
-threadlocal var terminal_allocation_scope: bool = false;
+pub threadlocal var current_path: Path = .other;
+pub threadlocal var terminal_allocation_scope: bool = false;
 
-pub const Guard = struct {
-    previous: Path,
-
-    pub fn restore(guard: Guard) void {
-        if (!enabled) {
-            return;
-        }
-        current_path = guard.previous;
-    }
-};
+pub const Guard = @import("Guard.zig");
 
 pub fn enter(path: Path) Guard {
     if (!enabled) {
@@ -137,16 +64,7 @@ pub fn enter(path: Path) Guard {
     return .{ .previous = previous };
 }
 
-pub const TerminalAllocationGuard = struct {
-    previous: bool,
-
-    pub fn restore(guard: TerminalAllocationGuard) void {
-        if (!enabled) {
-            return;
-        }
-        terminal_allocation_scope = guard.previous;
-    }
-};
+pub const TerminalAllocationGuard = @import("TerminalAllocationGuard.zig");
 
 /// Attributes allocations made by the external terminal emulator while
 /// preserving their interactive-path total. Debug telemetry can then
@@ -160,179 +78,31 @@ pub fn enterTerminalAllocations() TerminalAllocationGuard {
     return .{ .previous = previous };
 }
 
-const Counter = if (enabled) std.atomic.Value(u64) else void;
-const counter_init: Counter = if (enabled) .init(0) else {};
+pub const Counter = if (enabled) std.atomic.Value(u64) else void;
+pub const counter_init: Counter = if (enabled) .init(0) else {};
 
-fn add(counter: *Counter, n: u64) void {
+pub fn add(counter: *Counter, n: u64) void {
     if (!enabled) {
         return;
     }
     _ = counter.fetchAdd(n, .monotonic);
 }
 
-fn sub(counter: *Counter, n: u64) void {
+pub fn sub(counter: *Counter, n: u64) void {
     if (!enabled) {
         return;
     }
     _ = counter.fetchSub(n, .monotonic);
 }
 
-fn load(counter: *const Counter) u64 {
+pub fn load(counter: *const Counter) u64 {
     if (!enabled) {
         return 0;
     }
     return counter.load(.monotonic);
 }
 
-/// Counting wrapper around the process GPA. Debug builds attribute every
-/// alloc/free to the thread's current `Path`. Release returns the child
-/// unchanged, so the interactive path pays nothing.
-pub const Heap = struct {
-    child: Allocator,
-    live_bytes: Counter = counter_init,
-    live_allocs: Counter = counter_init,
-    allocs: Counter = counter_init,
-    frees: Counter = counter_init,
-    alloc_bytes: Counter = counter_init,
-    path_allocs: [path_count]Counter = @splat(counter_init),
-    path_alloc_bytes: [path_count]Counter = @splat(counter_init),
-    interactive_vt_allocs: Counter = counter_init,
-    interactive_vt_alloc_bytes: Counter = counter_init,
-
-    pub const Snapshot = struct {
-        live_bytes: u64 = 0,
-        live_allocs: u64 = 0,
-        allocs: u64 = 0,
-        frees: u64 = 0,
-        alloc_bytes: u64 = 0,
-        interactive_allocs: u64 = 0,
-        interactive_alloc_bytes: u64 = 0,
-        interactive_vt_allocs: u64 = 0,
-        interactive_vt_alloc_bytes: u64 = 0,
-        media_allocs: u64 = 0,
-        media_alloc_bytes: u64 = 0,
-        observation_allocs: u64 = 0,
-        observation_alloc_bytes: u64 = 0,
-        other_allocs: u64 = 0,
-        other_alloc_bytes: u64 = 0,
-    };
-
-    pub fn init(child: Allocator) Heap {
-        return .{ .child = child };
-    }
-
-    pub fn allocator(heap: *Heap) Allocator {
-        if (!enabled) {
-            return heap.child;
-        }
-        return .{
-            .ptr = heap,
-            .vtable = &.{
-                .alloc = alloc,
-                .resize = resize,
-                .remap = remap,
-                .free = free,
-            },
-        };
-    }
-
-    pub fn snapshot(heap: *const Heap) Snapshot {
-        return .{
-            .live_bytes = load(&heap.live_bytes),
-            .live_allocs = load(&heap.live_allocs),
-            .allocs = load(&heap.allocs),
-            .frees = load(&heap.frees),
-            .alloc_bytes = load(&heap.alloc_bytes),
-            .interactive_allocs = load(&heap.path_allocs[@intFromEnum(Path.interactive)]),
-            .interactive_alloc_bytes = load(&heap.path_alloc_bytes[@intFromEnum(Path.interactive)]),
-            .interactive_vt_allocs = load(&heap.interactive_vt_allocs),
-            .interactive_vt_alloc_bytes = load(&heap.interactive_vt_alloc_bytes),
-            .media_allocs = load(&heap.path_allocs[@intFromEnum(Path.media)]),
-            .media_alloc_bytes = load(&heap.path_alloc_bytes[@intFromEnum(Path.media)]),
-            .observation_allocs = load(&heap.path_allocs[@intFromEnum(Path.observation)]),
-            .observation_alloc_bytes = load(&heap.path_alloc_bytes[@intFromEnum(Path.observation)]),
-            .other_allocs = load(&heap.path_allocs[@intFromEnum(Path.other)]),
-            .other_alloc_bytes = load(&heap.path_alloc_bytes[@intFromEnum(Path.other)]),
-        };
-    }
-
-    fn recordAlloc(heap: *Heap, len: usize) void {
-        add(&heap.live_bytes, len);
-        add(&heap.live_allocs, 1);
-        add(&heap.allocs, 1);
-        add(&heap.alloc_bytes, len);
-        const path = @intFromEnum(current_path);
-        add(&heap.path_allocs[path], 1);
-        add(&heap.path_alloc_bytes[path], len);
-        if (current_path == .interactive and terminal_allocation_scope) {
-            add(&heap.interactive_vt_allocs, 1);
-            add(&heap.interactive_vt_alloc_bytes, len);
-        }
-    }
-
-    fn recordGrow(heap: *Heap, delta: usize) void {
-        add(&heap.live_bytes, delta);
-        add(&heap.alloc_bytes, delta);
-        add(&heap.path_alloc_bytes[@intFromEnum(current_path)], delta);
-        if (current_path == .interactive and terminal_allocation_scope) {
-            add(&heap.interactive_vt_alloc_bytes, delta);
-        }
-    }
-
-    fn recordShrink(heap: *Heap, delta: usize) void {
-        sub(&heap.live_bytes, delta);
-    }
-
-    fn recordFree(heap: *Heap, len: usize) void {
-        sub(&heap.live_bytes, len);
-        sub(&heap.live_allocs, 1);
-        add(&heap.frees, 1);
-    }
-
-    // codestyle: allow(maximum-parameter-count)
-    fn alloc(context: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
-        const heap: *Heap = @ptrCast(@alignCast(context));
-        const result = heap.child.rawAlloc(len, alignment, ret_addr) orelse return null;
-        heap.recordAlloc(len);
-        return result;
-    }
-
-    // codestyle: allow(maximum-parameter-count)
-    fn resize(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
-        const heap: *Heap = @ptrCast(@alignCast(context));
-        if (!heap.child.rawResize(memory, alignment, new_len, ret_addr)) {
-            return false;
-        }
-        if (new_len > memory.len) {
-            heap.recordGrow(new_len - memory.len);
-        }
-        if (new_len < memory.len) {
-            heap.recordShrink(memory.len - new_len);
-        }
-        return true;
-    }
-
-    // codestyle: allow(maximum-parameter-count)
-    fn remap(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
-        const heap: *Heap = @ptrCast(@alignCast(context));
-        const result = heap.child.rawRemap(memory, alignment, new_len, ret_addr) orelse
-            return null;
-        if (new_len > memory.len) {
-            heap.recordGrow(new_len - memory.len);
-        }
-        if (new_len < memory.len) {
-            heap.recordShrink(memory.len - new_len);
-        }
-        return result;
-    }
-
-    // codestyle: allow(maximum-parameter-count)
-    fn free(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {
-        const heap: *Heap = @ptrCast(@alignCast(context));
-        heap.child.rawFree(memory, alignment, ret_addr);
-        heap.recordFree(memory.len);
-    }
-};
+pub const Heap = @import("Heap.zig");
 
 /// Resident set of this process, not the host. Zero when the platform
 /// cannot sample it.

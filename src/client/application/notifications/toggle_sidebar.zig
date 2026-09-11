@@ -3,77 +3,18 @@
 const std = @import("std");
 const client_model = @import("../../root.zig").model;
 
-pub const SidebarEffects = struct {
-    context: *anyopaque,
-    apply: *const fn (*anyopaque, client_model.SidebarLayout) anyerror!void,
-};
+pub const SidebarEffects = @import("SidebarEffects.zig");
 
-pub const ToggleSidebarHandler = struct {
-    model: *client_model.Model,
-    effects: SidebarEffects,
-
-    /// Commits the sidebar preference before synchronizing its disposable
-    /// projection and pane geometry.
-    ///
-    /// ```zig
-    /// const change = try handler.execute();
-    /// ```
-    pub fn execute(handler: *ToggleSidebarHandler) !client_model.SidebarLayout {
-        const change = handler.model.toggleSidebar();
-
-        try handler.effects.apply(handler.effects.context, change);
-        return change;
-    }
-};
+pub const ToggleSidebarHandler = @import("ToggleSidebarHandler.zig");
 
 pub const Resize = union(enum) {
     exact: u16,
     direction: @import("../../layout/root.zig").sidebar.Direction,
 };
 
-pub const ResizeSidebarHandler = struct {
-    model: *client_model.Model,
-    effects: SidebarEffects,
+pub const ResizeSidebarHandler = @import("ResizeSidebarHandler.zig");
 
-    /// Commits one exact or stepped width before synchronizing geometry.
-    ///
-    /// ```zig
-    /// _ = try handler.execute(.{ .exact = 73 });
-    /// ```
-    pub fn execute(handler: *ResizeSidebarHandler, resize: Resize) !?client_model.SidebarLayout {
-        const change = switch (resize) {
-            .exact => |width| handler.model.setSidebarWidth(width),
-            .direction => |direction| handler.model.stepSidebarWidth(direction),
-        } orelse return null;
-
-        try handler.effects.apply(handler.effects.context, change);
-        return change;
-    }
-};
-
-const EffectsCapture = struct {
-    model: *const client_model.Model,
-    calls: usize = 0,
-    observed_commit: bool = false,
-    change: ?client_model.SidebarLayout = null,
-    fail: bool = false,
-
-    fn port(capture: *EffectsCapture) SidebarEffects {
-        return .{ .context = capture, .apply = apply };
-    }
-
-    fn apply(context: *anyopaque, change: client_model.SidebarLayout) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.change = change;
-        capture.observed_commit = capture.model.sidebarVisible() == change.visible and
-            capture.model.version().chrome == change.chrome_revision;
-
-        if (capture.fail) {
-            return error.SidebarSyncFailed;
-        }
-    }
-};
+const EffectsCapture = @import("ToggleSidebarEffectsCapture.zig");
 
 test "ToggleSidebarHandler commits before synchronizing client resources" {
     var model = client_model.Model.init(std.testing.allocator, true);

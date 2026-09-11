@@ -11,117 +11,31 @@ const tags = @import("tags.zig");
 
 const ClientTag = tags.ClientTag;
 const ServerTag = tags.ServerTag;
-const PaneId = id.PaneId;
-const TabLocation = types.TabLocation;
+pub const PaneId = id.PaneId;
+pub const TabLocation = types.TabLocation;
 const ClientLayoutAxis = types.ClientLayoutAxis;
-const ClientLayoutNode = types.ClientLayoutNode;
+pub const ClientLayoutNode = types.ClientLayoutNode;
 const ClientTabLayout = types.ClientTabLayout;
 const ClientLayoutUpdate = types.ClientLayoutUpdate;
 const ClientLayoutSnapshot = types.ClientLayoutSnapshot;
-const max_panes_per_tab = types.max_panes_per_tab;
-const max_client_layout_tabs = types.max_client_layout_tabs;
-const max_client_layout_nodes = types.max_client_layout_nodes;
-const min_client_layout_ratio = types.min_client_layout_ratio;
-const max_client_layout_ratio = types.max_client_layout_ratio;
-const validatePaneId = codec.validatePaneId;
+pub const max_panes_per_tab = types.max_panes_per_tab;
+pub const max_client_layout_tabs = types.max_client_layout_tabs;
+pub const max_client_layout_nodes = types.max_client_layout_nodes;
+pub const min_client_layout_ratio = types.min_client_layout_ratio;
+pub const max_client_layout_ratio = types.max_client_layout_ratio;
+pub const validatePaneId = codec.validatePaneId;
 const encodeTabLocation = codec.encodeTabLocation;
 const decodeTabLocation = codec.decodeTabLocation;
 
-pub const ClientTabLayoutView = struct {
-    location: TabLocation,
-    focused_pane: PaneId,
-    fullscreen: bool,
-    workspace_active: bool,
-    node_count: u16,
-    encoded_nodes: []const u8,
+pub const ClientTabLayoutView = @import("ClientTabLayoutView.zig");
 
-    /// Iterates this validated pre-order split tree without allocating.
-    ///
-    /// ```zig
-    /// var nodes = tab.nodes();
-    /// while (try nodes.next()) |node| use(node);
-    /// ```
-    pub fn nodes(layout: ClientTabLayoutView) ClientLayoutNodeIterator {
-        return .{ .decoder = .init(layout.encoded_nodes), .remaining = layout.node_count };
-    }
-};
+pub const ClientLayoutUpdateView = @import("ClientLayoutUpdateView.zig");
 
-pub const ClientLayoutUpdateView = struct {
-    sidebar_visible: bool,
-    sidebar_width: u16,
-    workspace_list_collapsed: bool,
-    active_tab: TabLocation,
-    tab_count: u16,
-    encoded_tabs: []const u8,
+pub const ClientLayoutSnapshotView = @import("ClientLayoutSnapshotView.zig");
 
-    /// Iterates the validated layouts retained by this client update.
-    ///
-    /// ```zig
-    /// var tabs = update.tabs();
-    /// while (try tabs.next()) |tab| use(tab);
-    /// ```
-    pub fn tabs(update: ClientLayoutUpdateView) ClientTabLayoutIterator {
-        return .{ .decoder = .init(update.encoded_tabs), .remaining = update.tab_count };
-    }
-};
+pub const ClientLayoutNodeIterator = @import("ClientLayoutNodeIterator.zig");
 
-pub const ClientLayoutSnapshotView = struct {
-    restored: bool,
-    sidebar_visible: bool,
-    sidebar_width: u16,
-    workspace_list_collapsed: bool,
-    active_tab: ?TabLocation,
-    tab_count: u16,
-    encoded_tabs: []const u8,
-
-    /// Iterates the runtime-retained tab layouts in this bootstrap snapshot.
-    ///
-    /// ```zig
-    /// var tabs = snapshot.tabs();
-    /// while (try tabs.next()) |tab| restore(tab);
-    /// ```
-    pub fn tabs(snapshot: ClientLayoutSnapshotView) ClientTabLayoutIterator {
-        return .{ .decoder = .init(snapshot.encoded_tabs), .remaining = snapshot.tab_count };
-    }
-};
-
-pub const ClientLayoutNodeIterator = struct {
-    decoder: wire.Decoder,
-    remaining: u16,
-
-    /// Decodes the next tree node, returning null after the declared count.
-    ///
-    /// ```zig
-    /// const node = (try nodes.next()) orelse return;
-    /// ```
-    pub fn next(iterator: *ClientLayoutNodeIterator) !?ClientLayoutNode {
-        if (iterator.remaining == 0) {
-            return null;
-        }
-
-        iterator.remaining -= 1;
-        return @as(?ClientLayoutNode, try decodeClientLayoutNode(&iterator.decoder));
-    }
-};
-
-pub const ClientTabLayoutIterator = struct {
-    decoder: wire.Decoder,
-    remaining: u16,
-
-    /// Decodes the next tab layout, returning null after the declared count.
-    ///
-    /// ```zig
-    /// const tab = (try tabs.next()) orelse return;
-    /// ```
-    pub fn next(iterator: *ClientTabLayoutIterator) !?ClientTabLayoutView {
-        if (iterator.remaining == 0) {
-            return null;
-        }
-
-        iterator.remaining -= 1;
-        return @as(?ClientTabLayoutView, try decodeClientTabLayout(&iterator.decoder));
-    }
-};
+pub const ClientTabLayoutIterator = @import("ClientTabLayoutIterator.zig");
 
 /// Encodes one complete current-workspace layout update.
 ///
@@ -275,7 +189,7 @@ fn encodeClientLayoutNode(encoder: *wire.Encoder, node: ClientLayoutNode) !void 
     }
 }
 
-fn decodeClientLayoutNode(decoder: *wire.Decoder) !ClientLayoutNode {
+pub fn decodeClientLayoutNode(decoder: *wire.Decoder) !ClientLayoutNode {
     return switch (try decoder.readByte()) {
         0 => .{ .pane = try id.pane(try decoder.readInt(u64)) },
         1 => split: {
@@ -304,7 +218,7 @@ fn encodeClientTabLayout(encoder: *wire.Encoder, layout: ClientTabLayout) !void 
     }
 }
 
-fn decodeClientTabLayout(decoder: *wire.Decoder) !ClientTabLayoutView {
+pub fn decodeClientTabLayout(decoder: *wire.Decoder) !ClientTabLayoutView {
     const location = try decodeTabLocation(decoder);
     const focused_pane = try id.pane(try decoder.readInt(u64));
     const fullscreen = try decoder.readBool();
@@ -328,54 +242,9 @@ fn decodeClientTabLayout(decoder: *wire.Decoder) !ClientTabLayoutView {
     return view;
 }
 
-const ClientLayoutTreeValidation = struct {
-    panes: [max_panes_per_tab]PaneId = undefined,
-    pane_count: usize = 0,
-    pending: usize = 1,
+const ClientLayoutTreeValidation = @import("ClientLayoutTreeValidation.zig");
 
-    fn accept(validation: *ClientLayoutTreeValidation, node: ClientLayoutNode) !void {
-        if (validation.pending == 0) {
-            return error.InvalidClientLayoutTree;
-        }
-
-        validation.pending -= 1;
-        switch (node) {
-            .pane => |pane_id| {
-                try validatePaneId(pane_id);
-                if (std.mem.findScalar(PaneId, validation.panes[0..validation.pane_count], pane_id) != null) {
-                    return error.DuplicatePane;
-                }
-                if (validation.pane_count == validation.panes.len) {
-                    return error.TooManyPanes;
-                }
-
-                validation.panes[validation.pane_count] = pane_id;
-                validation.pane_count += 1;
-            },
-            .split => |split| {
-                if (split.ratio < min_client_layout_ratio or split.ratio > max_client_layout_ratio) {
-                    return error.InvalidClientLayoutRatio;
-                }
-
-                validation.pending += 2;
-            },
-        }
-    }
-
-    fn finish(validation: *const ClientLayoutTreeValidation, layout: ClientLayoutTreeSummary) !void {
-        if (validation.pending != 0 or validation.pane_count == 0 or layout.node_count != validation.pane_count * 2 - 1) {
-            return error.InvalidClientLayoutTree;
-        }
-        if (std.mem.findScalar(PaneId, validation.panes[0..validation.pane_count], layout.focused_pane) == null) {
-            return error.InvalidClientLayoutFocus;
-        }
-    }
-};
-
-const ClientLayoutTreeSummary = struct {
-    node_count: usize,
-    focused_pane: PaneId,
-};
+const ClientLayoutTreeSummary = @import("ClientLayoutTreeSummary.zig");
 
 fn validateClientTabLayout(layout: ClientTabLayout) !void {
     if (layout.nodes.len == 0 or layout.nodes.len > max_client_layout_nodes) {
@@ -454,52 +323,6 @@ fn validateClientLayoutEntries(active: ?TabLocation, tabs: []const ClientTabLayo
     }
 }
 
-const ClientLayoutEntry = struct {
-    location: TabLocation,
-    workspace_active: bool,
-    node_count: usize,
-};
+const ClientLayoutEntry = @import("ClientLayoutEntry.zig");
 
-const ClientLayoutCollection = struct {
-    locations: [max_client_layout_tabs]TabLocation = undefined,
-    workspace_active: [max_client_layout_tabs]bool = undefined,
-    count: usize = 0,
-    node_count: usize = 0,
-
-    fn append(collection: *ClientLayoutCollection, entry: ClientLayoutEntry) !void {
-        for (collection.locations[0..collection.count]) |previous| {
-            if (std.meta.eql(previous, entry.location)) {
-                return error.DuplicateClientLayoutTab;
-            }
-        }
-        for (collection.locations[0..collection.count], collection.workspace_active[0..collection.count]) |previous, previous_active| {
-            if (previous_active and entry.workspace_active and std.meta.eql(previous.workspace, entry.location.workspace)) {
-                return error.DuplicateClientLayoutWorkspace;
-            }
-        }
-
-        collection.node_count = std.math.add(usize, collection.node_count, entry.node_count) catch
-            return error.TooManyClientLayoutNodes;
-        if (collection.node_count > max_client_layout_nodes) {
-            return error.TooManyClientLayoutNodes;
-        }
-
-        collection.locations[collection.count] = entry.location;
-        collection.workspace_active[collection.count] = entry.workspace_active;
-        collection.count += 1;
-    }
-
-    fn validateActive(collection: *const ClientLayoutCollection, active: TabLocation) !void {
-        for (collection.locations[0..collection.count], collection.workspace_active[0..collection.count]) |location, is_workspace_active| {
-            if (std.meta.eql(location, active)) {
-                if (!is_workspace_active) {
-                    return error.InvalidClientLayoutActiveTab;
-                }
-
-                return;
-            }
-        }
-
-        return error.InvalidClientLayoutActiveTab;
-    }
-};
+const ClientLayoutCollection = @import("ClientLayoutCollection.zig");

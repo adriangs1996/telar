@@ -4,44 +4,13 @@ const std = @import("std");
 const model = @import("model.zig");
 const terminal = @import("terminal.zig");
 
-pub const LaunchAttemptRequest = struct {
-    pane_id: model.schema.PaneId,
-    pane_generation: u64,
-    location: model.schema.TabLocation,
-    workspace_path: []const u8,
-    shell: []const u8,
-    started_at_ms: i64,
-    phase: model.LaunchPhase,
-    cause: []const u8,
-};
+pub const LaunchAttemptRequest = @import("LaunchAttemptRequest.zig");
 
-pub const SessionStartRequest = struct {
-    session_id: model.SessionId,
-    pane_id: model.schema.PaneId,
-    location: model.schema.TabLocation,
-    workspace_path: []const u8,
-    shell: []const u8,
-    started_at_ms: i64,
-};
+pub const SessionStartRequest = @import("SessionStartRequest.zig");
 
-pub const CommandContext = struct {
-    author: model.schema.HistoryAuthor = .human,
-    origin: model.schema.HistoryOrigin = .pane,
-    session_id: model.SessionId,
-    pane_id: model.schema.PaneId,
-    location: model.schema.TabLocation,
-    sequence: u64,
-    workspace_path: []const u8,
-    cols: u16,
-    rows: u16,
-    provider: []const u8 = "",
-    tool_call_id: []const u8 = "",
-};
+pub const CommandContext = @import("CommandContext.zig");
 
-pub const CommandRecord = struct {
-    context: CommandContext,
-    command: terminal.Command,
-};
+pub const CommandRecord = @import("CommandRecord.zig");
 
 /// Copies a failed launch into one request whose ownership can cross the
 /// history channel. Partial allocation failure releases every prior copy.

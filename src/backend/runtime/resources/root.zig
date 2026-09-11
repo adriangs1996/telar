@@ -15,10 +15,10 @@ const telemetry = @import("../observability/root.zig").telemetry;
 
 pub const git_probe = @import("git_probe.zig");
 
-const Io = std.Io;
-const diagnostics = core.diagnostics;
+pub const Io = std.Io;
+pub const diagnostics = core.diagnostics;
 
-const AcquisitionPhase = enum {
+pub const AcquisitionPhase = enum {
     child_environment,
     proxy,
     listener,
@@ -29,161 +29,26 @@ const AcquisitionPhase = enum {
     engine,
 };
 
-/// Owns runtime-wide physical resources acquired during startup.
-pub const Resources = struct {
-    dependencies: config.Dependencies,
-    heap: diagnostics.Heap,
-    gpa: std.mem.Allocator,
-    child_environment: pty.ChildEnvironment,
-    /// Immutable after startup; observation workers borrow it by pointer.
-    agent_manifests: core.agent_manifest.Table,
-    proxy: proxy_runtime.Runtime,
-    listener: transport.local.LocalListener,
-    telemetry: telemetry.State,
-    clients: *client_store.Store,
-    history: history_runtime.Runtime,
-    plugins: plugins_runtime.Runtime,
-    /// Present only when `runtime.engine` is configured.
-    engine: ?engine_runtime.Runtime,
+pub const Resources = @import("Resources.zig");
 
-    /// Acquires physical resources in dependency order and rolls back every
-    /// completed acquisition if a later one fails.
-    ///
-    /// ```zig
-    /// var resources: Resources = undefined;
-    /// try resources.init(initialization);
-    /// ```
-    pub fn init(resources: *Resources, initialization: config.Initialization) !void {
-        return resources.acquire(initialization, null);
-    }
-
-    fn acquire(resources: *Resources, initialization: config.Initialization, comptime fail_after: ?AcquisitionPhase) !void {
-        resources.dependencies = initialization.dependencies;
-        resources.heap = diagnostics.Heap.init(initialization.dependencies.allocator);
-        resources.gpa = resources.heap.allocator();
-
-        try initialization.options.graphics.validate();
-        attachment.initSharedFreezeNonce(resources.io());
-
-        resources.agent_manifests = initialization.options.agent_manifests;
-        resources.child_environment = try pty.ChildEnvironment.init(resources.gpa, initialization.options.environment, "telar");
-        errdefer resources.child_environment.deinit();
-        try checkpoint(fail_after, .child_environment);
-
-        resources.proxy = try proxy_runtime.Runtime.init(
-            resources.io(),
-            resources.gpa,
-            .{
-                .config = initialization.options.proxy,
-                .system_trusted = initialization.options.proxy_system_trusted,
-            },
-        );
-        errdefer resources.proxy.deinit();
-        try checkpoint(fail_after, .proxy);
-
-        resources.listener = try transport.local.LocalListener.listen(resources.io(), initialization.options.endpoint);
-        errdefer resources.listener.deinit(resources.io());
-        try checkpoint(fail_after, .listener);
-
-        resources.telemetry = initTelemetry(resources.io(), initialization.options.endpoint);
-        errdefer resources.telemetry.deinit(resources.io());
-        try checkpoint(fail_after, .telemetry);
-
-        resources.clients = try createClientStore(resources.gpa);
-        errdefer resources.gpa.destroy(resources.clients);
-        try checkpoint(fail_after, .clients);
-
-        resources.history = try history_runtime.Runtime.init(resources.io(), resources.gpa, .{
-            .database_path = initialization.options.history_path,
-            .filters = initialization.options.history_filters,
-            .capture_output = initialization.options.history_output_capture,
-        });
-        errdefer resources.history.deinit();
-        try checkpoint(fail_after, .history);
-
-        try resources.plugins.init(.{
-            .io = resources.io(),
-            .gpa = resources.gpa,
-            .specs = initialization.options.plugins,
-        });
-        errdefer resources.plugins.deinit();
-        resources.proxy.setCaptureSink(.{
-            .context = resources.plugins.service(),
-            .submit_fn = submitCapture,
-        });
-        try checkpoint(fail_after, .plugins);
-
-        resources.engine = if (initialization.options.engine) |options|
-            try engine_runtime.Runtime.init(resources.io(), resources.gpa, options)
-        else
-            null;
-        errdefer if (resources.engine) |*engine| engine.deinit();
-        try checkpoint(fail_after, .engine);
-    }
-
-    /// Borrows the engine service, or null when no engine is configured.
-    ///
-    /// ```zig
-    /// const service = resources.engineService() orelse return;
-    /// ```
-    pub fn engineService(resources: *Resources) ?*engine_runtime.Runtime.Service {
-        if (resources.engine) |*engine| {
-            return engine.service();
-        }
-
-        return null;
-    }
-
-    pub fn pluginService(resources: *Resources) *@import("../../plugins/root.zig").Service {
-        return resources.plugins.service();
-    }
-
-    /// Returns the I/O implementation selected by the process root.
-    ///
-    /// ```zig
-    /// const io = resources.io();
-    /// ```
-    pub fn io(resources: *const Resources) Io {
-        return resources.dependencies.io;
-    }
-
-    /// Releases resources acquired before actors were started.
-    ///
-    /// ```zig
-    /// resources.deinitUnstarted();
-    /// ```
-    pub fn deinitUnstarted(resources: *Resources) void {
-        if (resources.engine) |*engine| {
-            engine.deinit();
-        }
-        resources.proxy.deinit();
-        resources.plugins.deinit();
-        resources.history.deinit();
-        resources.gpa.destroy(resources.clients);
-        resources.telemetry.deinit(resources.io());
-        resources.listener.deinit(resources.io());
-        resources.child_environment.deinit();
-    }
-};
-
-fn submitCapture(context: *anyopaque, exchange: *@import("../../proxy/root.zig").CaptureExchange) void {
+pub fn submitCapture(context: *anyopaque, exchange: *@import("../../proxy/root.zig").CaptureExchange) void {
     const service: *@import("../../plugins/root.zig").Service = @ptrCast(@alignCast(context));
     service.submit(exchange);
 }
 
-fn checkpoint(comptime fail_after: ?AcquisitionPhase, comptime phase: AcquisitionPhase) !void {
+pub fn checkpoint(comptime fail_after: ?AcquisitionPhase, comptime phase: AcquisitionPhase) !void {
     if (comptime fail_after == phase) {
         return error.InjectedStartupFailure;
     }
 }
 
-fn initTelemetry(io: Io, endpoint: []const u8) telemetry.State {
+pub fn initTelemetry(io: Io, endpoint: []const u8) telemetry.State {
     var suffix_buffer: [64]u8 = undefined;
     const suffix = std.fmt.bufPrint(&suffix_buffer, "runtime-{d}", .{std.c.getpid()}) catch "runtime";
     return telemetry.State.init(io, endpoint, suffix);
 }
 
-fn createClientStore(gpa: std.mem.Allocator) !*client_store.Store {
+pub fn createClientStore(gpa: std.mem.Allocator) !*client_store.Store {
     const clients = try gpa.create(client_store.Store);
     clients.* = .{};
     return clients;

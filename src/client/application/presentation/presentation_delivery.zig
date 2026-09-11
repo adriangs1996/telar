@@ -6,139 +6,29 @@ const core = @import("telar-core");
 const workspace_capability = @import("../../workspace/root.zig");
 const client_model = @import("../../root.zig").model;
 
-const multiplexer = workspace_capability.multiplexer;
-const schema = core.schema;
+pub const multiplexer = workspace_capability.multiplexer;
+pub const schema = core.schema;
 
-pub const Command = struct {
-    commit: multiplexer.PresentationCommit,
-    media_pending: bool,
-};
+pub const Command = @import("Command.zig");
 
-pub const Effects = struct {
-    context: *anyopaque,
-    flush_graphics_credits: *const fn (*anyopaque) anyerror!void,
-    acknowledge_frame: *const fn (*anyopaque, schema.FrameAck) anyerror!void,
-    request_media: *const fn (*anyopaque) anyerror!void,
-};
+pub const Effects = @import("Effects.zig");
 
-pub const DeliverPresentationHandler = struct {
-    model: *client_model.Model,
-    effects: Effects,
+pub const DeliverPresentationHandler = @import("DeliverPresentationHandler.zig");
 
-    /// Commits one successful host presentation before delivering transport
-    /// effects in credits, frame and media order.
-    ///
-    /// ```zig
-    /// try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *DeliverPresentationHandler, command: Command) !void {
-        if (command.commit.len > multiplexer.max_panes) {
-            return error.InvalidPresentationCommit;
-        }
-
-        const accepted = handler.model.commitPresentation(command.commit);
-        try handler.effects.flush_graphics_credits(handler.effects.context);
-
-        for (accepted.slice()) |pane| {
-            if (!pane.attached or pane.frame_id == 0) {
-                continue;
-            }
-
-            try handler.effects.acknowledge_frame(handler.effects.context, .{ .pane_id = pane.pane_id, .frame_id = pane.frame_id });
-        }
-
-        if (command.media_pending) {
-            try handler.effects.request_media(handler.effects.context);
-        }
-    }
-};
-
-const Event = enum {
+pub const Event = enum {
     credits,
     acknowledgement,
     media,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     credits,
     second_acknowledgement,
     media,
 };
 
-const EffectCapture = struct {
-    model: *client_model.Model,
-    pane_id: schema.PaneId,
-    events: [multiplexer.max_panes + 2]Event = undefined,
-    event_count: usize = 0,
-    acknowledgements: [multiplexer.max_panes]schema.FrameAck = undefined,
-    acknowledgement_count: usize = 0,
-    commit_observed: bool = true,
-    failure: Failure = .none,
-
-    fn effects(capture: *EffectCapture) Effects {
-        return .{
-            .context = capture,
-            .flush_graphics_credits = flushGraphicsCredits,
-            .acknowledge_frame = acknowledgeFrame,
-            .request_media = requestMedia,
-        };
-    }
-
-    fn flushGraphicsCredits(context: *anyopaque) !void {
-        const capture: *EffectCapture = @ptrCast(@alignCast(context));
-        capture.observeCommit();
-        capture.append(.credits);
-
-        if (capture.failure == .credits) {
-            return error.CreditFailure;
-        }
-    }
-
-    fn acknowledgeFrame(context: *anyopaque, ack: schema.FrameAck) !void {
-        const capture: *EffectCapture = @ptrCast(@alignCast(context));
-        capture.observeCommit();
-        capture.append(.acknowledgement);
-        capture.acknowledgements[capture.acknowledgement_count] = ack;
-        capture.acknowledgement_count += 1;
-
-        if (capture.failure == .second_acknowledgement and capture.acknowledgement_count == 2) {
-            return error.AcknowledgementFailure;
-        }
-    }
-
-    fn requestMedia(context: *anyopaque) !void {
-        const capture: *EffectCapture = @ptrCast(@alignCast(context));
-        capture.observeCommit();
-        capture.append(.media);
-
-        if (capture.failure == .media) {
-            return error.MediaFailure;
-        }
-    }
-
-    fn observeCommit(capture: *EffectCapture) void {
-        const pane = capture.model.workspace.findPane(capture.pane_id) orelse {
-            capture.commit_observed = false;
-            return;
-        };
-
-        capture.commit_observed = capture.commit_observed and pane.pending_frame_id == 0;
-    }
-
-    fn append(capture: *EffectCapture, event: Event) void {
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn eventSlice(capture: *const EffectCapture) []const Event {
-        return capture.events[0..capture.event_count];
-    }
-
-    fn acknowledgementSlice(capture: *const EffectCapture) []const schema.FrameAck {
-        return capture.acknowledgements[0..capture.acknowledgement_count];
-    }
-};
+const EffectCapture = @import("EffectCapture.zig");
 
 const location: schema.TabLocation = .{
     .workspace = .{ .workspace = @enumFromInt(1) },

@@ -3,7 +3,7 @@
 const core = @import("telar-core");
 const session_application = @import("telar-client").application.session;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 const resync_required = session_application.resync_required;

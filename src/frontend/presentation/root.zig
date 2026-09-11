@@ -5,7 +5,7 @@ pub const frame = @import("frame.zig");
 pub const pace = @import("pace.zig");
 pub const pane_labels = @import("pane_labels.zig");
 pub const pointer = @import("pointer.zig");
-pub const screen = @import("screen.zig");
+pub const screen = @import("screen_support.zig");
 pub const window_title = @import("window_title.zig");
 
 test {

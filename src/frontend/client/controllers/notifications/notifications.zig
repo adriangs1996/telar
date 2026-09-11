@@ -14,7 +14,7 @@ const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 
 const presentation = @import("../../../presentation/root.zig");
 const term = presentation.screen;
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const action = input_capability.action;
 const notification_use_cases = notifications_application.notifications;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");

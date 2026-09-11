@@ -5,7 +5,7 @@
 //! accepts it only when HTTP framing and connection semantics stay unchanged.
 
 const std = @import("std");
-const head = @import("head.zig");
+const head = @import("head_support.zig");
 const middleware = @import("../middleware.zig");
 
 pub const Decision = union(enum) {
@@ -16,30 +16,11 @@ pub const Decision = union(enum) {
     },
 };
 
-pub const Input = struct {
-    original: []const u8,
-    original_head: head.Head,
-    is_response: bool,
-    response_to_head: bool,
-    pipeline: *const middleware.TransformPipeline,
-    io: std.Io,
-    context: middleware.TransformContext,
-    output: []u8,
-};
+pub const Input = @import("Input.zig");
 
-const Encoding = struct {
-    output: []u8,
-    start_line: []const u8,
-    is_response: bool,
-    headers: *const middleware.Headers,
-};
+const Encoding = @import("Encoding.zig");
 
-const TestDecisionInput = struct {
-    original: []const u8,
-    is_response: bool,
-    pipeline: *const middleware.TransformPipeline,
-    output: []u8,
-};
+const TestDecisionInput = @import("TestDecisionInput.zig");
 
 /// Chooses whether the caller should preserve or replace an HTTP head.
 ///
@@ -327,7 +308,7 @@ test "request classification remains tied to the original route" {
         .preserve => return error.ExpectedReplacement,
         .replace => |value| value,
     };
-    try std.testing.expectEqual(@import("../provider/request.zig").RequestClass.inference, replacement.head.classification);
+    try std.testing.expectEqual(@import("../provider/request_support.zig").RequestClass.inference, replacement.head.classification);
     try std.testing.expect(std.mem.startsWith(
         u8,
         output[0..replacement.len],

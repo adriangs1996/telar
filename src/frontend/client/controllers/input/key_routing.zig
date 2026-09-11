@@ -10,7 +10,7 @@ const name_prompts = @import("name_prompts.zig");
 const pane_inputs = @import("pane_inputs.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const host_input = input_capability.encoding;
 const key_routing = input_application.key_routing;
 const schema = core.schema;

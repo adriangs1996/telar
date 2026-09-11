@@ -4,14 +4,10 @@ const std = @import("std");
 const engine = @import("../../engine/root.zig");
 const worker_lifecycle = @import("worker_lifecycle.zig");
 
-const Io = std.Io;
+pub const Io = std.Io;
 const Worker = Io.Future(anyerror!void);
 
-const RuntimeState = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    service: engine.Service,
-};
+const RuntimeState = @import("EngineRuntimeState.zig");
 
 fn startWorker(state: *RuntimeState) !Worker {
     return state.io.concurrent(engine.Service.run, .{ &state.service, state.io });
@@ -38,54 +34,9 @@ const lifecycle_port: worker_lifecycle.Port(RuntimeState, Worker) = .{
     .destroy = destroyState,
 };
 
-const EngineLifecycle = worker_lifecycle.Lifecycle(RuntimeState, Worker, lifecycle_port);
+pub const EngineLifecycle = worker_lifecycle.Lifecycle(RuntimeState, Worker, lifecycle_port);
 
-pub const Runtime = struct {
-    lifecycle: EngineLifecycle,
-
-    pub const Options = engine.Options;
-    pub const Service = engine.Service;
-
-    /// Creates the engine service at a stable address and starts its actor.
-    /// No child process starts until the first prompt.
-    ///
-    /// ```zig
-    /// var engine_runtime = try Runtime.init(io, gpa, options);
-    /// defer engine_runtime.deinit();
-    /// ```
-    pub fn init(io: Io, gpa: std.mem.Allocator, options: Options) !Runtime {
-        const state = try gpa.create(RuntimeState);
-        const engine_service = engine.Service.init(gpa, options) catch |err| {
-            gpa.destroy(state);
-            return err;
-        };
-        state.* = .{
-            .io = io,
-            .gpa = gpa,
-            .service = engine_service,
-        };
-
-        return .{ .lifecycle = try EngineLifecycle.start(state) };
-    }
-
-    /// Borrows the service for as long as this runtime remains alive.
-    ///
-    /// ```zig
-    /// const service = engine_runtime.service();
-    /// ```
-    pub fn service(runtime: *Runtime) *engine.Service {
-        return &runtime.lifecycle.state.service;
-    }
-
-    /// Stops the actor, joins it, kills a live child and frees the rings.
-    ///
-    /// ```zig
-    /// engine_runtime.deinit();
-    /// ```
-    pub fn deinit(runtime: *Runtime) void {
-        runtime.lifecycle.deinit();
-    }
-};
+pub const Runtime = @import("EngineRuntime.zig");
 
 fn createAndDestroy(gpa: std.mem.Allocator) !void {
     var runtime = try Runtime.init(std.testing.io, gpa, .{

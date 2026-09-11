@@ -7,7 +7,7 @@ const std = @import("std");
 pub const wire = @import("wire.zig");
 pub const graphics = @import("graphics.zig");
 
-pub const frame = @import("frame.zig");
+pub const frame = @import("frame_support.zig");
 pub const id = @import("id.zig");
 pub const WorkspaceId = id.WorkspaceId;
 pub const WorktreeId = id.WorktreeId;

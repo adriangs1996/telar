@@ -5,15 +5,13 @@ const notifications_application = @import("telar-client").application.notificati
 const client_clock = @import("telar-client").resources.clock;
 const client_model = @import("telar-client").model;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const Io = std.Io;
 const sidebar_animation = notifications_application.sidebar_animation;
 
 const interval_ns = 120 * std.time.ns_per_ms;
 
-pub const Scheduler = struct {
-    pending: bool = false,
-};
+pub const Scheduler = @import("Scheduler.zig");
 
 /// Ensures the current model has one future tick when animation is active.
 ///

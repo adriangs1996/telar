@@ -5,120 +5,16 @@ const core = @import("telar-core");
 const show_notification_commands = @import("../../application/commands/show_notification.zig");
 const delivery_mod = @import("../../delivery/root.zig");
 
-const schema = core.schema;
-const ResponseQueue = delivery_mod.ResponseQueue;
+pub const schema = core.schema;
+pub const ResponseQueue = delivery_mod.ResponseQueue;
 
-pub const Delivery = struct {
-    context: *anyopaque,
-    pump_all_fn: *const fn (*anyopaque) void,
+pub const Delivery = @import("Delivery.zig");
 
-    /// Makes newly queued notifications and confirmation eligible for socket
-    /// delivery after their synchronous transaction is complete.
-    ///
-    /// ```zig
-    /// delivery.pumpAll();
-    /// ```
-    pub fn pumpAll(delivery: Delivery) void {
-        delivery.pump_all_fn(delivery.context);
-    }
-};
+pub const Controller = @import("ShowNotificationController.zig");
 
-pub const Controller = struct {
-    responses: *ResponseQueue,
-    show_notification: show_notification_commands.ShowNotificationExecutor,
-    delivery: Delivery,
+const StubExecutor = @import("ShowNotificationStubExecutor.zig");
 
-    /// Creates one controller scoped to a notification request.
-    ///
-    /// ```zig
-    /// var controller = Controller.init(&responses, handler.executor(), delivery);
-    /// ```
-    pub fn init(responses: *ResponseQueue, show_notification: show_notification_commands.ShowNotificationExecutor, delivery: Delivery) Controller {
-        return .{
-            .responses = responses,
-            .show_notification = show_notification,
-            .delivery = delivery,
-        };
-    }
-
-    /// Reserves the requester's exact confirmation before broadcasting. Queue
-    /// backpressure therefore causes no external effect. On success it commits
-    /// the accepted-recipient count and pumps every affected client once.
-    ///
-    /// ```zig
-    /// try controller.showNotification(request);
-    /// ```
-    pub fn showNotification(controller: *Controller, request: schema.ShowNotification) !void {
-        const confirmation = try controller.responses.reserveNotificationShown(request.request_id);
-        const result = controller.show_notification.execute(.{
-            .notification = request.notification,
-        });
-
-        confirmation.delivered_clients = result.delivered_clients;
-        controller.delivery.pumpAll();
-    }
-};
-
-const StubExecutor = struct {
-    responses: *ResponseQueue,
-    delivered_clients: u8,
-    call_count: usize = 0,
-    observed_reservation: bool = false,
-    level: schema.NotificationLevel = .info,
-    duration_ms: u32 = 0,
-    target: schema.NotificationTarget = .none,
-    title: [schema.max_notification_title_bytes]u8 = undefined,
-    title_len: usize = 0,
-    message: [schema.max_notification_message_bytes]u8 = undefined,
-    message_len: usize = 0,
-
-    fn executor(stub: *StubExecutor) show_notification_commands.ShowNotificationExecutor {
-        return .{ .context = stub, .execute_fn = execute };
-    }
-
-    fn execute(context: *anyopaque, command: show_notification_commands.ShowNotification) show_notification_commands.ShowNotificationResult {
-        const stub: *StubExecutor = @ptrCast(@alignCast(context));
-        stub.call_count += 1;
-        const response = stub.responses.peek().?;
-        stub.observed_reservation = response.* == .notification_shown and
-            response.notification_shown.delivered_clients == 0;
-        stub.level = command.notification.level;
-        stub.duration_ms = command.notification.duration_ms;
-        stub.target = command.notification.target;
-        stub.title_len = command.notification.title.len;
-        @memcpy(stub.title[0..command.notification.title.len], command.notification.title);
-        stub.message_len = command.notification.message.len;
-        @memcpy(stub.message[0..command.notification.message.len], command.notification.message);
-        return .{ .delivered_clients = stub.delivered_clients };
-    }
-
-    fn titleSlice(stub: *const StubExecutor) []const u8 {
-        return stub.title[0..stub.title_len];
-    }
-
-    fn messageSlice(stub: *const StubExecutor) []const u8 {
-        return stub.message[0..stub.message_len];
-    }
-};
-
-const PumpCapture = struct {
-    responses: *ResponseQueue,
-    expected_delivered: u8,
-    call_count: usize = 0,
-    observed_committed_confirmation: bool = false,
-
-    fn delivery(capture: *PumpCapture) Delivery {
-        return .{ .context = capture, .pump_all_fn = pumpAll };
-    }
-
-    fn pumpAll(context: *anyopaque) void {
-        const capture: *PumpCapture = @ptrCast(@alignCast(context));
-        capture.call_count += 1;
-        const response = capture.responses.peek().?;
-        capture.observed_committed_confirmation = response.* == .notification_shown and
-            response.notification_shown.delivered_clients == capture.expected_delivered;
-    }
-};
+const PumpCapture = @import("PumpCapture.zig");
 
 test "Controller reserves, broadcasts, commits, then pumps exact notification data" {
     var responses: ResponseQueue = .{};

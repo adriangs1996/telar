@@ -10,7 +10,7 @@ const host_resources = @import("host_resources.zig");
 const negotiation = @import("../../resources/host_negotiation.zig");
 const deadline_timer = @import("telar-client").resources.deadline_timer;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const host_capability = host_application.host_capabilities;
 const kitty = graphics.kitty;
 const term = presentation.screen;

@@ -4,10 +4,10 @@ const std = @import("std");
 const resources = @import("root.zig");
 
 pub const Store = resources.ResourceStore(@This());
-pub const State = struct {};
-pub const ImageState = struct { leases: u32 = 0 };
-pub const PlacementState = struct {};
-pub const Lease = struct { identity: resources.ImageIdentity, pixels: []const u8 };
+pub const State = @import("State.zig");
+pub const ImageState = @import("ImageState.zig");
+pub const PlacementState = @import("PlacementState.zig");
+pub const Lease = @import("Lease.zig");
 
 /// Borrows completed pixels until the matching release, without retaining map pointers.
 /// Example: `const lease = try retain(&store, identity); defer release(&store, lease);`.

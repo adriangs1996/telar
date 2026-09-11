@@ -14,19 +14,9 @@ pub const max_scan_bytes = 64 * 1024;
 pub const max_line_bytes = 4096;
 const title_prefix = "{\"type\":\"custom-title\"";
 
-pub const Scan = struct {
-    /// Bytes fully handled: up to and including the last newline, so a
-    /// partial trailing line is read again once complete.
-    consumed: usize,
-    /// The last name written for the session, copied into the caller's
-    /// buffer and cut to the title bound. Empty means the name was cleared.
-    title: ?[]const u8,
-};
+pub const Scan = @import("Scan.zig");
 
-const TitleLine = struct {
-    customTitle: []const u8 = "",
-    sessionId: []const u8 = "",
-};
+const TitleLine = @import("TitleLine.zig");
 
 /// Finds the last `custom-title` line for `session` among the complete lines
 /// in `bytes`. Other lines are skipped by prefix without parsing, so a

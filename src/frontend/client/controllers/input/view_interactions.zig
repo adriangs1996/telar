@@ -12,16 +12,13 @@ const sidebar_toggles = @import("../notifications/sidebar_toggles.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 
-const Client = @import("../../client.zig");
-const multiplexer = workspace_capability.multiplexer;
+const Client = @import("../../Client.zig");
+pub const multiplexer = workspace_capability.multiplexer;
 const view_interaction = input_application.view_interaction;
 
 pub const Outcome = view_interaction.Outcome;
 
-const Context = struct {
-    client: *Client,
-    model: *multiplexer.Model,
-};
+const Context = @import("ViewInteractionsContext.zig");
 
 /// Applies one interaction emitted by the view and returns its pane-input
 /// routing decision.

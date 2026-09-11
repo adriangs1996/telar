@@ -8,14 +8,7 @@ const Io = std.Io;
 
 pub const max_output_bytes = model.max_text_bytes;
 
-pub const Output = struct {
-    bytes: [max_output_bytes]u8 = @splat(0),
-    len: u16 = 0,
-
-    pub fn slice(output: *const Output) []const u8 {
-        return output.bytes[0..output.len];
-    }
-};
+pub const Output = @import("Output.zig");
 
 pub fn run(io: Io, command: model.Command) !Output {
     var argument_storage: [model.max_command_args][]const u8 = undefined;

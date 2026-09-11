@@ -9,33 +9,14 @@ const tags = @import("tags.zig");
 
 const ClientTag = tags.ClientTag;
 const ServerTag = tags.ServerTag;
-const PaneId = id.PaneId;
+pub const PaneId = id.PaneId;
 const encodeDerived = codec.encodeDerived;
 
-pub const RequestGraphicsSnapshot = struct { pane_id: PaneId };
+pub const RequestGraphicsSnapshot = @import("RequestGraphicsSnapshot.zig");
 
-pub const GraphicsCredit = struct {
-    pane_id: PaneId,
-    bytes: u64,
+pub const GraphicsCredit = @import("GraphicsCredit.zig");
 
-    pub fn validateWire(message: GraphicsCredit) !void {
-        if (message.bytes == 0) {
-            return error.InvalidGraphicsCredit;
-        }
-    }
-};
-
-/// Explicit per-session graphics capability. `shared` declares that this
-/// client shares the runtime's machine and can map POSIX shared memory the
-/// runtime names; the runtime never assumes it. Sent before the first pane
-/// attaches, and the setting applies to attachments created afterwards.
-pub const ConfigureGraphics = struct {
-    shared: bool,
-
-    pub fn validateWire(message: ConfigureGraphics) !void {
-        _ = message;
-    }
-};
+pub const ConfigureGraphics = @import("ConfigureGraphics.zig");
 
 pub fn encodeRequestGraphicsSnapshot(buffer: []u8, message: RequestGraphicsSnapshot) ![]const u8 {
     return encodeDerived(

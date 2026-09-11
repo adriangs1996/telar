@@ -8,7 +8,7 @@ const client_model = @import("telar-client").model;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const workspace_transitions = @import("workspace_transitions.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const create_workspace = workspaces_application.create_workspace;
 const multiplexer = workspace_capability.multiplexer;
 const pane_open_delivery = panes_application.pane_open_delivery;

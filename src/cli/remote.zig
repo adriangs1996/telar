@@ -9,7 +9,7 @@ const core = @import("telar-core");
 const frontend = @import("telar-frontend");
 const runtime_connection = @import("runtime_connection.zig");
 
-const Io = std.Io;
+pub const Io = std.Io;
 const RuntimeConnector = runtime_connection.RuntimeConnector;
 pub const Discovery = @import("remote_discovery.zig").Discovery;
 pub const LaunchDefaults = @import("remote_discovery.zig").LaunchDefaults;
@@ -21,28 +21,7 @@ const endpoint_timeout: Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(30) },
 };
 
-/// One live SSH socket forward. Stopping it kills the ssh child and removes
-/// the local socket file.
-pub const Forward = struct {
-    child: std.process.Child,
-    discovery: Discovery,
-    local_path: [std.fs.max_path_bytes:0]u8 = undefined,
-    local_path_len: usize = 0,
-
-    pub fn localPath(self: *const Forward) []const u8 {
-        return self.local_path[0..self.local_path_len];
-    }
-
-    pub fn localPathZ(self: *Forward) [*:0]const u8 {
-        self.local_path[self.local_path_len] = 0;
-        return self.local_path[0..self.local_path_len :0];
-    }
-
-    pub fn stop(self: *Forward, io: Io) void {
-        self.child.kill(io);
-        Io.Dir.deleteFileAbsolute(io, self.localPath()) catch {};
-    }
-};
+pub const Forward = @import("Forward.zig");
 
 /// Discovers the remote home, shell and runtime socket over SSH, then starts
 /// one `ssh -N -L` forward and waits until its private socket is connectable.

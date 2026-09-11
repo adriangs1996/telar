@@ -1,7 +1,7 @@
 //! Small UI components and the explicit composition root for client chrome.
 
 const std = @import("std");
-const context = @import("context.zig");
+const context = @import("context_support.zig");
 
 pub const layout = @import("layout.zig");
 pub const modal = @import("modal.zig");

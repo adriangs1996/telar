@@ -8,52 +8,11 @@ pub const Authority = enum {
     canonical_follow,
 };
 
-pub const Gate = struct {
-    context: *anyopaque,
-    pending: *const fn (*anyopaque) bool,
-};
+pub const Gate = @import("Gate.zig");
 
-pub const AdmitWorkspaceHandoffHandler = struct {
-    model: *const client_model.Model,
-    gate: Gate,
+pub const AdmitWorkspaceHandoffHandler = @import("AdmitWorkspaceHandoffHandler.zig");
 
-    /// Admits a requested departure only while idle, or a canonical follow
-    /// only after the current projection has already disappeared.
-    ///
-    /// ```zig
-    /// try handler.execute(.requested_departure);
-    /// ```
-    pub fn execute(handler: *const AdmitWorkspaceHandoffHandler, authority: Authority) !void {
-        switch (authority) {
-            .requested_departure => {
-                if (handler.gate.pending(handler.gate.context)) {
-                    return error.WorkspaceSwitchWhileRequestPending;
-                }
-            },
-            .canonical_follow => {
-                if (handler.model.workspaceLocation() != null) {
-                    return error.WorkspaceStillActive;
-                }
-            },
-        }
-    }
-};
-
-const GateCapture = struct {
-    blocked: bool = false,
-    calls: usize = 0,
-
-    fn gate(capture: *GateCapture) Gate {
-        return .{ .context = capture, .pending = pending };
-    }
-
-    fn pending(context: *anyopaque) bool {
-        const capture: *GateCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-
-        return capture.blocked;
-    }
-};
+const GateCapture = @import("GateCapture.zig");
 
 test "requested workspace departure requires an idle request lifecycle" {
     var model = client_model.Model.init(std.testing.allocator, true);

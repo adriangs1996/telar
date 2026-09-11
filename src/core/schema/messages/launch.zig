@@ -7,72 +7,19 @@ const id = @import("../id.zig");
 const types = @import("../types.zig");
 const codec = @import("../codec.zig");
 
-const PaneId = id.PaneId;
+pub const PaneId = id.PaneId;
 const Launch = types.Launch;
-const EnvironmentMode = types.EnvironmentMode;
-const EnvironmentEntry = types.EnvironmentEntry;
-const validateBytes = codec.validateBytes;
+pub const EnvironmentMode = types.EnvironmentMode;
+pub const EnvironmentEntry = types.EnvironmentEntry;
+pub const validateBytes = codec.validateBytes;
 const validatePaneId = codec.validatePaneId;
-const validateEnvironmentEntry = codec.validateEnvironmentEntry;
+pub const validateEnvironmentEntry = codec.validateEnvironmentEntry;
 
-pub const LaunchView = struct {
-    cwd: []const u8,
-    cwd_source: ?PaneId = null,
-    argument_count: u16,
-    encoded_arguments: []const u8,
-    environment_mode: EnvironmentMode,
-    environment_count: u16,
-    encoded_environment: []const u8,
+pub const LaunchView = @import("LaunchView.zig");
 
-    pub fn arguments(launch: LaunchView) ArgumentIterator {
-        return .{
-            .decoder = .init(launch.encoded_arguments),
-            .remaining = launch.argument_count,
-        };
-    }
+pub const ArgumentIterator = @import("ArgumentIterator.zig");
 
-    pub fn environment(launch: LaunchView) EnvironmentIterator {
-        return .{
-            .decoder = .init(launch.encoded_environment),
-            .remaining = launch.environment_count,
-        };
-    }
-};
-
-pub const ArgumentIterator = struct {
-    decoder: wire.Decoder,
-    remaining: u16,
-    index: u16 = 0,
-
-    pub fn next(iterator: *ArgumentIterator) !?[]const u8 {
-        if (iterator.remaining == 0) {
-            return null;
-        }
-        iterator.remaining -= 1;
-        defer iterator.index += 1;
-        const argument = try iterator.decoder.readSized16();
-        try validateBytes(argument, std.math.maxInt(u16), iterator.index != 0);
-        return argument;
-    }
-};
-
-pub const EnvironmentIterator = struct {
-    decoder: wire.Decoder,
-    remaining: u16,
-
-    pub fn next(iterator: *EnvironmentIterator) !?EnvironmentEntry {
-        if (iterator.remaining == 0) {
-            return null;
-        }
-        iterator.remaining -= 1;
-        const entry: EnvironmentEntry = .{
-            .name = try iterator.decoder.readSized16(),
-            .value = try iterator.decoder.readSized32(),
-        };
-        try validateEnvironmentEntry(entry);
-        return entry;
-    }
-};
+pub const EnvironmentIterator = @import("EnvironmentIterator.zig");
 
 pub fn encodeLaunch(encoder: *wire.Encoder, launch: Launch) !void {
     try validateBytes(launch.cwd, types.max_cwd_bytes, false);

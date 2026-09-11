@@ -4,13 +4,9 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const OpenedPane = struct {
-    pane_id: schema.PaneId,
-    location: schema.TabLocation,
-    created: bool,
-};
+pub const OpenedPane = @import("OpenedPane.zig");
 
 pub const Continuation = union(enum) {
     initial_open,
@@ -20,33 +16,15 @@ pub const Continuation = union(enum) {
     ignored,
 };
 
-pub const Command = struct {
-    continuation: Continuation,
-    opened: OpenedPane,
-};
+pub const Command = @import("Command.zig");
 
-pub const WorkspaceCreation = struct {
-    requested_size: schema.TerminalSize,
-    opened: OpenedPane,
-};
+pub const WorkspaceCreation = @import("WorkspaceCreation.zig");
 
-pub const PaneSplitConfirmation = struct {
-    requested: client_model.PaneSplit,
-    opened: OpenedPane,
-};
+pub const PaneSplitConfirmation = @import("PaneSplitConfirmation.zig");
 
-pub const PaneAttachmentConfirmation = struct {
-    requested: client_model.PaneAttachment,
-    opened: OpenedPane,
-};
+pub const PaneAttachmentConfirmation = @import("PaneAttachmentConfirmation.zig");
 
-pub const Effects = struct {
-    context: *anyopaque,
-    arrive_workspace: *const fn (*anyopaque, OpenedPane) anyerror!void,
-    create_workspace: *const fn (*anyopaque, WorkspaceCreation) anyerror!void,
-    confirm_split: *const fn (*anyopaque, PaneSplitConfirmation) anyerror!void,
-    confirm_attachment: *const fn (*anyopaque, PaneAttachmentConfirmation) anyerror!void,
-};
+pub const Effects = @import("PaneOpenDeliveryEffects.zig");
 
 pub const Outcome = enum {
     workspace_arrived,
@@ -56,112 +34,16 @@ pub const Outcome = enum {
     ignored,
 };
 
-pub const DeliverPaneOpenHandler = struct {
-    effects: Effects,
+pub const DeliverPaneOpenHandler = @import("DeliverPaneOpenHandler.zig");
 
-    /// Routes one already-correlated confirmation to its exact application
-    /// flow. Retired work has no effects.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *DeliverPaneOpenHandler, command: Command) !Outcome {
-        return switch (command.continuation) {
-            .initial_open => delivery: {
-                try handler.effects.arrive_workspace(handler.effects.context, command.opened);
-                break :delivery .workspace_arrived;
-            },
-            .create_workspace => |requested_size| delivery: {
-                try handler.effects.create_workspace(handler.effects.context, .{
-                    .requested_size = requested_size,
-                    .opened = command.opened,
-                });
-                break :delivery .workspace_created;
-            },
-            .split => |requested| delivery: {
-                try handler.effects.confirm_split(handler.effects.context, .{
-                    .requested = requested,
-                    .opened = command.opened,
-                });
-                break :delivery .pane_split;
-            },
-            .attach_pane => |requested| delivery: {
-                try handler.effects.confirm_attachment(handler.effects.context, .{
-                    .requested = requested,
-                    .opened = command.opened,
-                });
-                break :delivery .pane_attached;
-            },
-            .ignored => .ignored,
-        };
-    }
-};
-
-const Effect = enum {
+pub const Effect = enum {
     arrive_workspace,
     create_workspace,
     confirm_split,
     confirm_attachment,
 };
 
-const Capture = struct {
-    effect: ?Effect = null,
-    opened: ?OpenedPane = null,
-    requested_size: ?schema.TerminalSize = null,
-    split: ?client_model.PaneSplit = null,
-    attachment: ?client_model.PaneAttachment = null,
-    failure: ?Effect = null,
-
-    fn effects(capture: *Capture) Effects {
-        return .{
-            .context = capture,
-            .arrive_workspace = arriveWorkspace,
-            .create_workspace = createWorkspace,
-            .confirm_split = confirmSplit,
-            .confirm_attachment = confirmAttachment,
-        };
-    }
-
-    fn arriveWorkspace(raw_context: *anyopaque, opened: OpenedPane) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        try capture.record(.arrive_workspace, opened);
-    }
-
-    fn createWorkspace(raw_context: *anyopaque, confirmation: WorkspaceCreation) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.requested_size = confirmation.requested_size;
-        try capture.record(.create_workspace, confirmation.opened);
-    }
-
-    fn confirmSplit(raw_context: *anyopaque, confirmation: PaneSplitConfirmation) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.split = confirmation.requested;
-        try capture.record(.confirm_split, confirmation.opened);
-    }
-
-    fn confirmAttachment(raw_context: *anyopaque, confirmation: PaneAttachmentConfirmation) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.attachment = confirmation.requested;
-        try capture.record(.confirm_attachment, confirmation.opened);
-    }
-
-    fn record(capture: *Capture, effect: Effect, opened: OpenedPane) !void {
-        capture.effect = effect;
-        capture.opened = opened;
-
-        if (capture.failure == effect) {
-            return error.DeliveryFailed;
-        }
-    }
-
-    fn reset(capture: *Capture) void {
-        capture.effect = null;
-        capture.opened = null;
-        capture.requested_size = null;
-        capture.split = null;
-        capture.attachment = null;
-    }
-};
+const Capture = @import("PaneOpenDeliveryCapture.zig");
 
 const testing_location: schema.TabLocation = .{
     .workspace = .{ .workspace = @enumFromInt(1) },

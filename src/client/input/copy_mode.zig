@@ -6,277 +6,30 @@ const std = @import("std");
 const core = @import("telar-core");
 const keybind = @import("root.zig");
 
-const schema = core.schema;
-const ui = core.ui;
+pub const schema = core.schema;
+pub const ui = core.ui;
 
 pub const Direction = enum { forward, backward };
 
 pub const max_matches = core.schema.max_search_matches;
 
-pub const Point = struct {
-    x: u16,
-    /// Absolute row from the beginning of the retained screen history.
-    y: u32,
-};
+pub const Point = @import("Point.zig");
 
-pub const Viewport = struct {
-    scroll: schema.frame.Scroll,
-    rows: u16,
-};
+pub const Viewport = @import("Viewport.zig");
 
-pub const Screen = struct {
-    buffer: *const ui.Buffer,
-    scroll: schema.frame.Scroll,
-};
+pub const Screen = @import("Screen.zig");
 
-pub const PointerPress = struct {
-    pane_id: schema.PaneId,
-    position: ui.Point,
-    now_ns: u64,
-};
+pub const PointerPress = @import("PointerPress.zig");
 
-pub const PointerMotion = struct {
-    position: ui.Point,
-    release: bool = false,
-};
+pub const PointerMotion = @import("PointerMotion.zig");
 
-const PointerSelection = struct {
-    start: Point,
-    end: Point,
-    granularity: core.select.Granularity,
-    cols: u16,
-    rows: u16,
-};
+const PointerSelection = @import("PointerSelection.zig");
 
-pub const View = struct {
-    cursor: Point,
-    pointer: bool = false,
-    anchor: ?Point,
-    linewise: bool,
+pub const View = @import("View.zig");
 
-    pub fn selected(view: View, x: u16, y: u32) bool {
-        const anchor = view.anchor orelse return false;
-        if (view.linewise) {
-            const first = @min(anchor.y, view.cursor.y);
-            const last = @max(anchor.y, view.cursor.y);
-            return y >= first and y <= last;
-        }
-        const point = Point{ .x = x, .y = y };
-        const first, const last = if (less(view.cursor, anchor))
-            .{ view.cursor, anchor }
-        else
-            .{ anchor, view.cursor };
-        return !less(point, first) and !less(last, point);
-    }
-};
+pub const State = @import("State.zig");
 
-pub const State = struct {
-    pane_id: schema.PaneId,
-    cursor: Point,
-    pointer: ?PointerSelection = null,
-    anchor: ?Point = null,
-    linewise: bool = false,
-    entry_offset: u32,
-    viewport_offset: u32,
-    search_direction: Direction = .forward,
-    matches: [max_matches]schema.SearchMatch = @splat(.{ .x = 0, .y = 0, .len = 0 }),
-    match_count: u8 = 0,
-    match_index: u8 = 0,
-
-    pub fn init(pane_id: schema.PaneId, cursor: Point, viewport_offset: u32) State {
-        return .{
-            .pane_id = pane_id,
-            .cursor = cursor,
-            .entry_offset = viewport_offset,
-            .viewport_offset = viewport_offset,
-        };
-    }
-
-    pub fn view(state: State) View {
-        return .{
-            .cursor = state.cursor,
-            .pointer = state.pointer != null,
-            .anchor = state.anchor,
-            .linewise = state.linewise,
-        };
-    }
-
-    /// Captures a word or line boundary once; subsequent drags retain it.
-    /// Example: `state.beginPointer(.word, screen);`.
-    pub fn beginPointer(state: *State, granularity: core.select.Granularity, screen: Screen) void {
-        const span = pointerSpan(state.cursor, granularity, screen);
-        state.pointer = .{
-            .start = span[0],
-            .end = span[1],
-            .granularity = granularity,
-            .cols = screen.buffer.w,
-            .rows = screen.buffer.h,
-        };
-        state.anchor = if (granularity == .character) null else span[0];
-        state.cursor = span[1];
-        state.linewise = granularity == .line;
-    }
-
-    /// Extends only within the supplied pane cells, in absolute history rows.
-    /// Example: `state.movePointer(motion, screen);`.
-    pub fn movePointer(state: *State, motion: PointerMotion, screen: Screen) void {
-        const pointer = if (state.pointer) |*value| value else return;
-        if (screen.buffer.w == 0 or screen.buffer.h == 0) {
-            return;
-        }
-
-        const point: Point = .{
-            .x = @min(motion.position.x, screen.buffer.w - 1),
-            .y = screen.scroll.offset + @min(motion.position.y, screen.buffer.h - 1),
-        };
-        const span = pointerSpan(point, pointer.granularity, screen);
-        const backwards = less(point, pointer.start);
-        state.anchor = if (backwards) pointer.end else pointer.start;
-        state.cursor = if (backwards) span[0] else span[1];
-        if (pointer.granularity == .character and std.meta.eql(span[0], pointer.start) and std.meta.eql(span[1], pointer.end)) {
-            state.anchor = null;
-        }
-    }
-
-    pub fn toggleSelection(state: *State, linewise: bool) void {
-        if (state.anchor != null and state.linewise == linewise) {
-            state.anchor = null;
-            state.linewise = false;
-            return;
-        }
-        state.anchor = state.cursor;
-        state.linewise = linewise;
-    }
-
-    pub fn clearSelection(state: *State) bool {
-        if (state.anchor == null) {
-            return false;
-        }
-        state.anchor = null;
-        state.linewise = false;
-        return true;
-    }
-
-    pub fn horizontal(state: *State, delta: i32, cols: u16) void {
-        if (delta < 0) {
-            state.cursor.x -|= @intCast(-delta);
-        } else {
-            state.cursor.x = @min(cols -| 1, state.cursor.x +| @as(u16, @intCast(delta)));
-        }
-    }
-
-    pub fn vertical(state: *State, delta: i32, viewport: Viewport) void {
-        const last = viewport.scroll.total_rows -| 1;
-        if (delta < 0) {
-            state.cursor.y -|= @intCast(-delta);
-        } else {
-            state.cursor.y = @min(last, state.cursor.y +| @as(u32, @intCast(delta)));
-        }
-        state.reveal(viewport.rows, viewport.scroll);
-    }
-
-    pub fn top(state: *State) void {
-        state.cursor.y = 0;
-        state.viewport_offset = 0;
-    }
-
-    pub fn bottom(state: *State, scroll: schema.frame.Scroll, rows: u16) void {
-        state.cursor.y = scroll.total_rows -| 1;
-        state.viewport_offset = scroll.maxOffset(rows);
-    }
-
-    pub fn lineStart(state: *State) void {
-        state.cursor.x = 0;
-    }
-
-    pub fn lineEnd(state: *State, cols: u16) void {
-        state.cursor.x = cols -| 1;
-    }
-
-    /// Stores search results and selects the first match at or after the
-    /// cursor (forward) or before it (backward). The current match becomes
-    /// the selection so it is visibly highlighted.
-    ///
-    /// ```zig
-    /// state.applyMatches(results, viewport);
-    /// ```
-    pub fn applyMatches(state: *State, results: []const schema.SearchMatch, viewport: Viewport) void {
-        state.match_count = @intCast(@min(results.len, state.matches.len));
-        @memcpy(state.matches[0..state.match_count], results[0..state.match_count]);
-        if (state.match_count == 0) {
-            return;
-        }
-
-        var selected: ?u8 = null;
-        switch (state.search_direction) {
-            .forward => {
-                for (state.matchSlice(), 0..) |match, index| {
-                    if (less(state.cursor, .{ .x = match.x, .y = match.y })) {
-                        selected = @intCast(index);
-                        break;
-                    }
-                }
-            },
-            .backward => {
-                var index: usize = state.match_count;
-                while (index > 0) {
-                    index -= 1;
-                    const match = state.matches[index];
-                    if (less(.{ .x = match.x, .y = match.y }, state.cursor)) {
-                        selected = @intCast(index);
-                        break;
-                    }
-                }
-            },
-        }
-
-        state.gotoMatch(selected orelse switch (state.search_direction) {
-            .forward => 0,
-            .backward => state.match_count - 1,
-        }, viewport);
-    }
-
-    /// Moves to the next or previous stored match, wrapping around.
-    ///
-    /// ```zig
-    /// state.cycleMatch(1, viewport);
-    /// ```
-    pub fn cycleMatch(state: *State, delta: i2, viewport: Viewport) void {
-        if (state.match_count == 0) {
-            return;
-        }
-
-        const count: i16 = state.match_count;
-        var index: i16 = state.match_index;
-        index = @mod(index + delta, count);
-        state.gotoMatch(@intCast(index), viewport);
-    }
-
-    pub fn matchSlice(state: *const State) []const schema.SearchMatch {
-        return state.matches[0..state.match_count];
-    }
-
-    fn gotoMatch(state: *State, index: u8, viewport: Viewport) void {
-        const match = state.matches[index];
-        state.match_index = index;
-        state.anchor = .{ .x = match.x, .y = match.y };
-        state.linewise = false;
-        state.cursor = .{ .x = match.x + match.len - 1, .y = match.y };
-        state.cursor.y = @min(state.cursor.y, viewport.scroll.total_rows -| 1);
-        state.reveal(viewport.rows, viewport.scroll);
-    }
-
-    fn reveal(state: *State, rows: u16, scroll: schema.frame.Scroll) void {
-        if (state.cursor.y < state.viewport_offset) {
-            state.viewport_offset = state.cursor.y;
-        } else if (state.cursor.y >= state.viewport_offset + rows) {
-            state.viewport_offset = state.cursor.y - rows + 1;
-        }
-        state.viewport_offset = @min(state.viewport_offset, scroll.maxOffset(rows));
-    }
-};
-
-fn pointerSpan(point: Point, granularity: core.select.Granularity, screen: Screen) [2]Point {
+pub fn pointerSpan(point: Point, granularity: core.select.Granularity, screen: Screen) [2]Point {
     const local: ui.Point = .{ .x = point.x, .y = @intCast(point.y - screen.scroll.offset) };
     var range = (core.select.Range{
         .anchor = local,
@@ -298,22 +51,11 @@ fn pointerSpan(point: Point, granularity: core.select.Granularity, screen: Scree
     };
 }
 
-fn less(a: Point, b: Point) bool {
+pub fn less(a: Point, b: Point) bool {
     return a.y < b.y or (a.y == b.y and a.x < b.x);
 }
 
-/// What one handled key asks the client to do. Cursor, selection and
-/// viewport changes already happened inside the state; the client only
-/// projects them and, on exit, copies the selection.
-pub const Effect = struct {
-    handled: bool = true,
-    exit: bool = false,
-    copy: bool = false,
-    /// Ask the client to open the search input in this direction.
-    search: ?Direction = null,
-    /// Ask the client to open the textual link under the copy cursor.
-    open_link: bool = false,
-};
+pub const Effect = @import("Effect.zig");
 
 /// Interprets one key over the pane's visible cells. Pure: the only mutation
 /// is the copy-mode state itself.

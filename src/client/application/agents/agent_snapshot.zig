@@ -7,57 +7,11 @@ const client_model = @import("../../root.zig").model;
 
 const schema = core.schema;
 
-pub const AgentSnapshotDelivery = struct {
-    context: *anyopaque,
-    deliver: *const fn (*anyopaque, *const client_model.AgentSnapshotCommit) anyerror!void,
-};
+pub const AgentSnapshotDelivery = @import("AgentSnapshotDelivery.zig");
 
-pub const ApplyAgentSnapshotHandler = struct {
-    model: *client_model.Model,
-    delivery: AgentSnapshotDelivery,
+pub const ApplyAgentSnapshotHandler = @import("ApplyAgentSnapshotHandler.zig");
 
-    /// Commits one newer replica before delivering its exact result. Stale
-    /// snapshots and rejected candidates never cross the delivery boundary.
-    ///
-    /// ```zig
-    /// const commit = try handler.execute(snapshot) orelse return;
-    /// ```
-    pub fn execute(handler: *ApplyAgentSnapshotHandler, snapshot: agents.SnapshotInput) !?client_model.AgentSnapshotCommit {
-        const commit = try handler.model.reconcileAgentSnapshot(snapshot) orelse return null;
-        try handler.delivery.deliver(handler.delivery.context, &commit);
-
-        return commit;
-    }
-};
-
-const DeliveryCapture = struct {
-    model: *const client_model.Model,
-    calls: usize = 0,
-    observed_commit: bool = false,
-    fail: bool = false,
-
-    fn port(capture: *DeliveryCapture) AgentSnapshotDelivery {
-        return .{ .context = capture, .deliver = deliver };
-    }
-
-    fn reset(capture: *DeliveryCapture) void {
-        capture.calls = 0;
-        capture.observed_commit = false;
-    }
-
-    fn deliver(context: *anyopaque, commit: *const client_model.AgentSnapshotCommit) !void {
-        const capture: *DeliveryCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.observed_commit = capture.model.version().agents == commit.agent_revision and
-            capture.model.agentSnapshot().revision == commit.runtime_revision and
-            capture.model.agentSnapshot().count == commit.count and
-            commit.agent_revision_before +% 1 == commit.agent_revision;
-
-        if (capture.fail) {
-            return error.AgentSnapshotDeliveryFailed;
-        }
-    }
-};
+const DeliveryCapture = @import("AgentSnapshotDeliveryCapture.zig");
 
 fn agentInput(pane: u64, status: schema.AgentStatus) agents.AgentInput {
     return .{

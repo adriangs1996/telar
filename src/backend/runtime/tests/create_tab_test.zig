@@ -7,61 +7,13 @@ const create_tab_controller = @import("../entrypoints/requests/create_tab.zig");
 const delivery_mod = @import("../delivery/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-const ClientCapture = struct {
-    attach_count: usize = 0,
+const ClientCapture = @import("ClientCapture.zig");
 
-    fn authority(capture: *ClientCapture) create_tab_commands.LaunchAuthority {
-        return .{
-            .context = capture,
-            .prepare = prepareLaunch,
-        };
-    }
+const LauncherCapture = @import("LauncherCapture.zig");
 
-    fn attachment(capture: *ClientCapture) create_tab_commands.PaneAttachment {
-        return .{ .context = capture, .attach = attach };
-    }
-
-    fn prepareLaunch(_: *anyopaque, _: create_tab_commands.PrepareLaunch) ![]const u8 {
-        return "/prepared";
-    }
-
-    fn attach(context: *anyopaque, _: create_tab_commands.LaunchedPane) !void {
-        const capture: *ClientCapture = @ptrCast(@alignCast(context));
-        capture.attach_count += 1;
-    }
-};
-
-const LauncherCapture = struct {
-    pane_id: schema.PaneId,
-    call_count: usize = 0,
-
-    fn port(capture: *LauncherCapture) create_tab_commands.PaneLauncher {
-        return .{ .context = capture, .launch = launch };
-    }
-
-    fn launch(context: *anyopaque, _: create_tab_commands.LaunchPane) !create_tab_commands.LaunchedPane {
-        const capture: *LauncherCapture = @ptrCast(@alignCast(context));
-        capture.call_count += 1;
-        return .{ .id = capture.pane_id };
-    }
-};
-
-const EventCapture = struct {
-    count: usize = 0,
-    last: ?workspace_mod.TabCreated = null,
-
-    fn publisher(capture: *EventCapture) create_tab_commands.EventPublisher {
-        return .{ .context = capture, .publish = publish };
-    }
-
-    fn publish(context: *anyopaque, event: workspace_mod.TabCreated) void {
-        const capture: *EventCapture = @ptrCast(@alignCast(context));
-        capture.count += 1;
-        capture.last = event;
-    }
-};
+const EventCapture = @import("CreateTabTestEventCapture.zig");
 
 test "a committed tab creation survives response queue backpressure" {
     var state: workspace_mod.State = .{};

@@ -5,113 +5,19 @@ const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 const tab_snapshot_recovery = @import("../tabs/root.zig").tab_snapshot_recovery;
 
-const schema = core.schema;
+pub const schema = core.schema;
 
 pub const PaneAttachment = client_model.PaneAttachment;
 
-pub const ConfirmPaneAttachment = struct {
-    requested: PaneAttachment,
-    confirmed: PaneAttachment,
-    created: bool,
-};
+pub const ConfirmPaneAttachment = @import("ConfirmPaneAttachment.zig");
 
-pub const ConfirmPaneAttachmentHandler = struct {
-    model: *client_model.Model,
+pub const ConfirmPaneAttachmentHandler = @import("ConfirmPaneAttachmentHandler.zig");
 
-    /// Validates the runtime confirmation before committing client attachment
-    /// state. Confirmations made stale by a tab change are harmless no-ops.
-    ///
-    /// ```zig
-    /// const result = try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *ConfirmPaneAttachmentHandler, command: ConfirmPaneAttachment) !client_model.PaneAttachmentConfirmation {
-        if (command.created or !std.meta.eql(command.requested, command.confirmed)) {
-            return error.UnexpectedPane;
-        }
+pub const RecoverPaneAttachmentHandler = @import("RecoverPaneAttachmentHandler.zig");
 
-        return handler.model.confirmPaneAttachment(command.confirmed);
-    }
-};
+const TestingModel = @import("AttachPaneTestingModel.zig");
 
-pub const RecoverPaneAttachmentHandler = struct {
-    model: *const client_model.Model,
-    snapshots: tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler,
-
-    /// Requests canonical membership only while the failed attachment still
-    /// belongs to the active tab and remains detached.
-    ///
-    /// ```zig
-    /// _ = try handler.execute(attachment);
-    /// ```
-    pub fn execute(handler: *RecoverPaneAttachmentHandler, attachment: PaneAttachment) !bool {
-        if (!handler.model.needsPaneAttachment(attachment)) {
-            return false;
-        }
-
-        _ = try handler.snapshots.execute(attachment.location);
-        return true;
-    }
-};
-
-const TestingModel = struct {
-    model: *client_model.Model,
-    location: schema.TabLocation,
-    discovered: schema.PaneId,
-
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const location: schema.TabLocation = .{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(1),
-        };
-        const discovered: schema.PaneId = @enumFromInt(2);
-        try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
-        try model.workspace.active().?.model.addDiscovered(.{ .pane_id = discovered, .location = location, .area = .{ .w = 40, .h = 10 } });
-
-        return .{ .model = model, .location = location, .discovered = discovered };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-
-    fn attachment(testing: *const TestingModel) PaneAttachment {
-        return .{ .pane_id = testing.discovered, .location = testing.location };
-    }
-};
-
-const RecoveryCapture = struct {
-    calls: usize = 0,
-    location: ?schema.TabLocation = null,
-    fail: bool = false,
-
-    fn handler(capture: *RecoveryCapture) tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler {
-        return .{ .effects = .{
-            .context = capture,
-            .pending = pending,
-            .request = refresh,
-        } };
-    }
-
-    fn pending(_: *anyopaque) bool {
-        return false;
-    }
-
-    fn refresh(context: *anyopaque, location: schema.TabLocation) !void {
-        const capture: *RecoveryCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.location = location;
-
-        if (capture.fail) {
-            return error.RefreshFailed;
-        }
-    }
-};
+const RecoveryCapture = @import("AttachPaneRecoveryCapture.zig");
 
 test "ConfirmPaneAttachmentHandler validates and commits one exact confirmation" {
     var testing = try TestingModel.init();

@@ -6,7 +6,7 @@ const input_application = @import("telar-client").application.input;
 const pane_viewports = @import("../panes/pane_viewports.zig");
 const link_openings = @import("link_openings.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const copy_mode = input_application.copy_mode;
 const keybind = input_capability.keybind;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");

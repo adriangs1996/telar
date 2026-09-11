@@ -3,79 +3,22 @@
 const std = @import("std");
 const core = @import("telar-core");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const PaneRequest = struct {
-    pane_id: schema.PaneId,
-    fallback_workspace: ?schema.WorkspaceId,
-};
+pub const PaneRequest = @import("PaneRequest.zig");
 
 pub const Target = union(enum) {
     workspace: schema.WorkspaceId,
     pane: PaneRequest,
 };
 
-pub const Plan = struct {
-    target: schema.PaneTarget,
-    fallback_workspace: ?schema.WorkspaceId,
-};
+pub const Plan = @import("Plan.zig");
 
-pub const Bookmarks = struct {
-    context: *anyopaque,
-    remembered_pane: *const fn (*anyopaque, schema.WorkspaceLocation) ?schema.PaneId,
-};
+pub const Bookmarks = @import("WorkspaceHandoffTargetingBookmarks.zig");
 
-pub const PlanWorkspaceHandoffHandler = struct {
-    bookmarks: Bookmarks,
+pub const PlanWorkspaceHandoffHandler = @import("PlanWorkspaceHandoffHandler.zig");
 
-    /// Prefers a workspace's remembered pane while preserving its identity as
-    /// fallback, or retains an explicit pane request exactly as supplied.
-    ///
-    /// ```zig
-    /// const plan = handler.execute(.{ .workspace = workspace_id });
-    /// ```
-    pub fn execute(handler: *const PlanWorkspaceHandoffHandler, target: Target) Plan {
-        return switch (target) {
-            .workspace => |workspace| workspace: {
-                const destination: schema.WorkspaceLocation = .{ .workspace = workspace };
-                const pane_id = handler.bookmarks.remembered_pane(
-                    handler.bookmarks.context,
-                    destination,
-                );
-
-                break :workspace .{
-                    .target = if (pane_id) |pane| .{ .pane = pane } else .{ .workspace = workspace },
-                    .fallback_workspace = workspace,
-                };
-            },
-            .pane => |pane| .{
-                .target = .{ .pane = pane.pane_id },
-                .fallback_workspace = pane.fallback_workspace,
-            },
-        };
-    }
-};
-
-const Capture = struct {
-    pane_id: ?schema.PaneId = null,
-    calls: usize = 0,
-    location: ?schema.WorkspaceLocation = null,
-
-    fn handler(capture: *Capture) PlanWorkspaceHandoffHandler {
-        return .{ .bookmarks = .{
-            .context = capture,
-            .remembered_pane = rememberedPane,
-        } };
-    }
-
-    fn rememberedPane(context: *anyopaque, location: schema.WorkspaceLocation) ?schema.PaneId {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.location = location;
-
-        return capture.pane_id;
-    }
-};
+const Capture = @import("WorkspaceHandoffTargetingCapture.zig");
 
 test "PlanWorkspaceHandoffHandler targets a workspace without a bookmark" {
     var capture: Capture = .{};

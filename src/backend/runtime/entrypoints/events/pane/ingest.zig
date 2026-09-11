@@ -6,123 +6,27 @@ const pane_mod = @import("../../../../pane/root.zig");
 const telemetry_mod = @import("../../../observability/root.zig").telemetry;
 const test_support = @import("../../../tests/support.zig");
 
-const Io = std.Io;
-const diagnostics = core.diagnostics;
-const schema = core.schema;
-const Pane = pane_mod.Pane;
-const PaneKey = pane_mod.PaneKey;
-const PaneStore = pane_mod.PaneStore;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+pub const Io = std.Io;
+pub const diagnostics = core.diagnostics;
+pub const schema = core.schema;
+pub const Pane = pane_mod.Pane;
+pub const PaneKey = pane_mod.PaneKey;
+pub const PaneStore = pane_mod.PaneStore;
+pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 
 pub const Stats = pane_mod.PaneIngestStats;
 
-pub const Completion = struct {
-    pane: PaneKey,
-    result: anyerror!Stats,
-};
+pub const Completion = @import("IngestCompletion.zig");
 
-/// Output-read borrow handed to the runtime actor scheduler.
-pub const Read = struct {
-    io: Io,
-    pane: *Pane,
-};
+pub const Read = @import("Read.zig");
 
-pub const Resources = struct {
-    io: Io,
-    panes: *PaneStore,
-    metrics: *RuntimeMetrics,
-};
+pub const Resources = @import("IngestResources.zig");
 
-/// Defines the asynchronous work and runtime lifecycle effects used after VT
-/// ingestion.
-///
-/// ```zig
-/// const port: RuntimePort(Context) = .{ ... };
-/// ```
-pub fn RuntimePort(comptime Context: type) type {
-    return struct {
-        schedule_observation: *const fn (*Context, *Pane) anyerror!void,
-        schedule_media: *const fn (*Context, *Pane) anyerror!void,
-        refresh_clients: *const fn (*Context, *Pane) void,
-        schedule_response: *const fn (*Context, *Pane) anyerror!void,
-        start_read: *const fn (*Context, Read) anyerror!void,
-        collect: *const fn (*Context) void,
-        pump_clients: *const fn (*Context) void,
-    };
-}
+pub const RuntimePort = @import("GenericIngestRuntimePort.zig").Type;
 
-/// Creates a statically dispatched post-ingest coordinator.
-///
-/// ```zig
-/// const IngestCoordinator = Coordinator(Context, port);
-/// ```
-pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) type {
-    return struct {
-        const Self = @This();
+pub const Coordinator = @import("GenericIngestCoordinator.zig").Type;
 
-        context: *Context,
-        resources: Resources,
-
-        /// Binds one runtime's pane repository and telemetry.
-        ///
-        /// ```zig
-        /// var coordinator = IngestCoordinator.init(&context, resources);
-        /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
-            return .{ .context = context, .resources = resources };
-        }
-
-        /// Settles one generation-matched ingest. Success synchronizes domain,
-        /// background observers, client projections, PTY responses, and the
-        /// next read in that order. Ingest failure retires the pane output.
-        ///
-        /// ```zig
-        /// try coordinator.handle(completion);
-        /// ```
-        pub fn handle(coordinator: *Self, completion: Completion) !void {
-            const pane = coordinator.resources.panes.resolve(completion.pane) orelse {
-                coordinator.resources.metrics.stale_pane_events += 1;
-                return;
-            };
-
-            pane.completeOutputIngest();
-            const stats = completion.result catch {
-                _ = pane.requestClose();
-                pane.finishPtyOutput();
-                port.collect(coordinator.context);
-                return;
-            };
-
-            if (comptime diagnostics.enabled) {
-                coordinator.resources.metrics.ingest.observe(stats.elapsed_ns);
-            }
-
-            pane.applyPendingResize() catch {
-                _ = pane.requestClose();
-            };
-            try port.schedule_observation(coordinator.context, pane);
-            try port.schedule_media(coordinator.context, pane);
-            port.refresh_clients(coordinator.context, pane);
-            try port.schedule_response(coordinator.context, pane);
-
-            const read: Read = .{
-                .io = coordinator.resources.io,
-                .pane = pane,
-            };
-            const read_started = pane.beginPtyOutputRead();
-            std.debug.assert(read_started);
-            port.start_read(coordinator.context, read) catch |err| {
-                pane.cancelPtyOutputRead();
-                return err;
-            };
-
-            port.collect(coordinator.context);
-            port.pump_clients(coordinator.context);
-        }
-    };
-}
-
-const Step = enum {
+pub const Step = enum {
     observation,
     media,
     refresh_clients,
@@ -132,63 +36,7 @@ const Step = enum {
     pump_clients,
 };
 
-const Capture = struct {
-    steps: [7]Step = undefined,
-    len: usize = 0,
-    failure: ?Step = null,
-    expected_size: ?schema.TerminalSize = null,
-    observation_saw_released_ingest: bool = false,
-    observation_saw_expected_size: bool = false,
-    refresh_saw_expected_size: bool = false,
-    read_saw_borrow: bool = false,
-
-    fn record(capture: *Capture, step: Step) !void {
-        std.debug.assert(capture.len < capture.steps.len);
-        capture.steps[capture.len] = step;
-        capture.len += 1;
-
-        if (capture.failure == step) {
-            return error.SchedulerUnavailable;
-        }
-    }
-
-    fn scheduleObservation(capture: *Capture, pane: *Pane) !void {
-        capture.observation_saw_released_ingest = !pane.ingest_pending;
-        capture.observation_saw_expected_size = capture.hasExpectedSize(pane);
-        try capture.record(.observation);
-    }
-
-    fn scheduleMedia(capture: *Capture, _: *Pane) !void {
-        try capture.record(.media);
-    }
-
-    fn refreshClients(capture: *Capture, pane: *Pane) void {
-        capture.refresh_saw_expected_size = capture.hasExpectedSize(pane);
-        capture.record(.refresh_clients) catch unreachable;
-    }
-
-    fn scheduleResponse(capture: *Capture, _: *Pane) !void {
-        try capture.record(.response);
-    }
-
-    fn startRead(capture: *Capture, read: Read) !void {
-        capture.read_saw_borrow = read.pane.output_pending;
-        try capture.record(.read);
-    }
-
-    fn collect(capture: *Capture) void {
-        capture.record(.collect) catch unreachable;
-    }
-
-    fn pumpClients(capture: *Capture) void {
-        capture.record(.pump_clients) catch unreachable;
-    }
-
-    fn hasExpectedSize(capture: *const Capture, pane: *const Pane) bool {
-        const expected = capture.expected_size orelse return true;
-        return std.meta.eql(expected, pane.size);
-    }
-};
+const Capture = @import("IngestCapture.zig");
 
 const test_port: RuntimePort(Capture) = .{
     .schedule_observation = Capture.scheduleObservation,

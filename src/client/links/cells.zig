@@ -2,16 +2,13 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const target_mod = @import("target.zig");
+const target_mod = @import("target_support.zig");
 
 const link = core.link;
 const schema = core.schema;
 const ui = core.ui;
 
-pub const Position = struct {
-    x: u16,
-    y: u32,
-};
+pub const Position = @import("Position.zig");
 
 const row_window_bytes = link.max_uri_bytes * 2 + ui.Cell.max_bytes * 2;
 

@@ -4,8 +4,8 @@ const std = @import("std");
 const tlsz = @import("tls");
 const ca = @import("ca.zig");
 
-const Io = std.Io;
-const net = Io.net;
+pub const Io = std.Io;
+pub const net = Io.net;
 
 pub const Error = error{
     ContextFailed,
@@ -14,97 +14,15 @@ pub const Error = error{
     MintFailed,
 };
 
-pub const InterceptOptions = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    authority: *const ca.Authority,
-    roots: *const Roots,
-    host: []const u8,
-    child: net.Stream,
-    origin: net.Stream,
-};
+pub const InterceptOptions = @import("InterceptOptions.zig");
 
 const alpn_offer = [_][]const u8{ "h2", "http/1.1" };
 const alpn_h2_only = [_][]const u8{"h2"};
 const alpn_http11_only = [_][]const u8{"http/1.1"};
 
-pub const Roots = struct {
-    bundle: tlsz.config.cert.Bundle,
+pub const Roots = @import("Roots.zig");
 
-    pub fn load(io: Io, gpa: std.mem.Allocator) !Roots {
-        return .{ .bundle = try tlsz.config.cert.fromSystem(gpa, io) };
-    }
-
-    pub fn deinit(roots: *Roots, gpa: std.mem.Allocator) void {
-        roots.bundle.deinit(gpa);
-    }
-};
-
-/// Heap allocated because TLS connections borrow the adjacent reader/writer
-/// buffers and must never move after initialization.
-pub const Session = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    random: std.Random.IoSource,
-    auth: tlsz.config.CertKeyPair,
-    child: End,
-    origin: End,
-
-    const End = struct {
-        stream: net.Stream,
-        input_buffer: [tlsz.input_buffer_len]u8 = undefined,
-        output_buffer: [tlsz.output_buffer_len]u8 = undefined,
-        reader: net.Stream.Reader = undefined,
-        writer: net.Stream.Writer = undefined,
-        connection: tlsz.Connection = undefined,
-
-        fn wire(endpoint: *End, io: Io) void {
-            endpoint.reader = endpoint.stream.reader(io, &endpoint.input_buffer);
-            endpoint.writer = endpoint.stream.writer(io, &endpoint.output_buffer);
-        }
-    };
-
-    pub const Side = enum { child, origin };
-    pub const Protocol = enum { http11, h2 };
-
-    pub fn deinit(session: *Session) void {
-        const gpa = session.gpa;
-        session.child.connection.close() catch {};
-        session.origin.connection.close() catch {};
-        session.auth.deinit(gpa);
-        std.crypto.secureZero(u8, std.mem.asBytes(session));
-        gpa.destroy(session);
-    }
-
-    pub fn read(session: *Session, side: Side, buffer: []u8) ?usize {
-        const len = session.end(side).connection.read(buffer) catch return null;
-        return if (len == 0) null else len;
-    }
-
-    pub fn writeAll(session: *Session, side: Side, bytes: []const u8) bool {
-        session.end(side).connection.writeAll(bytes) catch return false;
-        return true;
-    }
-
-    pub fn halfClose(session: *Session, side: Side) void {
-        // Each relay owns only the send direction of its destination. Closing
-        // both directions here races the opposite relay and can truncate h2
-        // or upgraded responses after the request side reaches EOF.
-        session.end(side).stream.shutdown(session.io, .send) catch {};
-    }
-
-    pub fn negotiated(session: *const Session) Protocol {
-        const selected = session.child.connection.alpn_protocol orelse return .http11;
-        return if (std.mem.eql(u8, selected, "h2")) .h2 else .http11;
-    }
-
-    fn end(session: *Session, side: Side) *End {
-        return switch (side) {
-            .child => &session.child,
-            .origin => &session.origin,
-        };
-    }
-};
+pub const Session = @import("Session.zig");
 
 /// Establishes verified TLS towards the origin and mirrored TLS towards the
 /// child. Every failure releases all partially initialized TLS state; the
@@ -240,37 +158,9 @@ fn parseAlpnOffer(reader: *Io.Reader) ![]const []const u8 {
     return &.{};
 }
 
-const Cursor = struct {
-    bytes: []const u8,
-    index: usize = 0,
+const Cursor = @import("Cursor.zig");
 
-    fn left(cursor: Cursor) usize {
-        return cursor.bytes.len - cursor.index;
-    }
-
-    fn take(cursor: *Cursor, len: usize) ![]const u8 {
-        if (cursor.left() < len) {
-            return error.Truncated;
-        }
-        defer cursor.index += len;
-        return cursor.bytes[cursor.index..][0..len];
-    }
-
-    fn byte(cursor: *Cursor) !u8 {
-        return (try cursor.take(1))[0];
-    }
-
-    fn big16(cursor: *Cursor) !u16 {
-        return std.mem.readInt(u16, (try cursor.take(2))[0..2], .big);
-    }
-};
-
-const MintOptions = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    authority: *const ca.Authority,
-    host: []const u8,
-};
+const MintOptions = @import("MintOptions.zig");
 
 fn mintAuth(options: MintOptions) Error!tlsz.config.CertKeyPair {
     var leaf = options.authority.mint(options.io, options.host) catch {

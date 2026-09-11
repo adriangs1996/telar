@@ -11,7 +11,7 @@ const pane_pastes = @import("../input/pane_pastes.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const tab_attachments = @import("tab_attachments.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const create_tab = tabs_application.create_tab;
 const multiplexer = workspace_capability.multiplexer;
 const schema = core.schema;

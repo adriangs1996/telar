@@ -1,24 +1,16 @@
 //! Toast overlay rendering for the client notification center.
 
 const notifications = @import("telar-client").notifications;
-const widget = @import("context.zig");
+const widget = @import("context_support.zig");
 const ui = @import("../ui/root.zig");
 
 pub const card_height: u16 = 4;
 pub const card_gap: u16 = 1;
 pub const max_width: u16 = 48;
 
-const RenderMode = struct {
-    area: ui.Rect,
-    center: *const notifications.Center,
-    paint: bool,
-};
+const RenderMode = @import("RenderMode.zig");
 
-const CardInput = struct {
-    area: ui.Rect,
-    item: *const notifications.Item,
-    paint: bool,
-};
+const CardInput = @import("CardInput.zig");
 
 pub fn overlayArea(workbench: ui.Rect) ui.Rect {
     if (workbench.w < 12 or workbench.h < card_height) {

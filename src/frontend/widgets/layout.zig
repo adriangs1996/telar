@@ -1,44 +1,15 @@
 //! Geometry contract for the client chrome.
 
 const ui = @import("../ui/root.zig");
-const sidebar_geometry = ui.sidebar;
+pub const sidebar_geometry = ui.sidebar;
 
 pub const minimum_sidebar_width = sidebar_geometry.minimum_width;
 pub const sidebar_width = sidebar_geometry.default_width;
 pub const minimum_workbench_width = sidebar_geometry.minimum_workbench_width;
 
-pub const Sidebar = struct {
-    visible: bool,
-    preferred_width: u16,
-};
+pub const Sidebar = @import("LayoutSidebar.zig");
 
-pub const Regions = struct {
-    full: ui.Rect,
-    top: ui.Rect,
-    body: ui.Rect,
-    sidebar: ui.Rect,
-    workbench: ui.Rect,
-    bottom: ui.Rect,
-
-    pub fn calculate(width: u16, height: u16, sidebar_spec: Sidebar) Regions {
-        const full: ui.Rect = .{ .w = width, .h = height };
-        const top_height: u16 = @intFromBool(height != 0);
-        const bottom_height: u16 = @intFromBool(height >= 2);
-        const actual_width = sidebar_geometry.actualWidth(full.w, sidebar_spec.visible, sidebar_spec.preferred_width);
-        const sidebar, const client = full.splitLeft(actual_width);
-        const top, const below_top = client.splitTop(top_height);
-        const body, const bottom = below_top.splitBottom(bottom_height);
-
-        return .{
-            .full = full,
-            .top = top,
-            .body = body,
-            .sidebar = sidebar,
-            .workbench = body,
-            .bottom = bottom,
-        };
-    }
-};
+pub const Regions = @import("LayoutRegions.zig");
 
 test "regions expose the complete chrome layout" {
     const regions = Regions.calculate(120, 40, .{ .visible = true, .preferred_width = sidebar_width });

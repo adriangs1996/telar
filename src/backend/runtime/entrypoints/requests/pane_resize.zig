@@ -5,69 +5,12 @@ const core = @import("telar-core");
 const pane_resize_commands = @import("../../application/commands/pane_resize.zig");
 const telemetry_mod = @import("../../observability/root.zig").telemetry;
 
-const schema = core.schema;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+pub const schema = core.schema;
+pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 
-/// Builds a statically dispatched resize controller for the interactive path.
-///
-/// ```zig
-/// const ResizeController = Controller(*pane_resize_commands.PaneResizeHandler);
-/// var controller = ResizeController.init(&metrics, &handler);
-/// ```
-pub fn Controller(comptime Executor: type) type {
-    return struct {
-        const Self = @This();
+pub const Controller = @import("GenericPaneResizeController.zig").Type;
 
-        metrics: *RuntimeMetrics,
-        executor: Executor,
-
-        /// Creates one controller bound to the requesting client and handler.
-        ///
-        /// ```zig
-        /// var controller = ResizeController.init(&metrics, &handler);
-        /// ```
-        pub fn init(metrics: *RuntimeMetrics, executor: Executor) Self {
-            return .{ .metrics = metrics, .executor = executor };
-        }
-
-        /// Maps attachment and geometry rejection to diagnostics while
-        /// preserving scheduler and PTY failures as infrastructure errors.
-        ///
-        /// ```zig
-        /// try controller.paneResize(request);
-        /// ```
-        pub inline fn paneResize(controller: *Self, request: schema.PaneResize) !void {
-            const result = try controller.executor.execute(.{
-                .pane_id = request.pane_id,
-                .size = request.size,
-            });
-
-            switch (result) {
-                .handled => {},
-                .pane_not_attached => controller.metrics.stale_client_messages += 1,
-                .geometry_rejected => controller.metrics.geometry_rejections += 1,
-            }
-        }
-    };
-}
-
-const StubExecutor = struct {
-    result: pane_resize_commands.PaneResizeResult = .handled,
-    failure: ?anyerror = null,
-    call_count: usize = 0,
-    command: ?pane_resize_commands.PaneResize = null,
-
-    fn execute(stub: *StubExecutor, command: pane_resize_commands.PaneResize) !pane_resize_commands.PaneResizeResult {
-        stub.call_count += 1;
-        stub.command = command;
-
-        if (stub.failure) |failure| {
-            return failure;
-        }
-
-        return stub.result;
-    }
-};
+const StubExecutor = @import("PaneResizeStubExecutor.zig");
 
 const TestController = Controller(*StubExecutor);
 

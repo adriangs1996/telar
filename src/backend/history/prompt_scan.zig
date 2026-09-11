@@ -14,11 +14,7 @@ const core = @import("telar-core");
 
 const Signal = core.agent_manifest.Signal;
 
-const Scan = struct {
-    provider: core.schema.AgentProvider,
-    confidence: u8,
-    ready: *const fn (terminal: *const vt.Terminal) bool,
-};
+const Scan = @import("Scan.zig");
 
 const scans = [_]Scan{
     .{ .provider = .claude, .confidence = 96, .ready = claudeReadyPrompt },

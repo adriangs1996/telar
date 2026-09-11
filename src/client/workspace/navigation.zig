@@ -2,135 +2,17 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const layout_mod = @import("layout.zig");
+const layout_mod = @import("layout_support.zig");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const Bookmark = struct {
-    location: schema.TabLocation,
-    pane_id: schema.PaneId,
-    tab_layout: ?layout_mod.Layout = null,
-};
+pub const Bookmark = @import("Bookmark.zig");
 
-pub const SavedLayout = struct {
-    location: schema.TabLocation,
-    pane_id: schema.PaneId,
-    workspace_active: bool,
-    layout: layout_mod.Layout,
-};
+pub const SavedLayout = @import("SavedLayout.zig");
 
-pub const Layouts = struct {
-    entries: [schema.max_client_layout_tabs]?SavedLayout = @splat(null),
-    eviction_index: usize = 0,
+pub const Layouts = @import("Layouts.zig");
 
-    /// Retains the latest split tree for one stable tab identity.
-    ///
-    /// ```zig
-    /// try layouts.remember(saved);
-    /// ```
-    pub fn remember(layouts: *Layouts, saved: SavedLayout) !void {
-        var free: ?*?SavedLayout = null;
-        for (&layouts.entries) |*slot| {
-            if (slot.*) |entry| {
-                if (std.meta.eql(entry.location, saved.location)) {
-                    slot.* = saved;
-                    return;
-                }
-            } else if (free == null) {
-                free = slot;
-            }
-        }
-
-        const slot = free orelse return error.TooManySavedLayouts;
-        slot.* = saved;
-    }
-
-    /// Retains a live layout without blocking navigation when the cache fills.
-    /// Existing tabs replace their entry; overflow replaces slots round-robin.
-    /// Evicted layouts fall back to canonical pane order on their next visit.
-    ///
-    /// ```zig
-    /// layouts.retain(saved);
-    /// ```
-    pub fn retain(layouts: *Layouts, saved: SavedLayout) void {
-        layouts.remember(saved) catch {
-            layouts.entries[layouts.eviction_index] = saved;
-            layouts.eviction_index = (layouts.eviction_index + 1) % layouts.entries.len;
-        };
-    }
-
-    /// Finds a retained tab layout without changing its lifetime.
-    ///
-    /// ```zig
-    /// const saved = layouts.find(location) orelse return;
-    /// ```
-    pub fn find(layouts: *const Layouts, location: schema.TabLocation) ?SavedLayout {
-        for (layouts.entries) |slot| {
-            const entry = slot orelse continue;
-            if (std.meta.eql(entry.location, location)) {
-                return entry;
-            }
-        }
-
-        return null;
-    }
-
-    /// Removes one layout after canonical pane reconciliation consumes it.
-    ///
-    /// ```zig
-    /// layouts.forget(location);
-    /// ```
-    pub fn forget(layouts: *Layouts, location: schema.TabLocation) void {
-        for (&layouts.entries) |*slot| {
-            const entry = slot.* orelse continue;
-            if (std.meta.eql(entry.location, location)) {
-                slot.* = null;
-                return;
-            }
-        }
-    }
-};
-
-pub const History = struct {
-    entries: [schema.max_workspace_list_entries]?Bookmark = @splat(null),
-
-    pub fn remember(history: *History, bookmark: Bookmark) void {
-        var free: ?*?Bookmark = null;
-        for (&history.entries) |*slot| {
-            if (slot.*) |entry| {
-                if (std.meta.eql(entry.location.workspace, bookmark.location.workspace)) {
-                    slot.* = bookmark;
-                    return;
-                }
-            } else if (free == null) {
-                free = slot;
-            }
-        }
-        if (free) |slot| {
-            slot.* = bookmark;
-        }
-    }
-
-    pub fn find(history: *const History, workspace: schema.WorkspaceLocation) ?Bookmark {
-        for (history.entries) |slot| {
-            const entry = slot orelse continue;
-            if (std.meta.eql(entry.location.workspace, workspace)) {
-                return entry;
-            }
-        }
-        return null;
-    }
-
-    pub fn forget(history: *History, workspace: schema.WorkspaceLocation) void {
-        for (&history.entries) |*slot| {
-            const entry = slot.* orelse continue;
-            if (std.meta.eql(entry.location.workspace, workspace)) {
-                slot.* = null;
-                return;
-            }
-        }
-    }
-};
+pub const History = @import("History.zig");
 
 test "workspace bookmarks replace the last focused tab and pane" {
     var history: History = .{};

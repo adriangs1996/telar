@@ -5,13 +5,10 @@ const workspace = @import("../../../workspace/root.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const pane_focus = @import("pane_focus.zig");
 
-const Client = @import("../../client.zig");
-const schema = core.schema;
+const Client = @import("../../Client.zig");
+pub const schema = core.schema;
 
-const Completion = struct {
-    outcome: schema.PaneFocusOutcome,
-    focused_pane_id: schema.PaneId,
-};
+const Completion = @import("Completion.zig");
 
 /// Revalidates the source pane, applies the directional focus, and reports the
 /// result to the control connection through the runtime.

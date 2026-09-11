@@ -1,6 +1,6 @@
 const std = @import("std");
-const Io = std.Io;
-const net = std.Io.net;
+pub const Io = std.Io;
+pub const net = std.Io.net;
 
 const ca = @import("ca.zig");
 const event = @import("event.zig");
@@ -43,14 +43,7 @@ pub fn reservePort(first: u16, count: u16) ?u16 {
     return null;
 }
 
-/// Accepts tunnels until cancelled. One task per connection.
-pub const ServeContext = struct {
-    io: Io,
-    port: u16,
-    authority: ca.Authority,
-    allocator: std.mem.Allocator,
-    queue: *event.Queue,
-};
+pub const ServeContext = @import("ServeContext.zig");
 
 pub fn serve(context: ServeContext) Io.Cancelable!void {
     const io = context.io;
@@ -96,15 +89,7 @@ pub fn serve(context: ServeContext) Io.Cancelable!void {
     }
 }
 
-const TunnelContext = struct {
-    io: Io,
-    stream: net.Stream,
-    authority: ca.Authority,
-    roots: tls.Roots,
-    allocator: std.mem.Allocator,
-    queue: *event.Queue,
-    next_id: *std.atomic.Value(u64),
-};
+const TunnelContext = @import("TunnelContext.zig");
 
 fn tunnel(context: TunnelContext) Io.Cancelable!void {
     const io = context.io;
@@ -350,39 +335,9 @@ fn tunnel(context: TunnelContext) Io.Cancelable!void {
     };
 }
 
-/// Everything one direction of an h2 connection reported.
-const H2Side = struct {
-    decoder: h2.Decoder,
-    text: std.Io.Writer.Allocating,
-    body: []u8,
-    body_len: usize = 0,
-    seen: h2.Observed = .{},
+const H2Side = @import("H2Side.zig");
 
-    fn run(self: *H2Side, session: *tls.Session, route: h2.Route) void {
-        h2.relay(session, route, .{
-            .decoder = &self.decoder,
-            .text = &self.text.writer,
-            .body = self.body,
-            .body_len = &self.body_len,
-            .seen = &self.seen,
-        });
-        // One side stopping ends the conversation; release the other so the
-        // exchange gets recorded instead of waiting on a keep-alive timeout.
-        session.halfClose(route.to);
-    }
-};
-
-/// Runs both directions of an h2 connection and records one exchange for the
-/// whole thing. Per-stream splitting is the next step; this is the connection.
-const H2RelayContext = struct {
-    io: Io,
-    session: *tls.Session,
-    allocator: std.mem.Allocator,
-    id: u64,
-    opened: event.Upstream,
-    port: u16,
-    queue: *event.Queue,
-};
+const H2RelayContext = @import("H2RelayContext.zig");
 
 fn relayH2(context: H2RelayContext) Io.Cancelable!void {
     const io = context.io;
@@ -523,15 +478,7 @@ fn pumpDirection(session: *tls.Session, route: h2.Route, counter: *std.atomic.Va
     }
 }
 
-/// Builds the storable rendering of one exchange. Bodies are deliberately not
-/// persisted: prompts, replies, and tool payloads may contain credentials for
-/// which no generic redactor can provide a safety guarantee.
-const ExchangeContent = struct {
-    request_head: []const u8,
-    request_body: []const u8,
-    response_head: []const u8,
-    response_body: []const u8,
-};
+const ExchangeContent = @import("ExchangeContent.zig");
 
 fn renderExchange(gpa: std.mem.Allocator, content: ExchangeContent) ?[]const u8 {
     var out: std.Io.Writer.Allocating = .init(gpa);

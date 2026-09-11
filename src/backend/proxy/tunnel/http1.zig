@@ -9,88 +9,14 @@ const metrics = @import("../metrics.zig");
 const middleware = @import("../middleware.zig");
 const provider = @import("../provider/root.zig");
 const tls = @import("../tls.zig");
-const exchange_mod = @import("exchange.zig");
+const exchange_mod = @import("exchange_support.zig");
 
-const Io = std.Io;
-const schema = core.schema;
+pub const Io = std.Io;
+pub const schema = core.schema;
 
-pub const Options = struct {
-    io: Io,
-    transforms: *const middleware.TransformPipeline,
-    session: *tls.Session,
-    exchange: *exchange_mod.Exchange,
-    captures: ?*capture.Producer = null,
-};
+pub const Options = @import("Http1Options.zig");
 
-pub const Connection = struct {
-    io: Io,
-    transforms: *const middleware.TransformPipeline,
-    session: *tls.Session,
-    exchange: *exchange_mod.Exchange,
-    captures: ?*capture.Producer,
-    request: provider.RequestObserver = .{},
-    request_capture: ?*capture.Half = null,
-    response_capture: ?*capture.Half = null,
-
-    /// Binds an intercepted TLS session to its exchange and immutable header
-    /// transformation pipeline.
-    ///
-    /// ```zig
-    /// var connection = Connection.init(options);
-    /// ```
-    pub fn init(options: Options) Connection {
-        return .{
-            .io = options.io,
-            .transforms = options.transforms,
-            .session = options.session,
-            .exchange = options.exchange,
-            .captures = options.captures,
-        };
-    }
-
-    /// Relays reusable HTTP/1.1 exchanges until close, failure, or upgrade.
-    /// Provider request and response observers are scrubbed before returning.
-    ///
-    /// ```zig
-    /// connection.run();
-    /// ```
-    pub fn run(connection: *Connection) void {
-        defer connection.request.deinit();
-        defer connection.discardCaptures();
-        RelayConnection.run(connection);
-    }
-
-    fn discardCaptures(connection: *Connection) void {
-        if (connection.request_capture) |half| {
-            half.deinit();
-            connection.request_capture = null;
-        }
-
-        if (connection.response_capture) |half| {
-            half.deinit();
-            connection.response_capture = null;
-        }
-    }
-
-    fn beginCapture(connection: *Connection) void {
-        connection.discardCaptures();
-        const producer = connection.captures orelse return;
-        const started_at_ms = Io.Timestamp.now(connection.io, .real).toMilliseconds();
-        const base: capture.StartOptions = .{
-            .credential = connection.exchange.credential,
-            .dialect = connection.exchange.dialect,
-            .protocol = connection.exchange.protocol,
-            .key = .{ .connection_id = connection.exchange.connection_id, .stream_id = 0 },
-            .side = .request,
-            .host = connection.exchange.host.bytes,
-            .started_at_ms = started_at_ms,
-        };
-        connection.request_capture = producer.start(base);
-        var response = base;
-        response.side = .response;
-        connection.response_capture = producer.start(response);
-    }
-};
+pub const Connection = @import("Http1Connection.zig");
 
 const exchange_port: http.ExchangePort(Connection) = .{
     .io = connectionIo,
@@ -109,82 +35,15 @@ const connection_port: http.ConnectionPort(Connection) = .{
     .upgrade = upgrade,
 };
 
-const RelayConnection = http.Connection(Connection, connection_port);
+pub const RelayConnection = http.Connection(Connection, connection_port);
 
-const RequestBodyObserver = struct {
-    request: *provider.RequestObserver,
-    capture_half: ?*capture.Half = null,
+const RequestBodyObserver = @import("RequestBodyObserver.zig");
 
-    /// Feeds one already-forwarded payload fragment to request classification.
-    ///
-    /// ```zig
-    /// observer.observe(.{ .payload = bytes, .forwarded_bytes = bytes.len });
-    /// ```
-    pub fn observe(observer: RequestBodyObserver, fragment: http.BodyFragment) void {
-        observer.request.feed(fragment.payload);
-        if (observer.capture_half) |half| {
-            _ = half.append(.request_body, fragment.payload);
-        }
-    }
-};
+const ResponseBodyObserver = @import("ResponseBodyObserver.zig");
 
-const ResponseBodyObserver = struct {
-    exchange: *exchange_mod.Exchange,
-    response: provider.ResponseObserver,
-    inspect_payload: bool,
-    capture_half: ?*capture.Half,
+const ResponseObserverOptions = @import("ResponseObserverOptions.zig");
 
-    fn init(exchange: *exchange_mod.Exchange, options: ResponseObserverOptions) ResponseBodyObserver {
-        return .{
-            .exchange = exchange,
-            .response = .init(exchange.dialect),
-            .inspect_payload = options.inspect_payload,
-            .capture_half = options.capture_half,
-        };
-    }
-
-    /// Publishes forwarding activity and inspects eligible SSE payload bytes
-    /// for provider turn completion.
-    ///
-    /// ```zig
-    /// observer.observe(.{ .payload = bytes, .forwarded_bytes = bytes.len });
-    /// ```
-    pub fn observe(observer: *ResponseBodyObserver, fragment: http.BodyFragment) void {
-        if (observer.capture_half) |half| {
-            _ = half.append(.response_body, fragment.payload);
-        }
-
-        if (fragment.forwarded_bytes != 0) {
-            observer.exchange.publish(.response_activity, 0);
-        }
-
-        if (observer.inspect_payload and fragment.payload.len != 0) {
-            if (observer.response.dialect == .anthropic_messages) {
-                observer.exchange.record(.claude_sse_payload_fragment);
-            }
-
-            if (observer.response.feed(fragment.payload)) {
-                observer.exchange.publish(.provider_turn_completed, 0);
-            }
-        }
-    }
-
-    fn deinit(observer: *ResponseBodyObserver) void {
-        observer.response.deinit();
-        observer.inspect_payload = false;
-        observer.capture_half = null;
-    }
-};
-
-const ResponseObserverOptions = struct {
-    inspect_payload: bool,
-    capture_half: ?*capture.Half,
-};
-
-const UpgradeRoute = struct {
-    from: tls.Session.Side,
-    to: tls.Session.Side,
-};
+const UpgradeRoute = @import("UpgradeRoute.zig");
 
 fn connectionIo(connection: *Connection) Io {
     return connection.io;
@@ -446,55 +305,9 @@ fn pumpUpgrade(connection: *Connection, route: UpgradeRoute) void {
     connection.session.halfClose(route.to);
 }
 
-const Capture = struct {
-    events: [16]middleware.Event = undefined,
-    len: usize = 0,
+const Capture = @import("Http1Capture.zig");
 
-    fn observe(context: *anyopaque, _: Io, event: middleware.Event) void {
-        const observed: *Capture = @ptrCast(@alignCast(context));
-        observed.events[observed.len] = event;
-        observed.len += 1;
-    }
-};
-
-const TestHarness = struct {
-    capture: Capture = .{},
-    pipeline: middleware.Pipeline = .{},
-    counters: metrics.Counters = .{},
-    exchange: exchange_mod.Exchange = undefined,
-
-    fn init(harness: *TestHarness) !void {
-        try harness.pipeline.add(.{ .context = &harness.capture, .observe = Capture.observe });
-        harness.exchange = .{
-            .io = std.testing.io,
-            .pipeline = &harness.pipeline,
-            .telemetry = &harness.counters,
-            .credential = .{
-                .pane_id = try schema.id.pane(7),
-                .pane_generation = 11,
-                .token = .{0x42} ** identity.token_bytes,
-            },
-            .dialect = .anthropic_messages,
-            .connection_id = 19,
-            .protocol = .http11,
-        };
-    }
-
-    fn expectPhases(harness: *const TestHarness, expected: []const middleware.Phase) !void {
-        try std.testing.expectEqual(expected.len, harness.capture.len);
-
-        for (expected, harness.capture.events[0..harness.capture.len]) |phase, event| {
-            try std.testing.expectEqual(phase, event.phase);
-        }
-    }
-
-    fn snapshot(harness: *const TestHarness) metrics.Snapshot {
-        return harness.counters.snapshot(.{
-            .connections = .{ .active = 0, .limit_drops = 0 },
-            .observations = .{ .queued = 0, .high_water = 0, .dropped = 0 },
-        });
-    }
-};
+const TestHarness = @import("Http1TestHarness.zig");
 
 const claude_end_turn_event =
     "event: message_delta\n" ++
@@ -692,11 +505,7 @@ test "final status maps to response completion or failure" {
     }
 }
 
-const CaptureGate = struct {
-    fn accepts(_: *anyopaque, _: *const identity.Credential) bool {
-        return true;
-    }
-};
+const CaptureGate = @import("Http1CaptureGate.zig");
 
 fn testCaptureProducer(producer: *capture.Producer, context: *u8, config: capture.Config) !void {
     try producer.init(std.testing.allocator, .{

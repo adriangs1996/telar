@@ -7,112 +7,17 @@ const history_query = @import("../../application/queries/history.zig");
 const delivery_mod = @import("../../delivery/root.zig");
 const telemetry_mod = @import("../../observability/root.zig").telemetry;
 
-const diagnostics = core.diagnostics;
-const schema = core.schema;
-const QueryOrigin = history_mod.model.QueryOrigin;
-const ResponseQueue = delivery_mod.ResponseQueue;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+pub const diagnostics = core.diagnostics;
+pub const schema = core.schema;
+pub const QueryOrigin = history_mod.model.QueryOrigin;
+pub const ResponseQueue = delivery_mod.ResponseQueue;
+pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 
-const Failure = struct {
-    request_id: schema.RequestId,
-    code: schema.FailureCode,
-    message: []const u8,
-};
+const Failure = @import("HistoryQueryFailure.zig");
 
-pub const Controller = struct {
-    responses: *ResponseQueue,
-    metrics: *RuntimeMetrics,
-    query: history_query.Executor,
+pub const Controller = @import("HistoryQueryController.zig");
 
-    /// Creates a controller scoped to one history-query request.
-    ///
-    /// ```zig
-    /// var controller = Controller.init(&responses, &metrics, handler.executor());
-    /// ```
-    pub fn init(responses: *ResponseQueue, metrics: *RuntimeMetrics, query: history_query.Executor) Controller {
-        return .{ .responses = responses, .metrics = metrics, .query = query };
-    }
-
-    /// Maps borrowed wire fields and reply ownership to the application query.
-    /// Successful submission has no immediate response because the history
-    /// worker later answers the client identified by `origin`.
-    ///
-    /// ```zig
-    /// try controller.queryHistory(origin, request);
-    /// ```
-    pub fn queryHistory(controller: *Controller, origin: QueryOrigin, request: schema.QueryHistory) !void {
-        controller.query.execute(.{
-            .request_id = request.request_id,
-            .origin = origin,
-            .text = request.query,
-            .scope = request.scope,
-            .scope_value = request.scope_value,
-            .pane_id = request.pane_id,
-            .failed_only = request.failed_only,
-            .author = request.author,
-            .match = request.match,
-            .distinct = request.distinct,
-            .limit = request.limit,
-            .offset = request.offset,
-            .snapshot_id = request.snapshot_id,
-            .entry_id = request.entry_id,
-        }) catch |err| switch (err) {
-            error.InvalidHistoryQuery => {
-                try controller.queueFailure(.{
-                    .request_id = request.request_id,
-                    .code = .invalid_request,
-                    .message = "invalid history query",
-                });
-                return;
-            },
-            error.HistoryQueueFull => {
-                if (comptime diagnostics.enabled) {
-                    controller.metrics.history_query_failures += 1;
-                }
-
-                try controller.queueFailure(.{
-                    .request_id = request.request_id,
-                    .code = .resource_limit,
-                    .message = "history queue is full",
-                });
-                return;
-            },
-            else => return err,
-        };
-
-        if (comptime diagnostics.enabled) {
-            controller.metrics.history_queries += 1;
-        }
-    }
-
-    fn queueFailure(controller: *Controller, failure: Failure) !void {
-        try controller.responses.push(.{ .request_failed = .{
-            .request_id = failure.request_id,
-            .code = failure.code,
-            .message = failure.message,
-        } });
-    }
-};
-
-const StubQuery = struct {
-    failure: ?anyerror = null,
-    calls: usize = 0,
-    request: ?history_query.Request = null,
-
-    fn executor(stub: *StubQuery) history_query.Executor {
-        return .{ .context = stub, .execute_fn = execute };
-    }
-
-    fn execute(context: *anyopaque, request: history_query.Request) anyerror!void {
-        const stub: *StubQuery = @ptrCast(@alignCast(context));
-        stub.calls += 1;
-        stub.request = request;
-
-        if (stub.failure) |failure| {
-            return failure;
-        }
-    }
-};
+const StubQuery = @import("HistoryQueryStubQuery.zig");
 
 fn testingOrigin() QueryOrigin {
     return .{

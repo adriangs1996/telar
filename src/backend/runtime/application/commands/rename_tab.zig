@@ -4,91 +4,20 @@ const std = @import("std");
 const core = @import("telar-core");
 const workspace_mod = @import("../../../workspace/root.zig");
 
-const schema = core.schema;
-const WorkspaceRepository = workspace_mod.Repository;
+pub const schema = core.schema;
+pub const WorkspaceRepository = workspace_mod.Repository;
 
-pub const RenameTab = struct {
-    location: schema.TabLocation,
-    /// Borrowed only for the synchronous `execute` call.
-    label: []const u8,
-};
+pub const RenameTab = @import("RenameTab.zig");
 
 pub const RenameTabResult = workspace_mod.TabRenamed;
 
-/// Synchronous post-commit port. Implementations may retain the event value,
-/// but the erased context only has to remain valid until `publish` returns.
-pub const EventPublisher = struct {
-    context: *anyopaque,
-    publish: *const fn (*anyopaque, workspace_mod.TabRenamed) void,
-};
+pub const EventPublisher = @import("RenameTabEventPublisher.zig");
 
-pub const RenameTabExecutor = struct {
-    context: *anyopaque,
-    execute_fn: *const fn (*anyopaque, RenameTab) anyerror!RenameTabResult,
+pub const RenameTabExecutor = @import("RenameTabExecutor.zig");
 
-    /// Executes a tab rename through the bound application handler.
-    ///
-    /// ```zig
-    /// const renamed = try executor.execute(.{ .location = location, .label = "server" });
-    /// ```
-    pub fn execute(executor: RenameTabExecutor, command: RenameTab) !RenameTabResult {
-        return executor.execute_fn(executor.context, command);
-    }
-};
+pub const RenameTabHandler = @import("RenameTabHandler.zig");
 
-pub const RenameTabHandler = struct {
-    workspaces: *WorkspaceRepository,
-    events: EventPublisher,
-
-    /// Resolves the aggregate, commits its rename, then publishes the owned
-    /// domain event. Failed commands neither mutate state nor publish events.
-    ///
-    /// ```zig
-    /// const renamed = try handler.execute(.{ .location = location, .label = "server" });
-    /// ```
-    pub fn execute(handler: *RenameTabHandler, command: RenameTab) !RenameTabResult {
-        const workspace = handler.workspaces.find(command.location.workspace) orelse return error.TabNotFound;
-        const renamed = try workspace.renameTab(command.location.tab_id, command.label);
-
-        handler.events.publish(handler.events.context, renamed);
-        return renamed;
-    }
-
-    /// Erases the concrete handler behind the narrow command interface used
-    /// by request controllers.
-    ///
-    /// ```zig
-    /// const executor = handler.executor();
-    /// ```
-    pub fn executor(handler: *RenameTabHandler) RenameTabExecutor {
-        return .{ .context = handler, .execute_fn = executeErased };
-    }
-
-    fn executeErased(context: *anyopaque, command: RenameTab) !RenameTabResult {
-        const handler: *RenameTabHandler = @ptrCast(@alignCast(context));
-        return handler.execute(command);
-    }
-};
-
-const EventCapture = struct {
-    reader: workspace_mod.Reader,
-    count: usize = 0,
-    last: ?workspace_mod.TabRenamed = null,
-    observed_committed_state: bool = false,
-
-    fn publisher(capture: *EventCapture) EventPublisher {
-        return .{ .context = capture, .publish = publish };
-    }
-
-    fn publish(context: *anyopaque, event: workspace_mod.TabRenamed) void {
-        const capture: *EventCapture = @ptrCast(@alignCast(context));
-        const committed_label = capture.reader.tabLabel(event.location) orelse return;
-
-        capture.count += 1;
-        capture.last = event;
-        capture.observed_committed_state = std.mem.eql(u8, committed_label, event.labelSlice());
-    }
-};
+const EventCapture = @import("RenameTabEventCapture.zig");
 
 fn testingRepository(state: *workspace_mod.State) WorkspaceRepository {
     return WorkspaceRepository.init(state, std.testing.allocator);

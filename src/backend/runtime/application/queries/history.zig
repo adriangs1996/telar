@@ -3,122 +3,19 @@
 const std = @import("std");
 const history_mod = @import("../../../history/root.zig");
 
-const Query = history_mod.Query;
-const QueryOrigin = history_mod.model.QueryOrigin;
-const schema = history_mod.model.schema;
+pub const Query = history_mod.Query;
+pub const QueryOrigin = history_mod.model.QueryOrigin;
+pub const schema = history_mod.model.schema;
 
-pub const Request = struct {
-    request_id: schema.RequestId,
-    origin: QueryOrigin,
-    text: []const u8,
-    scope: history_mod.model.Scope,
-    scope_value: []const u8,
-    pane_id: schema.PaneId,
-    failed_only: bool,
-    author: schema.HistoryAuthorFilter,
-    match: schema.HistoryMatch,
-    distinct: bool,
-    limit: u16,
-    offset: u32 = 0,
-    snapshot_id: u64 = 0,
-    entry_id: u64 = 0,
-};
+pub const Request = @import("HistoryRequest.zig");
 
-pub const ServicePort = struct {
-    context: *anyopaque,
-    submit_fn: *const fn (*anyopaque, Query) bool,
+pub const ServicePort = @import("ServicePort.zig");
 
-    /// Transfers an owned query to the bounded history service. A false result
-    /// means the service rejected it and retains responsibility for cleanup.
-    ///
-    /// ```zig
-    /// const queued = service.submit(query);
-    /// ```
-    pub fn submit(service: ServicePort, query: Query) bool {
-        return service.submit_fn(service.context, query);
-    }
-};
+pub const Executor = @import("HistoryExecutor.zig");
 
-pub const Executor = struct {
-    context: *anyopaque,
-    execute_fn: *const fn (*anyopaque, Request) anyerror!void,
+pub const Handler = @import("HistoryHandler.zig");
 
-    /// Validates, owns, and submits one application-level history request.
-    ///
-    /// ```zig
-    /// try executor.execute(request);
-    /// ```
-    pub fn execute(executor: Executor, request: Request) !void {
-        return executor.execute_fn(executor.context, request);
-    }
-};
-
-pub const Handler = struct {
-    service: ServicePort,
-
-    /// Copies all borrowed request bytes before attempting bounded submission.
-    /// Invalid values and service backpressure have distinct application
-    /// errors; the eventual history result is handled asynchronously.
-    ///
-    /// ```zig
-    /// try handler.execute(request);
-    /// ```
-    pub fn execute(handler: *Handler, request: Request) !void {
-        const query = Query.init(.{
-            .request_id = request.request_id,
-            .origin = request.origin,
-            .text = request.text,
-            .scope = request.scope,
-            .scope_value = request.scope_value,
-            .pane_id = request.pane_id,
-            .failed_only = request.failed_only,
-            .author = request.author,
-            .match = request.match,
-            .distinct = request.distinct,
-            .limit = request.limit,
-            .offset = request.offset,
-            .snapshot_id = request.snapshot_id,
-            .entry_id = request.entry_id,
-        }) catch {
-            return error.InvalidHistoryQuery;
-        };
-
-        if (!handler.service.submit(query)) {
-            return error.HistoryQueueFull;
-        }
-    }
-
-    /// Exposes this handler through the query interface used by controllers.
-    ///
-    /// ```zig
-    /// const executor = handler.executor();
-    /// ```
-    pub fn executor(handler: *Handler) Executor {
-        return .{ .context = handler, .execute_fn = executeErased };
-    }
-
-    fn executeErased(context: *anyopaque, request: Request) !void {
-        const handler: *Handler = @ptrCast(@alignCast(context));
-        return handler.execute(request);
-    }
-};
-
-const SubmissionCapture = struct {
-    accepted: bool = true,
-    calls: usize = 0,
-    query: Query = undefined,
-
-    fn port(capture: *SubmissionCapture) ServicePort {
-        return .{ .context = capture, .submit_fn = submit };
-    }
-
-    fn submit(context: *anyopaque, query: Query) bool {
-        const capture: *SubmissionCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.query = query;
-        return capture.accepted;
-    }
-};
+const SubmissionCapture = @import("SubmissionCapture.zig");
 
 fn testingRequest() Request {
     return .{

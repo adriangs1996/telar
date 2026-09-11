@@ -4,92 +4,20 @@ const std = @import("std");
 const core = @import("telar-core");
 const workspace_mod = @import("../../../workspace/root.zig");
 
-const schema = core.schema;
-const WorkspaceRepository = workspace_mod.Repository;
+pub const schema = core.schema;
+pub const WorkspaceRepository = workspace_mod.Repository;
 
-pub const MoveTab = struct {
-    location: schema.TabLocation,
-    direction: schema.TabMoveDirection,
-};
+pub const MoveTab = @import("MoveTab.zig");
 
 pub const MoveTabResult = workspace_mod.TabMoved;
 
-pub const EventPublisher = struct {
-    context: *anyopaque,
-    publish: *const fn (*anyopaque, workspace_mod.TabMoved) void,
-};
+pub const EventPublisher = @import("MoveTabEventPublisher.zig");
 
-pub const MoveTabExecutor = struct {
-    context: *anyopaque,
-    execute_fn: *const fn (*anyopaque, MoveTab) anyerror!MoveTabResult,
+pub const MoveTabExecutor = @import("MoveTabExecutor.zig");
 
-    /// Executes a tab move through the bound application handler.
-    ///
-    /// ```zig
-    /// const moved = try executor.execute(.{ .location = location, .direction = .next });
-    /// ```
-    pub fn execute(executor: MoveTabExecutor, command: MoveTab) !MoveTabResult {
-        return executor.execute_fn(executor.context, command);
-    }
-};
+pub const MoveTabHandler = @import("MoveTabHandler.zig");
 
-pub const MoveTabHandler = struct {
-    workspaces: *WorkspaceRepository,
-    events: EventPublisher,
-
-    /// Commits a move through the workspace aggregate and then publishes its
-    /// canonical position. Failed commands have no observable effects.
-    ///
-    /// ```zig
-    /// const moved = try handler.execute(.{ .location = location, .direction = .previous });
-    /// ```
-    pub fn execute(handler: *MoveTabHandler, command: MoveTab) !MoveTabResult {
-        const moved = try workspace_mod.moveTab(
-            handler.workspaces,
-            command.location,
-            command.direction,
-        );
-
-        handler.events.publish(handler.events.context, moved);
-        return moved;
-    }
-
-    /// Exposes this handler through the command interface consumed by a
-    /// request-scoped controller.
-    ///
-    /// ```zig
-    /// const executor = handler.executor();
-    /// ```
-    pub fn executor(handler: *MoveTabHandler) MoveTabExecutor {
-        return .{ .context = handler, .execute_fn = executeErased };
-    }
-
-    fn executeErased(context: *anyopaque, command: MoveTab) !MoveTabResult {
-        const handler: *MoveTabHandler = @ptrCast(@alignCast(context));
-        return handler.execute(command);
-    }
-};
-
-const EventCapture = struct {
-    reader: workspace_mod.Reader,
-    count: usize = 0,
-    last: ?workspace_mod.TabMoved = null,
-    observed_committed_position: bool = false,
-
-    fn publisher(capture: *EventCapture) EventPublisher {
-        return .{ .context = capture, .publish = publish };
-    }
-
-    fn publish(context: *anyopaque, event: workspace_mod.TabMoved) void {
-        const capture: *EventCapture = @ptrCast(@alignCast(context));
-        var storage: [workspace_mod.max_tabs_per_workspace]schema.TabDescriptor = undefined;
-        const snapshot = capture.reader.descriptors(event.location.workspace, &storage) orelse return;
-
-        capture.count += 1;
-        capture.last = event;
-        capture.observed_committed_position = snapshot.tabs[event.position].tab_id == event.location.tab_id;
-    }
-};
+const EventCapture = @import("MoveTabEventCapture.zig");
 
 fn testingRepository(state: *workspace_mod.State) WorkspaceRepository {
     return WorkspaceRepository.init(state, std.testing.allocator);

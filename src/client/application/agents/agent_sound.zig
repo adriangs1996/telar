@@ -5,61 +5,20 @@ const core = @import("telar-core");
 const agents = @import("../../root.zig").agents;
 const client_model = @import("../../root.zig").model;
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-pub const Command = struct {
-    key: agents.AgentKey,
-    sound: schema.AgentSound,
-};
+pub const Command = @import("Command.zig");
 
-pub const Effects = struct {
-    context: *anyopaque,
-    schedule: *const fn (*anyopaque, schema.AgentSound) anyerror!void,
-};
+pub const Effects = @import("AgentSoundEffects.zig");
 
 pub const Outcome = enum {
     accepted,
     stale,
 };
 
-pub const HandleAgentSoundHandler = struct {
-    model: *const client_model.Model,
-    effects: Effects,
+pub const HandleAgentSoundHandler = @import("HandleAgentSoundHandler.zig");
 
-    /// Applies local sound policy only for an exact current agent identity.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *HandleAgentSoundHandler, command: Command) !Outcome {
-        if (!handler.model.knowsAgent(command.key)) {
-            return .stale;
-        }
-
-        try handler.effects.schedule(handler.effects.context, command.sound);
-        return .accepted;
-    }
-};
-
-const EffectsCapture = struct {
-    calls: usize = 0,
-    sound: ?schema.AgentSound = null,
-    fail: bool = false,
-
-    fn port(capture: *EffectsCapture) Effects {
-        return .{ .context = capture, .schedule = schedule };
-    }
-
-    fn schedule(context: *anyopaque, sound: schema.AgentSound) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.sound = sound;
-
-        if (capture.fail) {
-            return error.SoundScheduleFailed;
-        }
-    }
-};
+const EffectsCapture = @import("EffectsCapture.zig");
 
 fn agentInput(key: agents.AgentKey) agents.AgentInput {
     return .{

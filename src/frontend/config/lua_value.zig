@@ -34,10 +34,7 @@ pub fn integer(state: *lua.lua_State, index: c_int) ?lua.lua_Integer {
     return if (is_number == 1) value else null;
 }
 
-pub const RequiredField = struct {
-    index: c_int,
-    name: [*:0]const u8,
-};
+pub const RequiredField = @import("RequiredField.zig");
 
 pub fn requiredStringField(state: *lua.lua_State, input: RequiredField, diagnostic: *Diagnostic) ![]const u8 {
     const absolute = lua.lua_absindex(state, input.index);
@@ -63,11 +60,7 @@ pub fn requiredIntegerField(state: *lua.lua_State, input: RequiredField, diagnos
     return value;
 }
 
-pub const OptionalString = struct {
-    index: c_int,
-    name: [*:0]const u8,
-    default: []const u8,
-};
+pub const OptionalString = @import("OptionalString.zig");
 
 pub fn optionalStringField(state: *lua.lua_State, input: OptionalString, diagnostic: *Diagnostic) ![]const u8 {
     const absolute = lua.lua_absindex(state, input.index);
@@ -83,11 +76,7 @@ pub fn optionalStringField(state: *lua.lua_State, input: OptionalString, diagnos
     };
 }
 
-pub const OptionalInteger = struct {
-    index: c_int,
-    name: [*:0]const u8,
-    default: lua.lua_Integer,
-};
+pub const OptionalInteger = @import("OptionalInteger.zig");
 
 pub fn optionalIntegerField(state: *lua.lua_State, input: OptionalInteger, diagnostic: *Diagnostic) !lua.lua_Integer {
     const absolute = lua.lua_absindex(state, input.index);
@@ -123,11 +112,7 @@ pub fn optionalPositiveId(state: *lua.lua_State, input: RequiredField, diagnosti
     return @intCast(value);
 }
 
-pub const OptionalMebibytes = struct {
-    index: c_int,
-    name: [*:0]const u8,
-    default: usize,
-};
+pub const OptionalMebibytes = @import("OptionalMebibytes.zig");
 
 pub fn optionalMebibytes(state: *lua.lua_State, input: OptionalMebibytes, diagnostic: *Diagnostic) !usize {
     const absolute = lua.lua_absindex(state, input.index);
@@ -149,13 +134,7 @@ pub fn optionalMebibytes(state: *lua.lua_State, input: OptionalMebibytes, diagno
     return @as(usize, @intCast(value)) * 1024 * 1024;
 }
 
-pub const OptionalMilliseconds = struct {
-    index: c_int,
-    name: [*:0]const u8,
-    default_ns: u64,
-    minimum_ms: u64,
-    maximum_ms: u64,
-};
+pub const OptionalMilliseconds = @import("OptionalMilliseconds.zig");
 
 pub fn optionalMilliseconds(state: *lua.lua_State, input: OptionalMilliseconds, diagnostic: *Diagnostic) !u64 {
     const absolute = lua.lua_absindex(state, input.index);
@@ -180,11 +159,7 @@ pub fn optionalMilliseconds(state: *lua.lua_State, input: OptionalMilliseconds, 
     return @as(u64, @intCast(value)) * std.time.ns_per_ms;
 }
 
-pub const Fields = struct {
-    index: c_int,
-    allowed: []const []const u8,
-    path: []const u8,
-};
+pub const Fields = @import("Fields.zig");
 
 pub fn ensureOnlyFields(state: *lua.lua_State, fields: Fields, diagnostic: *Diagnostic) !void {
     const absolute = lua.lua_absindex(state, fields.index);
@@ -209,11 +184,7 @@ pub fn ensureOnlyFields(state: *lua.lua_State, fields: Fields, diagnostic: *Diag
     }
 }
 
-pub const Array = struct {
-    index: c_int,
-    count: usize,
-    path: []const u8,
-};
+pub const Array = @import("Array.zig");
 
 pub fn ensureArrayOnly(state: *lua.lua_State, input: Array, diagnostic: *Diagnostic) !void {
     const absolute = lua.lua_absindex(state, input.index);

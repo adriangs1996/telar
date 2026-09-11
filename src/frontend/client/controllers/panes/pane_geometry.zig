@@ -7,7 +7,7 @@ const client_model = @import("telar-client").model;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const tab_snapshots = @import("../tabs/tab_snapshots.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const pane_geometry_delivery = panes_application.pane_geometry_delivery;
 const resize_pane = panes_application.resize_pane;
 const multiplexer = workspace_capability.multiplexer;

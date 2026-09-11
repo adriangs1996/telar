@@ -3,38 +3,15 @@
 const std = @import("std");
 const core = @import("telar-core");
 const theme = @import("../ui/root.zig").theme;
-const ui = core.ui;
-const schema = core.schema;
+pub const ui = core.ui;
+pub const schema = core.schema;
 const pane_labels = @import("../presentation/root.zig").pane_labels;
 
-pub const Input = struct {
-    area: ui.Rect,
-    names: []const []const u8,
-    focused: usize,
-    palette: *const theme.Palette,
-};
+pub const Input = @import("Input.zig");
 
-pub const Result = struct {
-    width: u16 = 0,
-    plan: pane_labels.Plan = .{},
-};
+pub const Result = @import("Result.zig");
 
-const Label = struct {
-    buffer: [schema.max_foreground_name_bytes + 32]u8 = undefined,
-    len: usize,
-    width: u16,
-
-    fn init(name: []const u8, index: usize) Label {
-        var label: Label = .{ .len = 0, .width = 0 };
-        const text = std.fmt.bufPrint(&label.buffer, " {d} {s} ", .{
-            index + 1,
-            if (name.len == 0) "shell" else name,
-        }) catch unreachable;
-        label.len = text.len;
-        label.width = ui.measure(text);
-        return label;
-    }
-};
+const Label = @import("Label.zig");
 
 /// Shrinks labels before hiding panes. The active label stays visible and
 /// earlier labels join it while they fit. Reports the occupied border width

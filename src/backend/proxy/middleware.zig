@@ -11,7 +11,7 @@ const core = @import("telar-core");
 const dialect_mod = @import("provider/dialect.zig");
 const identity = @import("identity.zig");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
 pub const Phase = enum {
     request_started,
@@ -60,16 +60,7 @@ pub fn isIdentityContentEncoding(value: []const u8) bool {
     return found;
 }
 
-pub const Event = struct {
-    credential: identity.Credential,
-    dialect: dialect_mod.ApiDialect,
-    phase: Phase,
-    protocol: Protocol,
-    connection_id: u64,
-    stream_id: u32 = 0,
-    status_code: u16 = 0,
-    observed_at_ms: i64,
-};
+pub const Event = @import("MiddlewareEvent.zig");
 
 test "observable SSE headers require one event-stream type and identity bytes" {
     var headers: Headers = .{};
@@ -94,31 +85,11 @@ test "observable SSE headers require one event-stream type and identity bytes" {
     try std.testing.expect(!hasObservableSseBody(&missing));
 }
 
-pub const Observer = struct {
-    context: *anyopaque,
-    observe: *const fn (*anyopaque, std.Io, Event) void,
-};
+pub const Observer = @import("Observer.zig");
 
 pub const max_observers = 8;
 
-/// Immutable after the listener starts, so concurrent tunnels need no lock.
-pub const Pipeline = struct {
-    observers: [max_observers]Observer = undefined,
-    len: u8 = 0,
-
-    pub fn add(pipeline: *Pipeline, observer: Observer) !void {
-        if (pipeline.len == pipeline.observers.len) {
-            return error.TooManyProxyObservers;
-        }
-        pipeline.observers[pipeline.len] = observer;
-        pipeline.len += 1;
-    }
-
-    pub fn publish(pipeline: *const Pipeline, io: std.Io, event: Event) void {
-        for (pipeline.observers[0..pipeline.len]) |observer|
-            observer.observe(observer.context, io, event);
-    }
-};
+pub const Pipeline = @import("Pipeline.zig");
 
 pub const max_header_fields = 256;
 pub const max_header_bytes = 128 * 1024;
@@ -129,27 +100,11 @@ pub const max_effect_bytes = 8 * 1024;
 pub const HeaderKind = enum { request, response, trailers, push_promise };
 pub const Direction = enum { request, response };
 
-pub const TransformContext = struct {
-    pane_id: schema.PaneId,
-    pane_generation: u64,
-    dialect: dialect_mod.ApiDialect,
-    protocol: Protocol,
-    direction: Direction,
-    kind: HeaderKind,
-    connection_id: u64,
-    stream_id: u32,
-};
+pub const TransformContext = @import("TransformContext.zig");
 
-pub const HeaderView = struct {
-    name: []const u8,
-    value: []const u8,
-    sensitive: bool = false,
-};
+pub const HeaderView = @import("HeaderView.zig");
 
-pub const HeaderSnapshot = struct {
-    context: TransformContext,
-    fields: []const HeaderView,
-};
+pub const HeaderSnapshot = @import("HeaderSnapshot.zig");
 
 pub const Effect = union(enum) {
     remove: struct { name: []const u8 },
@@ -160,217 +115,20 @@ pub const Effect = union(enum) {
     },
 };
 
-/// Storage is owned by the callback invocation. Future worker adapters copy
-/// the completed batch before returning it to the tunnel actor.
-pub const EffectBatch = struct {
-    effects: [max_effects]Effect = undefined,
-    len: u8 = 0,
-    bytes: [max_effect_bytes]u8 = undefined,
-    bytes_len: usize = 0,
-
-    pub fn remove(batch: *EffectBatch, name: []const u8) !void {
-        const owned_name = try batch.copy(name);
-        try batch.append(.{ .remove = .{ .name = owned_name } });
-    }
-
-    /// Adds one owned header replacement to the atomic effect batch.
-    ///
-    /// ```zig
-    /// try effects.set(.{ .name = "x-telar", .value = "enabled" });
-    /// ```
-    pub fn set(batch: *EffectBatch, header: HeaderView) !void {
-        const owned_name = try batch.copy(header.name);
-        const owned_value = try batch.copy(header.value);
-        try batch.append(.{ .set = .{
-            .name = owned_name,
-            .value = owned_value,
-            .sensitive = header.sensitive,
-        } });
-    }
-
-    fn append(batch: *EffectBatch, effect: Effect) !void {
-        if (batch.len == batch.effects.len) {
-            return error.TooManyHeaderEffects;
-        }
-        batch.effects[batch.len] = effect;
-        batch.len += 1;
-    }
-
-    fn copy(batch: *EffectBatch, value: []const u8) ![]const u8 {
-        if (value.len > batch.bytes.len - batch.bytes_len) {
-            return error.HeaderEffectsTooLarge;
-        }
-        const start = batch.bytes_len;
-        @memcpy(batch.bytes[start..][0..value.len], value);
-        batch.bytes_len += value.len;
-        return batch.bytes[start..batch.bytes_len];
-    }
-};
+pub const EffectBatch = @import("EffectBatch.zig");
 
 pub const TransformStatus = enum {
     apply,
     preserve,
 };
 
-pub const Transformation = struct {
-    io: std.Io,
-    snapshot: HeaderSnapshot,
-    effects: *EffectBatch,
-};
+pub const Transformation = @import("Transformation.zig");
 
-pub const Transformer = struct {
-    context: *anyopaque,
-    transform: *const fn (*anyopaque, Transformation) TransformStatus,
-};
+pub const Transformer = @import("Transformer.zig");
 
-pub const HeaderField = struct {
-    name_start: u32,
-    name_len: u32,
-    value_start: u32,
-    value_len: u32,
-    sensitive: bool,
-};
+pub const HeaderField = @import("HeaderField.zig");
 
-/// Fixed owned header storage. Offsets remain valid when the value moves.
-pub const Headers = struct {
-    fields: [max_header_fields]HeaderField = undefined,
-    len: u16 = 0,
-    bytes: [max_header_bytes]u8 = undefined,
-    bytes_len: usize = 0,
-
-    /// Copies one validated header into bounded owned storage.
-    ///
-    /// ```zig
-    /// try headers.append(.{ .name = "content-type", .value = "text/event-stream" });
-    /// ```
-    pub fn append(headers: *Headers, header: HeaderView) !void {
-        const header_name = header.name;
-        const header_value = header.value;
-
-        try validateName(header_name);
-        try validateValue(header_value);
-        if (headers.len == headers.fields.len) {
-            return error.TooManyHeaders;
-        }
-        if (header_name.len + header_value.len > headers.bytes.len - headers.bytes_len) {
-            return error.HeadersTooLarge;
-        }
-        const name_start = headers.bytes_len;
-        @memcpy(headers.bytes[name_start..][0..header_name.len], header_name);
-        headers.bytes_len += header_name.len;
-        const value_start = headers.bytes_len;
-        @memcpy(headers.bytes[value_start..][0..header_value.len], header_value);
-        headers.bytes_len += header_value.len;
-        headers.fields[headers.len] = .{
-            .name_start = @intCast(name_start),
-            .name_len = @intCast(header_name.len),
-            .value_start = @intCast(value_start),
-            .value_len = @intCast(header_value.len),
-            .sensitive = header.sensitive or isSensitiveName(header_name),
-        };
-        headers.len += 1;
-    }
-
-    pub fn name(headers: *const Headers, field: HeaderField) []const u8 {
-        return headers.bytes[field.name_start..][0..field.name_len];
-    }
-
-    pub fn value(headers: *const Headers, field: HeaderField) []const u8 {
-        return headers.bytes[field.value_start..][0..field.value_len];
-    }
-
-    pub fn find(headers: *const Headers, wanted: []const u8) ?[]const u8 {
-        for (headers.fields[0..headers.len]) |field|
-            if (std.ascii.eqlIgnoreCase(headers.name(field), wanted))
-                return headers.value(field);
-        return null;
-    }
-
-    pub fn copyFrom(destination: *Headers, source: *const Headers) void {
-        destination.len = source.len;
-        destination.bytes_len = source.bytes_len;
-        @memcpy(
-            destination.fields[0..source.len],
-            source.fields[0..source.len],
-        );
-        @memcpy(
-            destination.bytes[0..source.bytes_len],
-            source.bytes[0..source.bytes_len],
-        );
-    }
-
-    pub fn views(headers: *const Headers, storage: *[max_header_fields]HeaderView) []const HeaderView {
-        for (headers.fields[0..headers.len], 0..) |field, index| storage[index] = .{
-            .name = headers.name(field),
-            .value = headers.value(field),
-            .sensitive = field.sensitive,
-        };
-        return storage[0..headers.len];
-    }
-
-    pub fn apply(headers: *Headers, effects: []const Effect) !void {
-        if (effects.len == 0) {
-            return;
-        }
-        var replacement: Headers = .{};
-        var inserted: [max_effects]bool = @splat(false);
-
-        for (headers.fields[0..headers.len]) |field| {
-            const field_name = headers.name(field);
-            var last_match: ?usize = null;
-            for (effects, 0..) |effect, effect_index| {
-                if (std.ascii.eqlIgnoreCase(field_name, effectName(effect))) {
-                    last_match = effect_index;
-                }
-            }
-            if (last_match) |effect_index| {
-                switch (effects[effect_index]) {
-                    .remove => {},
-                    .set => |set_effect| if (!inserted[effect_index]) {
-                        try replacement.append(.{
-                            .name = set_effect.name,
-                            .value = set_effect.value,
-                            .sensitive = set_effect.sensitive,
-                        });
-                        inserted[effect_index] = true;
-                    },
-                }
-            } else {
-                try replacement.append(.{
-                    .name = field_name,
-                    .value = headers.value(field),
-                    .sensitive = field.sensitive,
-                });
-            }
-        }
-
-        // New pseudo-headers must precede regular headers. Effects that replace
-        // an existing pseudo-header were inserted in its original position.
-        for (effects, 0..) |effect, effect_index| switch (effect) {
-            .remove => {},
-            .set => |set_effect| if (!inserted[effect_index]) {
-                var superseded = false;
-                for (effects[effect_index + 1 ..]) |later|
-                    if (std.ascii.eqlIgnoreCase(set_effect.name, effectName(later))) {
-                        superseded = true;
-                        break;
-                    };
-                if (superseded) {
-                    continue;
-                }
-                if (set_effect.name.len != 0 and set_effect.name[0] == ':') {
-                    return error.CannotInsertPseudoHeader;
-                }
-                try replacement.append(.{
-                    .name = set_effect.name,
-                    .value = set_effect.value,
-                    .sensitive = set_effect.sensitive,
-                });
-            },
-        };
-        headers.copyFrom(&replacement);
-    }
-};
+pub const Headers = @import("Headers.zig");
 
 /// Returns whether decoded headers describe directly observable SSE bytes.
 ///
@@ -405,67 +163,16 @@ pub fn hasObservableSseBody(headers: *const Headers) bool {
     return content_type_seen and event_stream;
 }
 
-fn effectName(effect: Effect) []const u8 {
+pub fn effectName(effect: Effect) []const u8 {
     return switch (effect) {
         .remove => |remove_effect| remove_effect.name,
         .set => |set_effect| set_effect.name,
     };
 }
 
-/// Immutable after listener startup. A callback failure returns `preserve`, so
-/// one extension cannot partially apply a batch or corrupt later middleware.
-pub const TransformPipeline = struct {
-    transformers: [max_transformers]Transformer = undefined,
-    len: u8 = 0,
+pub const TransformPipeline = @import("TransformPipeline.zig");
 
-    pub fn add(pipeline: *TransformPipeline, transformer: Transformer) !void {
-        if (pipeline.len == pipeline.transformers.len) {
-            return error.TooManyProxyTransformers;
-        }
-        pipeline.transformers[pipeline.len] = transformer;
-        pipeline.len += 1;
-    }
-
-    pub const Request = struct {
-        io: std.Io,
-        context: TransformContext,
-        headers: *Headers,
-    };
-
-    /// Applies every configured transformer atomically to one header block.
-    ///
-    /// ```zig
-    /// const changed = pipeline.apply(.{ .io = io, .context = context, .headers = &headers });
-    /// ```
-    pub fn apply(pipeline: *const TransformPipeline, request: Request) bool {
-        const headers = request.headers;
-
-        var changed = false;
-        for (pipeline.transformers[0..pipeline.len]) |transformer| {
-            var view_storage: [max_header_fields]HeaderView = undefined;
-            var effects: EffectBatch = .{};
-            const status = transformer.transform(
-                transformer.context,
-                .{
-                    .io = request.io,
-                    .snapshot = .{ .context = request.context, .fields = headers.views(&view_storage) },
-                    .effects = &effects,
-                },
-            );
-            if (status == .preserve or effects.len == 0) {
-                continue;
-            }
-            var candidate: Headers = undefined;
-            candidate.copyFrom(headers);
-            candidate.apply(effects.effects[0..effects.len]) catch continue;
-            headers.copyFrom(&candidate);
-            changed = true;
-        }
-        return changed;
-    }
-};
-
-fn validateName(name: []const u8) !void {
+pub fn validateName(name: []const u8) !void {
     if (name.len == 0) {
         return error.InvalidHeaderName;
     }
@@ -484,7 +191,7 @@ fn validateName(name: []const u8) !void {
     }
 }
 
-fn validateValue(value: []const u8) !void {
+pub fn validateValue(value: []const u8) !void {
     for (value) |byte| if ((byte < 0x20 and byte != '\t') or byte == 0x7f)
         return error.InvalidHeaderValue;
 }

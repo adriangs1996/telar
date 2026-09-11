@@ -9,7 +9,7 @@ const notifications = @import("telar-client").notifications;
 const notification_flow = @import("../notifications/notifications.zig");
 const sidebar_animations = @import("../notifications/sidebar_animations.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const agent_snapshot = agents_application.agent_snapshot;
 const agent_snapshot_delivery = agents_application.agent_snapshot_delivery;
 const schema = core.schema;

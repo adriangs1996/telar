@@ -8,19 +8,12 @@ const workspace = @import("../../workspace/root.zig");
 const response_queue = @import("response_queue.zig");
 
 const schema = core.schema;
-const PaneStore = pane_mod.PaneStore;
+pub const PaneStore = pane_mod.PaneStore;
 const PendingResponse = response_queue.PendingResponse;
 const max_panes = pane_mod.max_panes;
 const max_tabs_per_workspace = workspace.max_tabs_per_workspace;
 
-pub const EncodeContext = struct {
-    buffer: []u8,
-    panes: *const PaneStore,
-    workspaces: workspace.Reader,
-    history_result: *?*history.model.QueryResult,
-    history_output: *?*history.model.OutputResult,
-    history_stats: *?*history.model.StatsResult,
-};
+pub const EncodeContext = @import("EncodeContext.zig");
 
 /// Encodes one queued response against the *current* stores. A response can
 /// outlive what it describes - the workspace of a queued snapshot may close

@@ -11,7 +11,7 @@ const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const connection_outbox = @import("telar-client").connection.outbox;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const schema = core.schema;
 const history_application = @import("telar-client").application.input.history_browser;
 const inspection = @import("../../presentation/root.zig").history_inspection;
@@ -248,10 +248,7 @@ pub fn pasteSelection(client: *Client, request: PasteRequest) !void {
     _ = try pane_inputs.historyPaste(client, .{ .text = command, .run = request.run });
 }
 
-pub const PasteRequest = struct {
-    selection: u16,
-    run: bool,
-};
+pub const PasteRequest = @import("PasteRequest.zig");
 
 /// Sends one exact-entry deletion for the palette's selected row. The
 /// runtime answers with `history_pruned`, which requeries the palette so

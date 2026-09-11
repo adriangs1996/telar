@@ -11,19 +11,7 @@ const telemetry_mod = @import("../observability/root.zig").telemetry;
 const diagnostics = core.diagnostics;
 const schema = core.schema;
 
-const Submission = struct {
-    query: ?history_mod.Query = null,
-
-    fn port(submission: *Submission) history_query.ServicePort {
-        return .{ .context = submission, .submit_fn = submit };
-    }
-
-    fn submit(context: *anyopaque, query: history_mod.Query) bool {
-        const submission: *Submission = @ptrCast(@alignCast(context));
-        submission.query = query;
-        return true;
-    }
-};
+const Submission = @import("Submission.zig");
 
 test "borrowed protocol bytes become one owned asynchronous history query" {
     var submission: Submission = .{};

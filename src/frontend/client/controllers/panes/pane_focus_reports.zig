@@ -2,7 +2,7 @@
 
 const panes_application = @import("telar-client").application.panes;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const pane_focus_reporting = panes_application.pane_focus_reporting;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 

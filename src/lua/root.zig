@@ -1,7 +1,7 @@
 //! Shared bounded Lua runtime used by disposable frontend and backend workers.
 
 pub const sandbox = @import("sandbox.zig");
-pub const vm = @import("vm.zig");
+pub const vm = @import("vm_support.zig");
 
 pub const Limits = vm.Limits;
 pub const Meter = vm.Meter;

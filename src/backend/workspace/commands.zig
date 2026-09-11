@@ -3,8 +3,8 @@
 const std = @import("std");
 const core = @import("telar-core");
 const events = @import("events.zig");
-const repository_mod = @import("repository.zig");
-const state_mod = @import("state.zig");
+const repository_mod = @import("repository_support.zig");
+const state_mod = @import("state_support.zig");
 
 const schema = core.schema;
 const Repository = repository_mod.Repository;

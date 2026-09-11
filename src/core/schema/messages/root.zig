@@ -9,7 +9,7 @@
 const std = @import("std");
 const wire = @import("../wire.zig");
 const codec = @import("../codec.zig");
-const frame = @import("../frame.zig");
+const frame = @import("../frame_support.zig");
 const graphics_bodies = @import("../graphics.zig");
 const types = @import("../types.zig");
 
@@ -22,7 +22,7 @@ pub const tab = @import("tab.zig");
 pub const history = @import("history.zig");
 pub const suggestion = @import("suggestion.zig");
 pub const agent = @import("agent.zig");
-pub const notification = @import("notification.zig");
+pub const notification = @import("notification_support.zig");
 pub const layout = @import("layout.zig");
 pub const runtime = @import("runtime.zig");
 pub const graphics = @import("graphics.zig");

@@ -6,31 +6,20 @@ const input_capability = @import("../../input/root.zig");
 const Mouse = @import("../../input/root.zig").Mouse;
 const workspace_capability = @import("../../workspace/root.zig");
 
-const mouse_protocol = input_capability.mouse_protocol;
-const multiplexer = workspace_capability.multiplexer;
-const schema = core.schema;
+pub const mouse_protocol = input_capability.mouse_protocol;
+pub const multiplexer = workspace_capability.multiplexer;
+pub const schema = core.schema;
 
-pub const PointerCommand = struct {
-    event: Mouse,
-    exterior_pixels: bool,
-    cell_width_px: u16,
-    cell_height_px: u16,
-};
+pub const PointerCommand = @import("PointerCommand.zig");
 
 pub const Command = union(enum) {
     pointer: PointerCommand,
     focused_scroll: input_capability.action.ScrollDirection,
 };
 
-pub const ScrollEffect = struct {
-    pane_id: schema.PaneId,
-    delta: i32,
-};
+pub const ScrollEffect = @import("ScrollEffect.zig");
 
-pub const ReportEffect = struct {
-    plan: multiplexer.PaneMousePlan,
-    command: PointerCommand,
-};
+pub const ReportEffect = @import("ReportEffect.zig");
 
 pub const Effect = union(enum) {
     viewport: ScrollEffect,
@@ -47,117 +36,15 @@ pub const Outcome = enum {
     selection_started,
 };
 
-pub const Resolved = struct {
-    plan: multiplexer.PaneMousePlan,
-    pointer: PointerCommand,
-};
+pub const Resolved = @import("Resolved.zig");
 
-pub const Plans = struct {
-    context: *anyopaque,
-    resolve: *const fn (*anyopaque, Command) ?Resolved,
-};
+pub const Plans = @import("Plans.zig");
 
-pub const Effects = struct {
-    context: *anyopaque,
-    apply: *const fn (*anyopaque, Effect) anyerror!void,
-};
+pub const Effects = @import("PaneMouseEffects.zig");
 
-pub const PaneMouseHandler = struct {
-    plans: Plans,
-    effects: Effects,
+pub const PaneMouseHandler = @import("PaneMouseHandler.zig");
 
-    /// Resolves one pane snapshot, then selects one mouse-selection,
-    /// viewport, alternate-scroll or child mouse-report effect.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(command);
-    /// ```
-    pub fn execute(self: *PaneMouseHandler, command: Command) !Outcome {
-        const resolved = self.plans.resolve(self.plans.context, command) orelse return .ignored;
-        const plan = resolved.plan;
-        const pointer = resolved.pointer;
-
-        const forced_selection = pointer.event.button & 4 != 0;
-        if (pointer.event.kind == .press and pointer.event.button & 0b11 == 0 and
-            (plan.protocol.tracking == .none or forced_selection))
-        {
-            try self.effects.apply(self.effects.context, .{ .selection = .{
-                .plan = plan,
-                .command = pointer,
-            } });
-            return .selection_started;
-        }
-
-        const wheel_delta: ?i32 = switch (pointer.event.kind) {
-            .scroll_up => -3,
-            .scroll_down => 3,
-            else => null,
-        };
-
-        const tracked = plan.protocol.sgr and mouse_protocol.tracked(plan.protocol.tracking, pointer.event.kind);
-
-        if (wheel_delta) |delta| {
-            if (!tracked) {
-                if (plan.alternate_scroll and plan.at_bottom) {
-                    try self.effects.apply(self.effects.context, .{ .alternate_scroll = .{
-                        .pane_id = plan.pane_id,
-                        .delta = delta,
-                    } });
-                    return .alternate_scroll_selected;
-                }
-
-                try self.effects.apply(self.effects.context, .{ .viewport = .{
-                    .pane_id = plan.pane_id,
-                    .delta = delta,
-                } });
-                return .viewport_selected;
-            }
-        }
-
-        if (!tracked) {
-            return .ignored;
-        }
-
-        try self.effects.apply(self.effects.context, .{ .report = .{
-            .plan = plan,
-            .command = pointer,
-        } });
-        return .report_selected;
-    }
-};
-
-const Capture = struct {
-    resolved: ?Resolved = null,
-    received: ?Command = null,
-    effect: ?Effect = null,
-    effect_count: usize = 0,
-    fail: bool = false,
-
-    fn plans(capture: *Capture) Plans {
-        return .{ .context = capture, .resolve = resolve };
-    }
-
-    fn effects(capture: *Capture) Effects {
-        return .{ .context = capture, .apply = apply };
-    }
-
-    fn resolve(raw_context: *anyopaque, command: Command) ?Resolved {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.received = command;
-
-        return capture.resolved;
-    }
-
-    fn apply(raw_context: *anyopaque, effect: Effect) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.effect = effect;
-        capture.effect_count += 1;
-
-        if (capture.fail) {
-            return error.PaneMouseEffectFailed;
-        }
-    }
-};
+const Capture = @import("PaneMouseCapture.zig");
 
 fn testingPlan() multiplexer.PaneMousePlan {
     return .{

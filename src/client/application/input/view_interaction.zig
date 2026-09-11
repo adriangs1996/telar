@@ -23,124 +23,36 @@ pub const Intent = union(enum) {
     attachment_dismiss: attachments.Id,
 };
 
-pub const Command = struct {
-    intent: Intent = .none,
-    layout_changed: bool = false,
-    consumed: bool = false,
-};
+pub const Command = @import("ViewInteractionCommand.zig");
 
-pub const Outcome = struct {
-    consume_pane_input: bool,
-};
+pub const Outcome = @import("ViewInteractionOutcome.zig");
 
-pub const IntentOutcome = struct {
-    layout_changed: bool = false,
-};
+pub const IntentOutcome = @import("IntentOutcome.zig");
 
-pub const Effects = struct {
-    context: *anyopaque,
-    apply_intent: *const fn (*anyopaque, Intent) anyerror!IntentOutcome,
-    invalidate_graphics_placements: *const fn (*anyopaque) void,
-    offer_pane_geometry: *const fn (*anyopaque) anyerror!void,
-};
+pub const Effects = @import("ViewInteractionEffects.zig");
 
-pub const DispatchViewInteractionHandler = struct {
-    effects: Effects,
+pub const DispatchViewInteractionHandler = @import("DispatchViewInteractionHandler.zig");
 
-    /// Applies the single semantic intent before ordered layout delivery, then
-    /// returns only the routing decision needed by host input.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *DispatchViewInteractionHandler, command: Command) !Outcome {
-        var layout_changed = command.layout_changed;
-        switch (command.intent) {
-            .none => {},
-            else => {
-                const applied = try handler.effects.apply_intent(handler.effects.context, command.intent);
-                layout_changed = layout_changed or applied.layout_changed;
-            },
-        }
-
-        if (layout_changed) {
-            handler.effects.invalidate_graphics_placements(handler.effects.context);
-            try handler.effects.offer_pane_geometry(handler.effects.context);
-        }
-
-        return .{
-            .consume_pane_input = command.consumed or capturesPaneInput(command.intent),
-        };
-    }
-};
-
-fn capturesPaneInput(intent: Intent) bool {
+pub fn capturesPaneInput(intent: Intent) bool {
     return switch (intent) {
         .select_tab, .focus_agent => true,
         else => false,
     };
 }
 
-const Event = union(enum) {
+pub const Event = union(enum) {
     intent: Intent,
     invalidate_graphics_placements,
     offer_pane_geometry,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     intent,
     pane_geometry,
 };
 
-const Capture = struct {
-    events: [3]Event = undefined,
-    count: usize = 0,
-    failure: Failure = .none,
-
-    fn effects(capture: *Capture) Effects {
-        return .{
-            .context = capture,
-            .apply_intent = applyIntent,
-            .invalidate_graphics_placements = invalidateGraphicsPlacements,
-            .offer_pane_geometry = offerPaneGeometry,
-        };
-    }
-
-    fn record(capture: *Capture, event: Event) void {
-        capture.events[capture.count] = event;
-        capture.count += 1;
-    }
-
-    fn applyIntent(context: *anyopaque, intent: Intent) !IntentOutcome {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.record(.{ .intent = intent });
-
-        if (capture.failure == .intent) {
-            return error.ViewIntentFailed;
-        }
-
-        return .{ .layout_changed = switch (intent) {
-            .attachment_dismiss => true,
-            else => false,
-        } };
-    }
-
-    fn invalidateGraphicsPlacements(context: *anyopaque) void {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-
-        capture.record(.invalidate_graphics_placements);
-    }
-
-    fn offerPaneGeometry(context: *anyopaque) !void {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.record(.offer_pane_geometry);
-
-        if (capture.failure == .pane_geometry) {
-            return error.PaneGeometryFailed;
-        }
-    }
-};
+const Capture = @import("ViewInteractionCapture.zig");
 
 test "DispatchViewInteractionHandler orders intent invalidation and pane geometry" {
     const key: agents.AgentKey = .{

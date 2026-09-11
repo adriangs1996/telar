@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 
-const schema = core.schema;
+pub const schema = core.schema;
 
 pub const Command = enum {
     sync,
@@ -16,123 +16,22 @@ pub const Direction = enum {
     focus_in,
 };
 
-pub const Delivery = struct {
-    pane_id: schema.PaneId,
-    direction: Direction,
-};
+pub const Delivery = @import("Delivery.zig");
 
-pub const Effects = struct {
-    context: *anyopaque,
-    deliver: *const fn (*anyopaque, Delivery) anyerror!void,
-};
+pub const Effects = @import("PaneFocusReportingEffects.zig");
 
 pub const Outcome = enum {
     applied,
     unchanged,
 };
 
-pub const PaneFocusReportingHandler = struct {
-    model: *client_model.Model,
-    effects: Effects,
+pub const PaneFocusReportingHandler = @import("PaneFocusReportingHandler.zig");
 
-    /// Commits one reporting transition before emitting focus-out and
-    /// focus-in in protocol order.
-    ///
-    /// ```zig
-    /// _ = try handler.execute(.sync);
-    /// ```
-    pub fn execute(handler: *PaneFocusReportingHandler, command: Command) !Outcome {
-        const transition = switch (command) {
-            .sync => handler.model.syncReportedPaneFocus(),
-            .clear => handler.model.clearReportedPaneFocus(),
-        } orelse return .unchanged;
+pub const RetireReportedPaneFocusHandler = @import("RetireReportedPaneFocusHandler.zig");
 
-        if (transition.focus_out) |pane_id| {
-            try handler.effects.deliver(handler.effects.context, .{
-                .pane_id = pane_id,
-                .direction = .focus_out,
-            });
-        }
+const TestingModel = @import("PaneFocusReportingTestingModel.zig");
 
-        if (transition.focus_in) |pane_id| {
-            try handler.effects.deliver(handler.effects.context, .{
-                .pane_id = pane_id,
-                .direction = .focus_in,
-            });
-        }
-
-        return .applied;
-    }
-};
-
-pub const RetireReportedPaneFocusHandler = struct {
-    model: *client_model.Model,
-
-    /// Forgets focus reporting after a canonical transition invalidates its
-    /// owner. This use case has no delivery port and cannot emit focus-out.
-    ///
-    /// ```zig
-    /// _ = handler.execute();
-    /// ```
-    pub fn execute(handler: *RetireReportedPaneFocusHandler) Outcome {
-        return if (handler.model.forgetReportedPaneFocus()) .applied else .unchanged;
-    }
-};
-
-const TestingModel = struct {
-    model: *client_model.Model,
-    first: schema.PaneId,
-    second: schema.PaneId,
-
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const location: schema.TabLocation = .{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(1),
-        };
-        const first: schema.PaneId = @enumFromInt(1);
-        const second: schema.PaneId = @enumFromInt(2);
-        try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
-        try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = .{ .w = 80, .h = 24 } });
-        try std.testing.expect(model.workspace.active().?.model.focusPane(first));
-
-        return .{ .model = model, .first = first, .second = second };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
-
-const Capture = struct {
-    model: *const client_model.Model,
-    expected: ?client_model.ReportedPaneFocus,
-    deliveries: [4]Delivery = undefined,
-    delivery_count: usize = 0,
-    all_observed_commit: bool = true,
-    fail: bool = false,
-
-    fn port(capture: *Capture) Effects {
-        return .{ .context = capture, .deliver = deliver };
-    }
-
-    fn deliver(raw_context: *anyopaque, delivery: Delivery) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.all_observed_commit = capture.all_observed_commit and
-            std.meta.eql(capture.expected, capture.model.reportedPaneFocus());
-        capture.deliveries[capture.delivery_count] = delivery;
-        capture.delivery_count += 1;
-
-        if (capture.fail) {
-            return error.FocusReportFailed;
-        }
-    }
-};
+const Capture = @import("PaneFocusReportingCapture.zig");
 
 test "PaneFocusReportingHandler commits before ordered focus reports" {
     var testing = try TestingModel.init();

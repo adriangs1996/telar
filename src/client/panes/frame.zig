@@ -4,10 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const schema = core.schema;
 
-pub const Applied = struct {
-    spans: u64 = 0,
-    cells: u64 = 0,
-};
+pub const Applied = @import("Applied.zig");
 
 /// Applies a frame validated by schema.decodeServer. Pane owns base-frame
 /// admission; this function owns only cell replacement and snapshot resizing.

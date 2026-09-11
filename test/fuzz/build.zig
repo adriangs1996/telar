@@ -2,22 +2,14 @@ const std = @import("std");
 const builtin = @import("builtin");
 const afl = @import("afl");
 
-const Seed = struct {
-    name: []const u8,
-    bytes: []const u8,
-};
+const Seed = @import("Seed.zig");
 
-const ModuleKind = enum {
+pub const ModuleKind = enum {
     schema,
     escape,
 };
 
-const Fuzzer = struct {
-    name: []const u8,
-    source: []const u8,
-    module: ModuleKind,
-    seeds: []const Seed,
-};
+const Fuzzer = @import("Fuzzer.zig");
 
 const client_seeds = [_]Seed{
     .{ .name = "empty", .bytes = "" },

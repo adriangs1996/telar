@@ -9,83 +9,14 @@ const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
 const pane_paste = @import("../input/root.zig").pane_paste;
 const tab_attachment_retirement = @import("tab_attachment_retirement.zig");
 
-const schema = core.schema;
-const tabs_mod = workspace_capability.tabs;
+pub const schema = core.schema;
+pub const tabs_mod = workspace_capability.tabs;
 
-pub const Effects = struct {
-    context: *anyopaque,
-    set_pane_graphics_visible: *const fn (*anyopaque, schema.PaneId, bool) anyerror!void,
-    synchronize_active_resources: *const fn (*anyopaque) anyerror!void,
-    request_tab_snapshot: *const fn (*anyopaque, schema.TabLocation) anyerror!void,
-};
+pub const Effects = @import("TabSelectionDeliveryEffects.zig");
 
-pub const DeliverTabSelectionHandler = struct {
-    model: *client_model.Model,
-    paste_effects: pane_paste.Effects,
-    focus_effects: pane_focus_reporting.Effects,
-    attachment_effects: tab_attachment_retirement.Effects,
-    effects: Effects,
+pub const DeliverTabSelectionHandler = @import("DeliverTabSelectionHandler.zig");
 
-    /// Validates one exact selection before retiring the previous tab's
-    /// resources and activating the selected tab's graphics and snapshot.
-    ///
-    /// ```zig
-    /// try handler.execute(selection);
-    /// ```
-    pub fn execute(handler: *DeliverTabSelectionHandler, selection: client_model.TabSelection) !void {
-        try handler.validate(selection);
-
-        var retire_previous: tab_attachment_retirement.RetireTabAttachmentsHandler = .{
-            .model = handler.model,
-            .paste_effects = handler.paste_effects,
-            .focus_effects = handler.focus_effects,
-            .effects = handler.attachment_effects,
-        };
-        try retire_previous.execute(selection.previous);
-
-        const selected = try handler.exactTab(selection.selected);
-        var panes = selected.model.paneIterator();
-        while (panes.next()) |pane| {
-            try handler.effects.set_pane_graphics_visible(handler.effects.context, pane.id, true);
-        }
-
-        try handler.effects.synchronize_active_resources(handler.effects.context);
-        try handler.effects.request_tab_snapshot(handler.effects.context, selection.selected);
-    }
-
-    fn validate(handler: *const DeliverTabSelectionHandler, selection: client_model.TabSelection) !void {
-        if (std.meta.eql(selection.previous, selection.selected)) {
-            return error.StaleTabSelection;
-        }
-
-        const previous = try handler.exactTab(selection.previous);
-        const selected = try handler.exactTab(selection.selected);
-        const active = handler.model.workspace.activeConst() orelse return error.StaleTabSelection;
-        const version = handler.model.version();
-        if (!std.meta.eql(active.location, selection.selected) or
-            previous.model.layout.currentRevision() != selection.previous_layout_revision or
-            selected.model.layout.currentRevision() != selection.selected_layout_revision or
-            version.workspace != selection.workspace_revision or
-            version.tabs != selection.tabs_revision or
-            version.active_tab != selection.active_tab_revision or
-            version.panes != selection.panes_revision or
-            version.copy != selection.copy_revision)
-        {
-            return error.StaleTabSelection;
-        }
-    }
-
-    fn exactTab(handler: *const DeliverTabSelectionHandler, location: schema.TabLocation) !*tabs_mod.Tab {
-        const tab = handler.model.workspace.find(location.tab_id) orelse return error.StaleTabSelection;
-        if (!std.meta.eql(tab.location, location)) {
-            return error.StaleTabSelection;
-        }
-
-        return tab;
-    }
-};
-
-const Event = union(enum) {
+pub const Event = union(enum) {
     paste_finish: schema.PaneId,
     focus_out: schema.PaneId,
     attachment_pending: schema.PaneId,
@@ -99,7 +30,7 @@ const Event = union(enum) {
     request_tab_snapshot: schema.TabLocation,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     previous_detach,
     selected_visibility,
@@ -107,227 +38,9 @@ const Failure = enum {
     tab_snapshot,
 };
 
-const TestingModel = struct {
-    model: *client_model.Model,
-    previous: schema.TabLocation,
-    selected: schema.TabLocation,
-    previous_root: schema.PaneId,
-    previous_sibling: schema.PaneId,
-    selected_root: schema.PaneId,
-    selected_sibling: schema.PaneId,
+const TestingModel = @import("TabSelectionDeliveryTestingModel.zig");
 
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-        const previous: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(1),
-        };
-        const selected: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(2),
-        };
-        const previous_root: schema.PaneId = @enumFromInt(1);
-        const previous_sibling: schema.PaneId = @enumFromInt(2);
-        const selected_root: schema.PaneId = @enumFromInt(3);
-        const selected_sibling: schema.PaneId = @enumFromInt(4);
-        const area: core.ui.Rect = .{ .w = 40, .h = 10 };
-        try model.workspace.bootstrap(.{ .pane_id = previous_root, .location = previous, .size = .{ .cols = 40, .rows = 10 } });
-        try model.workspace.active().?.model.split(.{ .existing_pane = previous_root, .new_pane = previous_sibling, .location = previous, .axis = .horizontal, .area = area });
-        if (!model.workspace.active().?.model.focusPane(previous_root)) {
-            return error.PreviousFocusNotRestored;
-        }
-
-        const root = model.workspace.findPane(previous_root).?;
-        root.input_modes.bracketed_paste = true;
-        root.input_modes.focus_events = true;
-        _ = model.beginPanePaste().?;
-        _ = model.syncReportedPaneFocus().?;
-
-        const selected_tab = try model.workspace.addCreated(.{
-            .location = selected,
-            .position = 1,
-            .label = "selected",
-            .root_pane_id = selected_root,
-        }, .{ .cols = 40, .rows = 10 });
-        try selected_tab.model.split(.{ .existing_pane = selected_root, .new_pane = selected_sibling, .location = selected, .axis = .horizontal, .area = area });
-        var selected_panes = selected_tab.model.paneIterator();
-        while (selected_panes.next()) |pane| {
-            pane.attached = false;
-        }
-
-        if (!model.workspace.select(previous.tab_id)) {
-            return error.PreviousTabNotRestored;
-        }
-
-        return .{
-            .model = model,
-            .previous = previous,
-            .selected = selected,
-            .previous_root = previous_root,
-            .previous_sibling = previous_sibling,
-            .selected_root = selected_root,
-            .selected_sibling = selected_sibling,
-        };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-
-    fn select(testing: *TestingModel) !client_model.TabSelection {
-        return (try testing.model.selectTab(.{ .tab_id = testing.selected.tab_id })).?;
-    }
-};
-
-const EffectsCapture = struct {
-    model: *client_model.Model,
-    selection: client_model.TabSelection,
-    previous_sibling: schema.PaneId,
-    selected_sibling: schema.PaneId,
-    events: [20]Event = undefined,
-    event_count: usize = 0,
-    committed_state_observed: bool = true,
-    paste_delivery_valid: bool = true,
-    focus_delivery_valid: bool = true,
-    failure: Failure = .none,
-
-    fn pasteEffects(capture: *EffectsCapture) pane_paste.Effects {
-        return .{ .context = capture, .deliver = deliverPaste };
-    }
-
-    fn focusEffects(capture: *EffectsCapture) pane_focus_reporting.Effects {
-        return .{ .context = capture, .deliver = deliverFocus };
-    }
-
-    fn attachmentEffects(capture: *EffectsCapture) tab_attachment_retirement.Effects {
-        return .{
-            .context = capture,
-            .attachment_pending = attachmentPending,
-            .detach_pane = detachPane,
-            .retire_attachment = retireAttachment,
-            .hide_graphics = hideGraphics,
-        };
-    }
-
-    fn effects(capture: *EffectsCapture) Effects {
-        return .{
-            .context = capture,
-            .set_pane_graphics_visible = setPaneGraphicsVisible,
-            .synchronize_active_resources = synchronizeActiveResources,
-            .request_tab_snapshot = requestTabSnapshot,
-        };
-    }
-
-    fn deliverPaste(context: *anyopaque, delivery: pane_paste.Delivery) !bool {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        switch (delivery) {
-            .marker => |marker| {
-                capture.append(.{ .paste_finish = marker.session.pane_id });
-                capture.paste_delivery_valid = marker.boundary == .finish;
-            },
-            .content => {
-                capture.paste_delivery_valid = false;
-            },
-        }
-
-        return true;
-    }
-
-    fn deliverFocus(context: *anyopaque, delivery: pane_focus_reporting.Delivery) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.{ .focus_out = delivery.pane_id });
-        capture.focus_delivery_valid = delivery.direction == .focus_out and
-            capture.model.reportedPaneFocus() == null;
-    }
-
-    fn attachmentPending(context: *anyopaque, pane_id: schema.PaneId) bool {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.{ .attachment_pending = pane_id });
-
-        return false;
-    }
-
-    fn detachPane(context: *anyopaque, pane_id: schema.PaneId) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.{ .detach = pane_id });
-        if (capture.failure == .previous_detach and pane_id == capture.previous_sibling) {
-            return error.PreviousDetachFailed;
-        }
-    }
-
-    fn retireAttachment(context: *anyopaque, pane_id: schema.PaneId) void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.{ .retire_attachment = pane_id });
-    }
-
-    fn hideGraphics(context: *anyopaque, pane_id: schema.PaneId) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.{ .graphics_visibility = .{
-            .pane_id = pane_id,
-            .visible = false,
-        } });
-    }
-
-    fn setPaneGraphicsVisible(context: *anyopaque, pane_id: schema.PaneId, visible: bool) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.{ .graphics_visibility = .{
-            .pane_id = pane_id,
-            .visible = visible,
-        } });
-        if (capture.failure == .selected_visibility and pane_id == capture.selected_sibling) {
-            return error.SelectedVisibilityFailed;
-        }
-    }
-
-    fn synchronizeActiveResources(context: *anyopaque) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.synchronize_active_resources);
-        if (capture.failure == .active_resources) {
-            return error.ActiveResourceSynchronizationFailed;
-        }
-    }
-
-    fn requestTabSnapshot(context: *anyopaque, location: schema.TabLocation) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.{ .request_tab_snapshot = location });
-        if (capture.failure == .tab_snapshot) {
-            return error.TabSnapshotRequestFailed;
-        }
-    }
-
-    fn append(capture: *EffectsCapture, event: Event) void {
-        capture.committed_state_observed = capture.committed_state_observed and capture.observesSelection();
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn observesSelection(capture: *const EffectsCapture) bool {
-        const previous = capture.model.workspace.find(capture.selection.previous.tab_id) orelse return false;
-        const selected = capture.model.workspace.find(capture.selection.selected.tab_id) orelse return false;
-        const version = capture.model.version();
-
-        return std.meta.eql(previous.location, capture.selection.previous) and
-            std.meta.eql(selected.location, capture.selection.selected) and
-            std.meta.eql(capture.model.activeTabLocation(), capture.selection.selected) and
-            previous.model.layout.currentRevision() == capture.selection.previous_layout_revision and
-            selected.model.layout.currentRevision() == capture.selection.selected_layout_revision and
-            version.workspace == capture.selection.workspace_revision and
-            version.tabs == capture.selection.tabs_revision and
-            version.active_tab == capture.selection.active_tab_revision and
-            version.panes == capture.selection.panes_revision and
-            version.copy == capture.selection.copy_revision;
-    }
-
-    fn eventSlice(capture: *const EffectsCapture) []const Event {
-        return capture.events[0..capture.event_count];
-    }
-};
+const EffectsCapture = @import("TabSelectionDeliveryEffectsCapture.zig");
 
 fn deliveryHandler(testing: *TestingModel, capture: *EffectsCapture) DeliverTabSelectionHandler {
     return .{

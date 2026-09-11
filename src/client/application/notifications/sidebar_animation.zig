@@ -12,67 +12,11 @@ pub const Activity = enum {
     inactive,
 };
 
-pub const Effects = struct {
-    context: *anyopaque,
-    schedule: *const fn (*anyopaque) anyerror!void,
-};
+pub const Effects = @import("SidebarAnimationEffects.zig");
 
-pub const SidebarAnimationHandler = struct {
-    model: *client_model.Model,
-    effects: Effects,
+pub const SidebarAnimationHandler = @import("SidebarAnimationHandler.zig");
 
-    /// Ensures an active animation has one future tick without changing its
-    /// visible frame.
-    ///
-    /// ```zig
-    /// _ = try handler.synchronize();
-    /// ```
-    pub fn synchronize(handler: *SidebarAnimationHandler) !Activity {
-        if (!handler.model.sidebarAnimationActive()) {
-            return .inactive;
-        }
-
-        try handler.effects.schedule(handler.effects.context);
-        return .active;
-    }
-
-    /// Commits one visible frame before rearming the animation scheduler.
-    ///
-    /// ```zig
-    /// _ = try handler.tick();
-    /// ```
-    pub fn tick(handler: *SidebarAnimationHandler) !?client_model.SidebarAnimationChange {
-        const change = handler.model.advanceSidebarAnimation() orelse return null;
-
-        try handler.effects.schedule(handler.effects.context);
-        return change;
-    }
-};
-
-const Capture = struct {
-    model: *const client_model.Model,
-    expected_revision: u64 = 0,
-    expected_frame: u8 = 0,
-    calls: usize = 0,
-    observed_commit: bool = false,
-    fail: bool = false,
-
-    fn effects(capture: *Capture) Effects {
-        return .{ .context = capture, .schedule = schedule };
-    }
-
-    fn schedule(raw_context: *anyopaque) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.calls += 1;
-        capture.observed_commit = capture.model.version().sidebar_animation ==
-            capture.expected_revision and
-            capture.model.sidebarAnimationFrame() == capture.expected_frame;
-
-        if (capture.fail) {
-            return error.AnimationScheduleFailed;
-        }
-    }
-};
+const Capture = @import("Capture.zig");
 
 fn reconcileAgent(model: *client_model.Model, revision: u64, status: schema.AgentStatus) !void {
     const agent: agents.AgentInput = .{

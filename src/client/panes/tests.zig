@@ -1,7 +1,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const panes = @import("root.zig");
-const schema = core.schema;
+pub const schema = core.schema;
 const Pane = panes.Pane;
 
 const initial: Pane.Initial = .{
@@ -13,14 +13,7 @@ const initial: Pane.Initial = .{
     .attached = true,
 };
 
-const FrameInput = struct {
-    pane_id: schema.PaneId = @enumFromInt(1),
-    id: u64 = 1,
-    base: u64 = 0,
-    cols: u16 = 2,
-    rows: u16 = 2,
-    character: u8 = 'a',
-};
+const FrameInput = @import("FrameInput.zig");
 
 fn frame(storage: []u8, input: FrameInput) !schema.frame.FrameView {
     var cells = [_]core.ui.Cell{.{}} ** 9;

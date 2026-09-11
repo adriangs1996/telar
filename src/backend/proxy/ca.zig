@@ -3,9 +3,9 @@
 const std = @import("std");
 const tlsz = @import("tls");
 
-const Io = std.Io;
+pub const Io = std.Io;
 const File = Io.File;
-const x509 = tlsz.x509;
+pub const x509 = tlsz.x509;
 
 pub const Error = error{
     KeygenFailed,
@@ -15,204 +15,25 @@ pub const Error = error{
     IncompleteAuthority,
 };
 
-const ca_seconds: i64 = 3650 * 24 * 60 * 60;
+pub const ca_seconds: i64 = 3650 * 24 * 60 * 60;
 pub const system_ca_seconds: i64 = 30 * 24 * 60 * 60;
-const leaf_seconds: i64 = 30 * 24 * 60 * 60;
-const backdate_seconds: i64 = 3600;
-const max_cert_len = 1024;
-const max_pem_len = 2 * max_cert_len;
-const ca_common_name = "telar local CA";
+pub const leaf_seconds: i64 = 30 * 24 * 60 * 60;
+pub const backdate_seconds: i64 = 3600;
+pub const max_cert_len = 1024;
+pub const max_pem_len = 2 * max_cert_len;
+pub const ca_common_name = "telar local CA";
 
-pub const Resources = struct {
-    io: Io,
-    allocator: std.mem.Allocator,
-};
+pub const Resources = @import("Resources.zig");
 
-pub const AuthorityFiles = struct {
-    key: []const u8,
-    certificate: []const u8,
-};
+pub const AuthorityFiles = @import("AuthorityFiles.zig");
 
-const SecureWrite = struct {
-    path: []const u8,
-    bytes: []const u8,
-    exclusive: bool,
-};
+const SecureWrite = @import("SecureWrite.zig");
 
-pub const Pair = struct {
-    key_pair: x509.KeyPair,
-    cert_buf: [max_cert_len]u8 = undefined,
-    cert_len: usize = 0,
+pub const Pair = @import("Pair.zig");
 
-    pub fn certDer(pair: *const Pair) []const u8 {
-        return pair.cert_buf[0..pair.cert_len];
-    }
+pub const Authority = @import("Authority.zig");
 
-    pub fn certPem(pair: *const Pair, buffer: []u8) Error![]const u8 {
-        return x509.encodePem(buffer, x509.cert_label, pair.certDer()) catch error.WriteFailed;
-    }
-
-    pub fn keyPem(pair: *const Pair, buffer: []u8) Error![]const u8 {
-        var der_buffer: [256]u8 = undefined;
-        defer std.crypto.secureZero(u8, &der_buffer);
-        const der = x509.encodePrivateKey(&der_buffer, pair.key_pair) catch return error.WriteFailed;
-        return x509.encodePem(buffer, x509.key_label, der) catch error.WriteFailed;
-    }
-};
-
-pub const Authority = struct {
-    pair: Pair,
-
-    /// Loads one complete authority or atomically creates both missing files.
-    /// A partial key/certificate pair is rejected instead of being repaired.
-    ///
-    /// ```zig
-    /// var authority = try Authority.loadOrCreate(resources, files);
-    /// ```
-    pub fn loadOrCreate(resources: Resources, files: AuthorityFiles) Error!Authority {
-        return loadOrCreateWithValidity(resources, files, ca_seconds);
-    }
-
-    /// Loads a complete system-trust authority or creates a new 30-day one.
-    /// The caller owns installation in the platform trust store.
-    ///
-    /// ```zig
-    /// var authority = try Authority.loadOrCreateSystem(resources, files);
-    /// ```
-    pub fn loadOrCreateSystem(resources: Resources, files: AuthorityFiles) Error!Authority {
-        return loadOrCreateWithValidity(resources, files, system_ca_seconds);
-    }
-
-    /// Loads an existing authority without creating missing files.
-    ///
-    /// ```zig
-    /// const authority = try Authority.loadExisting(resources, files);
-    /// ```
-    pub fn loadExisting(resources: Resources, files: AuthorityFiles) Error!Authority {
-        try validateStoredFile(resources.io, files.key);
-        try validateStoredFile(resources.io, files.certificate);
-
-        return .{ .pair = try load(resources, files) };
-    }
-
-    /// Creates a new 30-day authority at unused paths. This is the rotation
-    /// primitive; it never overwrites the currently installed authority.
-    ///
-    /// ```zig
-    /// var authority = try Authority.createSystem(resources, temporary_files);
-    /// ```
-    pub fn createSystem(resources: Resources, files: AuthorityFiles) Error!Authority {
-        var pair = try generate(resources.io, system_ca_seconds);
-        defer std.crypto.secureZero(u8, std.mem.asBytes(&pair));
-        try persist(resources.io, &pair, files);
-        return .{ .pair = pair };
-    }
-
-    /// Returns the uppercase SHA-1 certificate fingerprint accepted by the
-    /// macOS `security -Z` option.
-    ///
-    /// ```zig
-    /// const fingerprint = authority.fingerprint();
-    /// ```
-    pub fn fingerprint(authority: *const Authority) [40]u8 {
-        var digest: [std.crypto.hash.Sha1.digest_length]u8 = undefined;
-        std.crypto.hash.Sha1.hash(authority.pair.certDer(), &digest, .{});
-        return std.fmt.bytesToHex(digest, .upper);
-    }
-
-    /// Reports whether the certificate expires within `seconds` from now.
-    ///
-    /// ```zig
-    /// if (authority.expiresWithin(io, 86400)) rotate();
-    /// ```
-    pub fn expiresWithin(authority: *const Authority, io: Io, seconds: u64) Error!bool {
-        const parsed = (std.crypto.Certificate{ .buffer = authority.pair.certDer(), .index = 0 }).parse() catch
-            return error.ReadFailed;
-        const now: u64 = @intCast(@max(Io.Clock.real.now(io).toSeconds(), 0));
-        return parsed.validity.not_after <= now +| seconds;
-    }
-
-    /// Reports whether the certificate has Telar's bounded system-trust
-    /// lifetime rather than the ten-year private-CA lifetime.
-    ///
-    /// ```zig
-    /// if (!try authority.hasSystemLifetime()) rejectAuthority();
-    /// ```
-    pub fn hasSystemLifetime(authority: *const Authority) Error!bool {
-        const parsed = (std.crypto.Certificate{ .buffer = authority.pair.certDer(), .index = 0 }).parse() catch
-            return error.ReadFailed;
-        const lifetime = parsed.validity.not_after -| parsed.validity.not_before;
-        return lifetime <= system_ca_seconds + backdate_seconds;
-    }
-
-    fn loadOrCreateWithValidity(resources: Resources, files: AuthorityFiles, validity_seconds: i64) Error!Authority {
-        const io = resources.io;
-        const key_path = files.key;
-        const cert_path = files.certificate;
-
-        const key_exists = pathExists(io, key_path) catch return error.ReadFailed;
-        const cert_exists = pathExists(io, cert_path) catch return error.ReadFailed;
-        if (key_exists != cert_exists) {
-            return error.IncompleteAuthority;
-        }
-        if (key_exists) {
-            try validateStoredFile(io, key_path);
-            try validateStoredFile(io, cert_path);
-            const authority: Authority = .{ .pair = try load(resources, files) };
-            if (validity_seconds == system_ca_seconds and !(try authority.hasSystemLifetime())) {
-                return error.ReadFailed;
-            }
-
-            return authority;
-        }
-
-        var pair = try generate(io, validity_seconds);
-        defer std.crypto.secureZero(u8, std.mem.asBytes(&pair));
-        try persist(io, &pair, files);
-        return .{ .pair = pair };
-    }
-
-    /// `SSL_CERT_FILE` replaces system trust. The child therefore receives a
-    /// bundle containing both platform roots and Telar's private authority.
-    ///
-    /// ```zig
-    /// try authority.writeBundle(resources, output_path);
-    /// ```
-    pub fn writeBundle(authority: *const Authority, resources: Resources, output_path: []const u8) Error!void {
-        const io = resources.io;
-        const gpa = resources.allocator;
-
-        const roots = readSystemRoots(io, gpa) catch return error.ReadFailed;
-        defer gpa.free(roots);
-        var pem_buffer: [max_pem_len]u8 = undefined;
-        const ours = try authority.pair.certPem(&pem_buffer);
-        const bundle = std.mem.concat(gpa, u8, &.{ roots, ours }) catch return error.WriteFailed;
-        defer gpa.free(bundle);
-        try writeSecure(io, .{ .path = output_path, .bytes = bundle, .exclusive = false });
-    }
-
-    pub fn mint(authority: *const Authority, io: Io, host: []const u8) Error!Pair {
-        const now = Io.Clock.real.now(io).toSeconds();
-        var leaf: Pair = .{ .key_pair = x509.KeyPair.generate(io) };
-        defer std.crypto.secureZero(u8, std.mem.asBytes(&leaf));
-        const cert = x509.create(
-            &leaf.cert_buf,
-            .{
-                .common_name = host,
-                .dns_name = host,
-                .serial = randomSerial(io),
-                .not_before = now - backdate_seconds,
-                .not_after = now + leaf_seconds,
-            },
-            leaf.key_pair.public_key,
-            .{ .common_name = ca_common_name, .key_pair = &authority.pair.key_pair },
-        ) catch return error.CertFailed;
-        leaf.cert_len = cert.len;
-        return leaf;
-    }
-};
-
-fn generate(io: Io, validity_seconds: i64) Error!Pair {
+pub fn generate(io: Io, validity_seconds: i64) Error!Pair {
     const now = Io.Clock.real.now(io).toSeconds();
     var pair: Pair = .{ .key_pair = x509.KeyPair.generate(io) };
     defer std.crypto.secureZero(u8, std.mem.asBytes(&pair));
@@ -232,7 +53,7 @@ fn generate(io: Io, validity_seconds: i64) Error!Pair {
     return pair;
 }
 
-fn load(resources: Resources, files: AuthorityFiles) Error!Pair {
+pub fn load(resources: Resources, files: AuthorityFiles) Error!Pair {
     const io = resources.io;
     const gpa = resources.allocator;
 
@@ -280,7 +101,7 @@ fn load(resources: Resources, files: AuthorityFiles) Error!Pair {
     return pair;
 }
 
-fn persist(io: Io, pair: *const Pair, files: AuthorityFiles) Error!void {
+pub fn persist(io: Io, pair: *const Pair, files: AuthorityFiles) Error!void {
     var buffer: [max_pem_len]u8 = undefined;
     defer std.crypto.secureZero(u8, &buffer);
     // Create both destinations with 0600 from their first inode. Exclusive
@@ -290,7 +111,7 @@ fn persist(io: Io, pair: *const Pair, files: AuthorityFiles) Error!void {
         return error.IncompleteAuthority;
 }
 
-fn writeSecure(io: Io, write: SecureWrite) Error!void {
+pub fn writeSecure(io: Io, write: SecureWrite) Error!void {
     const path = write.path;
 
     if (!std.fs.path.isAbsolute(path)) {
@@ -340,7 +161,7 @@ fn writeSecure(io: Io, write: SecureWrite) Error!void {
     return error.WriteFailed;
 }
 
-fn pathExists(io: Io, path: []const u8) !bool {
+pub fn pathExists(io: Io, path: []const u8) !bool {
     Io.Dir.accessAbsolute(io, path, .{}) catch |err| switch (err) {
         error.FileNotFound => return false,
         else => |other| return other,
@@ -348,7 +169,7 @@ fn pathExists(io: Io, path: []const u8) !bool {
     return true;
 }
 
-fn validateStoredFile(io: Io, path: []const u8) Error!void {
+pub fn validateStoredFile(io: Io, path: []const u8) Error!void {
     const stat = Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch
         return error.ReadFailed;
     if (stat.kind != .file or stat.permissions.toMode() & 0o077 != 0) {
@@ -356,7 +177,7 @@ fn validateStoredFile(io: Io, path: []const u8) Error!void {
     }
 }
 
-fn readSystemRoots(io: Io, gpa: std.mem.Allocator) ![]u8 {
+pub fn readSystemRoots(io: Io, gpa: std.mem.Allocator) ![]u8 {
     for ([_][]const u8{
         "/etc/ssl/cert.pem",
         "/etc/ssl/certs/ca-certificates.crt",
@@ -366,7 +187,7 @@ fn readSystemRoots(io: Io, gpa: std.mem.Allocator) ![]u8 {
     return error.FileNotFound;
 }
 
-fn randomSerial(io: Io) u64 {
+pub fn randomSerial(io: Io) u64 {
     const source: std.Random.IoSource = .{ .io = io };
     return source.interface().int(u64) >> 1;
 }

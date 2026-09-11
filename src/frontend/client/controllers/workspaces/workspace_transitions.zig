@@ -8,7 +8,7 @@ const host_inputs = @import("../input/host_inputs.zig");
 const active_pane_resources = @import("../panes/active_pane_resources.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const pane_open_delivery = panes_application.pane_open_delivery;
 const workspace_arrival_planning = workspaces_application.workspace_arrival_planning;
 const workspace_transition_delivery = workspaces_application.workspace_transition_delivery;

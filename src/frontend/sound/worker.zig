@@ -94,9 +94,7 @@ fn commandSucceeded(io: Io, argv: []const []const u8) bool {
     };
 }
 
-const Windows = struct {
-    extern "user32" fn MessageBeep(message_type: u32) callconv(.winapi) i32;
-};
+const Windows = @import("Windows.zig");
 
 test {
     std.testing.refAllDecls(@This());

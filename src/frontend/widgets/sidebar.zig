@@ -6,17 +6,17 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const widget = @import("context.zig");
+const widget = @import("context_support.zig");
 const agents = @import("telar-client").agents;
 const workspace_capability = @import("../workspace/root.zig");
 const ui = @import("../ui/root.zig");
 
-const schema = core.schema;
-const multiplexer = workspace_capability.multiplexer;
+pub const schema = core.schema;
+pub const multiplexer = workspace_capability.multiplexer;
 
-const Snapshot = agents.Snapshot;
+pub const Snapshot = agents.Snapshot;
 const AgentInput = agents.AgentInput;
-const AgentKey = agents.AgentKey;
+pub const AgentKey = agents.AgentKey;
 
 pub const max_provider_marks = agents.max_agents;
 const agent_card_rows = 3;
@@ -24,63 +24,13 @@ const agent_row_spacing = 1;
 const agent_row_stride = agent_card_rows + agent_row_spacing;
 const minions_icon = "\u{2687}";
 
-pub const State = struct {
-    scroll: u16 = 0,
-    total_rows: u16 = 0,
+pub const State = @import("State.zig");
 
-    pub fn scrollBy(state: *State, rows: i16, viewport_height: u16) bool {
-        const max_scroll = state.total_rows -| viewport_height;
-        const before = state.scroll;
-        if (rows < 0) {
-            state.scroll -|= @intCast(-rows);
-        } else {
-            state.scroll = @min(max_scroll, state.scroll +| @as(u16, @intCast(rows)));
-        }
-        return before != state.scroll;
-    }
-};
+pub const Semantic = @import("Semantic.zig");
 
-pub const Semantic = struct {
-    area: ui.Rect,
-    focused_card: ?ui.Rect = null,
-    provider_marks: [max_provider_marks]ProviderMark = undefined,
-    provider_mark_count: u8 = 0,
-    list_area: ui.Rect = .{},
-    cursor: ?widget.Cursor = null,
+pub const Input = @import("SidebarInput.zig");
 
-    pub const ProviderMark = struct {
-        area: ui.Rect,
-        provider: schema.AgentProvider,
-    };
-
-    fn addProviderMark(semantic: *Semantic, mark: ProviderMark) void {
-        if (semantic.provider_mark_count == semantic.provider_marks.len) {
-            return;
-        }
-        semantic.provider_marks[semantic.provider_mark_count] = mark;
-        semantic.provider_mark_count += 1;
-    }
-};
-
-pub const Input = struct {
-    area: ui.Rect,
-    snapshot: *const Snapshot,
-    state: *State,
-    active_model: ?*const multiplexer.Model = null,
-    focused_agent: ?AgentKey = null,
-    transparent: bool,
-    rounded_focus: bool = false,
-    animation_frame: u8 = 0,
-};
-
-const AgentLineInput = struct {
-    sidebar: Input,
-    semantic: *Semantic,
-    y: u16,
-    agent: *const agents.Agent,
-    line: u2,
-    background: ui.Color,
-};
+const AgentLineInput = @import("AgentLineInput.zig");
 
 pub fn render(context: *widget.Context, input: Input) Semantic {
     var semantic: Semantic = .{ .area = input.area };
@@ -278,38 +228,15 @@ fn drawAgentTitle(context: *widget.Context, line_input: AgentLineInput, area: ui
     });
 }
 
-const AgentLocationInput = struct {
-    area: ui.Rect,
-    agent: *const agents.Agent,
-    pane_index: u16,
-    background: ui.Color,
-};
+const AgentLocationInput = @import("AgentLocationInput.zig");
 
-const AgentMetaInput = struct {
-    area: ui.Rect,
-    agent: *const agents.Agent,
-    background: ui.Color,
-};
+const AgentMetaInput = @import("AgentMetaInput.zig");
 
-const AgentStatusInput = struct {
-    area: ui.Rect,
-    status: schema.AgentStatus,
-    animation_frame: u8,
-    background: ui.Color,
-};
+const AgentStatusInput = @import("AgentStatusInput.zig");
 
-const ScrollbarInput = struct {
-    state: *State,
-    list: ui.Rect,
-    total: u16,
-    background: ui.Color,
-};
+const ScrollbarInput = @import("ScrollbarInput.zig");
 
-const RuleInput = struct {
-    area: ui.Rect,
-    y: u16,
-    background: ui.Color,
-};
+const RuleInput = @import("RuleInput.zig");
 
 fn drawAgentLocation(context: *widget.Context, input: AgentLocationInput) void {
     var location_buffer: [256]u8 = undefined;

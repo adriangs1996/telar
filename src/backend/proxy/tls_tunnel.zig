@@ -3,90 +3,17 @@
 const std = @import("std");
 const tls = @import("tls.zig");
 
-pub fn Attempt(comptime Stream: type) type {
-    return struct {
-        host: []const u8,
-        child: Stream,
-        origin: Stream,
-    };
-}
+pub const Attempt = @import("GenericAttempt.zig").Type;
 
-pub fn Established(comptime Session: type) type {
-    return struct {
-        session: Session,
-        protocol: tls.Session.Protocol,
-    };
-}
+pub const Established = @import("GenericEstablished.zig").Type;
 
-pub fn Route(comptime Session: type) type {
-    return union(enum) {
-        passthrough,
-        http11: Session,
-        h2: Session,
-    };
-}
+pub const Route = @import("GenericRoute.zig").Type;
 
-/// Defines interception policy, TLS establishment, metrics, and failure
-/// publication supplied by the proxy service.
-///
-/// ```zig
-/// const port: Port(Context, Stream, Session) = .{ ... };
-/// ```
-pub fn Port(comptime Context: type, comptime Stream: type, comptime Session: type) type {
-    return struct {
-        pub const StreamType = Stream;
-        pub const SessionType = Session;
+pub const Port = @import("GenericTlsTunnelPort.zig").Type;
 
-        should_intercept: *const fn (*Context, []const u8) bool,
-        record_passthrough: *const fn (*Context) void,
-        intercept: *const fn (*Context, Attempt(Stream)) tls.Error!Established(Session),
-        record_failure: *const fn (*Context, tls.Error) void,
-        publish_failure: *const fn (*Context) void,
-    };
-}
+pub const Command = @import("GenericTlsTunnelCommand.zig").Type;
 
-/// Creates the policy command for one authenticated CONNECT tunnel.
-///
-/// ```zig
-/// const EstablishTunnel = Command(Context, port);
-/// const route = EstablishTunnel.execute(&context, attempt);
-/// ```
-pub fn Command(comptime Context: type, comptime port: anytype) type {
-    const PortType = @TypeOf(port);
-    const Stream = PortType.StreamType;
-    const Session = PortType.SessionType;
-
-    return struct {
-        /// Passes every host through unless policy explicitly authorizes its
-        /// interception. A successful interception transfers session ownership
-        /// through an explicit HTTP/1.1 or HTTP/2 route. Every TLS failure
-        /// records its exact stage, publishes one failed request, and returns
-        /// `null`.
-        ///
-        /// ```zig
-        /// const route = EstablishTunnel.execute(&context, attempt);
-        /// ```
-        pub fn execute(context: *Context, attempt: Attempt(Stream)) ?Route(Session) {
-            if (!port.should_intercept(context, attempt.host)) {
-                port.record_passthrough(context);
-                return .passthrough;
-            }
-
-            const established = port.intercept(context, attempt) catch |failure| {
-                port.record_failure(context, failure);
-                port.publish_failure(context);
-                return null;
-            };
-
-            return switch (established.protocol) {
-                .http11 => .{ .http11 = established.session },
-                .h2 => .{ .h2 = established.session },
-            };
-        }
-    };
-}
-
-const Step = enum {
+pub const Step = enum {
     check_interception,
     record_passthrough,
     intercept,
@@ -94,55 +21,7 @@ const Step = enum {
     publish_failure,
 };
 
-const Capture = struct {
-    steps: [5]Step = undefined,
-    len: usize = 0,
-    allow_interception: bool = false,
-    failure: ?tls.Error = null,
-    protocol: tls.Session.Protocol = .http11,
-    expected_host: []const u8 = "api.openai.com",
-    expected_child: u8 = 3,
-    expected_origin: u8 = 5,
-    recorded_failure: ?tls.Error = null,
-
-    fn record(capture: *Capture, step: Step) void {
-        std.debug.assert(capture.len < capture.steps.len);
-        capture.steps[capture.len] = step;
-        capture.len += 1;
-    }
-
-    fn shouldIntercept(capture: *Capture, host: []const u8) bool {
-        capture.record(.check_interception);
-        std.debug.assert(std.mem.eql(u8, capture.expected_host, host));
-        return capture.allow_interception;
-    }
-
-    fn recordPassthrough(capture: *Capture) void {
-        capture.record(.record_passthrough);
-    }
-
-    fn intercept(capture: *Capture, attempt: Attempt(u8)) tls.Error!Established(u16) {
-        capture.record(.intercept);
-        std.debug.assert(std.mem.eql(u8, capture.expected_host, attempt.host));
-        std.debug.assert(capture.expected_child == attempt.child);
-        std.debug.assert(capture.expected_origin == attempt.origin);
-
-        if (capture.failure) |failure| {
-            return failure;
-        }
-
-        return .{ .session = 17, .protocol = capture.protocol };
-    }
-
-    fn recordFailure(capture: *Capture, failure: tls.Error) void {
-        capture.record(.record_failure);
-        capture.recorded_failure = failure;
-    }
-
-    fn publishFailure(capture: *Capture) void {
-        capture.record(.publish_failure);
-    }
-};
+const Capture = @import("TlsTunnelCapture.zig");
 
 const test_port: Port(Capture, u8, u16) = .{
     .should_intercept = Capture.shouldIntercept,

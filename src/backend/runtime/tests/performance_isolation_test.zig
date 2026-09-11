@@ -108,26 +108,7 @@ test "performance probe measures runtime staging of a 4K RGBA transfer" {
     report("graphics_total_prepare_4k", &total_times);
 }
 
-const MetricsCapture = struct {
-    const metrics = @import("../observability/system_metrics.zig");
-    reads: usize = 0,
-    jobs: usize = 0,
-    pumps: usize = 0,
-
-    fn rearm(_: *MetricsCapture) !void {}
-
-    fn sample(capture: *MetricsCapture, _: *metrics.Sampler) void {
-        capture.reads += 1;
-    }
-
-    fn schedule(capture: *MetricsCapture, _: metrics.Sampler) !void {
-        capture.jobs += 1;
-    }
-
-    fn pump(capture: *MetricsCapture) void {
-        capture.pumps += 1;
-    }
-};
+const MetricsCapture = @import("MetricsCapture.zig");
 
 test "performance probe counts work while host sampling is blocked or unchanged" {
     const metrics = @import("../observability/system_metrics.zig");
@@ -151,26 +132,7 @@ test "performance probe counts work while host sampling is blocked or unchanged"
     std.debug.print("PERF metrics_ticks ticks=100 inline_reads={d} scheduled_jobs={d} client_pumps={d}\n", .{ capture.reads, capture.jobs, capture.pumps });
 }
 
-const CountedRelay = struct {
-    const Fake = @import("../../proxy/http/test_support.zig").FakeSession;
-    const Side = @import("../../proxy/tls.zig").Session.Side;
-    fake: Fake,
-    writes: usize = 0,
-
-    /// Example: `const count = counted.read(.origin, buffer);`.
-    pub fn read(relay: *CountedRelay, side: Side, bytes: []u8) ?usize {
-        return relay.fake.read(side, bytes);
-    }
-
-    /// Example: `const forwarded = counted.writeAll(.child, bytes);`.
-    pub fn writeAll(relay: *CountedRelay, side: Side, bytes: []const u8) bool {
-        relay.writes += 1;
-        return relay.fake.writeAll(side, bytes);
-    }
-
-    /// Example: `counted.observe(fragment);`.
-    pub fn observe(_: *CountedRelay, _: @import("../../proxy/http/body.zig").Fragment) void {}
-};
+const CountedRelay = @import("CountedRelay.zig");
 
 test "performance probe counts TLS-facing writes without changing chunk framing" {
     const encoded = "100\r\n" ++ ([_]u8{'x'} ** 256) ++ "\r\n0\r\nX-T: done\r\n\r\n";

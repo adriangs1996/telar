@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const backend = @import("telar-backend");
 const frontend = @import("telar-frontend");
 const pty = backend.pty;
-const Cursor = @import("cursor.zig").Cursor;
+const Cursor = @import("cursor_support.zig").Cursor;
 
 pub const Target = union(enum) {
     /// The pane this process runs in, from `TELAR_PANE_ID`.

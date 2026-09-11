@@ -10,45 +10,20 @@ const core = @import("telar-core");
 const bars = @import("../bars/root.zig");
 const bar_content = @import("bar_content.zig");
 const status_bar = @import("status_bar.zig");
-const widget = @import("context.zig");
+const widget = @import("context_support.zig");
 const workspace_list = @import("telar-client").workspace.workspace_list;
 const ui = @import("../ui/root.zig");
 
-const schema = core.schema;
-const empty_right: bars.Slot = .empty;
+pub const schema = core.schema;
+pub const empty_right: bars.Slot = .empty;
 
-pub const Input = struct {
-    area: ui.Rect,
-    sidebar_visible: bool,
-    location: ?schema.TabLocation,
-    workspace_name: []const u8,
-    workspaces: *const workspace_list.Snapshot,
-    collapsed: bool,
-    proxy_tls_active: bool,
-    proxy_tls_scope: schema.ProxyScope = .exact,
-    proxy_system_trusted: bool = false,
-    right: *const bars.Slot = &empty_right,
-    system_metrics: ?status_bar.Metrics = null,
-};
+pub const Input = @import("TopBarInput.zig");
 
-const ListInput = struct {
-    area: ui.Rect,
-    active_id: ?schema.WorkspaceId,
-};
+const ListInput = @import("ListInput.zig");
 
-const WorkspaceDraw = struct {
-    snapshot: *const workspace_list.Snapshot,
-    index: usize,
-    active_index: ?usize,
-    active_name: []const u8,
-    area: ui.Rect,
-};
+const WorkspaceDraw = @import("WorkspaceDraw.zig");
 
-const WorkspaceNames = struct {
-    snapshot: *const workspace_list.Snapshot,
-    active_index: ?usize,
-    active_name: []const u8,
-};
+const WorkspaceNames = @import("WorkspaceNames.zig");
 
 pub fn render(context: *widget.Context, input: Input) void {
     const area = input.area;

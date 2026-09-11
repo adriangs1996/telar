@@ -4,152 +4,34 @@ const std = @import("std");
 const core = @import("telar-core");
 const workspace_mod = @import("../../../workspace/root.zig");
 
-const schema = core.schema;
-const WorkspaceRepository = workspace_mod.Repository;
+pub const schema = core.schema;
+pub const WorkspaceRepository = workspace_mod.Repository;
 
-pub const CreateWorkspace = struct {
-    /// Borrowed only for the synchronous `execute` call.
-    name: []const u8,
-    size: schema.TerminalSize,
-    /// Every slice in this view is borrowed only for `execute`.
-    launch: schema.LaunchView,
-};
+pub const CreateWorkspace = @import("CreateWorkspace.zig");
 
-pub const CreateWorkspaceResult = struct {
-    created: workspace_mod.WorkspaceCreated,
-    root_pane_id: schema.PaneId,
-};
+pub const CreateWorkspaceResult = @import("CreateWorkspaceResult.zig");
 
-pub const PrepareLaunch = struct {
-    launch: schema.LaunchView,
-};
+pub const PrepareLaunch = @import("CreateWorkspacePrepareLaunch.zig");
 
-pub const LaunchPane = struct {
-    location: schema.TabLocation,
-    size: schema.TerminalSize,
-    launch: schema.LaunchView,
-    launch_cwd: []const u8,
-    workspace_path: []const u8,
-};
+pub const LaunchPane = @import("CreateWorkspaceLaunchPane.zig");
 
-pub const LaunchedPane = struct {
-    id: schema.PaneId,
-};
+pub const LaunchedPane = @import("CreateWorkspaceLaunchedPane.zig");
 
-pub const LaunchAuthority = struct {
-    context: *anyopaque,
-    prepare: *const fn (*anyopaque, PrepareLaunch) anyerror![]const u8,
-};
+pub const LaunchAuthority = @import("CreateWorkspaceLaunchAuthority.zig");
 
-pub const GeometryLease = struct {
-    context: *anyopaque,
-    acquire: *const fn (*anyopaque, schema.WorkspaceLocation) bool,
-    release: *const fn (*anyopaque, schema.WorkspaceLocation) void,
-};
+pub const GeometryLease = @import("CreateWorkspaceGeometryLease.zig");
 
-pub const PaneLauncher = struct {
-    context: *anyopaque,
-    launch: *const fn (*anyopaque, LaunchPane) anyerror!LaunchedPane,
-};
+pub const PaneLauncher = @import("CreateWorkspacePaneLauncher.zig");
 
-pub const ClientAttachment = struct {
-    context: *anyopaque,
-    replace: *const fn (*anyopaque, LaunchedPane) anyerror!void,
-};
+pub const ClientAttachment = @import("ClientAttachment.zig");
 
-pub const EventPublisher = struct {
-    context: *anyopaque,
-    publish: *const fn (*anyopaque, workspace_mod.WorkspaceCreated) void,
-};
+pub const EventPublisher = @import("CreateWorkspaceEventPublisher.zig");
 
-pub const CreateWorkspaceExecutor = struct {
-    context: *anyopaque,
-    execute_fn: *const fn (*anyopaque, CreateWorkspace) anyerror!CreateWorkspaceResult,
+pub const CreateWorkspaceExecutor = @import("CreateWorkspaceExecutor.zig");
 
-    /// Executes workspace creation through the bound application handler.
-    ///
-    /// ```zig
-    /// const result = try executor.execute(command);
-    /// ```
-    pub fn execute(executor: CreateWorkspaceExecutor, command: CreateWorkspace) !CreateWorkspaceResult {
-        return executor.execute_fn(executor.context, command);
-    }
-};
+pub const CreateWorkspaceHandler = @import("CreateWorkspaceHandler.zig");
 
-pub const CreateWorkspaceHandler = struct {
-    workspaces: *WorkspaceRepository,
-    authority: LaunchAuthority,
-    geometry: GeometryLease,
-    launcher: PaneLauncher,
-    attachment: ClientAttachment,
-    events: EventPublisher,
-
-    /// Creates an invisible workspace proposal, acquires its geometry lease,
-    /// launches the root pane, then commits and publishes the aggregate before
-    /// replacing client attachments. Pre-commit failures release all proposed
-    /// state; post-commit failures preserve runtime state.
-    ///
-    /// ```zig
-    /// const result = try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *CreateWorkspaceHandler, command: CreateWorkspace) !CreateWorkspaceResult {
-        const launch_cwd = try handler.authority.prepare(handler.authority.context, .{
-            .launch = command.launch,
-        });
-        var proposal = handler.workspaces.propose(.{
-            .path = launch_cwd,
-            .explicit_name = command.name,
-        }) catch return error.WorkspaceCreateFailed;
-        defer proposal.rollback();
-
-        const location = proposal.location();
-        var lease_acquired = false;
-        var committed = false;
-        defer if (!committed and lease_acquired) {
-            handler.geometry.release(handler.geometry.context, location.workspace);
-        };
-
-        if (!handler.geometry.acquire(handler.geometry.context, location.workspace)) {
-            return error.GeometryUnavailable;
-        }
-        lease_acquired = true;
-
-        const launched = handler.launcher.launch(handler.launcher.context, .{
-            .location = location,
-            .size = command.size,
-            .launch = command.launch,
-            .launch_cwd = launch_cwd,
-            .workspace_path = proposal.path(),
-        }) catch |err| return mapLaunchError(err);
-        const created = workspace_mod.WorkspaceCreated.init(location, proposal.name()) catch unreachable;
-
-        _ = proposal.commit();
-        committed = true;
-        handler.events.publish(handler.events.context, created);
-        try handler.attachment.replace(handler.attachment.context, launched);
-
-        return .{
-            .created = created,
-            .root_pane_id = launched.id,
-        };
-    }
-
-    /// Exposes this handler through the command interface used by controllers.
-    ///
-    /// ```zig
-    /// const executor = handler.executor();
-    /// ```
-    pub fn executor(handler: *CreateWorkspaceHandler) CreateWorkspaceExecutor {
-        return .{ .context = handler, .execute_fn = executeErased };
-    }
-
-    fn executeErased(context: *anyopaque, command: CreateWorkspace) !CreateWorkspaceResult {
-        const handler: *CreateWorkspaceHandler = @ptrCast(@alignCast(context));
-        return handler.execute(command);
-    }
-};
-
-fn mapLaunchError(spawn_error: anyerror) anyerror {
+pub fn mapLaunchError(spawn_error: anyerror) anyerror {
     return switch (spawn_error) {
         error.PaneLimitReached => error.PaneLimitReached,
         error.UnsupportedEnvironment => error.UnsupportedEnvironment,
@@ -157,156 +39,15 @@ fn mapLaunchError(spawn_error: anyerror) anyerror {
     };
 }
 
-const AuthorityCapture = struct {
-    failure: ?anyerror = null,
-    launch_cwd: []const u8 = "/prepared",
-    call_count: usize = 0,
-    last_requested_cwd: [schema.max_cwd_bytes]u8 = undefined,
-    last_requested_cwd_len: usize = 0,
+const AuthorityCapture = @import("CreateWorkspaceAuthorityCapture.zig");
 
-    fn port(capture: *AuthorityCapture) LaunchAuthority {
-        return .{ .context = capture, .prepare = prepare };
-    }
+const GeometryCapture = @import("CreateWorkspaceGeometryCapture.zig");
 
-    fn prepare(context: *anyopaque, request: PrepareLaunch) ![]const u8 {
-        const capture: *AuthorityCapture = @ptrCast(@alignCast(context));
-        std.debug.assert(request.launch.cwd.len <= capture.last_requested_cwd.len);
+const LauncherCapture = @import("CreateWorkspaceLauncherCapture.zig");
 
-        capture.call_count += 1;
-        capture.last_requested_cwd_len = request.launch.cwd.len;
-        @memcpy(capture.last_requested_cwd[0..request.launch.cwd.len], request.launch.cwd);
+const AttachmentCapture = @import("CreateWorkspaceAttachmentCapture.zig");
 
-        if (capture.failure) |failure| {
-            return failure;
-        }
-
-        return capture.launch_cwd;
-    }
-
-    fn requestedCwd(capture: *const AuthorityCapture) []const u8 {
-        return capture.last_requested_cwd[0..capture.last_requested_cwd_len];
-    }
-};
-
-const GeometryCapture = struct {
-    available: bool = true,
-    acquire_count: usize = 0,
-    release_count: usize = 0,
-    last_workspace: ?schema.WorkspaceLocation = null,
-
-    fn port(capture: *GeometryCapture) GeometryLease {
-        return .{
-            .context = capture,
-            .acquire = acquire,
-            .release = release,
-        };
-    }
-
-    fn acquire(context: *anyopaque, workspace: schema.WorkspaceLocation) bool {
-        const capture: *GeometryCapture = @ptrCast(@alignCast(context));
-        capture.acquire_count += 1;
-        capture.last_workspace = workspace;
-        return capture.available;
-    }
-
-    fn release(context: *anyopaque, workspace: schema.WorkspaceLocation) void {
-        const capture: *GeometryCapture = @ptrCast(@alignCast(context));
-        capture.release_count += 1;
-        capture.last_workspace = workspace;
-    }
-};
-
-const LauncherCapture = struct {
-    failure: ?anyerror = null,
-    pane_id: schema.PaneId,
-    call_count: usize = 0,
-    last_location: ?schema.TabLocation = null,
-    last_size: ?schema.TerminalSize = null,
-    last_launch_cwd: [schema.max_cwd_bytes]u8 = undefined,
-    last_launch_cwd_len: usize = 0,
-    last_workspace_path: [schema.max_cwd_bytes]u8 = undefined,
-    last_workspace_path_len: usize = 0,
-
-    fn port(capture: *LauncherCapture) PaneLauncher {
-        return .{ .context = capture, .launch = launch };
-    }
-
-    fn launch(context: *anyopaque, request: LaunchPane) !LaunchedPane {
-        const capture: *LauncherCapture = @ptrCast(@alignCast(context));
-        std.debug.assert(request.launch_cwd.len <= capture.last_launch_cwd.len);
-        std.debug.assert(request.workspace_path.len <= capture.last_workspace_path.len);
-
-        capture.call_count += 1;
-        capture.last_location = request.location;
-        capture.last_size = request.size;
-        capture.last_launch_cwd_len = request.launch_cwd.len;
-        @memcpy(capture.last_launch_cwd[0..request.launch_cwd.len], request.launch_cwd);
-        capture.last_workspace_path_len = request.workspace_path.len;
-        @memcpy(capture.last_workspace_path[0..request.workspace_path.len], request.workspace_path);
-
-        if (capture.failure) |failure| {
-            return failure;
-        }
-
-        return .{ .id = capture.pane_id };
-    }
-
-    fn launchCwd(capture: *const LauncherCapture) []const u8 {
-        return capture.last_launch_cwd[0..capture.last_launch_cwd_len];
-    }
-
-    fn workspacePath(capture: *const LauncherCapture) []const u8 {
-        return capture.last_workspace_path[0..capture.last_workspace_path_len];
-    }
-};
-
-const AttachmentCapture = struct {
-    failure: ?anyerror = null,
-    event_count: ?*const usize = null,
-    call_count: usize = 0,
-    last_pane_id: schema.PaneId = .invalid,
-    event_observed_before_replace: bool = false,
-
-    fn port(capture: *AttachmentCapture) ClientAttachment {
-        return .{ .context = capture, .replace = replace };
-    }
-
-    fn replace(context: *anyopaque, pane: LaunchedPane) !void {
-        const capture: *AttachmentCapture = @ptrCast(@alignCast(context));
-        capture.call_count += 1;
-        capture.last_pane_id = pane.id;
-
-        if (capture.event_count) |count| {
-            capture.event_observed_before_replace = count.* == 1;
-        }
-
-        if (capture.failure) |failure| {
-            return failure;
-        }
-    }
-};
-
-const EventCapture = struct {
-    reader: workspace_mod.Reader,
-    initial_revision: u64,
-    count: usize = 0,
-    last: ?workspace_mod.WorkspaceCreated = null,
-    observed_committed_state: bool = false,
-
-    fn publisher(capture: *EventCapture) EventPublisher {
-        return .{ .context = capture, .publish = publish };
-    }
-
-    fn publish(context: *anyopaque, event: workspace_mod.WorkspaceCreated) void {
-        const capture: *EventCapture = @ptrCast(@alignCast(context));
-        const committed_name = capture.reader.workspaceName(event.location.workspace) orelse return;
-
-        capture.count += 1;
-        capture.last = event;
-        capture.observed_committed_state = capture.reader.revision() != capture.initial_revision and
-            std.mem.eql(u8, committed_name, event.nameSlice());
-    }
-};
+const EventCapture = @import("CreateWorkspaceEventCapture.zig");
 
 fn testingLaunch(cwd: []const u8) schema.LaunchView {
     return .{

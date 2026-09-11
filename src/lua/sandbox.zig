@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const lua = @import("lua-api").c;
-const Vm = @import("vm.zig").Vm;
+const Vm = @import("vm_support.zig").Vm;
 
 /// Opens the restricted standard library set and removes unsafe base globals.
 ///

@@ -3,7 +3,7 @@
 const core = @import("telar-core");
 const panes_application = @import("telar-client").application.panes;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const diagnostics = core.diagnostics;
 const pane_graphics = panes_application.pane_graphics;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");

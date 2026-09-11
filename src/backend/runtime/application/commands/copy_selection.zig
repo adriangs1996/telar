@@ -4,19 +4,12 @@ const std = @import("std");
 const core = @import("telar-core");
 const attachment_mod = @import("../../attachment/root.zig");
 
-const schema = core.schema;
-const AttachmentStore = attachment_mod.AttachmentStore;
+pub const schema = core.schema;
+pub const AttachmentStore = attachment_mod.AttachmentStore;
 
 pub const scratch_bytes = attachment_mod.selection_scratch_bytes;
 
-pub const CopySelection = struct {
-    pane_id: schema.PaneId,
-    start_x: u16,
-    start_y: u32,
-    end_x: u16,
-    end_y: u32,
-    linewise: bool,
-};
+pub const CopySelection = @import("CopySelection.zig");
 
 pub const CopySelectionResult = union(enum) {
     copied: []const u8,
@@ -25,35 +18,7 @@ pub const CopySelectionResult = union(enum) {
     too_large,
 };
 
-pub const CopySelectionHandler = struct {
-    attachments: *AttachmentStore,
-
-    /// Resolves attachment authority and extracts the requested inclusive
-    /// range into caller-owned scratch storage. Copied bytes borrow `scratch`
-    /// and must be consumed before the next use of that storage.
-    ///
-    /// ```zig
-    /// const result = handler.execute(command, &scratch);
-    /// ```
-    pub fn execute(handler: *CopySelectionHandler, command: CopySelection, scratch: []u8) CopySelectionResult {
-        const result = handler.attachments.copySelection(command.pane_id, .{
-            .range = .{
-                .start_x = command.start_x,
-                .start_y = command.start_y,
-                .end_x = command.end_x,
-                .end_y = command.end_y,
-                .linewise = command.linewise,
-            },
-            .scratch = scratch,
-        }) orelse return .pane_not_attached;
-
-        return switch (result) {
-            .copied => |bytes| .{ .copied = bytes },
-            .unavailable => .unavailable,
-            .too_large => .too_large,
-        };
-    }
-};
+pub const CopySelectionHandler = @import("CopySelectionHandler.zig");
 
 test "CopySelectionHandler rejects a pane outside the client attachments" {
     var attachments: AttachmentStore = .{};

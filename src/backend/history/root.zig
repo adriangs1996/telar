@@ -2,18 +2,18 @@
 
 const std = @import("std");
 const model_mod = @import("model.zig");
-const service_mod = @import("service.zig");
+const service_mod = @import("service_support.zig");
 const terminal_mod = @import("terminal.zig");
 
 pub const model = model_mod;
 pub const osc = @import("osc.zig");
 pub const terminal = terminal_mod;
-pub const observer = @import("observer.zig");
+pub const observer = @import("observer_support.zig");
 pub const prompt_scan = @import("prompt_scan.zig");
 pub const detection = @import("agent_detection.zig");
 pub const escape = @import("escape.zig");
 
-pub const Sequence = @import("sequence.zig").Sequence;
+pub const Sequence = @import("sequence_support.zig").Sequence;
 pub const Service = service_mod.Service;
 pub const Tracker = terminal_mod.Tracker;
 pub const Command = terminal_mod.Command;

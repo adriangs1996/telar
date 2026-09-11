@@ -15,26 +15,11 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-pub const Values = struct {
-    cpu_percent: u8,
-    memory_used_decigib: u16,
-    battery_percent: ?u8,
-};
+pub const Values = @import("Values.zig");
 
-/// Raw counters one platform read produces. Cpu ticks are cumulative since
-/// boot; the sampler turns consecutive reads into a percentage.
-const Raw = struct {
-    busy_ticks: u64,
-    total_ticks: u64,
-    memory_used_bytes: u64,
-    battery_percent: ?u8,
-};
+const Raw = @import("Raw.zig");
 
-pub const Sample = struct {
-    sampler: Sampler,
-    duration_ns: u64,
-    captured_ns: u64,
-};
+pub const Sample = @import("SystemMetricsSample.zig");
 
 /// Samples a value-owned copy without borrowing runtime state.
 /// Example: `const result = sampleOwned(io, previous);`.
@@ -46,57 +31,11 @@ pub fn sampleOwned(io: std.Io, previous: Sampler) Sample {
     return .{ .sampler = sampler, .duration_ns = @intCast(finished - started), .captured_ns = @intCast(finished) };
 }
 
-pub const Sampler = struct {
-    revision: u64 = 1,
-    latest: ?Values = null,
-    previous_busy: u64 = 0,
-    previous_total: u64 = 0,
+pub const Sampler = @import("Sampler.zig");
 
-    /// Reads the current host counters and retains the previous projection when
-    /// the platform cannot provide a complete sample. The revision changes
-    /// only when the values visible to clients change.
-    ///
-    /// ```zig
-    /// sampler.sample();
-    /// ```
-    pub fn sample(sampler: *Sampler) void {
-        const raw = readRaw() orelse return;
-        sampler.apply(raw);
-    }
+const CpuTicks = @import("CpuTicks.zig");
 
-    fn apply(sampler: *Sampler, raw: Raw) void {
-        const cpu = cpuPercent(
-            .{ .busy = sampler.previous_busy, .total = sampler.previous_total },
-            .{ .busy = raw.busy_ticks, .total = raw.total_ticks },
-        );
-        sampler.previous_busy = raw.busy_ticks;
-        sampler.previous_total = raw.total_ticks;
-        const next: Values = .{
-            .cpu_percent = cpu,
-            .memory_used_decigib = decigib(raw.memory_used_bytes),
-            .battery_percent = raw.battery_percent,
-        };
-        if (sampler.latest) |current| {
-            if (std.meta.eql(current, next)) {
-                return;
-            }
-        }
-        sampler.latest = next;
-        sampler.revision +%= 1;
-        if (sampler.revision == 0) {
-            sampler.revision = 1;
-        }
-    }
-};
-
-/// The first read has no predecessor, so it reports zero instead of a
-/// since-boot average that would spike the bar on startup.
-const CpuTicks = struct {
-    busy: u64,
-    total: u64,
-};
-
-fn cpuPercent(previous: CpuTicks, current: CpuTicks) u8 {
+pub fn cpuPercent(previous: CpuTicks, current: CpuTicks) u8 {
     if (previous.total == 0) {
         return 0;
     }
@@ -111,12 +50,12 @@ fn cpuPercent(previous: CpuTicks, current: CpuTicks) u8 {
     return @intCast(@min(100, busy_delta * 100 / total_delta));
 }
 
-fn decigib(bytes: u64) u16 {
+pub fn decigib(bytes: u64) u16 {
     const tenths = bytes * 10 / (1024 * 1024 * 1024);
     return @intCast(@min(tenths, std.math.maxInt(u16)));
 }
 
-fn readRaw() ?Raw {
+pub fn readRaw() ?Raw {
     return switch (builtin.os.tag) {
         .macos => readDarwin(),
         .linux => readLinux(),
@@ -126,22 +65,7 @@ fn readRaw() ?Raw {
 
 // -- macOS ------------------------------------------------------------------
 
-const darwin = struct {
-    // These declarations must match the Darwin C ABI exactly.
-    extern "c" fn mach_host_self() std.c.mach_port_t;
-    extern "c" fn host_statistics64(host: std.c.mach_port_t, flavor: c_int, info: [*]u32, count: *u32) c_int;
-    extern "c" fn getpagesize() c_int;
-
-    const HOST_CPU_LOAD_INFO: c_int = 3;
-    const HOST_VM_INFO64: c_int = 4;
-    const cpu_load_words = 4;
-    const vm_info_words = 38;
-    // Word offsets into `vm_statistics64`: four natural_t counters first,
-    // u64 fields take two words each. Only the ones used below are named.
-    const vm_active_word = 1;
-    const vm_wire_word = 3;
-    const vm_compressor_word = 32;
-};
+const darwin = @import("darwin.zig");
 
 fn readDarwin() ?Raw {
     if (builtin.os.tag != .macos) {

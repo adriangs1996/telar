@@ -3,57 +3,16 @@
 const std = @import("std");
 const core = @import("telar-core");
 
-const Client = @import("../client.zig");
+const Client = @import("../Client.zig");
 const runtime_transport = @import("../entrypoints/runtime_io.zig");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-const TabVersion = struct {
-    location: schema.TabLocation,
-    layout_revision: u64,
-};
+const TabVersion = @import("TabVersion.zig");
 
-const Version = struct {
-    chrome: u64,
-    active_tab: schema.TabLocation,
-    tabs: [schema.max_client_layout_tabs]TabVersion = undefined,
-    tab_count: u8 = 0,
+const Version = @import("Version.zig");
 
-    fn eql(left: *const Version, right: *const Version) bool {
-        if (left.chrome != right.chrome or
-            !std.meta.eql(left.active_tab, right.active_tab) or
-            left.tab_count != right.tab_count)
-        {
-            return false;
-        }
-        for (left.tabs[0..left.tab_count], right.tabs[0..right.tab_count]) |left_tab, right_tab| {
-            if (!std.meta.eql(left_tab, right_tab)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-};
-
-pub const State = struct {
-    snapshot_received: bool = false,
-    last_sent: ?Version = null,
-
-    /// Opens layout synchronization after the runtime's one bootstrap
-    /// snapshot has been consumed.
-    ///
-    /// ```zig
-    /// state.markSnapshotReceived();
-    /// ```
-    pub fn markSnapshotReceived(state: *State) !void {
-        if (state.snapshot_received) {
-            return error.DuplicateClientLayoutSnapshot;
-        }
-
-        state.snapshot_received = true;
-    }
-};
+pub const State = @import("ClientLayoutsState.zig");
 
 /// Coalesces the complete, canonical layout of the current workspace into the
 /// runtime outbox. Tabs without a runtime snapshot are omitted until known.

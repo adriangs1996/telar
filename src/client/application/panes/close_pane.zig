@@ -4,154 +4,26 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 
-const schema = core.schema;
+pub const schema = core.schema;
 
 pub const PaneClosure = client_model.PaneClosure;
 pub const PaneExit = client_model.PaneExit;
 
-pub const PaneOperationGate = struct {
-    context: *anyopaque,
-    pending: *const fn (*anyopaque) bool,
-};
+pub const PaneOperationGate = @import("ClosePanePaneOperationGate.zig");
 
-pub const CloseRequestEffects = struct {
-    context: *anyopaque,
-    send: *const fn (*anyopaque, PaneClosure) anyerror!void,
-};
+pub const CloseRequestEffects = @import("CloseRequestEffects.zig");
 
-pub const RequestClosePaneHandler = struct {
-    model: *const client_model.Model,
-    gate: PaneOperationGate,
-    effects: CloseRequestEffects,
+pub const RequestClosePaneHandler = @import("RequestClosePaneHandler.zig");
 
-    /// Sends one close request for the active attached pane. The request does
-    /// not mutate the model; `pane_exited` is the authoritative transition.
-    ///
-    /// ```zig
-    /// const closure = try handler.execute() orelse return;
-    /// ```
-    pub fn execute(handler: *RequestClosePaneHandler) !?PaneClosure {
-        if (handler.gate.pending(handler.gate.context)) {
-            return null;
-        }
+pub const PaneExitEffects = @import("PaneExitEffects.zig");
 
-        const closure = handler.model.planPaneClosure() orelse return null;
-        try handler.effects.send(handler.effects.context, closure);
+pub const HandlePaneExitHandler = @import("HandlePaneExitHandler.zig");
 
-        return closure;
-    }
-};
+const TestingModel = @import("ClosePaneTestingModel.zig");
 
-pub const PaneExitEffects = struct {
-    context: *anyopaque,
-    deliver: *const fn (*anyopaque, PaneExit) anyerror!void,
-};
+const RequestCapture = @import("ClosePaneRequestCapture.zig");
 
-pub const HandlePaneExitHandler = struct {
-    model: *client_model.Model,
-    effects: PaneExitEffects,
-
-    /// Commits pane retirement before releasing client resources. Stale exit
-    /// traffic still runs idempotent cleanup so pending requests can settle.
-    ///
-    /// ```zig
-    /// const transition = try handler.execute(pane_id);
-    /// ```
-    pub fn execute(handler: *HandlePaneExitHandler, pane_id: schema.PaneId) !PaneExit {
-        const transition = handler.model.retirePane(pane_id);
-        try handler.effects.deliver(handler.effects.context, transition);
-
-        return transition;
-    }
-};
-
-const TestingModel = struct {
-    model: *client_model.Model,
-    location: schema.TabLocation,
-    pane_id: schema.PaneId,
-
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const location: schema.TabLocation = .{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(1),
-        };
-        const pane_id: schema.PaneId = @enumFromInt(1);
-        try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 40, .rows = 10 } });
-
-        return .{ .model = model, .location = location, .pane_id = pane_id };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
-
-const RequestCapture = struct {
-    blocked: bool = false,
-    calls: usize = 0,
-    closure: ?PaneClosure = null,
-    fail: bool = false,
-
-    fn gate(capture: *RequestCapture) PaneOperationGate {
-        return .{ .context = capture, .pending = pending };
-    }
-
-    fn port(capture: *RequestCapture) CloseRequestEffects {
-        return .{ .context = capture, .send = send };
-    }
-
-    fn pending(context: *anyopaque) bool {
-        const capture: *RequestCapture = @ptrCast(@alignCast(context));
-        return capture.blocked;
-    }
-
-    fn send(context: *anyopaque, closure: PaneClosure) !void {
-        const capture: *RequestCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.closure = closure;
-        if (capture.fail) {
-            return error.SendFailed;
-        }
-    }
-};
-
-const ExitCapture = struct {
-    model: *const client_model.Model,
-    pane_id: schema.PaneId,
-    calls: usize = 0,
-    observed_commit: bool = false,
-    fail: bool = false,
-
-    fn port(capture: *ExitCapture) PaneExitEffects {
-        return .{ .context = capture, .deliver = deliver };
-    }
-
-    fn deliver(context: *anyopaque, transition: PaneExit) !void {
-        const capture: *ExitCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.observed_commit = capture.model.workspace.activeConst().?.model.findConst(capture.pane_id) == null;
-        switch (transition) {
-            .retired => |retired| {
-                capture.observed_commit = capture.observed_commit and
-                    retired.pane_id == capture.pane_id and
-                    capture.model.version().panes == 1;
-            },
-            .stale => |stale| {
-                capture.observed_commit = capture.observed_commit and stale.pane_id == capture.pane_id;
-            },
-        }
-
-        if (capture.fail) {
-            return error.CleanupFailed;
-        }
-    }
-};
+const ExitCapture = @import("ExitCapture.zig");
 
 test "RequestClosePaneHandler gates and sends without model mutation" {
     var testing = try TestingModel.init();

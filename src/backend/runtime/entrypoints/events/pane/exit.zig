@@ -8,140 +8,31 @@ const pty = @import("../../../../pty/root.zig");
 const telemetry_mod = @import("../../../observability/root.zig").telemetry;
 const test_support = @import("../../../tests/support.zig");
 
-const Pane = pane_mod.Pane;
-const PaneKey = pane_mod.PaneKey;
-const PaneStore = pane_mod.PaneStore;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+pub const Pane = pane_mod.Pane;
+pub const PaneKey = pane_mod.PaneKey;
+pub const PaneStore = pane_mod.PaneStore;
+pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 
-pub const Completion = struct {
-    pane: PaneKey,
-    result: anyerror!pty.Exit,
-};
+pub const Completion = @import("ExitCompletion.zig");
 
-pub const Resources = struct {
-    panes: *PaneStore,
-    agents: *agent_mod.Tracker,
-    metrics: *RuntimeMetrics,
-};
+pub const Resources = @import("ExitResources.zig");
 
-/// Defines credential retirement, history scheduling, and runtime lifecycle
-/// effects bound by the runtime instance.
-///
-/// ```zig
-/// const port: RuntimePort(Context) = .{ ... };
-/// ```
-pub fn RuntimePort(comptime Context: type) type {
-    return struct {
-        revoke_credential: *const fn (*Context, *Pane) void,
-        schedule_observation: *const fn (*Context, *Pane) anyerror!void,
-        collect: *const fn (*Context) void,
-        pump_clients: *const fn (*Context) void,
-    };
-}
+pub const RuntimePort = @import("GenericExitRuntimePort.zig").Type;
 
-/// Creates a statically dispatched pane-exit coordinator.
-///
-/// ```zig
-/// const ExitCoordinator = Coordinator(Context, port);
-/// ```
-pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) type {
-    return struct {
-        const Self = @This();
+pub const Coordinator = @import("GenericExitCoordinator.zig").Type;
 
-        context: *Context,
-        resources: Resources,
-
-        /// Binds one runtime's pane, agent, and telemetry stores.
-        ///
-        /// ```zig
-        /// var coordinator = ExitCoordinator.init(&context, resources);
-        /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
-            return .{ .context = context, .resources = resources };
-        }
-
-        /// Commits one generation-matched exit, retires agent and credential
-        /// state, and queues exit history once PTY output is already drained.
-        /// Wait failures become a synthetic SIGKILL exit.
-        ///
-        /// ```zig
-        /// try coordinator.handle(completion);
-        /// ```
-        pub fn handle(coordinator: *Self, completion: Completion) !void {
-            const transition = coordinator.resources.panes.completeExit(
-                completion.pane,
-                exitOrSynthetic(completion.result),
-            ) orelse {
-                coordinator.resources.metrics.stale_pane_events += 1;
-                return;
-            };
-
-            _ = coordinator.resources.agents.remove(transition.pane.key());
-            port.revoke_credential(coordinator.context, transition.pane);
-
-            if (transition.launch_aborting) {
-                port.collect(coordinator.context);
-                port.pump_clients(coordinator.context);
-                return;
-            }
-
-            if (transition.output_done) {
-                transition.pane.queueExitedHistory(transition.exit);
-                try port.schedule_observation(coordinator.context, transition.pane);
-            }
-
-            port.collect(coordinator.context);
-            port.pump_clients(coordinator.context);
-        }
-    };
-}
-
-fn exitOrSynthetic(result: anyerror!pty.Exit) pty.Exit {
+pub fn exitOrSynthetic(result: anyerror!pty.Exit) pty.Exit {
     return result catch .{ .signaled = .KILL };
 }
 
-const Step = enum {
+pub const Step = enum {
     revoke_credential,
     observation,
     collect,
     pump_clients,
 };
 
-const Capture = struct {
-    steps: [4]Step = undefined,
-    len: usize = 0,
-    observation_failure: bool = false,
-    revoke_saw_exit: bool = false,
-    observation_saw_history: bool = false,
-
-    fn record(capture: *Capture, step: Step) void {
-        std.debug.assert(capture.len < capture.steps.len);
-        capture.steps[capture.len] = step;
-        capture.len += 1;
-    }
-
-    fn revokeCredential(capture: *Capture, pane: *Pane) void {
-        capture.record(.revoke_credential);
-        capture.revoke_saw_exit = pane.exit != null;
-    }
-
-    fn scheduleObservation(capture: *Capture, pane: *Pane) !void {
-        capture.record(.observation);
-        capture.observation_saw_history = pane.history_exit_queued and pane.history_observer.hasPending();
-
-        if (capture.observation_failure) {
-            return error.SchedulerUnavailable;
-        }
-    }
-
-    fn collect(capture: *Capture) void {
-        capture.record(.collect);
-    }
-
-    fn pumpClients(capture: *Capture) void {
-        capture.record(.pump_clients);
-    }
-};
+const Capture = @import("ExitCapture.zig");
 
 const test_port: RuntimePort(Capture) = .{
     .revoke_credential = Capture.revokeCredential,

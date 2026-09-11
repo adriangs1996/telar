@@ -4,7 +4,7 @@ const core = @import("telar-core");
 const panes_application = @import("telar-client").application.panes;
 const client_model = @import("telar-client").model;
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const pane_viewport_delivery = panes_application.pane_viewport_delivery;
 const set_pane_viewport = panes_application.set_pane_viewport;

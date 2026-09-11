@@ -13,65 +13,15 @@ const telemetry_mod = @import("../observability/root.zig").telemetry;
 
 const schema = core.schema;
 const diagnostics = core.diagnostics;
-const Pane = pane_mod.Pane;
+pub const Pane = pane_mod.Pane;
 const AttachmentStore = attachment_mod.AttachmentStore;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const InputController = pane_input_controller.Controller(*pane_input_commands.PaneInputHandler);
 const PaneFixture = test_support.PaneFixture;
 
-const ScheduleStep = enum { observation, input };
+pub const ScheduleStep = enum { observation, input };
 
-const ScheduleCapture = struct {
-    steps: [2]ScheduleStep = undefined,
-    len: usize = 0,
-    observation_failure: ?anyerror = null,
-    input_failure: ?anyerror = null,
-    observation_saw_history: bool = false,
-    observation_saw_empty_input_queue: bool = false,
-    input_saw_history: bool = false,
-    expected_input: ?[]const u8 = null,
-    input_matched: bool = false,
-
-    fn scheduler(capture: *ScheduleCapture) pane_input_commands.Scheduler {
-        return .{
-            .context = capture,
-            .observation = scheduleObservation,
-            .input = scheduleInput,
-        };
-    }
-
-    fn scheduleObservation(context: *anyopaque, pane: *Pane) !void {
-        const capture: *ScheduleCapture = @ptrCast(@alignCast(context));
-        capture.record(.observation);
-        capture.observation_saw_history = pane.history_observer.hasPending();
-        capture.observation_saw_empty_input_queue = pane.input_queue.nextChunk() == null;
-
-        if (capture.observation_failure) |failure| {
-            return failure;
-        }
-    }
-
-    fn scheduleInput(context: *anyopaque, pane: *Pane) !void {
-        const capture: *ScheduleCapture = @ptrCast(@alignCast(context));
-        capture.record(.input);
-        capture.input_saw_history = pane.history_observer.hasPending();
-
-        if (capture.expected_input) |expected| {
-            const queued = pane.input_queue.nextChunk() orelse return error.MissingQueuedInput;
-            capture.input_matched = std.mem.eql(u8, expected, queued);
-        }
-
-        if (capture.input_failure) |failure| {
-            return failure;
-        }
-    }
-
-    fn record(capture: *ScheduleCapture, step: ScheduleStep) void {
-        std.debug.assert(capture.len < capture.steps.len);
-        capture.steps[capture.len] = step;
-        capture.len += 1;
-    }
-};
+const ScheduleCapture = @import("PaneInputTestScheduleCapture.zig");
 
 fn handlerFor(fixture: *PaneFixture, capture: *ScheduleCapture, observe_agent_input: bool) pane_input_commands.PaneInputHandler {
     return .{

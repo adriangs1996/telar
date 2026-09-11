@@ -8,56 +8,9 @@ const pane_mod = @import("../../pane/root.zig");
 const delivery_mod = @import("../delivery/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-const Effects = struct {
-    launched: pane_mod.PaneLaunched,
-    attachment_count: usize = 0,
-    event_count: usize = 0,
-
-    fn panes(effects: *Effects) create_pane_commands.TabPanes {
-        return .{ .context = effects, .has_running = hasRunning };
-    }
-
-    fn authority(effects: *Effects) create_pane_commands.LaunchAuthority {
-        return .{ .context = effects, .prepare = prepare };
-    }
-
-    fn launcher(effects: *Effects) create_pane_commands.PaneLauncher {
-        return .{ .context = effects, .launch = launch };
-    }
-
-    fn attachment(effects: *Effects) create_pane_commands.PaneAttachment {
-        return .{ .context = effects, .attach = attach };
-    }
-
-    fn publisher(effects: *Effects) create_pane_commands.EventPublisher {
-        return .{ .context = effects, .publish = publish };
-    }
-
-    fn hasRunning(_: *anyopaque, _: schema.TabLocation) bool {
-        return true;
-    }
-
-    fn prepare(_: *anyopaque, _: create_pane_commands.PrepareLaunch) ![]const u8 {
-        return "/work/project";
-    }
-
-    fn launch(context: *anyopaque, _: create_pane_commands.LaunchPane) !pane_mod.PaneLaunched {
-        const effects: *Effects = @ptrCast(@alignCast(context));
-        return effects.launched;
-    }
-
-    fn attach(context: *anyopaque, _: pane_mod.PaneLaunched) !void {
-        const effects: *Effects = @ptrCast(@alignCast(context));
-        effects.attachment_count += 1;
-    }
-
-    fn publish(context: *anyopaque, _: pane_mod.PaneLaunched) void {
-        const effects: *Effects = @ptrCast(@alignCast(context));
-        effects.event_count += 1;
-    }
-};
+const Effects = @import("CreatePaneTestEffects.zig");
 
 test "a committed pane launch survives response queue backpressure" {
     var state: workspace_mod.State = .{};

@@ -8,8 +8,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 const core = @import("telar-core");
 
-const schema = core.schema;
-const Table = core.agent_manifest.Table;
+pub const schema = core.schema;
+pub const Table = core.agent_manifest.Table;
 const process_cwd = @import("cwd.zig");
 
 /// Reads a process working directory into caller-owned storage without
@@ -31,61 +31,13 @@ pub const max_acquisition_attempts: u8 = 6;
 pub const max_group_processes = 64;
 pub const max_process_args_bytes = 16 * 1024;
 
-pub const Cache = struct {
-    process_group_id: ?u32 = null,
-    provider: schema.AgentProvider = .unknown,
-    attempts: u8 = 0,
-    foreground_name: [schema.max_foreground_name_bytes]u8 = @splat(0),
-    foreground_name_len: u8 = 0,
+pub const Cache = @import("Cache.zig");
 
-    pub fn init(executable: []const u8) Cache {
-        var cache: Cache = .{};
-        cache.setName(boundedCommandName(executable));
-        return cache;
-    }
+const Identification = @import("Identification.zig");
 
-    pub fn name(cache: *const Cache) []const u8 {
-        return cache.foreground_name[0..cache.foreground_name_len];
-    }
+pub const Probe = @import("Probe.zig");
 
-    fn setName(cache: *Cache, value: []const u8) void {
-        const source = if (value.len == 0) "process" else value;
-        const len = @min(source.len, cache.foreground_name.len);
-        @memcpy(cache.foreground_name[0..len], source[0..len]);
-        cache.foreground_name_len = @intCast(len);
-    }
-};
-
-const Identification = struct {
-    provider: schema.AgentProvider = .unknown,
-    name: [schema.max_foreground_name_bytes]u8 = @splat(0),
-    name_len: u8 = 0,
-
-    fn init(table: *const Table, provider: schema.AgentProvider, command: []const u8) Identification {
-        var result: Identification = .{ .provider = provider };
-        const value = applicationName(table, provider, command);
-        @memcpy(result.name[0..value.len], value);
-        result.name_len = @intCast(value.len);
-        return result;
-    }
-
-    fn slice(result: *const Identification) []const u8 {
-        return result.name[0..result.name_len];
-    }
-};
-
-pub const Probe = struct {
-    cache: Cache,
-    changed: bool = false,
-    inspected: bool = false,
-};
-
-pub const ProbeInput = struct {
-    process_group_id: ?std.c.pid_t,
-    shell_pid: std.c.pid_t,
-    previous: Cache,
-    manifests: *const Table = &core.agent_manifest.builtin_table,
-};
+pub const ProbeInput = @import("ProbeInput.zig");
 
 /// Resolve a process group without allocating. A known group is cached until
 /// `tcgetpgrp` reports a different one. Unknown groups receive a small bounded
@@ -391,7 +343,7 @@ fn identifyCommand(table: *const Table, comm: []const u8, argv: []const u8) sche
 
 /// The foreground name a pane shows: the manifest display name for a known
 /// agent, otherwise the executable basename.
-fn applicationName(table: *const Table, provider: schema.AgentProvider, command: []const u8) []const u8 {
+pub fn applicationName(table: *const Table, provider: schema.AgentProvider, command: []const u8) []const u8 {
     if (provider == .unknown) {
         return boundedCommandName(command);
     }
@@ -399,7 +351,7 @@ fn applicationName(table: *const Table, provider: schema.AgentProvider, command:
     return table.displayName(provider);
 }
 
-fn boundedCommandName(command: []const u8) []const u8 {
+pub fn boundedCommandName(command: []const u8) []const u8 {
     const basename = pathBasename(command);
     const len = @min(basename.len, schema.max_foreground_name_bytes);
     const candidate = basename[0..len];

@@ -6,195 +6,26 @@
 const std = @import("std");
 const core = @import("telar-core");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-const OwnedTabLabel = struct {
-    bytes: [schema.max_tab_label_bytes]u8 = undefined,
-    len: u8,
+const OwnedTabLabel = @import("OwnedTabLabel.zig");
 
-    fn init(label: []const u8) !OwnedTabLabel {
-        if (label.len == 0 or label.len > schema.max_tab_label_bytes) {
-            return error.InvalidTabLabel;
-        }
+const OwnedWorkspaceName = @import("GenericOwnedWorkspaceName.zig").Type;
 
-        var owned: OwnedTabLabel = .{ .len = @intCast(label.len) };
-        @memcpy(owned.bytes[0..label.len], label);
-        return owned;
-    }
+pub const OwnedExplicitWorkspaceName = OwnedWorkspaceName(schema.max_tab_label_bytes);
+pub const OwnedCreatedWorkspaceName = OwnedWorkspaceName(schema.max_workspace_name_bytes);
 
-    fn slice(label: *const OwnedTabLabel) []const u8 {
-        return label.bytes[0..label.len];
-    }
-};
+pub const TabCreated = @import("TabCreated.zig");
 
-fn OwnedWorkspaceName(comptime max_bytes: usize) type {
-    return struct {
-        const Self = @This();
+pub const TabRemoved = @import("TabRemoved.zig");
 
-        bytes: [max_bytes]u8 = undefined,
-        len: u16,
+pub const TabRenamed = @import("TabRenamed.zig");
 
-        fn init(name: []const u8) !Self {
-            if (name.len == 0 or name.len > max_bytes) {
-                return error.InvalidWorkspaceName;
-            }
+pub const TabMoved = @import("TabMoved.zig");
 
-            var owned: Self = .{ .len = @intCast(name.len) };
-            @memcpy(owned.bytes[0..name.len], name);
-            return owned;
-        }
+pub const WorkspaceRenamed = @import("WorkspaceRenamed.zig");
 
-        fn slice(name: *const Self) []const u8 {
-            return name.bytes[0..name.len];
-        }
-    };
-}
-
-const OwnedExplicitWorkspaceName = OwnedWorkspaceName(schema.max_tab_label_bytes);
-const OwnedCreatedWorkspaceName = OwnedWorkspaceName(schema.max_workspace_name_bytes);
-
-pub const TabCreated = struct {
-    location: schema.TabLocation,
-    position: u16,
-    label: OwnedTabLabel,
-
-    /// Creates an event that owns the canonical label of the new tab.
-    ///
-    /// ```zig
-    /// const event = try TabCreated.init(location, 1, "logs");
-    /// ```
-    pub fn init(location: schema.TabLocation, position: u16, label: []const u8) !TabCreated {
-        return .{
-            .location = location,
-            .position = position,
-            .label = try .init(label),
-        };
-    }
-
-    /// Returns the event-owned canonical tab label.
-    ///
-    /// ```zig
-    /// const label = event.labelSlice();
-    /// ```
-    pub fn labelSlice(event: *const TabCreated) []const u8 {
-        return event.label.slice();
-    }
-};
-
-/// Committed disappearance of a tab from its workspace aggregate.
-pub const TabRemoved = struct {
-    location: schema.TabLocation,
-    workspace_removed: bool,
-    previous_workspace: ?schema.WorkspaceId = null,
-
-    /// Creates a removal fact and rejects an impossible workspace handoff.
-    /// A predecessor exists only when the removal also removed its workspace.
-    ///
-    /// ```zig
-    /// const event = try TabRemoved.init(location, true, previous_workspace);
-    /// ```
-    pub fn init(location: schema.TabLocation, workspace_removed: bool, previous_workspace: ?schema.WorkspaceId) !TabRemoved {
-        if (!workspace_removed and previous_workspace != null) {
-            return error.UnexpectedPreviousWorkspace;
-        }
-
-        if (previous_workspace) |previous| {
-            const removed_workspace = switch (location.workspace) {
-                .workspace => |workspace_id| workspace_id,
-                .worktree => return error.InvalidPreviousWorkspace,
-            };
-
-            if (previous == removed_workspace) {
-                return error.InvalidPreviousWorkspace;
-            }
-        }
-
-        return .{
-            .location = location,
-            .workspace_removed = workspace_removed,
-            .previous_workspace = previous_workspace,
-        };
-    }
-};
-
-pub const TabRenamed = struct {
-    location: schema.TabLocation,
-    label: OwnedTabLabel,
-
-    /// Validates and owns the canonical label carried by a tab rename event.
-    /// The aggregate exposes this value only after committing the mutation.
-    ///
-    /// ```zig
-    /// const event = try TabRenamed.init(location, "server");
-    /// ```
-    pub fn init(location: schema.TabLocation, label: []const u8) !TabRenamed {
-        return .{
-            .location = location,
-            .label = try .init(label),
-        };
-    }
-
-    /// Returns the event-owned canonical tab label.
-    ///
-    /// ```zig
-    /// const label = event.labelSlice();
-    /// ```
-    pub fn labelSlice(event: *const TabRenamed) []const u8 {
-        return event.label.slice();
-    }
-};
-
-/// Committed position of a tab after a move request.
-pub const TabMoved = struct {
-    location: schema.TabLocation,
-    position: u16,
-};
-
-pub const WorkspaceRenamed = struct {
-    location: schema.WorkspaceLocation,
-    name: OwnedExplicitWorkspaceName,
-
-    /// Validates and owns the canonical name of a renamed workspace.
-    ///
-    /// ```zig
-    /// const event = try WorkspaceRenamed.init(location, "backend");
-    /// ```
-    pub fn init(location: schema.WorkspaceLocation, name: []const u8) !WorkspaceRenamed {
-        return .{ .location = location, .name = try .init(name) };
-    }
-
-    /// Returns the event-owned canonical workspace name.
-    ///
-    /// ```zig
-    /// const name = event.nameSlice();
-    /// ```
-    pub fn nameSlice(event: *const WorkspaceRenamed) []const u8 {
-        return event.name.slice();
-    }
-};
-
-pub const WorkspaceCreated = struct {
-    location: schema.TabLocation,
-    name: OwnedCreatedWorkspaceName,
-
-    /// Creates a committed workspace event that owns its canonical name.
-    ///
-    /// ```zig
-    /// const event = try WorkspaceCreated.init(location, "backend");
-    /// ```
-    pub fn init(location: schema.TabLocation, name: []const u8) !WorkspaceCreated {
-        return .{ .location = location, .name = try .init(name) };
-    }
-
-    /// Returns the event-owned canonical workspace name.
-    ///
-    /// ```zig
-    /// const name = event.nameSlice();
-    /// ```
-    pub fn nameSlice(event: *const WorkspaceCreated) []const u8 {
-        return event.name.slice();
-    }
-};
+pub const WorkspaceCreated = @import("WorkspaceCreated.zig");
 
 fn testingLocation() !schema.TabLocation {
     return .{

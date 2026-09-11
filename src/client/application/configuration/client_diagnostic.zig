@@ -4,10 +4,7 @@ const std = @import("std");
 const lua_config = @import("../../config/root.zig");
 const client_model = @import("../../root.zig").model;
 
-pub const Replacement = struct {
-    diagnostic: lua_config.Diagnostic,
-    invalid_fallback: ?lua_config.Diagnostic = null,
-};
+pub const Replacement = @import("Replacement.zig");
 
 /// Formats one bounded diagnostic value without mutating client state.
 ///
@@ -21,33 +18,7 @@ pub fn formatted(comptime format: []const u8, args: anytype) lua_config.Diagnost
     return diagnostic;
 }
 
-pub const ClientDiagnosticHandler = struct {
-    model: *client_model.Model,
-
-    /// Commits one validated diagnostic, using the explicit fallback only
-    /// when the primary value is malformed.
-    ///
-    /// ```zig
-    /// _ = try handler.replace(.{ .diagnostic = diagnostic });
-    /// ```
-    pub fn replace(handler: *ClientDiagnosticHandler, replacement: Replacement) !client_model.Change {
-        return handler.model.replaceDiagnostic(replacement.diagnostic) catch |err| switch (err) {
-            error.InvalidClientDiagnostic => if (replacement.invalid_fallback) |fallback|
-                handler.model.replaceDiagnostic(fallback)
-            else
-                error.InvalidClientDiagnostic,
-        };
-    }
-
-    /// Clears the current diagnostic without advancing a repeated revision.
-    ///
-    /// ```zig
-    /// _ = handler.clear();
-    /// ```
-    pub fn clear(handler: *ClientDiagnosticHandler) client_model.Change {
-        return handler.model.clearDiagnostic();
-    }
-};
+pub const ClientDiagnosticHandler = @import("ClientDiagnosticHandler.zig");
 
 fn invalidDiagnostic() lua_config.Diagnostic {
     var diagnostic: lua_config.Diagnostic = .{};

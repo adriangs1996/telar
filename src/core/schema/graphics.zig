@@ -8,56 +8,19 @@ pub const ShmName = shared.ShmName;
 
 pub const SnapshotPhase = enum(u8) { begin = 0, end = 1 };
 
-pub const Snapshot = struct {
-    pane_id: PaneId,
-    revision: u64,
-    phase: SnapshotPhase,
-};
+pub const Snapshot = @import("Snapshot.zig");
 
-pub const Image = struct {
-    pane_id: PaneId,
-    revision: u64,
-    image: shared.Image,
-};
+pub const Image = @import("Image.zig");
 
-pub const ImageChunk = struct {
-    pane_id: PaneId,
-    revision: u64,
-    key: shared.ImageKey,
-    offset: u64,
-    bytes: []const u8,
-};
+pub const ImageChunk = @import("ImageChunk.zig");
 
-/// A complete image whose pixels live in a runtime-owned POSIX shared memory
-/// object instead of the socket. Only the validated name crosses the wire;
-/// the client maps the object read-only. Local transports only: the client
-/// declares the capability explicitly before the runtime may use this.
-pub const SharedImage = struct {
-    pane_id: PaneId,
-    revision: u64,
-    image: shared.Image,
-    name: shared.ShmName,
-};
+pub const SharedImage = @import("SharedImage.zig");
 
-pub const Placement = struct {
-    pane_id: PaneId,
-    revision: u64,
-    placement: shared.Placement,
-};
+pub const Placement = @import("Placement.zig");
 
-pub const DeleteImage = struct {
-    pane_id: PaneId,
-    revision: u64,
-    key: shared.ImageKey,
-};
+pub const DeleteImage = @import("DeleteImage.zig");
 
-pub const DeletePlacement = struct {
-    pane_id: PaneId,
-    revision: u64,
-    key: shared.ImageKey,
-    virtual_id: u64,
-    placement_id: u32,
-};
+pub const DeletePlacement = @import("DeletePlacement.zig");
 
 pub fn encodeSnapshot(e: *wire.Encoder, value: Snapshot) !void {
     try header(e, value.pane_id, value.revision);

@@ -10,13 +10,7 @@ const Pane = pane_mod.Pane;
 
 pub const scratch_bytes = 2 * schema.max_clipboard_bytes + 1;
 
-pub const Range = struct {
-    start_x: u16,
-    start_y: u32,
-    end_x: u16,
-    end_y: u32,
-    linewise: bool,
-};
+pub const Range = @import("Range.zig");
 
 pub const Result = union(enum) {
     copied: []const u8,
@@ -24,15 +18,9 @@ pub const Result = union(enum) {
     too_large,
 };
 
-const Point = struct {
-    x: u16,
-    y: u32,
-};
+const Point = @import("Point.zig");
 
-const Endpoints = struct {
-    start: Point,
-    end: Point,
-};
+const Endpoints = @import("Endpoints.zig");
 
 /// Extracts one inclusive range into caller-owned fixed storage. Returned bytes
 /// borrow `scratch` and remain valid until that storage is reused. Oversized

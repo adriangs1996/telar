@@ -5,7 +5,7 @@
 const core = @import("telar-core");
 const diagnostics = core.diagnostics;
 
-const Client = @import("../client.zig");
+const Client = @import("../Client.zig");
 const presentation_application = @import("telar-client").application.presentation;
 const presentation_projection = @import("presentation_projection.zig");
 const runtime_transport = @import("../entrypoints/runtime_io.zig");
@@ -67,7 +67,7 @@ pub fn presentNow(client: *Client) !void {
     try deliver(client, delivery);
 }
 
-fn deliver(client: *Client, token: @import("presenter.zig").Token) !void {
+fn deliver(client: *Client, token: @import("Presenter.zig").Token) !void {
     const delivery = client.presenter.presentation_state.complete(token, .delivered) orelse return;
     var use_case: presentation_delivery.DeliverPresentationHandler = .{
         .model = &client.model,

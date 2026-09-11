@@ -21,8 +21,8 @@ const File = Io.File;
 const schema = core.schema;
 const term = presentation.screen;
 
-const Client = @import("../client.zig");
-const InputHandler = @import("../resources/input_handler.zig");
+const Client = @import("../Client.zig");
+const InputHandler = @import("../resources/InputHandler.zig");
 const active_pane_resources = @import("../controllers/panes/active_pane_resources.zig");
 const client_actions = @import("../controllers/input/actions.zig");
 const agent_navigation = @import("../controllers/agents/agent_navigation.zig");

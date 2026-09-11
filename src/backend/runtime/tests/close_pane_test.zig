@@ -6,28 +6,9 @@ const close_pane_commands = @import("../application/commands/close_pane.zig");
 const close_pane_controller = @import("../entrypoints/requests/close_pane.zig");
 const delivery_mod = @import("../delivery/root.zig");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-const PaneCapture = struct {
-    attached_pane: schema.PaneId,
-    requested: bool = false,
-
-    fn port(capture: *PaneCapture) close_pane_commands.AttachedPaneCloser {
-        return .{ .context = capture, .request_close = requestClose };
-    }
-
-    fn requestClose(context: *anyopaque, pane_id: schema.PaneId) ?bool {
-        const capture: *PaneCapture = @ptrCast(@alignCast(context));
-
-        if (pane_id != capture.attached_pane) {
-            return null;
-        }
-
-        const newly_requested = !capture.requested;
-        capture.requested = true;
-        return newly_requested;
-    }
-};
+const PaneCapture = @import("ClosePaneTestPaneCapture.zig");
 
 test "repeated close requests cross controller and handler idempotently" {
     const pane_id = try schema.id.pane(7);

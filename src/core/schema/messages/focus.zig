@@ -11,114 +11,22 @@ const tags = @import("tags.zig");
 
 const ClientTag = tags.ClientTag;
 const ServerTag = tags.ServerTag;
-const RequestId = id.RequestId;
-const PaneId = id.PaneId;
-const PaneDirection = types.PaneDirection;
-const PaneFocusOutcome = types.PaneFocusOutcome;
-const validateRequestId = codec.validateRequestId;
-const validatePaneId = codec.validatePaneId;
+pub const RequestId = id.RequestId;
+pub const PaneId = id.PaneId;
+pub const PaneDirection = types.PaneDirection;
+pub const PaneFocusOutcome = types.PaneFocusOutcome;
+pub const validateRequestId = codec.validateRequestId;
+pub const validatePaneId = codec.validatePaneId;
 
-pub const ClientRoute = struct {
-    id: u64,
-    generation: u64,
+pub const ClientRoute = @import("ClientRoute.zig");
 
-    /// Rejects the zero identities reserved for absent client routes.
-    ///
-    /// ```zig
-    /// try route.validateWire();
-    /// ```
-    pub fn validateWire(route: ClientRoute) !void {
-        if (route.id == 0 or route.generation == 0) {
-            return error.InvalidClientRoute;
-        }
-    }
-};
+pub const RequestPaneFocus = @import("RequestPaneFocus.zig");
 
-pub const RequestPaneFocus = struct {
-    request_id: RequestId,
-    pane_id: PaneId,
-    pane_generation: u64,
-    direction: PaneDirection,
+pub const CompletePaneFocus = @import("CompletePaneFocus.zig");
 
-    /// Requires an exact live pane identity and a correlatable request.
-    ///
-    /// ```zig
-    /// try request.validateWire();
-    /// ```
-    pub fn validateWire(request: RequestPaneFocus) !void {
-        try validateRequestId(request.request_id);
-        try validatePaneId(request.pane_id);
-        if (request.pane_generation == 0) {
-            return error.InvalidPaneGeneration;
-        }
-    }
-};
+pub const PaneFocusCommand = @import("PaneFocusCommand.zig");
 
-pub const CompletePaneFocus = struct {
-    requester: ClientRoute,
-    request_id: RequestId,
-    pane_id: PaneId,
-    pane_generation: u64,
-    outcome: PaneFocusOutcome,
-    focused_pane_id: PaneId,
-
-    /// Validates the echoed route and the focused pane required on success.
-    ///
-    /// ```zig
-    /// try completion.validateWire();
-    /// ```
-    pub fn validateWire(completion: CompletePaneFocus) !void {
-        try completion.requester.validateWire();
-        try validateRequestId(completion.request_id);
-        try validatePaneId(completion.pane_id);
-        if (completion.pane_generation == 0) {
-            return error.InvalidPaneGeneration;
-        }
-        if (completion.outcome == .focused) {
-            try validatePaneId(completion.focused_pane_id);
-        }
-    }
-};
-
-pub const PaneFocusCommand = struct {
-    requester: ClientRoute,
-    request_id: RequestId,
-    pane_id: PaneId,
-    pane_generation: u64,
-    direction: PaneDirection,
-
-    /// Requires the runtime route and exact pane generation sent to the UI.
-    ///
-    /// ```zig
-    /// try command.validateWire();
-    /// ```
-    pub fn validateWire(command: PaneFocusCommand) !void {
-        try command.requester.validateWire();
-        try validateRequestId(command.request_id);
-        try validatePaneId(command.pane_id);
-        if (command.pane_generation == 0) {
-            return error.InvalidPaneGeneration;
-        }
-    }
-};
-
-pub const PaneFocusResult = struct {
-    request_id: RequestId,
-    outcome: PaneFocusOutcome,
-    focused_pane_id: PaneId,
-
-    /// Requires a focused pane identity only when the UI changed focus.
-    ///
-    /// ```zig
-    /// try result.validateWire();
-    /// ```
-    pub fn validateWire(result: PaneFocusResult) !void {
-        try validateRequestId(result.request_id);
-        if (result.outcome == .focused) {
-            try validatePaneId(result.focused_pane_id);
-        }
-    }
-};
+pub const PaneFocusResult = @import("PaneFocusResult.zig");
 
 pub fn encodeRequestPaneFocus(buffer: []u8, message: RequestPaneFocus) ![]const u8 {
     try message.validateWire();

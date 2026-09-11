@@ -56,11 +56,7 @@ pub fn captureClipboard(gpa: std.mem.Allocator, request: CaptureRequest, orphan:
     return capture;
 }
 
-const ClipboardImage = struct {
-    png: []u8,
-    width: u32,
-    height: u32,
-};
+const ClipboardImage = @import("ClipboardImage.zig");
 
 fn readClipboardPng(gpa: std.mem.Allocator) !ClipboardImage {
     if (comptime builtin.os.tag != .macos) {

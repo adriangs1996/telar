@@ -8,96 +8,14 @@ const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
 const pane_geometry_delivery = @import("../panes/root.zig").pane_geometry_delivery;
 const pane_resource_release = @import("../panes/root.zig").pane_resource_release;
 
-const schema = core.schema;
-const ui = core.ui;
+pub const schema = core.schema;
+pub const ui = core.ui;
 
-pub const Effects = struct {
-    context: *anyopaque,
-    ignore_tab_requests: *const fn (*anyopaque, schema.TabId) void,
-    clear_pane_graphics: *const fn (*anyopaque, schema.PaneId) void,
-    set_pane_graphics_visible: *const fn (*anyopaque, schema.PaneId, bool) anyerror!void,
-    synchronize_active_resources: *const fn (*anyopaque) anyerror!void,
-    tab_snapshot_pending: *const fn (*anyopaque) bool,
-    request_tab_snapshot: *const fn (*anyopaque, schema.TabLocation) anyerror!void,
-};
+pub const Effects = @import("WorkspaceSnapshotDeliveryEffects.zig");
 
-pub const DeliverWorkspaceSnapshotHandler = struct {
-    model: *client_model.Model,
-    area: ui.Rect,
-    geometry_effects: pane_geometry_delivery.OfferEffects,
-    effects: Effects,
+pub const DeliverWorkspaceSnapshotHandler = @import("DeliverWorkspaceSnapshotHandler.zig");
 
-    /// Validates one exact reconciliation before releasing retired resources,
-    /// activating the canonical tab and repairing snapshot or geometry state.
-    ///
-    /// ```zig
-    /// try handler.execute(&reconciliation);
-    /// ```
-    pub fn execute(handler: *DeliverWorkspaceSnapshotHandler, reconciliation: *const client_model.WorkspaceReconciliation) !void {
-        try handler.validate(reconciliation);
-
-        for (reconciliation.removed_tabs.slice()) |location| {
-            handler.effects.ignore_tab_requests(handler.effects.context, location.tab_id);
-        }
-
-        var release_pane: pane_resource_release.ReleasePaneResourcesHandler = .{
-            .model = handler.model,
-            .effects = .{
-                .context = handler.effects.context,
-                .clear_graphics = handler.effects.clear_pane_graphics,
-            },
-        };
-        for (reconciliation.removed_panes.slice()) |pane_id| {
-            _ = release_pane.execute(pane_id);
-        }
-
-        const active = handler.model.workspace.active() orelse return error.StaleWorkspaceReconciliation;
-        if (reconciliation.active_tab_changed) {
-            var retire_focus: pane_focus_reporting.RetireReportedPaneFocusHandler = .{
-                .model = handler.model,
-            };
-            _ = retire_focus.execute();
-
-            var panes = active.model.paneIterator();
-            while (panes.next()) |pane| {
-                try handler.effects.set_pane_graphics_visible(handler.effects.context, pane.id, true);
-            }
-
-            try handler.effects.synchronize_active_resources(handler.effects.context);
-        }
-
-        if (handler.effects.tab_snapshot_pending(handler.effects.context)) {
-            return;
-        }
-
-        if (reconciliation.active_tab_changed or !reconciliation.active_snapshot_loaded) {
-            try handler.effects.request_tab_snapshot(handler.effects.context, reconciliation.active);
-            return;
-        }
-
-        var offer_geometry: pane_geometry_delivery.OfferPaneGeometryHandler = .{
-            .effects = handler.geometry_effects,
-        };
-        _ = try offer_geometry.execute(&active.model, handler.area);
-    }
-
-    fn validate(handler: *const DeliverWorkspaceSnapshotHandler, reconciliation: *const client_model.WorkspaceReconciliation) !void {
-        const active = handler.model.workspace.activeConst() orelse return error.StaleWorkspaceReconciliation;
-        const version = handler.model.version();
-        if (!std.meta.eql(active.location, reconciliation.active) or
-            reconciliation.active_tab_changed != !std.meta.eql(reconciliation.previous_active, reconciliation.active) or
-            active.snapshot_loaded != reconciliation.active_snapshot_loaded or
-            version.workspace != reconciliation.workspace_revision or
-            version.tabs != reconciliation.tabs_revision or
-            version.active_tab != reconciliation.active_tab_revision or
-            version.panes != reconciliation.panes_revision)
-        {
-            return error.StaleWorkspaceReconciliation;
-        }
-    }
-};
-
-const Event = union(enum) {
+pub const Event = union(enum) {
     ignore_tab: schema.TabId,
     clear_graphics: schema.PaneId,
     set_graphics_visible: struct {
@@ -110,7 +28,7 @@ const Event = union(enum) {
     resize: schema.PaneId,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     graphics_visibility,
     active_resources,
@@ -118,186 +36,9 @@ const Failure = enum {
     resize,
 };
 
-const TestingModel = struct {
-    model: *client_model.Model,
-    workspace: schema.WorkspaceLocation,
-    first: schema.TabLocation,
-    second: schema.TabLocation,
-    first_pane: schema.PaneId,
-    second_pane: schema.PaneId,
-    tabs: [1]client_model.WorkspaceTabInput,
+const TestingModel = @import("WorkspaceSnapshotDeliveryTestingModel.zig");
 
-    fn init(two_tabs: bool) !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-        const first: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(1),
-        };
-        const second: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(2),
-        };
-        const first_pane: schema.PaneId = @enumFromInt(1);
-        const second_pane: schema.PaneId = @enumFromInt(2);
-        try model.workspace.bootstrap(.{ .pane_id = first_pane, .location = first, .size = .{ .cols = 20, .rows = 5 } });
-        if (two_tabs) {
-            _ = try model.workspace.addCreated(.{
-                .location = second,
-                .position = 1,
-                .label = "logs",
-                .root_pane_id = second_pane,
-            }, .{ .cols = 20, .rows = 5 });
-        }
-
-        return .{
-            .model = model,
-            .workspace = workspace,
-            .first = first,
-            .second = second,
-            .first_pane = first_pane,
-            .second_pane = second_pane,
-            .tabs = .{.{
-                .tab_id = first.tab_id,
-                .pane_count = 1,
-                .label = "main",
-            }},
-        };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-
-    fn snapshot(testing: *const TestingModel) client_model.WorkspaceSnapshot {
-        return .{
-            .workspace = testing.workspace,
-            .name = "main",
-            .tabs = &testing.tabs,
-        };
-    }
-
-    fn reconcile(testing: *TestingModel) !client_model.WorkspaceReconciliation {
-        return testing.model.reconcileWorkspace(testing.snapshot());
-    }
-};
-
-const EffectsCapture = struct {
-    model: *client_model.Model,
-    reconciliation: *const client_model.WorkspaceReconciliation,
-    events: [10]Event = undefined,
-    event_count: usize = 0,
-    pending_snapshot: bool = false,
-    delivered_resize: ?schema.PaneResize = null,
-    committed_state_observed: bool = true,
-    resources_released_before_graphics: bool = true,
-    failure: Failure = .none,
-
-    fn effects(capture: *EffectsCapture) Effects {
-        return .{
-            .context = capture,
-            .ignore_tab_requests = ignoreTabRequests,
-            .clear_pane_graphics = clearPaneGraphics,
-            .set_pane_graphics_visible = setPaneGraphicsVisible,
-            .synchronize_active_resources = synchronizeActiveResources,
-            .tab_snapshot_pending = tabSnapshotPending,
-            .request_tab_snapshot = requestTabSnapshot,
-        };
-    }
-
-    fn geometryEffects(capture: *EffectsCapture) pane_geometry_delivery.OfferEffects {
-        return .{
-            .context = capture,
-            .deliver_resize = deliverResize,
-        };
-    }
-
-    fn ignoreTabRequests(raw_context: *anyopaque, tab_id: schema.TabId) void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
-        capture.append(.{ .ignore_tab = tab_id });
-    }
-
-    fn clearPaneGraphics(raw_context: *anyopaque, pane_id: schema.PaneId) void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
-        capture.append(.{ .clear_graphics = pane_id });
-        capture.resources_released_before_graphics = capture.resources_released_before_graphics and
-            !capture.model.panePasteActive() and capture.model.reportedPaneFocus() == null;
-    }
-
-    fn setPaneGraphicsVisible(raw_context: *anyopaque, pane_id: schema.PaneId, visible: bool) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
-        capture.append(.{ .set_graphics_visible = .{
-            .pane_id = pane_id,
-            .visible = visible,
-        } });
-        if (capture.failure == .graphics_visibility) {
-            return error.GraphicsVisibilityFailed;
-        }
-    }
-
-    fn synchronizeActiveResources(raw_context: *anyopaque) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
-        capture.append(.synchronize_active_resources);
-        if (capture.failure == .active_resources) {
-            return error.ActiveResourceSyncFailed;
-        }
-    }
-
-    fn tabSnapshotPending(raw_context: *anyopaque) bool {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
-        capture.append(.tab_snapshot_pending);
-
-        return capture.pending_snapshot;
-    }
-
-    fn requestTabSnapshot(raw_context: *anyopaque, location: schema.TabLocation) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
-        capture.append(.{ .request_tab_snapshot = location });
-        if (capture.failure == .tab_snapshot) {
-            return error.TabSnapshotRequestFailed;
-        }
-    }
-
-    fn deliverResize(raw_context: *anyopaque, resize: schema.PaneResize) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
-        capture.append(.{ .resize = resize.pane_id });
-        capture.delivered_resize = resize;
-        if (capture.failure == .resize) {
-            return error.PaneResizeFailed;
-        }
-    }
-
-    fn append(capture: *EffectsCapture, event: Event) void {
-        capture.observeCommit();
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn observeCommit(capture: *EffectsCapture) void {
-        const active = capture.model.workspace.activeConst() orelse {
-            capture.committed_state_observed = false;
-            return;
-        };
-        const version = capture.model.version();
-
-        capture.committed_state_observed = capture.committed_state_observed and
-            std.meta.eql(active.location, capture.reconciliation.active) and
-            active.snapshot_loaded == capture.reconciliation.active_snapshot_loaded and
-            version.workspace == capture.reconciliation.workspace_revision and
-            version.tabs == capture.reconciliation.tabs_revision and
-            version.active_tab == capture.reconciliation.active_tab_revision and
-            version.panes == capture.reconciliation.panes_revision;
-    }
-
-    fn eventSlice(capture: *const EffectsCapture) []const Event {
-        return capture.events[0..capture.event_count];
-    }
-};
+const EffectsCapture = @import("WorkspaceSnapshotDeliveryEffectsCapture.zig");
 
 fn deliveryHandler(testing: *TestingModel, capture: *EffectsCapture) DeliverWorkspaceSnapshotHandler {
     return .{

@@ -6,77 +6,12 @@ const close_tab_commands = @import("../../application/commands/close_tab.zig");
 const delivery_mod = @import("../../delivery/root.zig");
 const workspace_mod = @import("../../../workspace/root.zig");
 
-const schema = core.schema;
-const ResponseQueue = delivery_mod.ResponseQueue;
+pub const schema = core.schema;
+pub const ResponseQueue = delivery_mod.ResponseQueue;
 
-pub const Controller = struct {
-    responses: *ResponseQueue,
-    close_tab: close_tab_commands.CloseTabExecutor,
+pub const Controller = @import("CloseTabController.zig");
 
-    /// Creates one controller for the lifetime of a close-tab request.
-    ///
-    /// ```zig
-    /// var controller = Controller.init(&responses, handler.executor());
-    /// ```
-    pub fn init(responses: *ResponseQueue, close_tab: close_tab_commands.CloseTabExecutor) Controller {
-        return .{ .responses = responses, .close_tab = close_tab };
-    }
-
-    /// Translates the wire request into an application command and queues the
-    /// canonical removal result or one expected protocol failure.
-    ///
-    /// ```zig
-    /// try controller.closeTab(request);
-    /// ```
-    pub fn closeTab(controller: *Controller, request: schema.CloseTab) !void {
-        const removed = controller.close_tab.execute(.{ .location = request.location }) catch |err| {
-            switch (err) {
-                error.TabNotFound => try controller.queueTabNotFound(request.request_id),
-                else => return err,
-            }
-
-            return;
-        };
-
-        try controller.responses.push(.{ .tab_closed = .{
-            .request_id = request.request_id,
-            .location = removed.location,
-            .workspace_closed = removed.workspace_removed,
-            .previous_workspace = removed.previous_workspace,
-        } });
-    }
-
-    fn queueTabNotFound(controller: *Controller, request_id: schema.RequestId) !void {
-        try controller.responses.push(.{ .request_failed = .{
-            .request_id = request_id,
-            .code = .tab_not_found,
-            .message = "tab not found",
-        } });
-    }
-};
-
-const StubCloseTab = struct {
-    result: ?close_tab_commands.CloseTabResult = null,
-    failure: ?anyerror = null,
-    call_count: usize = 0,
-    last_location: ?schema.TabLocation = null,
-
-    fn executor(stub: *StubCloseTab) close_tab_commands.CloseTabExecutor {
-        return .{ .context = stub, .execute_fn = execute };
-    }
-
-    fn execute(context: *anyopaque, command: close_tab_commands.CloseTab) !close_tab_commands.CloseTabResult {
-        const stub: *StubCloseTab = @ptrCast(@alignCast(context));
-        stub.call_count += 1;
-        stub.last_location = command.location;
-
-        if (stub.failure) |failure| {
-            return failure;
-        }
-
-        return stub.result.?;
-    }
-};
+const StubCloseTab = @import("StubCloseTab.zig");
 
 fn testingLocation(workspace_id: u64, tab_id: u64) !schema.TabLocation {
     return .{

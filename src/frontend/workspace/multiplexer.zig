@@ -5,16 +5,16 @@ const core = @import("telar-core");
 const presentation = @import("../presentation/root.zig");
 const input_capability = @import("../input/root.zig");
 const diff = presentation.diff;
-const copy_mode = input_capability.copy_mode;
+pub const copy_mode = input_capability.copy_mode;
 const client_panes = @import("telar-client").panes;
 const frame_apply = client_panes.frame;
 const layout_mod = @import("telar-client").workspace.layout;
 const fullscreen_tabs = @import("fullscreen_tabs.zig");
-const term = presentation.screen;
+pub const term = presentation.screen;
 const theme = @import("../ui/root.zig").theme;
 
-const schema = core.schema;
-const ui = core.ui;
+pub const schema = core.schema;
+pub const ui = core.ui;
 
 pub const max_panes = layout_mod.max_panes;
 
@@ -23,12 +23,7 @@ pub const MetadataChange = @import("telar-client").workspace.multiplexer.Metadat
 const pane_index_capacity = max_panes * 2;
 const PaneIndex = core.fixed_index.SlotIndex(pane_index_capacity);
 
-const BorderTheme = struct {
-    focused: ui.Color,
-    unfocused: ui.Color,
-    tab_text: ui.Color,
-    selected_tab_text: ui.Color,
-};
+const BorderTheme = @import("BorderTheme.zig");
 
 pub const PaneSpec = @import("telar-client").workspace.multiplexer.PaneSpec;
 
@@ -40,458 +35,27 @@ pub const Pane = client_panes.Pane;
 
 pub const PaneMousePlan = @import("telar-client").workspace.multiplexer.PaneMousePlan;
 
-pub const RenderStats = struct {
-    panes: usize = 0,
-    cells: usize = 0,
-    damaged_cells: usize = 0,
-    full: bool = false,
-};
+pub const RenderStats = @import("RenderStats.zig");
 
 pub const PresentationCommit = client_panes.PresentationCommit;
 
 pub const CopyProjection = @import("telar-client").workspace.multiplexer.CopyProjection;
 
-pub const CompositionInput = struct {
-    area: ui.Rect,
-    palette: *const theme.Palette,
-    copy: ?CopyProjection = null,
-    bottom_reservation: ?layout_mod.PaneBottomReservation = null,
-    progress_animation_frame: u8 = 0,
-    force: bool = false,
-};
+pub const CompositionInput = @import("CompositionInput.zig");
 
-pub const Composition = struct {
-    model: *const Model,
-    screen: *term.Screen,
-    input: CompositionInput,
-};
+pub const Composition = @import("Composition.zig");
 
-pub const CompositionResult = struct {
-    stats: RenderStats,
-    commit: PresentationCommit,
-};
+pub const CompositionResult = @import("CompositionResult.zig");
 
-/// Presentation-owned cache for one active tab. It borrows an immutable
-/// multiplexer model during composition and returns the exact model work that
-/// may be committed only after the host flush succeeds.
-pub const Compositor = struct {
-    gpa: std.mem.Allocator,
-    composed: ?ui.Buffer = null,
-    area: ui.Rect = .{},
-    source: ?schema.TabLocation = null,
-    border_theme: ?BorderTheme = null,
-    copy: ?CopyProjection = null,
-    bottom_reservation: ?layout_mod.PaneBottomReservation = null,
-    bottom_reservation_area: ui.Rect = .{},
-    layout_snapshot: layout_mod.Snapshot = .{},
-    fullscreen_labels: presentation.pane_labels.Plan = .{},
-    panes: [max_panes]PaneProjection = undefined,
-    pane_count: u8 = 0,
-    progress_animation_frame: u8 = 0,
-    invalidated: bool = true,
+pub const Compositor = @import("Compositor.zig");
 
-    /// Creates an empty composition cache. Buffer allocation is deferred
-    /// until the first frame.
-    ///
-    /// ```zig
-    /// var compositor = Compositor.init(gpa);
-    /// ```
-    pub fn init(gpa: std.mem.Allocator) Compositor {
-        return .{ .gpa = gpa };
-    }
+const PaneProjection = @import("PaneProjection.zig");
 
-    /// Releases the presentation-owned cell cache.
-    ///
-    /// ```zig
-    /// defer compositor.deinit();
-    /// ```
-    pub fn deinit(compositor: *Compositor) void {
-        if (compositor.composed) |*buffer| {
-            buffer.deinit();
-        }
+const IncrementalComposition = @import("IncrementalComposition.zig");
 
-        compositor.composed = null;
-    }
+const CopyChangeComposition = @import("CopyChangeComposition.zig");
 
-    /// Forces the next frame to rebuild the complete active composition.
-    ///
-    /// ```zig
-    /// compositor.invalidate();
-    /// ```
-    pub fn invalidate(compositor: *Compositor) void {
-        compositor.invalidated = true;
-    }
-
-    /// Composes an immutable tab model into the host screen and records which
-    /// pane work the caller may retire after a successful flush.
-    ///
-    /// ```zig
-    /// const result = try compositor.render(composition);
-    /// ```
-    pub fn render(compositor: *Compositor, composition: Composition) !CompositionResult {
-        const model = composition.model;
-        const screen = composition.screen;
-        const options = composition.input;
-        const previous_copy = compositor.copy;
-        const copy_changed = !std.meta.eql(previous_copy, options.copy);
-        const progress_animation_changed = compositor.progress_animation_frame != options.progress_animation_frame;
-        const border_theme: BorderTheme = .{
-            .focused = options.palette.accent,
-            .unfocused = options.palette.overlay0,
-            .tab_text = options.palette.subtext0,
-            .selected_tab_text = options.palette.surface_dim,
-        };
-        if (compositor.border_theme == null or !std.meta.eql(compositor.border_theme.?, border_theme)) {
-            compositor.border_theme = border_theme;
-            compositor.invalidated = true;
-        }
-        if (try compositor.ensureComposed(screen.back.w, screen.back.h)) {
-            compositor.invalidated = true;
-        }
-        if (!std.meta.eql(compositor.area, options.area)) {
-            compositor.area = options.area;
-            compositor.invalidated = true;
-        }
-        if (!std.meta.eql(compositor.source, model.location)) {
-            compositor.source = model.location;
-            compositor.invalidated = true;
-        }
-        if (!std.meta.eql(compositor.bottom_reservation, options.bottom_reservation)) {
-            compositor.bottom_reservation = options.bottom_reservation;
-            compositor.invalidated = true;
-        }
-        compositor.copy = options.copy;
-        if (options.force) {
-            compositor.invalidated = true;
-        }
-
-        if (compositor.layout_snapshot.revision != model.layout.currentRevision()) {
-            compositor.invalidated = true;
-        }
-        model.layout.snapshot(options.area, &compositor.layout_snapshot);
-        compositor.bottom_reservation_area = compositor.layout_snapshot.reserveBelowPane(options.bottom_reservation);
-        if (compositor.paneProjectionChanged(model)) {
-            compositor.invalidated = true;
-        }
-        const target = &compositor.composed.?;
-        const commit = model.presentationCommit();
-        const stats = if (compositor.invalidated) full: {
-            target.clear(.{});
-            screen.cursor = null;
-            var full_stats: RenderStats = .{ .full = true };
-            compositor.fullscreen_labels = .{};
-            for (compositor.layout_snapshot.views()) |view| {
-                const pane = model.findConst(view.pane_id) orelse continue;
-                full_stats.panes += 1;
-                if (model.layout.hasBorders()) {
-                    compositor.fullscreen_labels = drawBorder(target, .{
-                        .view = view,
-                        .foreground_name = pane.foregroundName(),
-                        .fullscreen_model = if (model.layout.isFullscreen()) model else null,
-                        .progress_state = pane.progress_state,
-                        .progress_percent = pane.progress_percent,
-                        .animation_frame = options.progress_animation_frame,
-                        .palette = options.palette,
-                    });
-                }
-
-                target.pushClip(view.content);
-                defer target.popClip();
-                const rows = @min(view.content.h, pane.buffer.h);
-                const cols = @min(view.content.w, pane.buffer.w);
-                var y: u16 = 0;
-                while (y < rows) : (y += 1) {
-                    var x: u16 = 0;
-                    while (x < cols) : (x += 1) {
-                        const source = &pane.buffer.cells[@as(usize, y) * pane.buffer.w + x];
-                        var style = source.style;
-                        if (copyView(options.copy, pane.id)) |copy| {
-                            const absolute_y = pane.scroll.offset + y;
-                            if (copy.selected(x, absolute_y)) {
-                                style.flags.inverse = !style.flags.inverse;
-                            }
-                        }
-
-                        target.setCell(
-                            .{ .x = view.content.x + x, .y = view.content.y + y },
-                            .{ .text = source.text(), .width = source.width, .style = style },
-                        );
-                        full_stats.cells += 1;
-                    }
-                }
-                if (view.focused) {
-                    setPaneCursor(screen, pane, .{
-                        .content = view.content,
-                        .copy = copyView(options.copy, pane.id),
-                    });
-                }
-                if (pane.graphics_placeholder) {
-                    drawGraphicsPlaceholder(target, view.content, options.palette);
-                }
-            }
-            full_stats.damaged_cells = try syncComposed(screen, target);
-            break :full full_stats;
-        } else incremental: {
-            var context: IncrementalComposition = .{
-                .model = model,
-                .screen = screen,
-                .target = target,
-                .previous_copy = previous_copy,
-                .copy_changed = copy_changed,
-            };
-            if (progress_animation_changed) {
-                try compositor.composeProgressBorders(&context, options);
-            }
-            break :incremental try compositor.composeIncremental(&context);
-        };
-
-        compositor.progress_animation_frame = options.progress_animation_frame;
-        compositor.invalidated = false;
-        return .{ .stats = stats, .commit = commit };
-    }
-
-    /// Restores an overlay region from the last pane composition without
-    /// reading or mutating semantic client state.
-    ///
-    /// ```zig
-    /// compositor.copyArea(destination, area);
-    /// ```
-    pub fn copyArea(compositor: *const Compositor, destination: *ui.Buffer, area: ui.Rect) void {
-        const source = if (compositor.composed) |*buffer| buffer else return;
-        if (source.w != destination.w or source.h != destination.h) {
-            return;
-        }
-
-        const clipped = area.intersect(source.area());
-        var y = clipped.y;
-        while (y < clipped.y + clipped.h) : (y += 1) {
-            const row_start = @as(usize, y) * source.w + clipped.x;
-            @memcpy(
-                destination.cells[row_start..][0..clipped.w],
-                source.cells[row_start..][0..clipped.w],
-            );
-        }
-    }
-
-    /// Returns the immutable geometry used for the last pane composition.
-    ///
-    /// ```zig
-    /// const layout = compositor.layoutSnapshot();
-    /// ```
-    pub fn layoutSnapshot(compositor: *const Compositor) *const layout_mod.Snapshot {
-        return &compositor.layout_snapshot;
-    }
-
-    /// Returns the area removed from the pane projection for its bottom
-    /// reservation.
-    ///
-    /// ```zig
-    /// const shelf = compositor.bottomReservationArea();
-    /// ```
-    pub fn bottomReservationArea(compositor: *const Compositor) ui.Rect {
-        return compositor.bottom_reservation_area;
-    }
-
-    /// Returns owned labels from the last cell composition for deferred media.
-    /// Example: `const labels = compositor.fullscreenLabels();`.
-    pub fn fullscreenLabels(compositor: *const Compositor) *const presentation.pane_labels.Plan {
-        return &compositor.fullscreen_labels;
-    }
-
-    fn ensureComposed(compositor: *Compositor, width: u16, height: u16) !bool {
-        if (compositor.composed) |*buffer| {
-            if (buffer.w == width and buffer.h == height) {
-                return false;
-            }
-
-            try buffer.resize(width, height);
-            return true;
-        }
-
-        compositor.composed = try .init(compositor.gpa, width, height);
-        return true;
-    }
-
-    fn composeIncremental(compositor: *Compositor, context: *IncrementalComposition) !RenderStats {
-        var stats: RenderStats = .{};
-        context.screen.cursor = null;
-        for (compositor.layout_snapshot.views()) |view| {
-            const pane = context.model.findConst(view.pane_id) orelse continue;
-            stats.panes += 1;
-            const rows = @min(view.content.h, pane.buffer.h);
-            const cols = @min(view.content.w, pane.buffer.w);
-            if (context.copy_changed) {
-                try compositor.composeCopyChange(context, .{
-                    .pane = pane,
-                    .view = view,
-                    .rows = rows,
-                    .cols = cols,
-                    .stats = &stats,
-                });
-            }
-            var y: u16 = 0;
-            while (y < rows) : (y += 1) {
-                const damage = pane.damage_rows[y];
-                if (!damage.dirty()) {
-                    continue;
-                }
-
-                const start = @min(damage.start, cols);
-                const end = @min(damage.end, cols);
-                if (start >= end) {
-                    continue;
-                }
-
-                stats.cells += end - start;
-                stats.damaged_cells += try syncPaneRange(.{
-                    .screen = context.screen,
-                    .composed = context.target,
-                    .pane = pane,
-                    .destination_x = view.content.x,
-                    .destination_y = view.content.y + y,
-                    .source_y = y,
-                    .start = start,
-                    .end = end,
-                    .copy = copyView(compositor.copy, pane.id),
-                });
-            }
-            if (view.focused) {
-                setPaneCursor(context.screen, pane, .{
-                    .content = view.content,
-                    .copy = copyView(compositor.copy, pane.id),
-                });
-            }
-        }
-
-        return stats;
-    }
-
-    fn composeProgressBorders(compositor: *Compositor, context: *IncrementalComposition, options: CompositionInput) !void {
-        if (!context.model.layout.hasBorders()) {
-            return;
-        }
-
-        for (compositor.layout_snapshot.views()) |view| {
-            const pane = context.model.findConst(view.pane_id) orelse continue;
-            if (pane.progress_state == .remove) {
-                continue;
-            }
-
-            compositor.fullscreen_labels = drawBorder(context.target, .{
-                .view = view,
-                .foreground_name = pane.foregroundName(),
-                .fullscreen_model = if (context.model.layout.isFullscreen()) context.model else null,
-                .progress_state = pane.progress_state,
-                .progress_percent = pane.progress_percent,
-                .animation_frame = options.progress_animation_frame,
-                .palette = options.palette,
-            });
-            _ = try syncComposedRow(context.screen, context.target, view.outer.y);
-        }
-    }
-
-    fn composeCopyChange(compositor: *Compositor, context: *IncrementalComposition, input: CopyChangeComposition) !void {
-        const previous = copyView(context.previous_copy, input.pane.id);
-        const next = copyView(compositor.copy, input.pane.id);
-        if (std.meta.eql(previous, next)) {
-            return;
-        }
-
-        var source_y: u16 = 0;
-        while (source_y < input.rows) : (source_y += 1) {
-            const absolute_y = input.pane.scroll.offset + source_y;
-            const before = copySelectionRange(previous, absolute_y, input.cols);
-            const after = copySelectionRange(next, absolute_y, input.cols);
-            if (std.meta.eql(before, after)) {
-                continue;
-            }
-
-            const start = @min(
-                if (before) |range| range.start else input.cols,
-                if (after) |range| range.start else input.cols,
-            );
-            const end = @max(
-                if (before) |range| range.end else 0,
-                if (after) |range| range.end else 0,
-            );
-            if (start >= end) {
-                continue;
-            }
-
-            input.stats.cells += end - start;
-            input.stats.damaged_cells += try syncPaneRange(.{
-                .screen = context.screen,
-                .composed = context.target,
-                .pane = input.pane,
-                .destination_x = input.view.content.x,
-                .destination_y = input.view.content.y + source_y,
-                .source_y = source_y,
-                .start = start,
-                .end = end,
-                .copy = next,
-            });
-        }
-    }
-
-    fn paneProjectionChanged(compositor: *Compositor, model: *const Model) bool {
-        var next: [max_panes]PaneProjection = undefined;
-        var next_count: u8 = 0;
-        for (compositor.layout_snapshot.views()) |view| {
-            const pane = model.findConst(view.pane_id) orelse continue;
-            next[next_count] = .{
-                .pane_id = pane.id,
-                .cols = pane.buffer.w,
-                .rows = pane.buffer.h,
-                .scroll_offset = highlightedScrollOffset(compositor.copy, pane),
-                .graphics_placeholder = pane.graphics_placeholder,
-                .progress_state = pane.progress_state,
-                .progress_percent = pane.progress_percent,
-            };
-            next_count += 1;
-        }
-
-        var changed = compositor.pane_count != next_count;
-        if (!changed) {
-            for (compositor.panes[0..compositor.pane_count], next[0..next_count]) |previous, current| {
-                if (!std.meta.eql(previous, current)) {
-                    changed = true;
-                    break;
-                }
-            }
-        }
-        @memcpy(compositor.panes[0..next_count], next[0..next_count]);
-        compositor.pane_count = next_count;
-        return changed;
-    }
-};
-
-const PaneProjection = struct {
-    pane_id: schema.PaneId,
-    cols: u16,
-    rows: u16,
-    scroll_offset: u32,
-    graphics_placeholder: bool,
-    progress_state: schema.PaneProgressState,
-    progress_percent: ?u8,
-};
-
-const IncrementalComposition = struct {
-    model: *const Model,
-    screen: *term.Screen,
-    target: *ui.Buffer,
-    previous_copy: ?CopyProjection,
-    copy_changed: bool,
-};
-
-const CopyChangeComposition = struct {
-    pane: *const Pane,
-    view: layout_mod.View,
-    rows: u16,
-    cols: u16,
-    stats: *RenderStats,
-};
-
-fn copyView(copy: ?CopyProjection, pane_id: schema.PaneId) ?copy_mode.View {
+pub fn copyView(copy: ?CopyProjection, pane_id: schema.PaneId) ?copy_mode.View {
     const projection = copy orelse return null;
     return if (projection.pane_id == pane_id) projection.view else null;
 }
@@ -504,7 +68,7 @@ fn copyView(copy: ?CopyProjection, pane_id: schema.PaneId) ?copy_mode.View {
 /// ```zig
 /// const offset = highlightedScrollOffset(compositor.copy, pane);
 /// ```
-fn highlightedScrollOffset(copy: ?CopyProjection, pane: *const Pane) u32 {
+pub fn highlightedScrollOffset(copy: ?CopyProjection, pane: *const Pane) u32 {
     if (copyView(copy, pane.id) == null) {
         return 0;
     }
@@ -512,12 +76,9 @@ fn highlightedScrollOffset(copy: ?CopyProjection, pane: *const Pane) u32 {
     return pane.scroll.offset;
 }
 
-const CopySelectionRange = struct {
-    start: u16,
-    end: u16,
-};
+const CopySelectionRange = @import("CopySelectionRange.zig");
 
-fn copySelectionRange(view: ?copy_mode.View, y: u32, cols: u16) ?CopySelectionRange {
+pub fn copySelectionRange(view: ?copy_mode.View, y: u32, cols: u16) ?CopySelectionRange {
     if (cols == 0) {
         return null;
     }
@@ -548,34 +109,11 @@ fn copySelectionRange(view: ?copy_mode.View, y: u32, cols: u16) ?CopySelectionRa
 
 pub const Model = @import("telar-client").workspace.multiplexer.Model;
 
-/// Copies each changed run into the composed buffer and the screen at once,
-/// so the composed cache and the terminal patch can never disagree.
-const ComposeSink = struct {
-    patch: term.PatchSink,
-    composed_row: []ui.Cell,
+const ComposeSink = @import("ComposeSink.zig");
 
-    pub fn copyRun(sink: *ComposeSink, run_start: u16, count: u16) !void {
-        @memcpy(
-            sink.composed_row[run_start..][0..count],
-            sink.patch.source_row[run_start..][0..count],
-        );
-        try sink.patch.copyRun(run_start, count);
-    }
-};
+const PaneRange = @import("PaneRange.zig");
 
-const PaneRange = struct {
-    screen: *term.Screen,
-    composed: *ui.Buffer,
-    pane: *const Pane,
-    destination_x: u16,
-    destination_y: u16,
-    source_y: u16,
-    start: u16,
-    end: u16,
-    copy: ?copy_mode.View,
-};
-
-fn syncPaneRange(range: PaneRange) !usize {
+pub fn syncPaneRange(range: PaneRange) !usize {
     std.debug.assert(range.start < range.end);
     const source_row = range.pane.buffer.cells[@as(usize, range.source_y) * range.pane.buffer.w ..];
     const destination_base = @as(usize, range.destination_y) * range.composed.w + range.destination_x;
@@ -626,12 +164,9 @@ fn syncPaneRange(range: PaneRange) !usize {
     }, &sink);
 }
 
-const PaneCursor = struct {
-    content: ui.Rect,
-    copy: ?copy_mode.View,
-};
+const PaneCursor = @import("PaneCursor.zig");
 
-fn setPaneCursor(screen: *term.Screen, pane: *const Pane, projection: PaneCursor) void {
+pub fn setPaneCursor(screen: *term.Screen, pane: *const Pane, projection: PaneCursor) void {
     if (projection.copy != null and !projection.copy.?.pointer) {
         const selection = projection.copy.?;
         if (selection.cursor.y < pane.scroll.offset or selection.cursor.x >= projection.content.w) {
@@ -656,7 +191,7 @@ fn setPaneCursor(screen: *term.Screen, pane: *const Pane, projection: PaneCursor
     };
 }
 
-fn syncComposed(screen: *term.Screen, composed: *const ui.Buffer) !usize {
+pub fn syncComposed(screen: *term.Screen, composed: *const ui.Buffer) !usize {
     std.debug.assert(screen.sizeMatches(composed.w, composed.h));
     var damaged: usize = 0;
     var y: u16 = 0;
@@ -678,7 +213,7 @@ fn syncComposed(screen: *term.Screen, composed: *const ui.Buffer) !usize {
     return damaged;
 }
 
-fn syncComposedRow(screen: *term.Screen, composed: *const ui.Buffer, y: u16) !usize {
+pub fn syncComposedRow(screen: *term.Screen, composed: *const ui.Buffer, y: u16) !usize {
     std.debug.assert(screen.sizeMatches(composed.w, composed.h));
     if (y >= composed.h) {
         return 0;
@@ -704,17 +239,9 @@ pub const placeholder_size = @import("telar-client").workspace.multiplexer.place
 
 pub const rectSize = @import("telar-client").workspace.multiplexer.rectSize;
 
-const BorderInput = struct {
-    view: layout_mod.View,
-    foreground_name: []const u8,
-    fullscreen_model: ?*const Model = null,
-    progress_state: schema.PaneProgressState,
-    progress_percent: ?u8,
-    animation_frame: u8,
-    palette: *const theme.Palette,
-};
+const BorderInput = @import("BorderInput.zig");
 
-fn drawBorder(buffer: *ui.Buffer, input: BorderInput) presentation.pane_labels.Plan {
+pub fn drawBorder(buffer: *ui.Buffer, input: BorderInput) presentation.pane_labels.Plan {
     const style: ui.Style = if (input.view.focused)
         .{ .fg = input.palette.accent, .flags = .{ .bold = true } }
     else
@@ -818,7 +345,7 @@ fn bouncingPosition(width: u16, frame: u8) u16 {
     return @intCast((@as(u32, width - 1) * phase) / 127);
 }
 
-fn drawGraphicsPlaceholder(buffer: *ui.Buffer, area: ui.Rect, palette: *const theme.Palette) void {
+pub fn drawGraphicsPlaceholder(buffer: *ui.Buffer, area: ui.Rect, palette: *const theme.Palette) void {
     if (area.w == 0 or area.h == 0) {
         return;
     }
@@ -872,15 +399,7 @@ test "progress thread weaves determinate state and moves indeterminate shuttle" 
     try std.testing.expectEqualStrings("◆", buffer.at(13, 0).?.text());
 }
 
-const TestingComposition = struct {
-    model: *Model,
-    screen: *term.Screen,
-    area: ui.Rect,
-    palette: *const theme.Palette = &theme.default_theme.palette,
-    copy: ?CopyProjection = null,
-    bottom_reservation: ?layout_mod.PaneBottomReservation = null,
-    force: bool = false,
-};
+const TestingComposition = @import("TestingComposition.zig");
 
 fn testingRender(compositor: *Compositor, composition: TestingComposition) !RenderStats {
     const rendered = try compositor.render(.{

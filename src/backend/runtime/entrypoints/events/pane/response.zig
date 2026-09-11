@@ -4,128 +4,23 @@ const std = @import("std");
 const pane_mod = @import("../../../../pane/root.zig");
 const telemetry_mod = @import("../../../observability/root.zig").telemetry;
 
-const Io = std.Io;
-const Pane = pane_mod.Pane;
-const PaneKey = pane_mod.PaneKey;
-const PaneStore = pane_mod.PaneStore;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+pub const Io = std.Io;
+pub const Pane = pane_mod.Pane;
+pub const PaneKey = pane_mod.PaneKey;
+pub const PaneStore = pane_mod.PaneStore;
+pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 
-pub const Completion = struct {
-    pane: PaneKey,
-    result: anyerror!void,
-};
+pub const Completion = @import("ResponseCompletion.zig");
 
-/// Stable response borrowed from the queue until completion is handled.
-pub const Write = struct {
-    io: Io,
-    pane: *Pane,
-    bytes: []const u8,
-};
+pub const Write = @import("ResponseWrite.zig");
 
-pub const Resources = struct {
-    io: Io,
-    panes: *PaneStore,
-    metrics: *RuntimeMetrics,
-};
+pub const Resources = @import("ResponseResources.zig");
 
-/// Defines the async writer and lifecycle effects supplied by the runtime.
-///
-/// ```zig
-/// const port: RuntimePort(Context) = .{ .start = start, .collect = collect };
-/// ```
-pub fn RuntimePort(comptime Context: type) type {
-    return struct {
-        start: *const fn (*Context, Write) anyerror!void,
-        collect: *const fn (*Context) void,
-    };
-}
+pub const RuntimePort = @import("GenericResponseRuntimePort.zig").Type;
 
-/// Creates a statically dispatched PTY response pump.
-///
-/// ```zig
-/// const ResponsePump = Pump(Context, port);
-/// ```
-pub fn Pump(comptime Context: type, comptime port: RuntimePort(Context)) type {
-    return struct {
-        const Self = @This();
+pub const Pump = @import("GenericResponsePump.zig").Type;
 
-        context: *Context,
-        resources: Resources,
-
-        /// Binds the pane repository and runtime telemetry.
-        ///
-        /// ```zig
-        /// var pump = ResponsePump.init(&context, resources);
-        /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
-            return .{ .context = context, .resources = resources };
-        }
-
-        /// Starts at most one response write. Async-start failure releases the
-        /// actor borrow while preserving the queue head for a retry.
-        ///
-        /// ```zig
-        /// try pump.schedule(pane);
-        /// ```
-        pub fn schedule(pump: *Self, pane: *Pane) !void {
-            const bytes = pane.beginPtyResponseWrite() orelse return;
-            const write: Write = .{
-                .io = pump.resources.io,
-                .pane = pane,
-                .bytes = bytes,
-            };
-
-            port.start(pump.context, write) catch |err| {
-                pane.cancelPtyResponseWrite();
-                return err;
-            };
-        }
-
-        /// Applies one generation-matched completion. Success removes the
-        /// written head and starts the next response; PTY failure clears the
-        /// queue. Collection runs only after the pump reaches a settled state.
-        ///
-        /// ```zig
-        /// try pump.complete(completion);
-        /// ```
-        pub fn complete(pump: *Self, completion: Completion) !void {
-            const pane = pump.resources.panes.resolve(completion.pane) orelse {
-                pump.resources.metrics.stale_pane_events += 1;
-                return;
-            };
-
-            const result: pane_mod.PtyWriteResult = if (completion.result) |_| .succeeded else |_| .failed;
-
-            pane.completePtyResponseWrite(result);
-
-            if (result == .succeeded) {
-                try pump.schedule(pane);
-            }
-
-            port.collect(pump.context);
-        }
-    };
-}
-
-const Capture = struct {
-    starts: usize = 0,
-    collects: usize = 0,
-    start_failure: ?anyerror = null,
-    last_bytes: []const u8 = "",
-
-    fn start(capture: *Capture, write: Write) !void {
-        capture.starts += 1;
-        capture.last_bytes = write.bytes;
-
-        if (capture.start_failure) |failure| {
-            return failure;
-        }
-    }
-
-    fn collect(capture: *Capture) void {
-        capture.collects += 1;
-    }
-};
+const Capture = @import("ResponseCapture.zig");
 
 const test_port: RuntimePort(Capture) = .{
     .start = Capture.start,

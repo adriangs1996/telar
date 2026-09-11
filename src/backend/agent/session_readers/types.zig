@@ -2,4 +2,4 @@
 const std = @import("std");
 const session_file = @import("../session_file.zig");
 pub const Completion = session_file.Completion;
-pub const Job = struct { io: std.Io, watch: session_file.Watch };
+pub const Job = @import("Job.zig");

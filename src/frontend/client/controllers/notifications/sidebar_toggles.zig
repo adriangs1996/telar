@@ -4,7 +4,7 @@ const notifications_application = @import("telar-client").application.notificati
 const client_model = @import("telar-client").model;
 const sidebar_projection = @import("sidebar_projection.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const toggle_sidebar = notifications_application.toggle_sidebar;
 
 /// Wires sidebar toggling to view, graphics and pane geometry resources.

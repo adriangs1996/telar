@@ -10,18 +10,15 @@ const link_openings = @import("link_openings.zig");
 const pane_mouse_inputs = @import("pane_mouse_inputs.zig");
 const view_interactions = @import("view_interactions.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const diagnostics = core.diagnostics;
-const multiplexer = workspace_capability.multiplexer;
+pub const multiplexer = workspace_capability.multiplexer;
 const pointer_routing = input_application.pointer_routing;
 const term = presentation.screen;
 
 pub const Outcome = pointer_routing.Outcome;
 
-const Context = struct {
-    client: *Client,
-    model: ?*multiplexer.Model = null,
-};
+const Context = @import("PointerRoutingContext.zig");
 
 /// Routes one host pointer event through the current exclusive owner.
 ///

@@ -8,114 +8,14 @@ const client_model = @import("../../root.zig").model;
 const pane_geometry_delivery = @import("pane_geometry_delivery.zig");
 const pane_resource_release = @import("pane_resource_release.zig");
 
-const schema = core.schema;
-const tabs_mod = workspace_capability.tabs;
+pub const schema = core.schema;
+pub const tabs_mod = workspace_capability.tabs;
 
-pub const Effects = struct {
-    context: *anyopaque,
-    ignore_attachment: *const fn (*anyopaque, schema.PaneId) void,
-    complete_close: *const fn (*anyopaque, schema.PaneId) void,
-    clear_pane_graphics: *const fn (*anyopaque, schema.PaneId) void,
-    invalidate_graphics_placements: *const fn (*anyopaque) void,
-    synchronize_active_resources: *const fn (*anyopaque) anyerror!void,
-    active_geometry_area: *const fn (*anyopaque) core.ui.Rect,
-};
+pub const Effects = @import("PaneClosureDeliveryEffects.zig");
 
-pub const DeliverPaneClosureHandler = struct {
-    model: *client_model.Model,
-    geometry_effects: pane_geometry_delivery.OfferEffects,
-    effects: Effects,
+pub const DeliverPaneClosureHandler = @import("DeliverPaneClosureHandler.zig");
 
-    /// Validates one exact pane-exit commit before retiring request and pane
-    /// resources, then repairs active focus and geometry when required.
-    ///
-    /// ```zig
-    /// try handler.execute(exit);
-    /// ```
-    pub fn execute(handler: *DeliverPaneClosureHandler, exit: client_model.PaneExit) !void {
-        try handler.validate(exit);
-
-        const pane_id = switch (exit) {
-            .retired => |retirement| retirement.pane_id,
-            .stale => |stale| stale.pane_id,
-        };
-        handler.effects.ignore_attachment(handler.effects.context, pane_id);
-        handler.effects.complete_close(handler.effects.context, pane_id);
-
-        var release_pane: pane_resource_release.ReleasePaneResourcesHandler = .{
-            .model = handler.model,
-            .effects = .{
-                .context = handler.effects.context,
-                .clear_graphics = handler.effects.clear_pane_graphics,
-            },
-        };
-        _ = release_pane.execute(pane_id);
-
-        const retirement = switch (exit) {
-            .retired => |retirement| retirement,
-            .stale => return,
-        };
-        if (!retirement.active) {
-            return;
-        }
-
-        handler.effects.invalidate_graphics_placements(handler.effects.context);
-        try handler.effects.synchronize_active_resources(handler.effects.context);
-        if (retirement.tab_empty) {
-            return;
-        }
-
-        const tab = try handler.exactTab(retirement.location);
-        const area = handler.effects.active_geometry_area(handler.effects.context);
-        var offer_geometry: pane_geometry_delivery.OfferPaneGeometryHandler = .{
-            .effects = handler.geometry_effects,
-        };
-        _ = try offer_geometry.execute(&tab.model, area);
-    }
-
-    fn validate(handler: *const DeliverPaneClosureHandler, exit: client_model.PaneExit) !void {
-        const version = handler.model.version();
-        switch (exit) {
-            .retired => |retirement| {
-                const tab = try handler.exactTab(retirement.location);
-                const active = handler.model.workspace.activeConst();
-                const tab_active = active != null and std.meta.eql(active.?.location, retirement.location);
-                if (version.workspace != retirement.workspace_revision or
-                    version.tabs != retirement.tabs_revision or
-                    version.active_tab != retirement.active_tab_revision or
-                    version.panes != retirement.panes_revision or
-                    tab.model.layout.currentRevision() != retirement.layout_revision or
-                    tab_active != retirement.active or
-                    (tab.model.pane_count == 0) != retirement.tab_empty or
-                    handler.model.workspace.tabForPaneConst(retirement.pane_id) != null)
-                {
-                    return error.StalePaneExit;
-                }
-            },
-            .stale => |stale| {
-                if (version.workspace != stale.workspace_revision or
-                    version.tabs != stale.tabs_revision or
-                    version.active_tab != stale.active_tab_revision or
-                    version.panes != stale.panes_revision or
-                    handler.model.workspace.tabForPaneConst(stale.pane_id) != null)
-                {
-                    return error.StalePaneExit;
-                }
-            },
-        }
-    }
-
-    fn exactTab(handler: *const DeliverPaneClosureHandler, location: schema.TabLocation) !*tabs_mod.Tab {
-        const tab = handler.model.workspace.find(location.tab_id) orelse return error.StalePaneExit;
-        if (!std.meta.eql(tab.location, location)) {
-            return error.StalePaneExit;
-        }
-
-        return tab;
-    }
-};
-
-const Event = union(enum) {
+pub const Event = union(enum) {
     ignore_attachment: schema.PaneId,
     complete_close: schema.PaneId,
     clear_graphics: schema.PaneId,
@@ -125,178 +25,15 @@ const Event = union(enum) {
     resize: schema.PaneId,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     active_resources,
     resize,
 };
 
-const TestingModel = struct {
-    model: *client_model.Model,
-    active: schema.TabLocation,
-    inactive: schema.TabLocation,
-    first: schema.PaneId,
-    second: schema.PaneId,
-    inactive_pane: schema.PaneId,
-    area: core.ui.Rect,
+const TestingModel = @import("PaneClosureDeliveryTestingModel.zig");
 
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-        const active: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(1),
-        };
-        const inactive: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(2),
-        };
-        const first: schema.PaneId = @enumFromInt(1);
-        const second: schema.PaneId = @enumFromInt(2);
-        const inactive_pane: schema.PaneId = @enumFromInt(3);
-        const area: core.ui.Rect = .{ .w = 40, .h = 10 };
-        try model.workspace.bootstrap(.{ .pane_id = first, .location = active, .size = .{ .cols = 40, .rows = 10 } });
-        try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = active, .axis = .horizontal, .area = area });
-        _ = try model.workspace.addCreated(.{
-            .location = inactive,
-            .position = 1,
-            .label = "inactive",
-            .root_pane_id = inactive_pane,
-        }, .{ .cols = 40, .rows = 10 });
-        if (!model.workspace.select(active.tab_id)) {
-            return error.ActiveTabNotRestored;
-        }
-
-        return .{
-            .model = model,
-            .active = active,
-            .inactive = inactive,
-            .first = first,
-            .second = second,
-            .inactive_pane = inactive_pane,
-            .area = area,
-        };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
-
-const EffectsCapture = struct {
-    model: *client_model.Model,
-    exit: client_model.PaneExit,
-    events: [8]Event = undefined,
-    event_count: usize = 0,
-    committed_state_observed: bool = true,
-    geometry_area: core.ui.Rect = .{ .w = 40, .h = 10 },
-    delivered_resize: ?schema.PaneResize = null,
-    failure: Failure = .none,
-
-    fn effects(capture: *EffectsCapture) Effects {
-        return .{
-            .context = capture,
-            .ignore_attachment = ignoreAttachment,
-            .complete_close = completeClose,
-            .clear_pane_graphics = clearPaneGraphics,
-            .invalidate_graphics_placements = invalidateGraphicsPlacements,
-            .synchronize_active_resources = synchronizeActiveResources,
-            .active_geometry_area = activeGeometryArea,
-        };
-    }
-
-    fn geometryEffects(capture: *EffectsCapture) pane_geometry_delivery.OfferEffects {
-        return .{
-            .context = capture,
-            .deliver_resize = deliverResize,
-        };
-    }
-
-    fn ignoreAttachment(context: *anyopaque, pane_id: schema.PaneId) void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.{ .ignore_attachment = pane_id });
-    }
-
-    fn completeClose(context: *anyopaque, pane_id: schema.PaneId) void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.{ .complete_close = pane_id });
-    }
-
-    fn clearPaneGraphics(context: *anyopaque, pane_id: schema.PaneId) void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.{ .clear_graphics = pane_id });
-    }
-
-    fn invalidateGraphicsPlacements(context: *anyopaque) void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.invalidate_placements);
-    }
-
-    fn synchronizeActiveResources(context: *anyopaque) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.synchronize_active_resources);
-        if (capture.failure == .active_resources) {
-            return error.ActiveResourceSynchronizationFailed;
-        }
-    }
-
-    fn activeGeometryArea(context: *anyopaque) core.ui.Rect {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.active_geometry_area);
-
-        return capture.geometry_area;
-    }
-
-    fn deliverResize(context: *anyopaque, resize: schema.PaneResize) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.{ .resize = resize.pane_id });
-        capture.delivered_resize = resize;
-        if (capture.failure == .resize) {
-            return error.PaneResizeDeliveryFailed;
-        }
-    }
-
-    fn append(capture: *EffectsCapture, event: Event) void {
-        capture.committed_state_observed = capture.committed_state_observed and capture.observesCommit();
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn observesCommit(capture: *const EffectsCapture) bool {
-        const version = capture.model.version();
-        return switch (capture.exit) {
-            .retired => |retirement| observed: {
-                const tab = capture.model.workspace.find(retirement.location.tab_id) orelse break :observed false;
-                const active = capture.model.workspace.activeConst();
-                const tab_active = active != null and std.meta.eql(active.?.location, retirement.location);
-
-                break :observed std.meta.eql(tab.location, retirement.location) and
-                    capture.model.workspace.tabForPaneConst(retirement.pane_id) == null and
-                    tab.model.layout.currentRevision() == retirement.layout_revision and
-                    (tab.model.pane_count == 0) == retirement.tab_empty and
-                    tab_active == retirement.active and
-                    version.workspace == retirement.workspace_revision and
-                    version.tabs == retirement.tabs_revision and
-                    version.active_tab == retirement.active_tab_revision and
-                    version.panes == retirement.panes_revision;
-            },
-            .stale => |stale| capture.model.workspace.tabForPaneConst(stale.pane_id) == null and
-                version.workspace == stale.workspace_revision and
-                version.tabs == stale.tabs_revision and
-                version.active_tab == stale.active_tab_revision and
-                version.panes == stale.panes_revision,
-        };
-    }
-
-    fn eventSlice(capture: *const EffectsCapture) []const Event {
-        return capture.events[0..capture.event_count];
-    }
-};
+const EffectsCapture = @import("PaneClosureDeliveryEffectsCapture.zig");
 
 fn deliveryHandler(testing: *TestingModel, capture: *EffectsCapture) DeliverPaneClosureHandler {
     return .{

@@ -4,84 +4,17 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 
-const schema = core.schema;
+pub const schema = core.schema;
 
 pub const SetPaneViewport = client_model.PaneViewportCommand;
 
-pub const PaneViewportEffects = struct {
-    context: *anyopaque,
-    sync: *const fn (*anyopaque, client_model.PaneViewportChange) anyerror!void,
-};
+pub const PaneViewportEffects = @import("PaneViewportEffects.zig");
 
-pub const SetPaneViewportHandler = struct {
-    model: *client_model.Model,
-    effects: PaneViewportEffects,
+pub const SetPaneViewportHandler = @import("SetPaneViewportHandler.zig");
 
-    /// Commits a bounded client viewport before synchronizing graphics and
-    /// the runtime. Invalid targets and repeated offsets have no effects.
-    ///
-    /// ```zig
-    /// const change = try handler.execute(command) orelse return;
-    /// ```
-    pub fn execute(handler: *SetPaneViewportHandler, command: SetPaneViewport) !?client_model.PaneViewportChange {
-        const change = handler.model.setPaneViewport(command) orelse return null;
+const TestingModel = @import("SetPaneViewportTestingModel.zig");
 
-        try handler.effects.sync(handler.effects.context, change);
-        return change;
-    }
-};
-
-const TestingModel = struct {
-    model: *client_model.Model,
-    pane_id: schema.PaneId,
-
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const location: schema.TabLocation = .{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(1),
-        };
-        const pane_id: schema.PaneId = @enumFromInt(1);
-        try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 10, .rows = 5 } });
-        model.workspace.findPane(pane_id).?.scroll = .{ .total_rows = 20, .offset = 10 };
-
-        return .{ .model = model, .pane_id = pane_id };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
-
-const EffectsCapture = struct {
-    model: *const client_model.Model,
-    calls: usize = 0,
-    observed_commit: bool = false,
-    change: ?client_model.PaneViewportChange = null,
-    fail: bool = false,
-
-    fn port(capture: *EffectsCapture) PaneViewportEffects {
-        return .{ .context = capture, .sync = sync };
-    }
-
-    fn sync(context: *anyopaque, change: client_model.PaneViewportChange) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        const pane = capture.model.workspace.activeConst().?.model.findConst(change.pane_id).?;
-        capture.calls += 1;
-        capture.change = change;
-        capture.observed_commit = pane.scroll.offset == change.offset and
-            capture.model.version().viewport == change.viewport_revision;
-
-        if (capture.fail) {
-            return error.ViewportSyncFailed;
-        }
-    }
-};
+const EffectsCapture = @import("SetPaneViewportEffectsCapture.zig");
 
 test "SetPaneViewportHandler commits before synchronizing client resources" {
     var testing = try TestingModel.init();

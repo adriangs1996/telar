@@ -1,12 +1,5 @@
-//! Image metadata carried by Kitty graphics transmission commands.
-
-pub const Format = enum(u8) {
-    rgb = 24,
-    rgba = 32,
-};
-
-pub const Image = struct {
-    format: Format,
-    width: u32,
-    height: u32,
-};
+const Image = @This();
+const source_namespace = @import("image_support.zig");
+format: source_namespace.Format,
+width: u32,
+height: u32,

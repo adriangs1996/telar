@@ -53,11 +53,7 @@ pub fn parseEngine(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot
     }, diagnostic);
 }
 
-const CommandInput = struct {
-    table: c_int,
-    label: []const u8,
-    command_path: []const u8,
-};
+const CommandInput = @import("CommandInput.zig");
 
 fn parseCommand(state: *lua.lua_State, input: CommandInput, diagnostic: *config_model.Diagnostic) !config_model.CommandSpec {
     _ = lua.lua_getfield(state, input.table, "command");
@@ -115,18 +111,9 @@ fn parseCommand(state: *lua.lua_State, input: CommandInput, diagnostic: *config_
     return command;
 }
 
-const IntegerBounds = struct {
-    default: u32,
-    min: u32,
-    max: u32,
-};
+const IntegerBounds = @import("IntegerBounds.zig");
 
-const IntegerInput = struct {
-    table: c_int,
-    field: [:0]const u8,
-    label: []const u8,
-    bounds: IntegerBounds,
-};
+const IntegerInput = @import("IntegerInput.zig");
 
 fn parseBoundedInteger(state: *lua.lua_State, input: IntegerInput, diagnostic: *config_model.Diagnostic) !u32 {
     _ = lua.lua_getfield(state, input.table, input.field);

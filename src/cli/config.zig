@@ -7,11 +7,7 @@ const parser = @import("parser.zig");
 const Io = std.Io;
 const File = Io.File;
 
-pub const Selection = struct {
-    path: ?[*:0]const u8 = null,
-    disabled: bool = false,
-    profile: ?[*:0]const u8 = null,
-};
+pub const Selection = @import("Selection.zig");
 
 /// Loads one config generation or returns null when configuration is disabled
 /// or the implicit default file does not exist.
@@ -91,10 +87,7 @@ pub fn runCheck(init: std.process.Init, options: parser.ConfigCheckOptions) !voi
     try File.stdout().writeStreamingAll(init.io, "telar config: OK\n");
 }
 
-const ResolvedSelection = struct {
-    path: []const u8,
-    explicit: bool,
-};
+const ResolvedSelection = @import("ResolvedSelection.zig");
 
 fn resolveSelection(environ: std.process.Environ, selection: Selection, path_buffer: []u8) !ResolvedSelection {
     if (selection.path) |value| {

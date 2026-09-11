@@ -38,11 +38,7 @@ const WAITID = switch (builtin.os.tag) {
     else => @compileError("telar's PTY bootstrap currently supports macOS and Linux"),
 };
 
-const CLD = struct {
-    const EXITED: c_int = 1;
-    const KILLED: c_int = 2;
-    const DUMPED: c_int = 3;
-};
+const CLD = @import("CLD.zig");
 
 extern "c" fn waitid(idtype: c_int, id: c_uint, infop: *std.c.siginfo_t, options: c_int) c_int;
 extern "c" fn openpty(amaster: *std.c.fd_t, aslave: *std.c.fd_t, name: ?[*]u8, termp: ?*const std.posix.termios, winp: ?*const std.posix.winsize) c_int;
@@ -50,10 +46,7 @@ extern "c" fn _NSGetEnviron() *[*:null]?[*:0]u8;
 extern "c" var environ: [*:null]?[*:0]u8;
 extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
 
-pub const Pair = struct {
-    master: std.c.fd_t,
-    slave: std.c.fd_t,
-};
+pub const Pair = @import("Pair.zig");
 
 pub fn openPty(window: *const std.posix.winsize) !Pair {
     var pair: Pair = .{ .master = -1, .slave = -1 };

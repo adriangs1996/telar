@@ -1,7 +1,7 @@
 //! Supported namespace for the runtime-owned loopback proxy service.
 
 const std = @import("std");
-const implementation = @import("service.zig");
+const implementation = @import("service_support.zig");
 
 pub const ClientConfiguration = implementation.ClientConfiguration;
 pub const max_connections = implementation.max_connections;

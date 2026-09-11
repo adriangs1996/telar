@@ -15,15 +15,9 @@ const session_name = @import("application/session_name.zig");
 
 const diagnostics = core.diagnostics;
 
-pub const ClientMessage = struct {
-    client: client_session.Key,
-    result: anyerror![]u8,
-};
+pub const ClientMessage = @import("ClientMessage.zig");
 
-pub const ClientSent = struct {
-    client: client_session.Key,
-    result: anyerror!void,
-};
+pub const ClientSent = @import("ClientSent.zig");
 
 pub const Event = union(enum) {
     accepted: anyerror!core.transport.SocketChannel,

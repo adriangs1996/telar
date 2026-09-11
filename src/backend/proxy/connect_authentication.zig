@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const identity = @import("identity.zig");
 
-const net = std.Io.net;
+pub const net = std.Io.net;
 
 const authentication_required_response =
     "HTTP/1.1 407 Proxy Authentication Required\r\n" ++
@@ -16,15 +16,9 @@ const bad_request_response =
     "HTTP/1.1 400 Bad Request\r\n" ++
     "Content-Length: 0\r\n\r\n";
 
-pub const Target = struct {
-    host: net.HostName,
-    port: u16,
-};
+pub const Target = @import("Target.zig");
 
-pub const Authenticated = struct {
-    credential: identity.Credential,
-    target: Target,
-};
+pub const Authenticated = @import("Authenticated.zig");
 
 pub const RejectionMetric = enum {
     invalid_authorization,
@@ -37,63 +31,18 @@ pub const RejectionReason = enum {
     invalid_target,
 };
 
-pub const Rejection = struct {
-    reason: RejectionReason,
-    response: []const u8,
-    metric: ?RejectionMetric,
-};
+pub const Rejection = @import("Rejection.zig");
 
 pub const Decision = union(enum) {
     authenticated: Authenticated,
     rejected: Rejection,
 };
 
-/// Defines live credential lookup supplied by the proxy credential registry.
-///
-/// ```zig
-/// const port: CredentialPort(Context) = .{ .contains = containsCredential };
-/// ```
-pub fn CredentialPort(comptime Context: type) type {
-    return struct {
-        contains: *const fn (*Context, *const identity.Credential) bool,
-    };
-}
+pub const CredentialPort = @import("GenericCredentialPort.zig").Type;
 
-/// Creates the CONNECT authentication command for one credential store.
-///
-/// ```zig
-/// const Authenticate = Command(Context, credential_port);
-/// const decision = Authenticate.execute(&context, request_head);
-/// ```
-pub fn Command(comptime Context: type, comptime credentials: CredentialPort(Context)) type {
-    return struct {
-        /// Authenticates before revealing target validity. Only an exact
-        /// `CONNECT authority HTTP/1.1` line with a bounded hostname and a
-        /// nonzero decimal port is accepted. A successful value owns a
-        /// credential copy whose token the caller must securely erase; its
-        /// validated hostname borrows from `head`.
-        ///
-        /// ```zig
-        /// const decision = Authenticate.execute(&context, request_head);
-        /// ```
-        pub fn execute(context: *Context, head: []const u8) Decision {
-            var credential = identity.parseProxyAuthorization(head) orelse return rejectInvalidAuthorization();
-            defer std.crypto.secureZero(u8, &credential.token);
+pub const Command = @import("GenericConnectAuthenticationCommand.zig").Type;
 
-            if (!credentials.contains(context, &credential)) {
-                return rejectUnknownCredential();
-            }
-
-            const target = parseTarget(head) orelse return rejectInvalidTarget();
-            return .{ .authenticated = .{
-                .credential = credential,
-                .target = target,
-            } };
-        }
-    };
-}
-
-fn parseTarget(head: []const u8) ?Target {
+pub fn parseTarget(head: []const u8) ?Target {
     const line_end = std.mem.indexOf(u8, head, "\r\n") orelse return null;
     var parts = std.mem.splitScalar(u8, head[0..line_end], ' ');
     if (!std.mem.eql(u8, parts.next() orelse return null, "CONNECT")) {
@@ -135,7 +84,7 @@ fn parseTarget(head: []const u8) ?Target {
     return .{ .host = host, .port = port };
 }
 
-fn rejectInvalidAuthorization() Decision {
+pub fn rejectInvalidAuthorization() Decision {
     return .{ .rejected = .{
         .reason = .invalid_authorization,
         .response = authentication_required_response,
@@ -143,7 +92,7 @@ fn rejectInvalidAuthorization() Decision {
     } };
 }
 
-fn rejectUnknownCredential() Decision {
+pub fn rejectUnknownCredential() Decision {
     return .{ .rejected = .{
         .reason = .unknown_credential,
         .response = authentication_required_response,
@@ -151,7 +100,7 @@ fn rejectUnknownCredential() Decision {
     } };
 }
 
-fn rejectInvalidTarget() Decision {
+pub fn rejectInvalidTarget() Decision {
     return .{ .rejected = .{
         .reason = .invalid_target,
         .response = bad_request_response,
@@ -159,16 +108,7 @@ fn rejectInvalidTarget() Decision {
     } };
 }
 
-const TestStore = struct {
-    expected: identity.Credential,
-    live: bool = true,
-    lookups: usize = 0,
-
-    fn contains(store: *TestStore, credential: *const identity.Credential) bool {
-        store.lookups += 1;
-        return store.live and std.meta.eql(store.expected, credential.*);
-    }
-};
+const TestStore = @import("TestStore.zig");
 
 const test_credential_port: CredentialPort(TestStore) = .{
     .contains = TestStore.contains,
@@ -194,11 +134,7 @@ fn requestHead(start_line: []const u8, output: []u8) ![]const u8 {
     return std.fmt.bufPrint(output, "{s}\r\nProxy-Authorization: Basic {s}\r\n\r\n", .{ start_line, basic });
 }
 
-const ExpectedRejection = struct {
-    reason: RejectionReason,
-    response: []const u8,
-    metric: ?RejectionMetric,
-};
+const ExpectedRejection = @import("ExpectedRejection.zig");
 
 fn expectRejected(decision: Decision, expected: ExpectedRejection) !void {
     const rejection = switch (decision) {

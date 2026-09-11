@@ -2,27 +2,13 @@
 
 const std = @import("std");
 
-pub const Size = struct {
-    width: u32,
-    height: u32,
-};
+pub const Size = @import("Size.zig");
 
-pub const Shape = struct {
-    size: Size,
-    radius: u32,
-};
+pub const Shape = @import("Shape.zig");
 
-const Point = struct {
-    x: u32,
-    y: u32,
-};
+const Point = @import("RoundedRectanglePoint.zig");
 
-pub const Input = struct {
-    pixels: []u8,
-    shape: Shape,
-    color: [3]u8,
-    stride: ?u32 = null,
-};
+pub const Input = @import("Input.zig");
 
 /// Fills a quota-validated surface. Transparent corners retain the fill RGB
 /// so hosts can interpolate the alpha edge without dark fringes.

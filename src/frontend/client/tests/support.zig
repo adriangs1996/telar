@@ -16,13 +16,13 @@ const workspace_capability = @import("../../workspace/root.zig");
 const keybind = input_capability.keybind;
 const kitty = graphics.kitty;
 
-const Io = std.Io;
-const File = Io.File;
-const schema = core.schema;
+pub const Io = std.Io;
+pub const File = Io.File;
+pub const schema = core.schema;
 const term = presentation.screen;
 
-const Client = @import("../client.zig");
-const InputHandler = @import("../resources/input_handler.zig");
+const Client = @import("../Client.zig");
+const InputHandler = @import("../resources/InputHandler.zig");
 const active_pane_resources = @import("../controllers/panes/active_pane_resources.zig");
 const client_actions = @import("../controllers/input/actions.zig");
 const agent_navigation = @import("../controllers/agents/agent_navigation.zig");
@@ -66,7 +66,7 @@ const tab_snapshots = @import("../controllers/tabs/tab_snapshots.zig");
 const workspace_handoffs = @import("../controllers/workspaces/workspace_handoffs.zig");
 const workspace_snapshots = @import("../controllers/workspaces/workspace_snapshots.zig");
 const InputChunk = Client.InputChunk;
-const initial_request_id = request_lifecycle.initial_request_id;
+pub const initial_request_id = request_lifecycle.initial_request_id;
 
 pub fn clientEventResourcesForTest(heap: *const core.diagnostics.Heap) client_events.Resources {
     return .{
@@ -194,237 +194,7 @@ pub fn expectOnlyNotificationVersionChanged(expected: client_model.Version, actu
 // socketpair instead of the runtime socket, a pipe instead of the tty's read
 // handle, and a discarding writer instead of the host terminal.
 
-pub const TestHarness = struct {
-    connection: core.transport.SocketChannel,
-    peer: core.transport.SocketChannel,
-    input_read: File,
-    input_write: File,
-    sink: Io.Writer.Discarding,
-    client: *Client,
-
-    pub fn init(harness: *TestHarness) !void {
-        try harness.initWithAsyncOutput(false);
-    }
-
-    /// Example: `try harness.initWithAsyncOutput(true);`.
-    pub fn initWithAsyncOutput(harness: *TestHarness, async_output: bool) !void {
-        var sockets: [2]std.c.fd_t = undefined;
-        if (std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets) != 0) {
-            return error.SocketPairFailed;
-        }
-        harness.connection = .init(.{ .socket = .{
-            .handle = sockets[0],
-            .address = .{ .ip4 = .loopback(0) },
-        } });
-        harness.peer = .init(.{ .socket = .{
-            .handle = sockets[1],
-            .address = .{ .ip4 = .loopback(0) },
-        } });
-        var pipe_fds: [2]std.c.fd_t = undefined;
-        if (std.c.pipe(&pipe_fds) != 0) {
-            return error.PipeFailed;
-        }
-        harness.input_read = .{ .handle = pipe_fds[0], .flags = .{ .nonblocking = false } };
-        harness.input_write = .{ .handle = pipe_fds[1], .flags = .{ .nonblocking = false } };
-        harness.sink = .init(&.{});
-        harness.client = try Client.init(.{
-            .gpa = std.testing.allocator,
-            .io = std.testing.io,
-            .connection = &harness.connection,
-            .input_file = harness.input_read,
-            .writer = &harness.sink.writer,
-            .async_output = async_output,
-            .host_size = .{ .cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0 },
-            .options = .{ .arguments = &.{}, .cwd = "/", .endpoint = "" },
-        });
-        // Every frame goes through the scheduled draw task, so tests observe
-        // pending state deterministically. The inline path has its own test.
-        harness.client.presenter.pacer = .{ .burst = 0, .credits = 0, .input_grace = 0 };
-    }
-
-    pub fn deinit(harness: *TestHarness) void {
-        const io = std.testing.io;
-        // EOF unblocks a pending input read so task cancellation never has
-        // to wait on the pipe.
-        harness.input_write.close(io);
-        harness.client.deinit();
-        harness.peer.deinit(io);
-        harness.connection.deinit(io);
-        harness.input_read.close(io);
-    }
-
-    /// Drives the real dispatch until the outbox is drained, so a test
-    /// observes exactly what the runtime peer would receive.
-    pub fn settle(harness: *TestHarness) !void {
-        while (harness.client.runtime_transport.outbox.inFlight() or harness.client.runtime_transport.outbox.len != 0) {
-            switch (try harness.client.select.await()) {
-                .sent => |result| try runtime_transport.handleSent(harness.client, result),
-                .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
-                .sidebar_animation_tick => |result| {
-                    _ = try sidebar_animations.handleTick(harness.client, result);
-                    try presentation_lifecycle.observe(harness.client);
-                },
-                .notification_tick => |result| {
-                    _ = try notification_flow.handleTick(harness.client, result);
-                    try presentation_lifecycle.observe(harness.client);
-                },
-                .bar_tick => |result| {
-                    try bar_updates.handleTick(harness.client, result);
-                    try presentation_lifecycle.observe(harness.client);
-                },
-                .bar_command => |completion| {
-                    try bar_updates.completeCommand(harness.client, completion);
-                    try presentation_lifecycle.observe(harness.client);
-                },
-                else => return error.UnexpectedEvent,
-            }
-        }
-    }
-
-    pub fn settleModelPresentation(harness: *TestHarness) !void {
-        var target = harness.client.model.version();
-        const graphics_target = harness.client.graphics_store.ingressVersion();
-        const attachment_target = harness.client.view.kittyAttachments().ingressVersion();
-        const view_interaction_target = harness.client.view.interactionVersion();
-        const input_routing_target = harness.client.host_input.presentationVersion();
-        while (!std.meta.eql(harness.client.presenter.presentation_state.prepared.model, target) or
-            harness.client.presenter.presentation_state.prepared.graphics_ingress != graphics_target or
-            harness.client.presenter.presentation_state.prepared.attachment_ingress != attachment_target or
-            harness.client.presenter.presentation_state.prepared.presentation_ingress.view_interaction !=
-                view_interaction_target or
-            harness.client.presenter.presentation_state.prepared.presentation_ingress.input_routing !=
-                input_routing_target)
-        {
-            switch (try harness.client.select.await()) {
-                .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
-                .sent => |result| try runtime_transport.handleSent(harness.client, result),
-                .media_tick => |result| try presentation_lifecycle.handleMediaTick(harness.client, result),
-                .sidebar_animation_tick => |result| {
-                    _ = try sidebar_animations.handleTick(harness.client, result);
-                    try presentation_lifecycle.observe(harness.client);
-                    target = harness.client.model.version();
-                },
-                .notification_tick => |result| {
-                    _ = try notification_flow.handleTick(harness.client, result);
-                    try presentation_lifecycle.observe(harness.client);
-                    target = harness.client.model.version();
-                },
-                .bar_tick => |result| {
-                    try bar_updates.handleTick(harness.client, result);
-                    try presentation_lifecycle.observe(harness.client);
-                    target = harness.client.model.version();
-                },
-                .bar_command => |completion| {
-                    try bar_updates.completeCommand(harness.client, completion);
-                    try presentation_lifecycle.observe(harness.client);
-                    target = harness.client.model.version();
-                },
-                else => return error.UnexpectedEvent,
-            }
-        }
-    }
-
-    /// Receives the next message the client sent to the runtime.
-    pub fn nextClientMessage(harness: *TestHarness, buffer: []u8) !schema.ClientMessage {
-        const payload = try harness.peer.receive(std.testing.io, buffer);
-        return schema.decodeClient(payload);
-    }
-
-    pub fn nextAttachmentRequest(harness: *TestHarness, pane_id: schema.PaneId, buffer: []u8) !schema.RequestId {
-        while (true) {
-            switch (try harness.nextClientMessage(buffer)) {
-                .open_pane => |open| {
-                    if (open.target == .pane and open.target.pane == pane_id) {
-                        return open.request_id;
-                    }
-
-                    return error.UnexpectedPaneTarget;
-                },
-                .pane_resize, .pane_input, .frame_ack => {},
-                else => return error.UnexpectedClientMessage,
-            }
-        }
-    }
-
-    pub fn discoverAndRequestAttachment(harness: *TestHarness, pane_id: schema.PaneId, buffer: []u8) !schema.RequestId {
-        const snapshot = try schema.encodeTabSnapshot(buffer, .{
-            .request_id = @enumFromInt(3),
-            .location = bootstrap_location,
-            .panes = &.{
-                .{ .pane_id = bootstrap_pane, .lifecycle = .running },
-                .{ .pane_id = pane_id, .lifecycle = .running },
-            },
-        });
-        _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(snapshot));
-        try harness.settle();
-
-        return harness.nextAttachmentRequest(pane_id, buffer);
-    }
-
-    pub const bootstrap_location: schema.TabLocation = .{
-        .workspace = .{ .workspace = @enumFromInt(1) },
-        .tab_id = @enumFromInt(1),
-    };
-    pub const bootstrap_pane: schema.PaneId = @enumFromInt(10);
-
-    /// Answers the initial open request through the real entrypoint, leaving
-    /// the client with one attached pane and its two snapshot requests (ids
-    /// 2 and 3) delivered to the peer.
-    pub fn bootstrap(harness: *TestHarness) !void {
-        try std.testing.expectEqual(initial_request_id, try request_lifecycle.registerInitial(harness.client));
-        var payload: [128]u8 = undefined;
-        const opened = try schema.encodePaneOpened(&payload, .{
-            .request_id = initial_request_id,
-            .pane_id = bootstrap_pane,
-            .location = bootstrap_location,
-            .created = true,
-        });
-        try std.testing.expectEqual(
-            @as(?u8, null),
-            try server_messages.handleServerMessage(harness.client, try schema.decodeServer(opened)),
-        );
-        try harness.settle();
-        var buffer: [256]u8 = undefined;
-        const first = try harness.nextClientMessage(&buffer);
-        try std.testing.expect(first == .request_workspace_snapshot);
-        const second = try harness.nextClientMessage(&buffer);
-        try std.testing.expect(second == .request_tab_snapshot);
-        try presentation_lifecycle.observe(harness.client);
-        try harness.settleModelPresentation();
-    }
-
-    pub fn addTab(harness: *TestHarness, tab_id: schema.TabId, pane_id: schema.PaneId) !schema.TabLocation {
-        const location: schema.TabLocation = .{
-            .workspace = bootstrap_location.workspace,
-            .tab_id = tab_id,
-        };
-
-        _ = try harness.client.model.workspace.addCreated(.{
-            .location = location,
-            .position = @intCast(harness.client.model.workspace.count),
-            .label = "second",
-            .root_pane_id = pane_id,
-        }, .{ .cols = 80, .rows = 24 });
-
-        return location;
-    }
-
-    pub fn addInactiveTab(harness: *TestHarness, tab_id: schema.TabId, pane_id: schema.PaneId) !schema.TabLocation {
-        const location = try harness.addTab(tab_id, pane_id);
-        const tab = harness.client.model.workspace.find(tab_id).?;
-        workspace_capability.tabs.Model.detachAll(tab);
-        try harness.client.graphics_store.setPaneVisible(pane_id, false);
-        try std.testing.expect(harness.client.model.workspace.select(bootstrap_location.tab_id));
-
-        return location;
-    }
-
-    pub fn allowTabSelection(harness: *TestHarness) !void {
-        const continuation = request_lifecycle.consume(harness.client, @enumFromInt(3)) orelse
-            return error.MissingBootstrapTabSnapshot;
-        try std.testing.expect(continuation == .tab_snapshot);
-    }
-};
+pub const TestHarness = @import("TestHarness.zig");
 
 pub fn encodeTestingAgentSnapshot(buffer: []u8, revision: u64, status: schema.AgentStatus) ![]const u8 {
     return schema.encodeAgentSnapshot(buffer, .{
@@ -520,10 +290,7 @@ pub fn installTestingLuaBinding(client: *Client, source: []const u8) !input_capa
     return configured;
 }
 
-pub const TestingPlugin = struct {
-    action: input_capability.action.PluginAction,
-    digest: core.plugin.Digest,
-};
+pub const TestingPlugin = @import("TestingPlugin.zig");
 
 pub const testing_plugin_context: lua_config.CallbackContext = .{
     .sidebar_visible = true,

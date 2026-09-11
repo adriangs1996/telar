@@ -34,13 +34,7 @@ pub fn addInstrumentedExe(b: *std.Build, obj: *std.Build.Step.Compile) std.Build
     return fuzz_exe;
 }
 
-/// Inputs `afl-fuzz` needs: the instrumented executable, the seed corpus it
-/// reads and the directory where it stores findings.
-pub const FuzzerRun = struct {
-    exe: std.Build.LazyPath,
-    corpus_dir: std.Build.LazyPath,
-    output_dir: std.Build.LazyPath,
-};
+pub const FuzzerRun = @import("FuzzerRun.zig");
 
 /// Creates a run step that invokes `afl-fuzz` with the given instrumented
 /// executable, input corpus directory, and output directory.

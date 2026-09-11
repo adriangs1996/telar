@@ -6,29 +6,9 @@ const c = @cImport({
     @cInclude("brotli/decode.h");
 });
 
-pub const Options = struct {
-    input: []const u8,
-    encoding: []const u8,
-    max_bytes: usize,
-};
+pub const Options = @import("Options.zig");
 
-pub const Result = struct {
-    bytes: []u8,
-    decoded: bool,
-    truncated: bool,
-    failed: bool = false,
-
-    /// Erases and releases decoded output owned by this result.
-    ///
-    /// ```zig
-    /// defer result.deinit(gpa);
-    /// ```
-    pub fn deinit(result: *Result, gpa: std.mem.Allocator) void {
-        std.crypto.secureZero(u8, result.bytes);
-        gpa.free(result.bytes);
-        result.* = .{ .bytes = &.{}, .decoded = false, .truncated = false };
-    }
-};
+pub const Result = @import("Result.zig");
 
 /// Applies at most two content codings in reverse order under one output cap.
 ///
@@ -115,11 +95,7 @@ pub fn raw(gpa: std.mem.Allocator, input: []const u8, max_bytes: usize) !Result 
     };
 }
 
-const DecodeInput = struct {
-    input: []const u8,
-    coding: []const u8,
-    max_bytes: usize,
-};
+const DecodeInput = @import("DecodeInput.zig");
 
 fn decodeOne(gpa: std.mem.Allocator, input: DecodeInput) !Result {
     if (std.ascii.eqlIgnoreCase(input.coding, "gzip")) {
@@ -185,9 +161,7 @@ fn decodeBrotli(gpa: std.mem.Allocator, input: DecodeInput) !Result {
     };
 }
 
-const CollectOptions = struct {
-    max_bytes: usize,
-};
+const CollectOptions = @import("CollectOptions.zig");
 
 fn collect(gpa: std.mem.Allocator, reader: *std.Io.Reader, options: CollectOptions) !Result {
     const logical_capacity = try cappedCapacity(options.max_bytes);

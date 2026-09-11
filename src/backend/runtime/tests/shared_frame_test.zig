@@ -13,7 +13,7 @@ const support = @import("support.zig");
 const shared_memory_supported = pane_mod.shared_transfer.shared_memory_supported;
 const AttachmentStore = attachment_mod.AttachmentStore;
 
-fn createChildObject(name: [:0]const u8, pixels: []const u8) !void {
+pub fn createChildObject(name: [:0]const u8, pixels: []const u8) !void {
     const fd = std.c.shm_open(
         name,
         @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDWR, .CREAT = true, .EXCL = true })),
@@ -52,59 +52,7 @@ fn readObject(name: [:0]const u8, buffer: []u8) !void {
     @memcpy(buffer, map[0..buffer.len]);
 }
 
-const Frame = struct {
-    name_buffer: [std.fs.max_path_bytes]u8 = undefined,
-    name_len: usize = 0,
-    envelope: [512]u8 = undefined,
-    envelope_len: usize = 0,
-
-    fn name(frame: *const Frame) [:0]const u8 {
-        return frame.name_buffer[0..frame.name_len :0];
-    }
-
-    fn bytes(frame: *const Frame) []const u8 {
-        return frame.envelope[0..frame.envelope_len];
-    }
-
-    /// Publishes `pixels` the way terminal-browser does: a fresh object and
-    /// one synchronized envelope naming it.
-    fn publish(frame: *Frame, sequence: u32, pixels: []const u8) !void {
-        const name_z = try std.fmt.bufPrintZ(&frame.name_buffer, "/tlrtest-frame-{d}-{d}", .{ std.c.getpid(), sequence });
-        frame.name_len = name_z.len;
-        _ = std.c.shm_unlink(name_z);
-        try createChildObject(name_z, pixels);
-        const Encoder = std.base64.standard.Encoder;
-        var encoded: [128]u8 = undefined;
-        const payload = Encoder.encode(encoded[0..Encoder.calcSize(name_z.len)], name_z);
-        const envelope = try std.fmt.bufPrint(
-            &frame.envelope,
-            "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=2,v=1,t=s,i=7,p=1,C=1,q=2;{s}\x1b\\\x1b[?2026l",
-            .{payload},
-        );
-        frame.envelope_len = envelope.len;
-    }
-
-    /// Publishes `pixels` through a regular file, terminal-browser's
-    /// preferred transport, and builds the matching `t=f` envelope.
-    fn publishFile(frame: *Frame, directory: []const u8, pixels: []const u8) !void {
-        const file_path = try std.fmt.bufPrint(&frame.name_buffer, "{s}/frame.rgba", .{directory});
-        frame.name_len = file_path.len;
-        try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = file_path, .data = pixels });
-        const Encoder = std.base64.standard.Encoder;
-        var encoded: [512]u8 = undefined;
-        const payload = Encoder.encode(encoded[0..Encoder.calcSize(file_path.len)], file_path);
-        const envelope = try std.fmt.bufPrint(
-            &frame.envelope,
-            "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=2,v=1,t=f,i=7,p=1,C=1,q=2;{s}\x1b\\\x1b[?2026l",
-            .{payload},
-        );
-        frame.envelope_len = envelope.len;
-    }
-
-    fn path(frame: *const Frame) []const u8 {
-        return frame.name_buffer[0..frame.name_len];
-    }
-};
+const Frame = @import("Frame.zig");
 
 fn encodedPath(buffer: []u8, path: []const u8) []const u8 {
     const Encoder = std.base64.standard.Encoder;

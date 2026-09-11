@@ -4,89 +4,13 @@ const std = @import("std");
 const notification_capability = @import("../../root.zig").notifications;
 const client_model = @import("../../root.zig").model;
 
-pub const Effects = struct {
-    context: *anyopaque,
-    publish_notification: *const fn (*anyopaque, notification_capability.Input) anyerror!void,
-};
+pub const Effects = @import("ProxyStatusDeliveryEffects.zig");
 
-pub const DeliverProxyStatusHandler = struct {
-    model: *const client_model.Model,
-    effects: Effects,
+pub const DeliverProxyStatusHandler = @import("DeliverProxyStatusHandler.zig");
 
-    /// Validates one exact proxy transition before publishing its semantic
-    /// notification.
-    ///
-    /// ```zig
-    /// try handler.execute(commit);
-    /// ```
-    pub fn execute(handler: *DeliverProxyStatusHandler, commit: client_model.ProxyStatusCommit) !void {
-        try handler.validate(commit);
+const Capture = @import("ProxyStatusDeliveryCaptureType.zig");
 
-        const trust_only = commit.previous == commit.active and commit.previous_scope == commit.scope;
-        try handler.effects.publish_notification(handler.effects.context, .{
-            .level = if (commit.active or commit.system_trusted) .warning else .info,
-            .title = if (trust_only)
-                if (commit.system_trusted) "Proxy CA trusted by system" else "Proxy CA removed from system trust"
-            else if (commit.active)
-                "TLS interception active"
-            else
-                "TLS interception stopped",
-            .message = if (trust_only)
-                if (commit.system_trusted) "The short-lived Telar CA is installed" else "The Telar CA is no longer installed"
-            else if (commit.active)
-                "Agent network traffic is being observed"
-            else
-                "Agent network traffic is no longer observed",
-            .duration_ns = if (commit.active or commit.system_trusted)
-                7 * std.time.ns_per_s
-            else
-                notification_capability.default_duration_ns,
-        });
-    }
-
-    fn validate(handler: *const DeliverProxyStatusHandler, commit: client_model.ProxyStatusCommit) !void {
-        if (handler.model.proxyTlsActive() != commit.active or
-            handler.model.proxyTlsScope() != commit.scope or
-            handler.model.proxySystemTrusted() != commit.system_trusted or
-            handler.model.version().proxy_status != commit.proxy_status_revision or
-            (commit.previous == commit.active and commit.previous_scope == commit.scope and
-                commit.previous_system_trusted == commit.system_trusted) or
-            commit.proxy_status_revision_before +% 1 != commit.proxy_status_revision)
-        {
-            return error.StaleProxyStatusCommit;
-        }
-    }
-};
-
-const Capture = struct {
-    model: *const client_model.Model,
-    expected: client_model.ProxyStatusCommit,
-    calls: usize = 0,
-    observed_commit: bool = false,
-    notification_valid: bool = false,
-    fail: bool = false,
-
-    fn effects(capture: *Capture) Effects {
-        return .{ .context = capture, .publish_notification = publishNotification };
-    }
-
-    fn publishNotification(context: *anyopaque, input: notification_capability.Input) !void {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.observed_commit = capture.model.proxyTlsActive() == capture.expected.active and
-            capture.model.proxyTlsScope() == capture.expected.scope and
-            capture.model.proxySystemTrusted() == capture.expected.system_trusted and
-            capture.model.version().proxy_status == capture.expected.proxy_status_revision and
-            capture.expected.proxy_status_revision_before +% 1 == capture.expected.proxy_status_revision;
-        capture.notification_valid = expectedNotification(capture.expected, input);
-
-        if (capture.fail) {
-            return error.NotificationPublicationFailed;
-        }
-    }
-};
-
-fn expectedNotification(commit: client_model.ProxyStatusCommit, input: notification_capability.Input) bool {
+pub fn expectedNotification(commit: client_model.ProxyStatusCommit, input: notification_capability.Input) bool {
     const trust_only = commit.previous == commit.active and commit.previous_scope == commit.scope;
     if (trust_only) {
         if (commit.system_trusted) {

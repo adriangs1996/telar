@@ -8,14 +8,11 @@ const client_model = @import("telar-client").model;
 const host_resources = @import("host_resources.zig");
 const host_capabilities = @import("host_capabilities.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const host_resize = host_application.host_resize;
 const schema = core.schema;
 
-pub const Source = struct {
-    tty: *const platform.Tty,
-    watcher: *platform.ResizeWatcher,
-};
+pub const Source = @import("Source.zig");
 
 /// Registers the next platform resize observation for this client.
 ///

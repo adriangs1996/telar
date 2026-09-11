@@ -3,7 +3,7 @@
 const core = @import("telar-core");
 const presentation = @import("../../../presentation/root.zig");
 
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const schema = core.schema;
 const term = presentation.screen;
 

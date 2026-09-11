@@ -6,128 +6,15 @@ const create_tab_commands = @import("../../application/commands/create_tab.zig")
 const delivery_mod = @import("../../delivery/root.zig");
 const workspace_mod = @import("../../../workspace/root.zig");
 
-const schema = core.schema;
-const PendingTabCreated = delivery_mod.PendingTabCreated;
-const ResponseQueue = delivery_mod.ResponseQueue;
+pub const schema = core.schema;
+pub const PendingTabCreated = delivery_mod.PendingTabCreated;
+pub const ResponseQueue = delivery_mod.ResponseQueue;
 
-pub const Controller = struct {
-    responses: *ResponseQueue,
-    create_tab: create_tab_commands.CreateTabExecutor,
+pub const Controller = @import("CreateTabController.zig");
 
-    /// Creates one controller for the lifetime of a create-tab request.
-    ///
-    /// ```zig
-    /// var controller = Controller.init(&responses, handler.executor());
-    /// ```
-    pub fn init(responses: *ResponseQueue, create_tab: create_tab_commands.CreateTabExecutor) Controller {
-        return .{ .responses = responses, .create_tab = create_tab };
-    }
+const Failure = @import("CreateTabFailure.zig");
 
-    /// Translates the wire request into an application command and maps its
-    /// result or expected failure into exactly one client response.
-    ///
-    /// ```zig
-    /// try controller.createTab(request);
-    /// ```
-    pub fn createTab(controller: *Controller, request: schema.CreateTabView) !void {
-        const result = controller.create_tab.execute(.{
-            .workspace = request.workspace,
-            .label = request.label,
-            .size = request.size,
-            .launch = request.launch,
-        }) catch |err| {
-            const failure: Failure = switch (err) {
-                error.WorkspaceNotFound => .{ .code = .workspace_not_found, .message = "workspace not found" },
-                error.TabLimitReached => .{ .code = .resource_limit, .message = "tab limit reached" },
-                error.InvalidTabLabel => .{ .code = .invalid_request, .message = "invalid tab label" },
-                error.GeometryUnavailable => .{ .code = .resource_limit, .message = "workspace geometry is leased by another client" },
-                error.InvalidLaunchCwd => .{ .code = .invalid_request, .message = "cwd source pane is unavailable" },
-                error.PaneLimitReached => .{ .code = .resource_limit, .message = "pane limit reached" },
-                error.UnsupportedEnvironment => .{ .code = .invalid_request, .message = "custom pane environment is not supported" },
-                error.PaneSpawnFailed => .{ .code = .spawn_failed, .message = "could not start pane process" },
-                else => return err,
-            };
-
-            try controller.queueFailure(request.request_id, failure);
-            return;
-        };
-
-        const label = result.created.labelSlice();
-        var pending: PendingTabCreated = .{
-            .request_id = request.request_id,
-            .location = result.created.location,
-            .position = result.created.position,
-            .label = undefined,
-            .label_len = @intCast(label.len),
-            .root_pane_id = result.root_pane_id,
-        };
-        @memcpy(pending.label[0..label.len], label);
-        try controller.responses.push(.{ .tab_created = pending });
-    }
-
-    fn queueFailure(controller: *Controller, request_id: schema.RequestId, failure: Failure) !void {
-        try controller.responses.push(.{ .request_failed = .{
-            .request_id = request_id,
-            .code = failure.code,
-            .message = failure.message,
-        } });
-    }
-};
-
-const Failure = struct {
-    code: schema.FailureCode,
-    message: []const u8,
-};
-
-const StubCreateTab = struct {
-    result: ?create_tab_commands.CreateTabResult = null,
-    failure: ?anyerror = null,
-    call_count: usize = 0,
-    last_workspace: ?schema.WorkspaceLocation = null,
-    last_size: ?schema.TerminalSize = null,
-    last_label: [schema.max_tab_label_bytes]u8 = undefined,
-    last_label_len: usize = 0,
-    last_cwd: [schema.max_cwd_bytes]u8 = undefined,
-    last_cwd_len: usize = 0,
-    last_cwd_source: ?schema.PaneId = null,
-    last_argument_count: u16 = 0,
-    last_environment_mode: schema.EnvironmentMode = .inherit_runtime,
-
-    fn executor(stub: *StubCreateTab) create_tab_commands.CreateTabExecutor {
-        return .{ .context = stub, .execute_fn = execute };
-    }
-
-    fn execute(context: *anyopaque, command: create_tab_commands.CreateTab) !create_tab_commands.CreateTabResult {
-        const stub: *StubCreateTab = @ptrCast(@alignCast(context));
-        std.debug.assert(command.label.len <= stub.last_label.len);
-        std.debug.assert(command.launch.cwd.len <= stub.last_cwd.len);
-
-        stub.call_count += 1;
-        stub.last_workspace = command.workspace;
-        stub.last_size = command.size;
-        stub.last_label_len = command.label.len;
-        @memcpy(stub.last_label[0..command.label.len], command.label);
-        stub.last_cwd_len = command.launch.cwd.len;
-        @memcpy(stub.last_cwd[0..command.launch.cwd.len], command.launch.cwd);
-        stub.last_cwd_source = command.launch.cwd_source;
-        stub.last_argument_count = command.launch.argument_count;
-        stub.last_environment_mode = command.launch.environment_mode;
-
-        if (stub.failure) |failure| {
-            return failure;
-        }
-
-        return stub.result.?;
-    }
-
-    fn lastLabel(stub: *const StubCreateTab) []const u8 {
-        return stub.last_label[0..stub.last_label_len];
-    }
-
-    fn lastCwd(stub: *const StubCreateTab) []const u8 {
-        return stub.last_cwd[0..stub.last_cwd_len];
-    }
-};
+const StubCreateTab = @import("StubCreateTab.zig");
 
 fn testingLocation(workspace_id: u64, tab_id: u64) !schema.TabLocation {
     return .{

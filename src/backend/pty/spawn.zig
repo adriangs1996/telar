@@ -1,15 +1,15 @@
 //! PTY acquisition and the verified fork-to-exec transaction.
 
 const std = @import("std");
-const command_mod = @import("command.zig");
+const command_mod = @import("command_support.zig");
 const native = @import("native.zig");
 
-const Command = command_mod.Command;
+pub const Command = command_mod.Command;
 const max_args = command_mod.max_args;
 
 const default_path = "/usr/local/bin:/bin:/usr/bin";
 
-const ChildFailureStage = enum(c_int) {
+pub const ChildFailureStage = enum(c_int) {
     session,
     controlling_terminal,
     working_directory,
@@ -24,10 +24,7 @@ const ChildFailure = extern struct {
     errno_code: c_int,
 };
 
-pub const Spawned = struct {
-    master: std.c.fd_t,
-    pid: std.c.pid_t,
-};
+pub const Spawned = @import("Spawned.zig");
 
 pub fn spawn(command: *const Command, window: *const std.posix.winsize) !Spawned {
     const cwd_fd: ?std.c.fd_t = if (command.cwd) |cwd_path|
@@ -159,15 +156,7 @@ fn childFailureError(failure: ChildFailure) anyerror {
     };
 }
 
-const ChildExec = struct {
-    master: std.c.fd_t,
-    slave: std.c.fd_t,
-    cwd_fd: ?std.c.fd_t,
-    error_fd: std.c.fd_t,
-    command: *const Command,
-    environment: [*:null]const ?[*:0]const u8,
-    path: []const u8,
-};
+const ChildExec = @import("ChildExec.zig");
 
 /// No allocator, error unwinding, or operation that can acquire a userspace
 /// libc lock may run in the child between `fork` and successful `execve`.
@@ -205,12 +194,7 @@ fn childExec(child: ChildExec) noreturn {
     childFail(child.error_fd, .exec, exec_error);
 }
 
-const ChildDescriptor = struct {
-    error_fd: std.c.fd_t,
-    source: std.c.fd_t,
-    target: std.c.fd_t,
-    stage: ChildFailureStage,
-};
+const ChildDescriptor = @import("ChildDescriptor.zig");
 
 fn duplicateChildDescriptor(descriptor: ChildDescriptor) void {
     const result = std.c.dup2(descriptor.source, descriptor.target);
@@ -219,12 +203,7 @@ fn duplicateChildDescriptor(descriptor: ChildDescriptor) void {
     }
 }
 
-const ExecRequest = struct {
-    file: [*:0]const u8,
-    argv: [*:null]const ?[*:0]const u8,
-    environment: [*:null]const ?[*:0]const u8,
-    path: []const u8,
-};
+const ExecRequest = @import("ExecRequest.zig");
 
 fn execWithPath(request: ExecRequest) std.posix.E {
     const file = std.mem.span(request.file);

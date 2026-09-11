@@ -24,9 +24,9 @@
 //! only the shared names below.
 
 const geometry = @import("geometry.zig");
-const cell = @import("cell.zig");
+const cell = @import("cell_support.zig");
 const text = @import("text.zig");
-const buffer = @import("buffer.zig");
+const buffer = @import("buffer_support.zig");
 
 pub const Rect = geometry.Rect;
 pub const Point = geometry.Point;

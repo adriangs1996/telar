@@ -1,6 +1,6 @@
 //! Client-side agent identities and the bounded runtime snapshot replica.
 
-pub const snapshot = @import("snapshot.zig");
+pub const snapshot = @import("snapshot_support.zig");
 
 pub const max_agents = snapshot.max_agents;
 pub const Agent = snapshot.Agent;

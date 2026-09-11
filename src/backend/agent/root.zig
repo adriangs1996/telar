@@ -4,7 +4,7 @@
 //! precedence, proxy tracking, and title lifecycle remain implementation
 //! details of this capability.
 
-const tracker = @import("tracker.zig");
+const tracker = @import("tracker_support.zig");
 const types = @import("types.zig");
 
 pub const soundForTransition = @import("sound.zig").soundForTransition;
@@ -34,13 +34,13 @@ pub const ReportObservation = types.ReportObservation;
 pub const SessionFile = types.SessionFile;
 
 test {
-    _ = @import("agent.zig");
-    _ = @import("evidence.zig");
+    _ = @import("Agent.zig");
+    _ = @import("evidence_support.zig");
     _ = @import("providers/root.zig");
     _ = @import("proxy_state.zig");
-    _ = @import("repository.zig");
+    _ = @import("repository_support.zig");
     _ = @import("restored_titles.zig");
-    _ = @import("tracker.zig");
+    _ = @import("tracker_support.zig");
     _ = @import("session_file.zig");
     _ = @import("transcript.zig");
 }

@@ -9,14 +9,14 @@ const core = @import("telar-core");
 const graphics = @import("../../graphics/root.zig");
 const lua_config = @import("../../config/root.zig");
 const plugin_broker = @import("../../plugins/root.zig");
-const kitty = graphics.kitty;
+pub const kitty = graphics.kitty;
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 
-const Io = std.Io;
+pub const Io = std.Io;
 
-const client_mod = @import("../client.zig");
-const ClientEvent = client_mod.ClientEvent;
-const InputRouter = host_inputs.Router;
+const client_mod = @import("../Client.zig");
+pub const ClientEvent = client_mod.ClientEvent;
+pub const InputRouter = host_inputs.Router;
 
 pub const ConfigReload = union(enum) {
     unchanged: i128,
@@ -27,56 +27,13 @@ pub const ConfigReload = union(enum) {
     },
 };
 
-pub const Loaded = struct {
-    generation: *lua_config.Generation,
-    registry: *plugin_broker.Registry,
-    trust_store: *core.plugin.TrustStore,
-    mtime_ns: i128,
-};
+pub const Loaded = @import("Loaded.zig");
 
-const Orphans = struct {
-    generation: ?*lua_config.Generation = null,
-    registry: ?*plugin_broker.Registry = null,
-    trust: ?*core.plugin.TrustStore = null,
-};
+const Orphans = @import("Orphans.zig");
 
-/// The reload's own state on the client: the watch fingerprint, the
-/// generation counter, and the race-window handoff slots the async task
-/// publishes into so a cancelled reload can still be freed.
-pub const State = struct {
-    mtime_ns: i128,
-    next_generation: u64 = 2,
-    orphans: Orphans = .{},
+pub const State = @import("ConfigReloadState.zig");
 
-    /// Frees whatever a cancelled reload task published. Call only after
-    /// the select's tasks are cancelled.
-    pub fn deinit(state: *State, gpa: std.mem.Allocator) void {
-        if (state.orphans.generation) |generation| {
-            generation.deinit();
-        }
-        if (state.orphans.registry) |registry| {
-            gpa.destroy(registry);
-        }
-        if (state.orphans.trust) |store| {
-            gpa.destroy(store);
-        }
-    }
-
-    fn clearOrphans(state: *State) void {
-        state.orphans = .{};
-    }
-};
-
-pub const ScheduleArgs = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    select: *Io.Select(ClientEvent),
-    path: []const u8,
-    profile: ?[]const u8,
-    trust_path: []const u8,
-    current_generation: *const lua_config.Generation,
-    current_registry: *const plugin_broker.Registry,
-};
+pub const ScheduleArgs = @import("ScheduleArgs.zig");
 
 /// Schedules one asynchronous watch using the current reload fingerprint.
 ///
@@ -100,39 +57,11 @@ pub fn schedule(state: *State, args: ScheduleArgs) !void {
     });
 }
 
-/// The client facts `resolve` validates a loaded configuration against.
-pub const Checks = struct {
-    kitty_support: kitty.Support,
-    sidebar_renderer_locked: bool,
-    current_sidebar: kitty.SidebarRendering,
-};
+pub const Checks = @import("Checks.zig");
 
-pub const ResolveArgs = struct {
-    gpa: std.mem.Allocator,
-    reload: ConfigReload,
-    checks: Checks,
-};
+pub const ResolveArgs = @import("ResolveArgs.zig");
 
-/// Everything a validated reload hands over: the owned configuration
-/// objects and the values already compiled from them.
-pub const Adoption = struct {
-    generation: *lua_config.Generation,
-    registry: *plugin_broker.Registry,
-    trust_store: *core.plugin.TrustStore,
-    router: InputRouter,
-    sidebar_rendering: kitty.SidebarRendering,
-
-    /// Releases an adoption that no client accepted.
-    ///
-    /// ```zig
-    /// errdefer adoption.deinit(gpa);
-    /// ```
-    pub fn deinit(adoption: Adoption, gpa: std.mem.Allocator) void {
-        adoption.generation.deinit();
-        gpa.destroy(adoption.registry);
-        gpa.destroy(adoption.trust_store);
-    }
-};
+pub const Adoption = @import("Adoption.zig");
 
 pub const Outcome = union(enum) {
     unchanged,
@@ -140,23 +69,7 @@ pub const Outcome = union(enum) {
     adopted: Adoption,
 };
 
-const RejectContext = struct {
-    state: *State,
-    gpa: std.mem.Allocator,
-    loaded: Loaded,
-
-    fn reject(context: RejectContext, comptime format: []const u8, args: anytype) Outcome {
-        var diagnostic: lua_config.Diagnostic = .{};
-        diagnostic.set(format, args);
-        context.state.clearOrphans();
-        context.state.mtime_ns = context.loaded.mtime_ns;
-        context.loaded.generation.deinit();
-        context.gpa.destroy(context.loaded.registry);
-        context.gpa.destroy(context.loaded.trust_store);
-
-        return .{ .rejected = diagnostic };
-    }
-};
+const RejectContext = @import("RejectContext.zig");
 
 /// Resolves one finished reload attempt. A rejection frees the loaded
 /// objects and clears the orphan slots here — the unwind lives once. An
@@ -210,37 +123,9 @@ pub fn resolve(state: *State, args: ResolveArgs) Outcome {
     }
 }
 
-/// The pieces the async task has built so far, so every failure unwinds
-/// through one place instead of repeating the partial free by hand.
-const Partial = struct {
-    generation: *lua_config.Generation,
-    trust: ?*core.plugin.TrustStore = null,
-    registry: ?*plugin_broker.Registry = null,
+const Partial = @import("Partial.zig");
 
-    fn abandon(partial: Partial, gpa: std.mem.Allocator, orphans: *Orphans) void {
-        orphans.* = .{};
-        if (partial.registry) |registry| {
-            gpa.destroy(registry);
-        }
-        partial.generation.deinit();
-        if (partial.trust) |trust| {
-            gpa.destroy(trust);
-        }
-    }
-};
-
-const WaitArgs = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    path: []const u8,
-    known_mtime_ns: i128,
-    generation_number: u64,
-    profile: ?[]const u8,
-    current_generation: *const lua_config.Generation,
-    current_registry: *const plugin_broker.Registry,
-    trust_path: []const u8,
-    orphans: *Orphans,
-};
+const WaitArgs = @import("WaitArgs.zig");
 
 fn waitConfigReload(args: WaitArgs) anyerror!ConfigReload {
     try args.io.sleep(.fromSeconds(1), .awake);

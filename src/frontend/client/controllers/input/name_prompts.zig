@@ -20,10 +20,10 @@ const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 const workspace_creations = @import("../workspaces/workspace_creations.zig");
 const workspace_renames = @import("../workspaces/workspace_renames.zig");
 
-const Client = @import("../../client.zig");
-const name_prompt = input_application.name_prompt;
+const Client = @import("../../Client.zig");
+pub const name_prompt = input_application.name_prompt;
 const name_prompt_opening = input_application.name_prompt_opening;
-const schema = core.schema;
+pub const schema = core.schema;
 const term = presentation.screen;
 
 /// Starts workspace creation only when the current client can plan the
@@ -146,18 +146,7 @@ pub fn handleInput(client: *Client, bytes: []const u8) !name_prompt.Outcome {
     return outcome;
 }
 
-const ListSnapshot = struct {
-    kind: enum { none, goto, history, suggest } = .none,
-    selection: u16 = 0,
-    scope: prompt_state.HistoryScope = .global,
-    alternate: bool = false,
-    text: [schema.max_tab_label_bytes]u8 = undefined,
-    len: u8 = 0,
-
-    fn textSlice(snapshot: *const ListSnapshot) []const u8 {
-        return snapshot.text[0..snapshot.len];
-    }
-};
+const ListSnapshot = @import("ListSnapshot.zig");
 
 fn listSnapshot(client: *Client) ListSnapshot {
     const prompt = client.model.name_prompt.currentConst() orelse return .{};
@@ -433,21 +422,7 @@ fn merge(current: name_prompt.Outcome, next: name_prompt.Outcome) name_prompt.Ou
     return next;
 }
 
-const EffectsCapture = struct {
-    accept: bool = true,
-    calls: usize = 0,
-
-    fn port(capture: *EffectsCapture) name_prompt.SubmitEffects {
-        return .{ .context = capture, .submit = submitPrompt };
-    }
-
-    fn submitPrompt(context: *anyopaque, submission: prompt_state.Submission) !bool {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        _ = submission;
-        capture.calls += 1;
-        return capture.accept;
-    }
-};
+const EffectsCapture = @import("EffectsCapture.zig");
 
 test "input adapter drops an incomplete zero-length tail without spinning" {
     var prompt: prompt_state.State = .{};

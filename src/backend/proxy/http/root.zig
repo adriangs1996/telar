@@ -7,11 +7,11 @@
 const std = @import("std");
 const body = @import("body.zig");
 const connection = @import("connection.zig");
-const head = @import("head.zig");
+const head = @import("head_support.zig");
 const transform = @import("transform.zig");
 const types = @import("types.zig");
 const middleware = @import("../middleware.zig");
-const provider = @import("../provider/request.zig");
+const provider = @import("../provider/request_support.zig");
 const tls = @import("../tls.zig");
 
 pub const max_head_bytes = head.max_bytes;
@@ -34,31 +34,11 @@ pub const Exchange = connection.Exchange;
 pub const ConnectionPort = connection.Port;
 pub const Connection = connection.Connection;
 
-pub const MessageRoute = struct {
-    from: tls.Session.Side,
-    to: tls.Session.Side,
-    is_response: bool,
-    response_to_head: bool,
-    dialect: provider.ApiDialect = .unknown,
-    capture: ?HeadSink = null,
-};
+pub const MessageRoute = @import("MessageRoute.zig");
 
-pub const HeadSink = struct {
-    context: *anyopaque,
-    append_fn: *const fn (*anyopaque, []const u8) void,
+pub const HeadSink = @import("HeadSink.zig");
 
-    pub fn append(sink: HeadSink, bytes: []const u8) void {
-        sink.append_fn(sink.context, bytes);
-    }
-};
-
-pub const HeadTransform = struct {
-    route: MessageRoute,
-    pipeline: *const middleware.TransformPipeline,
-    io: std.Io,
-    context: middleware.TransformContext,
-    capture: ?HeadSink = null,
-};
+pub const HeadTransform = @import("HeadTransform.zig");
 
 /// Relays one complete HTTP/1.1 message and returns its metadata.
 ///
@@ -173,9 +153,7 @@ pub fn relayBody(session: anytype, route: BodyRoute, observer: anytype) bool {
 
 const FakeSession = @import("test_support.zig").FakeSession;
 
-const IgnoreTestObserver = struct {
-    pub fn observe(_: IgnoreTestObserver, _: BodyFragment) void {}
-};
+const IgnoreTestObserver = @import("IgnoreTestObserver.zig");
 
 test "request head is forwarded before its body is consumed" {
     const request = "POST /upload HTTP/1.1\r\n" ++
@@ -281,95 +259,7 @@ test "informational response is delimited before the final response" {
     try std.testing.expectEqualStrings(responses, fake.childOutput());
 }
 
-const ConnectionIntegration = struct {
-    session: FakeSession,
-    request_classes: [2]RequestClass = undefined,
-    request_count: usize = 0,
-    response_statuses: [2]u16 = undefined,
-    response_count: usize = 0,
-    failure_count: usize = 0,
-    upgraded: bool = false,
-
-    fn io(_: *ConnectionIntegration) std.Io {
-        return std.testing.io;
-    }
-
-    fn readRequest(context: *ConnectionIntegration) ?RequestHead {
-        const parsed = relayHead(&context.session, .{
-            .from = .child,
-            .to = .origin,
-            .is_response = false,
-            .response_to_head = false,
-            .dialect = .anthropic_messages,
-        }) orelse return null;
-
-        return .{
-            .classification = parsed.classification,
-            .body = parsed.framing,
-            .response_context = if (parsed.message.head_request) .head_request else .normal,
-        };
-    }
-
-    fn relayRequestBody(context: *ConnectionIntegration, plan: BodyPlan) bool {
-        return relayBody(
-            &context.session,
-            .{ .from = .child, .to = .origin, .framing = plan },
-            IgnoreTestObserver{},
-        );
-    }
-
-    fn relayResponse(context: *ConnectionIntegration, request: RequestHead) ?ResponseHead {
-        while (true) {
-            const parsed = relayHead(&context.session, .{
-                .from = .origin,
-                .to = .child,
-                .is_response = true,
-                .response_to_head = request.response_context == .head_request,
-            }) orelse return null;
-
-            if (!relayBody(
-                &context.session,
-                .{ .from = .origin, .to = .child, .framing = parsed.framing },
-                IgnoreTestObserver{},
-            )) {
-                return null;
-            }
-
-            if (parsed.message.informational) {
-                continue;
-            }
-
-            return .{
-                .status_code = parsed.message.status_code,
-                .body = parsed.framing,
-                .kind = if (parsed.message.upgrade) .upgrade else .final,
-                .connection = if (parsed.message.closes) .close else .keep_alive,
-            };
-        }
-    }
-
-    fn exchange(context: *ConnectionIntegration, request: RequestHead) ExchangeOutcome {
-        return IntegrationExchange.execute(context, request);
-    }
-
-    fn publishRequest(context: *ConnectionIntegration, request: RequestHead) void {
-        context.request_classes[context.request_count] = request.classification;
-        context.request_count += 1;
-    }
-
-    fn publishResponse(context: *ConnectionIntegration, response: ResponseHead) void {
-        context.response_statuses[context.response_count] = response.status_code;
-        context.response_count += 1;
-    }
-
-    fn publishFailure(context: *ConnectionIntegration) void {
-        context.failure_count += 1;
-    }
-
-    fn upgrade(context: *ConnectionIntegration) void {
-        context.upgraded = true;
-    }
-};
+const ConnectionIntegration = @import("ConnectionIntegration.zig");
 
 const integration_exchange_port: ExchangePort(ConnectionIntegration) = .{
     .io = ConnectionIntegration.io,
@@ -377,7 +267,7 @@ const integration_exchange_port: ExchangePort(ConnectionIntegration) = .{
     .relay_response = ConnectionIntegration.relayResponse,
 };
 
-const IntegrationExchange = Exchange(ConnectionIntegration, integration_exchange_port);
+pub const IntegrationExchange = Exchange(ConnectionIntegration, integration_exchange_port);
 
 const integration_connection_port: ConnectionPort(ConnectionIntegration) = .{
     .read_request = ConnectionIntegration.readRequest,

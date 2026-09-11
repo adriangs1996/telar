@@ -5,25 +5,9 @@ const command = @import("command.zig");
 
 const Io = std.Io;
 
-pub const OutputPlacement = struct {
-    column: u32,
-    row: u32,
-    offset_x: u32,
-    offset_y: u32,
-    source_x: u32,
-    source_y: u32,
-    source_width: u32,
-    source_height: u32,
-    columns: u32,
-    rows: u32,
-};
+pub const OutputPlacement = @import("OutputPlacement.zig");
 
-pub const PlacementCommand = struct {
-    image_id: u32,
-    placement_id: u32,
-    value: OutputPlacement,
-    z: i32,
-};
+pub const PlacementCommand = @import("PlacementCommand.zig");
 
 /// Places an image without applying application-specific z-index policy.
 /// For example: `try writePlacement(writer, placement)`.

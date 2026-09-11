@@ -1,7 +1,7 @@
 //! Dependency-free Kitty Graphics Protocol command encoding.
 
-const image = @import("image.zig");
-const transmission = @import("transmission.zig");
+const image = @import("image_support.zig");
+const transmission = @import("transmission_support.zig");
 const placement = @import("placement.zig");
 const deletion = @import("deletion.zig");
 

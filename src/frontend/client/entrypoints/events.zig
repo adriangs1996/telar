@@ -5,7 +5,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const platform = @import("../../platform/root.zig");
 
-const Client = @import("../client.zig");
+const Client = @import("../Client.zig");
 const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
 const client_telemetry = @import("../resources/telemetry.zig");
 const client_layouts = @import("../resources/client_layouts.zig");
@@ -23,15 +23,11 @@ const plugin_actions = @import("../controllers/configuration/plugin_actions.zig"
 const runtime_transport = @import("runtime_io.zig");
 const sidebar_animations = @import("../controllers/notifications/sidebar_animations.zig");
 
-const diagnostics = core.diagnostics;
+pub const diagnostics = core.diagnostics;
 const Event = Client.ClientEvent;
 const EventTag = std.meta.Tag(Event);
 
-pub const Resources = struct {
-    tty: *const platform.Tty,
-    resize_watcher: *platform.ResizeWatcher,
-    heap: *const diagnostics.Heap,
-};
+pub const Resources = @import("Resources.zig");
 
 pub const Outcome = union(enum) {
     keep_running,

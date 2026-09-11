@@ -1,0 +1,18 @@
+const Palette = @This();
+const ui = @import("telar-core").ui;
+accent: ui.Color,
+panel_bg: ui.Color,
+surface0: ui.Color,
+surface1: ui.Color,
+surface_dim: ui.Color,
+overlay0: ui.Color,
+overlay1: ui.Color,
+text: ui.Color,
+subtext0: ui.Color,
+mauve: ui.Color,
+green: ui.Color,
+yellow: ui.Color,
+red: ui.Color,
+blue: ui.Color,
+teal: ui.Color,
+peach: ui.Color,

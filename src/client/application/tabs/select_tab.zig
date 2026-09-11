@@ -4,132 +4,23 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
 
-const schema = core.schema;
+pub const schema = core.schema;
 
 pub const Target = client_model.TabSelectionTarget;
 
-pub const SelectTab = struct {
-    target: Target,
-};
+pub const SelectTab = @import("SelectTab.zig");
 
-pub const SnapshotGate = struct {
-    context: *anyopaque,
-    pending: *const fn (*anyopaque) bool,
-};
+pub const SnapshotGate = @import("SnapshotGate.zig");
 
-pub const SelectionEffects = struct {
-    context: *anyopaque,
-    deliver: *const fn (*anyopaque, client_model.TabSelection) anyerror!void,
-};
+pub const SelectionEffects = @import("SelectionEffects.zig");
 
-pub const SelectTabHandler = struct {
-    model: *client_model.Model,
-    snapshots: SnapshotGate,
-    effects: SelectionEffects,
+pub const SelectTabHandler = @import("SelectTabHandler.zig");
 
-    /// Commits the active identity before synchronizing client resources.
-    /// Missing, repeated and snapshot-blocked selections have no effects.
-    ///
-    /// ```zig
-    /// const selection = try handler.execute(.{ .target = .{ .tab_id = tab_id } });
-    /// ```
-    pub fn execute(handler: *SelectTabHandler, command: SelectTab) !?client_model.TabSelection {
-        if (handler.snapshots.pending(handler.snapshots.context)) {
-            return null;
-        }
+const SnapshotGateCapture = @import("SnapshotGateCapture.zig");
 
-        const selection = handler.model.selectTab(command.target) catch |err| switch (err) {
-            error.NoActiveTab, error.TabNotFound => return null,
-        } orelse return null;
+const EffectsCapture = @import("SelectTabEffectsCapture.zig");
 
-        try handler.effects.deliver(handler.effects.context, selection);
-        return selection;
-    }
-};
-
-const SnapshotGateCapture = struct {
-    blocked: bool = false,
-
-    fn port(capture: *SnapshotGateCapture) SnapshotGate {
-        return .{ .context = capture, .pending = pending };
-    }
-
-    fn pending(context: *anyopaque) bool {
-        const capture: *SnapshotGateCapture = @ptrCast(@alignCast(context));
-        return capture.blocked;
-    }
-};
-
-const EffectsCapture = struct {
-    model: *client_model.Model,
-    expected: schema.TabLocation,
-    calls: usize = 0,
-    observed_commit: bool = false,
-    fail: bool = false,
-
-    fn port(capture: *EffectsCapture) SelectionEffects {
-        return .{ .context = capture, .deliver = deliver };
-    }
-
-    fn deliver(context: *anyopaque, selection: client_model.TabSelection) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        const previous = capture.model.workspace.find(selection.previous.tab_id);
-        const selected = capture.model.workspace.find(selection.selected.tab_id);
-        const version = capture.model.version();
-        capture.calls += 1;
-        capture.observed_commit = std.meta.eql(capture.model.activeTabLocation(), capture.expected) and
-            std.meta.eql(selection.selected, capture.expected) and
-            previous != null and selected != null and
-            previous.?.model.layout.currentRevision() == selection.previous_layout_revision and
-            selected.?.model.layout.currentRevision() == selection.selected_layout_revision and
-            version.workspace == selection.workspace_revision and
-            version.tabs == selection.tabs_revision and
-            version.active_tab == selection.active_tab_revision and
-            version.panes == selection.panes_revision and
-            version.copy == selection.copy_revision;
-        if (capture.fail) {
-            return error.SelectionSyncFailed;
-        }
-    }
-};
-
-const TestingModel = struct {
-    model: *client_model.Model,
-    first: schema.TabLocation,
-    second: schema.TabLocation,
-
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-        const first: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(1),
-        };
-        const second: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(2),
-        };
-        try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
-        _ = try model.workspace.addCreated(.{
-            .location = second,
-            .position = 1,
-            .label = "logs",
-            .root_pane_id = @enumFromInt(2),
-        }, .{ .cols = 20, .rows = 5 });
-        try std.testing.expect(model.workspace.select(first.tab_id));
-
-        return .{ .model = model, .first = first, .second = second };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
+const TestingModel = @import("SelectTabTestingModel.zig");
 
 test "SelectTabHandler commits a resolved target before synchronizing resources" {
     var testing = try TestingModel.init();

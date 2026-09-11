@@ -6,67 +6,16 @@ const workspace_capability = @import("../../workspace/root.zig");
 const client_model = @import("../../root.zig").model;
 const pane_open_delivery = @import("../panes/root.zig").pane_open_delivery;
 
-const layout_mod = workspace_capability.layout;
-const schema = core.schema;
+pub const layout_mod = workspace_capability.layout;
+pub const schema = core.schema;
 
-pub const Bookmark = struct {
-    location: schema.TabLocation,
-    tab_layout: ?layout_mod.Layout,
-};
+pub const Bookmark = @import("Bookmark.zig");
 
-pub const Bookmarks = struct {
-    context: *anyopaque,
-    find: *const fn (*anyopaque, schema.WorkspaceLocation) ?Bookmark,
-};
+pub const Bookmarks = @import("WorkspaceArrivalPlanningBookmarks.zig");
 
-pub const PlanWorkspaceArrivalHandler = struct {
-    bookmarks: Bookmarks,
+pub const PlanWorkspaceArrivalHandler = @import("PlanWorkspaceArrivalHandler.zig");
 
-    /// Constructs one runtime-confirmed arrival and retains a saved layout
-    /// only when its bookmark names the exact confirmed tab.
-    ///
-    /// ```zig
-    /// const arrival = handler.execute(opened, requested_size);
-    /// ```
-    pub fn execute(handler: *const PlanWorkspaceArrivalHandler, opened: pane_open_delivery.OpenedPane, size: schema.TerminalSize) client_model.WorkspaceArrival {
-        const bookmark = handler.bookmarks.find(
-            handler.bookmarks.context,
-            opened.location.workspace,
-        );
-        const saved_layout = if (bookmark) |remembered|
-            if (std.meta.eql(remembered.location, opened.location)) remembered.tab_layout else null
-        else
-            null;
-
-        return .{
-            .pane_id = opened.pane_id,
-            .location = opened.location,
-            .size = size,
-            .saved_layout = saved_layout,
-        };
-    }
-};
-
-const Capture = struct {
-    bookmark: ?Bookmark = null,
-    calls: usize = 0,
-    workspace: ?schema.WorkspaceLocation = null,
-
-    fn handler(capture: *Capture) PlanWorkspaceArrivalHandler {
-        return .{ .bookmarks = .{
-            .context = capture,
-            .find = find,
-        } };
-    }
-
-    fn find(context: *anyopaque, workspace: schema.WorkspaceLocation) ?Bookmark {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.workspace = workspace;
-
-        return capture.bookmark;
-    }
-};
+const Capture = @import("WorkspaceArrivalPlanningCapture.zig");
 
 const testing_location: schema.TabLocation = .{
     .workspace = .{ .workspace = @enumFromInt(3) },

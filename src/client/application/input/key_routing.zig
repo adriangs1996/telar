@@ -4,20 +4,16 @@ const std = @import("std");
 const core = @import("telar-core");
 const input_capability = @import("../../input/root.zig");
 
-const keybind = input_capability.keybind;
+pub const keybind = input_capability.keybind;
 const key_lease = input_capability.key_lease;
-const schema = core.schema;
+pub const schema = core.schema;
 
 pub const Command = union(enum) {
     bytes: []const u8,
     key: keybind.Key,
 };
 
-pub const Authority = struct {
-    attachment_modal_active: bool = false,
-    prompt_active: bool = false,
-    copy_mode_active: bool = false,
-};
+pub const Authority = @import("KeyRoutingAuthority.zig");
 
 pub const Owner = enum {
     ignored,
@@ -27,21 +23,14 @@ pub const Owner = enum {
     pane,
 };
 
-pub const Outcome = struct {
-    owner: Owner,
-    delivered: bool = false,
-    lease_overflow: bool = false,
-};
+pub const Outcome = @import("KeyRoutingOutcome.zig");
 
 pub const PaneTarget = union(enum) {
     current,
     lease: schema.PaneId,
 };
 
-pub const PaneCommand = struct {
-    target: PaneTarget,
-    input: Command,
-};
+pub const PaneCommand = @import("PaneCommand.zig");
 
 pub const LeaseOwner = union(enum) {
     ignored,
@@ -53,14 +42,7 @@ pub const LeaseOwner = union(enum) {
 
 pub const Leases = key_lease.Table(LeaseOwner, keybind.max_physical_leases);
 
-pub const Effects = struct {
-    context: *anyopaque,
-    close_modal: *const fn (*anyopaque) void,
-    prompt: *const fn (*anyopaque, Command) anyerror!void,
-    copy_key: *const fn (*anyopaque, keybind.Key) anyerror!void,
-    pane: *const fn (*anyopaque, PaneCommand) anyerror!?schema.PaneId,
-    preview: *const fn (*anyopaque) anyerror!void,
-};
+pub const Effects = @import("KeyRoutingEffects.zig");
 
 /// Returns whether the native router must bypass configured bindings for the
 /// current exclusive owner.
@@ -72,153 +54,16 @@ pub fn captures(authority: Authority) bool {
     return authority.attachment_modal_active or authority.prompt_active;
 }
 
-pub const KeyRoutingHandler = struct {
-    effects: Effects,
-    leases: *Leases,
+pub const KeyRoutingHandler = @import("KeyRoutingHandler.zig");
 
-    /// Assigns one synchronous input value to exactly one owner. A successful
-    /// unmodified Ctrl+V pane delivery may start one best-effort media preview.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(command, authority);
-    /// ```
-    pub fn execute(handler: *KeyRoutingHandler, command: Command, authority: Authority) !Outcome {
-        return switch (command) {
-            .bytes => |bytes| if (bytes.len == 0)
-                .{ .owner = .ignored }
-            else
-                (try handler.routeCurrent(command, authority)).outcome,
-            .key => |key| handler.routeKey(key, authority),
-        };
-    }
-
-    const Routed = struct {
-        outcome: Outcome,
-        lease_owner: LeaseOwner,
-    };
-
-    fn routeKey(handler: *KeyRoutingHandler, key: keybind.Key, authority: Authority) !Outcome {
-        const identity = key.physical orelse return (try handler.routeCurrent(.{ .key = key }, authority)).outcome;
-
-        return switch (key.phase) {
-            .press => handler.routePress(key, authority),
-            .repeat => handler.routeRepeat(key, handler.leases.owner(identity) orelse return .{ .owner = .ignored }),
-            .release => handler.routeRelease(key, handler.leases.release(identity) orelse return .{ .owner = .ignored }),
-        };
-    }
-
-    fn routePress(handler: *KeyRoutingHandler, key: keybind.Key, authority: Authority) !Outcome {
-        const identity = key.physical.?;
-        if (!handler.leases.acquire(identity, .ignored)) {
-            return .{ .owner = .ignored, .lease_overflow = true };
-        }
-        errdefer _ = handler.leases.release(identity);
-
-        const routed = try handler.routeCurrent(.{ .key = key }, authority);
-        const assigned = handler.leases.acquire(identity, routed.lease_owner);
-        std.debug.assert(assigned);
-
-        return routed.outcome;
-    }
-
-    fn routeRepeat(handler: *KeyRoutingHandler, key: keybind.Key, owner: LeaseOwner) !Outcome {
-        return switch (owner) {
-            .ignored => .{ .owner = .ignored },
-            .attachment_modal => .{ .owner = .attachment_modal },
-            .name_prompt => prompt: {
-                try handler.effects.prompt(handler.effects.context, .{ .key = key });
-
-                break :prompt .{ .owner = .name_prompt };
-            },
-            .copy_mode => copy: {
-                try handler.effects.copy_key(handler.effects.context, key);
-
-                break :copy .{ .owner = .copy_mode };
-            },
-            .pane => |pane_id| handler.routeLeasedPane(key, pane_id),
-        };
-    }
-
-    fn routeRelease(handler: *KeyRoutingHandler, key: keybind.Key, owner: LeaseOwner) !Outcome {
-        return switch (owner) {
-            .ignored => .{ .owner = .ignored },
-            .attachment_modal => .{ .owner = .attachment_modal },
-            .name_prompt => .{ .owner = .name_prompt },
-            .copy_mode => .{ .owner = .copy_mode },
-            .pane => |pane_id| handler.routeLeasedPane(key, pane_id),
-        };
-    }
-
-    fn routeCurrent(handler: *KeyRoutingHandler, command: Command, authority: Authority) !Routed {
-        switch (command) {
-            .bytes => {},
-            .key => |key| {
-                if (authority.attachment_modal_active) {
-                    if (key.code == .escape) {
-                        handler.effects.close_modal(handler.effects.context);
-                    }
-
-                    return .{
-                        .outcome = .{ .owner = .attachment_modal },
-                        .lease_owner = .attachment_modal,
-                    };
-                }
-            },
-        }
-
-        if (authority.prompt_active) {
-            try handler.effects.prompt(handler.effects.context, command);
-
-            return .{
-                .outcome = .{ .owner = .name_prompt },
-                .lease_owner = .name_prompt,
-            };
-        }
-
-        if (authority.copy_mode_active) {
-            switch (command) {
-                .bytes => {},
-                .key => |key| try handler.effects.copy_key(handler.effects.context, key),
-            }
-
-            return .{
-                .outcome = .{ .owner = .copy_mode },
-                .lease_owner = .copy_mode,
-            };
-        }
-
-        const pane_id = try handler.effects.pane(handler.effects.context, .{
-            .target = .current,
-            .input = command,
-        });
-        if (pane_id != null and requestsClipboardPreview(command)) {
-            handler.effects.preview(handler.effects.context) catch {};
-        }
-
-        return .{
-            .outcome = .{ .owner = .pane, .delivered = pane_id != null },
-            .lease_owner = if (pane_id) |id| .{ .pane = id } else .ignored,
-        };
-    }
-
-    fn routeLeasedPane(handler: *KeyRoutingHandler, key: keybind.Key, pane_id: schema.PaneId) !Outcome {
-        const delivered = try handler.effects.pane(handler.effects.context, .{
-            .target = .{ .lease = pane_id },
-            .input = .{ .key = key },
-        });
-
-        return .{ .owner = .pane, .delivered = delivered != null };
-    }
-};
-
-fn requestsClipboardPreview(command: Command) bool {
+pub fn requestsClipboardPreview(command: Command) bool {
     return switch (command) {
         .bytes => false,
         .key => |key| key.phase == .press and key.isCtrl('v') and !key.mods.alt and !key.mods.shift,
     };
 }
 
-const Event = enum {
+pub const Event = enum {
     close_modal,
     prompt,
     copy_key,
@@ -226,7 +71,7 @@ const Event = enum {
     preview,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     prompt,
     copy_key,
@@ -234,93 +79,7 @@ const Failure = enum {
     preview,
 };
 
-const Capture = struct {
-    events: [5]Event = undefined,
-    event_count: usize = 0,
-    command: ?Command = null,
-    pane_delivered: bool = true,
-    pane_id: schema.PaneId = @enumFromInt(1),
-    pane_target: ?PaneTarget = null,
-    failure: Failure = .none,
-    leases: Leases = .{},
-
-    fn routingHandler(capture: *Capture) KeyRoutingHandler {
-        return .{
-            .effects = capture.effects(),
-            .leases = &capture.leases,
-        };
-    }
-
-    fn effects(capture: *Capture) Effects {
-        return .{
-            .context = capture,
-            .close_modal = closeModal,
-            .prompt = prompt,
-            .copy_key = copyKey,
-            .pane = pane,
-            .preview = preview,
-        };
-    }
-
-    fn record(capture: *Capture, event: Event) void {
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn closeModal(raw_context: *anyopaque) void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.record(.close_modal);
-    }
-
-    fn prompt(raw_context: *anyopaque, command: Command) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.record(.prompt);
-        capture.command = command;
-
-        if (capture.failure == .prompt) {
-            return error.PromptInputFailed;
-        }
-    }
-
-    fn copyKey(raw_context: *anyopaque, key: keybind.Key) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.record(.copy_key);
-        capture.command = .{ .key = key };
-
-        if (capture.failure == .copy_key) {
-            return error.CopyModeInputFailed;
-        }
-    }
-
-    fn pane(raw_context: *anyopaque, command: PaneCommand) !?schema.PaneId {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.record(.pane);
-        capture.command = command.input;
-        capture.pane_target = command.target;
-
-        if (capture.failure == .pane) {
-            return error.PaneInputFailed;
-        }
-
-        if (!capture.pane_delivered) {
-            return null;
-        }
-
-        return switch (command.target) {
-            .current => capture.pane_id,
-            .lease => |pane_id| pane_id,
-        };
-    }
-
-    fn preview(raw_context: *anyopaque) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.record(.preview);
-
-        if (capture.failure == .preview) {
-            return error.ClipboardPreviewFailed;
-        }
-    }
-};
+const Capture = @import("KeyRoutingCapture.zig");
 
 test "key routing captures only modal and prompt authority" {
     try std.testing.expect(captures(.{ .attachment_modal_active = true }));

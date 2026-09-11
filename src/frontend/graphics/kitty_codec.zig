@@ -5,46 +5,21 @@ const core = @import("telar-core");
 const protocol = @import("kitty_protocol");
 
 const Io = std.Io;
-const graphics = core.graphics;
+pub const graphics = core.graphics;
 
 pub const transmission_budget_per_frame: usize = 256 * 1024;
 pub const OutputPlacement = protocol.OutputPlacement;
 pub const ChunkProgress = protocol.ChunkProgress;
 
-pub const TransmissionChunks = struct {
-    external_id: u32,
-    image: graphics.Image,
-    pixels: []const u8,
-    start_offset: usize,
-    budget: usize,
-    compressed: bool,
-};
+pub const TransmissionChunks = @import("TransmissionChunks.zig");
 
-pub const PngTransmissionChunks = struct {
-    external_id: u32,
-    png: []const u8,
-    start_offset: usize,
-    budget: usize,
-};
+pub const PngTransmissionChunks = @import("PngTransmissionChunks.zig");
 
-pub const Transmission = struct {
-    external_id: u32,
-    image: graphics.Image,
-    pixels: []const u8,
-};
+pub const Transmission = @import("Transmission.zig");
 
-pub const SharedTransmission = struct {
-    external_id: u32,
-    image: graphics.Image,
-    name: []const u8,
-};
+pub const SharedTransmission = @import("SharedTransmission.zig");
 
-pub const PlacementCommand = struct {
-    image_id: u32,
-    placement_id: u32,
-    value: OutputPlacement,
-    z: i32,
-};
+pub const PlacementCommand = @import("PlacementCommand.zig");
 
 /// Emits transmission chunks under the frontend's existing image vocabulary.
 /// For example: `try writeTransmissionChunks(writer, transmission)`.

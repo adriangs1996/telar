@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const Io = std.Io;
+pub const Io = std.Io;
 const core = @import("telar-core");
 const c = @cImport({
     @cInclude("sys/socket.h");
@@ -10,92 +10,13 @@ const c = @cImport({
     @cInclude("unistd.h");
 });
 
-pub const LocalListener = struct {
-    listener: Io.net.Server,
-    path: [Io.net.UnixAddress.max_len]u8 = undefined,
-    path_len: usize,
-    inode: Io.File.INode,
-    active: bool = true,
-
-    pub fn listen(io: Io, path: []const u8) !LocalListener {
-        const address = try localAddress(path);
-        try validateEndpointDirectory(path);
-        try reclaimStaleEndpoint(io, path);
-        var listener = try address.listen(io, .{});
-        errdefer listener.deinit(io);
-
-        const stat = try Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
-        if (stat.kind != .unix_domain_socket) {
-            return error.InvalidEndpoint;
-        }
-        errdefer removeIfOwned(io, path, stat.inode);
-
-        // The chmod must go through the path: a Unix socket descriptor does
-        // not reference the filesystem node that carries the mode, so fchmod
-        // cannot restrict the endpoint. Renaming it out from under us in this
-        // window requires write permission on the directory, which the trust
-        // validation above already refused to anyone but the owner.
-        try Io.Dir.cwd().setFilePermissions(
-            io,
-            path,
-            Io.File.Permissions.fromMode(0o600),
-            .{ .follow_symlinks = false },
-        );
-
-        var result = LocalListener{
-            .listener = listener,
-            .path_len = path.len,
-            .inode = stat.inode,
-        };
-        std.mem.copyForwards(u8, result.path[0..path.len], path);
-        return result;
-    }
-
-    pub fn accept(listener: *LocalListener, io: Io) !core.transport.SocketChannel {
-        std.debug.assert(listener.active);
-        const stream = try listener.listener.accept(io);
-        errdefer stream.close(io);
-        const peer_uid = try peerUid(stream.socket.handle);
-        if (!sameUserPeer(peer_uid, std.c.geteuid())) {
-            return error.PeerNotOwned;
-        }
-        return .init(stream);
-    }
-
-    pub fn deinit(listener: *LocalListener, io: Io) void {
-        if (!listener.active) {
-            return;
-        }
-        // POSIX does not guarantee that close from another thread interrupts
-        // accept. Shutdown does, and the runtime admission actor uses it as
-        // the concurrent cancellation mechanism.
-        listener.shutdown();
-        listener.listener.deinit(io);
-        removeIfOwned(io, listener.path[0..listener.path_len], listener.inode);
-        listener.active = false;
-    }
-
-    pub fn shutdown(listener: *LocalListener) void {
-        if (!listener.active) {
-            return;
-        }
-        _ = std.c.shutdown(listener.listener.socket.handle, std.posix.SHUT.RDWR);
-    }
-
-    fn removeIfOwned(io: Io, path: []const u8, inode: Io.File.INode) void {
-        const stat = Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch return;
-        if (stat.kind != .unix_domain_socket or stat.inode != inode) {
-            return;
-        }
-        Io.Dir.deleteFileAbsolute(io, path) catch {};
-    }
-};
+pub const LocalListener = @import("LocalListener.zig");
 
 pub fn sameUserPeer(peer_uid: u32, effective_uid: u32) bool {
     return peer_uid == effective_uid;
 }
 
-fn peerUid(handle: std.c.fd_t) !u32 {
+pub fn peerUid(handle: std.c.fd_t) !u32 {
     return switch (builtin.os.tag) {
         .linux => linux: {
             const Credentials = extern struct {
@@ -161,7 +82,7 @@ pub fn classifyEndpointDirectory(mode: u32, uid: u32, euid: u32) DirectoryTrust 
     return .trusted;
 }
 
-fn validateEndpointDirectory(path: []const u8) !void {
+pub fn validateEndpointDirectory(path: []const u8) !void {
     const directory = std.fs.path.dirname(path) orelse return error.RelativePath;
     var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
     if (directory.len >= directory_buffer.len) {
@@ -188,7 +109,7 @@ fn directoryTrust(path: [:0]const u8) !DirectoryTrust {
     return classifyEndpointDirectory(@intCast(stat.st_mode), @intCast(stat.st_uid), @intCast(std.c.geteuid()));
 }
 
-fn localAddress(path: []const u8) !Io.net.UnixAddress {
+pub fn localAddress(path: []const u8) !Io.net.UnixAddress {
     if (!std.fs.path.isAbsolute(path)) {
         return error.RelativePath;
     }
@@ -202,7 +123,7 @@ fn localAddress(path: []const u8) !Io.net.UnixAddress {
 /// A filesystem socket survives a process crash. Probe it before unlinking and
 /// remove it only when connect reports that no listener exists and the inode
 /// still matches the one inspected before the probe.
-fn reclaimStaleEndpoint(io: Io, path: []const u8) !void {
+pub fn reclaimStaleEndpoint(io: Io, path: []const u8) !void {
     const original = Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
         error.FileNotFound => return,
         else => |other| return other,

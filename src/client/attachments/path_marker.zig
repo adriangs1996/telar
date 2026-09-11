@@ -10,8 +10,8 @@
 const std = @import("std");
 const core = @import("telar-core");
 
-const schema = core.schema;
-const ui = core.ui;
+pub const schema = core.schema;
+pub const ui = core.ui;
 
 pub const prefix = "pi-clipboard-";
 pub const uuid_len: usize = 36;
@@ -21,31 +21,11 @@ const extensions = [_][]const u8{ "png", "jpg", "webp", "gif" };
 
 pub const Uuid = [uuid_len]u8;
 
-pub const Position = struct {
-    x: u16,
-    y: u16,
+pub const Position = @import("Position.zig");
 
-    pub fn eql(a: Position, b: Position) bool {
-        return a.x == b.x and a.y == b.y;
-    }
-};
+pub const Marker = @import("Marker.zig");
 
-pub const Marker = struct {
-    uuid: Uuid,
-    /// First cell of the path, which is the first `/` of the word holding
-    /// the file name so a word soft-wrapped before it is never included.
-    start: Position,
-    /// One past the last extension cell on its row.
-    end: Position,
-    /// Editor steps from `start` to `end`, or null when the path exceeds
-    /// `max_cells`. A marker is still recognisable without its extent.
-    cells: ?u8,
-};
-
-pub const Screen = struct {
-    buffer: *const ui.Buffer,
-    cursor: schema.frame.Cursor,
-};
+pub const Screen = @import("Screen.zig");
 
 /// Finds the marker carrying `uuid` anywhere on the screen.
 ///
@@ -155,75 +135,11 @@ pub fn stepsOnRow(buffer: *const ui.Buffer, y: u16, span: Span) ?u8 {
     return @intCast(steps);
 }
 
-pub const Span = struct {
-    from: u16,
-    to: u16,
-};
+pub const Span = @import("Span.zig");
 
-const Head = struct {
-    uuid: Uuid,
-    start: Position,
-    end: Position,
-};
+const Head = @import("Head.zig");
 
-/// Walks cells in Pi's logical order: left to right, then down to the next
-/// row whenever a row's reserved cursor column is reached. Rows are always
-/// `width - 1` content cells wide, so any content beyond that column belongs
-/// to the next row.
-const Scan = struct {
-    buffer: *const ui.Buffer,
-    x: u16,
-    y: u16,
-
-    fn start(buffer: *const ui.Buffer) ?Scan {
-        if (buffer.w < 2 or buffer.h == 0) {
-            return null;
-        }
-
-        return .{ .buffer = buffer, .x = 0, .y = 0 };
-    }
-
-    fn at(buffer: *const ui.Buffer, origin: Position) ?Scan {
-        if (buffer.w < 2 or origin.y >= buffer.h or origin.x >= buffer.w) {
-            return null;
-        }
-
-        return .{ .buffer = buffer, .x = origin.x, .y = origin.y };
-    }
-
-    /// The current cell, or null once the screen is exhausted.
-    fn position(scan: *Scan) ?Position {
-        if (scan.x >= scan.buffer.w - 1) {
-            scan.x = 0;
-            scan.y += 1;
-        }
-        if (scan.y >= scan.buffer.h) {
-            return null;
-        }
-
-        return .{ .x = scan.x, .y = scan.y };
-    }
-
-    fn cell(scan: *Scan) ?*const ui.Cell {
-        const here = scan.position() orelse return null;
-
-        return cellAt(scan.buffer, here.x, here.y);
-    }
-
-    fn step(scan: *Scan) void {
-        scan.x += 1;
-    }
-
-    fn expect(scan: *Scan, byte: u8) bool {
-        const here = scan.cell() orelse return false;
-        if (!isSingle(here) or here.text()[0] != byte) {
-            return false;
-        }
-        scan.step();
-
-        return true;
-    }
-};
+const Scan = @import("Scan.zig");
 
 fn parseHead(buffer: *const ui.Buffer, start: Position) ?Head {
     var scan = Scan.at(buffer, start) orelse return null;
@@ -378,11 +294,11 @@ fn knownExtension(extension: []const u8) bool {
     return false;
 }
 
-fn cellAt(buffer: *const ui.Buffer, x: u16, y: u16) *const ui.Cell {
+pub fn cellAt(buffer: *const ui.Buffer, x: u16, y: u16) *const ui.Cell {
     return &buffer.cells[@as(usize, y) * buffer.w + x];
 }
 
-fn isSingle(cell: *const ui.Cell) bool {
+pub fn isSingle(cell: *const ui.Cell) bool {
     return cell.width == 1 and cell.len == 1;
 }
 

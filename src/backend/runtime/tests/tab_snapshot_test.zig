@@ -7,30 +7,9 @@ const tab_snapshot_controller = @import("../entrypoints/requests/tab_snapshot.zi
 const delivery_mod = @import("../delivery/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");
 
-const schema = core.schema;
+pub const schema = core.schema;
 
-const SourceContext = struct {
-    workspaces: *workspace_mod.Repository,
-    live_location: schema.TabLocation,
-
-    fn source(context: *SourceContext) tab_snapshot_query.Source {
-        return .{
-            .context = context,
-            .contains_tab = containsTab,
-            .running_panes = runningPanes,
-        };
-    }
-
-    fn containsTab(context: *anyopaque, location: schema.TabLocation) bool {
-        const source_context: *SourceContext = @ptrCast(@alignCast(context));
-        return source_context.workspaces.reader().contains(location);
-    }
-
-    fn runningPanes(context: *anyopaque, location: schema.TabLocation) u16 {
-        const source_context: *SourceContext = @ptrCast(@alignCast(context));
-        return if (std.meta.eql(source_context.live_location, location)) 1 else 0;
-    }
-};
+const SourceContext = @import("SourceContext.zig");
 
 test "a live aggregate tab crosses query and controller boundaries" {
     var state: workspace_mod.State = .{};

@@ -3,9 +3,9 @@
 const std = @import("std");
 const client_clock = @import("clock.zig");
 
-const Io = std.Io;
+pub const Io = std.Io;
 const monotonic = client_clock.monotonic;
-const no_deadline = std.math.maxInt(u64);
+pub const no_deadline = std.math.maxInt(u64);
 
 const TimerEvent = union(enum) {
     deadline: anyerror!void,
@@ -23,58 +23,7 @@ pub const Update = enum {
     schedule,
 };
 
-pub const Scheduler = struct {
-    deadline_ns: std.atomic.Value(u64) = .init(no_deadline),
-    wake: Io.Event = .unset,
-    pending: bool = false,
-
-    /// Replaces the current deadline and reports whether the caller must
-    /// schedule the one worker.
-    ///
-    /// ```zig
-    /// if (scheduler.update(io, deadline_ns) == .schedule) startWorker();
-    /// ```
-    pub fn update(scheduler: *Scheduler, io: Io, deadline_ns: ?u64) Update {
-        const replacement = deadline_ns orelse no_deadline;
-        const previous = scheduler.deadline_ns.load(.acquire);
-        scheduler.deadline_ns.store(replacement, .release);
-        if (scheduler.pending) {
-            if (previous != replacement) {
-                scheduler.wake.set(io);
-            }
-
-            return .retained;
-        }
-        if (deadline_ns == null) {
-            return .idle;
-        }
-
-        scheduler.wake.reset();
-        scheduler.pending = true;
-
-        return .schedule;
-    }
-
-    /// Releases the reservation when the caller could not schedule its worker.
-    ///
-    /// ```zig
-    /// scheduler.schedulingFailed();
-    /// ```
-    pub fn schedulingFailed(scheduler: *Scheduler) void {
-        scheduler.pending = false;
-    }
-
-    /// Releases the completed worker before propagating its result.
-    ///
-    /// ```zig
-    /// try scheduler.complete(result);
-    /// ```
-    pub fn complete(scheduler: *Scheduler, result: anyerror!void) !void {
-        scheduler.pending = false;
-
-        try result;
-    }
-};
+pub const Scheduler = @import("Scheduler.zig");
 
 /// Waits until the latest non-null deadline, following replacements in place.
 ///

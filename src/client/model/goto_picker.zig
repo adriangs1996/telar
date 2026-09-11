@@ -8,8 +8,8 @@ const agents = @import("../agents/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 
 const schema = core.schema;
-const workspace_list = workspace_capability.workspace_list;
-const tabs_mod = workspace_capability.tabs;
+pub const workspace_list = workspace_capability.workspace_list;
+pub const tabs_mod = workspace_capability.tabs;
 
 pub const max_results = 64;
 pub const max_label_bytes = 160;
@@ -20,35 +20,13 @@ pub const Item = union(enum) {
     agent: agents.AgentKey,
 };
 
-pub const Match = struct {
-    item: Item,
-    score: u32,
-};
+pub const Match = @import("Match.zig");
 
-pub const Results = struct {
-    matches: [max_results]Match = undefined,
-    len: u8 = 0,
+pub const Results = @import("Results.zig");
 
-    pub fn slice(results: *const Results) []const Match {
-        return results.matches[0..results.len];
-    }
-};
+pub const Sources = @import("Sources.zig");
 
-pub const Sources = struct {
-    agents: *const agents.Snapshot,
-    workspaces: *const workspace_list.Snapshot,
-    tabs: ?*const tabs_mod.Model,
-};
-
-const Scorer = struct {
-    sources: Sources,
-    query: []const u8,
-    label: [max_label_bytes]u8 = undefined,
-
-    fn scoreItem(scorer: *Scorer, item: Item) ?u32 {
-        return score(describe(scorer.sources, item, &scorer.label), scorer.query);
-    }
-};
+const Scorer = @import("Scorer.zig");
 
 /// Fills `results` with every candidate matching `query`, best score first.
 /// An empty query lists everything in canonical order: workspaces, then the

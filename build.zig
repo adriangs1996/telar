@@ -1,29 +1,12 @@
 const std = @import("std");
 
-const ProxyPrefixes = struct {
-    nghttp2: []const u8,
-    brotli: []const u8,
-};
+const ProxyPrefixes = @import("ProxyPrefixes.zig");
 
-const ProxyModuleConfig = struct {
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-    tls: *std.Build.Module,
-    vt: *std.Build.Module,
-    prefixes: ProxyPrefixes,
-};
+const ProxyModuleConfig = @import("ProxyModuleConfig.zig");
 
-const FreeTypeConfig = struct {
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-    disable_coverage: bool,
-};
+const FreeTypeConfig = @import("FreeTypeConfig.zig");
 
-const LuaConfig = struct {
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-    name: []const u8,
-};
+const LuaConfig = @import("LuaConfig.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -783,15 +766,7 @@ pub fn build(b: *std.Build) void {
     parallel_test_prerequisites.dependOn(cross_step);
 }
 
-const Suite = struct {
-    path: []const u8,
-    vt: bool = false,
-    libc: bool = false,
-    transport: bool = false,
-    schema: bool = false,
-    frontend: bool = false,
-    isolated: bool = false,
-};
+const Suite = @import("Suite.zig");
 
 fn addClientModule(b: *std.Build, core: *std.Build.Module) *std.Build.Module {
     const client = b.createModule(.{
@@ -806,59 +781,7 @@ fn addClientModule(b: *std.Build, core: *std.Build.Module) *std.Build.Module {
 
 // The shared modules every test suite links against, so the run instances and
 // the analysis-only `check` twins are wired identically from one place.
-const SuiteModules = struct {
-    unicode: *std.Build.Module,
-    core: *std.Build.Module,
-    backend: *std.Build.Module,
-    frontend: *std.Build.Module,
-    client: *std.Build.Module,
-    kitty_protocol: *std.Build.Module,
-    lua_api: *std.Build.Module,
-    telar_lua: *std.Build.Module,
-    tls: *std.Build.Module,
-    freetype: *std.Build.Module,
-    ghostty_vt: *std.Build.Module,
-    wuffs: *std.Build.Module,
-    nghttp2_prefix: []const u8,
-    brotli_prefix: []const u8,
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-
-    fn addSuiteTest(modules: SuiteModules, b: *std.Build, suite: Suite) *std.Build.Step.Compile {
-        const tests = b.addTest(.{
-            .root_module = b.createModule(.{
-                .root_source_file = b.path(suite.path),
-                .target = modules.target,
-                .optimize = modules.optimize,
-                .link_libc = suite.libc,
-            }),
-        });
-
-        tests.root_module.addImport("unicode", modules.unicode);
-        tests.root_module.addImport("telar-core", modules.core);
-        tests.root_module.addImport("telar-backend", modules.backend);
-        tests.root_module.addImport("telar-frontend", modules.frontend);
-        tests.root_module.addImport("telar-client", modules.client);
-        tests.root_module.addImport("kitty_protocol", modules.kitty_protocol);
-        tests.root_module.addImport("lua-api", modules.lua_api);
-        tests.root_module.addImport("telar-lua", modules.telar_lua);
-        tests.root_module.addImport("tls", modules.tls);
-        tests.root_module.addImport("freetype", modules.freetype);
-        tests.root_module.addImport("wuffs", modules.wuffs);
-        tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ modules.nghttp2_prefix, "include" }) });
-        tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ modules.nghttp2_prefix, "lib" }) });
-        tests.root_module.linkSystemLibrary("nghttp2", .{});
-        tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ modules.brotli_prefix, "include" }) });
-        tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ modules.brotli_prefix, "lib" }) });
-        tests.root_module.linkSystemLibrary("brotlidec", .{});
-
-        if (suite.vt) {
-            tests.root_module.addImport("ghostty-vt", modules.ghostty_vt);
-        }
-
-        return tests;
-    }
-};
+const SuiteModules = @import("SuiteModules.zig");
 
 fn testBarrier(b: *std.Build, name: []const u8) *std.Build.Step {
     const barrier = b.allocator.create(std.Build.Step) catch @panic("OOM");
@@ -872,56 +795,14 @@ fn isolatedTestRun(b: *std.Build, tests: *std.Build.Step.Compile, prerequisites:
     return run;
 }
 
-const Coverage = struct {
-    enabled: bool,
-    runtime_path: ?[]const u8,
-
-    fn init(b: *std.Build) Coverage {
-        const enabled = b.option(bool, "coverage", "Enable zig-cov instrumentation") orelse false;
-        const runtime_path = b.option([]const u8, "coverage-rt", "Path to zig-cov-rt.o");
-        if (enabled and runtime_path == null) {
-            std.debug.panic("-Dcoverage requires -Dcoverage-rt=<path>", .{});
-        }
-        return .{
-            .enabled = enabled,
-            .runtime_path = runtime_path,
-        };
-    }
-
-    fn instrumentModule(coverage: Coverage, module: *std.Build.Module) void {
-        if (coverage.enabled) {
-            module.fuzz = true;
-        }
-    }
-
-    fn instrumentTest(coverage: Coverage, test_executable: *std.Build.Step.Compile) void {
-        if (!coverage.enabled) {
-            return;
-        }
-        test_executable.use_llvm = true;
-        test_executable.root_module.fuzz = true;
-        test_executable.root_module.link_libc = true;
-        test_executable.root_module.addObjectFile(.{ .cwd_relative = coverage.runtime_path.? });
-    }
-
-    fn excludeCSourceCoverage(coverage: Coverage, b: *std.Build, module: *std.Build.Module) void {
-        if (!coverage.enabled) {
-            return;
-        }
-        for (module.link_objects.items) |link_object| switch (link_object) {
-            .c_source_file => |source| source.flags = cFlags(b, source.flags, true),
-            .c_source_files => |sources| sources.flags = cFlags(b, sources.flags, true),
-            else => {},
-        };
-    }
-};
+const Coverage = @import("Coverage.zig");
 
 // Root fuzz instrumentation also reaches linked C-family sources. zcov's
 // runtime does not provide every callback those sources emit, so keep native
 // dependencies outside the coverage graph.
 const no_c_coverage = "-fno-sanitize-coverage=trace-pc-guard,trace-cmp,inline-8bit-counters,pc-table";
 
-fn cFlags(b: *std.Build, base: []const []const u8, disable_coverage: bool) []const []const u8 {
+pub fn cFlags(b: *std.Build, base: []const []const u8, disable_coverage: bool) []const []const u8 {
     if (!disable_coverage) {
         return base;
     }
