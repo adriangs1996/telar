@@ -1,0 +1,102 @@
+Build Summary: 29/29 steps succeeded; 34/34 tests passed
+test-proxy-example success
++- run test 3 pass (3 total) 306ms MaxRSS:2M
+|  +- compile test ReleaseSafe native success 12s MaxRSS:535M
+|     +- WriteFile  cached
+|     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 cached 40ms MaxRSS:34M
+|     |  +- WriteFile libc.txt cached
+|     +- WriteFile hwy cached
+|     +- compile lib highway ReleaseSafe aarch64-macos.13.0 cached 35ms MaxRSS:35M
+|     |  +- WriteFile libc.txt (reused)
+|     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- options cached
+|     +- options cached
+|     +- WriteFile props.zig cached
+|     |  +- run exe props-unigen cached
+|     |  |  +- compile exe props-unigen Debug native cached 61ms MaxRSS:35M
+|     |  |     +- run exe uucode_generate (tables.zig) cached
+|     |  |        +- compile exe uucode_generate Debug native cached 49ms MaxRSS:35M
+|     |  +- run exe symbols-unigen cached
+|     |     +- compile exe symbols-unigen Debug native cached 62ms MaxRSS:35M
+|     |        +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|     +- WriteFile props.zig (+2 more reused dependencies)
+|     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
++- run test 6 pass (6 total) 274ms MaxRSS:1M
+|  +- compile test ReleaseSafe native success 7s MaxRSS:299M
+|     +- WriteFile  (reused)
+|     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- WriteFile hwy (reused)
+|     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- options (reused)
+|     +- options (reused)
+|     +- WriteFile props.zig (+2 more reused dependencies)
+|     +- WriteFile props.zig (+2 more reused dependencies)
+|     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
++- run test 4 pass (4 total) 400ms MaxRSS:1M
+|  +- compile test ReleaseSafe native success 7s MaxRSS:311M
+|     +- WriteFile  (reused)
+|     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- WriteFile hwy (reused)
+|     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- options (reused)
+|     +- options (reused)
+|     +- WriteFile props.zig (+2 more reused dependencies)
+|     +- WriteFile props.zig (+2 more reused dependencies)
+|     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
++- run test 5 pass (5 total) 1s MaxRSS:1M
+|  +- compile test ReleaseSafe native success 7s MaxRSS:313M
+|     +- WriteFile  (reused)
+|     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- WriteFile hwy (reused)
+|     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- options (reused)
+|     +- options (reused)
+|     +- WriteFile props.zig (+2 more reused dependencies)
+|     +- WriteFile props.zig (+2 more reused dependencies)
+|     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
++- run test 1 pass (1 total) 887ms MaxRSS:2M
+|  +- compile test ReleaseSafe native success 7s MaxRSS:309M
+|     +- WriteFile  (reused)
+|     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- WriteFile hwy (reused)
+|     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- options (reused)
+|     +- options (reused)
+|     +- WriteFile props.zig (+2 more reused dependencies)
+|     +- WriteFile props.zig (+2 more reused dependencies)
+|     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
++- run test 4 pass (4 total) 585ms MaxRSS:2M
+|  +- compile test ReleaseSafe native success 7s MaxRSS:311M
+|     +- WriteFile  (reused)
+|     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- WriteFile hwy (reused)
+|     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+|     +- options (reused)
+|     +- options (reused)
+|     +- WriteFile props.zig (+2 more reused dependencies)
+|     +- WriteFile props.zig (+2 more reused dependencies)
+|     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
++- run test 11 pass (11 total) 269ms MaxRSS:2M
+   +- compile test ReleaseSafe native success 8s MaxRSS:363M
+      +- WriteFile  (reused)
+      +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- WriteFile hwy (reused)
+      +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- options (reused)
+      +- options (reused)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)

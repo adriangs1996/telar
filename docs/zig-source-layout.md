@@ -64,3 +64,7 @@ together; obsolete aliases are not a second public interface.
 Historical ADRs, plans and benchmark reports retain paths from their recorded
 revision. The [capability map](capabilities.md) and flow documents describe the
 current tree.
+
+The [migration validation report](validation/zig-source-layout/README.md) records
+source, test-discovery and executable checks. Performance acceptance remains
+open.

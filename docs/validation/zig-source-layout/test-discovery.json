@@ -1,0 +1,26 @@
+{
+  "baseline_unique_names": 2795,
+  "candidate_unique_names": 2814,
+  "missing_names": [],
+  "added_names": [
+    "Controller queues matches or a failure",
+    "Windows console layouts preserve their pre-extraction ABI",
+    "a generic family exposes one public Type function not one public method",
+    "collect keeps matches ordered by score with a stable bound",
+    "comments and strings do not declare structs or constructor imports",
+    "conditional and parenthesized type declarations cannot hide ordinary structs",
+    "constructor naming also applies to local imports and module exports",
+    "explicit ABI and packed layouts use dedicated PascalCase files",
+    "generic constructor imports retain the prefix and select Type directly",
+    "generic constructors require their family filename and Type spelling",
+    "generic files reject a second public top-level function",
+    "generic files reject missing private and non-type factories",
+    "implicit structs use PascalCase including stateless handlers",
+    "malformed input reports syntax instead of guessing a filename category",
+    "namespaces contain functions enums unions and value initializers",
+    "ordinary top-level structs and auxiliary structs require their own files",
+    "the executable preserves diagnostic and trace root contracts",
+    "type and namespace filename categories do not overlap",
+    "usage names every public subcommand"
+  ]
+}

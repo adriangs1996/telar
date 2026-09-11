@@ -58,14 +58,14 @@ class InventoryTests(unittest.TestCase):
             root = Path(directory)
             executable = root / ".zig-cache/o/abc/test"
             log = root / "build.log"
-            log.write_text(f"'{executable}' --seed=1 --listen=-\nfailed command: '{executable}' --listen=-\n.../.zig-cache/o/abc/test --listen=-\n")
+            log.write_text(f"'{executable}' --seed=1 --listen=-\nfailed command: '{executable}' --listen=-\n.../.zig-cache/o/abc/test --listen=-\n...../.zig-cache/o/abc/test --listen=-\n")
             self.assertEqual([".zig-cache/o/abc/test"], executable_paths(root, log))
 
     def test_logs_cannot_select_executables_outside_the_checkout(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             log = root / "build.log"
-            for text in ("no verbose output", "/elsewhere/.zig-cache/o/abc/test --listen=-"):
+            for text in ("no verbose output", "/elsewhere/.zig-cache/o/abc/test --listen=-", "../.zig-cache/o/abc/test --listen=-", "not-dots/.zig-cache/o/abc/test --listen=-"):
                 log.write_text(text)
                 with self.assertRaises(ValueError):
                     executable_paths(root, log)

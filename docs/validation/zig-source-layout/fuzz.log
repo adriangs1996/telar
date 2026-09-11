@@ -1,0 +1,35 @@
+Build Summary: 22/22 steps succeeded
+check cached
++- replay schema-client/empty cached
+|  +- run /opt/homebrew/Cellar/afl++/5.03c/bin/afl-cc (schema-client) cached
+|     +- compile lib schema-client ReleaseSafe aarch64-macos-none cached 51ms MaxRSS:35M
++- replay schema-client/runtime-stop cached
+|  +- run /opt/homebrew/Cellar/afl++/5.03c/bin/afl-cc (schema-client) (+1 more reused dependencies)
++- replay schema-client/request-runtime-state cached
+|  +- run /opt/homebrew/Cellar/afl++/5.03c/bin/afl-cc (schema-client) (+1 more reused dependencies)
++- replay schema-client/configure-graphics-shared cached
+|  +- run /opt/homebrew/Cellar/afl++/5.03c/bin/afl-cc (schema-client) (+1 more reused dependencies)
++- replay schema-client/pane-input cached
+|  +- run /opt/homebrew/Cellar/afl++/5.03c/bin/afl-cc (schema-client) (+1 more reused dependencies)
++- replay schema-server/empty cached
+|  +- run /opt/homebrew/Cellar/afl++/5.03c/bin/afl-cc (schema-server) cached
+|     +- compile lib schema-server ReleaseSafe aarch64-macos-none cached 52ms MaxRSS:35M
++- replay schema-server/runtime-stopping cached
+|  +- run /opt/homebrew/Cellar/afl++/5.03c/bin/afl-cc (schema-server) (+1 more reused dependencies)
++- replay schema-server/proxy-inactive cached
+|  +- run /opt/homebrew/Cellar/afl++/5.03c/bin/afl-cc (schema-server) (+1 more reused dependencies)
++- replay schema-server/pane-cwd cached
+|  +- run /opt/homebrew/Cellar/afl++/5.03c/bin/afl-cc (schema-server) (+1 more reused dependencies)
++- replay schema-server/pane-clipboard cached
+|  +- run /opt/homebrew/Cellar/afl++/5.03c/bin/afl-cc (schema-server) (+1 more reused dependencies)
++- replay escape/empty cached
+|  +- run /opt/homebrew/Cellar/afl++/5.03c/bin/afl-cc (escape) cached
+|     +- compile lib escape ReleaseSafe aarch64-macos-none cached 50ms MaxRSS:35M
++- replay escape/line-submit cached
+|  +- run /opt/homebrew/Cellar/afl++/5.03c/bin/afl-cc (escape) (+1 more reused dependencies)
++- replay escape/osc-133-bel cached
+|  +- run /opt/homebrew/Cellar/afl++/5.03c/bin/afl-cc (escape) (+1 more reused dependencies)
++- replay escape/kitty-apc cached
+|  +- run /opt/homebrew/Cellar/afl++/5.03c/bin/afl-cc (escape) (+1 more reused dependencies)
++- replay escape/bracketed-paste cached
+   +- run /opt/homebrew/Cellar/afl++/5.03c/bin/afl-cc (escape) (+1 more reused dependencies)

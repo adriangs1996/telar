@@ -1,0 +1,29 @@
+...................
+----------------------------------------------------------------------
+Ran 19 tests in 0.038s
+
+OK
+telar-client module and capability boundaries passed
+Build Summary: 17/17 steps succeeded
+check-client success
++- compile test ReleaseSafe x86_64-linux-gnu cached 65ms MaxRSS:36M
+|  +- WriteFile  cached
+|  +- compile lib simdutf ReleaseSafe x86_64-linux-gnu cached 59ms MaxRSS:34M
+|  +- WriteFile hwy cached
+|  +- compile lib highway ReleaseSafe x86_64-linux-gnu cached 49ms MaxRSS:35M
+|  +- compile lib simdutf ReleaseSafe x86_64-linux-gnu (reused)
+|  +- compile lib highway ReleaseSafe x86_64-linux-gnu (reused)
+|  +- options cached
+|  +- options cached
+|  +- WriteFile props.zig cached
+|  |  +- run exe props-unigen cached
+|  |  |  +- compile exe props-unigen Debug native cached 59ms MaxRSS:35M
+|  |  |     +- run exe uucode_generate (tables.zig) cached
+|  |  |        +- compile exe uucode_generate Debug native cached 55ms MaxRSS:35M
+|  |  +- run exe symbols-unigen cached
+|  |     +- compile exe symbols-unigen Debug native cached 59ms MaxRSS:35M
+|  |        +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  +- WriteFile props.zig (+2 more reused dependencies)
+|  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
++- run python3 success 314ms
+   +- run python3 success 84ms

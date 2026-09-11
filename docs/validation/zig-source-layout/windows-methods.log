@@ -1,0 +1,18 @@
+src/frontend/platform/WindowsTty.zig:73:65: error: incompatible types: 'os.windows.Bool(c_int)' and 'comptime_int'
+    if (windows_ops.GetConsoleScreenBufferInfo(t.output, &info) == 0) {
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+src/frontend/platform/WindowsTty.zig:73:47: note: type 'os.windows.Bool(c_int)' here
+    if (windows_ops.GetConsoleScreenBufferInfo(t.output, &info) == 0) {
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+src/frontend/platform/WindowsTty.zig:73:68: note: type 'comptime_int' here
+    if (windows_ops.GetConsoleScreenBufferInfo(t.output, &info) == 0) {
+                                                                   ^
+referenced by:
+    refAllDecls [inlined]: /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig/std/testing.zig:1216:14
+    comptime: /tmp/telar-windows-method-probe.zig:5:28
+src/frontend/platform/windows.zig:65:43: error: root source file struct 'os.windows.kernel32' has no member named 'CreateFileW'
+    const handle = std.os.windows.kernel32.CreateFileW(
+                   ~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~
+/opt/homebrew/Cellar/zig/0.16.0_1/lib/zig/std/os/windows/kernel32.zig:1:1: note: struct declared here
+const std = @import("../../std.zig");
+^~~~~

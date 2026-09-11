@@ -1,0 +1,24 @@
+{
+  "trace_files": 2,
+  "events": 2533,
+  "all_events_have_cpu_and_thread": true,
+  "complete_chains": 20,
+  "shutdown": {
+    "elapsed_ms": 58.874708018265665,
+    "exited": true,
+    "returncode": 0,
+    "reply": "telar runtime is stopping\n",
+    "pids": [
+      80705
+    ],
+    "children_exited": true,
+    "socket_removed": true,
+    "cleanup_complete": true
+  },
+  "client_exit": [
+    {
+      "pid": 80703,
+      "returncode": 0
+    }
+  ]
+}

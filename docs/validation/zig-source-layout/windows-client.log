@@ -1,0 +1,46 @@
+...................
+----------------------------------------------------------------------
+Ran 19 tests in 0.037s
+
+OK
+telar-client module and capability boundaries passed
+check-client
++- compile test ReleaseSafe x86_64-windows-gnu 2 errors
+src/client/connection/runtime_transport.zig:11:14: error: type 'void' not a function
+    if (std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets) != 0) {
+        ~~~~~^~~~~~~~~~~
+referenced by:
+    test.runtime bootstrap queues colors before subscribing to the initial layout: src/client/connection/runtime_transport.zig:56:41
+    test_0: src/client/client.zig:560:17
+src/client/graphics/tests.zig:87:73: error: type 'void' does not support struct initialization syntax
+    const fd = std.c.shm_open(name.sliceZ(), @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
+                                                                 ~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
+error: 2 compilation errors
+failed command: /opt/homebrew/Cellar/zig/0.16.0_1/bin/zig test -OReleaseSafe -target x86_64-windows-gnu -mcpu baseline --dep telar-core -Mroot=/Users/adriangonzalez/sandbox/telar-zig-layout/src/client/client.zig -OReleaseSafe -target x86_64-windows-gnu -mcpu baseline --dep unicode -Mtelar-core=/Users/adriangonzalez/sandbox/telar-zig-layout/src/core/core.zig -OReleaseSafe -target x86_64-windows-gnu -mcpu baseline --dep ghostty-vt -Municode=/Users/adriangonzalez/sandbox/telar-zig-layout/src/core/unicode.zig .zig-cache/o/cdd34597a0e2dfbe0e203ba096348a74/simdutf.lib .zig-cache/o/db928319f2016a3e3284481bd72641ec/highway.lib -cflags -DHWY_DISABLED_TARGETS=472 -std=c++17 -DHWY_NO_LIBCXX -DSIMDUTF_NO_LIBCXX -fno-sanitize=undefined -fno-sanitize-trap=undefined -- /Users/adriangonzalez/sandbox/telar-zig-layout/zig-pkg/ghostty-1.3.2-dev-5UdBC84MRwUm4UZ8gcDZ-4vBiye_KqGyGJpht6KayFbZ/src/simd/base64.cpp /Users/adriangonzalez/sandbox/telar-zig-layout/zig-pkg/ghostty-1.3.2-dev-5UdBC84MRwUm4UZ8gcDZ-4vBiye_KqGyGJpht6KayFbZ/src/simd/codepoint_width.cpp /Users/adriangonzalez/sandbox/telar-zig-layout/zig-pkg/ghostty-1.3.2-dev-5UdBC84MRwUm4UZ8gcDZ-4vBiye_KqGyGJpht6KayFbZ/src/simd/index_of.cpp /Users/adriangonzalez/sandbox/telar-zig-layout/zig-pkg/ghostty-1.3.2-dev-5UdBC84MRwUm4UZ8gcDZ-4vBiye_KqGyGJpht6KayFbZ/src/simd/vt.cpp -OReleaseSafe -target x86_64-windows-gnu -mcpu baseline -I .zig-cache/o/f45d8b759d5602ae6ed50928dd703233 -I .zig-cache/o/7fb2cdc845c287cc6274972e4f79f869 -I /Users/adriangonzalez/sandbox/telar-zig-layout/zig-pkg/ghostty-1.3.2-dev-5UdBC84MRwUm4UZ8gcDZ-4vBiye_KqGyGJpht6KayFbZ/src --dep build_options --dep terminal_options --dep unicode_tables --dep symbols_tables --dep uucode -Mghostty-vt=/Users/adriangonzalez/sandbox/telar-zig-layout/zig-pkg/ghostty-1.3.2-dev-5UdBC84MRwUm4UZ8gcDZ-4vBiye_KqGyGJpht6KayFbZ/src/lib_vt.zig -Mbuild_options=.zig-cache/c/6656ba50dfa0bf95847c4196605d1395/options.zig -Mterminal_options=.zig-cache/c/1cd77a17829b12b81e32e468540639cc/options.zig -Municode_tables=.zig-cache/o/7db4b2b741b688bdbcca263c893cb8c0/props.zig -Msymbols_tables=.zig-cache/o/7db4b2b741b688bdbcca263c893cb8c0/symbols.zig -ODebug --dep types.zig --dep config.zig --dep tables -Muucode=/Users/adriangonzalez/sandbox/telar-zig-layout/zig-pkg/uucode-0.2.0-ZZjBPlK5VADj7fdoq7G8LIHzD5o6FSkcBXXrRWr4jnrA/src/root.zig -ODebug -Mtypes.zig=/Users/adriangonzalez/sandbox/telar-zig-layout/zig-pkg/uucode-0.2.0-ZZjBPlK5VADj7fdoq7G8LIHzD5o6FSkcBXXrRWr4jnrA/src/types.zig -ODebug --dep types.zig --dep storage.zig -Mconfig.zig=/Users/adriangonzalez/sandbox/telar-zig-layout/zig-pkg/uucode-0.2.0-ZZjBPlK5VADj7fdoq7G8LIHzD5o6FSkcBXXrRWr4jnrA/src/config.zig -ODebug --dep config.zig --dep storage.zig --dep build_config -Mtables=.zig-cache/o/f667de8e6d63a2ae1af89f31e830bc79/tables.zig -ODebug --dep config.zig -Mstorage.zig=/Users/adriangonzalez/sandbox/telar-zig-layout/zig-pkg/uucode-0.2.0-ZZjBPlK5VADj7fdoq7G8LIHzD5o6FSkcBXXrRWr4jnrA/src/storage.zig --dep config.zig --dep storage.zig -Mbuild_config=/Users/adriangonzalez/sandbox/telar-zig-layout/zig-pkg/ghostty-1.3.2-dev-5UdBC84MRwUm4UZ8gcDZ-4vBiye_KqGyGJpht6KayFbZ/src/build/uucode_config.zig -lc++ -lc -fno-emit-bin --cache-dir .zig-cache --global-cache-dir /Users/adriangonzalez/.cache/zig --name test --zig-lib-dir /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig/ --listen=-
+
+Build Summary: 15/17 steps succeeded (1 failed)
+check-client transitive failure
++- compile test ReleaseSafe x86_64-windows-gnu 2 errors
+|  +- WriteFile  cached
+|  +- compile lib simdutf ReleaseSafe x86_64-windows-gnu cached 49ms MaxRSS:34M
+|  +- WriteFile hwy cached
+|  +- compile lib highway ReleaseSafe x86_64-windows-gnu cached 51ms MaxRSS:35M
+|  +- compile lib simdutf ReleaseSafe x86_64-windows-gnu (reused)
+|  +- compile lib highway ReleaseSafe x86_64-windows-gnu (reused)
+|  +- options cached
+|  +- options cached
+|  +- WriteFile props.zig cached
+|  |  +- run exe props-unigen cached
+|  |  |  +- compile exe props-unigen Debug native cached 58ms MaxRSS:35M
+|  |  |     +- run exe uucode_generate (tables.zig) cached
+|  |  |        +- compile exe uucode_generate Debug native cached 55ms MaxRSS:35M
+|  |  +- run exe symbols-unigen cached
+|  |     +- compile exe symbols-unigen Debug native cached 58ms MaxRSS:35M
+|  |        +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  +- WriteFile props.zig (+2 more reused dependencies)
+|  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
++- run python3 success 318ms
+   +- run python3 success 83ms
+
+error: the following build command failed with exit code 1:
+.zig-cache/o/bcb82f2a89496b6b1283ccd9c32384f0/build /opt/homebrew/Cellar/zig/0.16.0_1/bin/zig /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig /Users/adriangonzalez/sandbox/telar-zig-layout .zig-cache /Users/adriangonzalez/.cache/zig --seed 0x9c705ca8 -Z61b65dc5081fd41a check-client -Doptimize=ReleaseSafe -Dtarget=x86_64-windows-gnu --summary all

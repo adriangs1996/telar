@@ -1,0 +1,50 @@
+1/49 test.test_0...OK
+2/49 analysis.test.accepts conforming functions and conditionals...OK
+3/49 analysis.test.rejects functions with more than three parameters...OK
+4/49 analysis.test.counts anytype parameters...OK
+5/49 analysis.test.accepts extern functions with more than three parameters...OK
+6/49 analysis.test.accepts an explicit maximum parameter count exception...OK
+7/49 analysis.test.requires the maximum parameter count exception beside the declaration...OK
+8/49 analysis.test.rejects multiline function signatures...OK
+9/49 analysis.test.rejects a trailing parameter comma on one line...OK
+10/49 analysis.test.rejects unbraced if branches...OK
+11/49 analysis.test.rejects unbraced else branches...OK
+12/49 analysis.test.rejects an unbraced if statement after a block...OK
+13/49 analysis.test.rejects unbraced branches in an else if continuation...OK
+14/49 analysis.test.accepts unbraced if expression branches...OK
+15/49 analysis.test.reports invalid syntax without inspecting an incomplete tree...OK
+16/49 arguments.test.parses fix and paths...OK
+17/49 arguments.test.defaults to the current directory...OK
+18/49 arguments.test.reports unknown options...OK
+19/49 fixes.test.fixes multiline signatures and trailing parameter commas...OK
+20/49 fixes.test.fixes multiline signatures without trailing parameter commas...OK
+21/49 fixes.test.wraps an if statement branch...OK
+22/49 fixes.test.wraps both branches of an if statement...OK
+23/49 fixes.test.wraps statement branches across an else if chain...OK
+24/49 fixes.test.wraps nested if statements across passes...OK
+25/49 fixes.test.wraps a switch branch without keeping its semicolon...OK
+26/49 fixes.test.wraps a switch branch followed by else...OK
+27/49 fixes.test.wraps an else branch holding an error switch...OK
+28/49 fixes.test.wraps loop branches according to their body...OK
+29/49 fixes.test.keeps if expressions unchanged...OK
+30/49 fixes.test.keeps excessive parameter counts unchanged...OK
+31/49 paths.test.collects sorted unique Zig files and skips generated directories...OK
+32/49 reporter_tests.test.writes diagnostics, summaries, and a failing exit code...OK
+33/49 source_file.test.atomically replaces contents and preserves permissions...OK
+34/49 layout_tests.test.implicit structs use PascalCase including stateless handlers...OK
+35/49 layout_tests.test.ordinary top-level structs and auxiliary structs require their own files...OK
+36/49 layout_tests.test.conditional and parenthesized type declarations cannot hide ordinary structs...OK
+37/49 layout_tests.test.namespaces contain functions enums unions and value initializers...OK
+38/49 layout_tests.test.comments and strings do not declare structs or constructor imports...OK
+39/49 layout_tests.test.a generic family exposes one public Type function not one public method...OK
+40/49 layout_tests.test.generic constructors require their family filename and Type spelling...OK
+41/49 layout_tests.test.generic files reject missing private and non-type factories...OK
+42/49 layout_tests.test.generic files reject a second public top-level function...OK
+43/49 layout_tests.test.generic constructor imports retain the prefix and select Type directly...OK
+44/49 layout_tests.test.constructor naming also applies to local imports and module exports...OK
+45/49 layout_tests.test.explicit ABI and packed layouts use dedicated PascalCase files...OK
+46/49 layout_tests.test.malformed input reports syntax instead of guessing a filename category...OK
+47/49 layout_naming.test.type and namespace filename categories do not overlap...OK
+48/49 syntax.test.classifies statement if chains without classifying if expressions...OK
+49/49 syntax.test.recognizes branch expressions that end with a block...OK
+All 49 tests passed.

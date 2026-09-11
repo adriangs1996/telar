@@ -64,8 +64,10 @@ def executable_paths(root, log):
         for token in tokens:
             if not token.endswith("/test") or ".zig-cache/o/" not in token:
                 continue
-            if token.startswith(".../.zig-cache/o/"):
-                token = token[4:]
+            prefix, _, suffix = token.partition("/")
+            # Test progress dots can precede Zig's abbreviated cache path.
+            if len(prefix) >= 3 and not prefix.strip(".") and suffix.startswith(".zig-cache/o/"):
+                token = suffix
             executable = (root / token).resolve()
             relative = executable.relative_to(root)
             if relative.parts[:2] != (".zig-cache", "o"):

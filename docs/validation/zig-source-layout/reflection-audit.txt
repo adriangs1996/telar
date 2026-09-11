@@ -1,0 +1,31 @@
+src/main.zig:41:// These names are root-level opt-in contracts read by core through @hasDecl.
+src/frontend/platform/platform.zig:67:    if (!@hasDecl(impl, "Tty")) {
+src/frontend/platform/platform.zig:70:    if (!@hasDecl(impl, "ResizeWatcher")) {
+src/frontend/platform/platform.zig:87:    if (!@hasDecl(impl, "installCrashRestore")) {
+src/frontend/platform/platform.zig:90:    if (!@hasDecl(impl, "emergencyRestore")) {
+src/frontend/platform/platform.zig:93:    if (!@hasDecl(impl, "localTime")) {
+src/frontend/platform/platform.zig:112:    if (!@hasDecl(T, name)) {
+src/client/input/GenericRouter.zig:183:                if (comptime !@hasDecl(@TypeOf(handler.*), "key")) {
+src/client/input/GenericRouter.zig:226:                    if (comptime @hasDecl(@TypeOf(handler.*), "pasteContent")) {
+src/client/input/GenericRouter.zig:252:                        if (comptime @hasDecl(@TypeOf(handler.*), "mouse")) {
+src/client/input/GenericRouter.zig:274:                        if (comptime @hasDecl(@TypeOf(handler.*), "terminalResponse")) {
+src/client/input/GenericRouter.zig:283:                        if (comptime @hasDecl(@TypeOf(handler.*), "pasteStart")) {
+src/client/input/GenericRouter.zig:293:                        if (comptime @hasDecl(@TypeOf(handler.*), "pasteEnd")) {
+src/client/input/GenericRouter.zig:301:                        if (comptime !@hasDecl(@TypeOf(handler.*), "key")) {
+src/client/input/GenericRouter.zig:372:            if (comptime @hasDecl(@TypeOf(handler.*), "capturesKeys")) {
+src/client/input/GenericRouter.zig:395:                    if (comptime @hasDecl(@TypeOf(handler.*), "key")) {
+src/client/input/GenericRouter.zig:419:                    if (comptime @hasDecl(@TypeOf(handler.*), "repeatPolicy")) {
+src/client/input/GenericRouter.zig:444:            if (comptime !@hasDecl(@TypeOf(handler.*), "repeatPolicy")) {
+src/client/input/GenericRouter.zig:474:            if (comptime @hasDecl(@TypeOf(handler.*), "key")) {
+src/client/input/GenericRouter.zig:596:            if (comptime @hasDecl(@TypeOf(handler.*), "key")) {
+src/client/input/GenericRouter.zig:661:            if (comptime !@hasDecl(@TypeOf(handler.*), "key")) {
+src/core/diagnostics.zig:7:const root = @import("root");
+src/core/diagnostics.zig:19:    (@hasDecl(root, "telar_diagnostics") and root.telar_diagnostics);
+src/core/schema/GenericDerived.zig:12:        @hasDecl(T, "wire_allow_zero_request_id") and T.wire_allow_zero_request_id;
+src/core/schema/GenericDerived.zig:15:            if (@hasDecl(T, "validateWire")) {
+src/core/schema/GenericDerived.zig:28:            if (@hasDecl(T, "validateWire")) {
+src/core/echo_trace.zig:3:const root = @import("root");
+src/core/echo_trace.zig:7:pub const enabled = @hasDecl(root, "telar_echo_trace") and root.telar_echo_trace;
+src/core/echo_trace.zig:8:pub const cpu_enabled = enabled and @hasDecl(root, "telar_echo_trace_cpu") and root.telar_echo_trace_cpu;
+src/backend/runtime/tests/performance_isolation_test.zig:58:    if (comptime @hasDecl(pane_mod, "TextSearch")) {
+src/backend/runtime/tests/performance_isolation_test.zig:129:    const asynchronous = @hasDecl(metrics, "sampleOwned");
