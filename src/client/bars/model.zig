@@ -1,10 +1,14 @@
 //! Bounded configuration and presentation state for client-owned bars.
 
+const ColorType = @import("telar-core").Color;
+const Content = @import("Content.zig");
+const Dynamic = @import("Dynamic.zig");
+const Command = @import("BarCommand.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const ui_icons = @import("../layout/root.zig").icons;
-
-const ui = core.ui;
+const measure_module = @import("telar-core").measure;
+const ui_icons = @import("../layout/icons.zig");
+const Configuration = @import("Configuration.zig");
+const State = @import("State.zig");
 
 pub const max_segments = 16;
 pub const max_text_bytes = 512;
@@ -53,172 +57,7 @@ pub const PaletteColor = enum {
 
 pub const Color = union(enum) {
     palette: PaletteColor,
-    value: ui.Color,
-};
-
-pub const Style = struct {
-    foreground: ?Color = null,
-    background: ?Color = null,
-    bold: bool = false,
-    italic: bool = false,
-    faint: bool = false,
-    underline: bool = false,
-    strikethrough: bool = false,
-};
-
-pub const Segment = struct {
-    text_offset: u16 = 0,
-    text_len: u16 = 0,
-    icon: ?ui_icons.Icon = null,
-    style: Style = .{},
-};
-
-pub const SegmentInput = struct {
-    text: []const u8,
-    icon: ?ui_icons.Icon = null,
-    style: Style = .{},
-};
-
-pub const Content = struct {
-    text_bytes: [max_text_bytes]u8 = @splat(0),
-    text_len: u16 = 0,
-    segments: [max_segments]Segment = @splat(.{}),
-    segment_count: u8 = 0,
-
-    /// Appends one logical segment after validating and compacting its text.
-    ///
-    /// ```zig
-    /// try content.append(.{ .text = " CPU", .icon = .cpu });
-    /// ```
-    pub fn append(content: *Content, input: SegmentInput) !void {
-        if (content.segment_count == max_segments) {
-            return error.TooManyBarSegments;
-        }
-        if (input.text.len == 0 and input.icon == null) {
-            return error.EmptyBarSegment;
-        }
-        if (!validText(input.text)) {
-            return error.InvalidBarText;
-        }
-
-        const end = @as(usize, content.text_len) + input.text.len;
-        if (end > content.text_bytes.len) {
-            return error.BarTextTooLong;
-        }
-
-        const offset = content.text_len;
-        @memcpy(content.text_bytes[offset..end], input.text);
-        content.segments[content.segment_count] = .{
-            .text_offset = offset,
-            .text_len = @intCast(input.text.len),
-            .icon = input.icon,
-            .style = input.style,
-        };
-        content.text_len = @intCast(end);
-        content.segment_count += 1;
-    }
-
-    pub fn text(content: *const Content, segment: Segment) []const u8 {
-        return content.text_bytes[segment.text_offset..][0..segment.text_len];
-    }
-
-    pub fn slice(content: *const Content) []const Segment {
-        return content.segments[0..content.segment_count];
-    }
-
-    pub fn width(content: *const Content) u16 {
-        var result: u16 = 0;
-        for (content.slice()) |segment| {
-            if (segment.icon) |icon| {
-                result +|= @max(@as(u16, 1), ui.measure(icon.unicodeGlyph()));
-            }
-            result +|= ui.measure(content.text(segment));
-        }
-
-        return result;
-    }
-
-    pub fn eql(left: *const Content, right: *const Content) bool {
-        if (left.text_len != right.text_len or left.segment_count != right.segment_count) {
-            return false;
-        }
-        if (!std.mem.eql(u8, left.text_bytes[0..left.text_len], right.text_bytes[0..right.text_len])) {
-            return false;
-        }
-
-        for (left.segments[0..left.segment_count], right.segments[0..right.segment_count]) |left_segment, right_segment| {
-            if (!std.meta.eql(left_segment, right_segment)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-};
-
-pub const CallbackRef = struct {
-    generation: u64,
-    id: u8,
-};
-
-pub const Dynamic = struct {
-    callback: CallbackRef,
-    interval_ns: u64,
-};
-
-pub const Command = struct {
-    const Argument = struct {
-        offset: u16 = 0,
-        len: u16 = 0,
-    };
-
-    generation: u64,
-    bytes: [max_command_bytes]u8 = @splat(0),
-    byte_len: u16 = 0,
-    arguments: [max_command_args]Argument = @splat(.{}),
-    argument_count: u8 = 0,
-    interval_ns: u64,
-    timeout_ms: u32,
-    render: ?CallbackRef = null,
-
-    pub fn appendArgument(command: *Command, argument_value: []const u8) !void {
-        if (command.argument_count == max_command_args) {
-            return error.TooManyBarCommandArguments;
-        }
-        if ((command.argument_count == 0 and argument_value.len == 0) or std.mem.indexOfScalar(u8, argument_value, 0) != null) {
-            return error.InvalidBarCommandArgument;
-        }
-
-        const end = @as(usize, command.byte_len) + argument_value.len;
-        if (argument_value.len > std.math.maxInt(u16) or end > command.bytes.len) {
-            return error.BarCommandTooLong;
-        }
-
-        command.arguments[command.argument_count] = .{
-            .offset = command.byte_len,
-            .len = @intCast(argument_value.len),
-        };
-        @memcpy(command.bytes[command.byte_len..end], argument_value);
-        command.byte_len = @intCast(end);
-        command.argument_count += 1;
-    }
-
-    pub fn argument(command: *const Command, index: usize) ?[]const u8 {
-        if (index >= command.argument_count) {
-            return null;
-        }
-
-        const reference = command.arguments[index];
-        return command.bytes[reference.offset..][0..reference.len];
-    }
-
-    pub fn argumentSlice(command: *const Command, storage: *[max_command_args][]const u8) []const []const u8 {
-        for (0..command.argument_count) |index| {
-            storage[index] = command.argument(index).?;
-        }
-
-        return storage[0..command.argument_count];
-    }
+    value: ColorType,
 };
 
 pub const Source = union(enum) {
@@ -238,41 +77,6 @@ pub const Source = union(enum) {
     }
 };
 
-pub const Configuration = struct {
-    bottom: [3]Source = .{ .metrics, .empty, .tabs },
-    top_right: Source = .empty,
-
-    pub fn source(configuration: *const Configuration, position: Position) *const Source {
-        return switch (position) {
-            .bottom_left => &configuration.bottom[0],
-            .bottom_center => &configuration.bottom[1],
-            .bottom_right => &configuration.bottom[2],
-            .top_right => &configuration.top_right,
-        };
-    }
-
-    pub fn presentation(configuration: *const Configuration) Layout {
-        var result: Layout = .{};
-        inline for (std.meta.fields(Position)) |field| {
-            const position: Position = @enumFromInt(field.value);
-            result.set(position, presentationSlot(configuration.source(position)));
-            switch (configuration.source(position).*) {
-                .dynamic => |value| {
-                    result.generation = value.callback.generation;
-                    result.live_mask |= position.bit();
-                },
-                .command => |value| {
-                    result.generation = value.generation;
-                    result.live_mask |= position.bit();
-                },
-                else => {},
-            }
-        }
-
-        return result;
-    }
-};
-
 pub const Slot = union(enum) {
     empty,
     tabs,
@@ -280,95 +84,12 @@ pub const Slot = union(enum) {
     content: Content,
 };
 
-pub const Layout = struct {
-    generation: u64 = 0,
-    live_mask: u8 = 0,
-    bottom: [3]Slot = .{ .metrics, .empty, .tabs },
-    top_right: Slot = .empty,
-
-    pub fn slot(layout: *const Layout, position: Position) *const Slot {
-        return switch (position) {
-            .bottom_left => &layout.bottom[0],
-            .bottom_center => &layout.bottom[1],
-            .bottom_right => &layout.bottom[2],
-            .top_right => &layout.top_right,
-        };
-    }
-
-    pub fn isLive(layout: *const Layout, position: Position) bool {
-        return layout.live_mask & position.bit() != 0;
-    }
-
-    fn set(layout: *Layout, position: Position, slot_value: Slot) void {
-        switch (position) {
-            .bottom_left => layout.bottom[0] = slot_value,
-            .bottom_center => layout.bottom[1] = slot_value,
-            .bottom_right => layout.bottom[2] = slot_value,
-            .top_right => layout.top_right = slot_value,
-        }
-    }
-
-    fn eql(left: *const Layout, right: *const Layout) bool {
-        if (left.generation != right.generation or left.live_mask != right.live_mask) {
-            return false;
-        }
-        inline for (std.meta.fields(Position)) |field| {
-            const position: Position = @enumFromInt(field.value);
-            if (!slotEql(left.slot(position), right.slot(position))) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-};
-
 pub const Change = enum {
     unchanged,
     changed,
 };
 
-pub const Update = struct {
-    generation: u64,
-    position: Position,
-    content: Content,
-};
-
-pub const State = struct {
-    layout: Layout = .{},
-
-    pub fn init(layout: Layout) State {
-        return .{ .layout = layout };
-    }
-
-    pub fn replace(state: *State, layout: Layout) Change {
-        if (state.layout.eql(&layout)) {
-            return .unchanged;
-        }
-
-        state.layout = layout;
-        return .changed;
-    }
-
-    pub fn update(state: *State, update_value: Update) !Change {
-        if (state.layout.generation != update_value.generation or !state.layout.isLive(update_value.position)) {
-            return error.StaleBarUpdate;
-        }
-
-        const current = state.layout.slot(update_value.position);
-        if (current.* != .content) {
-            return error.InvalidBarUpdateTarget;
-        }
-        if (current.content.eql(&update_value.content)) {
-            return .unchanged;
-        }
-
-        state.layout.set(update_value.position, .{ .content = update_value.content });
-        return .changed;
-    }
-};
-
-fn presentationSlot(source: *const Source) Slot {
+pub fn presentationSlot(source: *const Source) Slot {
     return switch (source.*) {
         .empty => .empty,
         .tabs => .tabs,
@@ -378,7 +99,7 @@ fn presentationSlot(source: *const Source) Slot {
     };
 }
 
-fn slotEql(left: *const Slot, right: *const Slot) bool {
+pub fn slotEql(left: *const Slot, right: *const Slot) bool {
     if (std.meta.activeTag(left.*) != std.meta.activeTag(right.*)) {
         return false;
     }
@@ -389,7 +110,7 @@ fn slotEql(left: *const Slot, right: *const Slot) bool {
     };
 }
 
-fn validText(text: []const u8) bool {
+pub fn validText(text: []const u8) bool {
     if (!std.unicode.utf8ValidateSlice(text)) {
         return false;
     }
@@ -422,7 +143,7 @@ test "bar content reserves the rendered width of wide Unicode icons" {
     try content.append(.{ .text = "", .icon = .battery_full });
 
     try std.testing.expectEqual(
-        @max(@as(u16, 1), ui.measure(ui_icons.Icon.battery_full.unicodeGlyph())),
+        @max(@as(u16, 1), measure_module(ui_icons.Icon.battery_full.unicodeGlyph())),
         content.width(),
     );
 }

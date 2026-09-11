@@ -1,43 +1,43 @@
+const ModelType = @import("../Model.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("../../agents/root.zig");
-const attachments = @import("../../attachments/root.zig");
-const lua_config = @import("../../config/root.zig");
-const graphics = @import("../../environment/root.zig");
-const input_capability = @import("../../input/root.zig");
-const notifications = @import("../../notifications/root.zig");
-const workspace_capability = @import("../../workspace/root.zig");
-const client_model = @import("../root.zig");
-
-const copy_mode = input_capability.copy_mode;
-const keybind = input_capability;
-const capability_support = graphics;
-const schema = core.schema;
-const layout_mod = workspace_capability.layout;
-const multiplexer = workspace_capability.multiplexer;
-const tabs_mod = workspace_capability.tabs;
-const workspace_list_mod = workspace_capability.workspace_list;
-const ui = core.ui;
+const VersionType = @import("../Version.zig");
+const ProxyScopeType = @import("telar-core").ProxyScope;
+const SystemMetricsType = @import("../SystemMetrics.zig");
+const TabIdType = @import("telar-core").TabId;
+const notifications = @import("../../notifications/notifications.zig");
+const AgentKeyType = @import("../../agents/AgentKey.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const AgentInputType = @import("../../agents/AgentInput.zig");
+const AgentStatusType = @import("telar-core").AgentStatus;
+const AgentProviderType = @import("telar-core").AgentProvider;
+const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
+const TargetType = @import("../../attachments/AttachmentTarget.zig");
+const LocalAgentNavigationType = @import("../LocalAgentNavigation.zig");
+const AgentHandoffType = @import("../AgentHandoff.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const RectType = @import("telar-core").Rect;
+const types = @import("../types.zig");
+const HostCapabilitiesType = @import("../HostCapabilities.zig");
 
 test "proxy status reconciliation commits only changed runtime state" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
     try std.testing.expect(model.reconcileProxyStatus(.{ .active = false, .scope = .exact, .system_trusted = false }) == null);
     try std.testing.expect(!model.proxyTlsActive());
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
 
     const enabled = model.reconcileProxyStatus(.{ .active = true, .scope = .wildcard, .system_trusted = false }).?;
 
     try std.testing.expect(!enabled.previous);
     try std.testing.expect(enabled.active);
-    try std.testing.expectEqual(schema.ProxyScope.wildcard, enabled.scope);
+    try std.testing.expectEqual(ProxyScopeType.wildcard, enabled.scope);
     try std.testing.expectEqual(@as(u64, 0), enabled.proxy_status_revision_before);
     try std.testing.expectEqual(@as(u64, 1), enabled.proxy_status_revision);
     try std.testing.expect(model.proxyTlsActive());
-    try std.testing.expectEqual(client_model.Version{ .proxy_status = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .proxy_status = 1 }, model.version());
     try std.testing.expect(model.reconcileProxyStatus(.{ .active = true, .scope = .wildcard, .system_trusted = false }) == null);
-    try std.testing.expectEqual(client_model.Version{ .proxy_status = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .proxy_status = 1 }, model.version());
 
     const disabled = model.reconcileProxyStatus(.{ .active = false, .scope = .exact, .system_trusted = false }).?;
 
@@ -46,18 +46,18 @@ test "proxy status reconciliation commits only changed runtime state" {
     try std.testing.expectEqual(@as(u64, 1), disabled.proxy_status_revision_before);
     try std.testing.expectEqual(@as(u64, 2), disabled.proxy_status_revision);
     try std.testing.expect(!model.proxyTlsActive());
-    try std.testing.expectEqual(client_model.Version{ .proxy_status = 2 }, model.version());
+    try std.testing.expectEqual(VersionType{ .proxy_status = 2 }, model.version());
 
     const trusted = model.reconcileProxyStatus(.{ .active = false, .scope = .exact, .system_trusted = true }).?;
 
     try std.testing.expect(!trusted.previous_system_trusted);
     try std.testing.expect(trusted.system_trusted);
     try std.testing.expect(model.proxySystemTrusted());
-    try std.testing.expectEqual(client_model.Version{ .proxy_status = 3 }, model.version());
+    try std.testing.expectEqual(VersionType{ .proxy_status = 3 }, model.version());
 }
 
 test "system metrics reconciliation owns the latest replica and one isolated revision" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
     const first = (try model.reconcileSystemMetrics(.{
@@ -69,8 +69,8 @@ test "system metrics reconciliation owns the latest replica and one isolated rev
 
     try std.testing.expectEqual(@as(u64, 4), first.runtime_revision);
     try std.testing.expectEqual(@as(u64, 1), first.system_metrics_revision);
-    try std.testing.expectEqual(client_model.Version{ .system_metrics = 1 }, model.version());
-    try std.testing.expectEqualDeep(client_model.SystemMetrics{
+    try std.testing.expectEqual(VersionType{ .system_metrics = 1 }, model.version());
+    try std.testing.expectEqualDeep(SystemMetricsType{
         .runtime_revision = 4,
         .cpu_percent = 25,
         .memory_used_decigib = 123,
@@ -83,7 +83,7 @@ test "system metrics reconciliation owns the latest replica and one isolated rev
         .memory_used_decigib = 20,
         .battery_percent = 90,
     })) == null);
-    try std.testing.expectEqual(client_model.Version{ .system_metrics = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .system_metrics = 1 }, model.version());
 
     const second = (try model.reconcileSystemMetrics(.{
         .runtime_revision = 5,
@@ -94,13 +94,13 @@ test "system metrics reconciliation owns the latest replica and one isolated rev
 
     try std.testing.expectEqual(@as(u64, 2), second.system_metrics_revision);
     try std.testing.expectEqual(@as(?u8, 80), model.systemMetrics().?.battery_percent);
-    try std.testing.expectEqual(client_model.Version{ .system_metrics = 2 }, model.version());
+    try std.testing.expectEqual(VersionType{ .system_metrics = 2 }, model.version());
 }
 
 test "rejected system metrics preserve the latest replica and version" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const initial: client_model.SystemMetrics = .{
+    const initial: SystemMetricsType = .{
         .runtime_revision = 1,
         .cpu_percent = 30,
         .memory_used_decigib = 80,
@@ -128,14 +128,14 @@ test "rejected system metrics preserve the latest replica and version" {
     }));
 
     try std.testing.expectEqualDeep(initial, model.systemMetrics().?);
-    try std.testing.expectEqual(client_model.Version{ .system_metrics = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .system_metrics = 1 }, model.version());
 }
 
 test "notification lifecycle is model-owned and versioned by semantic change" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     var title = [_]u8{ 'R', 'e', 'a', 'd', 'y' };
-    const tab_id: schema.TabId = @enumFromInt(7);
+    const tab_id: TabIdType = @enumFromInt(7);
     const started_ns: u64 = 100;
 
     const publication = model.publishNotification(started_ns, .{
@@ -146,7 +146,7 @@ test "notification lifecycle is model-owned and versioned by semantic change" {
     });
     @memset(&title, 'x');
 
-    try std.testing.expectEqual(client_model.Version{ .notifications = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .notifications = 1 }, model.version());
     try std.testing.expectEqualStrings("Ready", model.notificationSnapshot().itemAt(0).?.title());
     try std.testing.expectEqual(
         started_ns + std.time.ns_per_s / 60,
@@ -158,34 +158,34 @@ test "notification lifecycle is model-owned and versioned by semantic change" {
 
     try std.testing.expectEqual(tab_id, activation.target.select_tab);
     try std.testing.expectEqual(@as(u64, 2), activation.notifications_revision);
-    try std.testing.expectEqual(client_model.Version{ .notifications = 2 }, model.version());
+    try std.testing.expectEqual(VersionType{ .notifications = 2 }, model.version());
     try std.testing.expect(model.activateNotification(publication.id, activation_ns) == null);
-    try std.testing.expectEqual(client_model.Version{ .notifications = 2 }, model.version());
+    try std.testing.expectEqual(VersionType{ .notifications = 2 }, model.version());
 
     const removal = model.advanceNotifications(activation_ns + notifications.transition_duration_ns).?;
 
     try std.testing.expectEqual(@as(u64, 3), removal.notifications_revision);
     try std.testing.expect(!model.notificationSnapshot().hasItems());
-    try std.testing.expectEqual(client_model.Version{ .notifications = 3 }, model.version());
+    try std.testing.expectEqual(VersionType{ .notifications = 3 }, model.version());
 
     const second = model.publishNotification(1000, .{ .title = "Saved", .message = "Done" });
     const dismissed = model.dismissNotification(second.id, 1001).?;
 
     try std.testing.expectEqual(@as(u64, 5), dismissed.notifications_revision);
     try std.testing.expect(model.dismissNotification(second.id, 1001) == null);
-    try std.testing.expectEqual(client_model.Version{ .notifications = 5 }, model.version());
+    try std.testing.expectEqual(VersionType{ .notifications = 5 }, model.version());
 }
 
 test "agent reconciliation owns labels versions and existing status transitions" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const key: agents.AgentKey = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 };
-    const location: schema.TabLocation = .{
+    const key: AgentKeyType = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 };
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     var title = [_]u8{ 'f', 'i', 'r', 's', 't' };
-    var agent: agents.AgentInput = .{
+    var agent: AgentInputType = .{
         .key = key,
         .location = location,
         .pane_index = 3,
@@ -205,7 +205,7 @@ test "agent reconciliation owns labels versions and existing status transitions"
     try std.testing.expectEqual(@as(usize, 0), first.status_changes.slice().len);
     try std.testing.expectEqual(@as(u64, 0), first.agent_revision_before);
     try std.testing.expectEqual(@as(u64, 1), first.agent_revision);
-    try std.testing.expectEqual(client_model.Version{ .agents = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .agents = 1 }, model.version());
     try std.testing.expectEqualStrings("first", model.agentSnapshot().find(key).?.sessionTitle());
     try std.testing.expect(model.knowsAgent(key));
     try std.testing.expect(model.sidebarAnimationActive());
@@ -222,22 +222,22 @@ test "agent reconciliation owns labels versions and existing status transitions"
     try std.testing.expectEqual(@as(u64, 2), second.agent_revision);
     try std.testing.expectEqual(@as(usize, 1), second.status_changes.slice().len);
     try std.testing.expectEqualDeep(key, change.key);
-    try std.testing.expectEqual(schema.AgentStatus.working, change.previous);
-    try std.testing.expectEqual(schema.AgentStatus.ready, change.current);
+    try std.testing.expectEqual(AgentStatusType.working, change.previous);
+    try std.testing.expectEqual(AgentStatusType.ready, change.current);
     try std.testing.expectEqual(@as(u16, 3), change.pane_index);
-    try std.testing.expectEqual(schema.AgentProvider.codex, change.provider);
+    try std.testing.expectEqual(AgentProviderType.codex, change.provider);
     try std.testing.expect(!model.sidebarAnimationActive());
     try std.testing.expect((try model.reconcileAgentSnapshot(.{
         .revision = 5,
         .agents = &.{agent},
     })) == null);
-    try std.testing.expectEqual(client_model.Version{ .agents = 2 }, model.version());
+    try std.testing.expectEqual(VersionType{ .agents = 2 }, model.version());
 }
 
 test "sidebar animation advances its own revision only while active" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var agent: agents.AgentInput = .{
+    var agent: AgentInputType = .{
         .key = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 },
         .location = .{
             .workspace = .{ .workspace = @enumFromInt(1) },
@@ -251,7 +251,7 @@ test "sidebar animation advances its own revision only while active" {
 
     try std.testing.expect(model.advanceSidebarAnimation() == null);
     try std.testing.expectEqual(@as(u8, 0), model.sidebarAnimationFrame());
-    try std.testing.expectEqual(client_model.Version{ .agents = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .agents = 1 }, model.version());
 
     agent.status = .working;
     _ = try model.reconcileAgentSnapshot(.{ .revision = 2, .agents = &.{agent} });
@@ -263,16 +263,16 @@ test "sidebar animation advances its own revision only while active" {
     try std.testing.expectEqual(@as(u8, 2), second.frame);
     try std.testing.expectEqual(@as(u64, 2), second.sidebar_animation_revision);
     try std.testing.expectEqual(@as(u8, 2), model.sidebarAnimationFrame());
-    try std.testing.expectEqual(client_model.Version{
+    try std.testing.expectEqual(VersionType{
         .agents = 2,
         .sidebar_animation = 2,
     }, model.version());
 }
 
 test "rejected agent reconciliation preserves replica and version" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const agent: agents.AgentInput = .{
+    const agent: AgentInputType = .{
         .key = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 },
         .location = .{
             .workspace = .{ .workspace = @enumFromInt(1) },
@@ -288,38 +288,38 @@ test "rejected agent reconciliation preserves replica and version" {
         .revision = 2,
         .agents = &.{ agent, agent },
     }));
-    const oversized: [agents.max_agents + 1]agents.AgentInput = @splat(agent);
+    const oversized: [max_agent_snapshot_entries + 1]AgentInputType = @splat(agent);
     try std.testing.expectError(error.TooManyAgents, model.reconcileAgentSnapshot(.{
         .revision = 3,
         .agents = &oversized,
     }));
 
-    try std.testing.expectEqual(client_model.Version{ .agents = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .agents = 1 }, model.version());
     try std.testing.expectEqual(@as(u64, 1), model.agentSnapshot().revision);
     try std.testing.expect(model.knowsAgent(agent.key));
 }
 
 test "agent navigation and focused attachments derive from committed client state" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const first: schema.TabLocation = .{
+    const first: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const second: schema.TabLocation = .{
+    const second: TabLocationType = .{
         .workspace = first.workspace,
         .tab_id = @enumFromInt(2),
     };
-    const local_key: agents.AgentKey = .{
+    const local_key: AgentKeyType = .{
         .pane_id = @enumFromInt(1),
         .pane_generation = 4,
     };
-    const remote_key: agents.AgentKey = .{
+    const remote_key: AgentKeyType = .{
         .pane_id = @enumFromInt(9),
         .pane_generation = 3,
     };
     try model.workspace.bootstrap(.{ .pane_id = local_key.pane_id, .location = first, .size = .{ .cols = 20, .rows = 5 } });
-    const agent_entries = [_]agents.AgentInput{
+    const agent_entries = [_]AgentInputType{
         .{
             .key = local_key,
             .location = first,
@@ -343,15 +343,15 @@ test "agent navigation and focused attachments derive from committed client stat
     _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &agent_entries });
 
     try std.testing.expectEqualDeep(local_key, model.focusedAttachmentAgent().?);
-    try std.testing.expectEqualDeep(attachments.Target{
+    try std.testing.expectEqualDeep(TargetType{
         .pane_id = local_key.pane_id,
         .pane_generation = local_key.pane_generation,
     }, model.focusedAttachmentTarget().?);
-    try std.testing.expectEqualDeep(client_model.LocalAgentNavigation{
+    try std.testing.expectEqualDeep(LocalAgentNavigationType{
         .pane_id = local_key.pane_id,
         .select_tab = null,
     }, model.planAgentNavigation(local_key).?.local);
-    try std.testing.expectEqualDeep(client_model.AgentHandoff{
+    try std.testing.expectEqualDeep(AgentHandoffType{
         .pane_id = remote_key.pane_id,
         .fallback_workspace = @enumFromInt(3),
     }, model.planAgentNavigation(remote_key).?.handoff);
@@ -365,7 +365,7 @@ test "agent navigation and focused attachments derive from committed client stat
 
     try std.testing.expect(model.focusedAttachmentAgent() == null);
     try std.testing.expect(model.focusedAttachmentTarget() == null);
-    try std.testing.expectEqualDeep(client_model.LocalAgentNavigation{
+    try std.testing.expectEqualDeep(LocalAgentNavigationType{
         .pane_id = local_key.pane_id,
         .select_tab = first.tab_id,
     }, model.planAgentNavigation(local_key).?.local);
@@ -376,18 +376,18 @@ test "agent navigation and focused attachments derive from committed client stat
 }
 
 test "focused done agent is acknowledged once per completion without a version change" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const key: agents.AgentKey = .{
+    const key: AgentKeyType = .{
         .pane_id = @enumFromInt(1),
         .pane_generation = 4,
     };
     try model.workspace.bootstrap(.{ .pane_id = key.pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
-    var entry: agents.AgentInput = .{
+    var entry: AgentInputType = .{
         .key = key,
         .location = location,
         .pane_index = 1,
@@ -416,19 +416,19 @@ test "focused done agent is acknowledged once per completion without a version c
 }
 
 test "an unfocused done agent is never acknowledged" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const first: schema.PaneId = @enumFromInt(1);
-    const second: schema.PaneId = @enumFromInt(2);
-    const area: ui.Rect = .{ .w = 80, .h = 24 };
+    const first: PaneIdType = @enumFromInt(1);
+    const second: PaneIdType = @enumFromInt(2);
+    const area: RectType = .{ .w = 80, .h = 24 };
     try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
-    const done_key: agents.AgentKey = .{ .pane_id = first, .pane_generation = 2 };
-    const entry: agents.AgentInput = .{
+    const done_key: AgentKeyType = .{ .pane_id = first, .pane_generation = 2 };
+    const entry: AgentInputType = .{
         .key = done_key,
         .location = location,
         .pane_index = 1,
@@ -446,19 +446,19 @@ test "an unfocused done agent is never acknowledged" {
 }
 
 test "pane titles are stored per pane and exposed for the focused pane" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane: schema.PaneId = @enumFromInt(1);
+    const pane: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     try std.testing.expectEqualStrings("", model.focusedPaneTitle());
 
     const commit = (try model.updatePaneMetadata(.{ .title = .{ .pane_id = pane, .title = "vim" } })).?;
 
-    try std.testing.expectEqual(client_model.PaneMetadataKind.title, commit.kind);
+    try std.testing.expectEqual(types.PaneMetadataKind.title, commit.kind);
     try std.testing.expect(commit.display_changed);
     try std.testing.expectEqualStrings("vim", model.focusedPaneTitle());
     try std.testing.expect(try model.updatePaneMetadata(.{ .title = .{ .pane_id = pane, .title = "vim" } }) == null);
@@ -469,11 +469,11 @@ test "pane titles are stored per pane and exposed for the focused pane" {
 }
 
 test "a host background report resolves the appearance by luminance" {
-    const light = client_model.HostCapabilities{};
+    const light = HostCapabilitiesType{};
     const bright = light.withObservation(.{ .background = .{ .r = 0xee, .g = 0xee, .b = 0xee } });
-    try std.testing.expectEqual(client_model.HostAppearance.light, bright.appearance);
+    try std.testing.expectEqual(types.HostAppearance.light, bright.appearance);
 
     const dim = light.withObservation(.{ .background = .{ .r = 0x1e, .g = 0x22, .b = 0x2e } });
-    try std.testing.expectEqual(client_model.HostAppearance.dark, dim.appearance);
-    try std.testing.expectEqual(client_model.HostAppearance.dark, dim.appearance);
+    try std.testing.expectEqual(types.HostAppearance.dark, dim.appearance);
+    try std.testing.expectEqual(types.HostAppearance.dark, dim.appearance);
 }

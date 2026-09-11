@@ -1,26 +1,26 @@
 //! Client resource reconciliation after canonical workspace snapshots.
 
-const std = @import("std");
-const core = @import("telar-core");
-const workspace_capability = @import("../../../workspace/root.zig");
-const workspaces_application = @import("telar-client").application.workspaces;
-const client_model = @import("telar-client").model;
-const active_pane_resources = @import("../panes/active_pane_resources.zig");
-const pane_geometry = @import("../panes/pane_geometry.zig");
+const Client = @import("../../Client.zig");
+const WorkspaceSnapshotViewType = @import("telar-core").WorkspaceSnapshotView;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-
-const Client = @import("../../client.zig");
-const schema = core.schema;
-const tabs_mod = workspace_capability.tabs;
-const workspace_snapshot = workspaces_application.workspace_snapshot;
-const workspace_snapshot_delivery = workspaces_application.workspace_snapshot_delivery;
+const std = @import("std");
+const max_tabs_per_workspace = @import("telar-core").max_tabs_per_workspace;
+const WorkspaceTabInputType = @import("telar-client").WorkspaceTabInput;
+const ApplyWorkspaceSnapshotHandlerType = @import("telar-client").ApplyWorkspaceSnapshotHandler;
+const WorkspaceReconciliationType = @import("telar-client").WorkspaceReconciliation;
+const DeliverWorkspaceSnapshotHandlerType = @import("telar-client").DeliverWorkspaceSnapshotHandler;
+const pane_geometry = @import("../panes/pane_geometry.zig");
+const TabIdType = @import("telar-core").TabId;
+const PaneIdType = @import("telar-core").PaneId;
+const active_pane_resources = @import("../panes/active_pane_resources.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 
 /// Consumes one correlated response and applies its canonical workspace state.
 ///
 /// ```zig
 /// try apply(client, snapshot);
 /// ```
-pub fn apply(client: *Client, snapshot: schema.WorkspaceSnapshotView) !void {
+pub fn apply(client: *Client, snapshot: WorkspaceSnapshotViewType) !void {
     const continuation = request_lifecycle.consume(client, snapshot.request_id) orelse
         return error.UnexpectedWorkspaceSnapshot;
     const expected_workspace = switch (continuation) {
@@ -32,7 +32,7 @@ pub fn apply(client: *Client, snapshot: schema.WorkspaceSnapshotView) !void {
         return error.UnexpectedWorkspaceSnapshot;
     }
 
-    var tabs: [tabs_mod.max_tabs]tabs_mod.WorkspaceTabInput = undefined;
+    var tabs: [max_tabs_per_workspace]WorkspaceTabInputType = undefined;
     var tab_count: usize = 0;
     var iterator = snapshot.tabs();
     while (try iterator.next()) |tab| {
@@ -56,7 +56,7 @@ pub fn apply(client: *Client, snapshot: schema.WorkspaceSnapshotView) !void {
     });
 }
 
-fn reconciliationHandler(client: *Client) workspace_snapshot.ApplyWorkspaceSnapshotHandler {
+fn reconciliationHandler(client: *Client) ApplyWorkspaceSnapshotHandlerType {
     return .{
         .model = &client.model,
         .effects = .{
@@ -66,9 +66,9 @@ fn reconciliationHandler(client: *Client) workspace_snapshot.ApplyWorkspaceSnaps
     };
 }
 
-fn deliverReconciliation(context: *anyopaque, reconciliation: *const client_model.WorkspaceReconciliation) !void {
+fn deliverReconciliation(context: *anyopaque, reconciliation: *const WorkspaceReconciliationType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    var use_case: workspace_snapshot_delivery.DeliverWorkspaceSnapshotHandler = .{
+    var use_case: DeliverWorkspaceSnapshotHandlerType = .{
         .model = &client.model,
         .area = client.geometry().area,
         .geometry_effects = pane_geometry.offerEffects(client),
@@ -86,19 +86,19 @@ fn deliverReconciliation(context: *anyopaque, reconciliation: *const client_mode
     try use_case.execute(reconciliation);
 }
 
-fn ignoreTabRequests(context: *anyopaque, tab_id: schema.TabId) void {
+fn ignoreTabRequests(context: *anyopaque, tab_id: TabIdType) void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     request_lifecycle.ignoreTab(client, tab_id);
 }
 
-fn clearPaneGraphics(context: *anyopaque, pane_id: schema.PaneId) void {
+fn clearPaneGraphics(context: *anyopaque, pane_id: PaneIdType) void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     client.graphics_store.clearPane(pane_id);
 }
 
-fn setPaneGraphicsVisible(context: *anyopaque, pane_id: schema.PaneId, visible: bool) !void {
+fn setPaneGraphicsVisible(context: *anyopaque, pane_id: PaneIdType, visible: bool) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try client.graphics_store.setPaneVisible(pane_id, visible);
@@ -116,7 +116,7 @@ fn tabSnapshotPending(context: *anyopaque) bool {
     return request_lifecycle.has(client, .tab_snapshot);
 }
 
-fn requestTabSnapshot(context: *anyopaque, location: schema.TabLocation) !void {
+fn requestTabSnapshot(context: *anyopaque, location: TabLocationType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try request_lifecycle.requestTabSnapshot(client, location);

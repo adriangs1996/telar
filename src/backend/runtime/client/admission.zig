@@ -1,228 +1,21 @@
 //! Single-flight admission of accepted client sockets.
 
+const GenericState = @import("GenericState.zig").Type;
+const FakeConnection = @import("FakeConnection.zig");
+const GenericAcceptPort = @import("GenericAcceptPort.zig").Type;
+const AdmissionCapture = @import("AdmissionCapture.zig");
+const GenericAcceptCoordinator = @import("GenericAcceptCoordinator.zig").Type;
 const std = @import("std");
+const Fixture = @import("Fixture.zig");
+const GenericHandshakePort = @import("GenericHandshakePort.zig").Type;
+const HandshakeCapture = @import("HandshakeCapture.zig");
+const TestHandshakeTypes = @import("TestHandshakeTypes.zig");
+const GenericHandshakeCoordinator = @import("GenericHandshakeCoordinator.zig").Type;
+const HandshakeFixture = @import("HandshakeFixture.zig");
 
-/// Creates the runtime-owned slot borrowed by one in-flight handshake actor.
-///
-/// ```zig
-/// const AdmissionState = State(Connection);
-/// var state: AdmissionState = .{};
-/// ```
-pub fn State(comptime Connection: type) type {
-    return struct {
-        const Self = @This();
+pub const AdmissionState = GenericState(FakeConnection);
 
-        slot: ?Connection = null,
-        pending: bool = false,
-
-        /// Reports whether a handshake actor still borrows the connection.
-        ///
-        /// ```zig
-        /// if (state.isPending()) {
-        ///     return;
-        /// }
-        /// ```
-        pub fn isPending(state: *const Self) bool {
-            return state.pending;
-        }
-
-        /// Returns the connection borrowed by the active handshake, if any.
-        /// Shutdown may use it to unblock the actor but must not deinitialize it.
-        ///
-        /// ```zig
-        /// if (state.pendingConnection()) |connection| {
-        ///     connection.shutdown(io);
-        /// }
-        /// ```
-        pub fn pendingConnection(state: *Self) ?*Connection {
-            if (!state.pending) {
-                return null;
-            }
-
-            return &state.slot.?;
-        }
-
-        /// Transfers the pending connection out after its actor has completed
-        /// or failed to start, leaving the slot idle for the next admission.
-        ///
-        /// ```zig
-        /// var connection = state.takePending();
-        /// defer connection.deinit(io);
-        /// ```
-        pub fn takePending(state: *Self) Connection {
-            std.debug.assert(state.pending and state.slot != null);
-            const connection = state.slot.?;
-            state.slot = null;
-            state.pending = false;
-            return connection;
-        }
-
-        fn begin(state: *Self, connection: Connection) void {
-            std.debug.assert(!state.pending and state.slot == null);
-            state.slot = connection;
-            state.pending = true;
-        }
-    };
-}
-
-/// Defines shutdown policy and socket effects bound by the runtime instance.
-///
-/// ```zig
-/// const port: AcceptPort(Context, Connection) = .{ ... };
-/// ```
-pub fn AcceptPort(comptime Context: type, comptime Connection: type) type {
-    return struct {
-        stopping: *const fn (*Context) bool,
-        rearm_accept: *const fn (*Context) anyerror!void,
-        has_capacity: *const fn (*Context) bool,
-        shutdown_connection: *const fn (*Context, *Connection) void,
-        deinit_connection: *const fn (*Context, *Connection) void,
-        start_handshake: *const fn (*Context, *Connection) anyerror!void,
-    };
-}
-
-/// Creates a statically dispatched accepted-socket coordinator.
-///
-/// ```zig
-/// const AcceptedCoordinator = AcceptCoordinator(Context, Connection, port);
-/// ```
-pub fn AcceptCoordinator(comptime Context: type, comptime Connection: type, comptime port: AcceptPort(Context, Connection)) type {
-    return struct {
-        const Self = @This();
-        const ConnectionState = State(Connection);
-
-        context: *Context,
-        state: *ConnectionState,
-
-        /// Binds accepted-socket effects to the runtime's handshake slot.
-        ///
-        /// ```zig
-        /// var coordinator = AcceptedCoordinator.init(&context, &state);
-        /// ```
-        pub fn init(context: *Context, state: *ConnectionState) Self {
-            return .{ .context = context, .state = state };
-        }
-
-        /// Rearms acceptance before starting one handshake actor. Every socket
-        /// stays owned by either this call or the handshake slot; shutdown,
-        /// capacity, rearm, and scheduling failures close the unclaimed socket.
-        /// A new arrival aborts a stalled handshake but cannot reuse its slot
-        /// until that actor completes.
-        ///
-        /// ```zig
-        /// try coordinator.handle(accepted_result);
-        /// ```
-        pub fn handle(coordinator: *Self, result: anyerror!Connection) !void {
-            var accepted = result catch {
-                try port.rearm_accept(coordinator.context);
-                return;
-            };
-            var accepted_owned = true;
-            defer if (accepted_owned) {
-                port.deinit_connection(coordinator.context, &accepted);
-            };
-
-            if (port.stopping(coordinator.context)) {
-                return;
-            }
-
-            try port.rearm_accept(coordinator.context);
-
-            if (coordinator.state.isPending()) {
-                port.shutdown_connection(coordinator.context, coordinator.state.pendingConnection().?);
-                return;
-            }
-
-            if (!port.has_capacity(coordinator.context)) {
-                return;
-            }
-
-            coordinator.state.begin(accepted);
-            accepted_owned = false;
-            port.start_handshake(coordinator.context, coordinator.state.pendingConnection().?) catch {
-                var unstarted = coordinator.state.takePending();
-                port.deinit_connection(coordinator.context, &unstarted);
-            };
-        }
-    };
-}
-
-/// Defines negotiated-connection admission and first-read effects bound by the
-/// runtime instance. `Types` declares `Connection` and `Session`.
-/// `admit` takes connection ownership only when it returns successfully.
-///
-/// ```zig
-/// const port: HandshakePort(Context, Types) = .{ ... };
-/// ```
-pub fn HandshakePort(comptime Context: type, comptime Types: type) type {
-    return struct {
-        stopping: *const fn (*Context) bool,
-        deinit_connection: *const fn (*Context, *Types.Connection) void,
-        admit: *const fn (*Context, Types.Connection) anyerror!Types.Session,
-        start_receive: *const fn (*Context, Types.Session) anyerror!void,
-        drop_session: *const fn (*Context, Types.Session) void,
-    };
-}
-
-/// Creates a statically dispatched handshake-completion coordinator.
-///
-/// ```zig
-/// const HandshakenCoordinator = HandshakeCoordinator(Context, Types, port);
-/// ```
-pub fn HandshakeCoordinator(comptime Context: type, comptime Types: type, comptime port: HandshakePort(Context, Types)) type {
-    return struct {
-        const Self = @This();
-        const ConnectionState = State(Types.Connection);
-
-        context: *Context,
-        state: *ConnectionState,
-
-        /// Binds handshake completion to the runtime's admission slot.
-        ///
-        /// ```zig
-        /// var coordinator = HandshakenCoordinator.init(&context, &state);
-        /// ```
-        pub fn init(context: *Context, state: *ConnectionState) Self {
-            return .{ .context = context, .state = state };
-        }
-
-        /// Releases the actor slot before interpreting its result. Failed or
-        /// shutdown handshakes close the negotiated socket; successful
-        /// admission transfers ownership to a session, whose first-read
-        /// scheduling failure removes that complete session.
-        ///
-        /// ```zig
-        /// coordinator.handle(handshake_result);
-        /// ```
-        pub fn handle(coordinator: *Self, result: anyerror!void) void {
-            var negotiated = coordinator.state.takePending();
-            var connection_owned = true;
-            defer if (connection_owned) {
-                port.deinit_connection(coordinator.context, &negotiated);
-            };
-
-            result catch return;
-
-            if (port.stopping(coordinator.context)) {
-                return;
-            }
-
-            const session = port.admit(coordinator.context, negotiated) catch return;
-            connection_owned = false;
-            port.start_receive(coordinator.context, session) catch {
-                port.drop_session(coordinator.context, session);
-            };
-        }
-    };
-}
-
-const FakeConnection = struct {
-    id: u8,
-};
-
-const AdmissionState = State(FakeConnection);
-
-const Step = enum {
+pub const Step = enum {
     stopping,
     rearm_accept,
     capacity,
@@ -231,89 +24,18 @@ const Step = enum {
     start_handshake,
 };
 
-const Capture = struct {
-    steps: [8]Step = undefined,
-    len: usize = 0,
-    runtime_stopping: bool = false,
-    capacity_available: bool = true,
-    rearm_failure: bool = false,
-    handshake_failure: bool = false,
-    state: ?*AdmissionState = null,
-    shutdown_id: ?u8 = null,
-    deinitialized_ids: [2]u8 = undefined,
-    deinitialized_count: usize = 0,
-    started_id: ?u8 = null,
-    start_received_slot: bool = false,
-
-    fn record(capture: *Capture, step: Step) void {
-        std.debug.assert(capture.len < capture.steps.len);
-        capture.steps[capture.len] = step;
-        capture.len += 1;
-    }
-
-    fn stopping(capture: *Capture) bool {
-        capture.record(.stopping);
-        return capture.runtime_stopping;
-    }
-
-    fn rearmAccept(capture: *Capture) !void {
-        capture.record(.rearm_accept);
-
-        if (capture.rearm_failure) {
-            return error.SchedulerUnavailable;
-        }
-    }
-
-    fn hasCapacity(capture: *Capture) bool {
-        capture.record(.capacity);
-        return capture.capacity_available;
-    }
-
-    fn shutdownConnection(capture: *Capture, connection: *FakeConnection) void {
-        capture.record(.shutdown_connection);
-        capture.shutdown_id = connection.id;
-    }
-
-    fn deinitConnection(capture: *Capture, connection: *FakeConnection) void {
-        capture.record(.deinit_connection);
-        std.debug.assert(capture.deinitialized_count < capture.deinitialized_ids.len);
-        capture.deinitialized_ids[capture.deinitialized_count] = connection.id;
-        capture.deinitialized_count += 1;
-    }
-
-    fn startHandshake(capture: *Capture, connection: *FakeConnection) !void {
-        capture.record(.start_handshake);
-        capture.started_id = connection.id;
-        capture.start_received_slot = connection == capture.state.?.pendingConnection().?;
-
-        if (capture.handshake_failure) {
-            return error.SchedulerUnavailable;
-        }
-    }
+const test_port: GenericAcceptPort(AdmissionCapture, FakeConnection) = .{
+    .stopping = AdmissionCapture.stopping,
+    .rearm_accept = AdmissionCapture.rearmAccept,
+    .has_capacity = AdmissionCapture.hasCapacity,
+    .shutdown_connection = AdmissionCapture.shutdownConnection,
+    .deinit_connection = AdmissionCapture.deinitConnection,
+    .start_handshake = AdmissionCapture.startHandshake,
 };
 
-const test_port: AcceptPort(Capture, FakeConnection) = .{
-    .stopping = Capture.stopping,
-    .rearm_accept = Capture.rearmAccept,
-    .has_capacity = Capture.hasCapacity,
-    .shutdown_connection = Capture.shutdownConnection,
-    .deinit_connection = Capture.deinitConnection,
-    .start_handshake = Capture.startHandshake,
-};
+pub const TestCoordinator = GenericAcceptCoordinator(AdmissionCapture, FakeConnection, test_port);
 
-const TestCoordinator = AcceptCoordinator(Capture, FakeConnection, test_port);
-
-const Fixture = struct {
-    state: AdmissionState = .{},
-    capture: Capture = .{},
-
-    fn coordinator(fixture: *Fixture) TestCoordinator {
-        fixture.capture.state = &fixture.state;
-        return TestCoordinator.init(&fixture.capture, &fixture.state);
-    }
-};
-
-fn expectSteps(capture: *const Capture, expected: []const Step) !void {
+fn expectSteps(capture: *const AdmissionCapture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
 }
 
@@ -414,16 +136,7 @@ test "a new socket aborts a stalled handshake but does not replace its slot" {
     try std.testing.expectEqual(@as(u8, 7), fixture.state.pendingConnection().?.id);
 }
 
-const FakeSession = struct {
-    id: u8,
-};
-
-const TestHandshakeTypes = struct {
-    pub const Connection = FakeConnection;
-    pub const Session = FakeSession;
-};
-
-const HandshakeStep = enum {
+pub const HandshakeStep = enum {
     stopping,
     deinit_connection,
     admit,
@@ -431,63 +144,7 @@ const HandshakeStep = enum {
     drop_session,
 };
 
-const HandshakeCapture = struct {
-    steps: [5]HandshakeStep = undefined,
-    len: usize = 0,
-    runtime_stopping: bool = false,
-    admission_failure: bool = false,
-    receive_failure: bool = false,
-    state: ?*const AdmissionState = null,
-    effects_saw_idle: bool = true,
-    deinitialized_id: ?u8 = null,
-    admitted_id: ?u8 = null,
-    started_session: ?u8 = null,
-    dropped_session: ?u8 = null,
-
-    fn record(capture: *HandshakeCapture, step: HandshakeStep) void {
-        std.debug.assert(capture.len < capture.steps.len);
-        capture.steps[capture.len] = step;
-        capture.len += 1;
-        capture.effects_saw_idle = capture.effects_saw_idle and !capture.state.?.isPending();
-    }
-
-    fn stopping(capture: *HandshakeCapture) bool {
-        capture.record(.stopping);
-        return capture.runtime_stopping;
-    }
-
-    fn deinitConnection(capture: *HandshakeCapture, connection: *FakeConnection) void {
-        capture.record(.deinit_connection);
-        capture.deinitialized_id = connection.id;
-    }
-
-    fn admit(capture: *HandshakeCapture, connection: FakeConnection) !FakeSession {
-        capture.record(.admit);
-        capture.admitted_id = connection.id;
-
-        if (capture.admission_failure) {
-            return error.ClientLimitReached;
-        }
-
-        return .{ .id = connection.id + 10 };
-    }
-
-    fn startReceive(capture: *HandshakeCapture, session: FakeSession) !void {
-        capture.record(.start_receive);
-        capture.started_session = session.id;
-
-        if (capture.receive_failure) {
-            return error.SchedulerUnavailable;
-        }
-    }
-
-    fn dropSession(capture: *HandshakeCapture, session: FakeSession) void {
-        capture.record(.drop_session);
-        capture.dropped_session = session.id;
-    }
-};
-
-const test_handshake_port: HandshakePort(HandshakeCapture, TestHandshakeTypes) = .{
+const test_handshake_port: GenericHandshakePort(HandshakeCapture, TestHandshakeTypes) = .{
     .stopping = HandshakeCapture.stopping,
     .deinit_connection = HandshakeCapture.deinitConnection,
     .admit = HandshakeCapture.admit,
@@ -495,18 +152,7 @@ const test_handshake_port: HandshakePort(HandshakeCapture, TestHandshakeTypes) =
     .drop_session = HandshakeCapture.dropSession,
 };
 
-const TestHandshakeCoordinator = HandshakeCoordinator(HandshakeCapture, TestHandshakeTypes, test_handshake_port);
-
-const HandshakeFixture = struct {
-    state: AdmissionState = .{},
-    capture: HandshakeCapture = .{},
-
-    fn coordinator(fixture: *HandshakeFixture, connection_id: u8) TestHandshakeCoordinator {
-        fixture.state.begin(.{ .id = connection_id });
-        fixture.capture.state = &fixture.state;
-        return TestHandshakeCoordinator.init(&fixture.capture, &fixture.state);
-    }
-};
+pub const TestHandshakeCoordinator = GenericHandshakeCoordinator(HandshakeCapture, TestHandshakeTypes, test_handshake_port);
 
 fn expectHandshakeSteps(capture: *const HandshakeCapture, expected: []const HandshakeStep) !void {
     try std.testing.expectEqualSlices(HandshakeStep, expected, capture.steps[0..capture.len]);

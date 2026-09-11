@@ -113,13 +113,13 @@ death drops the attachment projection without changing the PTY or terminal.
 
 ## Proof
 
-- `src/frontend/client/model.zig` proves clamping, relative movement,
+- `src/client/model/Model.zig` proves clamping, relative movement,
   independent revisions, no-ops and copy-mode exclusivity.
-- `src/frontend/client/application/set_pane_viewport.zig` proves commit-before-
+- `src/client/application/panes/set_pane_viewport.zig` proves commit-before-
   effect ordering and the failure policy.
-- `src/frontend/client/application/pane_viewport_delivery.zig` proves exact
+- `src/client/application/panes/pane_viewport_delivery.zig` proves exact
   commit validation, graphics-before-runtime order and partial failures.
-- `src/frontend/client/client_test.zig` proves graphics visibility, folded
+- `src/frontend/client/tests/` proves graphics visibility, folded
   revisions, presenter-owned composition and wire ordering before pane input.
 - `src/backend/runtime/attachment/cell.zig` proves attachment-local viewport
   pinning and return to the live screen.

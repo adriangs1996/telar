@@ -1,18 +1,13 @@
 //! Application policy for routing one normalized host pointer event.
 
+const PointerCommand = @import("PointerCommand.zig");
+const PointerRoutingCapture = @import("PointerRoutingCapture.zig");
+const PointerRoutingHandler = @import("PointerRoutingHandler.zig");
 const std = @import("std");
-const pane_mouse = @import("pane_mouse.zig");
-
-pub const PointerCommand = pane_mouse.PointerCommand;
 
 pub const Authority = union(enum) {
     unavailable,
     available: PointerCommand,
-};
-
-pub const ViewOutcome = struct {
-    consume_pane_input: bool,
-    pointer_inside: bool,
 };
 
 pub const Outcome = enum {
@@ -23,132 +18,19 @@ pub const Outcome = enum {
     pane,
 };
 
-pub const Effects = struct {
-    context: *anyopaque,
-    copy_mode: *const fn (*anyopaque, PointerCommand) anyerror!bool,
-    view: *const fn (*anyopaque, PointerCommand) anyerror!ViewOutcome,
-    link: *const fn (*anyopaque, PointerCommand) anyerror!bool,
-    pane: *const fn (*anyopaque, PointerCommand) anyerror!void,
-};
-
-pub const PointerRoutingHandler = struct {
-    effects: Effects,
-
-    /// Gives each pointer event to the first owner that accepts it.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(authority);
-    /// ```
-    pub fn execute(handler: *PointerRoutingHandler, authority: Authority) !Outcome {
-        const command = switch (authority) {
-            .unavailable => return .unavailable,
-            .available => |available| available,
-        };
-
-        if (try handler.effects.copy_mode(handler.effects.context, command)) {
-            return .copy_mode;
-        }
-
-        const view = try handler.effects.view(handler.effects.context, command);
-        if (view.consume_pane_input or !view.pointer_inside) {
-            return .view;
-        }
-
-        if (try handler.effects.link(handler.effects.context, command)) {
-            return .link;
-        }
-
-        try handler.effects.pane(handler.effects.context, command);
-        return .pane;
-    }
-};
-
-const Event = enum {
+pub const Event = enum {
     copy_mode,
     view,
     link,
     pane,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     copy_mode,
     view,
     link,
     pane,
-};
-
-const Capture = struct {
-    events: [4]Event = undefined,
-    event_count: usize = 0,
-    copy_consumed: bool = false,
-    link_consumed: bool = false,
-    view_outcome: ViewOutcome = .{
-        .consume_pane_input = false,
-        .pointer_inside = true,
-    },
-    failure: Failure = .none,
-
-    fn port(capture: *Capture) Effects {
-        return .{
-            .context = capture,
-            .copy_mode = copyMode,
-            .view = view,
-            .link = link,
-            .pane = pane,
-        };
-    }
-
-    fn record(capture: *Capture, event: Event) void {
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn copyMode(raw_context: *anyopaque, command: PointerCommand) !bool {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        _ = command;
-        capture.record(.copy_mode);
-
-        if (capture.failure == .copy_mode) {
-            return error.CopyModePointerFailed;
-        }
-
-        return capture.copy_consumed;
-    }
-
-    fn view(raw_context: *anyopaque, command: PointerCommand) !ViewOutcome {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        _ = command;
-        capture.record(.view);
-
-        if (capture.failure == .view) {
-            return error.ViewPointerFailed;
-        }
-
-        return capture.view_outcome;
-    }
-
-    fn pane(raw_context: *anyopaque, command: PointerCommand) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        _ = command;
-        capture.record(.pane);
-
-        if (capture.failure == .pane) {
-            return error.PanePointerFailed;
-        }
-    }
-
-    fn link(raw_context: *anyopaque, command: PointerCommand) !bool {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        _ = command;
-        capture.record(.link);
-
-        if (capture.failure == .link) {
-            return error.LinkPointerFailed;
-        }
-
-        return capture.link_consumed;
-    }
 };
 
 fn testingCommand() PointerCommand {
@@ -161,7 +43,7 @@ fn testingCommand() PointerCommand {
 }
 
 test "pointer routing drops input without authority" {
-    var capture: Capture = .{};
+    var capture: PointerRoutingCapture = .{};
     var handler: PointerRoutingHandler = .{ .effects = capture.port() };
 
     try std.testing.expectEqual(Outcome.unavailable, try handler.execute(.unavailable));
@@ -169,7 +51,7 @@ test "pointer routing drops input without authority" {
 }
 
 test "pointer routing stops after copy mode accepts the event" {
-    var capture: Capture = .{ .copy_consumed = true };
+    var capture: PointerRoutingCapture = .{ .copy_consumed = true };
     var handler: PointerRoutingHandler = .{ .effects = capture.port() };
 
     try std.testing.expectEqual(Outcome.copy_mode, try handler.execute(.{ .available = testingCommand() }));
@@ -177,7 +59,7 @@ test "pointer routing stops after copy mode accepts the event" {
 }
 
 test "pointer routing stops after consumed or outside view interaction" {
-    var capture: Capture = .{ .view_outcome = .{
+    var capture: PointerRoutingCapture = .{ .view_outcome = .{
         .consume_pane_input = true,
         .pointer_inside = true,
     } };
@@ -196,7 +78,7 @@ test "pointer routing stops after consumed or outside view interaction" {
 }
 
 test "pointer routing reaches pane input only after both earlier owners decline" {
-    var capture: Capture = .{};
+    var capture: PointerRoutingCapture = .{};
     var handler: PointerRoutingHandler = .{ .effects = capture.port() };
 
     try std.testing.expectEqual(Outcome.pane, try handler.execute(.{ .available = testingCommand() }));
@@ -204,7 +86,7 @@ test "pointer routing reaches pane input only after both earlier owners decline"
 }
 
 test "pointer routing stops after a link claims the gesture" {
-    var capture: Capture = .{ .link_consumed = true };
+    var capture: PointerRoutingCapture = .{ .link_consumed = true };
     var handler: PointerRoutingHandler = .{ .effects = capture.port() };
 
     try std.testing.expectEqual(Outcome.link, try handler.execute(.{ .available = testingCommand() }));
@@ -212,7 +94,7 @@ test "pointer routing stops after a link claims the gesture" {
 }
 
 test "pointer routing propagates a selected failure without later effects" {
-    var capture: Capture = .{ .failure = .pane };
+    var capture: PointerRoutingCapture = .{ .failure = .pane };
     var handler: PointerRoutingHandler = .{ .effects = capture.port() };
 
     try std.testing.expectError(

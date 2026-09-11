@@ -1,36 +1,28 @@
 //! Wires copy-mode pointer ownership to geometry and copy-mode effects.
 
-const core = @import("telar-core");
-const presentation = @import("../../../presentation/root.zig");
-const workspace_capability = @import("../../../workspace/root.zig");
-const input_application = @import("telar-client").application.input;
+const Client = @import("../../Client.zig");
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const term = @import("../../../presentation/screen_support.zig");
+const CopyModePointerContext = @import("CopyModePointerContext.zig");
+const CopyModePointerHandlerType = @import("telar-client").CopyModePointerHandler;
+const ApplicationInputCopyModePointerAuthority = @import("telar-client").ApplicationInputCopyModePointerAuthority;
+const PointType = @import("telar-core").Point;
 const copy_modes = @import("copy_modes.zig");
-
-const Client = @import("../../client.zig");
-const copy_mode_pointer = input_application.copy_mode_pointer;
-const multiplexer = workspace_capability.multiplexer;
-const term = presentation.screen;
-const ui = core.ui;
-
-const Context = struct {
-    client: *Client,
-    model: *multiplexer.Model,
-    area: ui.Rect,
-};
+const PointerMotionType = @import("telar-client").PointerMotion;
 
 /// Gives copy mode first refusal for one cell-based pointer event.
 ///
 /// ```zig
 /// if (try apply(client, model, event)) return;
 /// ```
-pub fn apply(client: *Client, model: *multiplexer.Model, event: term.Event.Mouse) !bool {
-    var context: Context = .{
+pub fn apply(client: *Client, model: *MultiplexerModel, event: term.Event.Mouse) !bool {
+    var context: CopyModePointerContext = .{
         .client = client,
         .model = model,
         .area = client.geometry().area,
     };
 
-    var use_case: copy_mode_pointer.CopyModePointerHandler = .{
+    var use_case: CopyModePointerHandlerType = .{
         .effects = .{
             .context = &context,
             .leave = leave,
@@ -48,10 +40,10 @@ pub fn apply(client: *Client, model: *multiplexer.Model, event: term.Event.Mouse
     return outcome != .unowned;
 }
 
-fn resolve(context: *Context, event: term.Event.Mouse) copy_mode_pointer.Authority {
+fn resolve(context: *CopyModePointerContext, event: term.Event.Mouse) ApplicationInputCopyModePointerAuthority {
     if (context.client.model.pointerSelection()) |selection| {
         const view = context.model.viewForPane(selection.pane_id, context.area);
-        const position: ?ui.Point = if (view != null and view.?.content.w > 0 and view.?.content.h > 0) .{
+        const position: ?PointType = if (view != null and view.?.content.w > 0 and view.?.content.h > 0) .{
             .x = @min(event.x -| view.?.content.x, view.?.content.w - 1),
             .y = @min(event.y -| view.?.content.y, view.?.content.h - 1),
         } else null;
@@ -73,25 +65,25 @@ fn resolve(context: *Context, event: term.Event.Mouse) copy_mode_pointer.Authori
 }
 
 fn leave(raw_context: *anyopaque) !void {
-    const context: *Context = @ptrCast(@alignCast(raw_context));
+    const context: *CopyModePointerContext = @ptrCast(@alignCast(raw_context));
 
     _ = try copy_modes.leave(context.client);
 }
 
 fn cancelPointer(raw_context: *anyopaque) !void {
-    const context: *Context = @ptrCast(@alignCast(raw_context));
+    const context: *CopyModePointerContext = @ptrCast(@alignCast(raw_context));
 
     _ = try copy_modes.cancelPointer(context.client);
 }
 
-fn pointer(raw_context: *anyopaque, motion: @import("telar-client").input.copy_mode.PointerMotion) !void {
-    const context: *Context = @ptrCast(@alignCast(raw_context));
+fn pointer(raw_context: *anyopaque, motion: PointerMotionType) !void {
+    const context: *CopyModePointerContext = @ptrCast(@alignCast(raw_context));
 
     _ = try copy_modes.pointer(context.client, motion);
 }
 
 fn vertical(raw_context: *anyopaque, delta: i32) !void {
-    const context: *Context = @ptrCast(@alignCast(raw_context));
+    const context: *CopyModePointerContext = @ptrCast(@alignCast(raw_context));
 
     _ = try copy_modes.vertical(context.client, delta);
 }

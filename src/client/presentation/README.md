@@ -1,7 +1,7 @@
 # Client presentation contract
 
-Each client connection owns one `lifecycle.State`. Its tokens are scoped to that
-owner. Drivers cancel and join consumers before destroying the owner; a token
+Each client connection owns one `LifecycleState` from `LifecycleState.zig`.
+Its tokens are scoped to that owner. Drivers cancel and join consumers before destroying the owner; a token
 is not an address or a cross-client identifier.
 
 `capture` borrows the semantic model for synchronous preparation. The projection
@@ -9,8 +9,9 @@ contains pane cells and semantic control state, not terminal widgets, writers,
 textures or GPU commands. Adapters own their chrome, hit maps, physical metrics,
 input decoding and host services. Pane cells do not prescribe a cell-based GUI.
 
-`State.observe` coalesces revisions. `State.begin` seals one prepared commit and
-returns a token. `State.complete` consumes that exact token once. Only a
+`LifecycleState.observe` coalesces revisions. `LifecycleState.begin` seals one
+prepared commit and returns a token. `LifecycleState.complete` consumes that
+exact token once. Only a
 successful completion returns a delivery for `DeliverPresentationHandler`.
 Preparation, failed delivery and cancellation never retire model damage.
 Obsolete tokens cannot consume a replacement flight. Receiving newer cells does
@@ -47,7 +48,8 @@ A partial diff is never cancelled to make room for a newer frame. Host write
 failure ends that client; reconnect rebuilds from runtime snapshots. New pointer
 gestures cannot use changed pane geometry during an in-flight presentation.
 
-`headless.Adapter` owns at most 16,384 cells and a bounded pane descriptor array.
+`HeadlessAdapter.zig`, exported as `telar-client.HeadlessAdapter`, owns at most
+16,384 cells and a bounded pane descriptor array.
 It explicitly rejects larger preparations rather than truncating them. Tests
 control busy admission, preparation failure, delayed completion, delivery
 failure and cancellation. The adapter imports no terminal, font or window

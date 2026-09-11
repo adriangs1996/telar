@@ -1,5 +1,5 @@
 const std = @import("std");
-const shared = @import("telar-core").ui;
+const AgentProviderType = @import("telar-core").AgentProvider;
 
 pub const Theme = enum {
     unicode,
@@ -63,7 +63,7 @@ pub const Icon = enum {
     /// ```zig
     /// const icon = Icon.forProvider(agent.provider) orelse .provider_unknown;
     /// ```
-    pub fn forProvider(provider: @import("telar-core").schema.AgentProvider) ?Icon {
+    pub fn forProvider(provider: AgentProviderType) ?Icon {
         return switch (provider) {
             .claude => .provider_claude,
             .codex => .provider_codex,

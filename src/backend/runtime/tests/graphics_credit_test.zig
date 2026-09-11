@@ -1,20 +1,22 @@
 //! Vertical and application tests for graphics transfer credit returns.
 
+const GenericGraphicsCreditController = @import("../entrypoints/requests/GenericGraphicsCreditController.zig").Type;
+const ReturnGraphicsCreditHandlerType = @import("../application/commands/ReturnGraphicsCreditHandler.zig");
+const PaneFixture = @import("PaneFixture.zig");
+const max_image_bytes_per_pane_module = @import("telar-core").max_image_bytes_per_pane;
 const std = @import("std");
-const core = @import("telar-core");
-const agent_mod = @import("../../agent/root.zig");
-const pane_mod = @import("../../pane/root.zig");
-const workspace_mod = @import("../../workspace/root.zig");
-const delivery_mod = @import("../delivery/root.zig");
 const graphics_credit_commands = @import("../application/commands/graphics_credit.zig");
-const graphics_credit_controller = @import("../entrypoints/requests/graphics_credit.zig");
-const system_metrics_mod = @import("../observability/root.zig").system_metrics;
-const test_support = @import("support.zig");
+const pane_module = @import("telar-core").pane;
+const Delivery = @import("../delivery/Delivery.zig");
+const PaneStoreType = @import("../../pane/PaneStore.zig");
+const StateType = @import("../../workspace/State.zig");
+const TrackerType = @import("../../agent/Tracker.zig");
+const SamplerType = @import("../observability/Sampler.zig");
+const SourcesType = @import("../delivery/Sources.zig");
+const ReaderType = @import("../../workspace/Reader.zig");
+const decodeServer_module = @import("telar-core").decodeServer;
 
-const schema = core.schema;
-const Delivery = delivery_mod.Delivery;
-const PaneFixture = test_support.PaneFixture;
-const GraphicsCreditController = graphics_credit_controller.Controller(*graphics_credit_commands.ReturnGraphicsCreditHandler);
+const GraphicsCreditController = GenericGraphicsCreditController(*ReturnGraphicsCreditHandlerType);
 
 test "ReturnGraphicsCreditHandler accepts the exact outstanding bound" {
     var fixture: PaneFixture = .{};
@@ -22,9 +24,9 @@ test "ReturnGraphicsCreditHandler accepts the exact outstanding bound" {
     defer fixture.deinit();
 
     const attachment = fixture.attachments.find(fixture.pane.id).?;
-    const max_credit = core.graphics.max_image_bytes_per_pane;
+    const max_credit = max_image_bytes_per_pane_module;
     attachment.graphics.credit = 7;
-    var handler: graphics_credit_commands.ReturnGraphicsCreditHandler = .{
+    var handler: ReturnGraphicsCreditHandlerType = .{
         .attachments = &fixture.attachments,
     };
 
@@ -54,12 +56,12 @@ test "ReturnGraphicsCreditHandler leaves existing credit unchanged for another p
 
     const attachment = fixture.attachments.find(fixture.pane.id).?;
     attachment.graphics.credit = 13;
-    var handler: graphics_credit_commands.ReturnGraphicsCreditHandler = .{
+    var handler: ReturnGraphicsCreditHandlerType = .{
         .attachments = &fixture.attachments,
     };
 
     const result = try handler.execute(.{
-        .pane_id = try schema.id.pane(99),
+        .pane_id = try pane_module(99),
         .bytes = 1,
     });
 
@@ -73,9 +75,9 @@ test "credit return crosses controller and handler with exact stale accounting" 
     defer fixture.deinit();
 
     const attachment = fixture.attachments.find(fixture.pane.id).?;
-    const max_credit = core.graphics.max_image_bytes_per_pane;
+    const max_credit = max_image_bytes_per_pane_module;
     attachment.graphics.credit = max_credit - 16;
-    var handler: graphics_credit_commands.ReturnGraphicsCreditHandler = .{
+    var handler: ReturnGraphicsCreditHandlerType = .{
         .attachments = &fixture.attachments,
     };
     var controller = GraphicsCreditController.init(&fixture.metrics, &handler);
@@ -121,13 +123,13 @@ test "returned credit lets the next delivery pump stage a blocked image" {
 
     var delivery = try Delivery.init(std.testing.allocator);
     defer delivery.deinit(std.testing.allocator);
-    var panes: pane_mod.PaneStore = .{};
-    var workspaces: workspace_mod.State = .{};
-    var agents: agent_mod.Tracker = .{};
-    var system_metrics: system_metrics_mod.Sampler = .{};
-    const sources: delivery_mod.Sources = .{
+    var panes: PaneStoreType = .{};
+    var workspaces: StateType = .{};
+    var agents: TrackerType = .{};
+    var system_metrics: SamplerType = .{};
+    const sources: SourcesType = .{
         .panes = &panes,
-        .workspaces = workspace_mod.Reader.init(&workspaces),
+        .workspaces = ReaderType.init(&workspaces),
         .agents = &agents,
         .system_metrics = &system_metrics,
         .proxy_active = false,
@@ -142,7 +144,7 @@ test "returned credit lets the next delivery pump stage a blocked image" {
     })) == null);
     try std.testing.expect(attachment.graphics.transfer == null);
 
-    var handler: graphics_credit_commands.ReturnGraphicsCreditHandler = .{
+    var handler: ReturnGraphicsCreditHandlerType = .{
         .attachments = &fixture.attachments,
     };
     var controller = GraphicsCreditController.init(&fixture.metrics, &handler);
@@ -162,7 +164,7 @@ test "returned credit lets the next delivery pump stage a blocked image" {
         .sources = sources,
         .metrics = &fixture.metrics,
     })).?;
-    const message = try schema.decodeServer(prepared.payload);
+    const message = try decodeServer_module(prepared.payload);
 
     try std.testing.expect(message == .graphics_image);
     try std.testing.expectEqual(@as(usize, 0), attachment.graphics.credit);

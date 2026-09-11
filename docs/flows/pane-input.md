@@ -165,25 +165,25 @@ different pane or the runtime event loop.
 
 ## Proof
 
-- `src/frontend/client/model.zig` proves active-target resolution, paste
+- `src/client/model/Model.zig` proves active-target resolution, paste
   identity and framing capture, exact release, attachment checks and exclusive
   modes.
-- `src/frontend/client/application/pane_paste.zig` proves start rollback,
+- `src/client/application/input/pane_paste.zig` proves start rollback,
   ordered delivery, unframed behavior, content retention and unconditional
   finish cleanup.
-- `src/frontend/client/application/paste_routing.zig` proves start authority,
+- `src/client/application/input/paste_routing.zig` proves start authority,
   established-owner priority, ignored phases and failure isolation.
-- `src/frontend/client/application/pane_input.zig` proves child-mode encoding,
+- `src/client/application/input/pane_input.zig` proves child-mode encoding,
   exact key-lease targets, legacy and Kitty releases, explicit marker delivery,
   bounds, source-specific viewport policy, effect order and failure behavior.
-- `src/frontend/client/application/pane_mouse.zig` proves exclusive pointer
+- `src/client/application/input/pane_mouse.zig` proves exclusive pointer
   policy before any report reaches pane input.
-- `src/frontend/client/client_test.zig` proves captured target and framing,
+- `src/frontend/client/tests/` proves captured target and framing,
   prompt and copy-mode routing, viewport and protocol order, owner exclusion,
   close-before-detach, pane-retirement cleanup, mouse scrollback preservation,
   telemetry separation and outbox backpressure.
-- `src/frontend/input/host.zig` proves terminal-mode-specific key and paste
+- `src/frontend/input/host_tests.zig` proves terminal-mode-specific key and paste
   encoding.
-- `src/backend/runtime/pane_input_test.zig` and
+- `src/backend/runtime/tests/pane_input_test.zig` and
   `src/transport_integration_test.zig` prove runtime queueing, PTY delivery and
   per-pane isolation.

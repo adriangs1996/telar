@@ -1,73 +1,15 @@
 //! Application use cases for host-capability presentation capability observations.
 
+const ModelType = @import("../../model/Model.zig");
 const std = @import("std");
-const client_model = @import("../../root.zig").model;
-
-pub const Effects = struct {
-    context: *anyopaque,
-    deliver: *const fn (*anyopaque, client_model.HostCommit) anyerror!void,
-};
-
-pub const Handler = struct {
-    model: *client_model.Model,
-    effects: Effects,
-
-    /// Commits one semantic host response before synchronizing resources.
-    ///
-    /// ```zig
-    /// const commit = try handler.observe(observation) orelse return;
-    /// ```
-    pub fn observe(handler: *Handler, observation: client_model.HostCapabilityObservation) !?client_model.HostCommit {
-        const commit = try handler.model.observeHostCapability(observation) orelse return null;
-
-        try handler.effects.deliver(handler.effects.context, commit);
-        return commit;
-    }
-
-    /// Commits a complete adapter observation before delivering resources.
-    /// Example: `_ = try handler.reconcile(capabilities);`.
-    pub fn reconcile(handler: *Handler, capabilities: client_model.HostCapabilities) !?client_model.HostCommit {
-        var size = handler.model.hostSize();
-        const cell_size = capabilities.cellSize(size.cols, size.rows);
-        size.cell_width_px = cell_size.width;
-        size.cell_height_px = cell_size.height;
-        const commit = try handler.model.reconcileHost(.{ .capabilities = capabilities, .size = size }) orelse return null;
-
-        try handler.effects.deliver(handler.effects.context, commit);
-        return commit;
-    }
-};
-
-const EffectsCapture = struct {
-    model: *const client_model.Model,
-    calls: usize = 0,
-    observed_commit: bool = false,
-    fail: bool = false,
-
-    fn port(capture: *EffectsCapture) Effects {
-        return .{ .context = capture, .deliver = deliver };
-    }
-
-    fn deliver(raw_context: *anyopaque, commit: client_model.HostCommit) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
-        const capabilities = commit.capabilities.?;
-        capture.calls += 1;
-        capture.observed_commit = std.meta.eql(
-            capture.model.hostCapabilities(),
-            capabilities.current,
-        ) and capture.model.version().host_capabilities ==
-            capabilities.host_capabilities_revision;
-
-        if (capture.fail) {
-            return error.HostCapabilityEffectsFailed;
-        }
-    }
-};
+const HostCapabilitiesEffectsCapture = @import("HostCapabilitiesEffectsCapture.zig");
+const Handler = @import("HostCapabilitiesHandler.zig");
+const VersionType = @import("../../model/Version.zig");
 
 test "Handler commits an observation before synchronizing resources" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectsCapture = .{ .model = &model };
+    var capture: HostCapabilitiesEffectsCapture = .{ .model = &model };
     var handler: Handler = .{
         .model = &model,
         .effects = capture.port(),
@@ -78,7 +20,7 @@ test "Handler commits an observation before synchronizing resources" {
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expectEqual(
-        client_model.Version{ .host_capabilities = 1 },
+        VersionType{ .host_capabilities = 1 },
         model.version(),
     );
     try std.testing.expectEqual(
@@ -88,9 +30,9 @@ test "Handler commits an observation before synchronizing resources" {
 }
 
 test "Handler suppresses repeated presentation capability observations" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectsCapture = .{ .model = &model };
+    var capture: HostCapabilitiesEffectsCapture = .{ .model = &model };
     var handler: Handler = .{
         .model = &model,
         .effects = capture.port(),
@@ -108,9 +50,9 @@ test "Handler suppresses repeated presentation capability observations" {
 }
 
 test "Handler retains a capability commit after effect failure" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectsCapture = .{
+    var capture: HostCapabilitiesEffectsCapture = .{
         .model = &model,
         .fail = true,
     };
@@ -126,7 +68,7 @@ test "Handler retains a capability commit after effect failure" {
 
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqual(
-        client_model.Version{ .host_capabilities = 1 },
+        VersionType{ .host_capabilities = 1 },
         model.version(),
     );
     try std.testing.expectEqual(

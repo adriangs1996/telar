@@ -1,24 +1,14 @@
 //! Bounded external command worker for configured bar data sources.
 
 const std = @import("std");
+const CommandType = @import("telar-client").BarCommand;
+const Output = @import("Output.zig");
+const max_command_args_module = @import("telar-client").max_command_args;
+const max_text_bytes_module = @import("telar-client").max_text_bytes;
 const builtin = @import("builtin");
-const model = @import("telar-client").bars.model;
 
-const Io = std.Io;
-
-pub const max_output_bytes = model.max_text_bytes;
-
-pub const Output = struct {
-    bytes: [max_output_bytes]u8 = @splat(0),
-    len: u16 = 0,
-
-    pub fn slice(output: *const Output) []const u8 {
-        return output.bytes[0..output.len];
-    }
-};
-
-pub fn run(io: Io, command: model.Command) !Output {
-    var argument_storage: [model.max_command_args][]const u8 = undefined;
+pub fn run(io: std.Io, command: CommandType) !Output {
+    var argument_storage: [max_command_args_module][]const u8 = undefined;
     const argv = command.argumentSlice(&argument_storage);
     if (argv.len == 0) {
         return error.EmptyBarCommand;
@@ -27,7 +17,7 @@ pub fn run(io: Io, command: model.Command) !Output {
     const allocator = std.heap.page_allocator;
     const result = try std.process.run(allocator, io, .{
         .argv = argv,
-        .stdout_limit = .limited(max_output_bytes + 2),
+        .stdout_limit = .limited(max_text_bytes_module + 2),
         .stderr_limit = .limited(4096),
         .timeout = .{ .duration = .{
             .clock = .awake,
@@ -47,7 +37,7 @@ pub fn run(io: Io, command: model.Command) !Output {
     }
 
     const trimmed = std.mem.trim(u8, result.stdout, " \t\r\n");
-    if (trimmed.len > max_output_bytes) {
+    if (trimmed.len > max_text_bytes_module) {
         return error.BarCommandOutputTooLong;
     }
     for (trimmed) |byte| {
@@ -78,7 +68,7 @@ test "command runner executes argv directly and validates one display line" {
         return error.SkipZigTest;
     }
 
-    var command: model.Command = .{
+    var command: CommandType = .{
         .generation = 1,
         .interval_ns = std.time.ns_per_s,
         .timeout_ms = 1_000,

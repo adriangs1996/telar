@@ -14,23 +14,14 @@
 //! someone who has a reason - a build with no emulator in it, or a test that
 //! wants to fix the widths rather than look them up.
 
+const UnicodeMeasured = @import("UnicodeMeasured.zig");
 const vt = @import("ghostty-vt");
-
-/// One grapheme cluster's extent.
-pub const Measured = struct {
-    /// How many codepoints the cluster spans.
-    len: usize,
-    /// How many columns it occupies. Zero for a control character, which the
-    /// caller turns into a blank column - a zero width cell cannot be
-    /// addressed by a cursor.
-    width: u8,
-};
 
 /// Measures the first grapheme cluster in `codepoints`.
 ///
 /// Segmentation and width in one call, on purpose: they are the same table
 /// lookup, and splitting them is how a measurement and a draw come to disagree.
-pub fn graphemeWidth(codepoints: []const u21) Measured {
+pub fn graphemeWidth(codepoints: []const u21) UnicodeMeasured {
     const measured = vt.unicode.graphemeWidth(u21, codepoints);
     return .{ .len = measured.len, .width = @intCast(measured.width) };
 }

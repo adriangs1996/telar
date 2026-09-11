@@ -1,14 +1,11 @@
 const std = @import("std");
 
-const Ast = std.zig.Ast;
-const Allocator = std.mem.Allocator;
-
 /// Detects line breaks across a complete function prototype.
 ///
 /// ```zig
 /// const multiline = hasMultilineSignature(&tree, function);
 /// ```
-pub fn hasMultilineSignature(tree: *const Ast, function: Ast.full.FnProto) bool {
+pub fn hasMultilineSignature(tree: *const std.zig.Ast, function: std.zig.Ast.full.FnProto) bool {
     const first_token = function.firstToken();
     const last_token = tree.lastToken(function.ast.proto_node);
     const start = tree.tokenStart(first_token);
@@ -22,7 +19,7 @@ pub fn hasMultilineSignature(tree: *const Ast, function: Ast.full.FnProto) bool 
 /// ```zig
 /// const rparen = closingParen(&tree, function.lparen);
 /// ```
-pub fn closingParen(tree: *const Ast, lparen: Ast.TokenIndex) Ast.TokenIndex {
+pub fn closingParen(tree: *const std.zig.Ast, lparen: std.zig.Ast.TokenIndex) std.zig.Ast.TokenIndex {
     var depth: usize = 1;
     var token = lparen + 1;
 
@@ -43,7 +40,7 @@ pub fn closingParen(tree: *const Ast, lparen: Ast.TokenIndex) Ast.TokenIndex {
 /// ```zig
 /// if (isBlock(tree.nodeTag(node))) {}
 /// ```
-pub fn isBlock(tag: Ast.Node.Tag) bool {
+pub fn isBlock(tag: std.zig.Ast.Node.Tag) bool {
     return switch (tag) {
         .block, .block_semicolon, .block_two, .block_two_semicolon => true,
         else => false,
@@ -56,18 +53,18 @@ pub fn isBlock(tag: Ast.Node.Tag) bool {
 /// const nodes = try statementIfNodes(allocator, &tree);
 /// defer allocator.free(nodes);
 /// ```
-pub fn statementIfNodes(allocator: Allocator, tree: *const Ast) ![]Ast.Node.Index {
-    var nodes: std.ArrayList(Ast.Node.Index) = .empty;
+pub fn statementIfNodes(allocator: std.mem.Allocator, tree: *const std.zig.Ast) ![]std.zig.Ast.Node.Index {
+    var nodes: std.ArrayList(std.zig.Ast.Node.Index) = .empty;
     errdefer nodes.deinit(allocator);
 
     var node_number: usize = 0;
     while (node_number < tree.nodes.len) : (node_number += 1) {
-        const node: Ast.Node.Index = @enumFromInt(node_number);
+        const node: std.zig.Ast.Node.Index = @enumFromInt(node_number);
         if (!isBlock(tree.nodeTag(node))) {
             continue;
         }
 
-        var buffer: [2]Ast.Node.Index = undefined;
+        var buffer: [2]std.zig.Ast.Node.Index = undefined;
         const statements = tree.blockStatements(&buffer, node).?;
 
         for (statements) |statement| {
@@ -92,7 +89,7 @@ pub fn statementIfNodes(allocator: Allocator, tree: *const Ast) ![]Ast.Node.Inde
 /// ```zig
 /// if (endsWithBlock(&tree, branch)) {}
 /// ```
-pub fn endsWithBlock(tree: *const Ast, node: Ast.Node.Index) bool {
+pub fn endsWithBlock(tree: *const std.zig.Ast, node: std.zig.Ast.Node.Index) bool {
     return switch (tree.nodeTag(node)) {
         .block, .block_semicolon, .block_two, .block_two_semicolon, .@"switch", .switch_comma => true,
         .if_simple, .@"if" => blk: {
@@ -112,7 +109,7 @@ pub fn endsWithBlock(tree: *const Ast, node: Ast.Node.Index) bool {
     };
 }
 
-fn isIf(tag: Ast.Node.Tag) bool {
+fn isIf(tag: std.zig.Ast.Node.Tag) bool {
     return tag == .if_simple or tag == .@"if";
 }
 
@@ -126,7 +123,7 @@ test "classifies statement if chains without classifying if expressions" {
         \\    return if (value) 1 else 2;
         \\}
     ;
-    var tree = try Ast.parse(std.testing.allocator, source, .zig);
+    var tree = try std.zig.Ast.parse(std.testing.allocator, source, .zig);
     defer tree.deinit(std.testing.allocator);
 
     const nodes = try statementIfNodes(std.testing.allocator, &tree);
@@ -145,7 +142,7 @@ test "recognizes branch expressions that end with a block" {
         \\    if (value) return;
         \\}
     ;
-    var tree = try Ast.parse(std.testing.allocator, source, .zig);
+    var tree = try std.zig.Ast.parse(std.testing.allocator, source, .zig);
     defer tree.deinit(std.testing.allocator);
 
     const nodes = try statementIfNodes(std.testing.allocator, &tree);

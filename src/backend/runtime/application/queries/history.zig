@@ -1,126 +1,16 @@
 //! Application boundary for submitting owned history queries.
 
+const HistoryRequest = @import("HistoryRequest.zig");
+const SubmissionCapture = @import("SubmissionCapture.zig");
+const HistoryHandler = @import("HistoryHandler.zig");
 const std = @import("std");
-const history_mod = @import("../../../history/root.zig");
+const HistoryScope = @import("telar-core").HistoryScope;
+const PaneIdType = @import("telar-core").PaneId;
+const max_history_query_bytes = @import("telar-core").max_history_query_bytes;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const max_history_results = @import("telar-core").max_history_results;
 
-const Query = history_mod.Query;
-const QueryOrigin = history_mod.model.QueryOrigin;
-const schema = history_mod.model.schema;
-
-pub const Request = struct {
-    request_id: schema.RequestId,
-    origin: QueryOrigin,
-    text: []const u8,
-    scope: history_mod.model.Scope,
-    scope_value: []const u8,
-    pane_id: schema.PaneId,
-    failed_only: bool,
-    author: schema.HistoryAuthorFilter,
-    match: schema.HistoryMatch,
-    distinct: bool,
-    limit: u16,
-    offset: u32 = 0,
-    snapshot_id: u64 = 0,
-    entry_id: u64 = 0,
-};
-
-pub const ServicePort = struct {
-    context: *anyopaque,
-    submit_fn: *const fn (*anyopaque, Query) bool,
-
-    /// Transfers an owned query to the bounded history service. A false result
-    /// means the service rejected it and retains responsibility for cleanup.
-    ///
-    /// ```zig
-    /// const queued = service.submit(query);
-    /// ```
-    pub fn submit(service: ServicePort, query: Query) bool {
-        return service.submit_fn(service.context, query);
-    }
-};
-
-pub const Executor = struct {
-    context: *anyopaque,
-    execute_fn: *const fn (*anyopaque, Request) anyerror!void,
-
-    /// Validates, owns, and submits one application-level history request.
-    ///
-    /// ```zig
-    /// try executor.execute(request);
-    /// ```
-    pub fn execute(executor: Executor, request: Request) !void {
-        return executor.execute_fn(executor.context, request);
-    }
-};
-
-pub const Handler = struct {
-    service: ServicePort,
-
-    /// Copies all borrowed request bytes before attempting bounded submission.
-    /// Invalid values and service backpressure have distinct application
-    /// errors; the eventual history result is handled asynchronously.
-    ///
-    /// ```zig
-    /// try handler.execute(request);
-    /// ```
-    pub fn execute(handler: *Handler, request: Request) !void {
-        const query = Query.init(.{
-            .request_id = request.request_id,
-            .origin = request.origin,
-            .text = request.text,
-            .scope = request.scope,
-            .scope_value = request.scope_value,
-            .pane_id = request.pane_id,
-            .failed_only = request.failed_only,
-            .author = request.author,
-            .match = request.match,
-            .distinct = request.distinct,
-            .limit = request.limit,
-            .offset = request.offset,
-            .snapshot_id = request.snapshot_id,
-            .entry_id = request.entry_id,
-        }) catch {
-            return error.InvalidHistoryQuery;
-        };
-
-        if (!handler.service.submit(query)) {
-            return error.HistoryQueueFull;
-        }
-    }
-
-    /// Exposes this handler through the query interface used by controllers.
-    ///
-    /// ```zig
-    /// const executor = handler.executor();
-    /// ```
-    pub fn executor(handler: *Handler) Executor {
-        return .{ .context = handler, .execute_fn = executeErased };
-    }
-
-    fn executeErased(context: *anyopaque, request: Request) !void {
-        const handler: *Handler = @ptrCast(@alignCast(context));
-        return handler.execute(request);
-    }
-};
-
-const SubmissionCapture = struct {
-    accepted: bool = true,
-    calls: usize = 0,
-    query: Query = undefined,
-
-    fn port(capture: *SubmissionCapture) ServicePort {
-        return .{ .context = capture, .submit_fn = submit };
-    }
-
-    fn submit(context: *anyopaque, query: Query) bool {
-        const capture: *SubmissionCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.query = query;
-        return capture.accepted;
-    }
-};
-
-fn testingRequest() Request {
+fn testingRequest() HistoryRequest {
     return .{
         .request_id = @enumFromInt(11),
         .origin = .{
@@ -141,7 +31,7 @@ fn testingRequest() Request {
 
 test "Handler submits an owned query with its asynchronous reply origin" {
     var capture: SubmissionCapture = .{};
-    var handler: Handler = .{ .service = capture.port() };
+    var handler: HistoryHandler = .{ .service = capture.port() };
     var text = [_]u8{ 'g', 'i', 't' };
     var scope = [_]u8{ '/', 'w', 'o', 'r', 'k' };
     var request = testingRequest();
@@ -156,16 +46,16 @@ test "Handler submits an owned query with its asynchronous reply origin" {
     try std.testing.expectEqual(request.request_id, capture.query.request_id);
     try std.testing.expectEqualDeep(request.origin, capture.query.origin);
     try std.testing.expectEqualStrings("git", capture.query.textSlice());
-    try std.testing.expectEqual(history_mod.model.Scope.workspace, capture.query.scope);
+    try std.testing.expectEqual(HistoryScope.workspace, capture.query.scope);
     try std.testing.expectEqualStrings("/work", capture.query.scopeSlice());
-    try std.testing.expectEqual(schema.PaneId.invalid, capture.query.pane_id);
+    try std.testing.expectEqual(PaneIdType.invalid, capture.query.pane_id);
     try std.testing.expect(capture.query.failed_only);
     try std.testing.expectEqual(@as(u16, 12), capture.query.limit);
 }
 
 test "Handler reports bounded service backpressure after one submission" {
     var capture: SubmissionCapture = .{ .accepted = false };
-    var handler: Handler = .{ .service = capture.port() };
+    var handler: HistoryHandler = .{ .service = capture.port() };
 
     try std.testing.expectError(error.HistoryQueueFull, handler.execute(testingRequest()));
 
@@ -174,10 +64,10 @@ test "Handler reports bounded service backpressure after one submission" {
 
 test "Handler rejects every model constraint before service submission" {
     var capture: SubmissionCapture = .{};
-    var handler: Handler = .{ .service = capture.port() };
-    const long_text = [_]u8{'q'} ** (history_mod.model.max_query_bytes + 1);
-    const long_scope = [_]u8{'s'} ** (schema.max_cwd_bytes + 1);
-    var invalid = [_]Request{
+    var handler: HistoryHandler = .{ .service = capture.port() };
+    const long_text = [_]u8{'q'} ** (max_history_query_bytes + 1);
+    const long_scope = [_]u8{'s'} ** (max_cwd_bytes_module + 1);
+    var invalid = [_]HistoryRequest{
         testingRequest(),
         testingRequest(),
         testingRequest(),
@@ -188,7 +78,7 @@ test "Handler rejects every model constraint before service submission" {
     invalid[0].text = &long_text;
     invalid[1].scope_value = &long_scope;
     invalid[2].limit = 0;
-    invalid[3].limit = history_mod.model.max_results + 1;
+    invalid[3].limit = max_history_results + 1;
     invalid[4].scope = .pane;
     invalid[4].pane_id = .invalid;
     invalid[5].scope = .global;

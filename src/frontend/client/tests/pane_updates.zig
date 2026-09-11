@@ -1,91 +1,21 @@
 //! Client integration tests for pane updates.
 
-const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("telar-client").agents;
-const attachments = @import("../../attachments/root.zig");
-const graphics = @import("../../graphics/root.zig");
-const input_capability = @import("../../input/root.zig");
-const lua_config = @import("../../config/root.zig");
-const notifications = @import("telar-client").notifications;
-const platform = @import("../../platform/root.zig");
-const plugin_broker = @import("../../plugins/root.zig");
-const presentation = @import("../../presentation/root.zig");
-const sound_capability = @import("../../sound/root.zig");
-const workspace_capability = @import("../../workspace/root.zig");
-const keybind = input_capability.keybind;
-const kitty = graphics.kitty;
-
-const Io = std.Io;
-const File = Io.File;
-const schema = core.schema;
-const term = presentation.screen;
-
-const Client = @import("../client.zig");
-const InputHandler = @import("../resources/input_handler.zig");
-const active_pane_resources = @import("../controllers/panes/active_pane_resources.zig");
-const client_actions = @import("../controllers/input/actions.zig");
-const agent_navigation = @import("../controllers/agents/agent_navigation.zig");
-const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
-const session_application = @import("telar-client").application.session;
-const client_events = @import("../entrypoints/events.zig");
-const client_startup = @import("../controllers/session/client_startup.zig");
-const client_outbox = @import("telar-client").connection.outbox;
-const client_model = @import("telar-client").model;
-const client_telemetry = @import("../resources/telemetry.zig");
-const clipboard_images = @import("../controllers/host/clipboard_images.zig");
-const client_clock = @import("telar-client").resources.clock;
-const config_reload_worker = @import("../resources/config_reload.zig");
-const config_reloads = @import("../controllers/configuration/config_reloads.zig");
-const host_capabilities = @import("../controllers/host/host_capabilities.zig");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
-const host_resizes = @import("../controllers/host/host_resizes.zig");
-const name_prompts = @import("../controllers/input/name_prompts.zig");
-const notification_flow = @import("../controllers/notifications/notifications.zig");
-const pane_clipboards = @import("../controllers/panes/pane_clipboards.zig");
-const pane_closures = @import("../controllers/panes/pane_closures.zig");
-const pane_focus = @import("../controllers/panes/pane_focus.zig");
-const pane_focus_reports = @import("../controllers/panes/pane_focus_reports.zig");
-const pane_geometry = @import("../controllers/panes/pane_geometry.zig");
-const pane_openings = @import("../controllers/panes/pane_openings.zig");
-const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const plugin_actions = @import("../controllers/configuration/plugin_actions.zig");
-const request_lifecycle = @import("../connection/request_lifecycle.zig");
-const resync_requirements = @import("../controllers/session/resync_requirements.zig");
-const runtime_transport = @import("../entrypoints/runtime_io.zig");
+const TestHarness = @import("TestHarness.zig");
+const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
 const server_messages = @import("../entrypoints/runtime_messages.zig");
-const sidebar_animations = @import("../controllers/notifications/sidebar_animations.zig");
-const sidebar_projection = @import("../controllers/notifications/sidebar_projection.zig");
-const tab_attachments = @import("../controllers/tabs/tab_attachments.zig");
-const tab_closures = @import("../controllers/tabs/tab_closures.zig");
-const tab_creations = @import("../controllers/tabs/tab_creations.zig");
-const tab_moves = @import("../controllers/tabs/tab_moves.zig");
-const tab_renames = @import("../controllers/tabs/tab_renames.zig");
-const tab_snapshots = @import("../controllers/tabs/tab_snapshots.zig");
-const workspace_handoffs = @import("../controllers/workspaces/workspace_handoffs.zig");
-const workspace_snapshots = @import("../controllers/workspaces/workspace_snapshots.zig");
-const InputChunk = Client.InputChunk;
-const initial_request_id = request_lifecycle.initial_request_id;
-
+const decodeServer_module = @import("telar-core").decodeServer;
+const std = @import("std");
+const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
+const enabled_module = @import("telar-core").enabled;
+const CellType = @import("telar-core").Cell;
+const encodePaneCwd_module = @import("telar-core").encodePaneCwd;
+const encodePaneForeground_module = @import("telar-core").encodePaneForeground;
+const PaneIdType = @import("telar-core").PaneId;
+const InputHandler = @import("../resources/InputHandler.zig");
+const client_actions = @import("../controllers/input/actions.zig");
+const encodePaneExited_module = @import("telar-core").encodePaneExited;
 const support = @import("support.zig");
-
-const clientEventResourcesForTest = support.clientEventResourcesForTest;
-const reportedPaneId = support.reportedPaneId;
-const expectNonPromptVersionEqual = support.expectNonPromptVersionEqual;
-const expectNonCopyVersionEqual = support.expectNonCopyVersionEqual;
-const expectNonCopyOrViewportVersionEqual = support.expectNonCopyOrViewportVersionEqual;
-const expectNonViewportVersionEqual = support.expectNonViewportVersionEqual;
-const expectOnlyNotificationVersionChanged = support.expectOnlyNotificationVersionChanged;
-const TestHarness = support.TestHarness;
-const encodeTestingAgentSnapshot = support.encodeTestingAgentSnapshot;
-const testingConfigAdoption = support.testingConfigAdoption;
-const testingConfigAdoptionSource = support.testingConfigAdoptionSource;
-const installTestingLuaBinding = support.installTestingLuaBinding;
-const TestingPlugin = support.TestingPlugin;
-const testing_plugin_context = support.testing_plugin_context;
-const installTestingPlugin = support.installTestingPlugin;
-const installTestingAttachmentTarget = support.installTestingAttachmentTarget;
-const testingClipboardCapture = support.testingClipboardCapture;
+const pane_closures = @import("../controllers/panes/pane_closures.zig");
 
 test "a patch against an unknown base requests a fresh snapshot" {
     var harness: TestHarness = undefined;
@@ -98,7 +28,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
     const frames = client.telemetry.metrics.frames;
 
     var payload: [512]u8 = undefined;
-    const patch = try schema.encodePaneFrame(&payload, .{
+    const patch = try encodePaneFrame_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .frame_id = 5,
         .base_frame_id = 4,
@@ -107,12 +37,12 @@ test "a patch against an unknown base requests a fresh snapshot" {
         .scroll = .{ .total_rows = 10, .offset = 0 },
         .spans = &.{},
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(patch));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(patch));
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
-    if (comptime core.diagnostics.enabled) {
+    if (comptime enabled_module) {
         try std.testing.expectEqual(frames, client.telemetry.metrics.frames);
     }
 
@@ -123,10 +53,10 @@ test "a patch against an unknown base requests a fresh snapshot" {
     try std.testing.expectEqual(@as(u64, 0), message.request_snapshot.known_frame_id);
 
     // A full snapshot must carry exactly one span covering the whole grid.
-    const blank: core.ui.Cell = .{};
-    const cells: [4]core.ui.Cell = @splat(blank);
+    const blank: CellType = .{};
+    const cells: [4]CellType = @splat(blank);
     try client.graphics_store.setPaneVisible(TestHarness.bootstrap_pane, false);
-    const snapshot = try schema.encodePaneFrame(&payload, .{
+    const snapshot = try encodePaneFrame_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .frame_id = 5,
         .base_frame_id = 0,
@@ -135,7 +65,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
         .scroll = .{ .total_rows = 2, .offset = 0 },
         .spans = &.{.{ .start = 0, .cells = &cells }},
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(snapshot));
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
 
     try std.testing.expectEqual(
@@ -146,7 +76,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
     try std.testing.expectEqual(version.frame + 1, client.model.version().frame);
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
     try std.testing.expect(client.graphics_store.paneVisible(TestHarness.bootstrap_pane));
-    if (comptime core.diagnostics.enabled) {
+    if (comptime enabled_module) {
         try std.testing.expectEqual(frames + 1, client.telemetry.metrics.frames);
         try std.testing.expectEqual(@as(u64, 1), client.telemetry.metrics.snapshots);
         try std.testing.expectEqual(@as(u64, 1), client.telemetry.metrics.frame_spans);
@@ -177,9 +107,9 @@ test "a frame made stale by detach has no state resources or presentation effect
     const pending_updates = client.presenter.pending_updates;
     const graphics_visible = client.graphics_store.paneVisible(TestHarness.bootstrap_pane);
     const frames = client.telemetry.metrics.frames;
-    const cells = [_]core.ui.Cell{.{}};
+    const cells = [_]CellType{.{}};
     var payload: [256]u8 = undefined;
-    const snapshot = try schema.encodePaneFrame(&payload, .{
+    const snapshot = try encodePaneFrame_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .frame_id = 8,
         .base_frame_id = 0,
@@ -189,14 +119,14 @@ test "a frame made stale by detach has no state resources or presentation effect
         .spans = &.{.{ .start = 0, .cells = &cells }},
     });
 
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(snapshot));
 
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(@as(u64, 0), pane.applied_frame_id);
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
     try std.testing.expectEqual(graphics_visible, client.graphics_store.paneVisible(pane.id));
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
-    if (comptime core.diagnostics.enabled) {
+    if (comptime enabled_module) {
         try std.testing.expectEqual(frames, client.telemetry.metrics.frames);
     }
 
@@ -214,11 +144,11 @@ test "pane cwd commits before presenter-owned metadata projection" {
     const pending_updates = client.presenter.pending_updates;
 
     var payload: [128]u8 = undefined;
-    const cwd = try schema.encodePaneCwd(&payload, .{
+    const cwd = try encodePaneCwd_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .cwd = "/work/telar",
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(cwd));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(cwd));
 
     try std.testing.expectEqualStrings(
         "/work/telar",
@@ -238,11 +168,11 @@ test "pane cwd commits before presenter-owned metadata projection" {
 
     const presented_version = client.model.version();
     const presented_updates = client.presenter.pending_updates;
-    const same_name = try schema.encodePaneCwd(&payload, .{
+    const same_name = try encodePaneCwd_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .cwd = "/other/telar",
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(same_name));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(same_name));
 
     try std.testing.expectEqualStrings(
         "/other/telar",
@@ -252,11 +182,11 @@ test "pane cwd commits before presenter-owned metadata projection" {
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(presented_updates, client.presenter.pending_updates);
 
-    const stale = try schema.encodePaneCwd(&payload, .{
+    const stale = try encodePaneCwd_module(&payload, .{
         .pane_id = @enumFromInt(99),
         .cwd = "/missing",
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(stale));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(stale));
     try std.testing.expectEqualDeep(presented_version, client.model.version());
 }
 
@@ -271,13 +201,13 @@ test "pane foreground reaches presentation only after version observation" {
     const pending_updates = client.presenter.pending_updates;
 
     var payload: [128]u8 = undefined;
-    const foreground = try schema.encodePaneForeground(&payload, .{
+    const foreground = try encodePaneForeground_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .name = "Claude Code",
     });
     _ = try server_messages.handleServerMessage(
         client,
-        try schema.decodeServer(foreground),
+        try decodeServer_module(foreground),
     );
 
     try std.testing.expectEqualStrings(
@@ -300,7 +230,7 @@ test "pane foreground reaches presentation only after version observation" {
     const presented_updates = client.presenter.pending_updates;
     _ = try server_messages.handleServerMessage(
         client,
-        try schema.decodeServer(foreground),
+        try decodeServer_module(foreground),
     );
     try presentation_lifecycle.observe(client);
 
@@ -315,7 +245,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try harness.bootstrap();
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
-    const closing_pane: schema.PaneId = @enumFromInt(11);
+    const closing_pane: PaneIdType = @enumFromInt(11);
     const split = try client.model.commitPaneSplit(.{
         .split = .{
             .target_pane = TestHarness.bootstrap_pane,
@@ -361,12 +291,12 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expect(!client.model.enterCopyMode());
 
     var payload: [128]u8 = undefined;
-    const exited = try schema.encodePaneExited(&payload, .{
+    const exited = try encodePaneExited_module(&payload, .{
         .pane_id = closing_pane,
         .kind = .exited,
         .value = 0,
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(exited));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(exited));
 
     try std.testing.expect(client.model.workspace.findPane(closing_pane) == null);
     try std.testing.expectEqual(version_before_request.panes + 1, client.model.version().panes);
@@ -374,7 +304,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.panePasteActive());
-    try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), reportedPaneId(client));
+    try std.testing.expectEqual(@as(?PaneIdType, TestHarness.bootstrap_pane), support.reportedPaneId(client));
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(closing_pane));
     try std.testing.expect(!client.notification_scheduler.pending);
 
@@ -386,7 +316,7 @@ test "close pane request waits for the authoritative exit before committing" {
     const committed_version = client.model.version();
     const pending_updates_after_commit = client.presenter.pending_updates;
 
-    const repeated = try pane_closures.applyExit(client, (try schema.decodeServer(exited)).pane_exited);
+    const repeated = try pane_closures.applyExit(client, (try decodeServer_module(exited)).pane_exited);
     try std.testing.expect(repeated == .stale);
     try std.testing.expectEqual(closing_pane, repeated.stale.pane_id);
     try presentation_lifecycle.observe(client);
@@ -417,12 +347,12 @@ test "an unrequested pane exit removes the pane silently" {
     const pending_updates_before_exit = client.presenter.pending_updates;
 
     var payload: [128]u8 = undefined;
-    const exited = try schema.encodePaneExited(&payload, .{
+    const exited = try encodePaneExited_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .kind = .exited,
         .value = 0,
     });
-    const transition = try pane_closures.applyExit(client, (try schema.decodeServer(exited)).pane_exited);
+    const transition = try pane_closures.applyExit(client, (try decodeServer_module(exited)).pane_exited);
     try std.testing.expect(transition == .retired);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, transition.retired.pane_id);
     try std.testing.expect(transition.retired.active);
@@ -433,7 +363,7 @@ test "an unrequested pane exit removes the pane silently" {
     try std.testing.expectEqual(version_before_exit.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_exit, client.presenter.pending_updates);
     try std.testing.expect(!client.model.copyModeActive());
-    try std.testing.expectEqual(@as(?schema.PaneId, null), reportedPaneId(client));
+    try std.testing.expectEqual(@as(?PaneIdType, null), support.reportedPaneId(client));
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
     try std.testing.expect(!client.notification_scheduler.pending);
 
@@ -451,7 +381,7 @@ test "an inactive pane exit retires only inactive state" {
     try harness.bootstrap();
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
-    const inactive_pane: schema.PaneId = @enumFromInt(20);
+    const inactive_pane: PaneIdType = @enumFromInt(20);
     const inactive = try harness.addInactiveTab(@enumFromInt(2), inactive_pane);
     try client.graphics_store.applyImage(.{
         .pane_id = inactive_pane,
@@ -476,18 +406,18 @@ test "an inactive pane exit retires only inactive state" {
     const pending_updates_before_exit = client.presenter.pending_updates;
 
     var payload: [128]u8 = undefined;
-    const exited = try schema.encodePaneExited(&payload, .{
+    const exited = try encodePaneExited_module(&payload, .{
         .pane_id = inactive_pane,
         .kind = .signaled,
         .value = 15,
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(exited));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(exited));
 
     try std.testing.expect(client.model.workspace.findPane(inactive_pane) == null);
     try std.testing.expectEqualDeep(version_before_exit, client.model.version());
     try std.testing.expectEqual(pending_updates_before_exit, client.presenter.pending_updates);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
-    try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), reportedPaneId(client));
+    try std.testing.expectEqual(@as(?PaneIdType, TestHarness.bootstrap_pane), support.reportedPaneId(client));
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(inactive_pane));
     try std.testing.expect(client.request_lifecycle.tracker.take(@enumFromInt(4)) == null);
     try std.testing.expect(client.request_lifecycle.tracker.take(@enumFromInt(5)).? == .ignored);

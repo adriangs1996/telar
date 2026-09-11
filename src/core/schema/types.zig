@@ -4,7 +4,7 @@
 //! they are built from, so the codec layer can reference it without cycles.
 
 const id = @import("id.zig");
-const frame = @import("frame.zig");
+const ClientLayoutSplit = @import("ClientLayoutSplit.zig");
 
 pub const max_input_bytes = 64 * 1024;
 pub const max_cwd_bytes = 4096;
@@ -50,31 +50,6 @@ pub const min_notification_duration_ms: u32 = 500;
 pub const max_notification_duration_ms: u32 = 60_000;
 pub const default_notification_duration_ms: u32 = 4_000;
 
-/// Host defaults used for terminal queries, independently of cell styling.
-/// Example: `const colors: TerminalColors = .{ .background = .{ 16, 16, 16 } };`.
-pub const TerminalColors = struct {
-    foreground: ?[3]u8 = null,
-    background: ?[3]u8 = null,
-};
-
-pub const TerminalSize = struct {
-    cols: u16,
-    rows: u16,
-    /// Pixel size of one cell. Zero means the client has not learned it.
-    cell_width_px: u16 = 0,
-    cell_height_px: u16 = 0,
-
-    pub fn validate(size: TerminalSize) !void {
-        if (size.cols == 0 or size.rows == 0) {
-            return error.InvalidTerminalSize;
-        }
-        const cells = @as(u32, size.cols) * @as(u32, size.rows);
-        if (cells > frame.max_cell_count) {
-            return error.ScreenTooLarge;
-        }
-    }
-};
-
 pub const PaneTarget = union(enum) {
     default,
     pane: id.PaneId,
@@ -88,31 +63,9 @@ pub const WorkspaceLocation = union(enum) {
     worktree: id.WorktreeId,
 };
 
-/// Persistent identity of a tab and therefore of the pane layout it owns.
-pub const TabLocation = struct {
-    workspace: WorkspaceLocation,
-    tab_id: id.TabId,
-};
-
 pub const EnvironmentMode = enum(u8) {
     inherit_runtime = 0,
     replace = 1,
-};
-
-pub const EnvironmentEntry = struct {
-    name: []const u8,
-    value: []const u8,
-};
-
-pub const Launch = struct {
-    cwd: []const u8,
-    /// When present, the runtime resolves the launch cwd from this attached
-    /// pane. `cwd` remains the explicit launch path for callers that do not
-    /// request inheritance.
-    cwd_source: ?id.PaneId = null,
-    arguments: []const []const u8,
-    environment_mode: EnvironmentMode = .inherit_runtime,
-    environment: []const EnvironmentEntry = &.{},
 };
 
 pub const TabMoveDirection = enum(u8) {
@@ -148,41 +101,11 @@ pub const ClientLayoutAxis = enum(u8) {
     vertical = 1,
 };
 
-pub const ClientLayoutSplit = struct {
-    axis: ClientLayoutAxis,
-    ratio: u16,
-};
-
 /// One node in a pre-order binary pane-layout tree. Split children immediately
 /// follow their parent, so the wire never carries disposable client indices.
 pub const ClientLayoutNode = union(enum) {
     pane: id.PaneId,
     split: ClientLayoutSplit,
-};
-
-pub const ClientTabLayout = struct {
-    location: TabLocation,
-    focused_pane: id.PaneId,
-    fullscreen: bool,
-    workspace_active: bool = false,
-    nodes: []const ClientLayoutNode,
-};
-
-pub const ClientLayoutUpdate = struct {
-    sidebar_visible: bool,
-    sidebar_width: u16,
-    workspace_list_collapsed: bool,
-    active_tab: TabLocation,
-    tabs: []const ClientTabLayout,
-};
-
-pub const ClientLayoutSnapshot = struct {
-    restored: bool,
-    sidebar_visible: bool = true,
-    sidebar_width: u16 = 0,
-    workspace_list_collapsed: bool = false,
-    active_tab: ?TabLocation = null,
-    tabs: []const ClientTabLayout = &.{},
 };
 
 pub const ExitKind = enum(u8) {
@@ -226,13 +149,6 @@ pub const PaneTextSource = enum(u8) {
     recent = 1,
 };
 
-/// One text match in absolute scrollback coordinates.
-pub const SearchMatch = struct {
-    x: u16,
-    y: u32,
-    len: u16,
-};
-
 /// How text sent to a pane is delivered. `prompt` wraps it in bracketed paste
 /// when the child enabled that mode, appends Enter, and is refused while the
 /// agent is blocked.
@@ -244,18 +160,6 @@ pub const PaneTextMode = enum(u8) {
 pub const PaneLifecycle = enum(u8) {
     running = 0,
     exited = 1,
-};
-
-pub const PaneDescriptor = struct {
-    pane_id: id.PaneId,
-    lifecycle: PaneLifecycle,
-};
-
-pub const TabDescriptor = struct {
-    tab_id: id.TabId,
-    position: u16,
-    pane_count: u16,
-    label: []const u8,
 };
 
 pub const HistoryScope = enum(u8) {
@@ -304,22 +208,6 @@ pub const NotificationTarget = union(enum) {
     pane: id.PaneId,
     tab: id.TabId,
     workspace: id.WorkspaceId,
-};
-
-pub const HistoryEntry = struct {
-    id: u64,
-    pane_id: id.PaneId,
-    started_at_ms: i64,
-    duration_ns: i64,
-    exit_code: ?i32,
-    status: HistoryStatus,
-    author: HistoryAuthor = .human,
-    origin: HistoryOrigin = .pane,
-    provider: []const u8 = "",
-    command: []const u8,
-    cwd: []const u8,
-    workspace_path: []const u8,
-    command_truncated: bool = false,
 };
 
 /// Agent vocabulary published by the runtime. These values describe evidence,
@@ -381,12 +269,6 @@ pub const AgentSound = enum(u8) {
     needs_input = 1,
 };
 
-pub const AgentSoundNotification = struct {
-    pane_id: id.PaneId,
-    pane_generation: u64,
-    sound: AgentSound,
-};
-
 pub const AgentSource = enum(u8) {
     proxy_tls = 0,
     screen = 1,
@@ -442,38 +324,4 @@ pub const AgentTitleState = enum(u8) {
     pending = 1,
     ready = 2,
     failed = 3,
-};
-
-pub const AgentSnapshotEntry = struct {
-    pane_id: id.PaneId,
-    pane_generation: u64,
-    location: TabLocation = .{
-        .workspace = .{ .workspace = .invalid },
-        .tab_id = .invalid,
-    },
-    /// One-based position among the currently open panes in this tab.
-    pane_index: u16 = 0,
-    process_id: u32,
-    session_id: [16]u8,
-    workspace_label: []const u8 = "",
-    tab_label: []const u8 = "",
-    session_title: []const u8 = "",
-    title_source: AgentTitleSource = .telar,
-    title_state: AgentTitleState = .placeholder,
-    cwd_label: []const u8 = "",
-    provider: AgentProvider,
-    /// Manifest name for `provider` ("claude"); empty only for `unknown`.
-    provider_name: []const u8 = "",
-    /// Human label for `provider` ("Claude Code"); empty only for `unknown`.
-    display_name: []const u8 = "",
-    /// Configured sidebar glyph; empty selects the client's own artwork.
-    icon: []const u8 = "",
-    attachments: AgentAttachmentMarkers = .none,
-    status: AgentStatus,
-    source: AgentSource,
-    authority: AgentAuthority,
-    confidence: u8,
-    sequence: u64,
-    observed_at_ms: i64,
-    expires_at_ms: i64,
 };

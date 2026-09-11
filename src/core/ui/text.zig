@@ -9,10 +9,9 @@
 //! renders the agents' own output, since that is the only answer guaranteed to
 //! match what appears on screen.
 
+const GraphemeIterator = @import("GraphemeIterator.zig");
 const std = @import("std");
-/// Imported by module name rather than by path so that a build can swap the
-/// width tables out. See `unicode.zig`.
-const unicode = @import("unicode");
+const ClusterType = @import("Cluster.zig");
 
 pub fn measure(text: []const u8) u16 {
     var total: u16 = 0;
@@ -21,103 +20,9 @@ pub fn measure(text: []const u8) u16 {
     return total;
 }
 
-/// Splits text into grapheme clusters and reports each one's column width.
-///
-/// The segmentation is not ours: `unicode.graphemeWidth` consumes a codepoint
-/// slice and reports how many codepoints the first cluster spans and how many
-/// columns it occupies. Which table answers is a build-time choice, and the
-/// default is the emulator's own - herdr draws its chrome next to panes that
-/// same emulator laid out, and two disagreeing width tables produce a UI that
-/// drifts one column at a time.
-pub const GraphemeIterator = struct {
-    bytes: []const u8,
-    index: usize = 0,
-
-    /// Long enough for a base character with combining marks or an emoji
-    /// sequence with a couple of joiners. A cluster longer than this is split,
-    /// which costs a rendering artefact and never a wrong byte count.
-    const window = 16;
-
-    pub const Cluster = struct {
-        bytes: []const u8,
-        width: u8,
-    };
-
-    pub fn next(it: *GraphemeIterator) ?Cluster {
-        if (it.index >= it.bytes.len) {
-            return null;
-        }
-
-        // Almost every chrome string is ASCII. A printable ASCII byte that is
-        // not followed by a multi-byte sequence cannot join a cluster (only a
-        // combining mark, joiner or selector could, and those start above
-        // 0x7f), so its cluster is known without decoding a window. The width
-        // still comes from the table: the drawing core never assumes one.
-        const first = it.bytes[it.index];
-        if (first >= 0x20 and first < 0x7f and
-            (it.index + 1 == it.bytes.len or it.bytes[it.index + 1] < 0x80))
-        {
-            const start = it.index;
-            it.index += 1;
-            const single = [_]u21{first};
-            const measured = unicode.graphemeWidth(&single);
-            return .{
-                .bytes = it.bytes[start..it.index],
-                .width = if (measured.width == 0) 1 else @intCast(measured.width),
-            };
-        }
-
-        // Decode a window, remembering where each codepoint began so the
-        // cluster's byte length can be recovered from its codepoint length.
-        var codepoints: [window]u21 = undefined;
-        var offsets: [window + 1]usize = undefined;
-        var count: usize = 0;
-        var cursor = it.index;
-        offsets[0] = cursor;
-
-        while (count < window and cursor < it.bytes.len) {
-            const length = std.unicode.utf8ByteSequenceLength(it.bytes[cursor]) catch break;
-            if (cursor + length > it.bytes.len) {
-                break;
-            }
-            const codepoint = std.unicode.utf8Decode(it.bytes[cursor..][0..length]) catch break;
-            codepoints[count] = codepoint;
-            count += 1;
-            cursor += length;
-            offsets[count] = cursor;
-        }
-
-        if (count == 0) {
-            // Invalid or truncated UTF-8. Agents print partial writes, so this
-            // is a cell to draw, not an error to propagate.
-            it.index += 1;
-            return .{ .bytes = "\u{FFFD}", .width = 1 };
-        }
-
-        const measured = unicode.graphemeWidth(codepoints[0..count]);
-        const start = it.index;
-        it.index = offsets[measured.len];
-
-        // A control character never reaches a cell as itself. The screen diff
-        // writes cell text verbatim, so a raw newline or escape in a cell
-        // moves the host cursor and every cell after it lands on the wrong
-        // row. It still owns one column, drawn blank.
-        if (isControl(codepoints[0])) {
-            return .{ .bytes = " ", .width = 1 };
-        }
-
-        return .{
-            .bytes = it.bytes[start..it.index],
-            // Control characters measure zero, and a zero width cell cannot be
-            // addressed. Anything unprintable becomes one blank column.
-            .width = if (measured.width == 0) 1 else @intCast(measured.width),
-        };
-    }
-};
-
 /// C0 controls, DEL and C1 controls: the codepoints a terminal interprets
 /// instead of drawing.
-fn isControl(codepoint: u21) bool {
+pub fn isControl(codepoint: u21) bool {
     return codepoint < 0x20 or (codepoint >= 0x7f and codepoint <= 0x9f);
 }
 
@@ -125,21 +30,19 @@ fn isControl(codepoint: u21) bool {
 // Tests
 // ---------------------------------------------------------------------------
 
-const testing = std.testing;
-
 test "printable ascii measures one column with or without the fast path" {
     var it: GraphemeIterator = .{ .bytes = "ab\u{0301}c" };
     // 'a' takes the fast path; 'b' is followed by a combining acute and must
     // go through the table so the mark stays attached.
     const a = it.next().?;
-    try testing.expectEqualStrings("a", a.bytes);
-    try testing.expectEqual(@as(u8, 1), a.width);
+    try std.testing.expectEqualStrings("a", a.bytes);
+    try std.testing.expectEqual(@as(u8, 1), a.width);
     const b = it.next().?;
-    try testing.expectEqualStrings("b\u{0301}", b.bytes);
-    try testing.expectEqual(@as(u8, 1), b.width);
+    try std.testing.expectEqualStrings("b\u{0301}", b.bytes);
+    try std.testing.expectEqual(@as(u8, 1), b.width);
     const c = it.next().?;
-    try testing.expectEqualStrings("c", c.bytes);
-    try testing.expect(it.next() == null);
+    try std.testing.expectEqualStrings("c", c.bytes);
+    try std.testing.expect(it.next() == null);
 }
 
 test "a control character becomes a blank cell rather than its own byte" {
@@ -149,15 +52,15 @@ test "a control character becomes a blank cell rather than its own byte" {
     for (samples) |sample| {
         var it: GraphemeIterator = .{ .bytes = sample };
         const cluster = it.next().?;
-        try testing.expectEqualStrings(" ", cluster.bytes);
-        try testing.expectEqual(@as(u8, 1), cluster.width);
-        try testing.expectEqual(@as(?GraphemeIterator.Cluster, null), it.next());
+        try std.testing.expectEqualStrings(" ", cluster.bytes);
+        try std.testing.expectEqual(@as(u8, 1), cluster.width);
+        try std.testing.expectEqual(@as(?ClusterType, null), it.next());
     }
 
     var it: GraphemeIterator = .{ .bytes = "a\nb" };
-    try testing.expectEqualStrings("a", it.next().?.bytes);
-    try testing.expectEqualStrings(" ", it.next().?.bytes);
-    try testing.expectEqualStrings("b", it.next().?.bytes);
+    try std.testing.expectEqualStrings("a", it.next().?.bytes);
+    try std.testing.expectEqualStrings(" ", it.next().?.bytes);
+    try std.testing.expectEqualStrings("b", it.next().?.bytes);
 }
 
 test "measuring and iterating cannot disagree" {
@@ -176,40 +79,40 @@ test "measuring and iterating cannot disagree" {
         var total: u16 = 0;
         var it: GraphemeIterator = .{ .bytes = sample };
         while (it.next()) |cluster| total += cluster.width;
-        try testing.expectEqual(total, measure(sample));
+        try std.testing.expectEqual(total, measure(sample));
     }
 }
 
 test "a composed and a decomposed word measure the same" {
     // Three bytes apart, one column apart if this is wrong - and the drift is
     // invisible until a name happens to carry an accent.
-    try testing.expectEqual(measure("caf\u{00e9}"), measure("cafe\u{0301}"));
-    try testing.expectEqual(@as(u16, 4), measure("cafe\u{0301}"));
+    try std.testing.expectEqual(measure("caf\u{00e9}"), measure("cafe\u{0301}"));
+    try std.testing.expectEqual(@as(u16, 4), measure("cafe\u{0301}"));
 }
 
 test "a wide glyph is two columns and one cluster" {
     var it: GraphemeIterator = .{ .bytes = "\u{6f22}" };
     const cluster = it.next().?;
-    try testing.expectEqual(@as(u8, 2), cluster.width);
-    try testing.expectEqualStrings("\u{6f22}", cluster.bytes);
-    try testing.expectEqual(@as(?GraphemeIterator.Cluster, null), it.next());
+    try std.testing.expectEqual(@as(u8, 2), cluster.width);
+    try std.testing.expectEqualStrings("\u{6f22}", cluster.bytes);
+    try std.testing.expectEqual(@as(?ClusterType, null), it.next());
 }
 
 test "an unprintable character still occupies a column" {
     // A zero width cell cannot be addressed by a cursor, so anything the tables
     // measure as nothing becomes one blank rather than a hole the layout would
     // silently close up.
-    try testing.expectEqual(@as(u16, 1), measure("\x01"));
+    try std.testing.expectEqual(@as(u16, 1), measure("\x01"));
 }
 
 test "invalid utf-8 measures as one column rather than failing" {
     // Agents produce partial writes. A lone continuation byte is a cell to
     // draw, not an error to propagate up through the layout.
-    try testing.expectEqual(@as(u16, 1), measure("\xff"));
+    try std.testing.expectEqual(@as(u16, 1), measure("\xff"));
 
     var it: GraphemeIterator = .{ .bytes = "\xffa" };
-    try testing.expectEqualStrings("\u{FFFD}", it.next().?.bytes);
-    try testing.expectEqualStrings("a", it.next().?.bytes);
+    try std.testing.expectEqualStrings("\u{FFFD}", it.next().?.bytes);
+    try std.testing.expectEqualStrings("a", it.next().?.bytes);
 }
 
 test "iteration terminates on every prefix of a multi byte sequence" {

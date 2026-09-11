@@ -1,140 +1,19 @@
 //! Bounded, disposable navigation bookmarks for workspace handoffs.
 
+const History = @import("History.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const std = @import("std");
-const core = @import("telar-core");
-const layout_mod = @import("layout.zig");
-
-const schema = core.schema;
-
-pub const Bookmark = struct {
-    location: schema.TabLocation,
-    pane_id: schema.PaneId,
-    tab_layout: ?layout_mod.Layout = null,
-};
-
-pub const SavedLayout = struct {
-    location: schema.TabLocation,
-    pane_id: schema.PaneId,
-    workspace_active: bool,
-    layout: layout_mod.Layout,
-};
-
-pub const Layouts = struct {
-    entries: [schema.max_client_layout_tabs]?SavedLayout = @splat(null),
-    eviction_index: usize = 0,
-
-    /// Retains the latest split tree for one stable tab identity.
-    ///
-    /// ```zig
-    /// try layouts.remember(saved);
-    /// ```
-    pub fn remember(layouts: *Layouts, saved: SavedLayout) !void {
-        var free: ?*?SavedLayout = null;
-        for (&layouts.entries) |*slot| {
-            if (slot.*) |entry| {
-                if (std.meta.eql(entry.location, saved.location)) {
-                    slot.* = saved;
-                    return;
-                }
-            } else if (free == null) {
-                free = slot;
-            }
-        }
-
-        const slot = free orelse return error.TooManySavedLayouts;
-        slot.* = saved;
-    }
-
-    /// Retains a live layout without blocking navigation when the cache fills.
-    /// Existing tabs replace their entry; overflow replaces slots round-robin.
-    /// Evicted layouts fall back to canonical pane order on their next visit.
-    ///
-    /// ```zig
-    /// layouts.retain(saved);
-    /// ```
-    pub fn retain(layouts: *Layouts, saved: SavedLayout) void {
-        layouts.remember(saved) catch {
-            layouts.entries[layouts.eviction_index] = saved;
-            layouts.eviction_index = (layouts.eviction_index + 1) % layouts.entries.len;
-        };
-    }
-
-    /// Finds a retained tab layout without changing its lifetime.
-    ///
-    /// ```zig
-    /// const saved = layouts.find(location) orelse return;
-    /// ```
-    pub fn find(layouts: *const Layouts, location: schema.TabLocation) ?SavedLayout {
-        for (layouts.entries) |slot| {
-            const entry = slot orelse continue;
-            if (std.meta.eql(entry.location, location)) {
-                return entry;
-            }
-        }
-
-        return null;
-    }
-
-    /// Removes one layout after canonical pane reconciliation consumes it.
-    ///
-    /// ```zig
-    /// layouts.forget(location);
-    /// ```
-    pub fn forget(layouts: *Layouts, location: schema.TabLocation) void {
-        for (&layouts.entries) |*slot| {
-            const entry = slot.* orelse continue;
-            if (std.meta.eql(entry.location, location)) {
-                slot.* = null;
-                return;
-            }
-        }
-    }
-};
-
-pub const History = struct {
-    entries: [schema.max_workspace_list_entries]?Bookmark = @splat(null),
-
-    pub fn remember(history: *History, bookmark: Bookmark) void {
-        var free: ?*?Bookmark = null;
-        for (&history.entries) |*slot| {
-            if (slot.*) |entry| {
-                if (std.meta.eql(entry.location.workspace, bookmark.location.workspace)) {
-                    slot.* = bookmark;
-                    return;
-                }
-            } else if (free == null) {
-                free = slot;
-            }
-        }
-        if (free) |slot| {
-            slot.* = bookmark;
-        }
-    }
-
-    pub fn find(history: *const History, workspace: schema.WorkspaceLocation) ?Bookmark {
-        for (history.entries) |slot| {
-            const entry = slot orelse continue;
-            if (std.meta.eql(entry.location.workspace, workspace)) {
-                return entry;
-            }
-        }
-        return null;
-    }
-
-    pub fn forget(history: *History, workspace: schema.WorkspaceLocation) void {
-        for (&history.entries) |*slot| {
-            const entry = slot.* orelse continue;
-            if (std.meta.eql(entry.location.workspace, workspace)) {
-                slot.* = null;
-                return;
-            }
-        }
-    }
-};
+const TabIdType = @import("telar-core").TabId;
+const PaneIdType = @import("telar-core").PaneId;
+const Layouts = @import("Layouts.zig");
+const LayoutType = @import("WorkspaceLayout.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const SavedLayout = @import("SavedLayout.zig");
+const max_client_layout_tabs_module = @import("telar-core").max_client_layout_tabs;
 
 test "workspace bookmarks replace the last focused tab and pane" {
     var history: History = .{};
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(3) };
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(3) };
     history.remember(.{
         .location = .{ .workspace = workspace, .tab_id = @enumFromInt(4) },
         .pane_id = @enumFromInt(5),
@@ -145,23 +24,23 @@ test "workspace bookmarks replace the last focused tab and pane" {
     });
 
     const restored = history.find(workspace).?;
-    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(7)), restored.location.tab_id);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(9)), restored.pane_id);
+    try std.testing.expectEqual(@as(TabIdType, @enumFromInt(7)), restored.location.tab_id);
+    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(9)), restored.pane_id);
     history.forget(workspace);
     try std.testing.expect(history.find(workspace) == null);
 }
 
 test "live layout retention stays bounded and replaces existing tabs before eviction" {
     var layouts: Layouts = .{};
-    var layout: layout_mod.Layout = .{};
-    const pane: schema.PaneId = @enumFromInt(5);
+    var layout: LayoutType = .{};
+    const pane: PaneIdType = @enumFromInt(5);
     try layout.addRoot(pane);
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(3) },
         .tab_id = @enumFromInt(1),
     };
     var saved: SavedLayout = .{ .location = location, .pane_id = pane, .workspace_active = true, .layout = layout };
-    for (0..schema.max_client_layout_tabs) |index| {
+    for (0..max_client_layout_tabs_module) |index| {
         saved.location.tab_id = @enumFromInt(index + 1);
         layouts.retain(saved);
     }
@@ -185,9 +64,9 @@ test "live layout retention stays bounded and replaces existing tabs before evic
 
 test "saved layouts are keyed by complete tab identity" {
     var layouts: Layouts = .{};
-    var first: layout_mod.Layout = .{};
+    var first: LayoutType = .{};
     try first.addRoot(@enumFromInt(5));
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(3) },
         .tab_id = @enumFromInt(4),
     };
@@ -198,7 +77,7 @@ test "saved layouts are keyed by complete tab identity" {
         .layout = first,
     });
 
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(5)), layouts.find(location).?.pane_id);
+    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(5)), layouts.find(location).?.pane_id);
     layouts.forget(location);
     try std.testing.expect(layouts.find(location) == null);
 }

@@ -1,91 +1,32 @@
 //! Client integration tests for pane lifecycle.
 
+const TestHarness = @import("TestHarness.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("telar-client").agents;
-const attachments = @import("../../attachments/root.zig");
-const graphics = @import("../../graphics/root.zig");
-const input_capability = @import("../../input/root.zig");
-const lua_config = @import("../../config/root.zig");
-const notifications = @import("telar-client").notifications;
-const platform = @import("../../platform/root.zig");
-const plugin_broker = @import("../../plugins/root.zig");
-const presentation = @import("../../presentation/root.zig");
-const sound_capability = @import("../../sound/root.zig");
-const workspace_capability = @import("../../workspace/root.zig");
-const keybind = input_capability.keybind;
-const kitty = graphics.kitty;
-
-const Io = std.Io;
-const File = Io.File;
-const schema = core.schema;
-const term = presentation.screen;
-
-const Client = @import("../client.zig");
-const InputHandler = @import("../resources/input_handler.zig");
-const active_pane_resources = @import("../controllers/panes/active_pane_resources.zig");
-const client_actions = @import("../controllers/input/actions.zig");
-const agent_navigation = @import("../controllers/agents/agent_navigation.zig");
-const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
-const session_application = @import("telar-client").application.session;
-const client_events = @import("../entrypoints/events.zig");
-const client_startup = @import("../controllers/session/client_startup.zig");
-const client_outbox = @import("telar-client").connection.outbox;
-const client_model = @import("telar-client").model;
-const client_telemetry = @import("../resources/telemetry.zig");
-const clipboard_images = @import("../controllers/host/clipboard_images.zig");
-const client_clock = @import("telar-client").resources.clock;
-const config_reload_worker = @import("../resources/config_reload.zig");
-const config_reloads = @import("../controllers/configuration/config_reloads.zig");
-const host_capabilities = @import("../controllers/host/host_capabilities.zig");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
-const host_resizes = @import("../controllers/host/host_resizes.zig");
-const name_prompts = @import("../controllers/input/name_prompts.zig");
-const notification_flow = @import("../controllers/notifications/notifications.zig");
-const pane_clipboards = @import("../controllers/panes/pane_clipboards.zig");
-const pane_closures = @import("../controllers/panes/pane_closures.zig");
-const pane_focus = @import("../controllers/panes/pane_focus.zig");
-const pane_focus_reports = @import("../controllers/panes/pane_focus_reports.zig");
-const pane_geometry = @import("../controllers/panes/pane_geometry.zig");
-const pane_openings = @import("../controllers/panes/pane_openings.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const plugin_actions = @import("../controllers/configuration/plugin_actions.zig");
-const request_lifecycle = @import("../connection/request_lifecycle.zig");
-const resync_requirements = @import("../controllers/session/resync_requirements.zig");
-const runtime_transport = @import("../entrypoints/runtime_io.zig");
+const InputHandler = @import("../resources/InputHandler.zig");
+const client_actions = @import("../controllers/input/actions.zig");
+const FullscreenReattachment = @import("FullscreenReattachment.zig");
+const PaneDescriptorType = @import("telar-core").PaneDescriptor;
+const encodePaneForeground_module = @import("telar-core").encodePaneForeground;
 const server_messages = @import("../entrypoints/runtime_messages.zig");
-const sidebar_animations = @import("../controllers/notifications/sidebar_animations.zig");
+const decodeServer_module = @import("telar-core").decodeServer;
+const DirectionType = @import("telar-client").Direction;
+const encodePaneFocusCommand_module = @import("telar-core").encodePaneFocusCommand;
+const PaneFocusOutcomeType = @import("telar-core").PaneFocusOutcome;
+const term = @import("../../presentation/screen_support.zig");
+const pane_geometry = @import("../controllers/panes/pane_geometry.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
 const sidebar_projection = @import("../controllers/notifications/sidebar_projection.zig");
-const tab_attachments = @import("../controllers/tabs/tab_attachments.zig");
-const tab_closures = @import("../controllers/tabs/tab_closures.zig");
-const tab_creations = @import("../controllers/tabs/tab_creations.zig");
-const tab_moves = @import("../controllers/tabs/tab_moves.zig");
-const tab_renames = @import("../controllers/tabs/tab_renames.zig");
-const tab_snapshots = @import("../controllers/tabs/tab_snapshots.zig");
-const workspace_handoffs = @import("../controllers/workspaces/workspace_handoffs.zig");
-const workspace_snapshots = @import("../controllers/workspaces/workspace_snapshots.zig");
-const InputChunk = Client.InputChunk;
-const initial_request_id = request_lifecycle.initial_request_id;
-
+const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
+const TabsModel = @import("telar-client").TabsModel;
+const encodeRequestFailed_module = @import("telar-core").encodeRequestFailed;
 const support = @import("support.zig");
-
-const clientEventResourcesForTest = support.clientEventResourcesForTest;
-const reportedPaneId = support.reportedPaneId;
-const expectNonPromptVersionEqual = support.expectNonPromptVersionEqual;
-const expectNonCopyVersionEqual = support.expectNonCopyVersionEqual;
-const expectNonCopyOrViewportVersionEqual = support.expectNonCopyOrViewportVersionEqual;
-const expectNonViewportVersionEqual = support.expectNonViewportVersionEqual;
-const expectOnlyNotificationVersionChanged = support.expectOnlyNotificationVersionChanged;
-const TestHarness = support.TestHarness;
-const encodeTestingAgentSnapshot = support.encodeTestingAgentSnapshot;
-const testingConfigAdoption = support.testingConfigAdoption;
-const testingConfigAdoptionSource = support.testingConfigAdoptionSource;
-const installTestingLuaBinding = support.installTestingLuaBinding;
-const TestingPlugin = support.TestingPlugin;
-const testing_plugin_context = support.testing_plugin_context;
-const installTestingPlugin = support.installTestingPlugin;
-const installTestingAttachmentTarget = support.installTestingAttachmentTarget;
-const testingClipboardCapture = support.testingClipboardCapture;
+const tab_attachments = @import("../controllers/tabs/tab_attachments.zig");
+const active_pane_resources = @import("../controllers/panes/active_pane_resources.zig");
+const ControlType = @import("telar-client").Control;
+const max_client_layout_wire_bytes_module = @import("telar-core").max_client_layout_wire_bytes;
+const encodeTabSnapshot_module = @import("telar-core").encodeTabSnapshot;
 
 test "pane focus commits before reports resize and presentation" {
     var harness: TestHarness = undefined;
@@ -93,7 +34,7 @@ test "pane focus commits before reports resize and presentation" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const second: schema.PaneId = @enumFromInt(20);
+    const second: PaneIdType = @enumFromInt(20);
     const area = client.view.workbench();
 
     const split = try client.model.commitPaneSplit(.{
@@ -159,65 +100,6 @@ test "pane focus commits before reports resize and presentation" {
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
-const FullscreenReattachment = struct {
-    harness: *TestHarness,
-
-    fn selectTab(scenario: FullscreenReattachment, index: u8, panes: []const schema.PaneDescriptor) !void {
-        const client = scenario.harness.client;
-        _ = try client_actions.apply(client, .{ .select_tab = index });
-        try scenario.harness.settle();
-        var buffer: [512]u8 = undefined;
-        const request = request: while (true) {
-            switch (try scenario.harness.nextClientMessage(&buffer)) {
-                .detach_pane => {},
-                .request_tab_snapshot => |request| break :request request,
-                else => return error.UnexpectedClientMessage,
-            }
-        };
-        const snapshot = try schema.encodeTabSnapshot(&buffer, .{
-            .request_id = request.request_id,
-            .location = request.location,
-            .panes = panes,
-        });
-        _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
-        try scenario.confirmAttachment(client.model.workspace.active().?.model.layout.focused().?);
-    }
-
-    fn confirmAttachment(scenario: FullscreenReattachment, pane_id: schema.PaneId) !void {
-        const client = scenario.harness.client;
-        try std.testing.expect(client.request_lifecycle.tracker.hasPane(.attachment, pane_id));
-        try scenario.harness.settle();
-        var buffer: [256]u8 = undefined;
-        const message = try scenario.harness.nextClientMessage(&buffer);
-        try std.testing.expect(message == .open_pane);
-        try std.testing.expectEqualDeep(schema.PaneTarget{ .pane = pane_id }, message.open_pane.target);
-        try std.testing.expectEqualDeep(
-            client.model.workspace.active().?.model.contentSize(pane_id, client.view.workbench()).?,
-            message.open_pane.size,
-        );
-        const opened = try schema.encodePaneOpened(&buffer, .{
-            .request_id = message.open_pane.request_id,
-            .pane_id = pane_id,
-            .location = client.model.activeTabLocation().?,
-            .created = false,
-        });
-        _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
-        try std.testing.expect(client.model.workspace.findPane(pane_id).?.attached);
-    }
-
-    fn expectInput(scenario: FullscreenReattachment, pane_id: schema.PaneId) !void {
-        var handler: InputHandler = .{ .client = scenario.harness.client };
-        try std.testing.expectEqual(pane_id, handler.client.model.planPaneInput(.focused).?.pane_id);
-        try handler.key(try keybind.parseKey("x"));
-        try scenario.harness.settle();
-        var buffer: [256]u8 = undefined;
-        const message = try scenario.harness.nextClientMessage(&buffer);
-        try std.testing.expect(message == .pane_input);
-        try std.testing.expectEqual(pane_id, message.pane_input.pane_id);
-        try std.testing.expectEqualStrings("x", message.pane_input.bytes);
-    }
-};
-
 test "fullscreen tab round trip reconnects panes revealed by focus or tiled layout" {
     for ([_]bool{ false, true }) |exit_fullscreen| {
         var harness: TestHarness = undefined;
@@ -230,8 +112,8 @@ test "fullscreen tab round trip reconnects panes revealed by focus or tiled layo
             .location = TestHarness.bootstrap_location,
             .panes = &.{TestHarness.bootstrap_pane},
         }, client.view.workbench());
-        const sibling: schema.PaneId = @enumFromInt(20);
-        const other_tab_pane: schema.PaneId = @enumFromInt(30);
+        const sibling: PaneIdType = @enumFromInt(20);
+        const other_tab_pane: PaneIdType = @enumFromInt(30);
         const model = &client.model.workspace.active().?.model;
         try model.split(.{
             .existing_pane = TestHarness.bootstrap_pane,
@@ -243,7 +125,7 @@ test "fullscreen tab round trip reconnects panes revealed by focus or tiled layo
         try std.testing.expect(model.toggleFullscreen());
         _ = try harness.addInactiveTab(@enumFromInt(2), other_tab_pane);
         const scenario: FullscreenReattachment = .{ .harness = &harness };
-        const original_panes = [_]schema.PaneDescriptor{
+        const original_panes = [_]PaneDescriptorType{
             .{ .pane_id = TestHarness.bootstrap_pane, .lifecycle = .running },
             .{ .pane_id = sibling, .lifecycle = .running },
         };
@@ -299,15 +181,15 @@ test "navigation forwards the canonical key only to Neovim at a Telar edge" {
         try harness.bootstrap();
 
         var payload: [128]u8 = undefined;
-        const foreground = try schema.encodePaneForeground(&payload, .{
+        const foreground = try encodePaneForeground_module(&payload, .{
             .pane_id = TestHarness.bootstrap_pane,
             .name = foreground_name,
         });
-        _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(foreground));
+        _ = try server_messages.handleServerMessage(harness.client, try decodeServer_module(foreground));
 
         if (!std.mem.eql(u8, foreground_name, "nvim")) {
             const version = harness.client.model.version();
-            for (std.enums.values(input_capability.action.Direction)) |direction| {
+            for (std.enums.values(DirectionType)) |direction| {
                 _ = try client_actions.apply(harness.client, .{ .navigate_pane = direction });
                 try std.testing.expectEqualDeep(version, harness.client.model.version());
                 try std.testing.expectEqual(@as(usize, 0), harness.client.runtime_transport.outbox.len);
@@ -334,20 +216,20 @@ test "runtime focus command reports a directionless client layout" {
     try harness.bootstrap();
 
     var payload: [128]u8 = undefined;
-    const command = try schema.encodePaneFocusCommand(&payload, .{
+    const command = try encodePaneFocusCommand_module(&payload, .{
         .requester = .{ .id = 8, .generation = 9 },
         .request_id = @enumFromInt(3),
         .pane_id = TestHarness.bootstrap_pane,
         .pane_generation = 4,
         .direction = .left,
     });
-    _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(command));
+    _ = try server_messages.handleServerMessage(harness.client, try decodeServer_module(command));
     try harness.settle();
 
     var message_buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(message == .complete_pane_focus);
-    try std.testing.expectEqual(schema.PaneFocusOutcome.no_neighbor, message.complete_pane_focus.outcome);
+    try std.testing.expectEqual(PaneFocusOutcomeType.no_neighbor, message.complete_pane_focus.outcome);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, message.complete_pane_focus.focused_pane_id);
 }
 
@@ -357,7 +239,7 @@ test "navigation lets Neovim consume internal movement before Telar focus" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const second: schema.PaneId = @enumFromInt(20);
+    const second: PaneIdType = @enumFromInt(20);
     _ = try client.model.commitPaneSplit(.{
         .split = .{
             .target_pane = TestHarness.bootstrap_pane,
@@ -369,8 +251,8 @@ test "navigation lets Neovim consume internal movement before Telar focus" {
     });
 
     var payload: [128]u8 = undefined;
-    const nvim = try schema.encodePaneForeground(&payload, .{ .pane_id = second, .name = "nvim" });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(nvim));
+    const nvim = try encodePaneForeground_module(&payload, .{ .pane_id = second, .name = "nvim" });
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(nvim));
     _ = try client_actions.apply(client, .{ .navigate_pane = .left });
     try std.testing.expectEqual(second, client.model.workspace.active().?.model.layout.focused().?);
     try harness.settle();
@@ -380,8 +262,8 @@ test "navigation lets Neovim consume internal movement before Telar focus" {
     try std.testing.expect(forwarded == .pane_input);
     try std.testing.expectEqual(second, forwarded.pane_input.pane_id);
 
-    const shell = try schema.encodePaneForeground(&payload, .{ .pane_id = second, .name = "zsh" });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(shell));
+    const shell = try encodePaneForeground_module(&payload, .{ .pane_id = second, .name = "zsh" });
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(shell));
     _ = try client_actions.apply(client, .{ .navigate_pane = .left });
     try std.testing.expectEqual(TestHarness.bootstrap_pane, client.model.workspace.active().?.model.layout.focused().?);
 }
@@ -393,7 +275,7 @@ test "mouse focus precedes forwarding its triggering press" {
     try harness.bootstrap();
     const client = harness.client;
     const first = TestHarness.bootstrap_pane;
-    const second: schema.PaneId = @enumFromInt(20);
+    const second: PaneIdType = @enumFromInt(20);
     const area = client.view.workbench();
 
     _ = try client.model.commitPaneSplit(.{
@@ -476,7 +358,7 @@ test "pane resize publishes committed geometry before presentation" {
     try harness.bootstrap();
     const client = harness.client;
     const first = TestHarness.bootstrap_pane;
-    const second: schema.PaneId = @enumFromInt(20);
+    const second: PaneIdType = @enumFromInt(20);
     const area = client.view.workbench();
 
     _ = try client.model.commitPaneSplit(.{
@@ -556,7 +438,7 @@ test "single-pane fullscreen publishes bordered and restored geometry" {
         const pending_updates = client.presenter.pending_updates;
         _ = try client_actions.apply(client, .toggle_pane_fullscreen);
         const expected = if (fullscreen)
-            schema.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }
+            TerminalSizeType{ .cols = area.w - 2, .rows = area.h - 2 }
         else
             initial;
         try std.testing.expectEqual(fullscreen, model.layout.isFullscreen());
@@ -581,7 +463,7 @@ test "pane fullscreen publishes visible geometry without direct presentation sch
     try harness.bootstrap();
     const client = harness.client;
     const first = TestHarness.bootstrap_pane;
-    const second: schema.PaneId = @enumFromInt(20);
+    const second: PaneIdType = @enumFromInt(20);
     const area = client.view.workbench();
 
     _ = try client.model.commitPaneSplit(.{
@@ -607,7 +489,7 @@ test "pane fullscreen publishes visible geometry without direct presentation sch
     try std.testing.expect(model.layout.isFullscreen());
     try std.testing.expect(model.contentSize(first, area) == null);
     const fullscreen_size = model.contentSize(second, area).?;
-    try std.testing.expectEqual(schema.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, fullscreen_size);
+    try std.testing.expectEqual(TerminalSizeType{ .cols = area.w - 2, .rows = area.h - 2 }, fullscreen_size);
     try std.testing.expectEqual(version_before_enter.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_enter, client.presenter.pending_updates);
     try std.testing.expect(!client.view.dirty);
@@ -682,7 +564,7 @@ test "sidebar toggle commits chrome before geometry and presentation" {
     try std.testing.expect(expanded == .pane_resize);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, expanded.pane_resize.pane_id);
     try std.testing.expectEqual(
-        schema.TerminalSize{ .cols = hidden_area.w, .rows = hidden_area.h },
+        TerminalSizeType{ .cols = hidden_area.w, .rows = hidden_area.h },
         expanded.pane_resize.size,
     );
 
@@ -708,7 +590,7 @@ test "sidebar toggle commits chrome before geometry and presentation" {
     try std.testing.expect(contracted == .pane_resize);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, contracted.pane_resize.pane_id);
     try std.testing.expectEqual(
-        schema.TerminalSize{ .cols = shown_area.w, .rows = shown_area.h },
+        TerminalSizeType{ .cols = shown_area.w, .rows = shown_area.h },
         contracted.pane_resize.size,
     );
 
@@ -738,7 +620,7 @@ test "sidebar resize keybinding commits width before pane geometry" {
     try std.testing.expect(resized == .pane_resize);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, resized.pane_resize.pane_id);
     try std.testing.expectEqual(
-        schema.TerminalSize{ .cols = 36, .rows = 22 },
+        TerminalSizeType{ .cols = 36, .rows = 22 },
         resized.pane_resize.size,
     );
 }
@@ -832,7 +714,7 @@ test "an active split commits once and presentation observes the model" {
     try harness.bootstrap();
     const client = harness.client;
 
-    const split_pane: schema.PaneId = @enumFromInt(21);
+    const split_pane: PaneIdType = @enumFromInt(21);
     try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
         .target_pane = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
@@ -842,13 +724,13 @@ test "an active split commits once and presentation observes the model" {
     const version_before = client.model.version();
     const pending_updates_before = client.presenter.pending_updates;
     var payload: [128]u8 = undefined;
-    const opened = try schema.encodePaneOpened(&payload, .{
+    const opened = try encodePaneOpened_module(&payload, .{
         .request_id = @enumFromInt(4),
         .pane_id = split_pane,
         .location = TestHarness.bootstrap_location,
         .created = true,
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
 
     const pane = client.model.workspace.findPane(split_pane).?;
     try std.testing.expect(pane.attached);
@@ -869,10 +751,10 @@ test "an inactive split is retained detached without a visible revision" {
     const client = harness.client;
     const first = client.model.workspace.active().?;
     const second_location = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
-    workspace_capability.tabs.Model.detachAll(first);
+    TabsModel.detachAll(first);
     try std.testing.expectEqualDeep(second_location, client.model.activeTabLocation().?);
 
-    const split_pane: schema.PaneId = @enumFromInt(21);
+    const split_pane: PaneIdType = @enumFromInt(21);
     try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
         .target_pane = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
@@ -882,14 +764,14 @@ test "an inactive split is retained detached without a visible revision" {
     const version_before = client.model.version();
     const pending_updates_before = client.presenter.pending_updates;
     var payload: [128]u8 = undefined;
-    const opened = try schema.encodePaneOpened(&payload, .{
+    const opened = try encodePaneOpened_module(&payload, .{
         .request_id = @enumFromInt(4),
         .pane_id = split_pane,
         .location = TestHarness.bootstrap_location,
         .created = true,
     });
 
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
 
     try std.testing.expect(!client.model.workspace.findPane(split_pane).?.attached);
     try std.testing.expectEqualDeep(version_before, client.model.version());
@@ -911,7 +793,7 @@ test "a split reply for a retired tab detaches and refreshes canonical state" {
     _ = client.request_lifecycle.tracker.take(@enumFromInt(2)) orelse return error.MissingWorkspaceSnapshot;
     _ = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
 
-    const split_pane: schema.PaneId = @enumFromInt(21);
+    const split_pane: PaneIdType = @enumFromInt(21);
     try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
         .target_pane = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
@@ -923,14 +805,14 @@ test "a split reply for a retired tab detaches and refreshes canonical state" {
     const version_before = client.model.version();
     const pending_updates_before = client.presenter.pending_updates;
     var payload: [128]u8 = undefined;
-    const opened = try schema.encodePaneOpened(&payload, .{
+    const opened = try encodePaneOpened_module(&payload, .{
         .request_id = @enumFromInt(4),
         .pane_id = split_pane,
         .location = TestHarness.bootstrap_location,
         .created = true,
     });
 
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
 
     try std.testing.expect(client.model.workspace.findPane(split_pane) == null);
     try std.testing.expectEqualDeep(version_before, client.model.version());
@@ -952,7 +834,7 @@ test "a split reply replaces its target after canonical retirement" {
     try harness.bootstrap();
     const client = harness.client;
 
-    const split_pane: schema.PaneId = @enumFromInt(21);
+    const split_pane: PaneIdType = @enumFromInt(21);
     try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
         .target_pane = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
@@ -963,14 +845,14 @@ test "a split reply replaces its target after canonical retirement" {
     client.request_lifecycle.tracker.ignorePane(TestHarness.bootstrap_pane);
     const version_before = client.model.version();
     var payload: [128]u8 = undefined;
-    const opened = try schema.encodePaneOpened(&payload, .{
+    const opened = try encodePaneOpened_module(&payload, .{
         .request_id = @enumFromInt(4),
         .pane_id = split_pane,
         .location = TestHarness.bootstrap_location,
         .created = true,
     });
 
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
 
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
     try std.testing.expect(client.model.workspace.findPane(split_pane).?.attached);
@@ -985,7 +867,7 @@ test "a failed split never resizes the tab selected afterwards" {
     const client = harness.client;
     const first = client.model.workspace.active().?;
     _ = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
-    workspace_capability.tabs.Model.detachAll(first);
+    TabsModel.detachAll(first);
 
     try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
         .target_pane = TestHarness.bootstrap_pane,
@@ -995,16 +877,16 @@ test "a failed split never resizes the tab selected afterwards" {
     } });
     const version_before = client.model.version();
     var payload: [128]u8 = undefined;
-    const failed = try schema.encodeRequestFailed(&payload, .{
+    const failed = try encodeRequestFailed_module(&payload, .{
         .request_id = @enumFromInt(4),
         .code = .internal,
         .message = "launch failed",
     });
 
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(failed));
 
     try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
-    try expectOnlyNotificationVersionChanged(version_before, client.model.version());
+    try support.expectOnlyNotificationVersionChanged(version_before, client.model.version());
 }
 
 test "a failed split for a retired target is silent" {
@@ -1024,13 +906,13 @@ test "a failed split for a retired target is silent" {
     client.request_lifecycle.tracker.ignorePane(TestHarness.bootstrap_pane);
     const pending_updates_before = client.presenter.pending_updates;
     var payload: [128]u8 = undefined;
-    const failed = try schema.encodeRequestFailed(&payload, .{
+    const failed = try encodeRequestFailed_module(&payload, .{
         .request_id = @enumFromInt(4),
         .code = .pane_not_found,
         .message = "target exited",
     });
 
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(failed));
 
     try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
@@ -1043,7 +925,7 @@ test "an attach reply marks the discovered pane attached" {
     try harness.bootstrap();
     const client = harness.client;
 
-    const discovered: schema.PaneId = @enumFromInt(11);
+    const discovered: PaneIdType = @enumFromInt(11);
     var payload: [256]u8 = undefined;
     const attachment_request = try harness.discoverAndRequestAttachment(discovered, &payload);
     try std.testing.expect(!client.model.workspace.findPane(discovered).?.attached);
@@ -1051,13 +933,13 @@ test "an attach reply marks the discovered pane attached" {
     const version_before_confirmation = client.model.version();
     const pending_updates_before_confirmation = client.presenter.pending_updates;
 
-    const opened = try schema.encodePaneOpened(&payload, .{
+    const opened = try encodePaneOpened_module(&payload, .{
         .request_id = attachment_request,
         .pane_id = discovered,
         .location = TestHarness.bootstrap_location,
         .created = false,
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
 
     try std.testing.expect(client.model.workspace.findPane(discovered).?.attached);
     try std.testing.expectEqualDeep(version_before_confirmation, client.model.version());
@@ -1071,7 +953,7 @@ test "tab detachment retires an in-flight pane attachment" {
     try harness.bootstrap();
     const client = harness.client;
 
-    const discovered: schema.PaneId = @enumFromInt(11);
+    const discovered: PaneIdType = @enumFromInt(11);
     var payload: [256]u8 = undefined;
     const attachment_request = try harness.discoverAndRequestAttachment(discovered, &payload);
     try tab_attachments.detach(client, client.model.workspace.active().?.location);
@@ -1096,13 +978,13 @@ test "tab detachment retires an in-flight pane attachment" {
     try std.testing.expect(!client.request_lifecycle.tracker.hasPane(.attachment, discovered));
 
     const pending_updates_before_confirmation = client.presenter.pending_updates;
-    const opened = try schema.encodePaneOpened(&payload, .{
+    const opened = try encodePaneOpened_module(&payload, .{
         .request_id = attachment_request,
         .pane_id = discovered,
         .location = TestHarness.bootstrap_location,
         .created = false,
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
 
     try std.testing.expect(!client.model.workspace.findPane(discovered).?.attached);
     try std.testing.expectEqual(pending_updates_before_confirmation, client.presenter.pending_updates);
@@ -1179,7 +1061,7 @@ test "tab detachment preserves focus reported by another tab" {
     try std.testing.expect(focus_in == .pane_input);
     try std.testing.expectEqualStrings("\x1b[I", focus_in.pane_input.bytes);
 
-    const inactive_pane: schema.PaneId = @enumFromInt(20);
+    const inactive_pane: PaneIdType = @enumFromInt(20);
     const inactive = try harness.addInactiveTab(@enumFromInt(2), inactive_pane);
     const tab = client.model.workspace.find(inactive.tab_id).?;
     tab.model.find(inactive_pane).?.attached = true;
@@ -1201,13 +1083,13 @@ test "detach action releases every tab before stopping the client" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const second_pane: schema.PaneId = @enumFromInt(20);
+    const second_pane: PaneIdType = @enumFromInt(20);
     _ = try harness.addTab(@enumFromInt(2), second_pane);
     const version = client.model.version();
     const pending_updates = client.presenter.pending_updates;
 
     try std.testing.expectEqual(
-        keybind.Control.stop,
+        ControlType.stop,
         try client_actions.apply(client, .detach),
     );
 
@@ -1239,10 +1121,10 @@ test "detach action captures layout changes from the same input batch" {
     try client.client_layouts.markSnapshotReceived();
 
     _ = try client_actions.apply(client, .{ .resize_sidebar = .right });
-    try std.testing.expectEqual(keybind.Control.stop, try client_actions.apply(client, .detach));
+    try std.testing.expectEqual(ControlType.stop, try client_actions.apply(client, .detach));
     try harness.settle();
 
-    var buffer: [schema.max_client_layout_wire_bytes]u8 = undefined;
+    var buffer: [max_client_layout_wire_bytes_module]u8 = undefined;
     const resized = try harness.nextClientMessage(&buffer);
     try std.testing.expect(resized == .pane_resize);
     const retained = try harness.nextClientMessage(&buffer);
@@ -1260,21 +1142,21 @@ test "a missing pane attachment keeps local membership until a canonical snapsho
     try harness.bootstrap();
     const client = harness.client;
 
-    const discovered: schema.PaneId = @enumFromInt(11);
+    const discovered: PaneIdType = @enumFromInt(11);
     var payload: [256]u8 = undefined;
     const attachment_request = try harness.discoverAndRequestAttachment(discovered, &payload);
     const version_before_failure = client.model.version();
 
-    const failed = try schema.encodeRequestFailed(&payload, .{
+    const failed = try encodeRequestFailed_module(&payload, .{
         .request_id = attachment_request,
         .code = .pane_not_found,
         .message = "pane disappeared",
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(failed));
 
     const pane = client.model.workspace.findPane(discovered) orelse return error.PaneRemovedBeforeSnapshot;
     try std.testing.expect(!pane.attached);
-    try expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
+    try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expect(client.request_lifecycle.tracker.has(.tab_snapshot));
     try harness.settle();
 
@@ -1292,21 +1174,21 @@ test "an internal pane attachment failure waits for a later resync" {
     try harness.bootstrap();
     const client = harness.client;
 
-    const discovered: schema.PaneId = @enumFromInt(11);
+    const discovered: PaneIdType = @enumFromInt(11);
     var payload: [256]u8 = undefined;
     const attachment_request = try harness.discoverAndRequestAttachment(discovered, &payload);
     const version_before_failure = client.model.version();
 
-    const failed = try schema.encodeRequestFailed(&payload, .{
+    const failed = try encodeRequestFailed_module(&payload, .{
         .request_id = attachment_request,
         .code = .internal,
         .message = "resize failed",
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(failed));
 
     const pane = client.model.workspace.findPane(discovered) orelse return error.PaneRemovedAfterInternalFailure;
     try std.testing.expect(!pane.attached);
-    try expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
+    try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expect(!client.request_lifecycle.tracker.has(.tab_snapshot));
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expect(client.notification_scheduler.pending);
@@ -1319,27 +1201,27 @@ test "a late pane attachment confirmation retired by a snapshot is ignored" {
     try harness.bootstrap();
     const client = harness.client;
 
-    const discovered: schema.PaneId = @enumFromInt(11);
+    const discovered: PaneIdType = @enumFromInt(11);
     var payload: [256]u8 = undefined;
     const attachment_request = try harness.discoverAndRequestAttachment(discovered, &payload);
     try client.request_lifecycle.tracker.add(@enumFromInt(90), .{ .tab_snapshot = TestHarness.bootstrap_location });
 
-    const reconciled = try schema.encodeTabSnapshot(&payload, .{
+    const reconciled = try encodeTabSnapshot_module(&payload, .{
         .request_id = @enumFromInt(90),
         .location = TestHarness.bootstrap_location,
         .panes = &.{.{ .pane_id = TestHarness.bootstrap_pane, .lifecycle = .running }},
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(reconciled));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(reconciled));
     try std.testing.expect(client.model.workspace.findPane(discovered) == null);
     const pending_updates_before_confirmation = client.presenter.pending_updates;
 
-    const opened = try schema.encodePaneOpened(&payload, .{
+    const opened = try encodePaneOpened_module(&payload, .{
         .request_id = attachment_request,
         .pane_id = discovered,
         .location = TestHarness.bootstrap_location,
         .created = false,
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
 
     try std.testing.expectEqual(pending_updates_before_confirmation, client.presenter.pending_updates);
 }
@@ -1358,13 +1240,13 @@ test "a late failed pane attachment does not notify or draw" {
     try std.testing.expect(client.request_lifecycle.tracker.ignoreAttachment(TestHarness.bootstrap_pane));
     const pending_updates_before_failure = client.presenter.pending_updates;
     var payload: [256]u8 = undefined;
-    const failed = try schema.encodeRequestFailed(&payload, .{
+    const failed = try encodeRequestFailed_module(&payload, .{
         .request_id = @enumFromInt(4),
         .code = .pane_not_found,
         .message = "pane disappeared",
     });
 
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(failed));
 
     try std.testing.expectEqual(pending_updates_before_failure, client.presenter.pending_updates);
     try std.testing.expect(!client.notification_scheduler.pending);

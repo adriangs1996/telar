@@ -2,283 +2,27 @@
 //! reconciliation. Everything here is pure over a cell buffer and a scroll
 //! position; the client applies the returned effects.
 
+const Point = @import("Point.zig");
+const GranularityType = @import("telar-core").Granularity;
+const Screen = @import("Screen.zig");
+const PointType = @import("telar-core").Point;
+const RangeType = @import("telar-core").Range;
+const State = @import("State.zig");
+const KeyType = @import("Key.zig");
+const Effect = @import("Effect.zig");
+const Viewport = @import("Viewport.zig");
+const ScrollType = @import("telar-core").Scroll;
+const BufferType = @import("telar-core").Buffer;
 const std = @import("std");
-const core = @import("telar-core");
-const keybind = @import("root.zig");
-
-const schema = core.schema;
-const ui = core.ui;
+const View = @import("CopyModeView.zig");
+const chord = @import("chord.zig");
+const SearchMatchType = @import("telar-core").SearchMatch;
 
 pub const Direction = enum { forward, backward };
 
-pub const max_matches = core.schema.max_search_matches;
-
-pub const Point = struct {
-    x: u16,
-    /// Absolute row from the beginning of the retained screen history.
-    y: u32,
-};
-
-pub const Viewport = struct {
-    scroll: schema.frame.Scroll,
-    rows: u16,
-};
-
-pub const Screen = struct {
-    buffer: *const ui.Buffer,
-    scroll: schema.frame.Scroll,
-};
-
-pub const PointerPress = struct {
-    pane_id: schema.PaneId,
-    position: ui.Point,
-    now_ns: u64,
-};
-
-pub const PointerMotion = struct {
-    position: ui.Point,
-    release: bool = false,
-};
-
-const PointerSelection = struct {
-    start: Point,
-    end: Point,
-    granularity: core.select.Granularity,
-    cols: u16,
-    rows: u16,
-};
-
-pub const View = struct {
-    cursor: Point,
-    pointer: bool = false,
-    anchor: ?Point,
-    linewise: bool,
-
-    pub fn selected(view: View, x: u16, y: u32) bool {
-        const anchor = view.anchor orelse return false;
-        if (view.linewise) {
-            const first = @min(anchor.y, view.cursor.y);
-            const last = @max(anchor.y, view.cursor.y);
-            return y >= first and y <= last;
-        }
-        const point = Point{ .x = x, .y = y };
-        const first, const last = if (less(view.cursor, anchor))
-            .{ view.cursor, anchor }
-        else
-            .{ anchor, view.cursor };
-        return !less(point, first) and !less(last, point);
-    }
-};
-
-pub const State = struct {
-    pane_id: schema.PaneId,
-    cursor: Point,
-    pointer: ?PointerSelection = null,
-    anchor: ?Point = null,
-    linewise: bool = false,
-    entry_offset: u32,
-    viewport_offset: u32,
-    search_direction: Direction = .forward,
-    matches: [max_matches]schema.SearchMatch = @splat(.{ .x = 0, .y = 0, .len = 0 }),
-    match_count: u8 = 0,
-    match_index: u8 = 0,
-
-    pub fn init(pane_id: schema.PaneId, cursor: Point, viewport_offset: u32) State {
-        return .{
-            .pane_id = pane_id,
-            .cursor = cursor,
-            .entry_offset = viewport_offset,
-            .viewport_offset = viewport_offset,
-        };
-    }
-
-    pub fn view(state: State) View {
-        return .{
-            .cursor = state.cursor,
-            .pointer = state.pointer != null,
-            .anchor = state.anchor,
-            .linewise = state.linewise,
-        };
-    }
-
-    /// Captures a word or line boundary once; subsequent drags retain it.
-    /// Example: `state.beginPointer(.word, screen);`.
-    pub fn beginPointer(state: *State, granularity: core.select.Granularity, screen: Screen) void {
-        const span = pointerSpan(state.cursor, granularity, screen);
-        state.pointer = .{
-            .start = span[0],
-            .end = span[1],
-            .granularity = granularity,
-            .cols = screen.buffer.w,
-            .rows = screen.buffer.h,
-        };
-        state.anchor = if (granularity == .character) null else span[0];
-        state.cursor = span[1];
-        state.linewise = granularity == .line;
-    }
-
-    /// Extends only within the supplied pane cells, in absolute history rows.
-    /// Example: `state.movePointer(motion, screen);`.
-    pub fn movePointer(state: *State, motion: PointerMotion, screen: Screen) void {
-        const pointer = if (state.pointer) |*value| value else return;
-        if (screen.buffer.w == 0 or screen.buffer.h == 0) {
-            return;
-        }
-
-        const point: Point = .{
-            .x = @min(motion.position.x, screen.buffer.w - 1),
-            .y = screen.scroll.offset + @min(motion.position.y, screen.buffer.h - 1),
-        };
-        const span = pointerSpan(point, pointer.granularity, screen);
-        const backwards = less(point, pointer.start);
-        state.anchor = if (backwards) pointer.end else pointer.start;
-        state.cursor = if (backwards) span[0] else span[1];
-        if (pointer.granularity == .character and std.meta.eql(span[0], pointer.start) and std.meta.eql(span[1], pointer.end)) {
-            state.anchor = null;
-        }
-    }
-
-    pub fn toggleSelection(state: *State, linewise: bool) void {
-        if (state.anchor != null and state.linewise == linewise) {
-            state.anchor = null;
-            state.linewise = false;
-            return;
-        }
-        state.anchor = state.cursor;
-        state.linewise = linewise;
-    }
-
-    pub fn clearSelection(state: *State) bool {
-        if (state.anchor == null) {
-            return false;
-        }
-        state.anchor = null;
-        state.linewise = false;
-        return true;
-    }
-
-    pub fn horizontal(state: *State, delta: i32, cols: u16) void {
-        if (delta < 0) {
-            state.cursor.x -|= @intCast(-delta);
-        } else {
-            state.cursor.x = @min(cols -| 1, state.cursor.x +| @as(u16, @intCast(delta)));
-        }
-    }
-
-    pub fn vertical(state: *State, delta: i32, viewport: Viewport) void {
-        const last = viewport.scroll.total_rows -| 1;
-        if (delta < 0) {
-            state.cursor.y -|= @intCast(-delta);
-        } else {
-            state.cursor.y = @min(last, state.cursor.y +| @as(u32, @intCast(delta)));
-        }
-        state.reveal(viewport.rows, viewport.scroll);
-    }
-
-    pub fn top(state: *State) void {
-        state.cursor.y = 0;
-        state.viewport_offset = 0;
-    }
-
-    pub fn bottom(state: *State, scroll: schema.frame.Scroll, rows: u16) void {
-        state.cursor.y = scroll.total_rows -| 1;
-        state.viewport_offset = scroll.maxOffset(rows);
-    }
-
-    pub fn lineStart(state: *State) void {
-        state.cursor.x = 0;
-    }
-
-    pub fn lineEnd(state: *State, cols: u16) void {
-        state.cursor.x = cols -| 1;
-    }
-
-    /// Stores search results and selects the first match at or after the
-    /// cursor (forward) or before it (backward). The current match becomes
-    /// the selection so it is visibly highlighted.
-    ///
-    /// ```zig
-    /// state.applyMatches(results, viewport);
-    /// ```
-    pub fn applyMatches(state: *State, results: []const schema.SearchMatch, viewport: Viewport) void {
-        state.match_count = @intCast(@min(results.len, state.matches.len));
-        @memcpy(state.matches[0..state.match_count], results[0..state.match_count]);
-        if (state.match_count == 0) {
-            return;
-        }
-
-        var selected: ?u8 = null;
-        switch (state.search_direction) {
-            .forward => {
-                for (state.matchSlice(), 0..) |match, index| {
-                    if (less(state.cursor, .{ .x = match.x, .y = match.y })) {
-                        selected = @intCast(index);
-                        break;
-                    }
-                }
-            },
-            .backward => {
-                var index: usize = state.match_count;
-                while (index > 0) {
-                    index -= 1;
-                    const match = state.matches[index];
-                    if (less(.{ .x = match.x, .y = match.y }, state.cursor)) {
-                        selected = @intCast(index);
-                        break;
-                    }
-                }
-            },
-        }
-
-        state.gotoMatch(selected orelse switch (state.search_direction) {
-            .forward => 0,
-            .backward => state.match_count - 1,
-        }, viewport);
-    }
-
-    /// Moves to the next or previous stored match, wrapping around.
-    ///
-    /// ```zig
-    /// state.cycleMatch(1, viewport);
-    /// ```
-    pub fn cycleMatch(state: *State, delta: i2, viewport: Viewport) void {
-        if (state.match_count == 0) {
-            return;
-        }
-
-        const count: i16 = state.match_count;
-        var index: i16 = state.match_index;
-        index = @mod(index + delta, count);
-        state.gotoMatch(@intCast(index), viewport);
-    }
-
-    pub fn matchSlice(state: *const State) []const schema.SearchMatch {
-        return state.matches[0..state.match_count];
-    }
-
-    fn gotoMatch(state: *State, index: u8, viewport: Viewport) void {
-        const match = state.matches[index];
-        state.match_index = index;
-        state.anchor = .{ .x = match.x, .y = match.y };
-        state.linewise = false;
-        state.cursor = .{ .x = match.x + match.len - 1, .y = match.y };
-        state.cursor.y = @min(state.cursor.y, viewport.scroll.total_rows -| 1);
-        state.reveal(viewport.rows, viewport.scroll);
-    }
-
-    fn reveal(state: *State, rows: u16, scroll: schema.frame.Scroll) void {
-        if (state.cursor.y < state.viewport_offset) {
-            state.viewport_offset = state.cursor.y;
-        } else if (state.cursor.y >= state.viewport_offset + rows) {
-            state.viewport_offset = state.cursor.y - rows + 1;
-        }
-        state.viewport_offset = @min(state.viewport_offset, scroll.maxOffset(rows));
-    }
-};
-
-fn pointerSpan(point: Point, granularity: core.select.Granularity, screen: Screen) [2]Point {
-    const local: ui.Point = .{ .x = point.x, .y = @intCast(point.y - screen.scroll.offset) };
-    var range = (core.select.Range{
+pub fn pointerSpan(point: Point, granularity: GranularityType, screen: Screen) [2]Point {
+    const local: PointType = .{ .x = point.x, .y = @intCast(point.y - screen.scroll.offset) };
+    var range = (RangeType{
         .anchor = local,
         .head = local,
         .granularity = granularity,
@@ -298,26 +42,13 @@ fn pointerSpan(point: Point, granularity: core.select.Granularity, screen: Scree
     };
 }
 
-fn less(a: Point, b: Point) bool {
+pub fn less(a: Point, b: Point) bool {
     return a.y < b.y or (a.y == b.y and a.x < b.x);
 }
 
-/// What one handled key asks the client to do. Cursor, selection and
-/// viewport changes already happened inside the state; the client only
-/// projects them and, on exit, copies the selection.
-pub const Effect = struct {
-    handled: bool = true,
-    exit: bool = false,
-    copy: bool = false,
-    /// Ask the client to open the search input in this direction.
-    search: ?Direction = null,
-    /// Ask the client to open the textual link under the copy cursor.
-    open_link: bool = false,
-};
-
 /// Interprets one key over the pane's visible cells. Pure: the only mutation
 /// is the copy-mode state itself.
-pub fn applyKey(state: *State, pressed: keybind.Key, screen: Screen) Effect {
+pub fn applyKey(state: *State, pressed: KeyType, screen: Screen) Effect {
     const buffer = screen.buffer;
     const scroll = screen.scroll;
     const page: i32 = @intCast(@max(@as(u16, 1), buffer.h -| 1));
@@ -405,7 +136,7 @@ pub fn applyKey(state: *State, pressed: keybind.Key, screen: Screen) Effect {
 /// Reconciles the copy cursor with a runtime frame. Pruned scrollback pulls
 /// the cursor and anchor up with it while the viewport sat at the pruned
 /// edge; both are then clamped to the new history length.
-pub fn onFrame(state: *State, previous_offset: u32, scroll: schema.frame.Scroll) void {
+pub fn onFrame(state: *State, previous_offset: u32, scroll: ScrollType) void {
     if (scroll.offset < previous_offset and state.viewport_offset == previous_offset) {
         const pruned = previous_offset - scroll.offset;
         state.cursor.y -|= pruned;
@@ -432,14 +163,14 @@ pub fn onFrame(state: *State, previous_offset: u32, scroll: schema.frame.Scroll)
 
 const WordClass = enum { space, word, punctuation };
 
-fn rowIndex(buffer: *const ui.Buffer, scroll: schema.frame.Scroll, absolute_y: u32) ?u16 {
+fn rowIndex(buffer: *const BufferType, scroll: ScrollType, absolute_y: u32) ?u16 {
     if (absolute_y < scroll.offset or absolute_y >= scroll.offset + buffer.h) {
         return null;
     }
     return @intCast(absolute_y - scroll.offset);
 }
 
-fn firstNonBlank(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scroll) void {
+fn firstNonBlank(state: *State, buffer: *const BufferType, scroll: ScrollType) void {
     const row = rowIndex(buffer, scroll, state.cursor.y) orelse return state.lineStart();
     var x: u16 = 0;
     while (x < buffer.w) : (x += 1) {
@@ -451,7 +182,7 @@ fn firstNonBlank(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.S
     state.cursor.x = @min(x, buffer.w -| 1);
 }
 
-fn lastNonBlank(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scroll) void {
+fn lastNonBlank(state: *State, buffer: *const BufferType, scroll: ScrollType) void {
     const row = rowIndex(buffer, scroll, state.cursor.y) orelse return state.lineEnd(buffer.w);
     var x = buffer.w;
     while (x != 0) {
@@ -492,7 +223,7 @@ fn paragraph(state: *State, screen: Screen, direction: i32) void {
     state.vertical(0, .{ .scroll = scroll, .rows = buffer.h });
 }
 
-fn wordClass(buffer: *const ui.Buffer, scroll: schema.frame.Scroll, point: Point) ?WordClass {
+fn wordClass(buffer: *const BufferType, scroll: ScrollType, point: Point) ?WordClass {
     const row = rowIndex(buffer, scroll, point.y) orelse return null;
     const cell = buffer.cells[@as(usize, row) * buffer.w + point.x];
     const text = cell.text();
@@ -575,7 +306,7 @@ fn wordForward(state: *State, screen: Screen, end: bool) void {
     state.vertical(0, .{ .scroll = scroll, .rows = buffer.h });
 }
 
-fn wordBackward(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scroll) void {
+fn wordBackward(state: *State, buffer: *const BufferType, scroll: ScrollType) void {
     var point = previousPoint(state.cursor, buffer.w);
     while (wordClass(buffer, scroll, point) == .space) {
         const previous = previousPoint(point, buffer.w);
@@ -601,7 +332,7 @@ fn wordBackward(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Sc
 }
 
 test "vertical movement scrolls the viewport only at its edges" {
-    const scroll: schema.frame.Scroll = .{ .total_rows = 100, .offset = 90 };
+    const scroll: ScrollType = .{ .total_rows = 100, .offset = 90 };
     var state = State.init(@enumFromInt(1), .{ .x = 2, .y = 99 }, 90);
     state.vertical(-1, .{ .scroll = scroll, .rows = 10 });
     try std.testing.expectEqual(@as(u32, 90), state.viewport_offset);
@@ -611,7 +342,7 @@ test "vertical movement scrolls the viewport only at its edges" {
 }
 
 test "pointer selection includes both cells of wide glyphs without copying a bare click" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 10, 2);
+    var buffer = try BufferType.init(std.testing.allocator, 10, 2);
     defer buffer.deinit();
     buffer.fill(buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "a界b", .style = .{} });
@@ -628,7 +359,7 @@ test "pointer selection includes both cells of wide glyphs without copying a bar
 }
 
 test "pointer word drags retain the original word when reversing direction" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 13, 2);
+    var buffer = try BufferType.init(std.testing.allocator, 13, 2);
     defer buffer.deinit();
     buffer.fill(buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "one two three", .style = .{} });
@@ -647,11 +378,11 @@ test "pointer word drags retain the original word when reversing direction" {
 }
 
 test "pruned history moves the captured pointer origin with its highlight" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 10, 2);
+    var buffer = try BufferType.init(std.testing.allocator, 10, 2);
     defer buffer.deinit();
     var state = State.init(@enumFromInt(1), .{ .x = 2, .y = 100 }, 100);
     state.beginPointer(.character, .{ .buffer = &buffer, .scroll = .{ .offset = 100, .total_rows = 102 } });
-    const scroll: schema.frame.Scroll = .{ .offset = 90, .total_rows = 92 };
+    const scroll: ScrollType = .{ .offset = 90, .total_rows = 92 };
     onFrame(&state, 100, scroll);
     state.movePointer(.{ .position = .{ .x = 4, .y = 0 } }, .{ .buffer = &buffer, .scroll = scroll });
 
@@ -678,10 +409,10 @@ test "linear and linewise selections are inclusive" {
     try std.testing.expect(linewise.selected(99, 5));
 }
 
-fn testScreen(gpa: std.mem.Allocator, rows: []const []const u8) !ui.Buffer {
+fn testScreen(gpa: std.mem.Allocator, rows: []const []const u8) !BufferType {
     var width: u16 = 0;
     for (rows) |row| width = @max(width, @as(u16, @intCast(row.len)));
-    var buffer = try ui.Buffer.init(gpa, width, @intCast(rows.len));
+    var buffer = try BufferType.init(gpa, width, @intCast(rows.len));
     buffer.fill(buffer.area(), .{ .glyph = " ", .style = .{} });
     for (rows, 0..) |row, y| _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = @intCast(y) }, .text = row, .style = .{} });
     return buffer;
@@ -691,18 +422,18 @@ test "word motions travel by class over the visible cells" {
     const gpa = std.testing.allocator;
     var buffer = try testScreen(gpa, &.{ "foo bar,baz", "        end" });
     defer buffer.deinit();
-    const scroll: schema.frame.Scroll = .{ .total_rows = 2, .offset = 0 };
+    const scroll: ScrollType = .{ .total_rows = 2, .offset = 0 };
     var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 0 }, 0);
 
-    _ = applyKey(&state, try keybind.parseKey("w"), .{ .buffer = &buffer, .scroll = scroll });
+    _ = applyKey(&state, try chord.parseKey("w"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(@as(u16, 4), state.cursor.x);
-    _ = applyKey(&state, try keybind.parseKey("w"), .{ .buffer = &buffer, .scroll = scroll });
+    _ = applyKey(&state, try chord.parseKey("w"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(@as(u16, 7), state.cursor.x);
-    _ = applyKey(&state, try keybind.parseKey("b"), .{ .buffer = &buffer, .scroll = scroll });
+    _ = applyKey(&state, try chord.parseKey("b"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(@as(u16, 4), state.cursor.x);
-    _ = applyKey(&state, try keybind.parseKey("$"), .{ .buffer = &buffer, .scroll = scroll });
+    _ = applyKey(&state, try chord.parseKey("$"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(@as(u16, 10), state.cursor.x);
-    _ = applyKey(&state, try keybind.parseKey("0"), .{ .buffer = &buffer, .scroll = scroll });
+    _ = applyKey(&state, try chord.parseKey("0"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(@as(u16, 0), state.cursor.x);
 }
 
@@ -710,19 +441,19 @@ test "escape clears the selection before it exits" {
     const gpa = std.testing.allocator;
     var buffer = try testScreen(gpa, &.{"abc"});
     defer buffer.deinit();
-    const scroll: schema.frame.Scroll = .{ .total_rows = 1, .offset = 0 };
+    const scroll: ScrollType = .{ .total_rows = 1, .offset = 0 };
     var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 0 }, 0);
 
-    _ = applyKey(&state, try keybind.parseKey("v"), .{ .buffer = &buffer, .scroll = scroll });
+    _ = applyKey(&state, try chord.parseKey("v"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expect(state.anchor != null);
-    const cleared = applyKey(&state, try keybind.parseKey("escape"), .{ .buffer = &buffer, .scroll = scroll });
+    const cleared = applyKey(&state, try chord.parseKey("escape"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expect(!cleared.exit);
     try std.testing.expect(state.anchor == null);
-    const exited = applyKey(&state, try keybind.parseKey("escape"), .{ .buffer = &buffer, .scroll = scroll });
+    const exited = applyKey(&state, try chord.parseKey("escape"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expect(exited.exit and !exited.copy);
-    const copied = applyKey(&state, try keybind.parseKey("y"), .{ .buffer = &buffer, .scroll = scroll });
+    const copied = applyKey(&state, try chord.parseKey("y"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expect(copied.exit and copied.copy);
-    const ignored = applyKey(&state, try keybind.parseKey("z"), .{ .buffer = &buffer, .scroll = scroll });
+    const ignored = applyKey(&state, try chord.parseKey("z"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expect(!ignored.handled);
 }
 
@@ -744,9 +475,9 @@ test "a pruning frame pulls cursor and anchor up before clamping" {
 }
 
 test "matches select relative to the cursor, highlight and cycle with wrap" {
-    const scroll: schema.frame.Scroll = .{ .total_rows = 40, .offset = 0 };
+    const scroll: ScrollType = .{ .total_rows = 40, .offset = 0 };
     var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 10 }, 0);
-    const results = [_]schema.SearchMatch{
+    const results = [_]SearchMatchType{
         .{ .x = 2, .y = 4, .len = 3 },
         .{ .x = 1, .y = 12, .len = 2 },
         .{ .x = 5, .y = 30, .len = 4 },
@@ -773,9 +504,9 @@ test "matches select relative to the cursor, highlight and cycle with wrap" {
 }
 
 test "slash and question mark ask for the search input" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 10, 5);
+    var buffer = try BufferType.init(std.testing.allocator, 10, 5);
     defer buffer.deinit();
-    const scroll: schema.frame.Scroll = .{ .total_rows = 5, .offset = 0 };
+    const scroll: ScrollType = .{ .total_rows = 5, .offset = 0 };
     var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 0 }, 0);
 
     const forward = applyKey(&state, .{ .code = .{ .char = .init("/") } }, .{ .buffer = &buffer, .scroll = scroll });
@@ -786,9 +517,9 @@ test "slash and question mark ask for the search input" {
 }
 
 test "o asks the client to open the link under the cursor" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 10, 5);
+    var buffer = try BufferType.init(std.testing.allocator, 10, 5);
     defer buffer.deinit();
-    const scroll: schema.frame.Scroll = .{ .total_rows = 5, .offset = 0 };
+    const scroll: ScrollType = .{ .total_rows = 5, .offset = 0 };
     var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 0 }, 0);
 
     const effect = applyKey(&state, .{ .code = .{ .char = .init("o") } }, .{ .buffer = &buffer, .scroll = scroll });

@@ -1,59 +1,14 @@
 //! Synchronizes the reconnectable subset of disposable client layout state.
 
-const std = @import("std");
-const core = @import("telar-core");
-
-const Client = @import("../client.zig");
+const Client = @import("../Client.zig");
+const max_client_layout_nodes_module = @import("telar-core").max_client_layout_nodes;
+const ClientLayoutNodeType = @import("telar-core").ClientLayoutNode;
+const max_client_layout_tabs_module = @import("telar-core").max_client_layout_tabs;
+const ClientTabLayoutType = @import("telar-core").ClientTabLayout;
 const runtime_transport = @import("../entrypoints/runtime_io.zig");
-
-const schema = core.schema;
-
-const TabVersion = struct {
-    location: schema.TabLocation,
-    layout_revision: u64,
-};
-
-const Version = struct {
-    chrome: u64,
-    active_tab: schema.TabLocation,
-    tabs: [schema.max_client_layout_tabs]TabVersion = undefined,
-    tab_count: u8 = 0,
-
-    fn eql(left: *const Version, right: *const Version) bool {
-        if (left.chrome != right.chrome or
-            !std.meta.eql(left.active_tab, right.active_tab) or
-            left.tab_count != right.tab_count)
-        {
-            return false;
-        }
-        for (left.tabs[0..left.tab_count], right.tabs[0..right.tab_count]) |left_tab, right_tab| {
-            if (!std.meta.eql(left_tab, right_tab)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-};
-
-pub const State = struct {
-    snapshot_received: bool = false,
-    last_sent: ?Version = null,
-
-    /// Opens layout synchronization after the runtime's one bootstrap
-    /// snapshot has been consumed.
-    ///
-    /// ```zig
-    /// state.markSnapshotReceived();
-    /// ```
-    pub fn markSnapshotReceived(state: *State) !void {
-        if (state.snapshot_received) {
-            return error.DuplicateClientLayoutSnapshot;
-        }
-
-        state.snapshot_received = true;
-    }
-};
+const Version = @import("Version.zig");
+const ClientLayoutUpdateType = @import("telar-core").ClientLayoutUpdate;
+const std = @import("std");
 
 /// Coalesces the complete, canonical layout of the current workspace into the
 /// runtime outbox. Tabs without a runtime snapshot are omitted until known.
@@ -73,8 +28,8 @@ pub fn observe(client: *Client) !void {
         }
     }
 
-    var nodes: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
-    var tabs: [schema.max_client_layout_tabs]schema.ClientTabLayout = undefined;
+    var nodes: [max_client_layout_nodes_module]ClientLayoutNodeType = undefined;
+    var tabs: [max_client_layout_tabs_module]ClientTabLayoutType = undefined;
     const update = buildUpdate(client, &nodes, &tabs) orelse return;
     runtime_transport.enqueueClientLayout(client, update) catch |err| switch (err) {
         error.ClientOutboxFull, error.TooManyPendingClientLayouts => return,
@@ -109,9 +64,9 @@ fn captureVersion(client: *Client) ?Version {
     return version;
 }
 
-fn buildUpdate(client: *Client, nodes: *[schema.max_client_layout_nodes]schema.ClientLayoutNode, output: *[schema.max_client_layout_tabs]schema.ClientTabLayout) ?schema.ClientLayoutUpdate {
+fn buildUpdate(client: *Client, nodes: *[max_client_layout_nodes_module]ClientLayoutNodeType, output: *[max_client_layout_tabs_module]ClientTabLayoutType) ?ClientLayoutUpdateType {
     const active_tab = client.model.activeTabLocation() orelse return null;
-    var scratch: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+    var scratch: [max_client_layout_nodes_module]ClientLayoutNodeType = undefined;
     var node_count: usize = 0;
     var tab_count: usize = 0;
     var active_included = false;

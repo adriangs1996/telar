@@ -1,29 +1,12 @@
 const std = @import("std");
+const Coverage = @import("build/Coverage.zig");
+const Suite = @import("build/Suite.zig");
+const SuiteModules = @import("build/SuiteModules.zig");
+const ProxyModuleConfig = @import("build/ProxyModuleConfig.zig");
+const FreeTypeConfig = @import("build/FreeTypeConfig.zig");
+const LuaConfig = @import("build/LuaConfig.zig");
 
-const ProxyPrefixes = struct {
-    nghttp2: []const u8,
-    brotli: []const u8,
-};
-
-const ProxyModuleConfig = struct {
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-    tls: *std.Build.Module,
-    vt: *std.Build.Module,
-    prefixes: ProxyPrefixes,
-};
-
-const FreeTypeConfig = struct {
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-    disable_coverage: bool,
-};
-
-const LuaConfig = struct {
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-    name: []const u8,
-};
+const source_roots: []const []const u8 = &.{ "build.zig", "build", "src", "examples", "benchmarks", "test", "linters" };
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -55,7 +38,7 @@ pub fn build(b: *std.Build) void {
     const lua_api = addLua(b, .{ .target = target, .optimize = optimize, .name = "lua" });
     coverage.instrumentModule(lua_api);
     const telar_lua = b.addModule("telar-lua", .{
-        .root_source_file = b.path("src/lua/root.zig"),
+        .root_source_file = b.path("src/lua/lua.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
@@ -102,7 +85,7 @@ pub fn build(b: *std.Build) void {
     coverage.instrumentModule(unicode);
 
     const kitty_protocol = b.addModule("kitty_protocol", .{
-        .root_source_file = b.path("src/kitty_protocol/root.zig"),
+        .root_source_file = b.path("src/kitty_protocol/kitty_protocol.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -111,7 +94,7 @@ pub fn build(b: *std.Build) void {
     // Runtime and client share values through core. The TUI additionally
     // imports client behavior; neither common package imports an adapter.
     const core = b.addModule("telar-core", .{
-        .root_source_file = b.path("src/core/root.zig"),
+        .root_source_file = b.path("src/core/core.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -121,7 +104,7 @@ pub fn build(b: *std.Build) void {
     coverage.instrumentModule(client);
 
     const backend = b.addModule("telar-backend", .{
-        .root_source_file = b.path("src/backend/root.zig"),
+        .root_source_file = b.path("src/backend/backend.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
@@ -142,7 +125,7 @@ pub fn build(b: *std.Build) void {
     coverage.instrumentModule(backend);
 
     const frontend = b.addModule("telar-frontend", .{
-        .root_source_file = b.path("src/frontend/root.zig"),
+        .root_source_file = b.path("src/frontend/frontend.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
@@ -177,6 +160,7 @@ pub fn build(b: *std.Build) void {
     });
     exe.root_module.addImport("telar-backend", backend);
     exe.root_module.addImport("telar-frontend", frontend);
+    exe.root_module.addImport("telar-client", client);
     exe.root_module.addImport("telar-core", core);
     exe.root_module.addImport("ghostty-vt", ghostty_vt);
     const diagnostics_enabled = b.option(
@@ -213,7 +197,7 @@ pub fn build(b: *std.Build) void {
         optimize;
     const bench_lua_api = addLua(b, .{ .target = target, .optimize = bench_optimize, .name = "lua-bench" });
     const bench_lua = b.createModule(.{
-        .root_source_file = b.path("src/lua/root.zig"),
+        .root_source_file = b.path("src/lua/lua.zig"),
         .target = target,
         .optimize = bench_optimize,
     });
@@ -225,13 +209,13 @@ pub fn build(b: *std.Build) void {
     });
     bench_unicode.addImport("ghostty-vt", ghostty_vt);
     const bench_core = b.createModule(.{
-        .root_source_file = b.path("src/core/root.zig"),
+        .root_source_file = b.path("src/core/core.zig"),
         .target = target,
         .optimize = bench_optimize,
     });
     bench_core.addImport("unicode", bench_unicode);
     const bench_backend = b.createModule(.{
-        .root_source_file = b.path("src/backend/root.zig"),
+        .root_source_file = b.path("src/backend/backend.zig"),
         .target = target,
         .optimize = bench_optimize,
         .link_libc = true,
@@ -249,19 +233,20 @@ pub fn build(b: *std.Build) void {
     bench_backend.linkSystemLibrary("brotlidec", .{});
     bench_backend.linkSystemLibrary("sqlite3", .{});
     const bench_kitty_protocol = b.createModule(.{
-        .root_source_file = b.path("src/kitty_protocol/root.zig"),
+        .root_source_file = b.path("src/kitty_protocol/kitty_protocol.zig"),
         .target = target,
         .optimize = bench_optimize,
     });
+    const bench_client = addClientModule(b, bench_core);
     const bench_frontend = b.createModule(.{
-        .root_source_file = b.path("src/frontend/root.zig"),
+        .root_source_file = b.path("src/frontend/frontend.zig"),
         .target = target,
         .optimize = bench_optimize,
         .link_libc = true,
     });
     const bench_freetype = addFreeType(b, .{ .target = target, .optimize = bench_optimize, .disable_coverage = false });
     bench_frontend.addImport("telar-core", bench_core);
-    bench_frontend.addImport("telar-client", addClientModule(b, bench_core));
+    bench_frontend.addImport("telar-client", bench_client);
     bench_frontend.addImport("kitty_protocol", bench_kitty_protocol);
     bench_frontend.addImport("lua-api", bench_lua_api);
     bench_frontend.addImport("telar-lua", bench_lua);
@@ -279,6 +264,7 @@ pub fn build(b: *std.Build) void {
     benchmarks.root_module.addImport("telar-core", bench_core);
     benchmarks.root_module.addImport("telar-backend", bench_backend);
     benchmarks.root_module.addImport("telar-frontend", bench_frontend);
+    benchmarks.root_module.addImport("telar-client", bench_client);
 
     const echo_probe = b.addExecutable(.{
         .name = "echo-probe",
@@ -291,6 +277,8 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "ghostty-vt", .module = ghostty_vt },
                 .{ .name = "telar-backend", .module = bench_backend },
                 .{ .name = "telar-frontend", .module = bench_frontend },
+                .{ .name = "telar-core", .module = bench_core },
+                .{ .name = "telar-client", .module = bench_client },
             },
         }),
     });
@@ -326,6 +314,8 @@ pub fn build(b: *std.Build) void {
         }),
     });
     sidebar.root_module.addImport("telar-frontend", frontend);
+    sidebar.root_module.addImport("telar-client", client);
+    sidebar.root_module.addImport("telar-core", core);
     b.installArtifact(sidebar);
 
     const run_sidebar = b.addRunArtifact(sidebar);
@@ -342,6 +332,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     history_preview.root_module.addImport("telar-frontend", frontend);
+    history_preview.root_module.addImport("telar-core", core);
     const run_history_preview = b.addRunArtifact(history_preview);
     if (b.args) |args| {
         run_history_preview.addArgs(args);
@@ -361,6 +352,7 @@ pub fn build(b: *std.Build) void {
     terminal_browser_pane.root_module.addImport("telar-core", core);
     terminal_browser_pane.root_module.addImport("telar-backend", backend);
     terminal_browser_pane.root_module.addImport("telar-frontend", frontend);
+    terminal_browser_pane.root_module.addImport("telar-client", client);
     terminal_browser_pane.root_module.addImport("ghostty-vt", ghostty_vt);
     b.installArtifact(terminal_browser_pane);
 
@@ -417,11 +409,13 @@ pub fn build(b: *std.Build) void {
     b.step("check-client-boundaries", "Check shared-client module and capability boundaries").dependOn(&client_boundaries.step);
     b.step("test-client", "Run renderer-independent client tests").dependOn(&run_client_tests.step);
     test_step.dependOn(&run_client_tests.step);
-    // zls auto-enables build-on-save when a step named "check" exists, giving
-    // editors real compiler diagnostics on every save. The step compiles twin
-    // instances of the test suites that nothing installs or runs, so Zig stops
-    // after semantic analysis and a save never pays for codegen or linking.
-    const check_step = b.step("check", "Semantic-analyze the test suites without running them");
+    // ZLS uses "check" on save. Test artifacts are analyzed without codegen;
+    // source validators run separately and never execute application tests.
+    const check_step = b.step("check", "Analyze test suites and validate source organization");
+    const inventory_tests = b.addSystemCommand(&.{ "python3", b.pathFromRoot("tools/test_compare_zig_tests.py") });
+    inventory_tests.setEnvironmentVariable("PYTHONDONTWRITEBYTECODE", "1");
+    test_step.dependOn(&inventory_tests.step);
+    check_step.dependOn(&inventory_tests.step);
     const client_check = b.addTest(.{ .root_module = client });
     check_step.dependOn(&client_check.step);
     check_step.dependOn(&client_boundaries.step);
@@ -454,17 +448,15 @@ pub fn build(b: *std.Build) void {
     if (b.args) |args| {
         run_codestyle.addArgs(args);
     } else {
-        run_codestyle.addArgs(&.{
-            "build.zig",
-            "src",
-            "examples",
-            "benchmarks",
-            "test/fuzz/build.zig",
-            "test/fuzz/src",
-            "linters",
-        });
+        run_codestyle.addArgs(source_roots);
     }
     b.step("codestyle", "Check or fix deterministic Zig code style rules").dependOn(&run_codestyle.step);
+
+    const check_codestyle = b.addRunArtifact(codestyle_exe);
+    check_codestyle.addArgs(source_roots);
+    check_codestyle.has_side_effects = true;
+    check_step.dependOn(&check_codestyle.step);
+    test_step.dependOn(&check_codestyle.step);
 
     const codestyle_tests = b.addTest(.{
         .root_module = b.createModule(.{
@@ -509,23 +501,23 @@ pub fn build(b: *std.Build) void {
     release_step.dependOn(b.getInstallStep());
 
     const suites = [_]Suite{
-        .{ .path = "src/kitty_protocol/root.zig" },
+        .{ .path = "src/kitty_protocol/kitty_protocol.zig" },
         .{ .path = "examples/games/asteroids/main.zig", .libc = true },
-        .{ .path = "src/core/ui/root.zig" },
+        .{ .path = "src/core/ui/ui_tests.zig" },
         .{ .path = "src/core/select.zig" },
         // Only referenced through non-pub imports elsewhere, so their tests
         // never run unless they are their own suite roots.
         .{ .path = "src/core/graphics.zig" },
         .{ .path = "src/core/schema/wire.zig", .schema = true },
-        .{ .path = "src/core/transport/root.zig", .transport = true },
+        .{ .path = "src/core/transport/transport.zig", .transport = true },
         .{ .path = "src/core/diagnostics.zig" },
         .{ .path = "src/core/schema/handshake.zig", .schema = true },
         .{ .path = "src/core/schema_contract_test.zig", .schema = true },
         .{ .path = "src/core/plugin.zig" },
-        .{ .path = "src/frontend/ui/root.zig" },
+        .{ .path = "src/frontend/ui/ui_tests.zig" },
         // Capability roots can import sibling capabilities, so the package
         // root collects their tests without narrowing Zig's module path.
-        .{ .path = "src/frontend/root.zig", .libc = true, .frontend = true },
+        .{ .path = "src/frontend/frontend.zig", .libc = true, .frontend = true },
         .{ .path = "src/frontend/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/backend/history/escape.zig" },
         .{ .path = "src/backend/runtime/observability/system_metrics.zig" },
@@ -533,9 +525,9 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/backend/proxy_test.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/pane/blit.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/pane/damage.zig" },
-        .{ .path = "src/backend/history/root.zig", .vt = true, .libc = true },
-        .{ .path = "src/backend/pty/root.zig", .libc = true },
-        .{ .path = "src/backend/root.zig", .vt = true, .libc = true },
+        .{ .path = "src/backend/history/history_tests.zig", .vt = true, .libc = true },
+        .{ .path = "src/backend/pty/pty_tests.zig", .libc = true },
+        .{ .path = "src/backend/backend.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/main.zig", .vt = true, .libc = true },
         .{ .path = "examples/sidebar.zig", .vt = true, .libc = true },
@@ -566,6 +558,7 @@ pub fn build(b: *std.Build) void {
         .brotli_prefix = brotli_prefix,
         .target = target,
         .optimize = optimize,
+        .build_options = exe_options,
     };
     for (suites) |suite| {
         const tests = suite_modules.addSuiteTest(b, suite);
@@ -700,6 +693,13 @@ pub fn build(b: *std.Build) void {
         proxy_test_step.dependOn(&b.addRunArtifact(tests).step);
     }
 
+    const check_programs = b.step("check-programs", "Analyze every first-party executable entrypoint");
+    for ([_]*std.Build.Step.Compile{ exe, benchmarks, echo_probe, sidebar, history_preview, terminal_browser_pane, frame_source, asteroids, proxy }) |program| {
+        const analyzed = b.addExecutable(.{ .name = program.name, .root_module = program.root_module });
+        check_programs.dependOn(&analyzed.step);
+    }
+    check_step.dependOn(check_programs);
+
     // ---------------------------------------------------------------------
     // Other targets
     // ---------------------------------------------------------------------
@@ -722,7 +722,7 @@ pub fn build(b: *std.Build) void {
             .optimize = .Debug,
         });
         const cross_core = b.createModule(.{
-            .root_source_file = b.path("src/core/root.zig"),
+            .root_source_file = b.path("src/core/core.zig"),
             .target = cross_target,
             .optimize = .Debug,
         });
@@ -730,7 +730,7 @@ pub fn build(b: *std.Build) void {
         const check = b.addObject(.{
             .name = b.fmt("platform-{s}-{s}", .{ @tagName(query.os_tag.?), @tagName(query.cpu_arch.?) }),
             .root_module = b.createModule(.{
-                .root_source_file = b.path("src/frontend/platform/root.zig"),
+                .root_source_file = b.path("src/frontend/platform/platform.zig"),
                 .target = cross_target,
                 .optimize = .Debug,
             }),
@@ -739,7 +739,7 @@ pub fn build(b: *std.Build) void {
         const raster_check = b.addLibrary(.{
             .name = b.fmt("text-rasterizer-{s}-{s}", .{ @tagName(query.os_tag.?), @tagName(query.cpu_arch.?) }),
             .root_module = b.createModule(.{
-                .root_source_file = b.path("src/frontend/graphics/rasterizer.zig"),
+                .root_source_file = b.path("src/frontend/graphics/rasterizer_support.zig"),
                 .target = cross_target,
                 .optimize = .Debug,
                 .link_libc = true,
@@ -753,7 +753,7 @@ pub fn build(b: *std.Build) void {
         cross_step.dependOn(&raster_check.step);
         const sound_check = b.addTest(.{
             .root_module = b.createModule(.{
-                .root_source_file = b.path("src/frontend/sound/root.zig"),
+                .root_source_file = b.path("src/frontend/sound/sound_tests.zig"),
                 .target = cross_target,
                 .optimize = .Debug,
                 .link_libc = true,
@@ -783,19 +783,9 @@ pub fn build(b: *std.Build) void {
     parallel_test_prerequisites.dependOn(cross_step);
 }
 
-const Suite = struct {
-    path: []const u8,
-    vt: bool = false,
-    libc: bool = false,
-    transport: bool = false,
-    schema: bool = false,
-    frontend: bool = false,
-    isolated: bool = false,
-};
-
 fn addClientModule(b: *std.Build, core: *std.Build.Module) *std.Build.Module {
     const client = b.createModule(.{
-        .root_source_file = b.path("src/client/root.zig"),
+        .root_source_file = b.path("src/client/client.zig"),
         .target = core.resolved_target,
         .optimize = core.optimize,
     });
@@ -806,59 +796,6 @@ fn addClientModule(b: *std.Build, core: *std.Build.Module) *std.Build.Module {
 
 // The shared modules every test suite links against, so the run instances and
 // the analysis-only `check` twins are wired identically from one place.
-const SuiteModules = struct {
-    unicode: *std.Build.Module,
-    core: *std.Build.Module,
-    backend: *std.Build.Module,
-    frontend: *std.Build.Module,
-    client: *std.Build.Module,
-    kitty_protocol: *std.Build.Module,
-    lua_api: *std.Build.Module,
-    telar_lua: *std.Build.Module,
-    tls: *std.Build.Module,
-    freetype: *std.Build.Module,
-    ghostty_vt: *std.Build.Module,
-    wuffs: *std.Build.Module,
-    nghttp2_prefix: []const u8,
-    brotli_prefix: []const u8,
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-
-    fn addSuiteTest(modules: SuiteModules, b: *std.Build, suite: Suite) *std.Build.Step.Compile {
-        const tests = b.addTest(.{
-            .root_module = b.createModule(.{
-                .root_source_file = b.path(suite.path),
-                .target = modules.target,
-                .optimize = modules.optimize,
-                .link_libc = suite.libc,
-            }),
-        });
-
-        tests.root_module.addImport("unicode", modules.unicode);
-        tests.root_module.addImport("telar-core", modules.core);
-        tests.root_module.addImport("telar-backend", modules.backend);
-        tests.root_module.addImport("telar-frontend", modules.frontend);
-        tests.root_module.addImport("telar-client", modules.client);
-        tests.root_module.addImport("kitty_protocol", modules.kitty_protocol);
-        tests.root_module.addImport("lua-api", modules.lua_api);
-        tests.root_module.addImport("telar-lua", modules.telar_lua);
-        tests.root_module.addImport("tls", modules.tls);
-        tests.root_module.addImport("freetype", modules.freetype);
-        tests.root_module.addImport("wuffs", modules.wuffs);
-        tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ modules.nghttp2_prefix, "include" }) });
-        tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ modules.nghttp2_prefix, "lib" }) });
-        tests.root_module.linkSystemLibrary("nghttp2", .{});
-        tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ modules.brotli_prefix, "include" }) });
-        tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ modules.brotli_prefix, "lib" }) });
-        tests.root_module.linkSystemLibrary("brotlidec", .{});
-
-        if (suite.vt) {
-            tests.root_module.addImport("ghostty-vt", modules.ghostty_vt);
-        }
-
-        return tests;
-    }
-};
 
 fn testBarrier(b: *std.Build, name: []const u8) *std.Build.Step {
     const barrier = b.allocator.create(std.Build.Step) catch @panic("OOM");
@@ -872,56 +809,12 @@ fn isolatedTestRun(b: *std.Build, tests: *std.Build.Step.Compile, prerequisites:
     return run;
 }
 
-const Coverage = struct {
-    enabled: bool,
-    runtime_path: ?[]const u8,
-
-    fn init(b: *std.Build) Coverage {
-        const enabled = b.option(bool, "coverage", "Enable zig-cov instrumentation") orelse false;
-        const runtime_path = b.option([]const u8, "coverage-rt", "Path to zig-cov-rt.o");
-        if (enabled and runtime_path == null) {
-            std.debug.panic("-Dcoverage requires -Dcoverage-rt=<path>", .{});
-        }
-        return .{
-            .enabled = enabled,
-            .runtime_path = runtime_path,
-        };
-    }
-
-    fn instrumentModule(coverage: Coverage, module: *std.Build.Module) void {
-        if (coverage.enabled) {
-            module.fuzz = true;
-        }
-    }
-
-    fn instrumentTest(coverage: Coverage, test_executable: *std.Build.Step.Compile) void {
-        if (!coverage.enabled) {
-            return;
-        }
-        test_executable.use_llvm = true;
-        test_executable.root_module.fuzz = true;
-        test_executable.root_module.link_libc = true;
-        test_executable.root_module.addObjectFile(.{ .cwd_relative = coverage.runtime_path.? });
-    }
-
-    fn excludeCSourceCoverage(coverage: Coverage, b: *std.Build, module: *std.Build.Module) void {
-        if (!coverage.enabled) {
-            return;
-        }
-        for (module.link_objects.items) |link_object| switch (link_object) {
-            .c_source_file => |source| source.flags = cFlags(b, source.flags, true),
-            .c_source_files => |sources| sources.flags = cFlags(b, sources.flags, true),
-            else => {},
-        };
-    }
-};
-
 // Root fuzz instrumentation also reaches linked C-family sources. zcov's
 // runtime does not provide every callback those sources emit, so keep native
 // dependencies outside the coverage graph.
 const no_c_coverage = "-fno-sanitize-coverage=trace-pc-guard,trace-cmp,inline-8bit-counters,pc-table";
 
-fn cFlags(b: *std.Build, base: []const []const u8, disable_coverage: bool) []const []const u8 {
+pub fn cFlags(b: *std.Build, base: []const []const u8, disable_coverage: bool) []const []const u8 {
     if (!disable_coverage) {
         return base;
     }

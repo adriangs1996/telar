@@ -2,6 +2,7 @@
 //! enough of the RPC contract to drive one outcome of a prompt.
 
 const types = @import("types.zig");
+const OptionsType = @import("Options.zig");
 
 pub const purpose: types.Purpose = .{ .suggestion = .{ .client_id = 7, .client_generation = 2, .request_id = 3 } };
 
@@ -24,7 +25,7 @@ pub const empty_reply_engine = "read -r line; printf '%s\\n' '{\"type\":\"respon
 
 /// `arguments` must outlive the options, so callers declare the argv in
 /// their own frame.
-pub fn options(arguments: []const []const u8, timeout_ms: u32, idle_timeout_ms: u32) types.Options {
+pub fn options(arguments: []const []const u8, timeout_ms: u32, idle_timeout_ms: u32) OptionsType {
     return .{
         .arguments = arguments,
         .timeout_ms = timeout_ms,

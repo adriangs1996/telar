@@ -1,12 +1,10 @@
 //! Operating-system adapter for opening web links with the default handler.
 
 const std = @import("std");
+const TargetType = @import("telar-client").LinkTarget;
 const builtin = @import("builtin");
-const target_mod = @import("telar-client").links.target;
 
-const Io = std.Io;
-
-const command_timeout: Io.Timeout = .{
+const command_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(5) },
 };
 
@@ -16,7 +14,7 @@ const command_timeout: Io.Timeout = .{
 /// ```zig
 /// try open(io, target);
 /// ```
-pub fn open(io: Io, target: target_mod.Target) !void {
+pub fn open(io: std.Io, target: TargetType) !void {
     if (target.scheme != .http and target.scheme != .https) {
         return error.UnsupportedLinkScheme;
     }

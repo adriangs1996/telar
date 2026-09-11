@@ -1,55 +1,39 @@
 //! Owns one client's host-TTY read, native router and replaceable deadlines.
 
+const GenericRouter = @import("../../../input/GenericRouter.zig").Type;
+const Action = @import("telar-client").Action;
+const model = @import("../../../config/model.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const input_capability = @import("../../../input/root.zig");
-const lua_config = @import("../../../config/root.zig");
-const widgets = @import("../../../widgets/root.zig");
-const input_application = @import("telar-client").application.input;
-const client_clock = @import("telar-client").resources.clock;
-const deadline_timer = @import("telar-client").resources.deadline_timer;
+const max_encoded_bytes = @import("telar-client").max_encoded_bytes;
+const Config = @import("Config.zig");
+const default_bindings = @import("../../../config/default_bindings.zig");
+const Client = @import("../../Client.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
+const mark_module = @import("telar-core").mark;
+const Chunk = @import("Chunk.zig");
+const InputHandler = @import("../../resources/InputHandler.zig");
+const monotonic_module = @import("telar-client").monotonic;
+const wait_module = @import("telar-client").wait;
+const parseKey_module = @import("telar-client").parseKey;
+const default_prefix_module = @import("telar-client").default_prefix;
+const State = @import("State.zig");
 
-const Client = @import("../../client.zig");
-const InputHandler = @import("../../resources/input_handler.zig");
-const Io = std.Io;
-const File = Io.File;
-const Action = input_capability.action.Action;
-const keybind = input_capability.keybind;
-const key_routing = input_application.key_routing;
-
-const chunk_size = 4096;
+pub const chunk_size = 4096;
 const held_binding_bytes = 128;
 
-pub const Router = keybind.Router(
+pub const Router = GenericRouter(
     Action,
     .{
-        .max_bindings = lua_config.max_bindings,
-        .max_keys = lua_config.default_binding_max_keys,
+        .max_bindings = model.max_bindings,
+        .max_keys = model.max_binding_keys,
         .input_capacity = chunk_size,
         .held_capacity = held_binding_bytes,
     },
 );
 
 comptime {
-    std.debug.assert(chunk_size <= runtime_transport.max_input_bytes);
+    std.debug.assert(chunk_size <= max_encoded_bytes);
 }
-
-pub const Chunk = struct {
-    bytes: [chunk_size]u8 = undefined,
-    len: u16 = 0,
-
-    fn slice(chunk: *const Chunk) []const u8 {
-        return chunk.bytes[0..chunk.len];
-    }
-};
-
-pub const Config = struct {
-    prefix: keybind.Key,
-    bindings: []const lua_config.ConfiguredBinding,
-    escape_timeout_ns: u64,
-    sequence_timeout_ns: u64,
-};
 
 /// Compiles an owned, allocation-free router from validated configuration.
 ///
@@ -57,99 +41,13 @@ pub const Config = struct {
 /// const router = try buildRouter(config);
 /// ```
 pub fn buildRouter(config: Config) !Router {
-    const resolved = try lua_config.resolveBindings(config.prefix, config.bindings);
+    const resolved = try default_bindings.resolve(config.prefix, config.bindings);
     var router = try Router.initWithPrefix(resolved.slice(), config.prefix);
     router.escape_timeout_ns = config.escape_timeout_ns;
     router.sequence_timeout_ns = config.sequence_timeout_ns;
 
     return router;
 }
-
-pub const State = struct {
-    file: File,
-    router: Router,
-    /// The one in-flight TTY read lands here. The read task owns it until
-    /// its `.input` completion, and routing finishes before the next read is
-    /// armed, so the event carries a length instead of 4 KiB of bytes.
-    chunk: Chunk = .{},
-    read_pending: bool = false,
-    presentation_revision: u64 = 0,
-    input_timeout: deadline_timer.Scheduler = .{},
-    binding_timeout: deadline_timer.Scheduler = .{},
-    application_leases: key_routing.Leases = .{},
-    startup_input: @import("../../resources/startup_input.zig").State = .{},
-
-    /// Creates the host input state around the client-owned TTY handle.
-    ///
-    /// ```zig
-    /// const state = try State.init(input_file, config);
-    /// ```
-    pub fn init(file: File, config: Config) !State {
-        return .{ .file = file, .router = try buildRouter(config) };
-    }
-
-    /// Replaces the native router and wakes timers that still follow its old
-    /// partial input.
-    ///
-    /// ```zig
-    /// state.replaceRouter(io, replacement);
-    /// ```
-    pub fn replaceRouter(state: *State, io: Io, replacement: Router) void {
-        const prefix_was_pending = state.router.prefixPending();
-        var inherited = replacement;
-        inherited.inheritPhysicalLeases(&state.router);
-        state.router = inherited;
-        if (prefix_was_pending != state.router.prefixPending()) {
-            state.presentation_revision +%= 1;
-        }
-        _ = state.input_timeout.update(io, null);
-        _ = state.binding_timeout.update(io, null);
-    }
-
-    /// Returns the revision of visible host-input routing state.
-    ///
-    /// ```zig
-    /// const revision = state.presentationVersion();
-    /// ```
-    pub fn presentationVersion(state: *const State) u64 {
-        return state.presentation_revision;
-    }
-
-    /// Projects prefix help from the effective router without exposing its
-    /// matching state to the presenter.
-    ///
-    /// ```zig
-    /// const mode = state.statusMode(copy_mode_active);
-    /// ```
-    pub fn statusMode(state: *const State, copy_mode_active: bool) widgets.status_bar.Mode {
-        if (!state.router.prefixPending()) {
-            return if (copy_mode_active) .copy else .normal;
-        }
-
-        const DescribedAction = struct {
-            action: Action,
-            label: []const u8,
-        };
-        const useful = [_]DescribedAction{
-            .{ .action = .{ .split_pane = .horizontal }, .label = "split right" },
-            .{ .action = .{ .split_pane = .vertical }, .label = "split down" },
-            .{ .action = .new_tab, .label = "new tab" },
-            .{ .action = .new_workspace, .label = "new workspace" },
-            .{ .action = .rename_tab, .label = "rename tab" },
-            .{ .action = .rename_workspace, .label = "rename workspace" },
-            .{ .action = .close_pane, .label = "close pane" },
-            .{ .action = .enter_copy_mode, .label = "copy mode" },
-        };
-        var hints: widgets.status_bar.Hints = .{};
-        for (useful) |described| {
-            const key = state.router.prefixedKeyForAction(described.action) orelse continue;
-
-            hints.append(.{ .key = key, .label = described.label });
-        }
-
-        return .{ .prefix = hints };
-    }
-};
 
 const Expiry = enum {
     input,
@@ -182,7 +80,7 @@ pub fn scheduleRead(client: *Client) !void {
 /// if (try host_inputs.handleOwnedRead(client, result)) return 0;
 /// ```
 pub fn handleOwnedRead(client: *Client, result: anyerror!u16) !bool {
-    core.echo_trace.mark(client.io, .client_input);
+    mark_module(client.io, .client_input);
     const state = &client.host_input;
     state.read_pending = false;
     state.chunk.len = try result;
@@ -242,13 +140,13 @@ pub fn replayStartup(client: *Client) !bool {
 
 fn routeBytes(client: *Client, bytes: []const u8) !bool {
     const state = &client.host_input;
-    client.presenter.noteInput(client_clock.monotonic(client.io));
+    client.presenter.noteInput(monotonic_module(client.io));
     var handler: InputHandler = .{ .client = client };
     const prefix_was_pending = state.router.prefixPending();
     const lease_overflows_before = state.router.leaseOverflowCount();
     const control = try state.router.feed(.{
         .bytes = bytes,
-        .now_ns = client_clock.monotonic(client.io),
+        .now_ns = monotonic_module(client.io),
     }, &handler);
     client.telemetry.metrics.key_lease_overflows +%= state.router.leaseOverflowCount() -% lease_overflows_before;
     if (control == .stop) {
@@ -287,8 +185,8 @@ fn expire(client: *Client, expiry: Expiry) !bool {
     var handler: InputHandler = .{ .client = client };
     const prefix_was_pending = state.router.prefixPending();
     const control = switch (expiry) {
-        .input => try state.router.expireInput(client_clock.monotonic(client.io), &handler),
-        .binding => try state.router.expireBinding(client_clock.monotonic(client.io), &handler),
+        .input => try state.router.expireInput(monotonic_module(client.io), &handler),
+        .binding => try state.router.expireBinding(monotonic_module(client.io), &handler),
     };
     if (control == .stop) {
         return true;
@@ -321,7 +219,7 @@ fn synchronizeInputTimeout(client: *Client) !void {
     const scheduler = &client.host_input.input_timeout;
     switch (scheduler.update(client.io, client.host_input.router.inputDeadline())) {
         .idle, .retained => {},
-        .schedule => client.select.concurrent(.input_timeout, deadline_timer.wait, .{
+        .schedule => client.select.concurrent(.input_timeout, wait_module, .{
             client.io,
             scheduler,
         }) catch |err| {
@@ -336,7 +234,7 @@ fn synchronizeBindingTimeout(client: *Client) !void {
     const scheduler = &client.host_input.binding_timeout;
     switch (scheduler.update(client.io, client.host_input.router.bindingDeadline())) {
         .idle, .retained => {},
-        .schedule => client.select.concurrent(.binding_timeout, deadline_timer.wait, .{
+        .schedule => client.select.concurrent(.binding_timeout, wait_module, .{
             client.io,
             scheduler,
         }) catch |err| {
@@ -347,14 +245,14 @@ fn synchronizeBindingTimeout(client: *Client) !void {
     }
 }
 
-fn read(io: Io, file: File, chunk: *Chunk) anyerror!u16 {
+fn read(io: std.Io, file: std.Io.File, chunk: *Chunk) anyerror!u16 {
     const length = try file.readStreaming(io, &.{&chunk.bytes});
-    core.echo_trace.mark(io, .host_read);
+    mark_module(io, .host_read);
     return @intCast(length);
 }
 
 test "host input configuration owns router timeouts" {
-    const prefix = try keybind.parseKey("ctrl+s");
+    const prefix = try parseKey_module("ctrl+s");
     const router = try buildRouter(.{
         .prefix = prefix,
         .bindings = &.{},
@@ -370,14 +268,14 @@ test "host input configuration owns router timeouts" {
 test "router replacement clears obsolete deadlines and visible prefix state" {
     const io = std.testing.io;
     var original = try buildRouter(.{
-        .prefix = keybind.default_prefix,
+        .prefix = default_prefix_module,
         .bindings = &.{},
         .escape_timeout_ns = 25,
         .sequence_timeout_ns = 100,
     });
     original.prefix_pending = true;
     const replacement = try buildRouter(.{
-        .prefix = try keybind.parseKey("ctrl+s"),
+        .prefix = try parseKey_module("ctrl+s"),
         .bindings = &.{},
         .escape_timeout_ns = 5,
         .sequence_timeout_ns = 20,
@@ -401,9 +299,9 @@ test "router replacement clears obsolete deadlines and visible prefix state" {
 }
 
 test "prefix status uses only the effective host input router" {
-    const prefix = try keybind.parseKey("ctrl+s");
-    const suffix = try keybind.parseKey("t");
-    const binding = try lua_config.ConfiguredBinding.init(&.{ prefix, suffix }, .new_tab);
+    const prefix = try parseKey_module("ctrl+s");
+    const suffix = try parseKey_module("t");
+    const binding = try model.ConfiguredBinding.init(&.{ prefix, suffix }, .new_tab);
     var router = try Router.initWithPrefix(&.{binding}, prefix);
     router.prefix_pending = true;
     const state: State = .{ .file = undefined, .router = router };

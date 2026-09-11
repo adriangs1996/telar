@@ -1,11 +1,14 @@
 //! PNG decoding for Ghostty's media terminal. All Wuffs allocations use the
 //! caller's quota-accounted allocator, including decoder and work buffers.
-const std = @import("std");
+
+const ParkingMutex = @import("ParkingMutex.zig");
 const vt = @import("ghostty-vt");
+const std = @import("std");
 const wuffs = @import("wuffs");
-const core = @import("telar-core");
-const allocation = @import("allocator.zig");
-const ParkingMutex = allocation.ParkingMutex;
+const ImageType = @import("telar-core").Image;
+const max_image_bytes_per_screen_module = @import("telar-core").max_image_bytes_per_screen;
+const GraphicsBudgetType = @import("GraphicsBudget.zig");
+const PaneMediaAllocatorType = @import("PaneMediaAllocator.zig");
 
 var install_mutex: ParkingMutex = .{};
 var installed = false;
@@ -32,14 +35,14 @@ fn decode(allocator: std.mem.Allocator, bytes: []const u8) vt.sys.DecodeError!vt
     };
     errdefer allocator.free(image.data);
 
-    const metadata: core.graphics.Image = .{
+    const metadata: ImageType = .{
         .key = .{ .image_id = 1, .generation = 1 },
         .format = .rgba,
         .width = image.width,
         .height = image.height,
         .byte_len = image.data.len,
     };
-    _ = metadata.validate(core.graphics.max_image_bytes_per_screen) catch return error.InvalidData;
+    _ = metadata.validate(max_image_bytes_per_screen_module) catch return error.InvalidData;
 
     return .{ .width = image.width, .height = image.height, .data = image.data };
 }
@@ -86,8 +89,8 @@ test "PNG decoder charges workspace and rejects oversized pixels before allocati
     const previous_log_level = std.testing.log_level;
     std.testing.log_level = .err;
     defer std.testing.log_level = previous_log_level;
-    var budget = allocation.GraphicsBudget.init(1024 * 1024);
-    var tracked = allocation.PaneMediaAllocator.init(std.testing.allocator, &budget, budget.limit);
+    var budget = GraphicsBudgetType.init(1024 * 1024);
+    var tracked = PaneMediaAllocatorType.init(std.testing.allocator, &budget, budget.limit);
 
     try expectDecoded(tracked.allocator());
     try std.testing.expectEqual(@as(usize, 0), budget.used);

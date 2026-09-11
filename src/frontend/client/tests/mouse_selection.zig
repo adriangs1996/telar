@@ -1,13 +1,12 @@
 //! Mouse selection through the real client input, outbox and presenter ports.
 
+const TestHarness = @import("TestHarness.zig");
+const InputHandler = @import("../resources/InputHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const keybind = @import("telar-client").input.keybind;
-const TestHarness = @import("support.zig").TestHarness;
-const InputHandler = @import("../resources/input_handler.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-
-const schema = core.schema;
+const CopySelectionType = @import("telar-core").CopySelection;
+const parseKey_module = @import("telar-client").parseKey;
+const PaneIdType = @import("telar-core").PaneId;
 
 test "mouse drag copies pane coordinates and keeps highlighting until typing" {
     var harness: TestHarness = undefined;
@@ -41,7 +40,7 @@ test "mouse drag copies pane coordinates and keeps highlighting until typing" {
     try harness.settle();
     var buffer: [512]u8 = undefined;
     const copied = try harness.nextClientMessage(&buffer);
-    try std.testing.expectEqualDeep(schema.CopySelection{
+    try std.testing.expectEqualDeep(CopySelectionType{
         .pane_id = pane.id,
         .start_x = 1,
         .start_y = 10,
@@ -50,7 +49,7 @@ test "mouse drag copies pane coordinates and keeps highlighting until typing" {
         .linewise = false,
     }, copied.copy_selection);
 
-    try handler.key(try keybind.parseKey("x"));
+    try handler.key(try parseKey_module("x"));
     try std.testing.expect(client.model.copyModeProjection() == null);
     try harness.settle();
     const input = try harness.nextClientMessage(&buffer);
@@ -65,7 +64,7 @@ test "selection focuses its pane and owns drags and release outside its borders"
     const client = harness.client;
     const model = client.model.activeTabModel().?;
     const first = TestHarness.bootstrap_pane;
-    const second: schema.PaneId = @enumFromInt(20);
+    const second: PaneIdType = @enumFromInt(20);
     _ = try client.model.commitPaneSplit(.{
         .split = .{ .target_pane = first, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() },
         .new_pane = second,
@@ -126,7 +125,7 @@ test "retiring a selected pane consumes its remaining gesture instead of reporti
     const client = harness.client;
     const model = client.model.activeTabModel().?;
     const first = TestHarness.bootstrap_pane;
-    const second: schema.PaneId = @enumFromInt(20);
+    const second: PaneIdType = @enumFromInt(20);
     try model.split(.{ .existing_pane = first, .new_pane = second, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
     try std.testing.expect(model.focusPane(first));
     model.find(first).?.buffer.fill(model.find(first).?.buffer.area(), .{ .glyph = " ", .style = .{} });

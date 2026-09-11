@@ -1,5 +1,5 @@
+const Key = @import("Key.zig");
 const std = @import("std");
-const Key = @import("key.zig").Key;
 
 pub fn parseKey(text: []const u8) !Key {
     if (text.len == 0) {

@@ -1,0 +1,35 @@
+const TabsModel = @import("telar-client").TabsModel;
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const CompositorType = @import("../../workspace/Compositor.zig");
+const SnapshotType = @import("telar-client").AgentSnapshot;
+const view = @import("view.zig");
+const CenterType = @import("telar-client").Center;
+const WorkspaceListSnapshot = @import("telar-client").WorkspaceListSnapshot;
+const PromptType = @import("telar-client").Prompt;
+const HistoryPaletteState = @import("telar-client").HistoryPaletteState;
+const SuggestionState = @import("telar-client").SuggestionState;
+const ProxyScopeType = @import("telar-core").ProxyScope;
+const SystemMetricsType = @import("telar-client").SystemMetrics;
+const ModeType = @import("telar-client").Mode;
+const StateType = @import("telar-client").State;
+const RenderInput = @This();
+
+tabs: ?*const TabsModel = null,
+model: *const MultiplexerModel,
+compositor: ?*const CompositorType = null,
+agents: *const SnapshotType = &view.empty_agent_snapshot,
+sidebar_animation_frame: u8 = 0,
+notifications: *const CenterType = &view.empty_notifications,
+workspaces: *const WorkspaceListSnapshot = &view.empty_workspace_list,
+prompt: ?*PromptType = null,
+history: *const HistoryPaletteState = &view.empty_history_palette,
+suggestion: *const SuggestionState = &view.empty_suggestion,
+proxy_tls_active: bool = false,
+proxy_tls_scope: ProxyScopeType = .exact,
+proxy_system_trusted: bool = false,
+system_metrics: ?SystemMetricsType = null,
+status_mode: ModeType = .normal,
+copy_mode_active: bool = false,
+bar_state: *const StateType = &view.default_bars_state,
+force: bool = false,
+diagnostic: ?[]const u8 = null,

@@ -1,243 +1,29 @@
 //! Coordination for asynchronous pane history and agent observation.
 
+const GenericObservationRuntimePort = @import("GenericObservationRuntimePort.zig").Type;
+const ObservationCapture = @import("ObservationCapture.zig");
+const GenericObservationCoordinator = @import("GenericObservationCoordinator.zig").Type;
+const PaneFixtureType = @import("../../../tests/PaneFixture.zig");
+const PaneStore = @import("../../../../pane/PaneStore.zig");
 const std = @import("std");
-const agent_identity = @import("../../../application/coordinators/root.zig").agent_identity;
-const core = @import("telar-core");
-const agent_mod = @import("../../../../agent/root.zig");
-const history = @import("../../../../history/root.zig");
-const pane_mod = @import("../../../../pane/root.zig");
-const agent_process = @import("../../../../process/root.zig");
-const telemetry_mod = @import("../../../observability/root.zig").telemetry;
-const test_support = @import("../../../tests/support.zig");
+const pane_mod = @import("../../../../pane/pane_namespace.zig");
+const AgentProviderType = @import("telar-core").AgentProvider;
+const CacheType = @import("../../../../process/Cache.zig");
+const Pane = @import("../../../../pane/Pane.zig");
+const RuntimeMetrics = @import("../../../observability/RuntimeMetrics.zig");
+const ObservationExpectedMetrics = @import("ObservationExpectedMetrics.zig");
+const enabled_module = @import("telar-core").enabled;
+const AgentStatusType = @import("telar-core").AgentStatus;
+const agent_identity = @import("../../../application/coordinators/agent_identity.zig");
+const AgentSoundNotificationType = @import("telar-core").AgentSoundNotification;
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const AgentReportStateType = @import("telar-core").AgentReportState;
+const StatsType = @import("../../../../history/Stats.zig");
+const TrackerType = @import("../../../../agent/Tracker.zig");
+const AgentSoundType = @import("telar-core").AgentSound;
+const sound_module = @import("../../../../agent/sound.zig");
 
-const Io = std.Io;
-const diagnostics = core.diagnostics;
-const schema = core.schema;
-const Pane = pane_mod.Pane;
-const PaneKey = pane_mod.PaneKey;
-const PaneStore = pane_mod.PaneStore;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
-
-pub const Work = struct {
-    pane: *Pane,
-    current_size: schema.TerminalSize,
-    process_cache: agent_process.Cache,
-};
-
-pub const Completion = struct {
-    pane: PaneKey,
-    stats: history.observer.Stats,
-    process_probe: agent_process.Probe,
-};
-
-pub const Resources = struct {
-    io: Io,
-    panes: *PaneStore,
-    agents: *agent_mod.Tracker,
-    metrics: *RuntimeMetrics,
-};
-
-const ProcessReconciliation = struct {
-    pane: *Pane,
-    probe: agent_process.Probe,
-    transition: pane_mod.HistoryObservationCompletion,
-};
-
-const ScreenReconciliation = struct {
-    pane: *Pane,
-    stats: history.observer.Stats,
-    shell_foreground: bool,
-};
-
-/// Defines observation actor startup and runtime-owned projection effects.
-///
-/// ```zig
-/// const port: RuntimePort(Context) = .{ ... };
-/// ```
-pub fn RuntimePort(comptime Context: type) type {
-    return struct {
-        start: *const fn (*Context, Work) anyerror!void,
-        publish_sound: *const fn (*Context, schema.AgentSoundNotification) void,
-        schedule_description: *const fn (*Context) void,
-        collect: *const fn (*Context) void,
-        pump_clients: *const fn (*Context) void,
-    };
-}
-
-/// Creates a statically dispatched observation coordinator.
-///
-/// ```zig
-/// const ObservationCoordinator = Coordinator(Context, port);
-/// ```
-pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) type {
-    return struct {
-        const Self = @This();
-
-        context: *Context,
-        resources: Resources,
-
-        /// Binds one runtime's pane, agent, and telemetry stores.
-        ///
-        /// ```zig
-        /// var coordinator = ObservationCoordinator.init(&context, resources);
-        /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
-            return .{ .context = context, .resources = resources };
-        }
-
-        /// Starts at most one history observation actor. Async-start failure
-        /// releases the pane and sealed-batch borrow.
-        ///
-        /// ```zig
-        /// try coordinator.schedule(pane);
-        /// ```
-        pub fn schedule(coordinator: *Self, pane: *Pane) !void {
-            const borrow = pane.beginHistoryObservation() orelse return;
-            const work: Work = .{
-                .pane = pane,
-                .current_size = borrow.current_size,
-                .process_cache = borrow.process_cache,
-            };
-
-            port.start(coordinator.context, work) catch |err| {
-                pane.cancelHistoryObservation();
-                return err;
-            };
-        }
-
-        /// Applies one generation-matched completion, reconciles process and
-        /// screen evidence, publishes exact status-transition sounds, then
-        /// rearms pending observation work before lifecycle effects.
-        ///
-        /// ```zig
-        /// try coordinator.handle(completion);
-        /// ```
-        pub fn handle(coordinator: *Self, completion: Completion) !void {
-            const pane = coordinator.resources.panes.resolve(completion.pane) orelse {
-                coordinator.resources.metrics.stale_pane_events += 1;
-                return;
-            };
-
-            const transition = pane.completeHistoryObservation(completion.process_probe.cache);
-            if (transition.cwd_changed) {
-                coordinator.resources.agents.touch();
-            }
-
-            coordinator.observeProcessMetrics(completion.process_probe);
-            coordinator.reconcileProcess(.{
-                .pane = pane,
-                .probe = completion.process_probe,
-                .transition = transition,
-            });
-            coordinator.observeHistoryMetrics(completion.stats);
-            coordinator.reconcileScreen(.{
-                .pane = pane,
-                .stats = completion.stats,
-                .shell_foreground = transition.shell_foreground,
-            });
-
-            port.schedule_description(coordinator.context);
-            try coordinator.schedule(pane);
-            port.collect(coordinator.context);
-            port.pump_clients(coordinator.context);
-        }
-
-        fn observeProcessMetrics(coordinator: *Self, probe: agent_process.Probe) void {
-            if (comptime !diagnostics.enabled) {
-                return;
-            }
-
-            if (!probe.inspected) {
-                return;
-            }
-
-            coordinator.resources.metrics.agent_process_inspections +|= 1;
-            if (probe.cache.provider == .unknown) {
-                coordinator.resources.metrics.agent_process_misses +|= 1;
-            }
-        }
-
-        fn reconcileProcess(coordinator: *Self, reconciliation: ProcessReconciliation) void {
-            if (!reconciliation.probe.changed) {
-                return;
-            }
-
-            if (reconciliation.probe.cache.provider != .unknown) {
-                _ = coordinator.resources.agents.observeProcess(.{
-                    .identity = agent_identity.fromPane(reconciliation.pane),
-                    .provider = reconciliation.probe.cache.provider,
-                    .process_id = reconciliation.probe.cache.process_group_id.?,
-                    .observed_at_ms = coordinator.nowMs(),
-                });
-                return;
-            }
-
-            if (reconciliation.transition.shell_foreground) {
-                _ = coordinator.resources.agents.remove(reconciliation.pane.key());
-                return;
-            }
-
-            if (reconciliation.transition.previous_process.provider != .unknown) {
-                _ = coordinator.resources.agents.clearProcess(reconciliation.pane.key());
-            }
-        }
-
-        fn observeHistoryMetrics(coordinator: *Self, stats: history.observer.Stats) void {
-            if (comptime !diagnostics.enabled) {
-                return;
-            }
-
-            coordinator.resources.metrics.history_candidate_input_bytes +|= stats.input_bytes;
-            coordinator.resources.metrics.history_captured +|= stats.captured;
-            coordinator.resources.metrics.history_dropped +|= stats.dropped;
-
-            if (stats.failed) {
-                coordinator.resources.metrics.history_observation_failures +|= 1;
-            }
-
-            if (stats.reset) {
-                coordinator.resources.metrics.history_observation_resets +|= 1;
-            }
-        }
-
-        fn reconcileScreen(coordinator: *Self, reconciliation: ScreenReconciliation) void {
-            const observation = reconciliation.stats.agent_observation orelse return;
-            if (reconciliation.shell_foreground) {
-                return;
-            }
-
-            const identity = agent_identity.fromPane(reconciliation.pane);
-            const previous_status = coordinator.resources.agents.projectedStatus(identity.key);
-            const changed = coordinator.resources.agents.observeScreen(.{
-                .identity = identity,
-                .signal = observation.signal,
-                .observed_at_ms = observation.observed_at_ms,
-                .observed_at_ns = observation.observed_at_ns,
-            });
-            if (!changed) {
-                return;
-            }
-
-            const sound = soundForTransition(
-                previous_status,
-                coordinator.resources.agents.projectedStatus(identity.key),
-            ) orelse return;
-            port.publish_sound(coordinator.context, .{
-                .pane_id = identity.key.id,
-                .pane_generation = identity.key.generation,
-                .sound = sound,
-            });
-        }
-
-        fn nowMs(coordinator: *const Self) i64 {
-            return Io.Timestamp.now(coordinator.resources.io, .real).toMilliseconds();
-        }
-    };
-}
-
-pub const soundForTransition = agent_mod.soundForTransition;
-
-const Step = enum {
+pub const Step = enum {
     sound,
     description,
     observation,
@@ -245,59 +31,17 @@ const Step = enum {
     pump_clients,
 };
 
-const Capture = struct {
-    steps: [5]Step = undefined,
-    len: usize = 0,
-    start_failure: bool = false,
-    started_work: ?Work = null,
-    start_saw_borrow: bool = false,
-    sound: ?schema.AgentSoundNotification = null,
-
-    fn record(capture: *Capture, step: Step) void {
-        std.debug.assert(capture.len < capture.steps.len);
-        capture.steps[capture.len] = step;
-        capture.len += 1;
-    }
-
-    fn start(capture: *Capture, work: Work) !void {
-        capture.record(.observation);
-        capture.started_work = work;
-        capture.start_saw_borrow = work.pane.history_observer.worker != null and work.pane.actor_count != 0;
-
-        if (capture.start_failure) {
-            return error.SchedulerUnavailable;
-        }
-    }
-
-    fn publishSound(capture: *Capture, notification: schema.AgentSoundNotification) void {
-        capture.record(.sound);
-        capture.sound = notification;
-    }
-
-    fn scheduleDescription(capture: *Capture) void {
-        capture.record(.description);
-    }
-
-    fn collect(capture: *Capture) void {
-        capture.record(.collect);
-    }
-
-    fn pumpClients(capture: *Capture) void {
-        capture.record(.pump_clients);
-    }
+const test_port: GenericObservationRuntimePort(ObservationCapture) = .{
+    .start = ObservationCapture.start,
+    .publish_sound = ObservationCapture.publishSound,
+    .schedule_description = ObservationCapture.scheduleDescription,
+    .collect = ObservationCapture.collect,
+    .pump_clients = ObservationCapture.pumpClients,
 };
 
-const test_port: RuntimePort(Capture) = .{
-    .start = Capture.start,
-    .publish_sound = Capture.publishSound,
-    .schedule_description = Capture.scheduleDescription,
-    .collect = Capture.collect,
-    .pump_clients = Capture.pumpClients,
-};
+const TestCoordinator = GenericObservationCoordinator(ObservationCapture, test_port);
 
-const TestCoordinator = Coordinator(Capture, test_port);
-
-fn testCoordinator(capture: *Capture, fixture: *test_support.PaneFixture, panes: *PaneStore) TestCoordinator {
+fn testCoordinator(capture: *ObservationCapture, fixture: *PaneFixtureType, panes: *PaneStore) TestCoordinator {
     return TestCoordinator.init(capture, .{
         .io = std.testing.io,
         .panes = panes,
@@ -306,18 +50,18 @@ fn testCoordinator(capture: *Capture, fixture: *test_support.PaneFixture, panes:
     });
 }
 
-fn beginFixtureObservation(fixture: *test_support.PaneFixture, panes: *PaneStore) !void {
+fn beginFixtureObservation(fixture: *PaneFixtureType, panes: *PaneStore) !void {
     try panes.insert(fixture.pane);
     fixture.pane.queueHistoryOutput(.{ .bytes = "observed", .shell_foreground = false, .clock = pane_mod.historyClock(std.testing.io) });
     try std.testing.expect(fixture.pane.beginHistoryObservation() != null);
 }
 
-fn queueFollowUp(fixture: *test_support.PaneFixture) void {
+fn queueFollowUp(fixture: *PaneFixtureType) void {
     fixture.pane.queueHistoryOutput(.{ .bytes = "follow-up", .shell_foreground = false, .clock = pane_mod.historyClock(std.testing.io) });
 }
 
-fn processCache(provider: schema.AgentProvider, process_id: u32, executable: []const u8) agent_process.Cache {
-    var cache = agent_process.Cache.init(executable);
+fn processCache(provider: AgentProviderType, process_id: u32, executable: []const u8) CacheType {
+    var cache = CacheType.init(executable);
     cache.process_group_id = process_id;
     cache.provider = provider;
     return cache;
@@ -328,22 +72,12 @@ fn nonShellProcessId(pane: *const Pane) u32 {
     return if (shell == std.math.maxInt(u32)) shell - 1 else shell + 1;
 }
 
-fn expectSteps(capture: *const Capture, expected: []const Step) !void {
+fn expectSteps(capture: *const ObservationCapture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
 }
 
-const ExpectedMetrics = struct {
-    inspections: u64 = 0,
-    misses: u64 = 0,
-    input_bytes: u64 = 0,
-    captured: u64 = 0,
-    dropped: u64 = 0,
-    failures: u64 = 0,
-    resets: u64 = 0,
-};
-
-fn expectMetrics(metrics: *const RuntimeMetrics, expected: ExpectedMetrics) !void {
-    const actual = if (comptime diagnostics.enabled) expected else ExpectedMetrics{};
+fn expectMetrics(metrics: *const RuntimeMetrics, expected: ObservationExpectedMetrics) !void {
+    const actual = if (comptime enabled_module) expected else ObservationExpectedMetrics{};
     try std.testing.expectEqual(actual.inspections, metrics.agent_process_inspections);
     try std.testing.expectEqual(actual.misses, metrics.agent_process_misses);
     try std.testing.expectEqual(actual.input_bytes, metrics.history_candidate_input_bytes);
@@ -354,13 +88,13 @@ fn expectMetrics(metrics: *const RuntimeMetrics, expected: ExpectedMetrics) !voi
 }
 
 test "known process observation commits pane state agent evidence and metrics" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     fixture.pane.history_observer.tracker.updateCwd("/observed");
     var panes: PaneStore = .{};
     try beginFixtureObservation(&fixture, &panes);
-    var capture: Capture = .{};
+    var capture: ObservationCapture = .{};
     var coordinator = testCoordinator(&capture, &fixture, &panes);
     const process_id = nonShellProcessId(fixture.pane);
     const foreground_revision = fixture.pane.foreground_revision;
@@ -385,7 +119,7 @@ test "known process observation commits pane state agent evidence and metrics" {
     try std.testing.expectEqualStrings("/observed", fixture.pane.cwd.slice());
     try std.testing.expectEqual(foreground_revision + 1, fixture.pane.foreground_revision);
     try std.testing.expectEqualStrings("Claude Code", fixture.pane.agent_process_cache.name());
-    try std.testing.expectEqual(schema.AgentStatus.ready, fixture.agents.projectedStatus(fixture.pane.key()).?);
+    try std.testing.expectEqual(AgentStatusType.ready, fixture.agents.projectedStatus(fixture.pane.key()).?);
     try expectMetrics(&fixture.metrics, .{
         .inspections = 1,
         .input_bytes = 13,
@@ -399,13 +133,13 @@ test "known process observation commits pane state agent evidence and metrics" {
 }
 
 test "foreground revision wraps past zero when the process name changes" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     fixture.pane.foreground_revision = std.math.maxInt(u64);
     var panes: PaneStore = .{};
     try beginFixtureObservation(&fixture, &panes);
-    var capture: Capture = .{};
+    var capture: ObservationCapture = .{};
     var coordinator = testCoordinator(&capture, &fixture, &panes);
 
     try coordinator.handle(.{
@@ -420,12 +154,12 @@ test "foreground revision wraps past zero when the process name changes" {
 }
 
 test "shell foreground removes the agent and ignores screen readiness" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     var panes: PaneStore = .{};
     try beginFixtureObservation(&fixture, &panes);
-    var capture: Capture = .{};
+    var capture: ObservationCapture = .{};
     var coordinator = testCoordinator(&capture, &fixture, &panes);
     const identity = agent_identity.fromPane(fixture.pane);
     const process_id = nonShellProcessId(fixture.pane);
@@ -460,12 +194,12 @@ test "shell foreground removes the agent and ignores screen readiness" {
 }
 
 test "an unknown non-shell process clears previous process evidence" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     var panes: PaneStore = .{};
     try beginFixtureObservation(&fixture, &panes);
-    var capture: Capture = .{};
+    var capture: ObservationCapture = .{};
     var coordinator = testCoordinator(&capture, &fixture, &panes);
     const process_id = nonShellProcessId(fixture.pane);
 
@@ -497,12 +231,12 @@ test "an unknown non-shell process clears previous process evidence" {
 }
 
 test "working to ready screen evidence publishes one generation-safe sound" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     var panes: PaneStore = .{};
     try beginFixtureObservation(&fixture, &panes);
-    var capture: Capture = .{};
+    var capture: ObservationCapture = .{};
     var coordinator = testCoordinator(&capture, &fixture, &panes);
     const identity = agent_identity.fromPane(fixture.pane);
     const process_id = nonShellProcessId(fixture.pane);
@@ -538,8 +272,8 @@ test "working to ready screen evidence publishes one generation-safe sound" {
     });
 
     try expectSteps(&capture, &.{ .sound, .description, .collect, .pump_clients });
-    try std.testing.expectEqual(schema.AgentStatus.done, fixture.agents.projectedStatus(identity.key).?);
-    try std.testing.expectEqualDeep(schema.AgentSoundNotification{
+    try std.testing.expectEqual(AgentStatusType.done, fixture.agents.projectedStatus(identity.key).?);
+    try std.testing.expectEqualDeep(AgentSoundNotificationType{
         .pane_id = identity.key.id,
         .pane_generation = identity.key.generation,
         .sound = .ready,
@@ -547,12 +281,12 @@ test "working to ready screen evidence publishes one generation-safe sound" {
 }
 
 test "a delayed screen completion cannot settle a newer Codex Stop or publish a sound" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     var panes: PaneStore = .{};
     try beginFixtureObservation(&fixture, &panes);
-    var capture: Capture = .{};
+    var capture: ObservationCapture = .{};
     var coordinator = testCoordinator(&capture, &fixture, &panes);
     const identity = agent_identity.fromPane(fixture.pane);
     const process_id = nonShellProcessId(fixture.pane);
@@ -568,29 +302,29 @@ test "a delayed screen completion cannot settle a newer Codex Stop or publish a 
         .process_probe = .{ .cache = processCache(.codex, process_id, "Codex") },
     });
 
-    try std.testing.expectEqual(schema.AgentStatus.working, fixture.agents.projectedStatus(identity.key).?);
+    try std.testing.expectEqual(AgentStatusType.working, fixture.agents.projectedStatus(identity.key).?);
     try std.testing.expect(capture.sound == null);
 }
 
 test "Codex PTY frames and continuing Stop hooks publish exactly one final completion sound" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
-    const size: schema.TerminalSize = .{ .cols = 100, .rows = 16 };
+    const size: TerminalSizeType = .{ .cols = 100, .rows = 16 };
     fixture.pane.history_observer.queueResize(size);
     var panes: PaneStore = .{};
     try panes.insert(fixture.pane);
-    var capture: Capture = .{};
+    var capture: ObservationCapture = .{};
     var coordinator = testCoordinator(&capture, &fixture, &panes);
     const identity = agent_identity.fromPane(fixture.pane);
     const process_id = nonShellProcessId(fixture.pane);
     _ = fixture.agents.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = process_id, .observed_at_ms = 50 });
 
     const cases = [_]struct {
-        report: ?schema.AgentReportState,
+        report: ?AgentReportStateType,
         now_ms: i64,
         output: []const u8,
-        status: schema.AgentStatus,
+        status: AgentStatusType,
         sound: bool = false,
     }{
         .{ .report = .working, .now_ms = 100, .output = "\x1b[1;1HWorking (1s)\x1b[4;1H\xe2\x80\xba Ask Codex to do anything\x1b[4;3H", .status = .working },
@@ -608,7 +342,7 @@ test "Codex PTY frames and continuing Stop hooks publish exactly one final compl
 
         fixture.pane.queueHistoryOutput(.{ .bytes = case.output, .shell_foreground = false, .clock = .{ .real_ms = case.now_ms + 1, .awake_ns = @intCast(case.now_ms * 1_000_000) } });
         try std.testing.expect(fixture.pane.beginHistoryObservation() != null);
-        var stats: history.observer.Stats = .{};
+        var stats: StatsType = .{};
         fixture.pane.processHistoryObservation(.{ .size = size, .provider = .codex }, &stats);
         try coordinator.handle(.{ .pane = fixture.pane.key(), .stats = stats, .process_probe = .{ .cache = processCache(.codex, process_id, "Codex") } });
         try std.testing.expectEqual(case.status, fixture.agents.projectedStatus(identity.key).?);
@@ -617,13 +351,13 @@ test "Codex PTY frames and continuing Stop hooks publish exactly one final compl
 }
 
 test "pending history is rearmed after description scheduling" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     var panes: PaneStore = .{};
     try beginFixtureObservation(&fixture, &panes);
     queueFollowUp(&fixture);
-    var capture: Capture = .{};
+    var capture: ObservationCapture = .{};
     var coordinator = testCoordinator(&capture, &fixture, &panes);
 
     try coordinator.handle(.{
@@ -641,13 +375,13 @@ test "pending history is rearmed after description scheduling" {
 }
 
 test "observation start failure releases the sealed batch and skips lifecycle effects" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     var panes: PaneStore = .{};
     try beginFixtureObservation(&fixture, &panes);
     queueFollowUp(&fixture);
-    var capture: Capture = .{ .start_failure = true };
+    var capture: ObservationCapture = .{ .start_failure = true };
     var coordinator = testCoordinator(&capture, &fixture, &panes);
 
     try std.testing.expectError(error.SchedulerUnavailable, coordinator.handle(.{
@@ -671,9 +405,9 @@ test "a stale generation cannot release a live observation borrow" {
     pane.history_observer.worker = 1;
     var panes: PaneStore = .{};
     try panes.insert(&pane);
-    var agents: agent_mod.Tracker = .{};
+    var agents: TrackerType = .{};
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var capture: Capture = .{};
+    var capture: ObservationCapture = .{};
     var coordinator = TestCoordinator.init(&capture, .{
         .io = std.testing.io,
         .panes = &panes,
@@ -694,11 +428,11 @@ test "a stale generation cannot release a live observation borrow" {
 }
 
 test "sounds are restricted to working-to-ready and working-to-blocked transitions" {
-    try std.testing.expectEqual(schema.AgentSound.ready, soundForTransition(.working, .ready).?);
-    try std.testing.expectEqual(schema.AgentSound.ready, soundForTransition(.working, .done).?);
-    try std.testing.expectEqual(schema.AgentSound.needs_input, soundForTransition(.working, .blocked).?);
-    try std.testing.expect(soundForTransition(null, .ready) == null);
-    try std.testing.expect(soundForTransition(.ready, .ready) == null);
-    try std.testing.expect(soundForTransition(.blocked, .ready) == null);
-    try std.testing.expect(soundForTransition(.working, .failed) == null);
+    try std.testing.expectEqual(AgentSoundType.ready, sound_module.soundForTransition(.working, .ready).?);
+    try std.testing.expectEqual(AgentSoundType.ready, sound_module.soundForTransition(.working, .done).?);
+    try std.testing.expectEqual(AgentSoundType.needs_input, sound_module.soundForTransition(.working, .blocked).?);
+    try std.testing.expect(sound_module.soundForTransition(null, .ready) == null);
+    try std.testing.expect(sound_module.soundForTransition(.ready, .ready) == null);
+    try std.testing.expect(sound_module.soundForTransition(.blocked, .ready) == null);
+    try std.testing.expect(sound_module.soundForTransition(.working, .failed) == null);
 }

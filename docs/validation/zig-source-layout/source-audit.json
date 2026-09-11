@@ -1,0 +1,10 @@
+{
+  "zig_files": 3273,
+  "generic_constructors": 119,
+  "top_level_ordinary_structs": 0,
+  "packed_layouts": 2,
+  "extern_layouts": 5,
+  "remaining_root_files": [],
+  "incorrect_import_paths": [],
+  "index_case_fixes": []
+}

@@ -1,26 +1,22 @@
 //! Adapts a pane's cell row to core's byte-oriented link recognizer.
 
+const max_uri_bytes_module = @import("telar-core").max_uri_bytes;
+const CellType = @import("telar-core").Cell;
+const BufferType = @import("telar-core").Buffer;
+const ScrollType = @import("telar-core").Scroll;
+const Position = @import("Position.zig");
+const TargetType = @import("LinkTarget.zig");
+const extractAt_module = @import("telar-core").extractAt;
 const std = @import("std");
-const core = @import("telar-core");
-const target_mod = @import("target.zig");
 
-const link = core.link;
-const schema = core.schema;
-const ui = core.ui;
-
-pub const Position = struct {
-    x: u16,
-    y: u32,
-};
-
-const row_window_bytes = link.max_uri_bytes * 2 + ui.Cell.max_bytes * 2;
+const row_window_bytes = max_uri_bytes_module * 2 + CellType.max_bytes * 2;
 
 /// Extracts the textual URI under one absolute pane position without allocating.
 ///
 /// ```zig
 /// const target = extract(&buffer, scroll, .{ .x = 3, .y = 10 });
 /// ```
-pub fn extract(buffer: *const ui.Buffer, scroll: schema.frame.Scroll, position: Position) ?target_mod.Target {
+pub fn extract(buffer: *const BufferType, scroll: ScrollType, position: Position) ?TargetType {
     if (position.x >= buffer.w or position.y < scroll.offset) {
         return null;
     }
@@ -32,7 +28,7 @@ pub fn extract(buffer: *const ui.Buffer, scroll: schema.frame.Scroll, position: 
 
     var start_x = position.x;
     var bytes_before: usize = 0;
-    while (start_x != 0 and bytes_before <= link.max_uri_bytes) {
+    while (start_x != 0 and bytes_before <= max_uri_bytes_module) {
         start_x -= 1;
         bytes_before += cellAt(buffer, start_x, @intCast(relative_y)).text().len;
     }
@@ -55,29 +51,29 @@ pub fn extract(buffer: *const ui.Buffer, scroll: schema.frame.Scroll, position: 
         len += text.len;
 
         if (cursor_offset) |offset| {
-            if (len - offset >= link.max_uri_bytes + ui.Cell.max_bytes) {
+            if (len - offset >= max_uri_bytes_module + CellType.max_bytes) {
                 break;
             }
         }
     }
 
     const offset = cursor_offset orelse return null;
-    const match = link.extractAt(storage[0..len], offset) orelse return null;
+    const match = extractAt_module(storage[0..len], offset) orelse return null;
 
-    return target_mod.Target.init(match.text(storage[0..len])) catch null;
+    return TargetType.init(match.text(storage[0..len])) catch null;
 }
 
-fn cellAt(buffer: *const ui.Buffer, x: u16, y: u16) *const ui.Cell {
+fn cellAt(buffer: *const BufferType, x: u16, y: u16) *const CellType {
     return &buffer.cells[@as(usize, y) * buffer.w + x];
 }
 
-fn testBuffer(rows: []const []const u8) !ui.Buffer {
+fn testBuffer(rows: []const []const u8) !BufferType {
     var width: u16 = 0;
     for (rows) |row| {
         width = @max(width, @as(u16, @intCast(row.len)));
     }
 
-    var buffer = try ui.Buffer.init(std.testing.allocator, width, @intCast(rows.len));
+    var buffer = try BufferType.init(std.testing.allocator, width, @intCast(rows.len));
     buffer.fill(buffer.area(), .{ .glyph = " ", .style = .{} });
     for (rows, 0..) |row, y| {
         _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = @intCast(y) }, .text = row, .style = .{} });

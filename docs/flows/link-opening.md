@@ -71,13 +71,13 @@ argv entry, captures bounded output and expires after five seconds.
 
 - `src/core/link.zig` proves classification, cursor-relative extraction and
   punctuation boundaries.
-- `src/frontend/links/cells.zig` proves absolute pane-coordinate adaptation.
-- `src/frontend/links/file_uri.zig` proves local file decoding and rejection.
-- `src/frontend/links/opening.zig` proves one active worker and latest-wins
+- `src/client/links/cells.zig` proves absolute pane-coordinate adaptation.
+- `src/client/links/file_uri.zig` proves local file decoding and rejection.
+- `src/client/links/opening_support.zig` proves one active worker and latest-wins
   queuing.
-- `src/frontend/links/pointer.zig` proves whole-gesture ownership.
-- `src/frontend/client/application/input/open_link.zig` proves scheme dispatch.
-- `src/frontend/client/application/input/copy_mode.zig` proves that `o`
+- `src/client/links/pointer_support.zig` proves whole-gesture ownership.
+- `src/client/application/input/open_link.zig` proves scheme dispatch.
+- `src/client/application/input/copy_mode.zig` proves that `o`
   dispatches without a copy-state commit.
 - `src/frontend/client/tests/host_interaction.zig` proves both file-opening
   triggers reach `create_tab` as `[$EDITOR, decoded_path]`.

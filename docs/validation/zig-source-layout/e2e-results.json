@@ -1,0 +1,260 @@
+[
+  {
+    "raw_us": [
+      731.958,
+      724.875,
+      1052.209,
+      949.917,
+      529.75,
+      560.167,
+      645.709,
+      562.75,
+      729.083,
+      738.583,
+      325.708,
+      344.584,
+      394.042,
+      644.5,
+      644.709,
+      622.0,
+      607.209,
+      810.792,
+      639.416,
+      449.417
+    ],
+    "timeouts": 0,
+    "p50_us": 641.9580000000001,
+    "p95_us": 955.0316000000001,
+    "p99_us": 1032.77352,
+    "version": "baseline",
+    "case": "echo",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 59.0842500096187,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        81464
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "raw_us": [
+      1412.875,
+      819.458,
+      1743.917,
+      607.25,
+      535.417,
+      635.917,
+      503.416,
+      733.834,
+      902.167,
+      703.708,
+      706.25,
+      420.042,
+      953.459,
+      1019.666,
+      711.916,
+      1352.917,
+      1037.334,
+      689.958,
+      749.625,
+      2648.75
+    ],
+    "timeouts": 0,
+    "p50_us": 741.7294999999999,
+    "p95_us": 1789.1586500000005,
+    "p99_us": 2476.831729999999,
+    "version": "candidate",
+    "case": "echo",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 58.888542000204325,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        81581
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "raw_us": [
+      507.917,
+      632.708,
+      358.375,
+      513.416,
+      646.666,
+      506.875,
+      462.0,
+      445.916,
+      366.583,
+      553.583,
+      385.541,
+      487.875,
+      702.875,
+      494.292,
+      506.208,
+      728.334,
+      559.125,
+      779.167,
+      611.291,
+      800.708
+    ],
+    "timeouts": 0,
+    "p50_us": 510.66650000000004,
+    "p95_us": 780.24405,
+    "p99_us": 796.6152099999999,
+    "version": "baseline",
+    "case": "load",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 60.16529200132936,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        81603
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "raw_us": [
+      800.625,
+      565.75,
+      472.5,
+      468.833,
+      753.75,
+      586.708,
+      554.666,
+      580.708,
+      441.125,
+      327.125,
+      816.583,
+      515.291,
+      1312.333,
+      469.0,
+      560.416,
+      747.0,
+      437.75,
+      418.584,
+      783.5,
+      953.041
+    ],
+    "timeouts": 0,
+    "p50_us": 563.0830000000001,
+    "p95_us": 971.0056000000003,
+    "p99_us": 1244.0675199999996,
+    "version": "candidate",
+    "case": "load",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 62.37183406483382,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        81816
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "input_sent": 32,
+    "input_while_host_blocked": 32,
+    "input_after_drain": 32,
+    "version": "baseline",
+    "case": "slow-host",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 55.00870803371072,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        82026
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "input_sent": 32,
+    "input_while_host_blocked": 32,
+    "input_after_drain": 32,
+    "version": "candidate",
+    "case": "slow-host",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 63.93549998756498,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        82662
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "pixel_bytes": 33177600,
+    "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+    "compressed": true,
+    "wire_payload_bytes": 4004011,
+    "elapsed_ms": 1928.630999987945,
+    "host_bytes": 5384445,
+    "version": "baseline",
+    "case": "graphics",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 68.28716699965298,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        82953
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "pixel_bytes": 33177600,
+    "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+    "compressed": true,
+    "wire_payload_bytes": 4004011,
+    "elapsed_ms": 1908.6758340708911,
+    "host_bytes": 5384434,
+    "version": "candidate",
+    "case": "graphics",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 58.057792019099,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        83073
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  }
+]

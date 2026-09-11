@@ -2,17 +2,13 @@
 //! optionally backed by a fresh git worktree.
 
 const std = @import("std");
-const core = @import("telar-core");
+const WorkspaceOptions = @import("arguments/WorkspaceOptions.zig");
 const agent = @import("agent.zig");
+const SessionType = @import("Session.zig");
 const control = @import("control.zig");
-const parser = @import("parser.zig");
+const workspace = @import("arguments/workspace.zig");
 
-const Io = std.Io;
-const File = Io.File;
-const schema = core.schema;
-const WorkspaceOptions = parser.WorkspaceOptions;
-
-const git_timeout: Io.Timeout = .{
+const git_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(60) },
 };
 
@@ -23,7 +19,7 @@ const git_timeout: Io.Timeout = .{
 /// ```
 pub fn run(init: std.process.Init, options: WorkspaceOptions) !u8 {
     var output_buffer: [4096]u8 = undefined;
-    var output = File.stdout().writerStreaming(init.io, &output_buffer);
+    var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
     defer writer.flush() catch {};
 
@@ -36,13 +32,13 @@ pub fn run(init: std.process.Init, options: WorkspaceOptions) !u8 {
 /// Adds the git worktree first, then asks the runtime to create a workspace
 /// rooted at it. Git runs in this process with the user's environment and
 /// credentials; the runtime never executes git on the CLI's behalf.
-fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *Io.Writer) !u8 {
+fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Writer) !u8 {
     const branch = std.mem.span(options.branch.?);
     var directory_buffer: [4096]u8 = undefined;
     const directory = try resolveDirectory(init, options, &directory_buffer);
     try addWorktree(init, options, directory);
 
-    var session = try control.Session.open(init, options.socket);
+    var session = try SessionType.open(init, options.socket);
     defer session.close();
     const workspace_id = try session.createWorkspace(.{
         .name = if (options.name) |name| std.mem.span(name) else branch,
@@ -79,11 +75,11 @@ fn resolveDirectory(init: std.process.Init, options: WorkspaceOptions, buffer: [
 /// const directory = try deriveDirectory("/src/telar", "fix/tabs", &buffer);
 /// ```
 fn deriveDirectory(toplevel: []const u8, branch: []const u8, buffer: []u8) ![]const u8 {
-    if (branch.len > parser.max_worktree_branch_bytes) {
+    if (branch.len > workspace.max_worktree_branch_bytes) {
         return error.InvalidWorktreeBranch;
     }
 
-    var sanitized: [parser.max_worktree_branch_bytes]u8 = undefined;
+    var sanitized: [workspace.max_worktree_branch_bytes]u8 = undefined;
     for (branch, 0..) |byte, index| {
         sanitized[index] = if (byte == '/' or byte == '\\') '-' else byte;
     }
@@ -132,7 +128,7 @@ fn addWorktree(init: std.process.Init, options: WorkspaceOptions, directory: []c
 }
 
 fn branchExists(init: std.process.Init, branch: []const u8) bool {
-    var ref_buffer: [parser.max_worktree_branch_bytes + 16]u8 = undefined;
+    var ref_buffer: [workspace.max_worktree_branch_bytes + 16]u8 = undefined;
     const ref = std.fmt.bufPrint(&ref_buffer, "refs/heads/{s}", .{branch}) catch return false;
 
     const result = std.process.run(init.gpa, init.io, .{

@@ -1,19 +1,17 @@
 //! Wires workspace creation use cases to one client's protocol and resources.
 
-const core = @import("telar-core");
-const workspace_capability = @import("../../../workspace/root.zig");
-const panes_application = @import("telar-client").application.panes;
-const workspaces_application = @import("telar-client").application.workspaces;
-const client_model = @import("telar-client").model;
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
+const Client = @import("../../Client.zig");
+const RequestWorkspaceCreationHandlerType = @import("telar-client").RequestWorkspaceCreationHandler;
+const OpenedPaneType = @import("telar-client").OpenedPane;
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const ConfirmWorkspaceCreationType = @import("telar-client").ConfirmWorkspaceCreation;
 const workspace_transitions = @import("workspace_transitions.zig");
-
-const Client = @import("../../client.zig");
-const create_workspace = workspaces_application.create_workspace;
-const multiplexer = workspace_capability.multiplexer;
-const pane_open_delivery = panes_application.pane_open_delivery;
-const schema = core.schema;
-const workspace_creation_delivery = workspaces_application.workspace_creation_delivery;
+const ConfirmWorkspaceCreationHandlerType = @import("telar-client").ConfirmWorkspaceCreationHandler;
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
+const WorkspaceCreationType = @import("telar-client").WorkspaceCreation;
+const rectSize_module = @import("telar-client").rectSize;
+const WorkspaceReplacementType = @import("telar-client").WorkspaceReplacement;
+const DeliverWorkspaceCreationHandlerType = @import("telar-client").DeliverWorkspaceCreationHandler;
 
 /// Wires a creation prompt to the client's continuation tracker and owned
 /// outbox storage.
@@ -22,7 +20,7 @@ const workspace_creation_delivery = workspaces_application.workspace_creation_de
 /// var handler = requestHandler(client);
 /// _ = try handler.execute(.{ .name = "agents" });
 /// ```
-pub fn requestHandler(client: *Client) create_workspace.RequestWorkspaceCreationHandler {
+pub fn requestHandler(client: *Client) RequestWorkspaceCreationHandlerType {
     return .{
         .model = &client.model,
         .gate = .{
@@ -42,7 +40,7 @@ pub fn requestHandler(client: *Client) create_workspace.RequestWorkspaceCreation
 /// ```zig
 /// const command = confirmation(client, opened, requested_size);
 /// ```
-pub fn confirmation(client: *Client, opened: pane_open_delivery.OpenedPane, requested_size: schema.TerminalSize) create_workspace.ConfirmWorkspaceCreation {
+pub fn confirmation(client: *Client, opened: OpenedPaneType, requested_size: TerminalSizeType) ConfirmWorkspaceCreationType {
     return .{
         .created = opened.created,
         .arrival = workspace_transitions.arrival(client, opened, requested_size),
@@ -56,7 +54,7 @@ pub fn confirmation(client: *Client, opened: pane_open_delivery.OpenedPane, requ
 /// var handler = confirmationHandler(client);
 /// _ = try handler.execute(command);
 /// ```
-pub fn confirmationHandler(client: *Client) create_workspace.ConfirmWorkspaceCreationHandler {
+pub fn confirmationHandler(client: *Client) ConfirmWorkspaceCreationHandlerType {
     return .{
         .model = &client.model,
         .delivery = .{
@@ -71,12 +69,12 @@ fn requestPending(context: *anyopaque) bool {
     return request_lifecycle.busy(client);
 }
 
-fn sendCreation(context: *anyopaque, creation: create_workspace.WorkspaceCreation) !void {
+fn sendCreation(context: *anyopaque, creation: WorkspaceCreationType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try request_lifecycle.nextId(client);
     try request_lifecycle.deliverCreateWorkspace(client, .{
         .request_id = request_id,
-        .size = multiplexer.rectSize(client.geometry().area) orelse return error.TerminalTooSmall,
+        .size = rectSize_module(client.geometry().area) orelse return error.TerminalTooSmall,
         .name = creation.name,
         .launch = .{
             .cwd = client.options.cwd,
@@ -86,9 +84,9 @@ fn sendCreation(context: *anyopaque, creation: create_workspace.WorkspaceCreatio
     });
 }
 
-fn deliverReplacement(context: *anyopaque, replacement: *const client_model.WorkspaceReplacement) !void {
+fn deliverReplacement(context: *anyopaque, replacement: *const WorkspaceReplacementType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    var use_case: workspace_creation_delivery.DeliverWorkspaceCreationHandler = .{
+    var use_case: DeliverWorkspaceCreationHandlerType = .{
         .model = &client.model,
         .release_effects = workspace_transitions.releaseEffects(client),
         .activation_effects = workspace_transitions.activationEffects(client),

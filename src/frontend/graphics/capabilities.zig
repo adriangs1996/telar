@@ -1,6 +1,7 @@
 //! Exterior-terminal probe constants and renderer policy.
 
 const std = @import("std");
+const Support = @import("telar-client").Support;
 
 pub const query_image_id: u32 = 31;
 /// Second probe: the same 1x1 image with a zlib-deflated payload. A host that
@@ -14,8 +15,6 @@ pub const query =
     "\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\" ++
     "\x1b_Gi=32,s=1,v=1,a=q,t=d,f=24,o=z;eJxjYGAAAAADAAE=\x1b\\" ++
     "\x1b[14t\x1b[16t\x1b[?1016$p\x1b[c";
-
-pub const Support = @import("telar-client").environment.Support;
 
 pub const SidebarRendering = enum {
     automatic,

@@ -1,6 +1,10 @@
 //! Data-only plugin manifests, capabilities, and digest-bound trust grants.
 
 const std = @import("std");
+const PluginManifest = @import("PluginManifest.zig");
+const WireManifest = @import("WireManifest.zig");
+const Grant = @import("Grant.zig");
+const TrustStore = @import("TrustStore.zig");
 
 pub const manifest_api_version: u16 = 1;
 pub const max_manifest_bytes = 64 * 1024;
@@ -54,70 +58,7 @@ pub const Capability = enum(u8) {
 
 pub const CapabilitySet = std.EnumSet(Capability);
 
-pub const ActionName = struct {
-    bytes: [max_action_bytes]u8 = undefined,
-    len: u8,
-
-    pub fn slice(value: *const ActionName) []const u8 {
-        return value.bytes[0..value.len];
-    }
-};
-
-pub const Manifest = struct {
-    id_bytes: [max_id_bytes]u8 = undefined,
-    id_len: u8,
-    version_bytes: [max_version_bytes]u8 = undefined,
-    version_len: u8,
-    entry_bytes: [max_entry_bytes]u8 = undefined,
-    entry_len: u16,
-    source_bytes: [max_source_bytes]u8 = undefined,
-    source_len: u16,
-    revision_bytes: [max_revision_bytes]u8 = undefined,
-    revision_len: u8,
-    actions: [max_actions]ActionName = undefined,
-    action_count: u8,
-    capabilities: CapabilitySet,
-
-    pub fn id(manifest: *const Manifest) []const u8 {
-        return manifest.id_bytes[0..manifest.id_len];
-    }
-
-    pub fn version(manifest: *const Manifest) []const u8 {
-        return manifest.version_bytes[0..manifest.version_len];
-    }
-
-    pub fn entry(manifest: *const Manifest) []const u8 {
-        return manifest.entry_bytes[0..manifest.entry_len];
-    }
-
-    pub fn source(manifest: *const Manifest) []const u8 {
-        return manifest.source_bytes[0..manifest.source_len];
-    }
-
-    pub fn revision(manifest: *const Manifest) []const u8 {
-        return manifest.revision_bytes[0..manifest.revision_len];
-    }
-
-    pub fn hasAction(manifest: *const Manifest, name: []const u8) bool {
-        for (manifest.actions[0..manifest.action_count]) |*candidate|
-            if (std.mem.eql(u8, candidate.slice(), name)) return true;
-        return false;
-    }
-};
-
-const WireManifest = struct {
-    const Source = struct { url: []const u8, revision: []const u8 };
-
-    api_version: u16,
-    id: []const u8,
-    version: []const u8,
-    entry: []const u8,
-    source: Source,
-    actions: []const []const u8 = &.{},
-    capabilities: []const []const u8 = &.{},
-};
-
-pub fn parseManifest(gpa: std.mem.Allocator, source: []const u8) !Manifest {
+pub fn parseManifest(gpa: std.mem.Allocator, source: []const u8) !PluginManifest {
     if (source.len > max_manifest_bytes) {
         return error.ManifestTooLarge;
     }
@@ -148,7 +89,7 @@ pub fn parseManifest(gpa: std.mem.Allocator, source: []const u8) !Manifest {
         return error.TooManyActions;
     }
 
-    var manifest: Manifest = .{
+    var manifest: PluginManifest = .{
         .id_len = @intCast(wire.id.len),
         .version_len = @intCast(wire.version.len),
         .entry_len = @intCast(wire.entry.len),
@@ -183,11 +124,6 @@ pub fn parseManifest(gpa: std.mem.Allocator, source: []const u8) !Manifest {
 
 pub const Digest = [32]u8;
 
-pub const PluginIdentity = struct {
-    id: []const u8,
-    digest: Digest,
-};
-
 pub fn contentDigest(manifest_bytes: []const u8, entry_bytes: []const u8) Digest {
     var hasher = std.crypto.hash.sha2.Sha256.init(.{});
     hasher.update("telar-plugin-v1\x00");
@@ -201,158 +137,7 @@ pub fn contentDigest(manifest_bytes: []const u8, entry_bytes: []const u8) Digest
     return hasher.finalResult();
 }
 
-pub const Grant = struct {
-    plugin_hash: u64,
-    digest: Digest,
-    capabilities: CapabilitySet,
-
-    /// Checks that this grant matches an exact package before testing one capability.
-    ///
-    /// ```zig
-    /// if (grant.allows(.{ .id = manifest.id(), .digest = digest }, .history_read)) readHistory();
-    /// ```
-    pub fn allows(grant: Grant, identity: PluginIdentity, capability: Capability) bool {
-        return grant.plugin_hash == stableId(identity.id) and
-            std.mem.eql(u8, &grant.digest, &identity.digest) and
-            grant.capabilities.contains(capability);
-    }
-};
-
 pub const max_grants = 64;
-
-pub const StoredGrant = struct {
-    plugin_bytes: [max_id_bytes]u8 = undefined,
-    plugin_len: u8,
-    grant: Grant,
-
-    pub fn pluginId(stored: *const StoredGrant) []const u8 {
-        return stored.plugin_bytes[0..stored.plugin_len];
-    }
-};
-
-pub const GrantUpdate = struct {
-    digest: Digest,
-    capabilities: CapabilitySet,
-};
-
-pub const TrustStore = struct {
-    entries: [max_grants]StoredGrant = undefined,
-    count: u8 = 0,
-
-    pub fn parse(gpa: std.mem.Allocator, source: []const u8) !TrustStore {
-        const WireGrant = struct {
-            plugin: []const u8,
-            digest: []const u8,
-            capabilities: []const []const u8,
-        };
-        const WireStore = struct { version: u16, grants: []const WireGrant };
-        const parsed = try std.json.parseFromSlice(WireStore, gpa, source, .{
-            .ignore_unknown_fields = false,
-        });
-        defer parsed.deinit();
-        if (parsed.value.version != 1) {
-            return error.IncompatibleTrustStore;
-        }
-        if (parsed.value.grants.len > max_grants) {
-            return error.TooManyTrustGrants;
-        }
-        var store: TrustStore = .{};
-        for (parsed.value.grants) |wire| {
-            if (!validIdentifier(wire.plugin) or wire.plugin.len > max_id_bytes) {
-                return error.InvalidPluginId;
-            }
-            var digest: Digest = undefined;
-            if (wire.digest.len != digest.len * 2) {
-                return error.InvalidDigest;
-            }
-            _ = std.fmt.hexToBytes(&digest, wire.digest) catch return error.InvalidDigest;
-            var capabilities = CapabilitySet.initEmpty();
-            for (wire.capabilities) |name| {
-                const capability = try Capability.parse(name);
-                if (capabilities.contains(capability)) {
-                    return error.DuplicateCapability;
-                }
-                capabilities.insert(capability);
-            }
-            var entry: StoredGrant = .{
-                .plugin_len = @intCast(wire.plugin.len),
-                .grant = .{
-                    .plugin_hash = stableId(wire.plugin),
-                    .digest = digest,
-                    .capabilities = capabilities,
-                },
-            };
-            @memcpy(entry.plugin_bytes[0..wire.plugin.len], wire.plugin);
-            for (store.entries[0..store.count]) |*previous|
-                if (std.mem.eql(u8, previous.pluginId(), wire.plugin))
-                    return error.DuplicateTrustGrant;
-            store.entries[store.count] = entry;
-            store.count += 1;
-        }
-        return store;
-    }
-
-    /// Replaces or adds the digest-bound capabilities for one manifest.
-    ///
-    /// ```zig
-    /// try store.upsert(&manifest, .{ .digest = digest, .capabilities = capabilities });
-    /// ```
-    pub fn upsert(store: *TrustStore, manifest: *const Manifest, update: GrantUpdate) !void {
-        for (store.entries[0..store.count]) |*entry| {
-            if (!std.mem.eql(u8, entry.pluginId(), manifest.id())) {
-                continue;
-            }
-            entry.grant = .{
-                .plugin_hash = stableId(manifest.id()),
-                .digest = update.digest,
-                .capabilities = update.capabilities,
-            };
-            return;
-        }
-        if (store.count == max_grants) {
-            return error.TooManyTrustGrants;
-        }
-        var entry: StoredGrant = .{
-            .plugin_len = manifest.id_len,
-            .grant = .{
-                .plugin_hash = stableId(manifest.id()),
-                .digest = update.digest,
-                .capabilities = update.capabilities,
-            },
-        };
-        @memcpy(entry.plugin_bytes[0..manifest.id_len], manifest.id());
-        store.entries[store.count] = entry;
-        store.count += 1;
-    }
-
-    pub fn grants(store: *const TrustStore, buffer: *[max_grants]Grant) []const Grant {
-        for (store.entries[0..store.count], 0..) |entry, index| buffer[index] = entry.grant;
-        return buffer[0..store.count];
-    }
-
-    pub fn writeJson(store: *const TrustStore, writer: *std.Io.Writer) !void {
-        try writer.writeAll("{\"version\":1,\"grants\":[");
-        for (store.entries[0..store.count], 0..) |*entry, index| {
-            if (index != 0) {
-                try writer.writeByte(',');
-            }
-            try writer.print("{{\"plugin\":\"{s}\",\"digest\":\"", .{entry.pluginId()});
-            for (entry.grant.digest) |byte| try writer.print("{x:0>2}", .{byte});
-            try writer.writeAll("\",\"capabilities\":[");
-            var capability_index: usize = 0;
-            var iterator = entry.grant.capabilities.iterator();
-            while (iterator.next()) |capability| {
-                if (capability_index != 0) {
-                    try writer.writeByte(',');
-                }
-                try writer.print("\"{s}\"", .{capability.canonicalName()});
-                capability_index += 1;
-            }
-            try writer.writeAll("]}");
-        }
-        try writer.writeAll("]}\n");
-    }
-};
 
 pub fn stableId(name: []const u8) u64 {
     var hash: u64 = 0xcbf29ce484222325;
@@ -363,7 +148,7 @@ pub fn stableId(name: []const u8) u64 {
     return hash;
 }
 
-fn validIdentifier(value: []const u8) bool {
+pub fn validIdentifier(value: []const u8) bool {
     if (value.len == 0 or value[0] == '.' or value[value.len - 1] == '.') {
         return false;
     }

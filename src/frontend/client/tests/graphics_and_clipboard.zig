@@ -1,91 +1,20 @@
 //! Client integration tests for graphics and clipboard.
 
-const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("telar-client").agents;
-const attachments = @import("../../attachments/root.zig");
-const graphics = @import("../../graphics/root.zig");
-const input_capability = @import("../../input/root.zig");
-const lua_config = @import("../../config/root.zig");
-const notifications = @import("telar-client").notifications;
-const platform = @import("../../platform/root.zig");
-const plugin_broker = @import("../../plugins/root.zig");
-const presentation = @import("../../presentation/root.zig");
-const sound_capability = @import("../../sound/root.zig");
-const workspace_capability = @import("../../workspace/root.zig");
-const keybind = input_capability.keybind;
-const kitty = graphics.kitty;
-
-const Io = std.Io;
-const File = Io.File;
-const schema = core.schema;
-const term = presentation.screen;
-
-const Client = @import("../client.zig");
-const InputHandler = @import("../resources/input_handler.zig");
-const active_pane_resources = @import("../controllers/panes/active_pane_resources.zig");
-const client_actions = @import("../controllers/input/actions.zig");
-const agent_navigation = @import("../controllers/agents/agent_navigation.zig");
-const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
-const session_application = @import("telar-client").application.session;
-const client_events = @import("../entrypoints/events.zig");
-const client_startup = @import("../controllers/session/client_startup.zig");
-const client_outbox = @import("telar-client").connection.outbox;
-const client_model = @import("telar-client").model;
-const client_telemetry = @import("../resources/telemetry.zig");
-const clipboard_images = @import("../controllers/host/clipboard_images.zig");
-const client_clock = @import("telar-client").resources.clock;
-const config_reload_worker = @import("../resources/config_reload.zig");
-const config_reloads = @import("../controllers/configuration/config_reloads.zig");
-const host_capabilities = @import("../controllers/host/host_capabilities.zig");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
-const host_resizes = @import("../controllers/host/host_resizes.zig");
-const name_prompts = @import("../controllers/input/name_prompts.zig");
-const notification_flow = @import("../controllers/notifications/notifications.zig");
-const pane_clipboards = @import("../controllers/panes/pane_clipboards.zig");
-const pane_closures = @import("../controllers/panes/pane_closures.zig");
-const pane_focus = @import("../controllers/panes/pane_focus.zig");
-const pane_focus_reports = @import("../controllers/panes/pane_focus_reports.zig");
-const pane_geometry = @import("../controllers/panes/pane_geometry.zig");
-const pane_openings = @import("../controllers/panes/pane_openings.zig");
-const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const plugin_actions = @import("../controllers/configuration/plugin_actions.zig");
-const request_lifecycle = @import("../connection/request_lifecycle.zig");
-const resync_requirements = @import("../controllers/session/resync_requirements.zig");
-const runtime_transport = @import("../entrypoints/runtime_io.zig");
+const TestHarness = @import("TestHarness.zig");
+const encodeGraphicsSnapshot_module = @import("telar-core").encodeGraphicsSnapshot;
 const server_messages = @import("../entrypoints/runtime_messages.zig");
-const sidebar_animations = @import("../controllers/notifications/sidebar_animations.zig");
-const sidebar_projection = @import("../controllers/notifications/sidebar_projection.zig");
-const tab_attachments = @import("../controllers/tabs/tab_attachments.zig");
-const tab_closures = @import("../controllers/tabs/tab_closures.zig");
-const tab_creations = @import("../controllers/tabs/tab_creations.zig");
-const tab_moves = @import("../controllers/tabs/tab_moves.zig");
-const tab_renames = @import("../controllers/tabs/tab_renames.zig");
-const tab_snapshots = @import("../controllers/tabs/tab_snapshots.zig");
-const workspace_handoffs = @import("../controllers/workspaces/workspace_handoffs.zig");
-const workspace_snapshots = @import("../controllers/workspaces/workspace_snapshots.zig");
-const InputChunk = Client.InputChunk;
-const initial_request_id = request_lifecycle.initial_request_id;
-
-const support = @import("support.zig");
-
-const clientEventResourcesForTest = support.clientEventResourcesForTest;
-const reportedPaneId = support.reportedPaneId;
-const expectNonPromptVersionEqual = support.expectNonPromptVersionEqual;
-const expectNonCopyVersionEqual = support.expectNonCopyVersionEqual;
-const expectNonCopyOrViewportVersionEqual = support.expectNonCopyOrViewportVersionEqual;
-const expectNonViewportVersionEqual = support.expectNonViewportVersionEqual;
-const expectOnlyNotificationVersionChanged = support.expectOnlyNotificationVersionChanged;
-const TestHarness = support.TestHarness;
-const encodeTestingAgentSnapshot = support.encodeTestingAgentSnapshot;
-const testingConfigAdoption = support.testingConfigAdoption;
-const testingConfigAdoptionSource = support.testingConfigAdoptionSource;
-const installTestingLuaBinding = support.installTestingLuaBinding;
-const TestingPlugin = support.TestingPlugin;
-const testing_plugin_context = support.testing_plugin_context;
-const installTestingPlugin = support.installTestingPlugin;
-const installTestingAttachmentTarget = support.installTestingAttachmentTarget;
-const testingClipboardCapture = support.testingClipboardCapture;
+const decodeServer_module = @import("telar-core").decodeServer;
+const encodeGraphicsImage_module = @import("telar-core").encodeGraphicsImage;
+const std = @import("std");
+const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
+const encodeGraphicsDeleteImage_module = @import("telar-core").encodeGraphicsDeleteImage;
+const encodeGraphicsSharedImage_module = @import("telar-core").encodeGraphicsSharedImage;
+const ShmNameType = @import("telar-core").ShmName;
+const encodeRuntimeStopping_module = @import("telar-core").encodeRuntimeStopping;
+const encodeHistoryResults_module = @import("telar-core").encodeHistoryResults;
+const encodeCommandSuggestion_module = @import("telar-core").encodeCommandSuggestion;
+const encodePaneClipboard_module = @import("telar-core").encodePaneClipboard;
+const pane_clipboards = @import("../controllers/panes/pane_clipboards.zig");
 
 test "a graphics revision break requests a graphics snapshot" {
     var harness: TestHarness = undefined;
@@ -94,13 +23,13 @@ test "a graphics revision break requests a graphics snapshot" {
     const client = harness.client;
 
     var payload: [256]u8 = undefined;
-    const begin = try schema.encodeGraphicsSnapshot(&payload, .{
+    const begin = try encodeGraphicsSnapshot_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 8,
         .phase = .begin,
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(begin));
-    const image = try schema.encodeGraphicsImage(&payload, .{
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(begin));
+    const image = try encodeGraphicsImage_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 9,
         .image = .{
@@ -111,7 +40,7 @@ test "a graphics revision break requests a graphics snapshot" {
             .byte_len = 3,
         },
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(image));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(image));
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&buffer);
@@ -129,7 +58,7 @@ test "pane graphics commit their cell fallback before presenter observation" {
     const pending_before = client.presenter.pending_updates;
 
     var payload: [256]u8 = undefined;
-    const encoded = try schema.encodeGraphicsImage(&payload, .{
+    const encoded = try encodeGraphicsImage_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 1,
         .image = .{
@@ -140,7 +69,7 @@ test "pane graphics commit their cell fallback before presenter observation" {
             .byte_len = 3,
         },
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(encoded));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(encoded));
 
     var committed = version_before;
     committed.pane_graphics += 1;
@@ -166,7 +95,7 @@ test "presenter observes physical graphics without a semantic fallback" {
     const pending_before = client.presenter.pending_updates;
 
     var payload: [256]u8 = undefined;
-    const encoded = try schema.encodeGraphicsImage(&payload, .{
+    const encoded = try encodeGraphicsImage_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 5,
         .image = .{
@@ -177,7 +106,7 @@ test "presenter observes physical graphics without a semantic fallback" {
             .byte_len = 3,
         },
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(encoded));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(encoded));
 
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(@as(u64, 1), client.graphics_store.ingressVersion());
@@ -191,12 +120,12 @@ test "presenter observes physical graphics without a semantic fallback" {
     try std.testing.expectEqual(@as(u64, 1), client.presenter.presentation_state.prepared.graphics_ingress);
 
     const pending_after = client.presenter.pending_updates;
-    const stale = try schema.encodeGraphicsDeleteImage(&payload, .{
+    const stale = try encodeGraphicsDeleteImage_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 4,
         .key = .{ .image_id = 1, .generation = 1 },
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(stale));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(stale));
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(@as(u64, 1), client.graphics_store.ingressVersion());
@@ -212,7 +141,7 @@ test "shared graphics mapping failure downgrades before resynchronizing" {
     const version_before = client.model.version();
 
     var payload: [256]u8 = undefined;
-    const encoded = try schema.encodeGraphicsSharedImage(&payload, .{
+    const encoded = try encodeGraphicsSharedImage_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 1,
         .image = .{
@@ -222,9 +151,9 @@ test "shared graphics mapping failure downgrades before resynchronizing" {
             .height = 1,
             .byte_len = 3,
         },
-        .name = try core.graphics.ShmName.init("/telar-missing"),
+        .name = try ShmNameType.init("/telar-missing"),
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(encoded));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(encoded));
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
@@ -244,30 +173,30 @@ test "runtime stopping and stray history results" {
     defer harness.deinit();
 
     var payload: [128]u8 = undefined;
-    const stopping = try schema.encodeRuntimeStopping(&payload);
+    const stopping = try encodeRuntimeStopping_module(&payload);
     try std.testing.expectEqual(
         @as(?u8, 0),
-        try server_messages.handleServerMessage(harness.client, try schema.decodeServer(stopping)),
+        try server_messages.handleServerMessage(harness.client, try decodeServer_module(stopping)),
     );
 
-    const history = try schema.encodeHistoryResults(&payload, .{
+    const history = try encodeHistoryResults_module(&payload, .{
         .request_id = @enumFromInt(2),
         .entries = &.{},
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try server_messages.handleServerMessage(harness.client, try schema.decodeServer(history)),
+        try server_messages.handleServerMessage(harness.client, try decodeServer_module(history)),
     );
     try std.testing.expectEqual(@as(u8, 0), harness.client.model.history_palette.len);
 
-    const suggestion = try schema.encodeCommandSuggestion(&payload, .{
+    const suggestion = try encodeCommandSuggestion_module(&payload, .{
         .request_id = @enumFromInt(3),
         .status = .ready,
         .text = "ls -la",
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try server_messages.handleServerMessage(harness.client, try schema.decodeServer(suggestion)),
+        try server_messages.handleServerMessage(harness.client, try decodeServer_module(suggestion)),
     );
     try std.testing.expectEqual(@as(u16, 0), harness.client.model.suggestion.text_len);
 }
@@ -279,11 +208,11 @@ test "a pane clipboard write reaches the host terminal" {
 
     const before = harness.sink.fullCount();
     var payload: [128]u8 = undefined;
-    const clipboard = try schema.encodePaneClipboard(&payload, .{
+    const clipboard = try encodePaneClipboard_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .bytes = "copied",
     });
-    _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(clipboard));
+    _ = try server_messages.handleServerMessage(harness.client, try decodeServer_module(clipboard));
 
     try std.testing.expectEqual(
         @as(u64, "\x1b]52;c;Y29waWVk\x07".len),

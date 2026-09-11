@@ -2,145 +2,11 @@
 //! agents through the local runtime.
 
 const std = @import("std");
-const core = @import("telar-core");
-const parser = @import("parser.zig");
-const runtime_connection = @import("runtime_connection.zig");
-
-const Io = std.Io;
-const File = Io.File;
-const schema = core.schema;
-const RuntimeConnector = runtime_connection.RuntimeConnector;
-
-pub const max_entries = schema.max_agent_snapshot_entries;
-
-pub const ExecutionContext = struct {
-    writer: *Io.Writer,
-    environ: std.process.Environ,
-};
-
-pub const AgentCommandReport = struct {
-    phase: schema.AgentCommandPhase,
-    provider: []const u8,
-    tool_call_id: []const u8,
-    command: []const u8,
-    cwd: []const u8,
-    session: []const u8,
-    exit_code: ?i32,
-};
-
-/// One decoded agent entry with its variable-length labels copied into owned
-/// storage, so a snapshot can be inspected after the receive buffer is reused.
-pub const Agent = struct {
-    pane_id: u64,
-    pane_generation: u64,
-    workspace_id: u64,
-    tab_id: u64,
-    pane_index: u16,
-    provider: schema.AgentProvider,
-    status: schema.AgentStatus,
-    workspace_label: [schema.max_agent_workspace_label_bytes]u8 = undefined,
-    workspace_label_len: u8 = 0,
-    tab_label: [schema.max_tab_label_bytes]u8 = undefined,
-    tab_label_len: u8 = 0,
-    title: [schema.max_agent_session_title_bytes]u8 = undefined,
-    title_len: u8 = 0,
-    cwd_label: [schema.max_agent_cwd_label_bytes]u8 = undefined,
-    cwd_label_len: u8 = 0,
-    provider_name: [schema.max_agent_provider_name_bytes]u8 = undefined,
-    provider_name_len: u8 = 0,
-
-    /// Manifest name of the provider; "unknown" when the runtime sent none.
-    pub fn providerLabel(agent: *const Agent) []const u8 {
-        if (agent.provider_name_len != 0) {
-            return agent.provider_name[0..agent.provider_name_len];
-        }
-
-        return "unknown";
-    }
-
-    pub fn workspaceLabel(agent: *const Agent) []const u8 {
-        return agent.workspace_label[0..agent.workspace_label_len];
-    }
-
-    pub fn tabLabel(agent: *const Agent) []const u8 {
-        return agent.tab_label[0..agent.tab_label_len];
-    }
-
-    pub fn titleSlice(agent: *const Agent) []const u8 {
-        return agent.title[0..agent.title_len];
-    }
-
-    pub fn cwdLabel(agent: *const Agent) []const u8 {
-        return agent.cwd_label[0..agent.cwd_label_len];
-    }
-
-    fn fromEntry(entry: schema.AgentSnapshotEntry) Agent {
-        var agent: Agent = .{
-            .pane_id = schema.id.raw(entry.pane_id),
-            .pane_generation = entry.pane_generation,
-            .workspace_id = schema.id.raw(entry.location.workspace.workspace),
-            .tab_id = schema.id.raw(entry.location.tab_id),
-            .pane_index = entry.pane_index,
-            .provider = entry.provider,
-            .status = entry.status,
-        };
-        agent.workspace_label_len = copyBounded(&agent.workspace_label, entry.workspace_label);
-        agent.tab_label_len = copyBounded(&agent.tab_label, entry.tab_label);
-        agent.title_len = copyBounded(&agent.title, entry.session_title);
-        agent.cwd_label_len = copyBounded(&agent.cwd_label, entry.cwd_label);
-        agent.provider_name_len = copyBounded(&agent.provider_name, entry.provider_name);
-        return agent;
-    }
-};
-
-pub const Snapshot = struct {
-    revision: u64 = 0,
-    entries: [max_entries]Agent = undefined,
-    count: usize = 0,
-
-    pub fn slice(snapshot: *const Snapshot) []const Agent {
-        return snapshot.entries[0..snapshot.count];
-    }
-
-    /// Finds the unique agent named by a CLI target. `current` reads
-    /// `TELAR_PANE_ID`; a name matches the session title case-insensitively.
-    ///
-    /// ```zig
-    /// const agent = try snapshot.resolve(target, environ) orelse return error.AgentNotFound;
-    /// ```
-    pub fn resolve(snapshot: *const Snapshot, target: parser.Target, environ: std.process.Environ) !?*const Agent {
-        const wanted_pane: ?u64 = switch (target) {
-            .current => try currentPaneId(environ),
-            .pane => |pane| pane,
-            .name => null,
-        };
-
-        if (wanted_pane) |pane_id| {
-            for (snapshot.slice()) |*agent| {
-                if (agent.pane_id == pane_id) {
-                    return agent;
-                }
-            }
-
-            return null;
-        }
-
-        const name = std.mem.span(target.name);
-        var found: ?*const Agent = null;
-        for (snapshot.slice()) |*agent| {
-            if (!std.ascii.eqlIgnoreCase(agent.titleSlice(), name)) {
-                continue;
-            }
-            if (found != null) {
-                return error.AmbiguousAgentName;
-            }
-
-            found = agent;
-        }
-
-        return found;
-    }
-};
+const RequestFailedType = @import("telar-core").RequestFailed;
+const AgentStatusType = @import("telar-core").AgentStatus;
+const ControlAgent = @import("ControlAgent.zig");
+const Snapshot = @import("Snapshot.zig");
+const pane_module = @import("telar-core").pane;
 
 /// Reads the pane identity the runtime injected into this process.
 ///
@@ -166,329 +32,6 @@ pub fn currentPaneGeneration(environ: std.process.Environ) !u64 {
     return generation;
 }
 
-/// One connected control session with its owned receive buffer.
-pub const Session = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    connection: core.transport.SocketChannel,
-    receive_buffer: []u8,
-    next_request: u64 = 1,
-
-    /// Connects to the runtime named by the CLI socket option or the process
-    /// environment, starting it when necessary.
-    ///
-    /// ```zig
-    /// var session = try Session.open(init, options.socket);
-    /// defer session.close();
-    /// ```
-    pub fn open(init: std.process.Init, socket: ?[*:0]const u8) !Session {
-        const connector = try RuntimeConnector.init(init, socket);
-        return Session.adopt(init, try connector.connectOrStart(.{}));
-    }
-
-    /// Connects to a runtime that is already listening and never starts one.
-    /// Reporters running inside a pane use it: the pane environment outlives
-    /// the runtime that injected it, so a report must not resurrect a stopped
-    /// runtime.
-    ///
-    /// ```zig
-    /// var session = try Session.attach(init, options.socket);
-    /// defer session.close();
-    /// ```
-    pub fn attach(init: std.process.Init, socket: ?[*:0]const u8) !Session {
-        const connector = try RuntimeConnector.init(init, socket);
-        return Session.adopt(init, try connector.connect());
-    }
-
-    fn adopt(init: std.process.Init, connection: core.transport.SocketChannel) !Session {
-        var owned = connection;
-        errdefer owned.deinit(init.io);
-        const receive_buffer = try init.gpa.alloc(u8, core.transport.max_frame_size);
-
-        return .{
-            .io = init.io,
-            .gpa = init.gpa,
-            .connection = owned,
-            .receive_buffer = receive_buffer,
-        };
-    }
-
-    pub fn close(session: *Session) void {
-        session.connection.deinit(session.io);
-        session.gpa.free(session.receive_buffer);
-    }
-
-    fn requestId(session: *Session) schema.RequestId {
-        const request_id: schema.RequestId = @enumFromInt(session.next_request);
-        session.next_request += 1;
-        return request_id;
-    }
-
-    /// Fetches the current agent snapshot into owned storage.
-    ///
-    /// ```zig
-    /// var snapshot: Snapshot = .{};
-    /// try session.fetchAgents(&snapshot);
-    /// ```
-    pub fn fetchAgents(session: *Session, snapshot: *Snapshot) !void {
-        var send_buffer: [16]u8 = undefined;
-        try session.connection.send(session.io, try schema.encodeQueryAgents(&send_buffer, .{
-            .request_id = session.requestId(),
-        }));
-
-        const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
-        const view = switch (response) {
-            .agent_snapshot => |view| view,
-            .request_failed => |failure| return failureError(failure),
-            else => return error.UnexpectedRuntimeResponse,
-        };
-
-        snapshot.revision = view.revision;
-        snapshot.count = 0;
-        var entries = view.entries();
-        while (try entries.next()) |entry| {
-            if (snapshot.count == snapshot.entries.len) {
-                break;
-            }
-
-            snapshot.entries[snapshot.count] = Agent.fromEntry(entry);
-            snapshot.count += 1;
-        }
-    }
-
-    pub const PaneRef = struct {
-        pane_id: u64,
-        pane_generation: u64,
-    };
-
-    pub const Text = struct {
-        pane_id: u64,
-        truncated: bool,
-        text: []const u8,
-    };
-
-    pub const ReadOptions = struct {
-        rows: u16,
-        source: schema.PaneTextSource,
-    };
-
-    pub const TextInput = struct {
-        mode: schema.PaneTextMode,
-        text: []const u8,
-    };
-
-    /// Reads bounded plain text from one exact pane generation. The returned
-    /// slice borrows the session's receive buffer until the next request.
-    ///
-    /// ```zig
-    /// const text = try session.readPane(pane, .{ .rows = 40, .source = .recent });
-    /// ```
-    pub fn readPane(session: *Session, pane: PaneRef, options: ReadOptions) !Text {
-        var send_buffer: [64]u8 = undefined;
-        try session.connection.send(session.io, try schema.encodeReadPane(&send_buffer, .{
-            .request_id = session.requestId(),
-            .pane_id = try schema.id.pane(pane.pane_id),
-            .pane_generation = pane.pane_generation,
-            .rows = options.rows,
-            .source = options.source,
-        }));
-
-        const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
-        return switch (response) {
-            .pane_text => |text| .{ .pane_id = pane.pane_id, .truncated = text.truncated, .text = text.text },
-            .request_failed => |failure| failureError(failure),
-            else => error.UnexpectedRuntimeResponse,
-        };
-    }
-
-    /// Sends raw bytes or one prompt to an exact pane generation.
-    ///
-    /// ```zig
-    /// try session.sendText(pane, .{ .mode = .prompt, .text = "run the tests" });
-    /// ```
-    pub fn sendText(session: *Session, pane: PaneRef, input: TextInput) !void {
-        var send_buffer: [schema.max_pane_text_input_bytes + 64]u8 = undefined;
-        try session.connection.send(session.io, try schema.encodeSendPaneText(&send_buffer, .{
-            .request_id = session.requestId(),
-            .pane_id = try schema.id.pane(pane.pane_id),
-            .pane_generation = pane.pane_generation,
-            .mode = input.mode,
-            .text = input.text,
-        }));
-
-        const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
-        switch (response) {
-            .request_completed => {},
-            .request_failed => |failure| return failureError(failure),
-            else => return error.UnexpectedRuntimeResponse,
-        }
-    }
-
-    /// Requests a directional focus change from the UI that owns the pane's interaction.
-    ///
-    /// ```zig
-    /// const result = try session.focusPane(pane, .left);
-    /// ```
-    pub fn focusPane(session: *Session, pane: PaneRef, direction: schema.PaneDirection) !schema.PaneFocusResult {
-        var send_buffer: [64]u8 = undefined;
-        try session.connection.send(session.io, try schema.encodeRequestPaneFocus(&send_buffer, .{
-            .request_id = session.requestId(),
-            .pane_id = try schema.id.pane(pane.pane_id),
-            .pane_generation = pane.pane_generation,
-            .direction = direction,
-        }));
-
-        const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
-        return switch (response) {
-            .pane_focus_result => |result| result,
-            .request_failed => |failure| failureError(failure),
-            else => error.UnexpectedRuntimeResponse,
-        };
-    }
-
-    /// Reports an agent's own session reference for later restore.
-    ///
-    /// ```zig
-    /// try session.reportSession(pane, "0192...");
-    /// ```
-    pub fn reportSession(session: *Session, pane: PaneRef, reference: []const u8) !void {
-        var send_buffer: [schema.max_agent_session_reference_bytes + 64]u8 = undefined;
-        try session.connection.send(session.io, try schema.encodeReportAgentSession(&send_buffer, .{
-            .request_id = session.requestId(),
-            .pane_id = try schema.id.pane(pane.pane_id),
-            .pane_generation = pane.pane_generation,
-            .session = reference,
-        }));
-
-        const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
-        switch (response) {
-            .request_completed => {},
-            .request_failed => |failure| return failureError(failure),
-            else => return error.UnexpectedRuntimeResponse,
-        }
-    }
-
-    pub const AgentReport = struct {
-        state: schema.AgentReportState,
-        session: []const u8 = "",
-        session_file: []const u8 = "",
-        session_file_kind: schema.AgentSessionFileKind = .claude_transcript,
-    };
-
-    /// Sends one official lifecycle report for the pane's agent.
-    ///
-    /// ```zig
-    /// try session.reportAgent(pane, .{ .state = .working });
-    /// ```
-    pub fn reportAgent(session: *Session, pane: PaneRef, report: AgentReport) !void {
-        var send_buffer: [schema.max_agent_session_reference_bytes + schema.max_agent_session_file_bytes + 64]u8 = undefined;
-        try session.connection.send(session.io, try schema.encodeReportAgent(&send_buffer, .{
-            .request_id = session.requestId(),
-            .pane_id = try schema.id.pane(pane.pane_id),
-            .pane_generation = pane.pane_generation,
-            .state = report.state,
-            .session = report.session,
-            .session_file = report.session_file,
-            .session_file_kind = report.session_file_kind,
-        }));
-
-        const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
-        switch (response) {
-            .request_completed => {},
-            .request_failed => |failure| return failureError(failure),
-            else => return error.UnexpectedRuntimeResponse,
-        }
-    }
-
-    /// Sends one shell-tool observation from an official agent hook.
-    ///
-    /// ```zig
-    /// try session.reportAgentCommand(pane, command);
-    /// ```
-    pub fn reportAgentCommand(session: *Session, pane: PaneRef, command: AgentCommandReport) !void {
-        var send_buffer: [schema.max_history_command_bytes + schema.max_cwd_bytes + 1024]u8 = undefined;
-        try session.connection.send(session.io, try schema.encodeReportAgentCommand(&send_buffer, .{
-            .request_id = session.requestId(),
-            .pane_id = try schema.id.pane(pane.pane_id),
-            .pane_generation = pane.pane_generation,
-            .phase = command.phase,
-            .provider = command.provider,
-            .tool_call_id = command.tool_call_id,
-            .command = command.command,
-            .cwd = command.cwd,
-            .session = command.session,
-            .exit_code = command.exit_code,
-        }));
-
-        const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
-        switch (response) {
-            .request_completed => {},
-            .request_failed => |failure| return failureError(failure),
-            else => return error.UnexpectedRuntimeResponse,
-        }
-    }
-
-    /// Sends the name the agent's own session carries; empty clears it.
-    ///
-    /// ```zig
-    /// try session.reportAgentTitle(pane, "Fix proxy");
-    /// ```
-    pub fn reportAgentTitle(session: *Session, pane: PaneRef, title: []const u8) !void {
-        var send_buffer: [schema.max_agent_session_title_bytes + 64]u8 = undefined;
-        try session.connection.send(session.io, try schema.encodeReportAgentTitle(&send_buffer, .{
-            .request_id = session.requestId(),
-            .pane_id = try schema.id.pane(pane.pane_id),
-            .pane_generation = pane.pane_generation,
-            .title = title,
-        }));
-
-        const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
-        switch (response) {
-            .request_completed => {},
-            .request_failed => |failure| return failureError(failure),
-            else => return error.UnexpectedRuntimeResponse,
-        }
-    }
-
-    pub const WorkspaceCreation = struct {
-        name: []const u8,
-        cwd: []const u8,
-        arguments: []const []const u8,
-    };
-
-    /// Creates a named workspace rooted at an explicit path and returns the
-    /// runtime workspace id. The size only shapes the root pane until a UI
-    /// client attaches and resizes it.
-    ///
-    /// ```zig
-    /// const id = try session.createWorkspace(.{ .name = "fix", .cwd = "/src/fix", .arguments = &.{"/bin/sh"} });
-    /// ```
-    pub fn createWorkspace(session: *Session, request: WorkspaceCreation) !u64 {
-        var send_buffer: [8192]u8 = undefined;
-        try session.connection.send(session.io, try schema.encodeCreateWorkspace(&send_buffer, .{
-            .request_id = session.requestId(),
-            .size = .{ .cols = 80, .rows = 24 },
-            .name = request.name,
-            .launch = .{ .cwd = request.cwd, .arguments = request.arguments },
-        }));
-
-        const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
-        switch (response) {
-            .pane_opened => |opened| return schema.id.raw(opened.location.workspace.workspace),
-            .request_failed => |failure| return failureError(failure),
-            else => return error.UnexpectedRuntimeResponse,
-        }
-    }
-
-    pub fn nowMs(session: *const Session) i64 {
-        return Io.Timestamp.now(session.io, .real).toMilliseconds();
-    }
-
-    pub fn sleepMs(session: *const Session, milliseconds: u32) void {
-        session.io.sleep(.fromMilliseconds(milliseconds), .awake) catch {};
-    }
-};
-
 pub const ControlError = error{
     PaneNotFound,
     PaneExited,
@@ -497,7 +40,7 @@ pub const ControlError = error{
     RuntimeRefused,
 };
 
-fn failureError(failure: schema.RequestFailed) ControlError {
+pub fn failureError(failure: RequestFailedType) ControlError {
     return switch (failure.code) {
         .pane_not_found => error.PaneNotFound,
         .pane_exited => error.PaneExited,
@@ -528,7 +71,7 @@ pub fn describe(err: anyerror) []const u8 {
     };
 }
 
-pub fn statusName(status: schema.AgentStatus) []const u8 {
+pub fn statusName(status: AgentStatusType) []const u8 {
     return switch (status) {
         .unknown => "unknown",
         .working => "working",
@@ -544,7 +87,7 @@ pub fn statusName(status: schema.AgentStatus) []const u8 {
 /// ```zig
 /// try writeJsonString(writer, title);
 /// ```
-pub fn writeJsonString(writer: *Io.Writer, text: []const u8) !void {
+pub fn writeJsonString(writer: *std.Io.Writer, text: []const u8) !void {
     try writer.writeByte('"');
     for (text) |byte| {
         switch (byte) {
@@ -565,7 +108,7 @@ pub fn writeJsonString(writer: *Io.Writer, text: []const u8) !void {
 /// ```zig
 /// try writeAgentJson(writer, agent);
 /// ```
-pub fn writeAgentJson(writer: *Io.Writer, agent: *const Agent) !void {
+pub fn writeAgentJson(writer: *std.Io.Writer, agent: *const ControlAgent) !void {
     try writer.print("{{\"pane_id\":{d},\"pane_generation\":{d},\"workspace_id\":{d},\"tab_id\":{d},\"pane_index\":{d},\"provider\":", .{
         agent.pane_id,
         agent.pane_generation,
@@ -592,7 +135,7 @@ pub fn writeAgentJson(writer: *Io.Writer, agent: *const Agent) !void {
 /// ```zig
 /// try writeAgentRow(writer, agent);
 /// ```
-pub fn writeAgentRow(writer: *Io.Writer, agent: *const Agent) !void {
+pub fn writeAgentRow(writer: *std.Io.Writer, agent: *const ControlAgent) !void {
     try writer.print("{d:<6}{d:<5}{s:<9}{s:<8}{s:<18}{s:<14}{s}\n", .{
         agent.pane_id,
         agent.pane_generation,
@@ -606,7 +149,7 @@ pub fn writeAgentRow(writer: *Io.Writer, agent: *const Agent) !void {
 
 pub const agent_row_header = "PANE  GEN  STATUS   PROV    WORKSPACE         TAB           TITLE\n";
 
-fn copyBounded(storage: []u8, value: []const u8) u8 {
+pub fn copyBounded(storage: []u8, value: []const u8) u8 {
     const len = @min(storage.len, value.len);
     @memcpy(storage[0..len], value[0..len]);
     return @intCast(len);
@@ -614,7 +157,7 @@ fn copyBounded(storage: []u8, value: []const u8) u8 {
 
 test "json strings escape quotes, backslashes and control bytes" {
     var buffer: [64]u8 = undefined;
-    var writer = Io.Writer.fixed(&buffer);
+    var writer = std.Io.Writer.fixed(&buffer);
 
     try writeJsonString(&writer, "a\"b\\c\nd\x01");
 
@@ -623,8 +166,8 @@ test "json strings escape quotes, backslashes and control bytes" {
 
 test "snapshot resolution prefers exact pane ids and rejects ambiguous titles" {
     var snapshot: Snapshot = .{};
-    snapshot.entries[0] = Agent.fromEntry(.{
-        .pane_id = try schema.id.pane(7),
+    snapshot.entries[0] = ControlAgent.fromEntry(.{
+        .pane_id = try pane_module(7),
         .pane_generation = 2,
         .process_id = 1,
         .session_id = .{0} ** 16,

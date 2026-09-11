@@ -1,149 +1,20 @@
 //! State machine for asynchronous writes from a pane's bounded input queue.
 
+const GenericInputRuntimePort = @import("GenericInputRuntimePort.zig").Type;
+const InputCapture = @import("InputCapture.zig");
+const GenericInputPump = @import("GenericInputPump.zig").Type;
+const Pane = @import("../../../../pane/Pane.zig");
+const PaneStore = @import("../../../../pane/PaneStore.zig");
+const RuntimeMetrics = @import("../../../observability/RuntimeMetrics.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const pane_mod = @import("../../../../pane/root.zig");
-const telemetry_mod = @import("../../../observability/root.zig").telemetry;
+const enabled_module = @import("telar-core").enabled;
 
-const Io = std.Io;
-const diagnostics = core.diagnostics;
-const Pane = pane_mod.Pane;
-const PaneKey = pane_mod.PaneKey;
-const PaneStore = pane_mod.PaneStore;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
-
-pub const Completion = struct {
-    pane: PaneKey,
-    started_ns: u64,
-    result: anyerror!void,
+const test_port: GenericInputRuntimePort(InputCapture) = .{
+    .start = InputCapture.start,
+    .collect = InputCapture.collect,
 };
 
-/// Stable input borrowed from a pane until its completion event is handled.
-pub const Write = struct {
-    io: Io,
-    pane: *Pane,
-    bytes: []const u8,
-    started_ns: u64,
-};
-
-pub const Resources = struct {
-    io: Io,
-    panes: *PaneStore,
-    metrics: *RuntimeMetrics,
-};
-
-/// Defines the async writer and lifecycle effects supplied by the runtime.
-///
-/// ```zig
-/// const port: RuntimePort(Context) = .{ .start = start, .collect = collect };
-/// ```
-pub fn RuntimePort(comptime Context: type) type {
-    return struct {
-        start: *const fn (*Context, Write) anyerror!void,
-        collect: *const fn (*Context) void,
-    };
-}
-
-/// Creates a statically dispatched input pump for one runtime context.
-///
-/// ```zig
-/// const InputPump = Pump(Context, port);
-/// ```
-pub fn Pump(comptime Context: type, comptime port: RuntimePort(Context)) type {
-    return struct {
-        const Self = @This();
-
-        context: *Context,
-        resources: Resources,
-
-        /// Binds the pane repository and telemetry owned by one runtime.
-        ///
-        /// ```zig
-        /// var pump = InputPump.init(&context, resources);
-        /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
-            return .{ .context = context, .resources = resources };
-        }
-
-        /// Starts at most one write for the pane. Async-start failure rolls
-        /// back the borrow and preserves every queued byte for a later retry.
-        ///
-        /// ```zig
-        /// try pump.schedule(pane);
-        /// ```
-        pub fn schedule(pump: *Self, pane: *Pane) !void {
-            const bytes = pane.beginPtyInputWrite() orelse return;
-            const write: Write = .{
-                .io = pump.resources.io,
-                .pane = pane,
-                .bytes = bytes,
-                .started_ns = if (comptime diagnostics.enabled) diagnostics.now(pump.resources.io) else 0,
-            };
-
-            port.start(pump.context, write) catch |err| {
-                pane.cancelPtyInputWrite();
-                return err;
-            };
-        }
-
-        /// Applies exactly one completion to its generation-matched pane.
-        /// Success consumes the borrowed prefix and schedules the backlog;
-        /// PTY failure clears the queue. Collection runs after a settled pump.
-        ///
-        /// ```zig
-        /// try pump.complete(completion);
-        /// ```
-        pub fn complete(pump: *Self, completion: Completion) !void {
-            const pane = pump.resources.panes.resolve(completion.pane) orelse {
-                pump.resources.metrics.stale_pane_events += 1;
-                return;
-            };
-
-            const result: pane_mod.PtyWriteResult = if (completion.result) |_| .succeeded else |_| .failed;
-
-            pane.completePtyInputWrite(result);
-
-            if (comptime diagnostics.enabled) {
-                pump.resources.metrics.input_write.observe(
-                    diagnostics.elapsed(completion.started_ns, diagnostics.now(pump.resources.io)),
-                );
-            }
-
-            if (result == .succeeded) {
-                try pump.schedule(pane);
-            }
-
-            port.collect(pump.context);
-        }
-    };
-}
-
-const Capture = struct {
-    starts: usize = 0,
-    collects: usize = 0,
-    start_failure: ?anyerror = null,
-    last_bytes: []const u8 = "",
-
-    fn start(capture: *Capture, write: Write) !void {
-        capture.starts += 1;
-        capture.last_bytes = write.bytes;
-
-        if (capture.start_failure) |failure| {
-            return failure;
-        }
-    }
-
-    fn collect(capture: *Capture) void {
-        capture.collects += 1;
-    }
-};
-
-const test_port: RuntimePort(Capture) = .{
-    .start = Capture.start,
-    .collect = Capture.collect,
-};
-
-const TestPump = Pump(Capture, test_port);
+const TestPump = GenericInputPump(InputCapture, test_port);
 
 fn initTestPane(pane: *Pane) void {
     pane.id = @enumFromInt(7);
@@ -154,7 +25,7 @@ fn initTestPane(pane: *Pane) void {
     pane.actor_count = 0;
 }
 
-fn testPump(capture: *Capture, panes: *PaneStore, metrics: *RuntimeMetrics) TestPump {
+fn testPump(capture: *InputCapture, panes: *PaneStore, metrics: *RuntimeMetrics) TestPump {
     return TestPump.init(capture, .{
         .io = std.testing.io,
         .panes = panes,
@@ -163,7 +34,7 @@ fn testPump(capture: *Capture, panes: *PaneStore, metrics: *RuntimeMetrics) Test
 }
 
 fn expectInputTiming(metrics: *const RuntimeMetrics, expected_debug_count: u64) !void {
-    const expected = if (comptime diagnostics.enabled) expected_debug_count else 0;
+    const expected = if (comptime enabled_module) expected_debug_count else 0;
     try std.testing.expectEqual(expected, metrics.input_write.count);
 }
 
@@ -173,7 +44,7 @@ test "schedule is single-flight and rolls async-start failure back" {
     var panes: PaneStore = .{};
     try panes.insert(&pane);
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var capture: Capture = .{ .start_failure = error.WriterUnavailable };
+    var capture: InputCapture = .{ .start_failure = error.WriterUnavailable };
     var pump = testPump(&capture, &panes, &metrics);
 
     try pump.schedule(&pane);
@@ -203,7 +74,7 @@ test "successful completion consumes only its borrow and starts the backlog" {
     var panes: PaneStore = .{};
     try panes.insert(&pane);
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var capture: Capture = .{};
+    var capture: InputCapture = .{};
     var pump = testPump(&capture, &panes, &metrics);
     try std.testing.expect(pane.queuePtyInput("first"));
     try pump.schedule(&pane);
@@ -232,7 +103,7 @@ test "failed completion clears the pump without starting another write" {
     var panes: PaneStore = .{};
     try panes.insert(&pane);
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var capture: Capture = .{};
+    var capture: InputCapture = .{};
     var pump = testPump(&capture, &panes, &metrics);
     try std.testing.expect(pane.queuePtyInput("first"));
     try pump.schedule(&pane);
@@ -258,7 +129,7 @@ test "backlog start failure preserves bytes and skips collection" {
     var panes: PaneStore = .{};
     try panes.insert(&pane);
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var capture: Capture = .{};
+    var capture: InputCapture = .{};
     var pump = testPump(&capture, &panes, &metrics);
     try std.testing.expect(pane.queuePtyInput("first"));
     try pump.schedule(&pane);
@@ -285,7 +156,7 @@ test "stale completion is counted without touching writer or lifecycle ports" {
     var panes: PaneStore = .{};
     try panes.insert(&pane);
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var capture: Capture = .{};
+    var capture: InputCapture = .{};
     var pump = testPump(&capture, &panes, &metrics);
     try std.testing.expect(pane.queuePtyInput("still borrowed"));
     _ = pane.beginPtyInputWrite().?;

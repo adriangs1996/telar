@@ -3,30 +3,17 @@
 //! hooks point at. This is the pure scan over appended bytes; the runtime
 //! owns the file I/O.
 
+const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
+const Scan = @import("Scan.zig");
 const std = @import("std");
-const core = @import("telar-core");
-
-const schema = core.schema;
+const TitleLine = @import("TitleLine.zig");
+const truncateSessionTitle_module = @import("telar-core").truncateSessionTitle;
 
 /// Bytes one probe reads; a longer backlog continues on the next probe.
 pub const max_scan_bytes = 64 * 1024;
 /// A title line longer than this is skipped rather than parsed.
 pub const max_line_bytes = 4096;
 const title_prefix = "{\"type\":\"custom-title\"";
-
-pub const Scan = struct {
-    /// Bytes fully handled: up to and including the last newline, so a
-    /// partial trailing line is read again once complete.
-    consumed: usize,
-    /// The last name written for the session, copied into the caller's
-    /// buffer and cut to the title bound. Empty means the name was cleared.
-    title: ?[]const u8,
-};
-
-const TitleLine = struct {
-    customTitle: []const u8 = "",
-    sessionId: []const u8 = "",
-};
 
 /// Finds the last `custom-title` line for `session` among the complete lines
 /// in `bytes`. Other lines are skipped by prefix without parsing, so a
@@ -35,7 +22,7 @@ const TitleLine = struct {
 /// ```zig
 /// const result = scan(bytes, "0192...", &title_buffer);
 /// ```
-pub fn scan(bytes: []const u8, session: []const u8, buffer: *[schema.max_agent_session_title_bytes]u8) Scan {
+pub fn scan(bytes: []const u8, session: []const u8, buffer: *[max_agent_session_title_bytes_module]u8) Scan {
     var result: Scan = .{ .consumed = 0, .title = null };
     var rest = bytes;
 
@@ -54,14 +41,14 @@ pub fn scan(bytes: []const u8, session: []const u8, buffer: *[schema.max_agent_s
             continue;
         }
 
-        result.title = schema.truncateSessionTitle(buffer, parsed.customTitle);
+        result.title = truncateSessionTitle_module(buffer, parsed.customTitle);
     }
 
     return result;
 }
 
 test "scan keeps the last name for the session and leaves a partial line" {
-    var buffer: [schema.max_agent_session_title_bytes]u8 = undefined;
+    var buffer: [max_agent_session_title_bytes_module]u8 = undefined;
     const bytes =
         "{\"type\":\"custom-title\",\"customTitle\":\"first\",\"sessionId\":\"abc\"}\n" ++
         "{\"type\":\"user\",\"message\":{\"content\":\"{\\\"type\\\":\\\"custom-title\\\"}\"}}\n" ++
@@ -78,7 +65,7 @@ test "scan keeps the last name for the session and leaves a partial line" {
 }
 
 test "scan reports a cleared name as an empty title and bounds long names" {
-    var buffer: [schema.max_agent_session_title_bytes]u8 = undefined;
+    var buffer: [max_agent_session_title_bytes_module]u8 = undefined;
     const cleared = scan("{\"type\":\"custom-title\",\"customTitle\":\"\",\"sessionId\":\"abc\"}\n", "abc", &buffer);
     try std.testing.expectEqualStrings("", cleared.title.?);
 

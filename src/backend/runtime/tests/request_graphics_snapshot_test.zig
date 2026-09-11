@@ -1,14 +1,15 @@
 //! Vertical and application tests for graphics snapshot recovery.
 
+const GenericRequestGraphicsSnapshotController = @import("../entrypoints/requests/GenericRequestGraphicsSnapshotController.zig").Type;
+const RequestGraphicsSnapshotHandlerType = @import("../application/commands/RequestGraphicsSnapshotHandler.zig");
+const PaneFixture = @import("PaneFixture.zig");
+const ImageKeyType = @import("telar-core").ImageKey;
 const std = @import("std");
-const core = @import("telar-core");
 const request_graphics_snapshot_commands = @import("../application/commands/request_graphics_snapshot.zig");
-const request_graphics_snapshot_controller = @import("../entrypoints/requests/request_graphics_snapshot.zig");
-const test_support = @import("support.zig");
+const pane_module = @import("telar-core").pane;
+const decodeServer_module = @import("telar-core").decodeServer;
 
-const schema = core.schema;
-const PaneFixture = test_support.PaneFixture;
-const GraphicsSnapshotController = request_graphics_snapshot_controller.Controller(*request_graphics_snapshot_commands.RequestGraphicsSnapshotHandler);
+const GraphicsSnapshotController = GenericRequestGraphicsSnapshotController(*RequestGraphicsSnapshotHandlerType);
 
 test "RequestGraphicsSnapshotHandler discards transfer state and preserves transport policy" {
     var fixture: PaneFixture = .{};
@@ -16,7 +17,7 @@ test "RequestGraphicsSnapshotHandler discards transfer state and preserves trans
     defer fixture.deinit();
 
     const attachment = fixture.attachments.find(fixture.pane.id).?;
-    const key: core.graphics.ImageKey = .{ .image_id = 7, .generation = 3 };
+    const key: ImageKeyType = .{ .image_id = 7, .generation = 3 };
     attachment.graphics.snapshot = .idle;
     attachment.graphics.revision = 11;
     attachment.graphics.target_revision = 10;
@@ -49,7 +50,7 @@ test "RequestGraphicsSnapshotHandler discards transfer state and preserves trans
         .reserved_len = transfer_bytes,
     };
 
-    var handler: request_graphics_snapshot_commands.RequestGraphicsSnapshotHandler = .{
+    var handler: RequestGraphicsSnapshotHandlerType = .{
         .attachments = &fixture.attachments,
     };
 
@@ -85,11 +86,11 @@ test "RequestGraphicsSnapshotHandler leaves other attachments unchanged" {
     attachment.graphics.target_revision = 12;
     attachment.graphics.batch_active = true;
     attachment.graphics.observed_revision = 11;
-    var handler: request_graphics_snapshot_commands.RequestGraphicsSnapshotHandler = .{
+    var handler: RequestGraphicsSnapshotHandlerType = .{
         .attachments = &fixture.attachments,
     };
 
-    const result = try handler.execute(.{ .pane_id = try schema.id.pane(99) });
+    const result = try handler.execute(.{ .pane_id = try pane_module(99) });
 
     try std.testing.expectEqual(request_graphics_snapshot_commands.RequestGraphicsSnapshotResult.pane_not_attached, result);
     try std.testing.expectEqual(.idle, attachment.graphics.snapshot);
@@ -105,7 +106,7 @@ test "graphics recovery crosses controller and handler without stale accounting"
 
     const attachment = fixture.attachments.find(fixture.pane.id).?;
     attachment.graphics.snapshot = .idle;
-    var handler: request_graphics_snapshot_commands.RequestGraphicsSnapshotHandler = .{
+    var handler: RequestGraphicsSnapshotHandlerType = .{
         .attachments = &fixture.attachments,
     };
     var controller = GraphicsSnapshotController.init(&fixture.metrics, &handler);
@@ -122,7 +123,7 @@ test "repeated recovery requests emit one complete empty graphics snapshot" {
     defer fixture.deinit();
 
     const attachment = fixture.attachments.find(fixture.pane.id).?;
-    var handler: request_graphics_snapshot_commands.RequestGraphicsSnapshotHandler = .{
+    var handler: RequestGraphicsSnapshotHandlerType = .{
         .attachments = &fixture.attachments,
     };
     var controller = GraphicsSnapshotController.init(&fixture.metrics, &handler);
@@ -136,7 +137,7 @@ test "repeated recovery requests emit one complete empty graphics snapshot" {
         .global_credit = credit,
         .live_storage_available = true,
     })).?;
-    const begin_message = try schema.decodeServer(begin.bytes);
+    const begin_message = try decodeServer_module(begin.bytes);
     const begin_effect = attachment.commitPrepared(begin);
 
     try std.testing.expect(begin_message == .graphics_snapshot);
@@ -148,7 +149,7 @@ test "repeated recovery requests emit one complete empty graphics snapshot" {
         .global_credit = credit,
         .live_storage_available = true,
     })).?;
-    const end_message = try schema.decodeServer(end.bytes);
+    const end_message = try decodeServer_module(end.bytes);
     const end_effect = attachment.commitPrepared(end);
 
     try std.testing.expect(end_message == .graphics_snapshot);

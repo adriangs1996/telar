@@ -2,21 +2,29 @@
 //! connection and the client model: queries go out per keystroke, only the
 //! newest reply lands, and Enter pastes the selected command.
 
-const core = @import("telar-core");
-const std = @import("std");
-const history_palette = @import("telar-client").model.history_palette;
+const Client = @import("../../Client.zig");
+const HandlerType = @import("telar-client").HistoryBrowserHandler;
 const name_prompts = @import("name_prompts.zig");
-const pane_inputs = @import("pane_inputs.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-const connection_outbox = @import("telar-client").connection.outbox;
+const OwnedHistoryQueryType = @import("telar-client").OwnedHistoryQuery;
+const max_history_results = @import("telar-core").max_history_results;
+const raw_module = @import("telar-core").raw;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
+const HistoryResultsViewType = @import("telar-core").HistoryResultsView;
+const HistoryEntryType = @import("telar-core").HistoryEntry;
+const std = @import("std");
+const inspection = @import("../../presentation/history_inspection.zig");
+const MessageType = @import("telar-client").Message;
+const HistoryOutputType = @import("telar-core").HistoryOutput;
+const RequestFailedType = @import("telar-core").RequestFailed;
+const RequestIdType = @import("telar-core").RequestId;
+const pane_input_module = @import("telar-client").pane_input;
+const max_encoded_bytes = @import("telar-client").max_encoded_bytes;
+const PasteRequest = @import("PasteRequest.zig");
+const pane_inputs = @import("pane_inputs.zig");
+const HistoryPrunedType = @import("telar-core").HistoryPruned;
 
-const Client = @import("../../client.zig");
-const schema = core.schema;
-const history_application = @import("telar-client").application.input.history_browser;
-const inspection = @import("../../presentation/root.zig").history_inspection;
-
-fn handler(client: *Client) history_application.Handler {
+fn handler(client: *Client) HandlerType {
     return .{ .model = &client.model };
 }
 
@@ -50,18 +58,18 @@ pub fn sendQuery(client: *Client, query: []const u8) !void {
 fn sendPage(client: *Client, query: []const u8) !void {
     const request_id = try request_lifecycle.nextId(client);
 
-    var owned: connection_outbox.OwnedHistoryQuery = .{
+    var owned: OwnedHistoryQueryType = .{
         .request_id = request_id,
-        .query_len = @intCast(@min(query.len, connection_outbox.OwnedHistoryQuery.max_query_bytes)),
+        .query_len = @intCast(@min(query.len, OwnedHistoryQueryType.max_query_bytes)),
         .author = if (client.history_show_agent_commands) .all else .human,
         .match = if (client.history_match_fts) .fts else .fuzzy,
-        .limit = history_palette.max_entries,
+        .limit = max_history_results,
         .offset = client.model.history_palette.pending_offset,
         .snapshot_id = client.model.history_palette.snapshot_id,
     };
     @memcpy(owned.query[0..owned.query_len], query[0..owned.query_len]);
     applyScope(client, &owned);
-    if (!handler(client).requestPage(schema.id.raw(request_id), owned.scope)) {
+    if (!handler(client).requestPage(raw_module(request_id), owned.scope)) {
         return;
     }
 
@@ -73,7 +81,7 @@ fn sendPage(client: *Client, query: []const u8) !void {
     };
 }
 
-fn applyScope(client: *Client, owned: *connection_outbox.OwnedHistoryQuery) void {
+fn applyScope(client: *Client, owned: *OwnedHistoryQueryType) void {
     const prompt = client.model.name_prompt.currentConst() orelse return;
     if (prompt.target() != .history) {
         return;
@@ -90,7 +98,7 @@ fn applyScope(client: *Client, owned: *connection_outbox.OwnedHistoryQuery) void
             const list = client.model.workspaceListSnapshot();
             const index = list.indexOf(workspace) orelse return;
             const path = list.pathAt(index);
-            if (path.len == 0 or path.len > connection_outbox.OwnedHistoryQuery.max_scope_bytes) {
+            if (path.len == 0 or path.len > OwnedHistoryQueryType.max_scope_bytes) {
                 return;
             }
 
@@ -102,7 +110,7 @@ fn applyScope(client: *Client, owned: *connection_outbox.OwnedHistoryQuery) void
             const active = client.model.workspace.activeConst() orelse return;
             const pane = active.model.focusedPaneConst() orelse return;
             const cwd = pane.cwdSlice();
-            if (cwd.len == 0 or cwd.len > connection_outbox.OwnedHistoryQuery.max_scope_bytes) {
+            if (cwd.len == 0 or cwd.len > OwnedHistoryQueryType.max_scope_bytes) {
                 return;
             }
 
@@ -125,8 +133,8 @@ fn applyScope(client: *Client, owned: *connection_outbox.OwnedHistoryQuery) void
 /// ```zig
 /// _ = try apply(client, view);
 /// ```
-pub fn apply(client: *Client, view: schema.HistoryResultsView) !bool {
-    var storage: [history_palette.max_entries]schema.HistoryEntry = undefined;
+pub fn apply(client: *Client, view: HistoryResultsViewType) !bool {
+    var storage: [max_history_results]HistoryEntryType = undefined;
     var count: usize = 0;
     var iterator = view.entries();
     while (try iterator.next()) |entry| {
@@ -139,7 +147,7 @@ pub fn apply(client: *Client, view: schema.HistoryResultsView) !bool {
     }
 
     const changed = handler(client).apply(.{
-        .request_id = schema.id.raw(view.request_id),
+        .request_id = raw_module(view.request_id),
         .entries = storage[0..count],
         .snapshot_id = view.snapshot_id,
         .has_more = view.has_more,
@@ -163,11 +171,11 @@ pub fn refreshInspection(client: *Client) !void {
 
         const read = next orelse return;
         const request_id = try request_lifecycle.nextId(client);
-        if (!handler(client).requestRead(schema.id.raw(request_id), read)) {
+        if (!handler(client).requestRead(raw_module(request_id), read)) {
             return;
         }
 
-        const message: connection_outbox.Message = switch (read.kind) {
+        const message: MessageType = switch (read.kind) {
             .command => .{ .query_history = .{ .request_id = request_id, .entry_id = read.id, .limit = 1 } },
             .output => .{ .read_history_output = .{ .request_id = request_id, .id = read.id } },
         };
@@ -185,17 +193,17 @@ pub fn navigatePage(client: *Client) !void {
 
 /// Delivers output through the history application boundary.
 /// Example: `_ = output(client, reply);`.
-pub fn output(client: *Client, reply: schema.HistoryOutput) bool {
+pub fn output(client: *Client, reply: HistoryOutputType) bool {
     return handler(client).output(reply);
 }
 
 /// Consumes owned failures, including stale history requests.
 /// Example: `if (failed(client, failure)) return;`.
-pub fn failed(client: *Client, failure: schema.RequestFailed) bool {
+pub fn failed(client: *Client, failure: RequestFailedType) bool {
     return handler(client).fail(failure);
 }
 
-fn enqueue(client: *Client, message: connection_outbox.Message, request_id: schema.RequestId) !void {
+fn enqueue(client: *Client, message: MessageType, request_id: RequestIdType) !void {
     runtime_transport.enqueue(client, message) catch |err| {
         _ = failed(client, .{ .request_id = request_id, .code = .resource_limit, .message = "History queue is full; change selection or retry" });
         if (err != error.ClientOutboxFull) {
@@ -214,13 +222,13 @@ pub fn canSubmit(client: *Client, selection: u16) bool {
     };
     const active = client.model.workspace.activeConst() orelse return false;
     const pane = active.model.focusedPaneConst() orelse return false;
-    const pane_input = @import("telar-client").application.input.pane_input;
+    const pane_input = pane_input_module;
     pane_input.validateHistoryText(command, pane.input_modes.bracketed_paste) catch |err| {
         handler(client).reject(if (err == error.UnframedHistoryText) "Multiline/tab paste requires shell bracketed-paste support" else "Command contains terminal controls; cannot paste");
         return false;
     };
 
-    const slots = (command.len + 13 + connection_outbox.max_input_bytes - 1) / connection_outbox.max_input_bytes;
+    const slots = (command.len + 13 + max_encoded_bytes - 1) / max_encoded_bytes;
     if (runtime_transport.availableCapacity(client) < slots + 1) {
         handler(client).reject("Input is busy; retry the command");
         return false;
@@ -248,11 +256,6 @@ pub fn pasteSelection(client: *Client, request: PasteRequest) !void {
     _ = try pane_inputs.historyPaste(client, .{ .text = command, .run = request.run });
 }
 
-pub const PasteRequest = struct {
-    selection: u16,
-    run: bool,
-};
-
 /// Sends one exact-entry deletion for the palette's selected row. The
 /// runtime answers with `history_pruned`, which requeries the palette so
 /// the row disappears only once it is actually gone.
@@ -262,7 +265,7 @@ pub const PasteRequest = struct {
 /// ```
 pub fn deleteSelected(client: *Client, selection: u16) !void {
     const request_id = try request_lifecycle.nextId(client);
-    const id = handler(client).requestDelete(schema.id.raw(request_id), selection) orelse return;
+    const id = handler(client).requestDelete(raw_module(request_id), selection) orelse return;
     try enqueue(client, .{ .delete_history = .{ .request_id = request_id, .id = id } }, request_id);
 }
 
@@ -271,8 +274,8 @@ pub fn deleteSelected(client: *Client, selection: u16) !void {
 /// ```zig
 /// _ = try pruned(client, confirmation);
 /// ```
-pub fn pruned(client: *Client, confirmation: schema.HistoryPruned) !bool {
-    if (!handler(client).pruned(schema.id.raw(confirmation.request_id))) {
+pub fn pruned(client: *Client, confirmation: HistoryPrunedType) !bool {
+    if (!handler(client).pruned(raw_module(confirmation.request_id))) {
         return false;
     }
 

@@ -1,10 +1,7 @@
-const std = @import("std");
-const Io = std.Io;
-const File = Io.File;
-const windows = std.os.windows;
+const WindowsTty = @import("WindowsTty.zig");
 
-const Size = @import("types.zig").Size;
-const LocalTime = @import("types.zig").LocalTime;
+const std = @import("std");
+const LocalTime = @import("LocalTime.zig");
 
 // Windows: console modes for the state, the screen buffer info for the size,
 // and - the awkward one - polling for the change.
@@ -13,58 +10,36 @@ const LocalTime = @import("types.zig").LocalTime;
 // That is the arrangement the project asks for anyway: OS APIs belong in the
 // platform file and nowhere else.
 //
-// NOT YET VERIFIED ON A REAL WINDOWS MACHINE. It cross compiles, and the
-// console mode flags and structures are the documented ones, but nobody has
-// watched it run. Treat a bug report against this file as more likely to be
-// right than the code is.
-
-const HANDLE = windows.HANDLE;
-const DWORD = windows.DWORD;
-const BOOL = windows.BOOL;
-const WORD = windows.WORD;
-const SHORT = i16;
+// Not verified on a real Windows machine. The console ABI has a layout test;
+// TTY method checks still expose pre-existing Zig 0.16 Windows API mismatches.
+// A passing layout check does not establish working console I/O.
 
 // Output modes.
-const ENABLE_PROCESSED_OUTPUT: DWORD = 0x0001;
-const ENABLE_VIRTUAL_TERMINAL_PROCESSING: DWORD = 0x0004;
-const DISABLE_NEWLINE_AUTO_RETURN: DWORD = 0x0008;
+pub const ENABLE_PROCESSED_OUTPUT: std.os.windows.DWORD = 0x0001;
+pub const ENABLE_VIRTUAL_TERMINAL_PROCESSING: std.os.windows.DWORD = 0x0004;
+pub const DISABLE_NEWLINE_AUTO_RETURN: std.os.windows.DWORD = 0x0008;
 
 // Input modes. The three that are *cleared* are the ones that make a console
 // behave like a line editor: buffering until Enter, echoing what is typed, and
 // turning Ctrl+C into a signal. Exactly the trio termios calls ICANON, ECHO
 // and ISIG, under different names.
-const ENABLE_PROCESSED_INPUT: DWORD = 0x0001;
-const ENABLE_LINE_INPUT: DWORD = 0x0002;
-const ENABLE_ECHO_INPUT: DWORD = 0x0004;
-const ENABLE_WINDOW_INPUT: DWORD = 0x0008;
-const ENABLE_MOUSE_INPUT: DWORD = 0x0010;
-const ENABLE_VIRTUAL_TERMINAL_INPUT: DWORD = 0x0200;
+pub const ENABLE_PROCESSED_INPUT: std.os.windows.DWORD = 0x0001;
+pub const ENABLE_LINE_INPUT: std.os.windows.DWORD = 0x0002;
+pub const ENABLE_ECHO_INPUT: std.os.windows.DWORD = 0x0004;
+pub const ENABLE_WINDOW_INPUT: std.os.windows.DWORD = 0x0008;
+const ENABLE_MOUSE_INPUT: std.os.windows.DWORD = 0x0010;
+pub const ENABLE_VIRTUAL_TERMINAL_INPUT: std.os.windows.DWORD = 0x0200;
 
-const COORD = extern struct { X: SHORT, Y: SHORT };
-const SMALL_RECT = extern struct { Left: SHORT, Top: SHORT, Right: SHORT, Bottom: SHORT };
-const CONSOLE_SCREEN_BUFFER_INFO = extern struct {
-    dwSize: COORD,
-    dwCursorPosition: COORD,
-    wAttributes: WORD,
-    srWindow: SMALL_RECT,
-    dwMaximumWindowSize: COORD,
-};
-const SYSTEMTIME = extern struct {
-    year: WORD,
-    month: WORD,
-    day_of_week: WORD,
-    day: WORD,
-    hour: WORD,
-    minute: WORD,
-    second: WORD,
-    milliseconds: WORD,
-};
+const COORD = @import("Coord.zig").COORD;
+const SMALL_RECT = @import("SmallRect.zig").SMALL_RECT;
+pub const CONSOLE_SCREEN_BUFFER_INFO = @import("ConsoleScreenBufferInfo.zig").CONSOLE_SCREEN_BUFFER_INFO;
+const SYSTEMTIME = @import("SystemTime.zig").SYSTEMTIME;
 
-extern "kernel32" fn GetConsoleMode(hConsoleHandle: HANDLE, lpMode: *DWORD) callconv(.winapi) BOOL;
-extern "kernel32" fn SetConsoleMode(hConsoleHandle: HANDLE, dwMode: DWORD) callconv(.winapi) BOOL;
-extern "kernel32" fn GetConsoleScreenBufferInfo(hConsoleOutput: HANDLE, lpConsoleScreenBufferInfo: *CONSOLE_SCREEN_BUFFER_INFO) callconv(.winapi) BOOL;
+pub extern "kernel32" fn GetConsoleMode(hConsoleHandle: std.os.windows.HANDLE, lpMode: *std.os.windows.DWORD) callconv(.winapi) std.os.windows.BOOL;
+pub extern "kernel32" fn SetConsoleMode(hConsoleHandle: std.os.windows.HANDLE, dwMode: std.os.windows.DWORD) callconv(.winapi) std.os.windows.BOOL;
+pub extern "kernel32" fn GetConsoleScreenBufferInfo(hConsoleOutput: std.os.windows.HANDLE, lpConsoleScreenBufferInfo: *CONSOLE_SCREEN_BUFFER_INFO) callconv(.winapi) std.os.windows.BOOL;
 extern "kernel32" fn GetLocalTime(system_time: *SYSTEMTIME) callconv(.winapi) void;
-extern "kernel32" fn GetConsoleWindow() callconv(.winapi) ?windows.HWND;
+pub extern "kernel32" fn GetConsoleWindow() callconv(.winapi) ?std.os.windows.HWND;
 
 pub fn localTime() LocalTime {
     var value: SYSTEMTIME = undefined;
@@ -81,141 +56,22 @@ pub fn localTime() LocalTime {
     };
 }
 
-pub const FastWriter = struct {
-    /// Windows retains the single-flight blocking output actor.
-    /// Example: `const fast = FastWriter.open();`.
-    pub fn open() ?FastWriter {
-        return null;
-    }
+pub const FastWriter = @import("WindowsFastWriter.zig");
 
-    /// Example: `const count = try FastWriter.writeOpaque(context, bytes);`.
-    pub fn writeOpaque(_: *anyopaque, _: []const u8) !usize {
-        return error.FastOutputUnavailable;
-    }
+pub const Tty = @import("WindowsTty.zig");
 
-    /// Example: `fast.deinit();`.
-    pub fn deinit(_: *FastWriter) void {}
-};
-
-pub const Tty = struct {
-    input: HANDLE,
-    output: HANDLE,
-    original_input: DWORD,
-    original_output: DWORD,
-
-    /// Opens the console directly rather than using the standard handles.
-    ///
-    /// The same reasoning as `/dev/tty` on Unix: stdin may be a pipe when the
-    /// program was started from a script, and `CONIN$`/`CONOUT$` name the
-    /// console itself whatever the standard handles were redirected to.
-    pub fn open() !Tty {
-        const input = try openConsole("CONIN$", true);
-        errdefer windows.CloseHandle(input);
-        const output = try openConsole("CONOUT$", false);
-        errdefer windows.CloseHandle(output);
-
-        var original_input: DWORD = 0;
-        var original_output: DWORD = 0;
-        if (GetConsoleMode(input, &original_input) == 0) {
-            return error.NotATerminal;
-        }
-        if (GetConsoleMode(output, &original_output) == 0) {
-            return error.NotATerminal;
-        }
-
-        // Without VIRTUAL_TERMINAL_PROCESSING every escape sequence this
-        // program emits is printed literally, which is what makes a Windows
-        // TUI look like it vomited its own source code.
-        const out_mode = original_output |
-            ENABLE_PROCESSED_OUTPUT |
-            ENABLE_VIRTUAL_TERMINAL_PROCESSING |
-            // Stops the console wrapping and scrolling when a write lands in
-            // the last column, which would shift the whole frame up by a row.
-            DISABLE_NEWLINE_AUTO_RETURN;
-
-        const in_mode = (original_input &
-            ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT)) |
-            ENABLE_WINDOW_INPUT |
-            // Delivers keys and mouse as the same escape sequences a Unix
-            // terminal sends, so the input parser is shared rather than
-            // reimplemented against console records.
-            ENABLE_VIRTUAL_TERMINAL_INPUT;
-
-        if (SetConsoleMode(output, out_mode) == 0) {
-            return error.NotATerminal;
-        }
-        if (SetConsoleMode(input, in_mode) == 0) {
-            return error.NotATerminal;
-        }
-
-        return .{
-            .input = input,
-            .output = output,
-            .original_input = original_input,
-            .original_output = original_output,
-        };
-    }
-
-    pub fn deinit(t: *Tty) void {
-        _ = SetConsoleMode(t.input, t.original_input);
-        _ = SetConsoleMode(t.output, t.original_output);
-        windows.CloseHandle(t.input);
-        windows.CloseHandle(t.output);
-    }
-
-    pub fn size(t: *const Tty) Size {
-        var info: CONSOLE_SCREEN_BUFFER_INFO = undefined;
-        if (GetConsoleScreenBufferInfo(t.output, &info) == 0) {
-            return .{ .cols = 80, .rows = 24 };
-        }
-        // `srWindow` and not `dwSize`: the buffer is usually taller than the
-        // window, because that is where the scrollback lives. Drawing to the
-        // buffer's height puts most of the frame where nobody can see it.
-        return .{
-            .cols = @intCast(@max(1, info.srWindow.Right - info.srWindow.Left + 1)),
-            .rows = @intCast(@max(1, info.srWindow.Bottom - info.srWindow.Top + 1)),
-        };
-    }
-
-    pub fn writeHandle(t: *const Tty) File {
-        return .{ .handle = t.output, .flags = .{ .nonblocking = false } };
-    }
-
-    pub fn readHandle(t: *const Tty) File {
-        return .{ .handle = t.input, .flags = .{ .nonblocking = false } };
-    }
-
-    /// Returns a reconnect-stable console identity when no emulator session
-    /// identifier is available in the environment.
-    ///
-    /// ```zig
-    /// const identity = try tty.identity();
-    /// ```
-    pub fn identity(t: *const Tty) !u64 {
-        const raw = if (GetConsoleWindow()) |window|
-            @intFromPtr(window)
-        else
-            @intFromPtr(t.output);
-        if (raw == 0) {
-            return error.TerminalIdentityUnavailable;
-        }
-
-        return @intCast(raw);
-    }
-};
-
-fn openConsole(comptime name: []const u8, read: bool) !HANDLE {
+pub fn openConsole(comptime name: []const u8, read: bool) !std.os.windows.HANDLE {
     const path = std.unicode.utf8ToUtf16LeStringLiteral(name);
-    const handle = windows.kernel32.CreateFileW(
+    const handle = std.os.windows.kernel32.CreateFileW(
         path,
-        if (read) windows.GENERIC_READ | windows.GENERIC_WRITE else windows.GENERIC_READ | windows.GENERIC_WRITE,
-        windows.FILE_SHARE_READ | windows.FILE_SHARE_WRITE,
+        if (read) std.os.windows.GENERIC_READ | std.os.windows.GENERIC_WRITE else std.os.windows.GENERIC_READ | std.os.windows.GENERIC_WRITE,
+        std.os.windows.FILE_SHARE_READ | std.os.windows.FILE_SHARE_WRITE,
         null,
-        windows.OPEN_EXISTING,
+        std.os.windows.OPEN_EXISTING,
         0,
         null,
     );
-    if (handle == windows.INVALID_HANDLE_VALUE) {
+    if (handle == std.os.windows.INVALID_HANDLE_VALUE) {
         return error.NotATerminal;
     }
     return handle;
@@ -225,49 +81,19 @@ fn openConsole(comptime name: []const u8, read: bool) !HANDLE {
 /// mode is per-handle state the next process resets, and there is no POSIX
 /// fatal-signal path to hook. A crash leaves the console in VT mode, which
 /// Windows Terminal recovers from on the next prompt.
-pub fn installCrashRestore(_: *const Tty) void {}
+pub fn installCrashRestore(_: *const WindowsTty) void {}
 
 pub fn emergencyRestore() void {}
 
-/// Notices resizes by looking, because the alternative steals keystrokes.
-///
-/// Windows reports a resize as a `WINDOW_BUFFER_SIZE_EVENT` record on the
-/// console input handle - but reading records *consumes* them, and the same
-/// handle carries the keyboard. A watcher that drained records to find resizes
-/// would eat the input the parser is waiting for, and the symptom is dropped
-/// characters under an unrelated subsystem.
-///
-/// So this asks for the size on a timer instead. It costs one cheap call every
-/// hundred milliseconds and a resize is noticed within that window, which is
-/// well under the time a human takes to finish dragging a window edge. The
-/// honest alternative is to move *all* input behind this file and translate
-/// console records centrally; that is the right long-term answer and a much
-/// larger change than a resize watcher.
-///
-/// Recorded exception to `docs/engineering-invariants.md` ("Idle panes and
-/// clients schedule no polling or repaint proportional to their count"): this
-/// is one constant-cost poll per client on Windows only, independent of pane
-/// count. It disappears when console records are translated centrally.
-pub const ResizeWatcher = struct {
-    tty: *Tty,
-    last: Size,
+pub const ResizeWatcher = @import("WindowsResizeWatcher.zig");
 
-    const interval_ms = 100;
-
-    pub fn init(tty: *Tty) !ResizeWatcher {
-        return .{ .tty = tty, .last = tty.size() };
-    }
-
-    pub fn deinit(_: *ResizeWatcher) void {}
-
-    pub fn wait(w: *ResizeWatcher, io: Io) Io.Cancelable!void {
-        while (true) {
-            try io.sleep(.fromMilliseconds(interval_ms), .awake);
-            const now = w.tty.size();
-            if (now.cols != w.last.cols or now.rows != w.last.rows) {
-                w.last = now;
-                return;
-            }
-        }
-    }
-};
+test "Windows console layouts preserve their pre-extraction ABI" {
+    try std.testing.expectEqual(@as(usize, 4), @sizeOf(COORD));
+    try std.testing.expectEqual(@as(usize, 8), @sizeOf(SMALL_RECT));
+    try std.testing.expectEqual(@as(usize, 22), @sizeOf(CONSOLE_SCREEN_BUFFER_INFO));
+    try std.testing.expectEqual(@as(usize, 2), @alignOf(CONSOLE_SCREEN_BUFFER_INFO));
+    try std.testing.expectEqual(@as(usize, 10), @offsetOf(CONSOLE_SCREEN_BUFFER_INFO, "srWindow"));
+    try std.testing.expectEqual(@as(usize, 18), @offsetOf(CONSOLE_SCREEN_BUFFER_INFO, "dwMaximumWindowSize"));
+    try std.testing.expectEqual(@as(usize, 16), @sizeOf(SYSTEMTIME));
+    try std.testing.expectEqual(@as(usize, 14), @offsetOf(SYSTEMTIME, "milliseconds"));
+}

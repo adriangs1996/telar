@@ -4,11 +4,11 @@ pub const Rule = enum {
     single_line_function_signature,
     trailing_parameter_comma,
     braced_if_branch,
-};
-
-pub const Violation = struct {
-    rule: Rule,
-    line: usize,
-    column: usize,
-    detail: usize = 0,
+    ordinary_struct_declaration,
+    type_file_name,
+    namespace_file_name,
+    generic_constructor,
+    generic_file,
+    generic_import,
+    dedicated_layout_file,
 };

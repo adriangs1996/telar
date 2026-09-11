@@ -1,13 +1,16 @@
 //! Compiler for `config.runtime.session`.
 
-const std = @import("std");
-const lua = @import("lua-api").c;
-const config_model = @import("model.zig");
+const lua_api = @import("lua-api");
+const RuntimeSnapshotType = @import("RuntimeSnapshot.zig");
+const DiagnosticType = @import("telar-client").Diagnostic;
 const value = @import("lua_value.zig");
+const config_model = @import("model.zig");
+const std = @import("std");
+const OptionalBoolean = @import("OptionalBoolean.zig");
 
-pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diagnostic: *config_model.Diagnostic) !void {
-    const absolute = lua.lua_absindex(state, -1);
-    if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *DiagnosticType) !void {
+    const absolute = lua_api.c.lua_absindex(state, -1);
+    if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.session must be a table", .{});
         return error.InvalidConfig;
     }
@@ -29,9 +32,9 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
         diagnostic,
     );
 
-    _ = lua.lua_getfield(state, absolute, "path");
+    _ = lua_api.c.lua_getfield(state, absolute, "path");
     defer value.pop(state, 1);
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
+    if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
 
@@ -48,22 +51,16 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
     runtime.session_path_len = @intCast(path.len);
 }
 
-const OptionalBoolean = struct {
-    table: c_int,
-    field: [*:0]const u8,
-    default: bool,
-};
-
-fn optionalBoolean(state: *lua.lua_State, input: OptionalBoolean, diagnostic: *config_model.Diagnostic) !bool {
-    _ = lua.lua_getfield(state, input.table, input.field);
+fn optionalBoolean(state: *lua_api.c.lua_State, input: OptionalBoolean, diagnostic: *DiagnosticType) !bool {
+    _ = lua_api.c.lua_getfield(state, input.table, input.field);
     defer value.pop(state, 1);
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
+    if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL) {
         return input.default;
     }
-    if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TBOOLEAN) {
         diagnostic.set("config.runtime.session.{s} must be a boolean", .{std.mem.span(input.field)});
         return error.InvalidConfig;
     }
 
-    return lua.lua_toboolean(state, -1) != 0;
+    return lua_api.c.lua_toboolean(state, -1) != 0;
 }

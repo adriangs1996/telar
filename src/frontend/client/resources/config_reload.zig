@@ -4,78 +4,28 @@
 //! an adoption to apply — nothing here touches client state beyond the
 //! module's own.
 
-const std = @import("std");
-const core = @import("telar-core");
-const graphics = @import("../../graphics/root.zig");
-const lua_config = @import("../../config/root.zig");
-const plugin_broker = @import("../../plugins/root.zig");
-const kitty = graphics.kitty;
+const Loaded = @import("Loaded.zig");
+const DiagnosticType = @import("telar-client").Diagnostic;
+const ConfigReloadState = @import("ConfigReloadState.zig");
+const ScheduleArgs = @import("ScheduleArgs.zig");
+const WaitArgs = @import("WaitArgs.zig");
+const Adoption = @import("Adoption.zig");
+const ResolveArgs = @import("ResolveArgs.zig");
+const RejectContext = @import("RejectContext.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
-
-const Io = std.Io;
-
-const client_mod = @import("../client.zig");
-const ClientEvent = client_mod.ClientEvent;
-const InputRouter = host_inputs.Router;
+const GenerationType = @import("../../config/Generation.zig");
+const Partial = @import("Partial.zig");
+const RegistryType = @import("../../plugins/Registry.zig");
+const std = @import("std");
+const TrustStoreType = @import("telar-core").TrustStore;
 
 pub const ConfigReload = union(enum) {
     unchanged: i128,
     loaded: Loaded,
     failed: struct {
-        diagnostic: lua_config.Diagnostic,
+        diagnostic: DiagnosticType,
         mtime_ns: i128,
     },
-};
-
-pub const Loaded = struct {
-    generation: *lua_config.Generation,
-    registry: *plugin_broker.Registry,
-    trust_store: *core.plugin.TrustStore,
-    mtime_ns: i128,
-};
-
-const Orphans = struct {
-    generation: ?*lua_config.Generation = null,
-    registry: ?*plugin_broker.Registry = null,
-    trust: ?*core.plugin.TrustStore = null,
-};
-
-/// The reload's own state on the client: the watch fingerprint, the
-/// generation counter, and the race-window handoff slots the async task
-/// publishes into so a cancelled reload can still be freed.
-pub const State = struct {
-    mtime_ns: i128,
-    next_generation: u64 = 2,
-    orphans: Orphans = .{},
-
-    /// Frees whatever a cancelled reload task published. Call only after
-    /// the select's tasks are cancelled.
-    pub fn deinit(state: *State, gpa: std.mem.Allocator) void {
-        if (state.orphans.generation) |generation| {
-            generation.deinit();
-        }
-        if (state.orphans.registry) |registry| {
-            gpa.destroy(registry);
-        }
-        if (state.orphans.trust) |store| {
-            gpa.destroy(store);
-        }
-    }
-
-    fn clearOrphans(state: *State) void {
-        state.orphans = .{};
-    }
-};
-
-pub const ScheduleArgs = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    select: *Io.Select(ClientEvent),
-    path: []const u8,
-    profile: ?[]const u8,
-    trust_path: []const u8,
-    current_generation: *const lua_config.Generation,
-    current_registry: *const plugin_broker.Registry,
 };
 
 /// Schedules one asynchronous watch using the current reload fingerprint.
@@ -83,7 +33,7 @@ pub const ScheduleArgs = struct {
 /// ```zig
 /// try schedule(&state, args);
 /// ```
-pub fn schedule(state: *State, args: ScheduleArgs) !void {
+pub fn schedule(state: *ConfigReloadState, args: ScheduleArgs) !void {
     try args.select.concurrent(.config_reload, waitConfigReload, .{
         WaitArgs{
             .io = args.io,
@@ -100,62 +50,10 @@ pub fn schedule(state: *State, args: ScheduleArgs) !void {
     });
 }
 
-/// The client facts `resolve` validates a loaded configuration against.
-pub const Checks = struct {
-    kitty_support: kitty.Support,
-    sidebar_renderer_locked: bool,
-    current_sidebar: kitty.SidebarRendering,
-};
-
-pub const ResolveArgs = struct {
-    gpa: std.mem.Allocator,
-    reload: ConfigReload,
-    checks: Checks,
-};
-
-/// Everything a validated reload hands over: the owned configuration
-/// objects and the values already compiled from them.
-pub const Adoption = struct {
-    generation: *lua_config.Generation,
-    registry: *plugin_broker.Registry,
-    trust_store: *core.plugin.TrustStore,
-    router: InputRouter,
-    sidebar_rendering: kitty.SidebarRendering,
-
-    /// Releases an adoption that no client accepted.
-    ///
-    /// ```zig
-    /// errdefer adoption.deinit(gpa);
-    /// ```
-    pub fn deinit(adoption: Adoption, gpa: std.mem.Allocator) void {
-        adoption.generation.deinit();
-        gpa.destroy(adoption.registry);
-        gpa.destroy(adoption.trust_store);
-    }
-};
-
 pub const Outcome = union(enum) {
     unchanged,
-    rejected: lua_config.Diagnostic,
+    rejected: DiagnosticType,
     adopted: Adoption,
-};
-
-const RejectContext = struct {
-    state: *State,
-    gpa: std.mem.Allocator,
-    loaded: Loaded,
-
-    fn reject(context: RejectContext, comptime format: []const u8, args: anytype) Outcome {
-        var diagnostic: lua_config.Diagnostic = .{};
-        diagnostic.set(format, args);
-        context.state.clearOrphans();
-        context.state.mtime_ns = context.loaded.mtime_ns;
-        context.loaded.generation.deinit();
-        context.gpa.destroy(context.loaded.registry);
-        context.gpa.destroy(context.loaded.trust_store);
-
-        return .{ .rejected = diagnostic };
-    }
 };
 
 /// Resolves one finished reload attempt. A rejection frees the loaded
@@ -166,7 +64,7 @@ const RejectContext = struct {
 /// ```zig
 /// const outcome = resolve(&state, args);
 /// ```
-pub fn resolve(state: *State, args: ResolveArgs) Outcome {
+pub fn resolve(state: *ConfigReloadState, args: ResolveArgs) Outcome {
     switch (args.reload) {
         .unchanged => |mtime_ns| {
             state.mtime_ns = mtime_ns;
@@ -210,38 +108,6 @@ pub fn resolve(state: *State, args: ResolveArgs) Outcome {
     }
 }
 
-/// The pieces the async task has built so far, so every failure unwinds
-/// through one place instead of repeating the partial free by hand.
-const Partial = struct {
-    generation: *lua_config.Generation,
-    trust: ?*core.plugin.TrustStore = null,
-    registry: ?*plugin_broker.Registry = null,
-
-    fn abandon(partial: Partial, gpa: std.mem.Allocator, orphans: *Orphans) void {
-        orphans.* = .{};
-        if (partial.registry) |registry| {
-            gpa.destroy(registry);
-        }
-        partial.generation.deinit();
-        if (partial.trust) |trust| {
-            gpa.destroy(trust);
-        }
-    }
-};
-
-const WaitArgs = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    path: []const u8,
-    known_mtime_ns: i128,
-    generation_number: u64,
-    profile: ?[]const u8,
-    current_generation: *const lua_config.Generation,
-    current_registry: *const plugin_broker.Registry,
-    trust_path: []const u8,
-    orphans: *Orphans,
-};
-
 fn waitConfigReload(args: WaitArgs) anyerror!ConfigReload {
     try args.io.sleep(.fromSeconds(1), .awake);
     const mtime_ns = args.current_generation.watchFingerprint(args.io, args.path) ^
@@ -250,8 +116,8 @@ fn waitConfigReload(args: WaitArgs) anyerror!ConfigReload {
     if (mtime_ns == args.known_mtime_ns) {
         return .{ .unchanged = mtime_ns };
     }
-    var diagnostic: lua_config.Diagnostic = .{};
-    const generation = lua_config.Generation.loadFile(.{
+    var diagnostic: DiagnosticType = .{};
+    const generation = GenerationType.loadFile(.{
         .gpa = args.gpa,
         .io = args.io,
         .diagnostic = &diagnostic,
@@ -272,13 +138,13 @@ fn waitConfigReload(args: WaitArgs) anyerror!ConfigReload {
     };
     args.orphans.trust = trust;
     partial.trust = trust;
-    const registry = args.gpa.create(plugin_broker.Registry) catch {
+    const registry = args.gpa.create(RegistryType) catch {
         partial.abandon(args.gpa, args.orphans);
         diagnostic.set("cannot allocate reloaded plugin registry", .{});
         return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
     };
     partial.registry = registry;
-    registry.* = plugin_broker.Registry.loadWithTrust(
+    registry.* = RegistryType.loadWithTrust(
         .{
             .gpa = args.gpa,
             .io = args.io,
@@ -307,10 +173,10 @@ fn waitConfigReload(args: WaitArgs) anyerror!ConfigReload {
     } };
 }
 
-pub fn trustWatchFingerprint(io: Io, path: []const u8) u64 {
+pub fn trustWatchFingerprint(io: std.Io, path: []const u8) u64 {
     var hasher = std.hash.Wyhash.init(0x74656c61722d7472);
     hasher.update(path);
-    const stat = Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch {
+    const stat = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch {
         hasher.update("\x00missing");
         return hasher.final();
     };
@@ -320,10 +186,10 @@ pub fn trustWatchFingerprint(io: Io, path: []const u8) u64 {
     return hasher.final();
 }
 
-fn loadReloadTrustStore(gpa: std.mem.Allocator, io: Io, path: []const u8) !*core.plugin.TrustStore {
-    const store = try gpa.create(core.plugin.TrustStore);
+fn loadReloadTrustStore(gpa: std.mem.Allocator, io: std.Io, path: []const u8) !*TrustStoreType {
+    const store = try gpa.create(TrustStoreType);
     errdefer gpa.destroy(store);
-    const stat = Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
+    const stat = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
         error.FileNotFound => {
             store.* = .{};
             return store;
@@ -333,22 +199,22 @@ fn loadReloadTrustStore(gpa: std.mem.Allocator, io: Io, path: []const u8) !*core
     if (stat.kind != .file or stat.permissions.toMode() & 0o077 != 0) {
         return error.InsecureTrustStore;
     }
-    const source = try Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(64 * 1024));
+    const source = try std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(64 * 1024));
     defer gpa.free(source);
-    store.* = try core.plugin.TrustStore.parse(gpa, source);
+    store.* = try TrustStoreType.parse(gpa, source);
     return store;
 }
 
 test "a rejected load is freed once and reports why" {
     // The unwind concentrates here: rejecting a loaded configuration frees
     // the three objects and clears the orphan slots in one place.
-    var state: State = .{ .mtime_ns = 0 };
+    var state: ConfigReloadState = .{ .mtime_ns = 0 };
     const gpa = std.testing.allocator;
-    const registry = try gpa.create(plugin_broker.Registry);
-    const trust = try gpa.create(core.plugin.TrustStore);
+    const registry = try gpa.create(RegistryType);
+    const trust = try gpa.create(TrustStoreType);
     trust.* = .{};
-    var diagnostic: lua_config.Diagnostic = .{};
-    const generation = try lua_config.Generation.loadSource(.{
+    var diagnostic: DiagnosticType = .{};
+    const generation = try GenerationType.loadSource(.{
         .gpa = gpa,
         .io = std.testing.io,
         .diagnostic = &diagnostic,

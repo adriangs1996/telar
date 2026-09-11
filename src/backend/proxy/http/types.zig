@@ -3,8 +3,8 @@
 //! These types own no buffers and borrow no network data. They may outlive the
 //! scratch storage used to parse or transform an HTTP message head.
 
+const provider = @import("../provider/request_support.zig");
 const std = @import("std");
-const provider = @import("../provider/request.zig");
 
 /// How an HTTP message body is delimited on the wire.
 pub const BodyPlan = union(enum) {
@@ -22,12 +22,6 @@ pub const BodyPlan = union(enum) {
     }
 };
 
-/// Route-level request classification.
-///
-/// Classification refers to the request received from the child, before any
-/// configured header transformation changes the forwarded method or target.
-/// A Claude inference route remains only a candidate until its body is
-/// classified by the provider layer.
 pub const RequestClass = provider.RequestClass;
 
 /// Information from the forwarded request needed to parse its response.
@@ -49,22 +43,9 @@ pub const ConnectionPolicy = enum {
     close,
 };
 
-/// Owned metadata derived from one forwarded request head.
-pub const RequestHead = struct {
-    classification: RequestClass,
-    body: BodyPlan,
-    response_context: ResponseContext,
-};
+pub const RequestHead = @import("RequestHead.zig");
 
-/// Owned metadata derived from one forwarded response head.
-pub const ResponseHead = struct {
-    /// Valid HTTP status code in the inclusive range 100...599.
-    status_code: u16,
-
-    body: BodyPlan,
-    kind: ResponseKind,
-    connection: ConnectionPolicy,
-};
+pub const ResponseHead = @import("ResponseHead.zig");
 
 test "body plans report whether payload relay is required" {
     try std.testing.expect(!BodyPlan.hasBody(.none));

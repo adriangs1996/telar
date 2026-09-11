@@ -1,11 +1,11 @@
 //! TLS termination towards the child and the real origin.
 
+const InterceptOptionsType = @import("InterceptOptions.zig");
+const SessionType = @import("Session.zig");
 const std = @import("std");
 const tlsz = @import("tls");
-const ca = @import("ca.zig");
-
-const Io = std.Io;
-const net = Io.net;
+const Cursor = @import("Cursor.zig");
+const MintOptions = @import("MintOptions.zig");
 
 pub const Error = error{
     ContextFailed,
@@ -14,97 +14,15 @@ pub const Error = error{
     MintFailed,
 };
 
-pub const InterceptOptions = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    authority: *const ca.Authority,
-    roots: *const Roots,
-    host: []const u8,
-    child: net.Stream,
-    origin: net.Stream,
-};
+pub const InterceptOptions = @import("InterceptOptions.zig");
 
 const alpn_offer = [_][]const u8{ "h2", "http/1.1" };
 const alpn_h2_only = [_][]const u8{"h2"};
 const alpn_http11_only = [_][]const u8{"http/1.1"};
 
-pub const Roots = struct {
-    bundle: tlsz.config.cert.Bundle,
+pub const Roots = @import("Roots.zig");
 
-    pub fn load(io: Io, gpa: std.mem.Allocator) !Roots {
-        return .{ .bundle = try tlsz.config.cert.fromSystem(gpa, io) };
-    }
-
-    pub fn deinit(roots: *Roots, gpa: std.mem.Allocator) void {
-        roots.bundle.deinit(gpa);
-    }
-};
-
-/// Heap allocated because TLS connections borrow the adjacent reader/writer
-/// buffers and must never move after initialization.
-pub const Session = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    random: std.Random.IoSource,
-    auth: tlsz.config.CertKeyPair,
-    child: End,
-    origin: End,
-
-    const End = struct {
-        stream: net.Stream,
-        input_buffer: [tlsz.input_buffer_len]u8 = undefined,
-        output_buffer: [tlsz.output_buffer_len]u8 = undefined,
-        reader: net.Stream.Reader = undefined,
-        writer: net.Stream.Writer = undefined,
-        connection: tlsz.Connection = undefined,
-
-        fn wire(endpoint: *End, io: Io) void {
-            endpoint.reader = endpoint.stream.reader(io, &endpoint.input_buffer);
-            endpoint.writer = endpoint.stream.writer(io, &endpoint.output_buffer);
-        }
-    };
-
-    pub const Side = enum { child, origin };
-    pub const Protocol = enum { http11, h2 };
-
-    pub fn deinit(session: *Session) void {
-        const gpa = session.gpa;
-        session.child.connection.close() catch {};
-        session.origin.connection.close() catch {};
-        session.auth.deinit(gpa);
-        std.crypto.secureZero(u8, std.mem.asBytes(session));
-        gpa.destroy(session);
-    }
-
-    pub fn read(session: *Session, side: Side, buffer: []u8) ?usize {
-        const len = session.end(side).connection.read(buffer) catch return null;
-        return if (len == 0) null else len;
-    }
-
-    pub fn writeAll(session: *Session, side: Side, bytes: []const u8) bool {
-        session.end(side).connection.writeAll(bytes) catch return false;
-        return true;
-    }
-
-    pub fn halfClose(session: *Session, side: Side) void {
-        // Each relay owns only the send direction of its destination. Closing
-        // both directions here races the opposite relay and can truncate h2
-        // or upgraded responses after the request side reaches EOF.
-        session.end(side).stream.shutdown(session.io, .send) catch {};
-    }
-
-    pub fn negotiated(session: *const Session) Protocol {
-        const selected = session.child.connection.alpn_protocol orelse return .http11;
-        return if (std.mem.eql(u8, selected, "h2")) .h2 else .http11;
-    }
-
-    fn end(session: *Session, side: Side) *End {
-        return switch (side) {
-            .child => &session.child,
-            .origin => &session.origin,
-        };
-    }
-};
+pub const Session = @import("Session.zig");
 
 /// Establishes verified TLS towards the origin and mirrored TLS towards the
 /// child. Every failure releases all partially initialized TLS state; the
@@ -114,8 +32,8 @@ pub const Session = struct {
 /// const session = try intercept(options);
 /// defer session.deinit();
 /// ```
-pub fn intercept(options: InterceptOptions) Error!*Session {
-    const session = options.gpa.create(Session) catch return error.ContextFailed;
+pub fn intercept(options: InterceptOptionsType) Error!*SessionType {
+    const session = options.gpa.create(SessionType) catch return error.ContextFailed;
     errdefer {
         std.crypto.secureZero(u8, std.mem.asBytes(session));
         options.gpa.destroy(session);
@@ -144,7 +62,7 @@ pub fn intercept(options: InterceptOptions) Error!*Session {
         .{
             .host = options.host,
             .root_ca = options.roots.bundle,
-            .now = Io.Clock.real.now(options.io),
+            .now = std.Io.Clock.real.now(options.io),
             .rng = session.random.interface(),
             .alpn_protocols = offer,
         },
@@ -157,7 +75,7 @@ pub fn intercept(options: InterceptOptions) Error!*Session {
         &session.child.writer.interface,
         .{
             .auth = &session.auth,
-            .now = Io.Clock.real.now(options.io),
+            .now = std.Io.Clock.real.now(options.io),
             .rng = session.random.interface(),
             .alpn_protocols = mirroredAlpn(session.origin.connection.alpn_protocol),
             .cipher_suites_tls12 = &tlsz.config.cipher_suites.tls12_secure,
@@ -176,7 +94,7 @@ fn mirroredAlpn(selected: ?[]const u8) []const []const u8 {
     return &alpn_http11_only;
 }
 
-fn peekAlpnOffer(reader: *Io.Reader) []const []const u8 {
+fn peekAlpnOffer(reader: *std.Io.Reader) []const []const u8 {
     return parseAlpnOffer(reader) catch &alpn_offer;
 }
 
@@ -186,7 +104,7 @@ const handshake_record: u8 = 0x16;
 const client_hello: u8 = 0x01;
 const alpn_extension: u16 = 16;
 
-fn parseAlpnOffer(reader: *Io.Reader) ![]const []const u8 {
+fn parseAlpnOffer(reader: *std.Io.Reader) ![]const []const u8 {
     const header = try reader.peek(tls_record_header_len);
     if (header[0] != handshake_record) {
         return error.NotAHandshake;
@@ -240,38 +158,6 @@ fn parseAlpnOffer(reader: *Io.Reader) ![]const []const u8 {
     return &.{};
 }
 
-const Cursor = struct {
-    bytes: []const u8,
-    index: usize = 0,
-
-    fn left(cursor: Cursor) usize {
-        return cursor.bytes.len - cursor.index;
-    }
-
-    fn take(cursor: *Cursor, len: usize) ![]const u8 {
-        if (cursor.left() < len) {
-            return error.Truncated;
-        }
-        defer cursor.index += len;
-        return cursor.bytes[cursor.index..][0..len];
-    }
-
-    fn byte(cursor: *Cursor) !u8 {
-        return (try cursor.take(1))[0];
-    }
-
-    fn big16(cursor: *Cursor) !u16 {
-        return std.mem.readInt(u16, (try cursor.take(2))[0..2], .big);
-    }
-};
-
-const MintOptions = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    authority: *const ca.Authority,
-    host: []const u8,
-};
-
 fn mintAuth(options: MintOptions) Error!tlsz.config.CertKeyPair {
     var leaf = options.authority.mint(options.io, options.host) catch {
         return error.MintFailed;
@@ -297,9 +183,9 @@ fn mintAuth(options: MintOptions) Error!tlsz.config.CertKeyPair {
 }
 
 fn fakeClientHello(output: []u8, protocols: []const []const u8) []u8 {
-    var writer = Io.Writer.fixed(output);
+    var writer = std.Io.Writer.fixed(output);
     var alpn_buffer: [128]u8 = undefined;
-    var names = Io.Writer.fixed(&alpn_buffer);
+    var names = std.Io.Writer.fixed(&alpn_buffer);
     for (protocols) |name| {
         names.writeByte(@intCast(name.len)) catch unreachable;
         names.writeAll(name) catch unreachable;
@@ -307,7 +193,7 @@ fn fakeClientHello(output: []u8, protocols: []const []const u8) []u8 {
     const name_list = names.buffered();
 
     var extension_buffer: [160]u8 = undefined;
-    var extensions = Io.Writer.fixed(&extension_buffer);
+    var extensions = std.Io.Writer.fixed(&extension_buffer);
     if (protocols.len != 0) {
         extensions.writeInt(u16, alpn_extension, .big) catch unreachable;
         extensions.writeInt(u16, @intCast(name_list.len + 2), .big) catch unreachable;
@@ -336,7 +222,7 @@ fn fakeClientHello(output: []u8, protocols: []const []const u8) []u8 {
 }
 
 fn offerOf(hello: []const u8) []const []const u8 {
-    var reader = Io.Reader.fixed(hello);
+    var reader = std.Io.Reader.fixed(hello);
     return peekAlpnOffer(&reader);
 }
 
@@ -365,7 +251,7 @@ test "malformed ClientHello falls back without consuming bytes" {
     for (tls_record_header_len..hello.len) |cut|
         try std.testing.expectEqual(@as(usize, 2), offerOf(hello[0..cut]).len);
 
-    var reader = Io.Reader.fixed(hello);
+    var reader = std.Io.Reader.fixed(hello);
     _ = peekAlpnOffer(&reader);
     try std.testing.expectEqualSlices(u8, hello, reader.buffered());
 }

@@ -1,66 +1,34 @@
 //! Application policy for one bounded local clipboard image capture.
 
+const ClipboardCaptureType = @import("../../model/ClipboardCapture.zig");
+const CapturedImage = @import("CapturedImage.zig");
+const types = @import("../../model/types.zig");
+const ModelType = @import("../../model/Model.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("../../root.zig").agents;
-const attachments = @import("../../attachments/root.zig");
-const client_model = @import("../../root.zig").model;
-
-const schema = core.schema;
-
-pub const StartEffects = struct {
-    context: *anyopaque,
-    schedule: *const fn (*anyopaque, client_model.ClipboardCapture) anyerror!void,
-};
+const ClipboardImageStartCapture = @import("ClipboardImageStartCapture.zig");
+const StartClipboardImageHandler = @import("StartClipboardImageHandler.zig");
+const ClipboardImageCompletionCapture = @import("ClipboardImageCompletionCapture.zig");
+const ClipboardImageCompletionDeliveryCapture = @import("ClipboardImageCompletionDeliveryCapture.zig");
+const CompleteClipboardImageHandler = @import("CompleteClipboardImageHandler.zig");
+const TargetType = @import("../../attachments/AttachmentTarget.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const AgentInputType = @import("../../agents/AgentInput.zig");
 
 pub const StartOutcome = union(enum) {
-    started: client_model.ClipboardCapture,
+    started: ClipboardCaptureType,
     busy,
     unsupported,
     no_target,
 };
 
-pub const StartClipboardImageHandler = struct {
-    model: *client_model.Model,
-    effects: StartEffects,
-
-    /// Resolves one supported focused target and commits its capture identity
-    /// before scheduling the media worker.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(platform_supported);
-    /// ```
-    pub fn execute(handler: *StartClipboardImageHandler, platform_supported: bool) !StartOutcome {
-        if (!platform_supported) {
-            return .unsupported;
-        }
-
-        const target = handler.model.focusedAttachmentTarget() orelse return .no_target;
-        const capture = (try handler.model.beginClipboardCapture(target)) orelse return .busy;
-        errdefer {
-            const rolled_back = handler.model.finishClipboardCapture(capture.id);
-            std.debug.assert(rolled_back != null);
-        }
-
-        try handler.effects.schedule(handler.effects.context, capture);
-        return .{ .started = capture };
-    }
-};
-
-pub const CapturedImage = struct {
-    execution_id: client_model.ClipboardCaptureId,
-    result_id: client_model.ClipboardCaptureId,
-    target: attachments.Target,
-};
-
 pub const CompletionCommand = union(enum) {
     succeeded: CapturedImage,
     failed: struct {
-        execution_id: client_model.ClipboardCaptureId,
+        execution_id: types.ClipboardCaptureId,
         reason: anyerror,
     },
 
-    fn executionId(command: CompletionCommand) client_model.ClipboardCaptureId {
+    pub fn executionId(command: CompletionCommand) types.ClipboardCaptureId {
         return switch (command) {
             .succeeded => |result| result.execution_id,
             .failed => |failure| failure.execution_id,
@@ -78,64 +46,7 @@ pub const CompletionOutcome = union(enum) {
     adoption_failed: anyerror,
 };
 
-pub const CompletionDelivery = struct {
-    context: *anyopaque,
-    deliver: *const fn (*anyopaque, CompletionOutcome) anyerror!void,
-};
-
-pub const CompletionEffects = struct {
-    context: *anyopaque,
-    adopt: *const fn (*anyopaque) anyerror!bool,
-    resize: *const fn (*anyopaque) anyerror!void,
-};
-
-pub const CompleteClipboardImageHandler = struct {
-    model: *client_model.Model,
-    effects: CompletionEffects,
-    delivery: CompletionDelivery,
-
-    /// Consumes one exact completion before validating or applying its image.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *CompleteClipboardImageHandler, command: CompletionCommand) !CompletionOutcome {
-        const capture = handler.model.finishClipboardCapture(command.executionId()) orelse
-            return handler.deliver(.ignored);
-
-        return handler.deliver(switch (command) {
-            .failed => |failure| classifyFailure(failure.reason),
-            .succeeded => |result| result: {
-                if (result.result_id != capture.id or !std.meta.eql(result.target, capture.target)) {
-                    break :result .stale;
-                }
-
-                const current = handler.model.focusedAttachmentTarget() orelse
-                    break :result .stale;
-                if (!std.meta.eql(current, capture.target)) {
-                    break :result .stale;
-                }
-
-                const layout_changed = handler.effects.adopt(handler.effects.context) catch |err| {
-                    break :result .{ .adoption_failed = err };
-                };
-                if (layout_changed) {
-                    try handler.effects.resize(handler.effects.context);
-                }
-
-                break :result .applied;
-            },
-        });
-    }
-
-    fn deliver(handler: *CompleteClipboardImageHandler, outcome: CompletionOutcome) !CompletionOutcome {
-        try handler.delivery.deliver(handler.delivery.context, outcome);
-
-        return outcome;
-    }
-};
-
-fn classifyFailure(reason: anyerror) CompletionOutcome {
+pub fn classifyFailure(reason: anyerror) CompletionOutcome {
     return switch (reason) {
         error.NoImageOnClipboard => .no_image,
         error.ClipboardImageTooLarge => .too_large,
@@ -143,31 +54,11 @@ fn classifyFailure(reason: anyerror) CompletionOutcome {
     };
 }
 
-const StartCapture = struct {
-    model: *const client_model.Model,
-    calls: usize = 0,
-    observed_commit: bool = false,
-    fail: bool = false,
-
-    fn port(capture: *StartCapture) StartEffects {
-        return .{ .context = capture, .schedule = schedule };
-    }
-
-    fn schedule(raw_context: *anyopaque, expected: client_model.ClipboardCapture) !void {
-        const capture: *StartCapture = @ptrCast(@alignCast(raw_context));
-        capture.calls += 1;
-        capture.observed_commit = std.meta.eql(capture.model.clipboardCapture().?, expected);
-        if (capture.fail) {
-            return error.CaptureScheduleFailed;
-        }
-    }
-};
-
 test "StartClipboardImageHandler commits before scheduling and suppresses a second capture" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const target = try installFocusedTarget(&model);
-    var capture: StartCapture = .{ .model = &model };
+    var capture: ClipboardImageStartCapture = .{ .model = &model };
     var handler: StartClipboardImageHandler = .{
         .model = &model,
         .effects = capture.port(),
@@ -184,9 +75,9 @@ test "StartClipboardImageHandler commits before scheduling and suppresses a seco
 }
 
 test "StartClipboardImageHandler owns unsupported and missing target outcomes" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: StartCapture = .{ .model = &model };
+    var capture: ClipboardImageStartCapture = .{ .model = &model };
     var handler: StartClipboardImageHandler = .{
         .model = &model,
         .effects = capture.port(),
@@ -202,10 +93,10 @@ test "StartClipboardImageHandler owns unsupported and missing target outcomes" {
 }
 
 test "StartClipboardImageHandler rolls back the exact reservation after scheduling failure" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     _ = try installFocusedTarget(&model);
-    var capture: StartCapture = .{ .model = &model, .fail = true };
+    var capture: ClipboardImageStartCapture = .{ .model = &model, .fail = true };
     var handler: StartClipboardImageHandler = .{
         .model = &model,
         .effects = capture.port(),
@@ -215,73 +106,12 @@ test "StartClipboardImageHandler rolls back the exact reservation after scheduli
     try std.testing.expect(model.clipboardCapture() == null);
 }
 
-const CompletionEvent = enum {
+pub const CompletionEvent = enum {
     adopt,
     resize,
 };
 
-const CompletionCapture = struct {
-    model: *const client_model.Model,
-    events: [2]CompletionEvent = undefined,
-    event_count: usize = 0,
-    observed_finished: bool = false,
-    layout_changed: bool = false,
-    fail_adopt: bool = false,
-    fail_resize: bool = false,
-
-    fn port(capture: *CompletionCapture) CompletionEffects {
-        return .{
-            .context = capture,
-            .adopt = adopt,
-            .resize = resize,
-        };
-    }
-
-    fn adopt(raw_context: *anyopaque) !bool {
-        const capture: *CompletionCapture = @ptrCast(@alignCast(raw_context));
-        capture.events[capture.event_count] = .adopt;
-        capture.event_count += 1;
-        capture.observed_finished = capture.model.clipboardCapture() == null;
-        if (capture.fail_adopt) {
-            return error.AttachmentAdoptionFailed;
-        }
-
-        return capture.layout_changed;
-    }
-
-    fn resize(raw_context: *anyopaque) !void {
-        const capture: *CompletionCapture = @ptrCast(@alignCast(raw_context));
-        capture.events[capture.event_count] = .resize;
-        capture.event_count += 1;
-        capture.observed_finished = capture.observed_finished and
-            capture.model.clipboardCapture() == null;
-        if (capture.fail_resize) {
-            return error.AttachmentResizeFailed;
-        }
-    }
-};
-
-const CompletionDeliveryCapture = struct {
-    calls: usize = 0,
-    outcome: ?CompletionOutcome = null,
-    fail: bool = false,
-
-    fn port(capture: *CompletionDeliveryCapture) CompletionDelivery {
-        return .{ .context = capture, .deliver = deliver };
-    }
-
-    fn deliver(raw_context: *anyopaque, outcome: CompletionOutcome) !void {
-        const capture: *CompletionDeliveryCapture = @ptrCast(@alignCast(raw_context));
-        capture.calls += 1;
-        capture.outcome = outcome;
-
-        if (capture.fail) {
-            return error.CompletionDeliveryFailed;
-        }
-    }
-};
-
-fn completionHandler(model: *client_model.Model, capture: *CompletionCapture, delivery: *CompletionDeliveryCapture) CompleteClipboardImageHandler {
+fn completionHandler(model: *ModelType, capture: *ClipboardImageCompletionCapture, delivery: *ClipboardImageCompletionDeliveryCapture) CompleteClipboardImageHandler {
     return .{
         .model = model,
         .effects = capture.port(),
@@ -289,19 +119,19 @@ fn completionHandler(model: *client_model.Model, capture: *CompletionCapture, de
     };
 }
 
-fn installFocusedTarget(model: *client_model.Model) !attachments.Target {
-    const location: schema.TabLocation = .{
+fn installFocusedTarget(model: *ModelType) !TargetType {
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const target: attachments.Target = .{
+    const target: TargetType = .{
         .pane_id = @enumFromInt(7),
         .pane_generation = 2,
     };
     try model.workspace.bootstrap(.{ .pane_id = target.pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.reconcileAgentSnapshot(.{
         .revision = 1,
-        .agents = &.{agents.AgentInput{
+        .agents = &.{AgentInputType{
             .key = .{
                 .pane_id = target.pane_id,
                 .pane_generation = target.pane_generation,
@@ -316,7 +146,7 @@ fn installFocusedTarget(model: *client_model.Model) !attachments.Target {
     return target;
 }
 
-fn successfulCommand(capture: client_model.ClipboardCapture) CompletionCommand {
+fn successfulCommand(capture: ClipboardCaptureType) CompletionCommand {
     return .{ .succeeded = .{
         .execution_id = capture.id,
         .result_id = capture.id,
@@ -325,15 +155,15 @@ fn successfulCommand(capture: client_model.ClipboardCapture) CompletionCommand {
 }
 
 test "CompleteClipboardImageHandler adopts before resize after consuming the run" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const target = try installFocusedTarget(&model);
     const execution = (try model.beginClipboardCapture(target)).?;
-    var capture: CompletionCapture = .{
+    var capture: ClipboardImageCompletionCapture = .{
         .model = &model,
         .layout_changed = true,
     };
-    var delivery: CompletionDeliveryCapture = .{};
+    var delivery: ClipboardImageCompletionDeliveryCapture = .{};
     var handler = completionHandler(&model, &capture, &delivery);
 
     const outcome = try handler.execute(successfulCommand(execution));
@@ -350,12 +180,12 @@ test "CompleteClipboardImageHandler adopts before resize after consuming the run
 }
 
 test "CompleteClipboardImageHandler preserves unmatched work and drops stale results" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const target = try installFocusedTarget(&model);
     const execution = (try model.beginClipboardCapture(target)).?;
-    var capture: CompletionCapture = .{ .model = &model };
-    var delivery: CompletionDeliveryCapture = .{};
+    var capture: ClipboardImageCompletionCapture = .{ .model = &model };
+    var delivery: ClipboardImageCompletionDeliveryCapture = .{};
     var handler = completionHandler(&model, &capture, &delivery);
 
     const ignored = try handler.execute(.{ .failed = .{
@@ -380,11 +210,11 @@ test "CompleteClipboardImageHandler preserves unmatched work and drops stale res
 }
 
 test "CompleteClipboardImageHandler classifies worker and adoption failures" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const target = try installFocusedTarget(&model);
-    var capture: CompletionCapture = .{ .model = &model };
-    var delivery: CompletionDeliveryCapture = .{};
+    var capture: ClipboardImageCompletionCapture = .{ .model = &model };
+    var delivery: ClipboardImageCompletionDeliveryCapture = .{};
     var handler = completionHandler(&model, &capture, &delivery);
 
     const no_image = (try model.beginClipboardCapture(target)).?;
@@ -418,16 +248,16 @@ test "CompleteClipboardImageHandler classifies worker and adoption failures" {
 }
 
 test "CompleteClipboardImageHandler propagates resize failure after adoption" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const target = try installFocusedTarget(&model);
     const execution = (try model.beginClipboardCapture(target)).?;
-    var capture: CompletionCapture = .{
+    var capture: ClipboardImageCompletionCapture = .{
         .model = &model,
         .layout_changed = true,
         .fail_resize = true,
     };
-    var delivery: CompletionDeliveryCapture = .{};
+    var delivery: ClipboardImageCompletionDeliveryCapture = .{};
     var handler = completionHandler(&model, &capture, &delivery);
 
     try std.testing.expectError(
@@ -444,12 +274,12 @@ test "CompleteClipboardImageHandler propagates resize failure after adoption" {
 }
 
 test "CompleteClipboardImageHandler preserves completion after delivery failure" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const target = try installFocusedTarget(&model);
     const execution = (try model.beginClipboardCapture(target)).?;
-    var capture: CompletionCapture = .{ .model = &model };
-    var delivery: CompletionDeliveryCapture = .{ .fail = true };
+    var capture: ClipboardImageCompletionCapture = .{ .model = &model };
+    var delivery: ClipboardImageCompletionDeliveryCapture = .{ .fail = true };
     var handler = completionHandler(&model, &capture, &delivery);
 
     try std.testing.expectError(error.CompletionDeliveryFailed, handler.execute(.{ .failed = .{

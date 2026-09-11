@@ -1,236 +1,32 @@
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const Fixture = @import("Fixture.zig");
+const FrameInput = @import("FrameInput.zig");
+const CellType = @import("telar-core").Cell;
+const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
+const decodeServer_module = @import("telar-core").decodeServer;
 const std = @import("std");
-const core = @import("telar-core");
-const client = @import("../root.zig");
-const presentation = @import("root.zig");
-const app = client.application;
-const schema = core.schema;
-const gpa = std.testing.allocator;
-const pane_id: schema.PaneId = @enumFromInt(1);
-const location: schema.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
-const retained = client.graphics.retained;
-const Outcome = enum { applied, ignored, exit };
+const decodeClient_module = @import("telar-core").decodeClient;
+const GeometryType = @import("Geometry.zig");
+const ImageType = @import("telar-core").Image;
+const retained = @import("../graphics/retained.zig");
+const store = @import("../graphics/store.zig");
+const ConfirmPaneAttachmentHandlerType = @import("../application/panes/ConfirmPaneAttachmentHandler.zig");
+const PaneAttachmentType = @import("../model/PaneAttachment.zig");
+const types = @import("../model/types.zig");
 
-const Fixture = struct {
-    model: client.model.Model,
-    adapter: presentation.headless.Adapter = .{},
-    outbox: client.connection.outbox.Outbox = .{},
-    graphics: retained.Store,
-    geometry: client.workspace.geometry.State = .{},
-    activations: usize = 0,
-    resource_syncs: usize = 0,
-    media_requests: usize = 0,
+pub const pane_id: PaneIdType = @enumFromInt(1);
+pub const location: TabLocationType = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
 
-    fn init() !*Fixture {
-        return initWithAllocator(gpa);
-    }
-
-    fn initWithAllocator(allocator: std.mem.Allocator) !*Fixture {
-        const fixture = try gpa.create(Fixture);
-        errdefer gpa.destroy(fixture);
-        fixture.* = .{ .model = client.model.Model.init(allocator, true), .graphics = retained.Store.init(allocator) };
-        errdefer fixture.model.deinit();
-        fixture.geometry.update(.{ .w = 40, .h = 10 });
-        try fixture.arrive();
-        return fixture;
-    }
-
-    fn deinit(fixture: *Fixture) void {
-        if (fixture.adapter.state.active) |flight| {
-            _ = fixture.adapter.complete(flight.token, .cancelled);
-        }
-
-        fixture.graphics.deinit();
-        fixture.model.deinit();
-        gpa.destroy(fixture);
-    }
-
-    fn arrive(fixture: *Fixture) !void {
-        var handler: app.workspaces.workspace_handoff.ConfirmWorkspaceHandoffHandler = .{
-            .model = &fixture.model,
-            .delivery = .{ .context = fixture, .deliver = activated },
-        };
-        try handler.execute(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 4, .rows = 1 } });
-    }
-
-    fn activated(context: *anyopaque, _: client.model.WorkspaceActivation) !void {
-        const fixture: *Fixture = @ptrCast(@alignCast(context));
-        fixture.activations += 1;
-    }
-
-    fn projection(fixture: *Fixture) presentation.Projection {
-        return presentation.capture(&fixture.model, .{ .geometry = fixture.geometry.current });
-    }
-
-    fn prepare(fixture: *Fixture) !presentation.lifecycle.Token {
-        return (try fixture.adapter.prepare(fixture.projection())) orelse error.ExpectedPresentation;
-    }
-
-    fn complete(fixture: *Fixture, token: presentation.lifecycle.Token, outcome: presentation.lifecycle.Outcome) !void {
-        const delivery = fixture.adapter.complete(token, outcome) orelse return;
-        var handler: app.presentation.presentation_delivery.DeliverPresentationHandler = .{
-            .model = &fixture.model,
-            .effects = .{ .context = fixture, .flush_graphics_credits = credits, .acknowledge_frame = acknowledge, .request_media = media },
-        };
-        try handler.execute(.{ .commit = delivery.commit, .media_pending = delivery.media_pending });
-    }
-
-    fn receive(fixture: *Fixture, message: schema.ServerMessage) !void {
-        _ = try client.entrypoints.runtime_messages.dispatch(fixture, message, Adapters);
-    }
-
-    fn recover(context: *anyopaque, recovery: client.model.PaneFrameRecovery) !void {
-        const fixture: *Fixture = @ptrCast(@alignCast(context));
-        try fixture.outbox.push(.{ .request_snapshot = .{ .pane_id = recovery.pane_id, .known_frame_id = recovery.known_frame_id } });
-    }
-
-    fn frameResources(context: *anyopaque, commit: client.model.PaneFrameCommit) !void {
-        const fixture: *Fixture = @ptrCast(@alignCast(context));
-        var handler: app.panes.pane_frame_delivery.DeliverPaneFrameHandler = .{
-            .model = &fixture.model,
-            .effects = .{ .context = fixture, .pane_graphics_visible = visible, .set_pane_graphics_visible = setVisible, .synchronize_active_resources = synchronize },
-        };
-        try handler.execute(commit);
-    }
-
-    fn visible(context: *anyopaque, id: schema.PaneId) bool {
-        const fixture: *Fixture = @ptrCast(@alignCast(context));
-        return fixture.graphics.paneVisible(id);
-    }
-
-    fn setVisible(context: *anyopaque, id: schema.PaneId, value: bool) !void {
-        const fixture: *Fixture = @ptrCast(@alignCast(context));
-        try fixture.graphics.setPaneVisible(id, value);
-    }
-
-    fn synchronize(context: *anyopaque) !void {
-        const fixture: *Fixture = @ptrCast(@alignCast(context));
-        fixture.resource_syncs += 1;
-    }
-
-    fn credits(context: *anyopaque) !void {
-        const fixture: *Fixture = @ptrCast(@alignCast(context));
-        while (fixture.graphics.peekCredit()) |credit| {
-            try fixture.outbox.push(.{ .graphics_credit = .{ .pane_id = credit.pane_id, .bytes = credit.bytes } });
-            fixture.graphics.consumeCredit(credit);
-        }
-    }
-
-    fn acknowledge(context: *anyopaque, ack: schema.FrameAck) !void {
-        const fixture: *Fixture = @ptrCast(@alignCast(context));
-        try fixture.outbox.push(.{ .frame_ack = ack });
-    }
-
-    fn media(context: *anyopaque) !void {
-        const fixture: *Fixture = @ptrCast(@alignCast(context));
-        fixture.media_requests += 1;
-    }
-
-    fn key(fixture: *Fixture, value: client.input.keybind.Key) !void {
-        var handler: app.input.pane_input.PaneInputHandler = .{
-            .model = &fixture.model,
-            .effects = .{ .context = fixture, .send = sendInput, .viewport = .{ .context = fixture, .sync = viewport } },
-        };
-        _ = try handler.execute(.{ .target = .focused, .source = .host, .payload = .{ .key = value } });
-    }
-
-    fn sendInput(context: *anyopaque, value: app.input.pane_input.PaneInputEffect) !void {
-        const fixture: *Fixture = @ptrCast(@alignCast(context));
-        try fixture.outbox.pushInput(value.pane_id, value.bytes);
-    }
-
-    fn viewport(context: *anyopaque, value: client.model.PaneViewportChange) !void {
-        const fixture: *Fixture = @ptrCast(@alignCast(context));
-        try fixture.outbox.push(.{ .set_pane_viewport = .{ .pane_id = value.pane_id, .offset = value.offset } });
-    }
-
-    fn expectAck(fixture: *Fixture, frame_id: u64) !void {
-        try std.testing.expectEqual(frame_id, fixture.outbox.peek().?.frame_ack.frame_id);
-        try fixture.sendOne();
-    }
-
-    fn sendOne(fixture: *Fixture) !void {
-        var wire: [1024]u8 = undefined;
-        try std.testing.expect((try fixture.outbox.beginSend(&wire)) != null);
-        try fixture.outbox.finishSend({});
-    }
-};
-
-const Frames = struct {
-    pub fn apply(fixture: *Fixture, frame: schema.frame.FrameView) !client.model.PaneFrameOutcome {
-        var handler: app.panes.pane_frame.ApplyPaneFrameHandler = .{
-            .model = &fixture.model,
-            .effects = .{ .context = fixture, .recover = Fixture.recover, .deliver = Fixture.frameResources },
-        };
-        return handler.execute(frame);
-    }
-};
+pub const Outcome = enum { applied, ignored, exit };
 
 // Unwired test capabilities fail explicitly instead of pretending to implement a client.
-const Unsupported = struct {
-    pub fn apply(_: *Fixture, _: anytype) !Outcome {
-        return error.UnsupportedTestEvent;
-    }
-    pub fn failed(_: *Fixture, _: anytype) bool {
-        return false;
-    }
-    pub fn output(_: *Fixture, _: anytype) Outcome {
-        @panic("unsupported test event");
-    }
-    pub const applyCwd = apply;
-    pub const applyForeground = apply;
-    pub const applyTitle = apply;
-    pub const applyExit = apply;
-    pub const applyRuntime = apply;
-    pub const applyDeliveryReport = apply;
-    pub const matches = apply;
-    pub const pruned = apply;
-};
-const UnsupportedVoid = struct {
-    pub fn apply(_: *Fixture, _: anytype) !void {
-        return error.UnsupportedTestEvent;
-    }
-};
-const Adapters = struct {
-    pub const pane_frames = Frames;
-    pub const agent_sounds = Unsupported;
-    pub const agent_snapshots = Unsupported;
-    pub const notifications = Unsupported;
-    pub const client_layouts = UnsupportedVoid;
-    pub const pane_clipboards = UnsupportedVoid;
-    pub const pane_closures = Unsupported;
-    pub const pane_focus_commands = UnsupportedVoid;
-    pub const pane_graphics = Unsupported;
-    pub const pane_metadata = Unsupported;
-    pub const pane_openings = Unsupported;
-    pub const pane_progress = Unsupported;
-    pub const copy_modes = Unsupported;
-    pub const history_palettes = Unsupported;
-    pub const suggestions = Unsupported;
-    pub const proxy_status = Unsupported;
-    pub const request_failures = Unsupported;
-    pub const resync_requirements = Unsupported;
-    pub const system_metrics = Unsupported;
-    pub const tab_closures = Unsupported;
-    pub const tab_creations = Unsupported;
-    pub const tab_moves = Unsupported;
-    pub const tab_renames = Unsupported;
-    pub const tab_snapshots = Unsupported;
-    pub const workspace_lists = Unsupported;
-    pub const workspace_snapshots = UnsupportedVoid;
-};
-
-const FrameInput = struct {
-    frame_id: u64 = 1,
-    base: u64 = 0,
-    text: u8 = 'A',
-    cursor_keys: bool = true,
-};
 
 fn sendFrame(fixture: *Fixture, input: FrameInput) !void {
     var wire: [1024]u8 = undefined;
-    var cells: [4]core.ui.Cell = @splat(.{});
+    var cells: [4]CellType = @splat(.{});
     cells[0].bytes[0] = input.text;
-    const bytes = try schema.encodePaneFrame(&wire, .{
+    const bytes = try encodePaneFrame_module(&wire, .{
         .pane_id = pane_id,
         .frame_id = input.frame_id,
         .base_frame_id = input.base,
@@ -240,7 +36,7 @@ fn sendFrame(fixture: *Fixture, input: FrameInput) !void {
         .input_modes = .{ .cursor_keys = input.cursor_keys },
         .spans = &.{.{ .start = 0, .cells = if (input.base == 0) &cells else cells[0..1] }},
     });
-    try fixture.receive(try schema.decodeServer(bytes));
+    try fixture.receive(try decodeServer_module(bytes));
     @memset(&wire, 0xff);
 }
 
@@ -259,7 +55,7 @@ test "shared entrypoint and handlers continue input while headless delivery owns
     try fixture.key(.{ .code = .up });
     var wire: [1024]u8 = undefined;
     const sent = (try fixture.outbox.beginSend(&wire)).?;
-    try std.testing.expectEqualStrings("\x1b[A", (try schema.decodeClient(sent)).pane_input.bytes);
+    try std.testing.expectEqualStrings("\x1b[A", (try decodeClient_module(sent)).pane_input.bytes);
     try fixture.outbox.finishSend({});
     try fixture.complete(first, .delivered);
     try fixture.expectAck(1);
@@ -311,7 +107,7 @@ test "broken bases request recovery and geometry ABA does not authorize a new ge
     fixture.geometry.update(old_area);
     try fixture.complete(token, .delivered);
     try fixture.expectAck(1);
-    const current_geometry = presentation.Geometry.capture(fixture.projection());
+    const current_geometry = GeometryType.capture(fixture.projection());
     try std.testing.expect(!fixture.adapter.state.delivered_geometry.?.matches(&current_geometry));
     const replacement = try fixture.prepare();
     try fixture.complete(replacement, .delivered);
@@ -341,10 +137,10 @@ test "retained graphics return credit on release before the delivered cell ackno
     const fixture = try Fixture.init();
     defer fixture.deinit();
     try sendFrame(fixture, .{});
-    const image: core.graphics.Image = .{ .key = .{ .image_id = 1, .generation = 1 }, .format = .rgb, .width = 1, .height = 1, .byte_len = 3 };
+    const image: ImageType = .{ .key = .{ .image_id = 1, .generation = 1 }, .format = .rgb, .width = 1, .height = 1, .byte_len = 3 };
     try fixture.graphics.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = image });
     try fixture.graphics.applyChunk(.{ .pane_id = pane_id, .revision = 1, .key = image.key, .offset = 0, .bytes = "rgb" });
-    const lease = try retained.retain(&fixture.graphics, client.graphics.identity(pane_id, image.key));
+    const lease = try retained.retain(&fixture.graphics, store.identity(pane_id, image.key));
     const token = try fixture.prepare();
     try fixture.graphics.applySnapshot(.{ .pane_id = pane_id, .revision = 2, .phase = .begin });
     try std.testing.expect(fixture.graphics.peekCredit() == null);
@@ -363,9 +159,9 @@ test "reattachment invalidates old acknowledgements without replacing the pane b
     try sendFrame(fixture, .{});
     const old = try fixture.prepare();
     try fixture.model.commitTabDetachment(try fixture.model.planTabDetachment(location));
-    var attach: app.panes.attach_pane.ConfirmPaneAttachmentHandler = .{ .model = &fixture.model };
-    const attachment: client.model.PaneAttachment = .{ .pane_id = pane_id, .location = location };
-    try std.testing.expectEqual(client.model.PaneAttachmentConfirmation.confirmed, try attach.execute(.{
+    var attach: ConfirmPaneAttachmentHandlerType = .{ .model = &fixture.model };
+    const attachment: PaneAttachmentType = .{ .pane_id = pane_id, .location = location };
+    try std.testing.expectEqual(types.PaneAttachmentConfirmation.confirmed, try attach.execute(.{
         .requested = attachment,
         .confirmed = attachment,
         .created = false,
@@ -380,7 +176,7 @@ test "reattachment invalidates old acknowledgements without replacing the pane b
 }
 
 test "headless preparation delivery input and steady-state patches allocate nothing" {
-    var allocator = std.testing.FailingAllocator.init(gpa, .{});
+    var allocator = std.testing.FailingAllocator.init(std.testing.allocator, .{});
     const fixture = try Fixture.initWithAllocator(allocator.allocator());
     defer fixture.deinit();
     try sendFrame(fixture, .{});

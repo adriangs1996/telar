@@ -5,43 +5,17 @@
 //! because the runtime lives on another machine.
 
 const std = @import("std");
-const core = @import("telar-core");
-const frontend = @import("telar-frontend");
-const runtime_connection = @import("runtime_connection.zig");
-
-const Io = std.Io;
-const RuntimeConnector = runtime_connection.RuntimeConnector;
-pub const Discovery = @import("remote_discovery.zig").Discovery;
-pub const LaunchDefaults = @import("remote_discovery.zig").LaunchDefaults;
+const Forward = @import("Forward.zig");
+const RuntimeConnector = @import("RuntimeConnector.zig");
+const SocketChannelType = @import("telar-core").SocketChannel;
+const Discovery = @import("Discovery.zig");
+const remote_discovery = @import("remote_discovery.zig");
 
 pub const connect_attempts = 100;
 pub const connect_interval_ms = 100;
 
-const endpoint_timeout: Io.Timeout = .{
+const endpoint_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(30) },
-};
-
-/// One live SSH socket forward. Stopping it kills the ssh child and removes
-/// the local socket file.
-pub const Forward = struct {
-    child: std.process.Child,
-    discovery: Discovery,
-    local_path: [std.fs.max_path_bytes:0]u8 = undefined,
-    local_path_len: usize = 0,
-
-    pub fn localPath(self: *const Forward) []const u8 {
-        return self.local_path[0..self.local_path_len];
-    }
-
-    pub fn localPathZ(self: *Forward) [*:0]const u8 {
-        self.local_path[self.local_path_len] = 0;
-        return self.local_path[0..self.local_path_len :0];
-    }
-
-    pub fn stop(self: *Forward, io: Io) void {
-        self.child.kill(io);
-        Io.Dir.deleteFileAbsolute(io, self.localPath()) catch {};
-    }
 };
 
 /// Discovers the remote home, shell and runtime socket over SSH, then starts
@@ -66,7 +40,7 @@ pub fn establish(init: std.process.Init, destination: []const u8) !Forward {
         destinationHash(destination),
     });
     forward.local_path_len = local_path.len;
-    Io.Dir.deleteFileAbsolute(init.io, local_path) catch {};
+    std.Io.Dir.deleteFileAbsolute(init.io, local_path) catch {};
 
     var forward_spec_buffer: [2 * std.fs.max_path_bytes + 1]u8 = undefined;
     const forward_spec = try std.fmt.bufPrint(&forward_spec_buffer, "{s}:{s}", .{ local_path, forward.discovery.endpoint() });
@@ -101,7 +75,7 @@ pub fn establish(init: std.process.Init, destination: []const u8) !Forward {
 /// ```zig
 /// var connection = try connectForwarded(init, &connector);
 /// ```
-pub fn connectForwarded(init: std.process.Init, connector: *const RuntimeConnector) !core.transport.SocketChannel {
+pub fn connectForwarded(init: std.process.Init, connector: *const RuntimeConnector) !SocketChannelType {
     var attempt: usize = 0;
     while (attempt < connect_attempts) : (attempt += 1) {
         if (connector.connect()) |connection| {
@@ -147,10 +121,10 @@ fn validateDestination(destination: []const u8) !void {
     }
 }
 
-fn waitForSocket(io: Io, path: []const u8) !void {
+fn waitForSocket(io: std.Io, path: []const u8) !void {
     var attempt: usize = 0;
     while (attempt < connect_attempts) : (attempt += 1) {
-        if (Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false })) |_| {
+        if (std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false })) |_| {
             return;
         } else |_| {
             io.sleep(.fromMilliseconds(connect_interval_ms), .awake) catch {};
@@ -180,7 +154,7 @@ test "SSH destinations cannot inject options or control bytes" {
 }
 
 test {
-    _ = @import("remote_discovery.zig");
+    _ = remote_discovery;
 }
 
 test "destination hashes are stable and distinct" {

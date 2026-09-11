@@ -6,8 +6,11 @@
     .paths = .{
         "build.zig",
         "build.zig.zon",
+        "build",
         "src",
         "linters",
+        "tools",
+        "benchmarks",
         "examples",
         "test/fuzz/build.zig",
         "test/fuzz/build.zig.zon",

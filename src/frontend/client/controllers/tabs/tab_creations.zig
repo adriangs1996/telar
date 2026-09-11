@@ -1,21 +1,19 @@
 //! Wires tab creation use cases to one client's protocol and attachments.
 
-const std = @import("std");
-const core = @import("telar-core");
-const workspace_capability = @import("../../../workspace/root.zig");
-const tabs_application = @import("telar-client").application.tabs;
-const client_model = @import("telar-client").model;
-const active_pane_resources = @import("../panes/active_pane_resources.zig");
-const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
-const pane_pastes = @import("../input/pane_pastes.zig");
+const Client = @import("../../Client.zig");
+const RequestTabCreationHandlerType = @import("telar-client").RequestTabCreationHandler;
+const TabCreatedType = @import("telar-core").TabCreated;
+const TabCreationType = @import("telar-client").TabCreation;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
+const std = @import("std");
+const ConfirmTabCreationHandlerType = @import("telar-client").ConfirmTabCreationHandler;
+const DeliverTabCreationHandlerType = @import("telar-client").DeliverTabCreationHandler;
+const pane_pastes = @import("../input/pane_pastes.zig");
+const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
 const tab_attachments = @import("tab_attachments.zig");
-
-const Client = @import("../../client.zig");
-const create_tab = tabs_application.create_tab;
-const multiplexer = workspace_capability.multiplexer;
-const schema = core.schema;
-const tab_creation_delivery = tabs_application.tab_creation_delivery;
+const TabCreationIntentType = @import("telar-client").TabCreationIntent;
+const rectSize_module = @import("telar-client").rectSize;
+const active_pane_resources = @import("../panes/active_pane_resources.zig");
 
 /// Wires an interactive tab creation to planning and owned request delivery.
 ///
@@ -23,7 +21,7 @@ const tab_creation_delivery = tabs_application.tab_creation_delivery;
 /// var handler = requestHandler(client);
 /// if (!try handler.execute(.{})) return;
 /// ```
-pub fn requestHandler(client: *Client) create_tab.RequestTabCreationHandler {
+pub fn requestHandler(client: *Client) RequestTabCreationHandlerType {
     return .{
         .model = &client.model,
         .gate = .{
@@ -42,7 +40,7 @@ pub fn requestHandler(client: *Client) create_tab.RequestTabCreationHandler {
 /// ```zig
 /// const creation = try apply(client, created);
 /// ```
-pub fn apply(client: *Client, created: schema.TabCreated) !client_model.TabCreation {
+pub fn apply(client: *Client, created: TabCreatedType) !TabCreationType {
     const continuation = request_lifecycle.consume(client, created.request_id) orelse
         return error.UnexpectedTabCreated;
     const requested = switch (continuation) {
@@ -66,7 +64,7 @@ pub fn apply(client: *Client, created: schema.TabCreated) !client_model.TabCreat
     });
 }
 
-fn confirmationHandler(client: *Client) create_tab.ConfirmTabCreationHandler {
+fn confirmationHandler(client: *Client) ConfirmTabCreationHandlerType {
     return .{
         .model = &client.model,
         .delivery = .{
@@ -76,9 +74,9 @@ fn confirmationHandler(client: *Client) create_tab.ConfirmTabCreationHandler {
     };
 }
 
-fn deliverConfirmation(context: *anyopaque, creation: client_model.TabCreation) !void {
+fn deliverConfirmation(context: *anyopaque, creation: TabCreationType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    var use_case: tab_creation_delivery.DeliverTabCreationHandler = .{
+    var use_case: DeliverTabCreationHandlerType = .{
         .model = &client.model,
         .paste_effects = pane_pastes.effects(client),
         .focus_effects = pane_focus_reports.effects(client),
@@ -97,14 +95,14 @@ fn tabOperationPending(context: *anyopaque) bool {
     return request_lifecycle.has(client, .tab_operation);
 }
 
-fn sendCreation(context: *anyopaque, intent: create_tab.TabCreationIntent) !void {
+fn sendCreation(context: *anyopaque, intent: TabCreationIntentType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try request_lifecycle.nextId(client);
     try request_lifecycle.deliverCreateTab(client, .{
         .request_id = request_id,
         .workspace = intent.workspace,
         .label = intent.label,
-        .size = multiplexer.rectSize(client.geometry().area) orelse return error.TerminalTooSmall,
+        .size = rectSize_module(client.geometry().area) orelse return error.TerminalTooSmall,
         .launch = .{
             .cwd = client.options.cwd,
             .cwd_source = intent.cwd_source,

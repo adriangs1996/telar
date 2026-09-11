@@ -1,12 +1,17 @@
 const std = @import("std");
-const Io = std.Io;
-const net = std.Io.net;
-
-const ca = @import("ca.zig");
+const ServeContext = @import("ServeContext.zig");
+const RootsType = @import("Roots.zig");
+const TunnelContext = @import("TunnelContext.zig");
 const event = @import("event.zig");
-const h2 = @import("h2.zig");
-const http = @import("http.zig");
+const UpstreamType = @import("Upstream.zig");
 const tls = @import("tls.zig");
+const http = @import("http.zig");
+const RouteType = @import("Route.zig");
+const H2RelayContext = @import("H2RelayContext.zig");
+const H2Side = @import("H2Side.zig");
+const DecoderType = @import("Decoder.zig");
+const SessionType = @import("Session.zig");
+const ExchangeContent = @import("ExchangeContent.zig");
 
 // HTTPS forward proxy with TLS interception.
 //
@@ -43,32 +48,23 @@ pub fn reservePort(first: u16, count: u16) ?u16 {
     return null;
 }
 
-/// Accepts tunnels until cancelled. One task per connection.
-pub const ServeContext = struct {
-    io: Io,
-    port: u16,
-    authority: ca.Authority,
-    allocator: std.mem.Allocator,
-    queue: *event.Queue,
-};
-
-pub fn serve(context: ServeContext) Io.Cancelable!void {
+pub fn serve(context: ServeContext) std.Io.Cancelable!void {
     const io = context.io;
     const port = context.port;
     const authority = context.authority;
     const gpa = context.allocator;
     const queue = context.queue;
-    const address = net.IpAddress.parse("127.0.0.1", port) catch return;
+    const address = std.Io.net.IpAddress.parse("127.0.0.1", port) catch return;
     var server = address.listen(io, .{ .reuse_address = true }) catch return;
     defer server.deinit(io);
 
     // The platform's real roots, read once. Every connection wants the same
     // answer, and rescanning per connection costs an allocation and a few
     // milliseconds on the handshake path.
-    var roots = tls.Roots.load(io, gpa) catch return;
+    var roots = RootsType.load(io, gpa) catch return;
     defer roots.deinit(gpa);
 
-    var connections: Io.Group = .init;
+    var connections: std.Io.Group = .init;
     defer connections.cancel(io);
 
     var next_id: std.atomic.Value(u64) = .init(1);
@@ -96,17 +92,7 @@ pub fn serve(context: ServeContext) Io.Cancelable!void {
     }
 }
 
-const TunnelContext = struct {
-    io: Io,
-    stream: net.Stream,
-    authority: ca.Authority,
-    roots: tls.Roots,
-    allocator: std.mem.Allocator,
-    queue: *event.Queue,
-    next_id: *std.atomic.Value(u64),
-};
-
-fn tunnel(context: TunnelContext) Io.Cancelable!void {
+fn tunnel(context: TunnelContext) std.Io.Cancelable!void {
     const io = context.io;
     const stream = context.stream;
     const authority = context.authority;
@@ -153,7 +139,7 @@ fn tunnel(context: TunnelContext) Io.Cancelable!void {
     var cw_buf: [16 * event.KB]u8 = undefined;
     var client_writer = stream.writer(io, &cw_buf);
 
-    const host_name = net.HostName.init(host) catch {
+    const host_name = std.Io.net.HostName.init(host) catch {
         reply(&client_writer.interface, "HTTP/1.1 502 Bad Gateway\r\n\r\n");
         return;
     };
@@ -174,9 +160,9 @@ fn tunnel(context: TunnelContext) Io.Cancelable!void {
     }
 
     const id = next_id.fetchAdd(1, .monotonic);
-    const opened_at = Io.Timestamp.now(io, .awake);
+    const opened_at = std.Io.Timestamp.now(io, .awake);
 
-    var opened: event.Upstream = .{ .id = id, .host = .{}, .port = port };
+    var opened: UpstreamType = .{ .id = id, .host = .{}, .port = port };
     opened.host.set(host);
     queue.putOne(io, .{ .upstream_opened = opened }) catch |err| switch (err) {
         error.Canceled => |e| return e,
@@ -204,7 +190,7 @@ fn tunnel(context: TunnelContext) Io.Cancelable!void {
             .port = port,
             .request_bytes = blind_up.load(.monotonic),
             .response_bytes = blind_down.load(.monotonic),
-            .duration_ms = opened_at.durationTo(Io.Timestamp.now(io, .awake)).toMilliseconds(),
+            .duration_ms = opened_at.durationTo(std.Io.Timestamp.now(io, .awake)).toMilliseconds(),
             .detail = gpa.dupe(u8, "not intercepted: client did not offer http/1.1 (likely h2)") catch null,
         } }) catch {};
         return;
@@ -232,7 +218,7 @@ fn tunnel(context: TunnelContext) Io.Cancelable!void {
             .port = port,
             .request_bytes = 0,
             .response_bytes = 0,
-            .duration_ms = opened_at.durationTo(Io.Timestamp.now(io, .awake)).toMilliseconds(),
+            .duration_ms = opened_at.durationTo(std.Io.Timestamp.now(io, .awake)).toMilliseconds(),
             .detail = gpa.dupe(u8, note) catch null,
         } }) catch {};
         return;
@@ -268,7 +254,7 @@ fn tunnel(context: TunnelContext) Io.Cancelable!void {
     // HTTP/1.1 keep-alive: one request and one response per turn, until either
     // side stops talking.
     while (true) {
-        const started = Io.Timestamp.now(io, .awake);
+        const started = std.Io.Timestamp.now(io, .awake);
 
         const request = http.relay(session, .{ .from = .child, .to = .origin, .is_response = false }, .{ .scratch = &msg_buf, .capture = &req_body }) orelse break;
         // Both the head and the body capture live in buffers the response relay
@@ -300,7 +286,7 @@ fn tunnel(context: TunnelContext) Io.Cancelable!void {
             .port = port,
             .request_bytes = req_bytes,
             .response_bytes = response.body_bytes,
-            .duration_ms = started.durationTo(Io.Timestamp.now(io, .awake)).toMilliseconds(),
+            .duration_ms = started.durationTo(std.Io.Timestamp.now(io, .awake)).toMilliseconds(),
             .detail = detail,
             .truncated = req_truncated or response.truncated,
         } };
@@ -324,7 +310,7 @@ fn tunnel(context: TunnelContext) Io.Cancelable!void {
             var ws_up: std.atomic.Value(u64) = .init(0);
             var ws_down: std.atomic.Value(u64) = .init(0);
 
-            if (io.concurrent(pumpDirection, .{ session, h2.Route{ .from = .child, .to = .origin }, &ws_up })) |future| {
+            if (io.concurrent(pumpDirection, .{ session, RouteType{ .from = .child, .to = .origin }, &ws_up })) |future| {
                 var c2o = future;
                 pumpDirection(session, .{ .from = .origin, .to = .child }, &ws_down);
                 c2o.await(io);
@@ -338,7 +324,7 @@ fn tunnel(context: TunnelContext) Io.Cancelable!void {
         }
     }
 
-    const elapsed = opened_at.durationTo(Io.Timestamp.now(io, .awake));
+    const elapsed = opened_at.durationTo(std.Io.Timestamp.now(io, .awake));
     queue.putOne(io, .{ .upstream_closed = .{
         .id = id,
         .bytes_up = total_up,
@@ -350,41 +336,7 @@ fn tunnel(context: TunnelContext) Io.Cancelable!void {
     };
 }
 
-/// Everything one direction of an h2 connection reported.
-const H2Side = struct {
-    decoder: h2.Decoder,
-    text: std.Io.Writer.Allocating,
-    body: []u8,
-    body_len: usize = 0,
-    seen: h2.Observed = .{},
-
-    fn run(self: *H2Side, session: *tls.Session, route: h2.Route) void {
-        h2.relay(session, route, .{
-            .decoder = &self.decoder,
-            .text = &self.text.writer,
-            .body = self.body,
-            .body_len = &self.body_len,
-            .seen = &self.seen,
-        });
-        // One side stopping ends the conversation; release the other so the
-        // exchange gets recorded instead of waiting on a keep-alive timeout.
-        session.halfClose(route.to);
-    }
-};
-
-/// Runs both directions of an h2 connection and records one exchange for the
-/// whole thing. Per-stream splitting is the next step; this is the connection.
-const H2RelayContext = struct {
-    io: Io,
-    session: *tls.Session,
-    allocator: std.mem.Allocator,
-    id: u64,
-    opened: event.Upstream,
-    port: u16,
-    queue: *event.Queue,
-};
-
-fn relayH2(context: H2RelayContext) Io.Cancelable!void {
+fn relayH2(context: H2RelayContext) std.Io.Cancelable!void {
     const io = context.io;
     const session = context.session;
     const gpa = context.allocator;
@@ -392,7 +344,7 @@ fn relayH2(context: H2RelayContext) Io.Cancelable!void {
     const opened = context.opened;
     const port = context.port;
     const queue = context.queue;
-    const started = Io.Timestamp.now(io, .awake);
+    const started = std.Io.Timestamp.now(io, .awake);
 
     const req_body = gpa.alloc(u8, 64 * event.KB) catch return;
     defer gpa.free(req_body);
@@ -400,7 +352,7 @@ fn relayH2(context: H2RelayContext) Io.Cancelable!void {
     defer gpa.free(res_body);
 
     var out: H2Side = .{
-        .decoder = h2.Decoder.init(gpa) catch return,
+        .decoder = DecoderType.init(gpa) catch return,
         .text = .init(gpa),
         .body = req_body,
     };
@@ -408,14 +360,14 @@ fn relayH2(context: H2RelayContext) Io.Cancelable!void {
     defer out.text.deinit();
 
     var back: H2Side = .{
-        .decoder = h2.Decoder.init(gpa) catch return,
+        .decoder = DecoderType.init(gpa) catch return,
         .text = .init(gpa),
         .body = res_body,
     };
     defer back.decoder.deinit();
     defer back.text.deinit();
 
-    if (io.concurrent(H2Side.run, .{ &out, session, h2.Route{ .from = .child, .to = .origin } })) |future| {
+    if (io.concurrent(H2Side.run, .{ &out, session, RouteType{ .from = .child, .to = .origin } })) |future| {
         var c2o = future;
         back.run(session, .{ .from = .origin, .to = .child });
         c2o.await(io);
@@ -430,7 +382,7 @@ fn relayH2(context: H2RelayContext) Io.Cancelable!void {
         .port = port,
         .request_bytes = out.seen.data_bytes,
         .response_bytes = back.seen.data_bytes,
-        .duration_ms = started.durationTo(Io.Timestamp.now(io, .awake)).toMilliseconds(),
+        .duration_ms = started.durationTo(std.Io.Timestamp.now(io, .awake)).toMilliseconds(),
         .detail = detail,
         .truncated = out.seen.truncated or back.seen.truncated,
     } }) catch |err| {
@@ -512,7 +464,7 @@ fn pumpBlind(from: c_int, to: c_int, counter: *std.atomic.Value(u64)) void {
 /// Copies one direction opaquely until it stops. Each `SSL` object ends up with
 /// exactly one reading thread and one writing thread, which is the pairing
 /// OpenSSL supports on a single object.
-fn pumpDirection(session: *tls.Session, route: h2.Route, counter: *std.atomic.Value(u64)) void {
+fn pumpDirection(session: *SessionType, route: RouteType, counter: *std.atomic.Value(u64)) void {
     var buf: [16 * event.KB]u8 = undefined;
     while (true) {
         const n = session.read(route.from, &buf) orelse break;
@@ -522,16 +474,6 @@ fn pumpDirection(session: *tls.Session, route: h2.Route, counter: *std.atomic.Va
         _ = counter.fetchAdd(n, .monotonic);
     }
 }
-
-/// Builds the storable rendering of one exchange. Bodies are deliberately not
-/// persisted: prompts, replies, and tool payloads may contain credentials for
-/// which no generic redactor can provide a safety guarantee.
-const ExchangeContent = struct {
-    request_head: []const u8,
-    request_body: []const u8,
-    response_head: []const u8,
-    response_body: []const u8,
-};
 
 fn renderExchange(gpa: std.mem.Allocator, content: ExchangeContent) ?[]const u8 {
     var out: std.Io.Writer.Allocating = .init(gpa);
@@ -571,10 +513,10 @@ test "storable exchanges omit request and response bodies" {
 // HostName.connect races connection attempts for all resolved addresses. On
 // Zig 0.16.0/macOS that path can panic when a racing connect(2) reports
 // EISCONN, so resolve asynchronously but try addresses one at a time.
-fn connectUpstream(host_name: net.HostName, io: Io, port: u16) !net.Stream {
-    var lookup_buf: [32]net.HostName.LookupResult = undefined;
-    var resolved: Io.Queue(net.HostName.LookupResult) = .init(&lookup_buf);
-    var lookup_future = io.async(net.HostName.lookup, .{ host_name, io, &resolved, .{ .port = port } });
+fn connectUpstream(host_name: std.Io.net.HostName, io: std.Io, port: u16) !std.Io.net.Stream {
+    var lookup_buf: [32]std.Io.net.HostName.LookupResult = undefined;
+    var resolved: std.Io.Queue(std.Io.net.HostName.LookupResult) = .init(&lookup_buf);
+    var lookup_future = io.async(std.Io.net.HostName.lookup, .{ host_name, io, &resolved, .{ .port = port } });
     defer lookup_future.cancel(io) catch {};
 
     var last_connect_error: ?anyerror = null;
@@ -596,7 +538,7 @@ fn connectUpstream(host_name: net.HostName, io: Io, port: u16) !net.Stream {
     }
 }
 
-fn reply(w: *Io.Writer, bytes: []const u8) void {
+fn reply(w: *std.Io.Writer, bytes: []const u8) void {
     w.writeAll(bytes) catch return;
     w.flush() catch {};
 }

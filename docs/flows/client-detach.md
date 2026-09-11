@@ -44,12 +44,12 @@ panes valid.
 
 ## Proof
 
-- `src/frontend/client/application/tab_attachment_retirement.zig` proves
+- `src/client/application/tabs/tab_attachment_retirement.zig` proves
   paste, focus, pane and final model-commit ordering for one tab.
-- `src/frontend/client/application/client_detachment.zig` proves stable
+- `src/client/application/session/client_detachment.zig` proves stable
   whole-client planning, empty state and partial failure behavior.
-- `src/frontend/client/tab_attachments.zig` binds the concrete client effects.
-- `src/frontend/client/client_detachments.zig` binds the per-tab retirement
+- `src/frontend/client/controllers/tabs/tab_attachments.zig` binds the concrete client effects.
+- `src/frontend/client/controllers/session/client_detachments.zig` binds the per-tab retirement
   port without owning traversal policy.
-- `src/frontend/client/client_test.zig` proves stable multi-tab delivery,
+- `src/frontend/client/tests/` proves stable multi-tab delivery,
   local attachment cleanup, version silence and the final stop control.

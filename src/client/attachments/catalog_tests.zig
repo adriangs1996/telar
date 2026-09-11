@@ -1,11 +1,13 @@
+const TargetType = @import("AttachmentTarget.zig");
 const std = @import("std");
-const attachments = @import("root.zig");
-const retained = attachments.retained;
-const Store = retained.Store;
-const target: attachments.Target = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 };
+const CaptureType = @import("Capture.zig");
+const retained = @import("retained.zig");
+const types = @import("types.zig");
 
-fn capture(gpa: std.mem.Allocator, sequence: u64) !*attachments.Capture {
-    const result = try gpa.create(attachments.Capture);
+const target: TargetType = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 };
+
+fn capture(gpa: std.mem.Allocator, sequence: u64) !*CaptureType {
+    const result = try gpa.create(CaptureType);
     errdefer gpa.destroy(result);
     result.* = .{
         .request = .{ .target = target, .sequence = sequence },
@@ -16,14 +18,14 @@ fn capture(gpa: std.mem.Allocator, sequence: u64) !*attachments.Capture {
     return result;
 }
 
-fn adopt(store: *Store, sequence: u64) !void {
+fn adopt(store: *retained.Store, sequence: u64) !void {
     const result = try capture(store.gpa, sequence);
     errdefer result.deinit(store.gpa);
     try store.adopt(result);
 }
 
 test "headless attachment dismissal retains sensitive PNG until the consumer returns it" {
-    var store = Store.init(std.testing.allocator);
+    var store = retained.Store.init(std.testing.allocator);
     defer store.deinit();
     _ = store.setTarget(target);
     try adopt(&store, 1);
@@ -43,7 +45,7 @@ test "headless attachment dismissal retains sensitive PNG until the consumer ret
 }
 
 test "attachment eviction skips a borrowed slot and keeps the four-item bound" {
-    var store = Store.init(std.testing.allocator);
+    var store = retained.Store.init(std.testing.allocator);
     defer store.deinit();
     _ = store.setTarget(target);
     try adopt(&store, 1);
@@ -54,7 +56,7 @@ test "attachment eviction skips a borrowed slot and keeps the four-item bound" {
     }
 
     try std.testing.expectEqualStrings("private png", lease.png);
-    try std.testing.expectEqual(attachments.max_items, store.snapshot().len);
+    try std.testing.expectEqual(types.max_items, store.snapshot().len);
     try std.testing.expect(store.find(@enumFromInt(1)) != null);
     try std.testing.expect(store.find(@enumFromInt(2)) == null);
 }
@@ -64,7 +66,7 @@ test "attachment initialization failures retain a single owner of captured bytes
 }
 
 fn allocationFailure(gpa: std.mem.Allocator) !void {
-    var store = Store.init(gpa);
+    var store = retained.Store.init(gpa);
     defer store.deinit();
     try adopt(&store, 1);
 }

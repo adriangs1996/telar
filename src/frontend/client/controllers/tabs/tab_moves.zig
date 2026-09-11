@@ -1,14 +1,13 @@
 //! Wires tab-move use cases to one client's protocol state.
 
-const std = @import("std");
-const core = @import("telar-core");
-const tabs_application = @import("telar-client").application.tabs;
-const client_model = @import("telar-client").model;
-
-const Client = @import("../../client.zig");
-const move_tab = tabs_application.move_tab;
+const Client = @import("../../Client.zig");
+const RequestTabMoveHandlerType = @import("telar-client").RequestTabMoveHandler;
+const TabMovedType = @import("telar-core").TabMoved;
+const ChangeType = @import("telar-client").Change;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-const schema = core.schema;
+const std = @import("std");
+const ConfirmTabMoveHandlerType = @import("telar-client").ConfirmTabMoveHandler;
+const TabMoveIntentType = @import("telar-client").TabMoveIntent;
 
 /// Wires an interactive move to the tab-operation gate and runtime request.
 ///
@@ -18,7 +17,7 @@ const schema = core.schema;
 ///     return;
 /// }
 /// ```
-pub fn requestHandler(client: *Client) move_tab.RequestTabMoveHandler {
+pub fn requestHandler(client: *Client) RequestTabMoveHandlerType {
     return .{
         .model = &client.model,
         .gate = .{
@@ -37,7 +36,7 @@ pub fn requestHandler(client: *Client) move_tab.RequestTabMoveHandler {
 /// ```zig
 /// const change = try apply(client, moved);
 /// ```
-pub fn apply(client: *Client, moved: schema.TabMoved) !client_model.Change {
+pub fn apply(client: *Client, moved: TabMovedType) !ChangeType {
     const continuation = request_lifecycle.consume(client, moved.request_id) orelse
         return error.UnexpectedTabMoved;
     const expected_location = switch (continuation) {
@@ -56,7 +55,7 @@ pub fn apply(client: *Client, moved: schema.TabMoved) !client_model.Change {
     }) catch return error.UnexpectedTabMoved;
 }
 
-fn confirmationHandler(client: *Client) move_tab.ConfirmTabMoveHandler {
+fn confirmationHandler(client: *Client) ConfirmTabMoveHandlerType {
     return .{ .model = &client.model };
 }
 
@@ -65,7 +64,7 @@ fn tabOperationPending(context: *anyopaque) bool {
     return request_lifecycle.has(client, .tab_operation);
 }
 
-fn sendMove(context: *anyopaque, intent: move_tab.TabMoveIntent) !void {
+fn sendMove(context: *anyopaque, intent: TabMoveIntentType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try request_lifecycle.nextId(client);
     try request_lifecycle.deliver(client, .{

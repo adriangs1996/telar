@@ -1,20 +1,13 @@
 //! Composition of the interactive Telar client process.
 
 const std = @import("std");
-const core = @import("telar-core");
-const backend = @import("telar-backend");
-const frontend = @import("telar-frontend");
-const config = @import("config.zig");
-const parser = @import("parser.zig");
-const plugin = @import("plugin.zig");
+const RunOptions = @import("arguments/RunOptions.zig");
+const ForwardType = @import("Forward.zig");
 const remote = @import("remote.zig");
-const runtime_connection = @import("runtime_connection.zig");
-const TestEnvironment = @import("test_environment.zig").TestEnvironment;
-
-const Io = std.Io;
-const RunOptions = parser.RunOptions;
-const RuntimeConnector = runtime_connection.RuntimeConnector;
-const max_args = backend.pty.max_args;
+const RuntimeConnector = @import("RuntimeConnector.zig");
+const ClientLaunch = @import("ClientLaunch.zig");
+const ClientRunRun = @import("telar-frontend").ClientRun;
+const TestEnvironment = @import("TestEnvironment.zig");
 
 /// Connects to the selected runtime, prepares the local client configuration
 /// and transfers its owned resources into the frontend client lifecycle.
@@ -23,7 +16,7 @@ const max_args = backend.pty.max_args;
 /// const exit_code = try client.run(process_init, options);
 /// ```
 pub fn run(init: std.process.Init, options: RunOptions) !u8 {
-    var forward: ?remote.Forward = null;
+    var forward: ?ForwardType = null;
     defer if (forward) |*owned| owned.stop(init.io);
     if (options.remote) |destination| {
         forward = try remote.establish(init, std.mem.span(destination));
@@ -41,7 +34,7 @@ pub fn run(init: std.process.Init, options: RunOptions) !u8 {
         });
     defer connection.deinit(init.io);
 
-    var launch: Launch = undefined;
+    var launch: ClientLaunch = undefined;
     try launch.prepare(.{
         .process = init,
         .options = &options,
@@ -52,182 +45,10 @@ pub fn run(init: std.process.Init, options: RunOptions) !u8 {
 
     const frontend_options = launch.frontendOptions();
     launch.transferResources();
-    return frontend.client.run(init, &connection, frontend_options);
+    return ClientRunRun(init, &connection, frontend_options);
 }
 
-const Preparation = struct {
-    process: std.process.Init,
-    options: *const RunOptions,
-    endpoint: []const u8,
-    remote_defaults: ?remote.LaunchDefaults = null,
-};
-
-const Launch = struct {
-    process: std.process.Init,
-    options: *const RunOptions,
-    endpoint: []const u8,
-    argument_storage: [max_args][]const u8 = undefined,
-    argument_count: usize = 0,
-    cwd_buffer: [std.fs.max_path_bytes]u8 = undefined,
-    cwd_len: usize = 0,
-    config_path_buffer: [std.fs.max_path_bytes]u8 = undefined,
-    trust_path_buffer: [std.fs.max_path_bytes]u8 = undefined,
-    generation: ?*frontend.config.Generation = null,
-    config_path: ?[]const u8 = null,
-    config_mtime_ns: i128 = 0,
-    plugin_registry: ?*frontend.plugins.Registry = null,
-    trust_store: ?*core.plugin.TrustStore = null,
-    trust_path: ?[]const u8 = null,
-    owns_resources: bool = true,
-
-    fn prepare(launch: *Launch, preparation: Preparation) !void {
-        launch.* = .{
-            .process = preparation.process,
-            .options = preparation.options,
-            .endpoint = preparation.endpoint,
-        };
-        errdefer launch.deinit();
-
-        try launch.prepareChild(preparation.remote_defaults);
-        launch.generation = try config.loadGeneration(preparation.process, .{
-            .path = preparation.options.config,
-            .disabled = preparation.options.no_config,
-            .profile = preparation.options.profile,
-        }, &launch.config_path_buffer);
-        launch.config_path = if (launch.generation != null)
-            if (preparation.options.config) |value|
-                std.mem.span(value)
-            else
-                try frontend.config.defaultPath(preparation.process.minimal.environ, &launch.config_path_buffer)
-        else
-            null;
-        launch.config_mtime_ns = if (launch.config_path) |path|
-            launch.generation.?.watchFingerprint(preparation.process.io, path)
-        else
-            0;
-
-        if (launch.generation) |generation| {
-            try launch.preparePlugins(generation);
-        }
-    }
-
-    fn prepareChild(launch: *Launch, defaults: ?remote.LaunchDefaults) !void {
-        if (defaults) |remote_launch| {
-            if (remote_launch.cwd.len > launch.cwd_buffer.len) {
-                return error.NameTooLong;
-            }
-
-            @memcpy(launch.cwd_buffer[0..remote_launch.cwd.len], remote_launch.cwd);
-            launch.cwd_len = remote_launch.cwd.len;
-            if (!launch.options.command_set) {
-                launch.argument_storage[0] = remote_launch.shell;
-                launch.argument_count = 1;
-                return;
-            }
-        } else {
-            launch.cwd_len = try Io.Dir.cwd().realPathFile(launch.process.io, ".", &launch.cwd_buffer);
-        }
-
-        while (launch.options.command.argv[launch.argument_count]) |argument| : (launch.argument_count += 1) {
-            launch.argument_storage[launch.argument_count] = std.mem.span(argument);
-        }
-    }
-
-    fn preparePlugins(launch: *Launch, generation: *frontend.config.Generation) !void {
-        const resolved_trust_path = try plugin.trustPath(launch.process.minimal.environ, &launch.trust_path_buffer);
-        const loaded_trust = try plugin.loadTrustStore(launch.process, resolved_trust_path);
-        launch.trust_store = try launch.process.gpa.create(core.plugin.TrustStore);
-        launch.trust_store.?.* = loaded_trust;
-
-        const registry_value = try frontend.plugins.Registry.loadWithTrust(
-            .{
-                .gpa = launch.process.gpa,
-                .io = launch.process.io,
-                .config_dir = generation.configDir(),
-            },
-            generation.pluginSlice(),
-            launch.trust_store.?,
-        );
-        try registry_value.validateConfiguredActions(generation.snapshot.bindingSlice());
-        launch.plugin_registry = try launch.process.gpa.create(frontend.plugins.Registry);
-        launch.plugin_registry.?.* = registry_value;
-        launch.config_mtime_ns ^= @as(i128, launch.plugin_registry.?.watchFingerprint(launch.process.gpa, launch.process.io));
-        launch.config_mtime_ns ^= @as(i128, frontend.client.trustWatchFingerprint(launch.process.io, resolved_trust_path));
-        launch.trust_path = resolved_trust_path;
-    }
-
-    fn frontendOptions(launch: *const Launch) frontend.client.Options {
-        const snapshot = if (launch.generation) |generation| &generation.snapshot else null;
-        const options = launch.options;
-        return .{
-            .arguments = launch.argument_storage[0..launch.argument_count],
-            .cwd = launch.cwd_buffer[0..launch.cwd_len],
-            .endpoint = launch.endpoint,
-            .prefix = if (snapshot) |value| value.prefix else frontend.keybind.default_prefix,
-            .bindings = if (snapshot) |value| value.bindingSlice() else &.{},
-            .theme = if (options.theme_set)
-                options.theme
-            else if (snapshot) |value|
-                value.theme
-            else
-                options.theme,
-            .icon_theme = if (snapshot) |value| value.icon_theme else .unicode,
-            .sidebar_rendering = if (options.sidebar_renderer_set)
-                options.sidebar_rendering
-            else if (snapshot) |value|
-                value.sidebar_rendering
-            else
-                options.sidebar_rendering,
-            .sidebar_visible = if (snapshot) |value| value.sidebar_visible else true,
-            .pane_gaps = if (snapshot) |value| value.pane_gaps else true,
-            .sound = if (snapshot) |value| value.sound else .{},
-            .bars = if (snapshot) |value| value.bars.presentation() else .{},
-            .host_shared_memory = launch.options.remote == null and
-                supportsHostSharedMemory(launch.process.minimal.environ),
-            .input_escape_timeout_ns = if (snapshot) |value|
-                value.input_escape_timeout_ns
-            else
-                frontend.keybind.default_escape_timeout_ns,
-            .input_sequence_timeout_ns = if (snapshot) |value|
-                value.input_sequence_timeout_ns
-            else
-                frontend.keybind.default_sequence_timeout_ns,
-            .lua_generation = launch.generation,
-            .config_path = launch.config_path,
-            .config_mtime_ns = launch.config_mtime_ns,
-            .theme_locked = options.theme_set,
-            .sidebar_renderer_locked = options.sidebar_renderer_set,
-            .plugin_registry = launch.plugin_registry,
-            .trust_store = launch.trust_store,
-            .trust_path = launch.trust_path,
-            .profile = if (options.profile) |value| std.mem.span(value) else null,
-            .editor = configuredEditor(launch.process.minimal.environ),
-        };
-    }
-
-    fn transferResources(launch: *Launch) void {
-        launch.owns_resources = false;
-    }
-
-    fn deinit(launch: *Launch) void {
-        if (!launch.owns_resources) {
-            return;
-        }
-
-        if (launch.plugin_registry) |registry| {
-            launch.process.gpa.destroy(registry);
-        }
-        if (launch.trust_store) |store| {
-            launch.process.gpa.destroy(store);
-        }
-        if (launch.generation) |generation| {
-            generation.deinit();
-        }
-        launch.owns_resources = false;
-    }
-};
-
-fn supportsHostSharedMemory(environ: std.process.Environ) bool {
+pub fn supportsHostSharedMemory(environ: std.process.Environ) bool {
     if (environ.getPosix("SSH_CONNECTION") != null) {
         return false;
     }
@@ -236,15 +57,15 @@ fn supportsHostSharedMemory(environ: std.process.Environ) bool {
     return std.ascii.eqlIgnoreCase(terminal_program, "ghostty");
 }
 
-fn configuredEditor(environ: std.process.Environ) []const u8 {
+pub fn configuredEditor(environ: std.process.Environ) []const u8 {
     return environ.getPosix("EDITOR") orelse "";
 }
 
 test "remote launch uses remote home and shell rather than client paths" {
-    var environment = try TestEnvironment.init(&.{.{ "SHELL", "/opt/homebrew/bin/local-shell" }});
+    var environment = try TestEnvironment.init(&.{.{ .name = "SHELL", .value = "/opt/homebrew/bin/local-shell" }});
     defer environment.deinit();
     const options = try RunOptions.parse(&.{ "--remote", "box" }, .{ .block = environment.block });
-    var launch: Launch = .{ .process = undefined, .options = &options, .endpoint = "/forward.sock" };
+    var launch: ClientLaunch = .{ .process = undefined, .options = &options, .endpoint = "/forward.sock" };
     try launch.prepareChild(.{ .cwd = "/home/remote-user", .shell = "/bin/remote-shell" });
 
     try std.testing.expectEqualStrings("/home/remote-user", launch.cwd_buffer[0..launch.cwd_len]);
@@ -254,7 +75,7 @@ test "remote launch uses remote home and shell rather than client paths" {
 
 test "remote launch preserves explicit commands while keeping the remote home" {
     const options = try RunOptions.parse(&.{ "--remote", "box", "/bin/bash", "-l" }, .empty);
-    var launch: Launch = .{ .process = undefined, .options = &options, .endpoint = "/forward.sock" };
+    var launch: ClientLaunch = .{ .process = undefined, .options = &options, .endpoint = "/forward.sock" };
     try launch.prepareChild(.{ .cwd = "/home/remote-user", .shell = "/bin/remote-shell" });
 
     try std.testing.expectEqualStrings("/home/remote-user", launch.cwd_buffer[0..launch.cwd_len]);
@@ -264,7 +85,7 @@ test "remote launch preserves explicit commands while keeping the remote home" {
 }
 
 test "local Ghostty clients may use host shared memory" {
-    var environment = try TestEnvironment.init(&.{.{ "TERM_PROGRAM", "Ghostty" }});
+    var environment = try TestEnvironment.init(&.{.{ .name = "TERM_PROGRAM", .value = "Ghostty" }});
     defer environment.deinit();
 
     try std.testing.expect(supportsHostSharedMemory(.{ .block = environment.block }));
@@ -272,8 +93,8 @@ test "local Ghostty clients may use host shared memory" {
 
 test "SSH clients never use host shared memory" {
     var environment = try TestEnvironment.init(&.{
-        .{ "TERM_PROGRAM", "ghostty" },
-        .{ "SSH_CONNECTION", "host 22 host 22" },
+        .{ .name = "TERM_PROGRAM", .value = "ghostty" },
+        .{ .name = "SSH_CONNECTION", .value = "host 22 host 22" },
     });
     defer environment.deinit();
 
@@ -281,7 +102,7 @@ test "SSH clients never use host shared memory" {
 }
 
 test "other terminals do not use Ghostty shared memory" {
-    var environment = try TestEnvironment.init(&.{.{ "TERM_PROGRAM", "iTerm.app" }});
+    var environment = try TestEnvironment.init(&.{.{ .name = "TERM_PROGRAM", .value = "iTerm.app" }});
     defer environment.deinit();
 
     try std.testing.expect(!supportsHostSharedMemory(.{ .block = environment.block }));
@@ -289,7 +110,7 @@ test "other terminals do not use Ghostty shared memory" {
 }
 
 test "the client snapshots EDITOR without inventing a fallback" {
-    var environment = try TestEnvironment.init(&.{.{ "EDITOR", "/usr/bin/nvim" }});
+    var environment = try TestEnvironment.init(&.{.{ .name = "EDITOR", .value = "/usr/bin/nvim" }});
     defer environment.deinit();
 
     try std.testing.expectEqualStrings(

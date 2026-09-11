@@ -1,0 +1,9 @@
+pub const SWINSZ: c_int = @bitCast(@as(u32, 0x80087467));
+pub const SCTTY: c_int = 0x20007461;
+pub const FLUSH: c_int = @bitCast(@as(u32, 0x80047410));
+pub const P_PID: c_int = 1;
+pub const WNOHANG: c_int = 0x00000001;
+pub const WEXITED: c_int = 0x00000004;
+pub const WSTOPPED: c_int = 0x00000008;
+pub const WCONTINUED: c_int = 0x00000010;
+pub const WNOWAIT: c_int = 0x00000020;

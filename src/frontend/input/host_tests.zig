@@ -1,10 +1,9 @@
 const std = @import("std");
-const term = @import("../presentation/root.zig").screen;
-const core = @import("telar-core");
-pub const Key = @import("telar-client").input.Key;
-pub const Modes = @import("telar-client").input.Modes;
-pub const encodeKey = @import("telar-client").input.encodeKey;
-pub const encodePaste = @import("telar-client").input.encodePaste;
+const encodeKey = @import("telar-client").encodeKey;
+const term = @import("../presentation/screen_support.zig");
+const InputModes = @import("telar-core").InputModes;
+const Key = @import("telar-client").Key;
+const encodePaste = @import("telar-client").encodePaste;
 
 test "line-feed shortcuts preserve LF when encoded for a legacy child" {
     var buffer: [32]u8 = undefined;
@@ -14,7 +13,7 @@ test "line-feed shortcuts preserve LF when encoded for a legacy child" {
 
 test "Kitty child event types preserve a modified character lifecycle" {
     var buffer: [32]u8 = undefined;
-    const modes: Modes = .{ .kitty_keyboard_flags = 7 };
+    const modes: InputModes = .{ .kitty_keyboard_flags = 7 };
     const cases = [_]struct { host: []const u8, expected: []const u8 }{
         .{ .host = "\x1b[115::115;5:1u", .expected = "\x1b[115::115;5u" },
         .{ .host = "\x1b[115::115;5:2u", .expected = "\x1b[115::115;5:2u" },
@@ -43,7 +42,7 @@ test "Kitty alternate codepoints are forwarded only when the child requests them
 
 test "Kitty functional keys preserve repeat and release suffixes" {
     var buffer: [32]u8 = undefined;
-    const modes: Modes = .{ .kitty_keyboard_flags = 2 };
+    const modes: InputModes = .{ .kitty_keyboard_flags = 2 };
 
     const pressed_up = term.parse("\x1b[1;1:1A").?.event.key;
     try std.testing.expectEqualStrings("\x1b[A", try encodeKey(&buffer, pressed_up, .{

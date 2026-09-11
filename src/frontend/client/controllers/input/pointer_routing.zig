@@ -1,41 +1,35 @@
 //! Wires host pointer authority and normalization to client pointer owners.
 
-const std = @import("std");
-const core = @import("telar-core");
-const presentation = @import("../../../presentation/root.zig");
-const workspace_capability = @import("../../../workspace/root.zig");
-const input_application = @import("telar-client").application.input;
-const copy_mode_pointer = @import("copy_mode_pointer.zig");
+const Client = @import("../../Client.zig");
+const term = @import("../../../presentation/screen_support.zig");
+const ApplicationInputPointerRoutingOutcome = @import("telar-client").ApplicationInputPointerRoutingOutcome;
+const enabled_module = @import("telar-core").enabled;
+const PointerRoutingContext = @import("PointerRoutingContext.zig");
+const PointerRoutingHandlerType = @import("telar-client").PointerRoutingHandler;
+const PointerCommandType = @import("telar-client").PointerCommand;
 const link_openings = @import("link_openings.zig");
-const pane_mouse_inputs = @import("pane_mouse_inputs.zig");
+const AuthorityType = @import("telar-client").Authority;
+const capture_module = @import("telar-client").capture;
+const GeometryType = @import("telar-client").Geometry;
+const std = @import("std");
+const copy_mode_pointer = @import("copy_mode_pointer.zig");
+const ViewOutcomeType = @import("telar-client").ViewOutcome;
 const view_interactions = @import("view_interactions.zig");
-
-const Client = @import("../../client.zig");
-const diagnostics = core.diagnostics;
-const multiplexer = workspace_capability.multiplexer;
-const pointer_routing = input_application.pointer_routing;
-const term = presentation.screen;
-
-pub const Outcome = pointer_routing.Outcome;
-
-const Context = struct {
-    client: *Client,
-    model: ?*multiplexer.Model = null,
-};
+const pane_mouse_inputs = @import("pane_mouse_inputs.zig");
 
 /// Routes one host pointer event through the current exclusive owner.
 ///
 /// ```zig
 /// _ = try apply(client, event);
 /// ```
-pub fn apply(client: *Client, event: term.Event.Mouse) !Outcome {
-    if (comptime diagnostics.enabled) {
+pub fn apply(client: *Client, event: term.Event.Mouse) !ApplicationInputPointerRoutingOutcome {
+    if (comptime enabled_module) {
         client.telemetry.metrics.mouse_events += 1;
     }
 
-    var context: Context = .{ .client = client };
+    var context: PointerRoutingContext = .{ .client = client };
 
-    var use_case: pointer_routing.PointerRoutingHandler = .{
+    var use_case: PointerRoutingHandlerType = .{
         .effects = .{
             .context = &context,
             .copy_mode = copyMode,
@@ -48,13 +42,13 @@ pub fn apply(client: *Client, event: term.Event.Mouse) !Outcome {
     return use_case.execute(resolve(&context, event));
 }
 
-fn link(raw_context: *anyopaque, command: pointer_routing.PointerCommand) !bool {
-    const context: *Context = @ptrCast(@alignCast(raw_context));
+fn link(raw_context: *anyopaque, command: PointerCommandType) !bool {
+    const context: *PointerRoutingContext = @ptrCast(@alignCast(raw_context));
 
     return link_openings.pointer(context.client, context.model.?, command.event);
 }
 
-fn resolve(context: *Context, event: term.Event.Mouse) pointer_routing.Authority {
+fn resolve(context: *PointerRoutingContext, event: term.Event.Mouse) AuthorityType {
     const selection = context.client.model.pointerSelection();
     const captured = if (selection) |value| value.dragging else false;
     if (context.client.model.name_prompt.active() and !captured) {
@@ -65,8 +59,8 @@ fn resolve(context: *Context, event: term.Event.Mouse) pointer_routing.Authority
     const begins_gesture = event.kind == .press or event.kind == .scroll_up or event.kind == .scroll_down;
     if (begins_gesture and !captured and context.client.presenter.presentation_state.active != null) {
         const delivered = context.client.presenter.presentation_state.delivered_geometry orelse return .unavailable;
-        const projection = @import("telar-client").presentation.capture(&context.client.model, .{ .geometry = context.client.geometry() });
-        const current = @import("telar-client").presentation.Geometry.capture(projection);
+        const projection = capture_module(&context.client.model, .{ .geometry = context.client.geometry() });
+        const current = GeometryType.capture(projection);
         if (!delivered.matches(&current)) {
             return .unavailable;
         }
@@ -92,14 +86,14 @@ fn resolve(context: *Context, event: term.Event.Mouse) pointer_routing.Authority
     } };
 }
 
-fn copyMode(raw_context: *anyopaque, command: pointer_routing.PointerCommand) !bool {
-    const context: *Context = @ptrCast(@alignCast(raw_context));
+fn copyMode(raw_context: *anyopaque, command: PointerCommandType) !bool {
+    const context: *PointerRoutingContext = @ptrCast(@alignCast(raw_context));
 
     return copy_mode_pointer.apply(context.client, context.model.?, command.event);
 }
 
-fn view(raw_context: *anyopaque, command: pointer_routing.PointerCommand) !pointer_routing.ViewOutcome {
-    const context: *Context = @ptrCast(@alignCast(raw_context));
+fn view(raw_context: *anyopaque, command: PointerCommandType) !ViewOutcomeType {
+    const context: *PointerRoutingContext = @ptrCast(@alignCast(raw_context));
     const interaction = context.client.view.handleMouse(command.event);
     const outcome = try view_interactions.apply(context.client, context.model.?, interaction);
 
@@ -109,8 +103,8 @@ fn view(raw_context: *anyopaque, command: pointer_routing.PointerCommand) !point
     };
 }
 
-fn pane(raw_context: *anyopaque, command: pointer_routing.PointerCommand) !void {
-    const context: *Context = @ptrCast(@alignCast(raw_context));
+fn pane(raw_context: *anyopaque, command: PointerCommandType) !void {
+    const context: *PointerRoutingContext = @ptrCast(@alignCast(raw_context));
 
     _ = try pane_mouse_inputs.apply(
         context.client,

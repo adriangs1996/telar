@@ -1,47 +1,17 @@
 //! Vertical contract tests for the runtime close-tab flow.
 
+const StateType = @import("../../workspace/State.zig");
+const RepositoryType = @import("../../workspace/Repository.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const close_tab_commands = @import("../application/commands/close_tab.zig");
-const close_tab_controller = @import("../entrypoints/requests/close_tab.zig");
-const delivery_mod = @import("../delivery/root.zig");
-const workspace_mod = @import("../../workspace/root.zig");
-
-const schema = core.schema;
-
-const PaneCapture = struct {
-    close_count: usize = 0,
-    last_location: ?schema.TabLocation = null,
-
-    fn port(capture: *PaneCapture) close_tab_commands.PaneCloser {
-        return .{ .context = capture, .close_all = closeAll };
-    }
-
-    fn closeAll(context: *anyopaque, location: schema.TabLocation) void {
-        const capture: *PaneCapture = @ptrCast(@alignCast(context));
-        capture.close_count += 1;
-        capture.last_location = location;
-    }
-};
-
-const EventCapture = struct {
-    count: usize = 0,
-    last: ?workspace_mod.TabRemoved = null,
-
-    fn publisher(capture: *EventCapture) close_tab_commands.EventPublisher {
-        return .{ .context = capture, .publish = publish };
-    }
-
-    fn publish(context: *anyopaque, event: workspace_mod.TabRemoved) void {
-        const capture: *EventCapture = @ptrCast(@alignCast(context));
-        capture.count += 1;
-        capture.last = event;
-    }
-};
+const CloseTabTestPaneCapture = @import("CloseTabTestPaneCapture.zig");
+const CloseTabTestEventCapture = @import("CloseTabTestEventCapture.zig");
+const CloseTabHandlerType = @import("../application/commands/CloseTabHandler.zig");
+const ResponseQueueType = @import("../delivery/ResponseQueue.zig");
+const CloseTabController = @import("../entrypoints/requests/CloseTabController.zig");
 
 test "a committed tab removal survives response queue backpressure" {
-    var state: workspace_mod.State = .{};
-    var workspaces = workspace_mod.Repository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     const first = (try workspaces.ensure("/work/first")).location;
     const removed_location = (try workspaces.ensure("/work/second")).location;
@@ -50,14 +20,14 @@ test "a committed tab removal survives response queue backpressure" {
         .worktree => unreachable,
     };
     const revision = workspaces.reader().revision();
-    var panes: PaneCapture = .{};
-    var events: EventCapture = .{};
-    var handler: close_tab_commands.CloseTabHandler = .{
+    var panes: CloseTabTestPaneCapture = .{};
+    var events: CloseTabTestEventCapture = .{};
+    var handler: CloseTabHandlerType = .{
         .workspaces = &workspaces,
         .panes = panes.port(),
         .events = events.publisher(),
     };
-    var responses: delivery_mod.ResponseQueue = .{};
+    var responses: ResponseQueueType = .{};
 
     while (responses.len < responses.items.len) {
         try responses.push(.{ .tab_moved = .{
@@ -67,7 +37,7 @@ test "a committed tab removal survives response queue backpressure" {
         } });
     }
 
-    var controller = close_tab_controller.Controller.init(&responses, handler.executor());
+    var controller = CloseTabController.init(&responses, handler.executor());
     try std.testing.expectError(error.ResponseQueueFull, controller.closeTab(.{
         .request_id = @enumFromInt(31),
         .location = removed_location,

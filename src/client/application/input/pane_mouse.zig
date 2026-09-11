@@ -1,35 +1,20 @@
 //! Shared pointer and focused-scroll policy after pane resolution.
 
+const PointerCommand = @import("PointerCommand.zig");
+const action_module = @import("../../input/action.zig");
+const ScrollEffect = @import("ScrollEffect.zig");
+const ReportEffect = @import("ReportEffect.zig");
+const PaneMousePlanType = @import("../../workspace/PaneMousePlan.zig");
+const Mouse = @import("../../input/Mouse.zig");
+const Resolved = @import("Resolved.zig");
+const PaneMouseCapture = @import("PaneMouseCapture.zig");
+const PaneMouseHandler = @import("PaneMouseHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const input_capability = @import("../../input/root.zig");
-const Mouse = @import("../../input/root.zig").Mouse;
-const workspace_capability = @import("../../workspace/root.zig");
-
-const mouse_protocol = input_capability.mouse_protocol;
-const multiplexer = workspace_capability.multiplexer;
-const schema = core.schema;
-
-pub const PointerCommand = struct {
-    event: Mouse,
-    exterior_pixels: bool,
-    cell_width_px: u16,
-    cell_height_px: u16,
-};
+const MouseTrackingType = @import("telar-core").MouseTracking;
 
 pub const Command = union(enum) {
     pointer: PointerCommand,
-    focused_scroll: input_capability.action.ScrollDirection,
-};
-
-pub const ScrollEffect = struct {
-    pane_id: schema.PaneId,
-    delta: i32,
-};
-
-pub const ReportEffect = struct {
-    plan: multiplexer.PaneMousePlan,
-    command: PointerCommand,
+    focused_scroll: action_module.ScrollDirection,
 };
 
 pub const Effect = union(enum) {
@@ -47,119 +32,7 @@ pub const Outcome = enum {
     selection_started,
 };
 
-pub const Resolved = struct {
-    plan: multiplexer.PaneMousePlan,
-    pointer: PointerCommand,
-};
-
-pub const Plans = struct {
-    context: *anyopaque,
-    resolve: *const fn (*anyopaque, Command) ?Resolved,
-};
-
-pub const Effects = struct {
-    context: *anyopaque,
-    apply: *const fn (*anyopaque, Effect) anyerror!void,
-};
-
-pub const PaneMouseHandler = struct {
-    plans: Plans,
-    effects: Effects,
-
-    /// Resolves one pane snapshot, then selects one mouse-selection,
-    /// viewport, alternate-scroll or child mouse-report effect.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(command);
-    /// ```
-    pub fn execute(self: *PaneMouseHandler, command: Command) !Outcome {
-        const resolved = self.plans.resolve(self.plans.context, command) orelse return .ignored;
-        const plan = resolved.plan;
-        const pointer = resolved.pointer;
-
-        const forced_selection = pointer.event.button & 4 != 0;
-        if (pointer.event.kind == .press and pointer.event.button & 0b11 == 0 and
-            (plan.protocol.tracking == .none or forced_selection))
-        {
-            try self.effects.apply(self.effects.context, .{ .selection = .{
-                .plan = plan,
-                .command = pointer,
-            } });
-            return .selection_started;
-        }
-
-        const wheel_delta: ?i32 = switch (pointer.event.kind) {
-            .scroll_up => -3,
-            .scroll_down => 3,
-            else => null,
-        };
-
-        const tracked = plan.protocol.sgr and mouse_protocol.tracked(plan.protocol.tracking, pointer.event.kind);
-
-        if (wheel_delta) |delta| {
-            if (!tracked) {
-                if (plan.alternate_scroll and plan.at_bottom) {
-                    try self.effects.apply(self.effects.context, .{ .alternate_scroll = .{
-                        .pane_id = plan.pane_id,
-                        .delta = delta,
-                    } });
-                    return .alternate_scroll_selected;
-                }
-
-                try self.effects.apply(self.effects.context, .{ .viewport = .{
-                    .pane_id = plan.pane_id,
-                    .delta = delta,
-                } });
-                return .viewport_selected;
-            }
-        }
-
-        if (!tracked) {
-            return .ignored;
-        }
-
-        try self.effects.apply(self.effects.context, .{ .report = .{
-            .plan = plan,
-            .command = pointer,
-        } });
-        return .report_selected;
-    }
-};
-
-const Capture = struct {
-    resolved: ?Resolved = null,
-    received: ?Command = null,
-    effect: ?Effect = null,
-    effect_count: usize = 0,
-    fail: bool = false,
-
-    fn plans(capture: *Capture) Plans {
-        return .{ .context = capture, .resolve = resolve };
-    }
-
-    fn effects(capture: *Capture) Effects {
-        return .{ .context = capture, .apply = apply };
-    }
-
-    fn resolve(raw_context: *anyopaque, command: Command) ?Resolved {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.received = command;
-
-        return capture.resolved;
-    }
-
-    fn apply(raw_context: *anyopaque, effect: Effect) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.effect = effect;
-        capture.effect_count += 1;
-
-        if (capture.fail) {
-            return error.PaneMouseEffectFailed;
-        }
-    }
-};
-
-fn testingPlan() multiplexer.PaneMousePlan {
+fn testingPlan() PaneMousePlanType {
     return .{
         .pane_id = @enumFromInt(3),
         .content = .{ .x = 10, .y = 4, .w = 20, .h = 8 },
@@ -213,7 +86,7 @@ test "PaneMouseHandler selects viewport or alternate scroll for untracked wheels
             var resolved = testingResolved(kind);
             resolved.plan.alternate_scroll = case.alternate_scroll;
             resolved.plan.at_bottom = case.at_bottom;
-            var capture: Capture = .{ .resolved = resolved };
+            var capture: PaneMouseCapture = .{ .resolved = resolved };
             var handler: PaneMouseHandler = .{ .plans = capture.plans(), .effects = capture.effects() };
             const command = testingCommand(kind);
             const scroll: ScrollEffect = .{
@@ -235,7 +108,7 @@ test "PaneMouseHandler selects viewport or alternate scroll for untracked wheels
 
 test "PaneMouseHandler reports only child-tracked events" {
     const Case = struct {
-        tracking: schema.frame.MouseTracking,
+        tracking: MouseTrackingType,
         sgr: bool = true,
         kind: Mouse.Kind,
         outcome: Outcome,
@@ -255,7 +128,7 @@ test "PaneMouseHandler reports only child-tracked events" {
     for (cases) |case| {
         var resolved = testingResolved(case.kind);
         resolved.plan.protocol = .{ .tracking = case.tracking, .sgr = case.sgr, .pixels = true };
-        var capture: Capture = .{ .resolved = resolved };
+        var capture: PaneMouseCapture = .{ .resolved = resolved };
         var handler: PaneMouseHandler = .{ .plans = capture.plans(), .effects = capture.effects() };
         const command = testingCommand(case.kind);
 
@@ -288,7 +161,7 @@ test "PaneMouseHandler preserves the resolved report instead of the original poi
         .cell_width_px = 10,
         .cell_height_px = 20,
     };
-    var capture: Capture = .{ .resolved = resolved };
+    var capture: PaneMouseCapture = .{ .resolved = resolved };
     var handler: PaneMouseHandler = .{ .plans = capture.plans(), .effects = capture.effects() };
     const command = testingCommand(.press);
 
@@ -317,12 +190,12 @@ test "PaneMouseHandler applies the shared wheel policy to focused scroll in both
     };
 
     for (cases) |case| {
-        for ([_]input_capability.action.ScrollDirection{ .up, .down }) |direction| {
+        for ([_]action_module.ScrollDirection{ .up, .down }) |direction| {
             var resolved = testingResolved(if (direction == .up) .scroll_up else .scroll_down);
             resolved.plan.alternate_scroll = case.alternate_scroll;
             resolved.plan.at_bottom = case.at_bottom;
             resolved.plan.protocol = .{ .tracking = if (case.tracked) .normal else .none, .sgr = true };
-            var capture: Capture = .{ .resolved = resolved };
+            var capture: PaneMouseCapture = .{ .resolved = resolved };
             var handler: PaneMouseHandler = .{ .plans = capture.plans(), .effects = capture.effects() };
             const command: Command = .{ .focused_scroll = direction };
             const scroll: ScrollEffect = .{
@@ -348,7 +221,7 @@ test "PaneMouseHandler ignores unresolved pointer and focused scroll commands" {
     const commands = [_]Command{ testingCommand(.press), .{ .focused_scroll = .up }, .{ .focused_scroll = .down } };
 
     for (commands) |command| {
-        var capture: Capture = .{};
+        var capture: PaneMouseCapture = .{};
         var handler: PaneMouseHandler = .{ .plans = capture.plans(), .effects = capture.effects() };
 
         try std.testing.expectEqual(Outcome.ignored, try handler.execute(command));
@@ -366,7 +239,7 @@ test "PaneMouseHandler propagates each selected effect failure without fallback"
             var resolved = testingResolved(.scroll_up);
             resolved.plan.alternate_scroll = effect_tag != .viewport;
             resolved.plan.protocol = .{ .tracking = if (effect_tag == .report) .normal else .none, .sgr = true };
-            var capture: Capture = .{ .resolved = resolved, .fail = true };
+            var capture: PaneMouseCapture = .{ .resolved = resolved, .fail = true };
             var handler: PaneMouseHandler = .{ .plans = capture.plans(), .effects = capture.effects() };
 
             try std.testing.expectError(error.PaneMouseEffectFailed, handler.execute(command));

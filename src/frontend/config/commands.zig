@@ -1,13 +1,18 @@
 //! Compiler for bounded runtime helper commands.
 
-const std = @import("std");
-const lua = @import("lua-api").c;
-const config_model = @import("model.zig");
+const lua_api = @import("lua-api");
+const RuntimeSnapshotType = @import("RuntimeSnapshot.zig");
+const DiagnosticType = @import("telar-client").Diagnostic;
 const value = @import("lua_value.zig");
+const config_model = @import("model.zig");
+const CommandInput = @import("CommandInput.zig");
+const CommandSpecType = @import("CommandSpec.zig");
+const std = @import("std");
+const IntegerInput = @import("IntegerInput.zig");
 
-pub fn parseAgentDescriptions(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diagnostic: *config_model.Diagnostic) !void {
-    const absolute = lua.lua_absindex(state, -1);
-    if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+pub fn parseAgentDescriptions(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *DiagnosticType) !void {
+    const absolute = lua_api.c.lua_absindex(state, -1);
+    if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.agent_descriptions must be a table", .{});
         return error.InvalidConfig;
     }
@@ -24,9 +29,9 @@ pub fn parseAgentDescriptions(state: *lua.lua_State, runtime: *config_model.Runt
     }, diagnostic);
 }
 
-pub fn parseEngine(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diagnostic: *config_model.Diagnostic) !void {
-    const absolute = lua.lua_absindex(state, -1);
-    if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+pub fn parseEngine(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *DiagnosticType) !void {
+    const absolute = lua_api.c.lua_absindex(state, -1);
+    if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.engine must be a table", .{});
         return error.InvalidConfig;
     }
@@ -53,22 +58,16 @@ pub fn parseEngine(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot
     }, diagnostic);
 }
 
-const CommandInput = struct {
-    table: c_int,
-    label: []const u8,
-    command_path: []const u8,
-};
-
-fn parseCommand(state: *lua.lua_State, input: CommandInput, diagnostic: *config_model.Diagnostic) !config_model.CommandSpec {
-    _ = lua.lua_getfield(state, input.table, "command");
+fn parseCommand(state: *lua_api.c.lua_State, input: CommandInput, diagnostic: *DiagnosticType) !CommandSpecType {
+    _ = lua_api.c.lua_getfield(state, input.table, "command");
     defer value.pop(state, 1);
-    if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("{s}.command must be an array", .{input.label});
         return error.InvalidConfig;
     }
 
-    const command_table = lua.lua_absindex(state, -1);
-    const count = lua.lua_rawlen(state, command_table);
+    const command_table = lua_api.c.lua_absindex(state, -1);
+    const count = lua_api.c.lua_rawlen(state, command_table);
     if (count == 0 or count > config_model.max_agent_description_command_args) {
         diagnostic.set("{s}.command must contain 1..{d} arguments", .{ input.label, config_model.max_agent_description_command_args });
         return error.InvalidConfig;
@@ -79,9 +78,9 @@ fn parseCommand(state: *lua.lua_State, input: CommandInput, diagnostic: *config_
         .path = input.command_path,
     }, diagnostic);
 
-    var command: config_model.CommandSpec = .{};
+    var command: CommandSpecType = .{};
     for (0..count) |argument_index| {
-        _ = lua.lua_geti(state, command_table, @intCast(argument_index + 1));
+        _ = lua_api.c.lua_geti(state, command_table, @intCast(argument_index + 1));
         defer value.pop(state, 1);
         const argument = value.string(state, -1) orelse {
             diagnostic.set("{s}.command[{d}] must be a string", .{ input.label, argument_index + 1 });
@@ -115,23 +114,10 @@ fn parseCommand(state: *lua.lua_State, input: CommandInput, diagnostic: *config_
     return command;
 }
 
-const IntegerBounds = struct {
-    default: u32,
-    min: u32,
-    max: u32,
-};
-
-const IntegerInput = struct {
-    table: c_int,
-    field: [:0]const u8,
-    label: []const u8,
-    bounds: IntegerBounds,
-};
-
-fn parseBoundedInteger(state: *lua.lua_State, input: IntegerInput, diagnostic: *config_model.Diagnostic) !u32 {
-    _ = lua.lua_getfield(state, input.table, input.field);
+fn parseBoundedInteger(state: *lua_api.c.lua_State, input: IntegerInput, diagnostic: *DiagnosticType) !u32 {
+    _ = lua_api.c.lua_getfield(state, input.table, input.field);
     defer value.pop(state, 1);
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
+    if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL) {
         return input.bounds.default;
     }
 

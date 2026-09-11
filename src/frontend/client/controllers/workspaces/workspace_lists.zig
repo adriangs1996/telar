@@ -1,14 +1,11 @@
 //! Adapts runtime workspace-list messages to the client application boundary.
 
-const core = @import("telar-core");
-const workspaces_application = @import("telar-client").application.workspaces;
-const workspace_list = @import("telar-client").workspace.workspace_list;
-
-const Client = @import("../../client.zig");
-const schema = core.schema;
-const workspace_list_snapshot = workspaces_application.workspace_list_snapshot;
-
-pub const ApplyOutcome = workspace_list_snapshot.Outcome;
+const Client = @import("../../Client.zig");
+const WorkspaceListViewType = @import("telar-core").WorkspaceListView;
+const ApplicationWorkspacesWorkspaceListSnapshotOutcome = @import("telar-client").ApplicationWorkspacesWorkspaceListSnapshotOutcome;
+const max_workspace_list_entries_module = @import("telar-core").max_workspace_list_entries;
+const EntryInputType = @import("telar-client").EntryInput;
+const ReconcileWorkspaceListHandlerType = @import("telar-client").ReconcileWorkspaceListHandler;
 
 /// Decodes one validated wire view into bounded domain inputs and reconciles
 /// it through the application handler. An application rejection keeps the
@@ -17,8 +14,8 @@ pub const ApplyOutcome = workspace_list_snapshot.Outcome;
 /// ```zig
 /// _ = try apply(client, list);
 /// ```
-pub fn apply(client: *Client, list: schema.WorkspaceListView) !ApplyOutcome {
-    var entries: [schema.max_workspace_list_entries]workspace_list.EntryInput = undefined;
+pub fn apply(client: *Client, list: WorkspaceListViewType) !ApplicationWorkspacesWorkspaceListSnapshotOutcome {
+    var entries: [max_workspace_list_entries_module]EntryInputType = undefined;
     var count: usize = 0;
     var iterator = list.entries();
     while (try iterator.next()) |entry| {
@@ -41,6 +38,6 @@ pub fn apply(client: *Client, list: schema.WorkspaceListView) !ApplyOutcome {
     });
 }
 
-fn handler(client: *Client) workspace_list_snapshot.ReconcileWorkspaceListHandler {
+fn handler(client: *Client) ReconcileWorkspaceListHandlerType {
     return .{ .model = &client.model };
 }

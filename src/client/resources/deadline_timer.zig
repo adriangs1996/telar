@@ -1,11 +1,10 @@
 //! One replaceable absolute deadline backed by at most one select task.
 
 const std = @import("std");
+const Scheduler = @import("Scheduler.zig");
 const client_clock = @import("clock.zig");
 
-const Io = std.Io;
-const monotonic = client_clock.monotonic;
-const no_deadline = std.math.maxInt(u64);
+pub const no_deadline = std.math.maxInt(u64);
 
 const TimerEvent = union(enum) {
     deadline: anyerror!void,
@@ -23,65 +22,12 @@ pub const Update = enum {
     schedule,
 };
 
-pub const Scheduler = struct {
-    deadline_ns: std.atomic.Value(u64) = .init(no_deadline),
-    wake: Io.Event = .unset,
-    pending: bool = false,
-
-    /// Replaces the current deadline and reports whether the caller must
-    /// schedule the one worker.
-    ///
-    /// ```zig
-    /// if (scheduler.update(io, deadline_ns) == .schedule) startWorker();
-    /// ```
-    pub fn update(scheduler: *Scheduler, io: Io, deadline_ns: ?u64) Update {
-        const replacement = deadline_ns orelse no_deadline;
-        const previous = scheduler.deadline_ns.load(.acquire);
-        scheduler.deadline_ns.store(replacement, .release);
-        if (scheduler.pending) {
-            if (previous != replacement) {
-                scheduler.wake.set(io);
-            }
-
-            return .retained;
-        }
-        if (deadline_ns == null) {
-            return .idle;
-        }
-
-        scheduler.wake.reset();
-        scheduler.pending = true;
-
-        return .schedule;
-    }
-
-    /// Releases the reservation when the caller could not schedule its worker.
-    ///
-    /// ```zig
-    /// scheduler.schedulingFailed();
-    /// ```
-    pub fn schedulingFailed(scheduler: *Scheduler) void {
-        scheduler.pending = false;
-    }
-
-    /// Releases the completed worker before propagating its result.
-    ///
-    /// ```zig
-    /// try scheduler.complete(result);
-    /// ```
-    pub fn complete(scheduler: *Scheduler, result: anyerror!void) !void {
-        scheduler.pending = false;
-
-        try result;
-    }
-};
-
 /// Waits until the latest non-null deadline, following replacements in place.
 ///
 /// ```zig
 /// try deadline_timer.wait(io, &scheduler);
 /// ```
-pub fn wait(io: Io, scheduler: *Scheduler) anyerror!void {
+pub fn wait(io: std.Io, scheduler: *Scheduler) anyerror!void {
     while (true) {
         const deadline_ns = scheduler.deadline_ns.load(.acquire);
         if (deadline_ns == no_deadline) {
@@ -89,7 +35,7 @@ pub fn wait(io: Io, scheduler: *Scheduler) anyerror!void {
             scheduler.wake.reset();
             continue;
         }
-        if (monotonic(io) >= deadline_ns) {
+        if (client_clock.monotonic(io) >= deadline_ns) {
             return;
         }
 
@@ -100,9 +46,9 @@ pub fn wait(io: Io, scheduler: *Scheduler) anyerror!void {
     }
 }
 
-fn waitForTimerEvent(io: Io, scheduler: *Scheduler, deadline_ns: u64) anyerror!TimerResult {
+fn waitForTimerEvent(io: std.Io, scheduler: *Scheduler, deadline_ns: u64) anyerror!TimerResult {
     var storage: [2]TimerEvent = undefined;
-    var select = Io.Select(TimerEvent).init(io, &storage);
+    var select = std.Io.Select(TimerEvent).init(io, &storage);
     defer select.cancelDiscard();
     try select.concurrent(.deadline, waitUntil, .{ io, deadline_ns });
     try select.concurrent(.rescheduled, waitForReschedule, .{ io, &scheduler.wake });
@@ -119,13 +65,13 @@ fn waitForTimerEvent(io: Io, scheduler: *Scheduler, deadline_ns: u64) anyerror!T
     };
 }
 
-fn waitUntil(io: Io, deadline_ns: u64) anyerror!void {
-    const deadline = Io.Timestamp.fromNanoseconds(@intCast(deadline_ns)).withClock(.awake);
+fn waitUntil(io: std.Io, deadline_ns: u64) anyerror!void {
+    const deadline = std.Io.Timestamp.fromNanoseconds(@intCast(deadline_ns)).withClock(.awake);
 
     try deadline.wait(io);
 }
 
-fn waitForReschedule(io: Io, event: *Io.Event) anyerror!void {
+fn waitForReschedule(io: std.Io, event: *std.Io.Event) anyerror!void {
     try event.wait(io);
 }
 
@@ -143,7 +89,7 @@ test "deadline completion releases the worker on every result" {
 test "deadline replacement retains one worker and wakes obsolete waits" {
     const io = std.testing.io;
     var scheduler: Scheduler = .{};
-    const first = monotonic(io) + std.time.ns_per_s;
+    const first = client_clock.monotonic(io) + std.time.ns_per_s;
     const second = first + std.time.ns_per_s;
 
     try std.testing.expectEqual(Update.schedule, scheduler.update(io, first));
@@ -161,7 +107,7 @@ test "deadline replacement retains one worker and wakes obsolete waits" {
 
 test "an unchanged deadline retains its worker without another wake" {
     const io = std.testing.io;
-    const deadline_ns = monotonic(io) + std.time.ns_per_s;
+    const deadline_ns = client_clock.monotonic(io) + std.time.ns_per_s;
     var scheduler: Scheduler = .{
         .deadline_ns = .init(deadline_ns),
         .pending = true,
@@ -188,16 +134,16 @@ test "a parked worker follows the next deadline without a second task" {
     const io = std.testing.io;
     var scheduler: Scheduler = .{};
     var storage: [1]Completion = undefined;
-    var select = Io.Select(Completion).init(io, &storage);
+    var select = std.Io.Select(Completion).init(io, &storage);
     defer select.cancelDiscard();
 
     try std.testing.expectEqual(
         Update.schedule,
-        scheduler.update(io, monotonic(io) + std.time.ns_per_s),
+        scheduler.update(io, client_clock.monotonic(io) + std.time.ns_per_s),
     );
     try select.concurrent(.done, wait, .{ io, &scheduler });
     try std.testing.expectEqual(Update.retained, scheduler.update(io, null));
-    try std.testing.expectEqual(Update.retained, scheduler.update(io, monotonic(io)));
+    try std.testing.expectEqual(Update.retained, scheduler.update(io, client_clock.monotonic(io)));
 
     switch (try select.await()) {
         .done => |result| try scheduler.complete(result),

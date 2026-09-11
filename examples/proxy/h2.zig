@@ -1,7 +1,10 @@
+const SessionType = @import("Session.zig");
+const Route = @import("Route.zig");
+const H2Capture = @import("H2Capture.zig");
 const std = @import("std");
-const tls = @import("tls.zig");
+const Decoder = @import("Decoder.zig");
 
-const c = @cImport({
+pub const c = @cImport({
     @cInclude("nghttp2/nghttp2.h");
 });
 
@@ -43,97 +46,11 @@ const flag_end_headers: u8 = 0x4;
 const flag_padded: u8 = 0x8;
 const flag_priority: u8 = 0x20;
 
-/// One direction's HPACK state. The dynamic table is per-direction and strictly
-/// ordered, so a decoder must see every header block in sequence — which is
-/// exactly what sitting inline gives us.
-pub const Decoder = struct {
-    inflater: ?*c.nghttp2_hd_inflater = null,
-    /// Header blocks can span CONTINUATION frames; they are only inflated once
-    /// END_HEADERS arrives.
-    block: std.ArrayList(u8) = .empty,
-    gpa: std.mem.Allocator,
-
-    pub fn init(gpa: std.mem.Allocator) !Decoder {
-        var self: Decoder = .{ .gpa = gpa };
-        if (c.nghttp2_hd_inflate_new(&self.inflater) != 0) {
-            return error.InflaterFailed;
-        }
-        return self;
-    }
-
-    pub fn deinit(self: *Decoder) void {
-        if (self.inflater) |inf| {
-            c.nghttp2_hd_inflate_del(inf);
-        }
-        self.block.deinit(self.gpa);
-    }
-
-    /// Inflates one complete header block into `out` as `name: value` lines.
-    fn emit(self: *Decoder, out: *std.Io.Writer) void {
-        const inf = self.inflater orelse return;
-        var input = self.block.items;
-
-        while (true) {
-            var nv: c.nghttp2_nv = undefined;
-            var flags: c_int = 0;
-            const consumed = c.nghttp2_hd_inflate_hd2(
-                inf,
-                &nv,
-                &flags,
-                input.ptr,
-                input.len,
-                1, // in_final
-            );
-            if (consumed < 0) {
-                break;
-            }
-            input = input[@intCast(consumed)..];
-
-            if (flags & c.NGHTTP2_HD_INFLATE_EMIT != 0) {
-                out.print("{s}: {s}\n", .{
-                    nv.name[0..nv.namelen],
-                    nv.value[0..nv.valuelen],
-                }) catch {};
-            }
-            if (flags & c.NGHTTP2_HD_INFLATE_FINAL != 0) {
-                break;
-            }
-            if (input.len == 0) {
-                break;
-            }
-        }
-
-        _ = c.nghttp2_hd_inflate_end_headers(inf);
-        self.block.clearRetainingCapacity();
-    }
-};
-
-/// What one direction saw. Bodies are capped by the caller's buffer.
-pub const Observed = struct {
-    frames: usize = 0,
-    headers: usize = 0,
-    data_bytes: u64 = 0,
-    truncated: bool = false,
-};
-
-pub const Route = struct {
-    from: tls.Session.Side,
-    to: tls.Session.Side,
-};
-
-pub const Capture = struct {
-    decoder: *Decoder,
-    text: *std.Io.Writer,
-    body: []u8,
-    body_len: *usize,
-    seen: *Observed,
-};
-
 /// Relays one direction and reports what went by.
 ///
 /// `text` receives decoded headers, `body` the DATA payloads. Both are the
 /// caller's buffers and both may fill up; the relay itself never stops.
-pub fn relay(session: *tls.Session, route: Route, capture: Capture) void {
+pub fn relay(session: *SessionType, route: Route, capture: H2Capture) void {
     const from = route.from;
     const to = route.to;
     const decoder = capture.decoder;
@@ -243,28 +160,26 @@ fn streamId(header: []const u8) u32 {
 // Tests
 // ---------------------------------------------------------------------------
 
-const testing = std.testing;
-
 test "reads the frame header layout" {
     // length 0x000004, type SETTINGS, flags 0, stream 0
     const h = [_]u8{ 0x00, 0x00, 0x04, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00 };
     const len: usize = (@as(usize, h[0]) << 16) | (@as(usize, h[1]) << 8) | h[2];
-    try testing.expectEqual(@as(usize, 4), len);
-    try testing.expectEqual(FrameType.settings, @as(FrameType, @enumFromInt(h[3])));
-    try testing.expectEqual(@as(u32, 0), streamId(&h));
+    try std.testing.expectEqual(@as(usize, 4), len);
+    try std.testing.expectEqual(FrameType.settings, @as(FrameType, @enumFromInt(h[3])));
+    try std.testing.expectEqual(@as(u32, 0), streamId(&h));
 }
 
 test "stream id ignores the reserved bit" {
     // The top bit of the stream id field is reserved and must be masked off.
     const h = [_]u8{ 0, 0, 0, 0x01, 0x04, 0x80, 0x00, 0x00, 0x0D };
-    try testing.expectEqual(@as(u32, 13), streamId(&h));
+    try std.testing.expectEqual(@as(u32, 13), streamId(&h));
 }
 
 test "inflates a header block that nghttp2 deflated" {
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
 
     var deflater: ?*c.nghttp2_hd_deflater = null;
-    try testing.expectEqual(@as(c_int, 0), c.nghttp2_hd_deflate_new(&deflater, 4096));
+    try std.testing.expectEqual(@as(c_int, 0), c.nghttp2_hd_deflate_new(&deflater, 4096));
     defer c.nghttp2_hd_deflate_del(deflater);
 
     var nva = [_]c.nghttp2_nv{
@@ -275,7 +190,7 @@ test "inflates a header block that nghttp2 deflated" {
 
     var buf: [1024]u8 = undefined;
     const written = c.nghttp2_hd_deflate_hd(deflater, &buf, buf.len, &nva, nva.len);
-    try testing.expect(written > 0);
+    try std.testing.expect(written > 0);
 
     var decoder = try Decoder.init(gpa);
     defer decoder.deinit();
@@ -286,18 +201,18 @@ test "inflates a header block that nghttp2 deflated" {
     decoder.emit(&w);
     const out = w.buffered();
 
-    try testing.expect(std.mem.indexOf(u8, out, ":method: POST") != null);
-    try testing.expect(std.mem.indexOf(u8, out, ":path: /v1/messages") != null);
-    try testing.expect(std.mem.indexOf(u8, out, "x-test: hola") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, ":method: POST") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, ":path: /v1/messages") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "x-test: hola") != null);
 }
 
 test "the dynamic table carries across blocks" {
     // The second block references the first's entries, so decoding it alone
     // would fail. This is why the decoder must see every block in order.
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
 
     var deflater: ?*c.nghttp2_hd_deflater = null;
-    try testing.expectEqual(@as(c_int, 0), c.nghttp2_hd_deflate_new(&deflater, 4096));
+    try std.testing.expectEqual(@as(c_int, 0), c.nghttp2_hd_deflate_new(&deflater, 4096));
     defer c.nghttp2_hd_deflate_del(deflater);
 
     var nva = [_]c.nghttp2_nv{
@@ -308,9 +223,9 @@ test "the dynamic table carries across blocks" {
     const n1 = c.nghttp2_hd_deflate_hd(deflater, &first, first.len, &nva, nva.len);
     var second: [512]u8 = undefined;
     const n2 = c.nghttp2_hd_deflate_hd(deflater, &second, second.len, &nva, nva.len);
-    try testing.expect(n1 > 0 and n2 > 0);
+    try std.testing.expect(n1 > 0 and n2 > 0);
     // The repeat is far smaller: it is a reference into the dynamic table.
-    try testing.expect(n2 < n1);
+    try std.testing.expect(n2 < n1);
 
     var decoder = try Decoder.init(gpa);
     defer decoder.deinit();
@@ -320,6 +235,6 @@ test "the dynamic table carries across blocks" {
         try decoder.block.appendSlice(gpa, block);
         var w = std.Io.Writer.fixed(&out_buf);
         decoder.emit(&w);
-        try testing.expect(std.mem.indexOf(u8, w.buffered(), "x-herdr-pane: 7") != null);
+        try std.testing.expect(std.mem.indexOf(u8, w.buffered(), "x-herdr-pane: 7") != null);
     }
 }

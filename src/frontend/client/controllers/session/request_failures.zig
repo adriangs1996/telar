@@ -1,21 +1,24 @@
 //! Adapts rejected runtime requests to client recovery and notification use cases.
 
-const std = @import("std");
-const builtin = @import("builtin");
-const core = @import("telar-core");
-const session_application = @import("telar-client").application.session;
-const notifications = @import("telar-client").notifications;
-const client_requests = @import("telar-client").connection.requests;
-
-const Client = @import("../../client.zig");
-const notification_flow = @import("../notifications/notifications.zig");
-const pane_attachments = @import("../panes/pane_attachments.zig");
-const pane_splits = @import("../panes/pane_splits.zig");
+const Client = @import("../../Client.zig");
+const RequestFailedType = @import("telar-core").RequestFailed;
+const ApplicationSessionRequestFailureOutcome = @import("telar-client").ApplicationSessionRequestFailureOutcome;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
+const HandleRequestFailureHandlerType = @import("telar-client").HandleRequestFailureHandler;
+const builtin = @import("builtin");
+const std = @import("std");
+const SplitType = @import("telar-client").Split;
+const SplitRecoveryType = @import("telar-client").SplitRecovery;
+const pane_splits = @import("../panes/pane_splits.zig");
+const PaneOperationType = @import("telar-client").PaneOperation;
+const pane_attachments = @import("../panes/pane_attachments.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 const tab_closures = @import("../tabs/tab_closures.zig");
+const InitialOpenFailureType = @import("telar-client").InitialOpenFailure;
+const InitialOpenRecoveryType = @import("telar-client").InitialOpenRecovery;
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
-const request_failure = session_application.request_failure;
-const schema = core.schema;
+const InputType = @import("telar-client").NotificationInput;
+const notification_flow = @import("../notifications/notifications.zig");
 
 /// Consumes one correlated continuation and applies its failure policy. Fatal
 /// directives become the client loop's existing `RuntimeRequestFailed` error.
@@ -23,7 +26,7 @@ const schema = core.schema;
 /// ```zig
 /// _ = try apply(client, failure);
 /// ```
-pub fn apply(client: *Client, failure: schema.RequestFailed) !request_failure.Outcome {
+pub fn apply(client: *Client, failure: RequestFailedType) !ApplicationSessionRequestFailureOutcome {
     const continuation = request_lifecycle.consume(client, failure.request_id) orelse {
         reportFailure(client, failure.message);
 
@@ -42,7 +45,7 @@ pub fn apply(client: *Client, failure: schema.RequestFailed) !request_failure.Ou
     return outcome;
 }
 
-fn handler(client: *Client) request_failure.HandleRequestFailureHandler {
+fn handler(client: *Client) HandleRequestFailureHandlerType {
     return .{
         .recovery = .{
             .context = client,
@@ -70,7 +73,7 @@ fn reportFailure(_: *anyopaque, message: []const u8) void {
     std.debug.print("telar runtime: {s}\n", .{message});
 }
 
-fn recoverSplit(context: *anyopaque, split: client_requests.Split) !request_failure.SplitRecovery {
+fn recoverSplit(context: *anyopaque, split: SplitType) !SplitRecoveryType {
     const client: *Client = @ptrCast(@alignCast(context));
     var recovery = pane_splits.recoveryHandler(client);
     const status = try recovery.execute(.{
@@ -86,7 +89,7 @@ fn recoverSplit(context: *anyopaque, split: client_requests.Split) !request_fail
     };
 }
 
-fn recoverAttachment(context: *anyopaque, attachment: client_requests.PaneOperation) !void {
+fn recoverAttachment(context: *anyopaque, attachment: PaneOperationType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     var recovery = pane_attachments.recoveryHandler(client);
 
@@ -96,14 +99,14 @@ fn recoverAttachment(context: *anyopaque, attachment: client_requests.PaneOperat
     });
 }
 
-fn recoverCloseTab(context: *anyopaque, location: schema.TabLocation) !void {
+fn recoverCloseTab(context: *anyopaque, location: TabLocationType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     var recovery = tab_closures.recoveryHandler(client);
 
     _ = try recovery.execute(location);
 }
 
-fn recoverInitialOpen(context: *anyopaque, failure: request_failure.InitialOpenFailure) !request_failure.InitialOpenRecovery {
+fn recoverInitialOpen(context: *anyopaque, failure: InitialOpenFailureType) !InitialOpenRecoveryType {
     const client: *Client = @ptrCast(@alignCast(context));
     var recovery = workspace_handoffs.recoveryHandler(client);
     const result = try recovery.execute(.{
@@ -117,7 +120,7 @@ fn recoverInitialOpen(context: *anyopaque, failure: request_failure.InitialOpenF
     };
 }
 
-fn publishNotification(context: *anyopaque, input: notifications.Input) !void {
+fn publishNotification(context: *anyopaque, input: InputType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try notification_flow.publishNow(client, input);

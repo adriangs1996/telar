@@ -1,17 +1,17 @@
 //! Adapts runtime pane metadata messages to the client application boundary.
 
-const core = @import("telar-core");
-const client_model = @import("telar-client").model;
-
-const Client = @import("../../client.zig");
-const schema = core.schema;
+const Client = @import("../../Client.zig");
+const PaneCwdType = @import("telar-core").PaneCwd;
+const PaneMetadataCommitType = @import("telar-client").PaneMetadataCommit;
+const PaneForegroundType = @import("telar-core").PaneForeground;
+const PaneTitleType = @import("telar-core").PaneTitle;
 
 /// Stores one decoded pane working-directory fact.
 ///
 /// ```zig
 /// _ = try applyCwd(client, message);
 /// ```
-pub fn applyCwd(client: *Client, message: schema.PaneCwd) !?client_model.PaneMetadataCommit {
+pub fn applyCwd(client: *Client, message: PaneCwdType) !?PaneMetadataCommitType {
     return client.model.updatePaneMetadata(.{ .cwd = .{
         .pane_id = message.pane_id,
         .path = message.cwd,
@@ -23,7 +23,7 @@ pub fn applyCwd(client: *Client, message: schema.PaneCwd) !?client_model.PaneMet
 /// ```zig
 /// _ = try applyForeground(client, message);
 /// ```
-pub fn applyForeground(client: *Client, message: schema.PaneForeground) !?client_model.PaneMetadataCommit {
+pub fn applyForeground(client: *Client, message: PaneForegroundType) !?PaneMetadataCommitType {
     return client.model.updatePaneMetadata(.{ .foreground = .{
         .pane_id = message.pane_id,
         .name = message.name,
@@ -35,7 +35,7 @@ pub fn applyForeground(client: *Client, message: schema.PaneForeground) !?client
 /// ```zig
 /// _ = try applyTitle(client, message);
 /// ```
-pub fn applyTitle(client: *Client, message: schema.PaneTitle) !?client_model.PaneMetadataCommit {
+pub fn applyTitle(client: *Client, message: PaneTitleType) !?PaneMetadataCommitType {
     return client.model.updatePaneMetadata(.{ .title = .{
         .pane_id = message.pane_id,
         .title = message.title,

@@ -1,26 +1,14 @@
 //! Cost-aware frame spans from conservative terminal row damage.
 
+const Input = @import("Input.zig");
+const SpanType = @import("telar-core").Span;
+const Diff = @import("Diff.zig");
 const std = @import("std");
-const core = @import("telar-core");
-
-const schema = core.schema;
-
-pub const Diff = struct {
-    span_count: usize = 0,
-    damaged_rows: usize = 0,
-    scanned_cells: usize = 0,
-    coalesced_spans: usize = 0,
-    bridged_cells: usize = 0,
-    bytes_saved: usize = 0,
-    snapshot_required: bool = false,
-};
-
-pub const Input = struct {
-    current: []const core.ui.Cell,
-    acknowledged: []const core.ui.Cell,
-    cols: u16,
-    damaged_rows: []const bool,
-};
+const span_header_size_module = @import("telar-core").span_header_size;
+const max_style_size_module = @import("telar-core").max_style_size;
+const encodedCellsSize_module = @import("telar-core").encodedCellsSize;
+const encodedCellSize_module = @import("telar-core").encodedCellSize;
+const CellType = @import("telar-core").Cell;
 
 /// Compares only rows which RenderState reported as dirty.
 ///
@@ -32,7 +20,7 @@ pub const Input = struct {
 /// ```zig
 /// const diff = collectSpans(.{ .current = current, .acknowledged = acknowledged, .cols = cols, .damaged_rows = damaged }, storage);
 /// ```
-pub fn collectSpans(input: Input, storage: []schema.frame.Span) Diff {
+pub fn collectSpans(input: Input, storage: []SpanType) Diff {
     const current = input.current;
     const acknowledged = input.acknowledged;
     const cols = input.cols;
@@ -74,17 +62,17 @@ pub fn collectSpans(input: Input, storage: []schema.frame.Span) Diff {
                     continue;
                 }
                 const gap_len = start - previous_end;
-                const maximum_profitable_gap = schema.frame.span_header_size +
-                    schema.frame.max_style_size;
+                const maximum_profitable_gap = span_header_size_module +
+                    max_style_size_module;
                 if (previous_end / cols == start / cols and
                     gap_len <= maximum_profitable_gap)
                 {
                     const previous_style = previous.cells[previous.cells.len - 1].style;
                     const gap = current[previous_end..start];
-                    const merged_cost = schema.frame.encodedCellsSize(gap, previous_style) +
-                        schema.frame.encodedCellSize(current[start], gap[gap.len - 1].style);
-                    const separate_cost = schema.frame.span_header_size +
-                        schema.frame.encodedCellSize(current[start], null);
+                    const merged_cost = encodedCellsSize_module(gap, previous_style) +
+                        encodedCellSize_module(current[start], gap[gap.len - 1].style);
+                    const separate_cost = span_header_size_module +
+                        encodedCellSize_module(current[start], null);
                     if (merged_cost <= separate_cost) {
                         previous.cells = current[previous_start..index];
                         result.coalesced_spans += 1;
@@ -109,12 +97,12 @@ pub fn collectSpans(input: Input, storage: []schema.frame.Span) Diff {
 }
 
 test "damage limits patch generation to dirty rows" {
-    const acknowledged = [_]core.ui.Cell{.{}} ** 12;
+    const acknowledged = [_]CellType{.{}} ** 12;
     var current = acknowledged;
     current[1].bytes[0] = 'x';
     current[9].bytes[0] = 'y';
     const damaged_rows = [_]bool{ true, false, false };
-    var spans: [4]schema.frame.Span = undefined;
+    var spans: [4]SpanType = undefined;
 
     const diff = collectSpans(.{ .current = &current, .acknowledged = &acknowledged, .cols = 4, .damaged_rows = &damaged_rows }, &spans);
     try std.testing.expectEqual(@as(usize, 1), diff.damaged_rows);
@@ -125,12 +113,12 @@ test "damage limits patch generation to dirty rows" {
 }
 
 test "damage from separate rows accumulates without scanning the gap" {
-    const acknowledged = [_]core.ui.Cell{.{}} ** 12;
+    const acknowledged = [_]CellType{.{}} ** 12;
     var current = acknowledged;
     current[1].bytes[0] = 'x';
     current[9].bytes[0] = 'y';
     const damaged_rows = [_]bool{ true, false, true };
-    var spans: [4]schema.frame.Span = undefined;
+    var spans: [4]SpanType = undefined;
 
     const diff = collectSpans(.{ .current = &current, .acknowledged = &acknowledged, .cols = 4, .damaged_rows = &damaged_rows }, &spans);
     try std.testing.expectEqual(@as(usize, 2), diff.damaged_rows);
@@ -141,12 +129,12 @@ test "damage from separate rows accumulates without scanning the gap" {
 }
 
 test "adjacent damage across rows stays one span" {
-    const acknowledged = [_]core.ui.Cell{.{}} ** 8;
+    const acknowledged = [_]CellType{.{}} ** 8;
     var current = acknowledged;
     current[3].bytes[0] = 'x';
     current[4].bytes[0] = 'y';
     const damaged_rows = [_]bool{ true, true };
-    var spans: [2]schema.frame.Span = undefined;
+    var spans: [2]SpanType = undefined;
 
     const diff = collectSpans(.{ .current = &current, .acknowledged = &acknowledged, .cols = 4, .damaged_rows = &damaged_rows }, &spans);
     try std.testing.expectEqual(@as(usize, 1), diff.span_count);
@@ -155,12 +143,12 @@ test "adjacent damage across rows stays one span" {
 }
 
 test "short unchanged gaps share a cheaper span" {
-    const acknowledged = [_]core.ui.Cell{.{}} ** 8;
+    const acknowledged = [_]CellType{.{}} ** 8;
     var current = acknowledged;
     current[1].bytes[0] = 'x';
     current[4].bytes[0] = 'y';
     const damaged_rows = [_]bool{true};
-    var spans: [2]schema.frame.Span = undefined;
+    var spans: [2]SpanType = undefined;
 
     const diff = collectSpans(.{ .current = &current, .acknowledged = &acknowledged, .cols = 8, .damaged_rows = &damaged_rows }, &spans);
     try std.testing.expectEqual(@as(usize, 1), diff.span_count);
@@ -169,21 +157,21 @@ test "short unchanged gaps share a cheaper span" {
     try std.testing.expectEqual(@as(u32, 1), spans[0].start);
     try std.testing.expectEqual(@as(usize, 4), spans[0].cells.len);
 
-    const separate_size = 2 * schema.frame.span_header_size +
-        schema.frame.encodedCellsSize(current[1..2], null) +
-        schema.frame.encodedCellsSize(current[4..5], null);
-    const merged_size = schema.frame.span_header_size +
-        schema.frame.encodedCellsSize(current[1..5], null);
+    const separate_size = 2 * span_header_size_module +
+        encodedCellsSize_module(current[1..2], null) +
+        encodedCellsSize_module(current[4..5], null);
+    const merged_size = span_header_size_module +
+        encodedCellsSize_module(current[1..5], null);
     try std.testing.expectEqual(separate_size - merged_size, diff.bytes_saved);
 }
 
 test "an expensive gap keeps separate spans" {
-    const acknowledged = [_]core.ui.Cell{.{}} ** 32;
+    const acknowledged = [_]CellType{.{}} ** 32;
     var current = acknowledged;
     current[1].bytes[0] = 'x';
     current[30].bytes[0] = 'y';
     const damaged_rows = [_]bool{true};
-    var spans: [2]schema.frame.Span = undefined;
+    var spans: [2]SpanType = undefined;
 
     const diff = collectSpans(.{ .current = &current, .acknowledged = &acknowledged, .cols = 32, .damaged_rows = &damaged_rows }, &spans);
     try std.testing.expectEqual(@as(usize, 2), diff.span_count);
@@ -192,12 +180,12 @@ test "an expensive gap keeps separate spans" {
 }
 
 test "too many damaged runs request a snapshot" {
-    const acknowledged = [_]core.ui.Cell{.{}} ** 32;
+    const acknowledged = [_]CellType{.{}} ** 32;
     var current = acknowledged;
     current[0].bytes[0] = 'x';
     current[31].bytes[0] = 'y';
     const damaged_rows = [_]bool{true};
-    var spans: [1]schema.frame.Span = undefined;
+    var spans: [1]SpanType = undefined;
 
     const diff = collectSpans(.{ .current = &current, .acknowledged = &acknowledged, .cols = 32, .damaged_rows = &damaged_rows }, &spans);
     try std.testing.expect(diff.snapshot_required);

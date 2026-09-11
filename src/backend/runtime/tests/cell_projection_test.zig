@@ -1,22 +1,19 @@
 //! Cell projection contracts across pane and client attachment state.
 
+const PaneFixture = @import("PaneFixture.zig");
+const Attachment = @import("../attachment/Attachment.zig");
+const FrameViewType = @import("telar-core").FrameView;
 const std = @import("std");
-const core = @import("telar-core");
-const attachment_mod = @import("../attachment/root.zig");
-const test_support = @import("support.zig");
+const decodeServer_module = @import("telar-core").decodeServer;
+const enabled_module = @import("telar-core").enabled;
 
-const schema = core.schema;
-const diagnostics = core.diagnostics;
-const Attachment = attachment_mod.Attachment;
-const PaneFixture = test_support.PaneFixture;
-
-fn prepareFrame(fixture: *PaneFixture, attachment: *Attachment, buffer: []u8) !schema.frame.FrameView {
+fn prepareFrame(fixture: *PaneFixture, attachment: *Attachment, buffer: []u8) !FrameViewType {
     const prepared = (try attachment.prepareNextCells(.{
         .io = std.testing.io,
         .buffer = buffer,
         .metrics = &fixture.metrics,
     })).?;
-    const message = try schema.decodeServer(prepared.bytes);
+    const message = try decodeServer_module(prepared.bytes);
 
     return switch (message) {
         .pane_frame => |frame| frame,
@@ -53,7 +50,7 @@ test "a no-op projection advances its observed revision and is not prepared twic
     })) == null);
     try std.testing.expect(fixture.pane.cell_revision != previous_revision);
     try std.testing.expectEqual(fixture.pane.cell_revision, attachment.observedCellRevision());
-    try std.testing.expectEqual(noops_before + @intFromBool(diagnostics.enabled), fixture.metrics.noop_frames);
+    try std.testing.expectEqual(noops_before + @intFromBool(enabled_module), fixture.metrics.noop_frames);
 
     const noops_after_observation = fixture.metrics.noop_frames;
 

@@ -54,9 +54,9 @@ selection. See [Client layout persistence](client-layout-persistence.md).
 
 ## Proof
 
-- `src/frontend/client/model/root.zig` resolves exact generations and local or
+- `src/client/model/Model.zig` resolves exact generations and local or
   remote plans without exposing the agent replica.
-- `src/frontend/client/application/agents/agent_navigation.zig` proves selection
+- `src/client/application/agents/agent_navigation.zig` proves selection
   before focus, stale and pending suppression, and effect failure ordering.
 - `src/frontend/client/controllers/agents/agent_navigation.zig` wires the plan
   to tab, focus and handoff adapters.

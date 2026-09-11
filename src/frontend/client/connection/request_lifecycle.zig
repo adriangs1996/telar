@@ -1,22 +1,25 @@
 //! Owns one client's bounded request identities and reply correlations.
 
-const std = @import("std");
-const core = @import("telar-core");
-const client_requests = @import("telar-client").connection.requests;
+const Client = @import("../Client.zig");
+const RequestIdType = @import("telar-core").RequestId;
+const initial_request_id = @import("telar-client").initial_request_id;
+const GroupType = @import("telar-client").Group;
+const PaneIdType = @import("telar-core").PaneId;
+const Registration = @import("telar-client").Registration;
+const ContinuationType = @import("telar-client").Continuation;
+const Delivery = @import("telar-client").ConnectionDelivery;
 const runtime_transport = @import("../entrypoints/runtime_io.zig");
-
-const Client = @import("../client.zig");
-const schema = core.schema;
-
-/// The request that opens the first pane. Generated request identities start
-/// immediately after it.
-pub const initial_request_id = @import("telar-client").connection.lifecycle.initial_request_id;
-
-pub const Registration = @import("telar-client").connection.lifecycle.Registration;
-
-pub const Delivery = @import("telar-client").connection.lifecycle.Delivery;
-
-pub const State = @import("telar-client").connection.lifecycle.State;
+const RenameTabType = @import("telar-core").RenameTab;
+const RenameWorkspaceType = @import("telar-core").RenameWorkspace;
+const CreateWorkspaceType = @import("telar-core").CreateWorkspace;
+const CreateTabType = @import("telar-core").CreateTab;
+const ShowNotificationType = @import("telar-core").ShowNotification;
+const TabLocationType = @import("telar-core").TabLocation;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabIdType = @import("telar-core").TabId;
+const LifecycleState = @import("telar-client").LifecycleState;
+const std = @import("std");
+const TrackerType = @import("telar-client").Tracker;
 
 /// Registers the fixed bootstrap continuation before its synchronous open
 /// request leaves the client.
@@ -24,7 +27,7 @@ pub const State = @import("telar-client").connection.lifecycle.State;
 /// ```zig
 /// const request_id = try request_lifecycle.registerInitial(client);
 /// ```
-pub fn registerInitial(client: *Client) !schema.RequestId {
+pub fn registerInitial(client: *Client) !RequestIdType {
     try register(client, .{
         .request_id = initial_request_id,
         .continuation = .{ .initial_open = .{} },
@@ -38,7 +41,7 @@ pub fn registerInitial(client: *Client) !schema.RequestId {
 /// ```zig
 /// const request_id = try request_lifecycle.nextId(client);
 /// ```
-pub fn nextId(client: *Client) !schema.RequestId {
+pub fn nextId(client: *Client) !RequestIdType {
     return client.request_lifecycle.nextId();
 }
 
@@ -70,7 +73,7 @@ pub fn busy(client: *const Client) bool {
 ///     return;
 /// }
 /// ```
-pub fn has(client: *const Client, group: client_requests.Group) bool {
+pub fn has(client: *const Client, group: GroupType) bool {
     return client.request_lifecycle.tracker.has(group);
 }
 
@@ -81,7 +84,7 @@ pub fn has(client: *const Client, group: client_requests.Group) bool {
 ///     return;
 /// }
 /// ```
-pub fn hasPane(client: *const Client, group: client_requests.Group, pane_id: schema.PaneId) bool {
+pub fn hasPane(client: *const Client, group: GroupType, pane_id: PaneIdType) bool {
     return client.request_lifecycle.tracker.hasPane(group, pane_id);
 }
 
@@ -100,7 +103,7 @@ pub fn register(client: *Client, registration: Registration) !void {
 /// ```zig
 /// const continuation = request_lifecycle.consume(client, request_id) orelse return error.UnexpectedRequest;
 /// ```
-pub fn consume(client: *Client, request_id: schema.RequestId) ?client_requests.Continuation {
+pub fn consume(client: *Client, request_id: RequestIdType) ?ContinuationType {
     return client.request_lifecycle.tracker.take(request_id);
 }
 
@@ -121,7 +124,7 @@ pub fn deliver(client: *Client, delivery: Delivery) !void {
 /// ```zig
 /// try request_lifecycle.deliverRename(client, rename, continuation);
 /// ```
-pub fn deliverRename(client: *Client, rename: schema.RenameTab, continuation: client_requests.Continuation) !void {
+pub fn deliverRename(client: *Client, rename: RenameTabType, continuation: ContinuationType) !void {
     try register(client, .{ .request_id = rename.request_id, .continuation = continuation });
     errdefer _ = consume(client, rename.request_id);
     try runtime_transport.enqueueRename(client, rename);
@@ -132,7 +135,7 @@ pub fn deliverRename(client: *Client, rename: schema.RenameTab, continuation: cl
 /// ```zig
 /// try request_lifecycle.deliverWorkspaceRename(client, rename);
 /// ```
-pub fn deliverWorkspaceRename(client: *Client, rename: schema.RenameWorkspace) !void {
+pub fn deliverWorkspaceRename(client: *Client, rename: RenameWorkspaceType) !void {
     try register(client, .{
         .request_id = rename.request_id,
         .continuation = .{ .rename_workspace = rename.workspace },
@@ -146,7 +149,7 @@ pub fn deliverWorkspaceRename(client: *Client, rename: schema.RenameWorkspace) !
 /// ```zig
 /// try request_lifecycle.deliverCreateWorkspace(client, request);
 /// ```
-pub fn deliverCreateWorkspace(client: *Client, request: schema.CreateWorkspace) !void {
+pub fn deliverCreateWorkspace(client: *Client, request: CreateWorkspaceType) !void {
     try register(client, .{
         .request_id = request.request_id,
         .continuation = .{ .create_workspace = request.size },
@@ -160,7 +163,7 @@ pub fn deliverCreateWorkspace(client: *Client, request: schema.CreateWorkspace) 
 /// ```zig
 /// try request_lifecycle.deliverCreateTab(client, request);
 /// ```
-pub fn deliverCreateTab(client: *Client, request: schema.CreateTab) !void {
+pub fn deliverCreateTab(client: *Client, request: CreateTabType) !void {
     try register(client, .{
         .request_id = request.request_id,
         .continuation = .{ .create_tab = .{
@@ -178,7 +181,7 @@ pub fn deliverCreateTab(client: *Client, request: schema.CreateTab) !void {
 /// ```zig
 /// try request_lifecycle.deliverNotification(client, request);
 /// ```
-pub fn deliverNotification(client: *Client, request: schema.ShowNotification) !void {
+pub fn deliverNotification(client: *Client, request: ShowNotificationType) !void {
     try register(client, .{
         .request_id = request.request_id,
         .continuation = .notification,
@@ -192,7 +195,7 @@ pub fn deliverNotification(client: *Client, request: schema.ShowNotification) !v
 /// ```zig
 /// try request_lifecycle.requestTabSnapshot(client, location);
 /// ```
-pub fn requestTabSnapshot(client: *Client, location: schema.TabLocation) !void {
+pub fn requestTabSnapshot(client: *Client, location: TabLocationType) !void {
     const request_id = try nextId(client);
     try deliver(client, .{
         .registration = .{
@@ -211,7 +214,7 @@ pub fn requestTabSnapshot(client: *Client, location: schema.TabLocation) !void {
 /// ```zig
 /// try request_lifecycle.requestWorkspaceSnapshot(client, workspace);
 /// ```
-pub fn requestWorkspaceSnapshot(client: *Client, workspace: schema.WorkspaceLocation) !void {
+pub fn requestWorkspaceSnapshot(client: *Client, workspace: WorkspaceLocationType) !void {
     const request_id = try nextId(client);
     try deliver(client, .{
         .registration = .{
@@ -230,7 +233,7 @@ pub fn requestWorkspaceSnapshot(client: *Client, workspace: schema.WorkspaceLoca
 /// ```zig
 /// request_lifecycle.ignoreTab(client, tab_id);
 /// ```
-pub fn ignoreTab(client: *Client, tab_id: schema.TabId) void {
+pub fn ignoreTab(client: *Client, tab_id: TabIdType) void {
     client.request_lifecycle.tracker.ignoreTab(tab_id);
 }
 
@@ -239,7 +242,7 @@ pub fn ignoreTab(client: *Client, tab_id: schema.TabId) void {
 /// ```zig
 /// request_lifecycle.ignorePane(client, pane_id);
 /// ```
-pub fn ignorePane(client: *Client, pane_id: schema.PaneId) void {
+pub fn ignorePane(client: *Client, pane_id: PaneIdType) void {
     client.request_lifecycle.tracker.ignorePane(pane_id);
 }
 
@@ -248,7 +251,7 @@ pub fn ignorePane(client: *Client, pane_id: schema.PaneId) void {
 /// ```zig
 /// _ = request_lifecycle.ignoreAttachment(client, pane_id);
 /// ```
-pub fn ignoreAttachment(client: *Client, pane_id: schema.PaneId) bool {
+pub fn ignoreAttachment(client: *Client, pane_id: PaneIdType) bool {
     return client.request_lifecycle.tracker.ignoreAttachment(pane_id);
 }
 
@@ -257,17 +260,17 @@ pub fn ignoreAttachment(client: *Client, pane_id: schema.PaneId) bool {
 /// ```zig
 /// _ = request_lifecycle.completePaneClose(client, pane_id);
 /// ```
-pub fn completePaneClose(client: *Client, pane_id: schema.PaneId) bool {
+pub fn completePaneClose(client: *Client, pane_id: PaneIdType) bool {
     return client.request_lifecycle.tracker.completePaneClose(pane_id);
 }
 
 test "request identities never reach the reserved zero or maximum values" {
-    var state: State = .{};
-    try std.testing.expectEqual(@as(schema.RequestId, @enumFromInt(2)), try state.nextId());
+    var state: LifecycleState = .{};
+    try std.testing.expectEqual(@as(RequestIdType, @enumFromInt(2)), try state.nextId());
 
     state.next_request_id = std.math.maxInt(u64) - 1;
     try std.testing.expectEqual(
-        @as(schema.RequestId, @enumFromInt(std.math.maxInt(u64) - 1)),
+        @as(RequestIdType, @enumFromInt(std.math.maxInt(u64) - 1)),
         try state.nextId(),
     );
     try std.testing.expectError(error.RequestIdExhausted, state.nextId());
@@ -277,7 +280,7 @@ test "request identities never reach the reserved zero or maximum values" {
 }
 
 test "request preflight preserves identities needed by synchronous recovery" {
-    var state: State = .{ .next_request_id = std.math.maxInt(u64) - 1 };
+    var state: LifecycleState = .{ .next_request_id = std.math.maxInt(u64) - 1 };
 
     try state.ensureCanStart(1);
     try std.testing.expectError(error.RequestIdExhausted, state.ensureCanStart(2));
@@ -285,8 +288,8 @@ test "request preflight preserves identities needed by synchronous recovery" {
 }
 
 test "request identity allocation stops before correlation overflow" {
-    var state: State = .{};
-    for (0..client_requests.Tracker.capacity) |index| {
+    var state: LifecycleState = .{};
+    for (0..TrackerType.capacity) |index| {
         try state.tracker.add(@enumFromInt(index + 20), .notification);
     }
     const next_request_id = state.next_request_id;

@@ -1,26 +1,31 @@
 //! Wires workspace handoff use cases to one client's protocol and resources.
 
-const core = @import("telar-core");
-const workspace_capability = @import("../../../workspace/root.zig");
-const panes_application = @import("telar-client").application.panes;
-const tabs_application = @import("telar-client").application.tabs;
-const workspaces_application = @import("telar-client").application.workspaces;
-const client_model = @import("telar-client").model;
-const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
+const Client = @import("../../Client.zig");
+const SelectionTargetType = @import("telar-client").SelectionTarget;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const WorkspaceDepartureType = @import("telar-client").WorkspaceDeparture;
+const PaneIdType = @import("telar-core").PaneId;
+const ApplicationWorkspacesWorkspaceHandoffTargetingTarget = @import("telar-client").ApplicationWorkspacesWorkspaceHandoffTargetingTarget;
+const ApplicationWorkspacesWorkspaceHandoffAdmissionAuthority = @import("telar-client").ApplicationWorkspacesWorkspaceHandoffAdmissionAuthority;
+const rectSize_module = @import("telar-client").rectSize;
+const PlanWorkspaceHandoffHandlerType = @import("telar-client").PlanWorkspaceHandoffHandler;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const RequestWorkspaceHandoffHandlerType = @import("telar-client").RequestWorkspaceHandoffHandler;
+const tab_attachments = @import("../tabs/tab_attachments.zig");
 const pane_pastes = @import("../input/pane_pastes.zig");
+const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
+const RequestTabSnapshotRecoveryHandlerType = @import("telar-client").RequestTabSnapshotRecoveryHandler;
+const SelectWorkspaceHandlerType = @import("telar-client").SelectWorkspaceHandler;
+const OpenedPaneType = @import("telar-client").OpenedPane;
+const WorkspaceArrivalType = @import("telar-client").WorkspaceArrival;
+const workspace_transitions = @import("workspace_transitions.zig");
+const ConfirmWorkspaceHandoffHandlerType = @import("telar-client").ConfirmWorkspaceHandoffHandler;
+const RecoverWorkspaceHandoffHandlerType = @import("telar-client").RecoverWorkspaceHandoffHandler;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
-const tab_attachments = @import("../tabs/tab_attachments.zig");
-const workspace_transitions = @import("workspace_transitions.zig");
-
-const Client = @import("../../client.zig");
-const multiplexer = workspace_capability.multiplexer;
-const pane_open_delivery = panes_application.pane_open_delivery;
-const schema = core.schema;
-const tab_snapshot_recovery = tabs_application.tab_snapshot_recovery;
-const workspace_handoff = workspaces_application.workspace_handoff;
-const workspace_handoff_admission = workspaces_application.workspace_handoff_admission;
-const workspace_handoff_targeting = workspaces_application.workspace_handoff_targeting;
+const WorkspaceHandoffType = @import("telar-client").WorkspaceHandoff;
+const TabLocationType = @import("telar-core").TabLocation;
+const WorkspaceActivationType = @import("telar-client").WorkspaceActivation;
 
 /// Resolves one workspace selection from the committed list and requests its
 /// handoff only when the target is known and actionable.
@@ -28,7 +33,7 @@ const workspace_handoff_targeting = workspaces_application.workspace_handoff_tar
 /// ```zig
 /// _ = try selectWorkspace(client, .{ .position = 1 });
 /// ```
-pub fn selectWorkspace(client: *Client, target: workspace_handoff.SelectionTarget) !bool {
+pub fn selectWorkspace(client: *Client, target: SelectionTargetType) !bool {
     var use_case = selectionHandler(client);
 
     return use_case.execute(target);
@@ -40,7 +45,7 @@ pub fn selectWorkspace(client: *Client, target: workspace_handoff.SelectionTarge
 /// ```zig
 /// _ = try requestWorkspace(client, workspace_id);
 /// ```
-pub fn requestWorkspace(client: *Client, workspace: schema.WorkspaceId) !client_model.WorkspaceDeparture {
+pub fn requestWorkspace(client: *Client, workspace: WorkspaceIdType) !WorkspaceDepartureType {
     return request(client, .{ .workspace = workspace }, .requested_departure);
 }
 
@@ -50,7 +55,7 @@ pub fn requestWorkspace(client: *Client, workspace: schema.WorkspaceId) !client_
 /// ```zig
 /// _ = try followWorkspace(client, workspace_id);
 /// ```
-pub fn followWorkspace(client: *Client, workspace: schema.WorkspaceId) !client_model.WorkspaceDeparture {
+pub fn followWorkspace(client: *Client, workspace: WorkspaceIdType) !WorkspaceDepartureType {
     return request(client, .{ .workspace = workspace }, .canonical_follow);
 }
 
@@ -60,14 +65,14 @@ pub fn followWorkspace(client: *Client, workspace: schema.WorkspaceId) !client_m
 /// ```zig
 /// _ = try requestPane(client, pane_id, fallback_workspace);
 /// ```
-pub fn requestPane(client: *Client, pane_id: schema.PaneId, fallback_workspace: ?schema.WorkspaceId) !client_model.WorkspaceDeparture {
+pub fn requestPane(client: *Client, pane_id: PaneIdType, fallback_workspace: ?WorkspaceIdType) !WorkspaceDepartureType {
     return request(client, .{ .pane = .{
         .pane_id = pane_id,
         .fallback_workspace = fallback_workspace,
     } }, .requested_departure);
 }
 
-fn request(client: *Client, target: workspace_handoff_targeting.Target, authority: workspace_handoff_admission.Authority) !client_model.WorkspaceDeparture {
+fn request(client: *Client, target: ApplicationWorkspacesWorkspaceHandoffTargetingTarget, authority: ApplicationWorkspacesWorkspaceHandoffAdmissionAuthority) !WorkspaceDepartureType {
     const targeting = targetingHandler(client);
     const plan = targeting.execute(target);
     var handler = requestHandler(client);
@@ -75,25 +80,25 @@ fn request(client: *Client, target: workspace_handoff_targeting.Target, authorit
     return handler.execute(.{
         .target = plan.target,
         .fallback_workspace = plan.fallback_workspace,
-        .size = multiplexer.rectSize(client.geometry().area) orelse return error.TerminalTooSmall,
+        .size = rectSize_module(client.geometry().area) orelse return error.TerminalTooSmall,
     }, authority);
 }
 
-fn targetingHandler(client: *Client) workspace_handoff_targeting.PlanWorkspaceHandoffHandler {
+fn targetingHandler(client: *Client) PlanWorkspaceHandoffHandlerType {
     return .{ .bookmarks = .{
         .context = client,
         .remembered_pane = rememberedPane,
     } };
 }
 
-fn rememberedPane(context: *anyopaque, workspace: schema.WorkspaceLocation) ?schema.PaneId {
+fn rememberedPane(context: *anyopaque, workspace: WorkspaceLocationType) ?PaneIdType {
     const client: *Client = @ptrCast(@alignCast(context));
     const bookmark = client.navigation_history.find(workspace) orelse return null;
 
     return bookmark.pane_id;
 }
 
-fn requestHandler(client: *Client) workspace_handoff.RequestWorkspaceHandoffHandler {
+fn requestHandler(client: *Client) RequestWorkspaceHandoffHandlerType {
     const attachment_effects = tab_attachments.effects(client);
 
     return .{
@@ -141,7 +146,7 @@ fn requestHandler(client: *Client) workspace_handoff.RequestWorkspaceHandoffHand
     };
 }
 
-fn snapshotRecovery(client: *Client) tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler {
+fn snapshotRecovery(client: *Client) RequestTabSnapshotRecoveryHandlerType {
     return .{ .effects = .{
         .context = client,
         .pending = tabSnapshotPending,
@@ -149,7 +154,7 @@ fn snapshotRecovery(client: *Client) tab_snapshot_recovery.RequestTabSnapshotRec
     } };
 }
 
-fn selectionHandler(client: *Client) workspace_handoff.SelectWorkspaceHandler {
+fn selectionHandler(client: *Client) SelectWorkspaceHandlerType {
     return .{
         .model = &client.model,
         .gate = .{
@@ -169,11 +174,11 @@ fn selectionHandler(client: *Client) workspace_handoff.SelectWorkspaceHandler {
 /// ```zig
 /// try confirmationHandler(client).execute(try arrival(client, opened));
 /// ```
-pub fn arrival(client: *Client, opened: pane_open_delivery.OpenedPane) !client_model.WorkspaceArrival {
+pub fn arrival(client: *Client, opened: OpenedPaneType) !WorkspaceArrivalType {
     return workspace_transitions.arrival(
         client,
         opened,
-        multiplexer.rectSize(client.geometry().area) orelse return error.TerminalTooSmall,
+        rectSize_module(client.geometry().area) orelse return error.TerminalTooSmall,
     );
 }
 
@@ -184,7 +189,7 @@ pub fn arrival(client: *Client, opened: pane_open_delivery.OpenedPane) !client_m
 /// var handler = confirmationHandler(client);
 /// try handler.execute(command);
 /// ```
-pub fn confirmationHandler(client: *Client) workspace_handoff.ConfirmWorkspaceHandoffHandler {
+pub fn confirmationHandler(client: *Client) ConfirmWorkspaceHandoffHandlerType {
     return .{
         .model = &client.model,
         .delivery = .{
@@ -200,7 +205,7 @@ pub fn confirmationHandler(client: *Client) workspace_handoff.ConfirmWorkspaceHa
 /// var handler = recoveryHandler(client);
 /// _ = try handler.execute(failure);
 /// ```
-pub fn recoveryHandler(client: *Client) workspace_handoff.RecoverWorkspaceHandoffHandler {
+pub fn recoveryHandler(client: *Client) RecoverWorkspaceHandoffHandlerType {
     return .{
         .effects = .{
             .context = client,
@@ -215,7 +220,7 @@ fn requestPending(context: *anyopaque) bool {
     return request_lifecycle.busy(client);
 }
 
-fn requestSelectedWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) !void {
+fn requestSelectedWorkspace(context: *anyopaque, workspace: WorkspaceIdType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     _ = try requestWorkspace(client, workspace);
@@ -233,7 +238,7 @@ fn availableDeliveryCapacity(context: *anyopaque) usize {
     return runtime_transport.availableCapacity(client);
 }
 
-fn sendHandoff(context: *anyopaque, command: workspace_handoff.WorkspaceHandoff) !void {
+fn sendHandoff(context: *anyopaque, command: WorkspaceHandoffType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try request_lifecycle.nextId(client);
     try request_lifecycle.deliver(client, .{
@@ -250,7 +255,7 @@ fn sendHandoff(context: *anyopaque, command: workspace_handoff.WorkspaceHandoff)
     });
 }
 
-fn showPaneGraphics(context: *anyopaque, pane_id: schema.PaneId) !void {
+fn showPaneGraphics(context: *anyopaque, pane_id: PaneIdType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try client.graphics_store.setPaneVisible(pane_id, true);
@@ -262,29 +267,29 @@ fn tabSnapshotPending(context: *anyopaque) bool {
     return request_lifecycle.has(client, .tab_snapshot);
 }
 
-fn requestTabSnapshot(context: *anyopaque, location: schema.TabLocation) !void {
+fn requestTabSnapshot(context: *anyopaque, location: TabLocationType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try request_lifecycle.requestTabSnapshot(client, location);
 }
 
-fn releaseDeparture(context: *anyopaque, departure: *const client_model.WorkspaceDeparture) void {
+fn releaseDeparture(context: *anyopaque, departure: *const WorkspaceDepartureType) void {
     const client: *Client = @ptrCast(@alignCast(context));
     workspace_transitions.release(client, departure);
 }
 
-fn activateArrival(context: *anyopaque, activation: client_model.WorkspaceActivation) !void {
+fn activateArrival(context: *anyopaque, activation: WorkspaceActivationType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try workspace_transitions.activate(client, activation);
 }
 
-fn forgetWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) void {
+fn forgetWorkspace(context: *anyopaque, workspace: WorkspaceIdType) void {
     const client: *Client = @ptrCast(@alignCast(context));
     client.navigation_history.forget(.{ .workspace = workspace });
 }
 
-fn retryWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) !void {
+fn retryWorkspace(context: *anyopaque, workspace: WorkspaceIdType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try request_lifecycle.nextId(client);
     try request_lifecycle.deliver(client, .{
@@ -295,7 +300,7 @@ fn retryWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) !void {
         .message = .{ .open_pane = .{
             .request_id = request_id,
             .target = .{ .workspace = workspace },
-            .size = multiplexer.rectSize(client.geometry().area) orelse return error.TerminalTooSmall,
+            .size = rectSize_module(client.geometry().area) orelse return error.TerminalTooSmall,
             .launch = null,
         } },
     });

@@ -95,15 +95,15 @@ never has to replay a move.
 
 ## Proof
 
-- `src/frontend/client/tab_moves.zig` proves one-time response correlation,
+- `src/frontend/client/controllers/tabs/tab_moves.zig` proves one-time response correlation,
   exact identity validation, wire translation and protocol error mapping.
-- `src/frontend/client/application/move_tab.zig` proves request gating, absence
+- `src/client/application/tabs/move_tab.zig` proves request gating, absence
   of provisional mutation, delivery failure and canonical confirmation.
-- `src/frontend/client/model.zig` proves exact workspace, tab and position
+- `src/client/model/Model.zig` proves exact workspace, tab and position
   validation plus model version changes.
-- `src/frontend/client/client_test.zig` proves wire correlation, failure
+- `src/frontend/client/tests/` proves wire correlation, failure
   behavior and presenter scheduling.
-- `src/backend/runtime/commands/move_tab.zig` proves aggregate commit ordering
+- `src/backend/runtime/application/commands/move_tab.zig` proves aggregate commit ordering
   and edge behavior.
-- `src/backend/runtime/controllers/move_tab.zig` proves protocol translation
+- `src/backend/runtime/entrypoints/requests/move_tab.zig` proves protocol translation
   and expected runtime failures.

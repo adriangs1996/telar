@@ -1,19 +1,18 @@
 //! Adapts one model-owned pane paste to the existing pane-input boundary.
 
-const input_application = @import("telar-client").application.input;
+const Client = @import("../../Client.zig");
+const ApplicationInputPanePasteOutcome = @import("telar-client").ApplicationInputPanePasteOutcome;
+const PanePasteHandlerType = @import("telar-client").PanePasteHandler;
+const PanePasteEffects = @import("telar-client").PanePasteEffects;
+const ApplicationInputPanePasteDelivery = @import("telar-client").ApplicationInputPanePasteDelivery;
 const pane_inputs = @import("pane_inputs.zig");
-
-const Client = @import("../../client.zig");
-const pane_paste = input_application.pane_paste;
-
-pub const Outcome = pane_paste.Outcome;
 
 /// Starts one pane-owned paste against the current focused target.
 ///
 /// ```zig
 /// _ = try start(client);
 /// ```
-pub fn start(client: *Client) !Outcome {
+pub fn start(client: *Client) !ApplicationInputPanePasteOutcome {
     var use_case = handler(client);
 
     return use_case.start();
@@ -24,7 +23,7 @@ pub fn start(client: *Client) !Outcome {
 /// ```zig
 /// _ = try content(client, bytes);
 /// ```
-pub fn content(client: *Client, text: []const u8) !Outcome {
+pub fn content(client: *Client, text: []const u8) !ApplicationInputPanePasteOutcome {
     var use_case = handler(client);
 
     return use_case.content(text);
@@ -35,13 +34,13 @@ pub fn content(client: *Client, text: []const u8) !Outcome {
 /// ```zig
 /// _ = try finish(client);
 /// ```
-pub fn finish(client: *Client) !Outcome {
+pub fn finish(client: *Client) !ApplicationInputPanePasteOutcome {
     var use_case = handler(client);
 
     return use_case.finish();
 }
 
-fn handler(client: *Client) pane_paste.PanePasteHandler {
+fn handler(client: *Client) PanePasteHandlerType {
     return .{
         .model = &client.model,
         .effects = effects(client),
@@ -53,14 +52,14 @@ fn handler(client: *Client) pane_paste.PanePasteHandler {
 /// ```zig
 /// const paste_effects = effects(client);
 /// ```
-pub fn effects(client: *Client) pane_paste.Effects {
+pub fn effects(client: *Client) PanePasteEffects {
     return .{
         .context = client,
         .deliver = deliver,
     };
 }
 
-fn deliver(raw_context: *anyopaque, delivery: pane_paste.Delivery) !bool {
+fn deliver(raw_context: *anyopaque, delivery: ApplicationInputPanePasteDelivery) !bool {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     const result = switch (delivery) {
         .marker => |marker| try pane_inputs.pasteMarker(

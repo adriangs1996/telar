@@ -1,5 +1,8 @@
 //! Application policy for assigning each streamed paste phase to one owner.
 
+const PasteRoutingAuthority = @import("PasteRoutingAuthority.zig");
+const PasteRoutingCapture = @import("PasteRoutingCapture.zig");
+const PasteRoutingHandler = @import("PasteRoutingHandler.zig");
 const std = @import("std");
 
 pub const Command = union(enum) {
@@ -7,14 +10,6 @@ pub const Command = union(enum) {
     /// Borrowed only for the synchronous routing effect.
     content: []const u8,
     finish,
-};
-
-pub const Authority = struct {
-    attachment_modal_active: bool = false,
-    prompt_active: bool = false,
-    prompt_pasting: bool = false,
-    copy_mode_active: bool = false,
-    pane_paste_active: bool = false,
 };
 
 pub const Owner = enum {
@@ -28,41 +23,7 @@ pub const Outcome = enum {
     pane_owned,
 };
 
-pub const Route = struct {
-    owner: Owner,
-    command: Command,
-};
-
-pub const Effects = struct {
-    context: *anyopaque,
-    route: *const fn (*anyopaque, Route) anyerror!void,
-};
-
-pub const PasteRoutingHandler = struct {
-    effects: Effects,
-
-    /// Resolves one paste phase against a fixed authority snapshot and sends
-    /// it to at most one owner.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(authority, command);
-    /// ```
-    pub fn execute(handler: *PasteRoutingHandler, authority: Authority, command: Command) !Outcome {
-        const owner = resolve(authority, command) orelse return .ignored;
-
-        try handler.effects.route(handler.effects.context, .{
-            .owner = owner,
-            .command = command,
-        });
-
-        return switch (owner) {
-            .prompt => .prompt_owned,
-            .pane => .pane_owned,
-        };
-    }
-};
-
-fn resolve(authority: Authority, command: Command) ?Owner {
+pub fn resolve(authority: PasteRoutingAuthority, command: Command) ?Owner {
     return switch (command) {
         .start => if (authority.attachment_modal_active)
             null
@@ -81,29 +42,9 @@ fn resolve(authority: Authority, command: Command) ?Owner {
     };
 }
 
-const Capture = struct {
-    route_value: ?Route = null,
-    calls: usize = 0,
-    fail: bool = false,
-
-    fn effects(capture: *Capture) Effects {
-        return .{ .context = capture, .route = route };
-    }
-
-    fn route(raw_context: *anyopaque, value: Route) !void {
-        const capture: *Capture = @ptrCast(@alignCast(raw_context));
-        capture.calls += 1;
-        capture.route_value = value;
-
-        if (capture.fail) {
-            return error.PasteRouteFailed;
-        }
-    }
-};
-
 test "PasteRoutingHandler assigns paste start by modal prompt and copy authority" {
     const cases = [_]struct {
-        authority: Authority,
+        authority: PasteRoutingAuthority,
         outcome: Outcome,
     }{
         .{ .authority = .{ .attachment_modal_active = true, .prompt_active = true }, .outcome = .ignored },
@@ -113,7 +54,7 @@ test "PasteRoutingHandler assigns paste start by modal prompt and copy authority
     };
 
     for (cases) |case| {
-        var capture: Capture = .{};
+        var capture: PasteRoutingCapture = .{};
         var handler: PasteRoutingHandler = .{ .effects = capture.effects() };
 
         try std.testing.expectEqual(case.outcome, try handler.execute(case.authority, .start));
@@ -122,9 +63,9 @@ test "PasteRoutingHandler assigns paste start by modal prompt and copy authority
 }
 
 test "PasteRoutingHandler keeps later phases with their established owner" {
-    var capture: Capture = .{};
+    var capture: PasteRoutingCapture = .{};
     var handler: PasteRoutingHandler = .{ .effects = capture.effects() };
-    const competing: Authority = .{
+    const competing: PasteRoutingAuthority = .{
         .attachment_modal_active = true,
         .prompt_active = true,
         .prompt_pasting = true,
@@ -151,7 +92,7 @@ test "PasteRoutingHandler keeps later phases with their established owner" {
 }
 
 test "PasteRoutingHandler propagates the selected owner failure without fallback" {
-    var capture: Capture = .{ .fail = true };
+    var capture: PasteRoutingCapture = .{ .fail = true };
     var handler: PasteRoutingHandler = .{ .effects = capture.effects() };
 
     try std.testing.expectError(

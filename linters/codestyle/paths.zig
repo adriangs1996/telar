@@ -1,57 +1,5 @@
 const std = @import("std");
-
-const Io = std.Io;
-
-const Collector = struct {
-    allocator: std.mem.Allocator,
-    io: Io,
-    files: std.ArrayList([]u8) = .empty,
-
-    fn deinit(self: *Collector) void {
-        for (self.files.items) |path| {
-            self.allocator.free(path);
-        }
-
-        self.files.deinit(self.allocator);
-    }
-
-    fn addRoot(self: *Collector, path: []const u8) !void {
-        const stat = try Io.Dir.cwd().statFile(self.io, path, .{ .follow_symlinks = false });
-
-        switch (stat.kind) {
-            .directory => try self.addDirectory(path),
-            .file => {
-                if (std.mem.endsWith(u8, path, ".zig")) {
-                    try self.files.append(self.allocator, try self.allocator.dupe(u8, path));
-                }
-            },
-            else => {},
-        }
-    }
-
-    fn addDirectory(self: *Collector, path: []const u8) !void {
-        var directory = try Io.Dir.cwd().openDir(self.io, path, .{ .iterate = true });
-        defer directory.close(self.io);
-
-        var walker = try directory.walk(self.allocator);
-        defer walker.deinit();
-
-        while (try walker.next(self.io)) |entry| {
-            if (entry.kind == .directory and shouldSkipDirectory(entry.basename)) {
-                walker.leave(self.io);
-                continue;
-            }
-
-            if (entry.kind != .file or !std.mem.endsWith(u8, entry.basename, ".zig")) {
-                continue;
-            }
-
-            const file_path = try std.fs.path.join(self.allocator, &.{ path, entry.path });
-            errdefer self.allocator.free(file_path);
-            try self.files.append(self.allocator, file_path);
-        }
-    }
-};
+const Collector = @import("Collector.zig");
 
 /// Resolves file and directory roots into sorted, unique Zig source paths.
 ///
@@ -59,7 +7,7 @@ const Collector = struct {
 /// const files = try collect(allocator, io, &.{"src"});
 /// defer free(allocator, files);
 /// ```
-pub fn collect(allocator: std.mem.Allocator, io: Io, roots: []const []const u8) ![][]u8 {
+pub fn collect(allocator: std.mem.Allocator, io: std.Io, roots: []const []const u8) ![][]u8 {
     var collector: Collector = .{ .allocator = allocator, .io = io };
     errdefer collector.deinit();
 
@@ -108,7 +56,7 @@ fn pathBefore(_: void, left: []u8, right: []u8) bool {
     return std.mem.order(u8, left, right) == .lt;
 }
 
-fn shouldSkipDirectory(name: []const u8) bool {
+pub fn shouldSkipDirectory(name: []const u8) bool {
     const ignored = [_][]const u8{
         ".git",
         ".zig-cache",

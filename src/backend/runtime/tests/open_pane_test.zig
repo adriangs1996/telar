@@ -1,105 +1,37 @@
 //! Vertical contract tests for the runtime open-pane flow.
 
+const StateType = @import("../../workspace/State.zig");
+const RepositoryType = @import("../../workspace/Repository.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const open_pane_commands = @import("../application/commands/open_pane.zig");
-const open_pane_controller = @import("../entrypoints/requests/open_pane.zig");
-const pane_mod = @import("../../pane/root.zig");
-const delivery_mod = @import("../delivery/root.zig");
-const workspace_mod = @import("../../workspace/root.zig");
-
-const schema = core.schema;
-
-const Effects = struct {
-    launched: pane_mod.PaneLaunched,
-    event_count: usize = 0,
-    attachment_count: usize = 0,
-
-    fn panes(effects: *Effects) open_pane_commands.Panes {
-        return .{
-            .context = effects,
-            .find = find,
-            .first = first,
-            .launch = launch,
-            .prepare_view = prepareView,
-            .attach = attach,
-        };
-    }
-
-    fn authority(effects: *Effects) open_pane_commands.LaunchAuthority {
-        return .{ .context = effects, .prepare = prepare };
-    }
-
-    fn geometry(effects: *Effects) open_pane_commands.GeometryLease {
-        return .{
-            .context = effects,
-            .acquire = acquire,
-            .release = release,
-        };
-    }
-
-    fn publisher(effects: *Effects) open_pane_commands.EventPublisher {
-        return .{ .context = effects, .publish = publish };
-    }
-
-    fn find(_: *anyopaque, _: schema.PaneId) ?pane_mod.PaneLaunched {
-        return null;
-    }
-
-    fn first(_: *anyopaque, _: schema.TabLocation) ?pane_mod.PaneLaunched {
-        return null;
-    }
-
-    fn launch(context: *anyopaque, _: open_pane_commands.LaunchPane) !pane_mod.PaneLaunched {
-        const effects: *Effects = @ptrCast(@alignCast(context));
-        return effects.launched;
-    }
-
-    fn prepareView(_: *anyopaque, _: open_pane_commands.PrepareView) !void {}
-
-    fn attach(context: *anyopaque, _: pane_mod.PaneLaunched) !void {
-        const effects: *Effects = @ptrCast(@alignCast(context));
-        effects.attachment_count += 1;
-    }
-
-    fn prepare(_: *anyopaque, _: open_pane_commands.PrepareLaunch) ![]const u8 {
-        return "/work/new";
-    }
-
-    fn acquire(_: *anyopaque, _: schema.WorkspaceLocation) bool {
-        return true;
-    }
-
-    fn release(_: *anyopaque, _: schema.WorkspaceLocation) void {
-        unreachable;
-    }
-
-    fn publish(context: *anyopaque, _: open_pane_commands.RuntimeEvent) void {
-        const effects: *Effects = @ptrCast(@alignCast(context));
-        effects.event_count += 1;
-    }
-};
+const TabLocationType = @import("telar-core").TabLocation;
+const workspace_module = @import("telar-core").workspace;
+const tab_module = @import("telar-core").tab;
+const OpenPaneTestEffects = @import("OpenPaneTestEffects.zig");
+const pane_module = @import("telar-core").pane;
+const OpenPaneHandlerType = @import("../application/commands/OpenPaneHandler.zig");
+const ResponseQueueType = @import("../delivery/ResponseQueue.zig");
+const OpenPaneController = @import("../entrypoints/requests/OpenPaneController.zig");
 
 test "a default pane launch survives response queue backpressure" {
-    var state: workspace_mod.State = .{};
-    var workspaces = workspace_mod.Repository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
-    const location: schema.TabLocation = .{
-        .workspace = .{ .workspace = try schema.id.workspace(1) },
-        .tab_id = try schema.id.tab(1),
+    const location: TabLocationType = .{
+        .workspace = .{ .workspace = try workspace_module(1) },
+        .tab_id = try tab_module(1),
     };
-    var effects: Effects = .{ .launched = .{
-        .key = .{ .id = try schema.id.pane(17), .generation = 9 },
+    var effects: OpenPaneTestEffects = .{ .launched = .{
+        .key = .{ .id = try pane_module(17), .generation = 9 },
         .location = location,
     } };
-    var handler: open_pane_commands.OpenPaneHandler = .{
+    var handler: OpenPaneHandlerType = .{
         .workspaces = &workspaces,
         .panes = effects.panes(),
         .authority = effects.authority(),
         .geometry = effects.geometry(),
         .events = effects.publisher(),
     };
-    var responses: delivery_mod.ResponseQueue = .{};
+    var responses: ResponseQueueType = .{};
 
     while (responses.len < responses.items.len) {
         try responses.push(.{ .tab_moved = .{
@@ -109,7 +41,7 @@ test "a default pane launch survives response queue backpressure" {
         } });
     }
 
-    var controller = open_pane_controller.Controller.init(&responses, handler.executor());
+    var controller = OpenPaneController.init(&responses, handler.executor());
     try std.testing.expectError(error.ResponseQueueFull, controller.openPane(.{
         .request_id = @enumFromInt(31),
         .target = .default,

@@ -93,12 +93,12 @@ foreground revisions again.
 
 - `src/frontend/workspace/multiplexer.zig` proves bounded CWD display names,
   exact path ownership, fixed foreground storage and border composition.
-- `src/frontend/client/model.zig` proves stale and repeated reports, exact
+- `src/client/model/Model.zig` proves stale and repeated reports, exact
   revision changes, state-only CWD moves and allocation failure behavior.
-- `src/frontend/client/application/pane_metadata.zig` proves both messages use
+- `src/frontend/client/controllers/panes/pane_metadata.zig` proves both messages use
   the same model transaction.
-- `src/frontend/client/client_test.zig` proves the dispatcher commits before
+- `src/frontend/client/tests/` proves the dispatcher commits before
   presentation, requests no direct draw and leaves composition policy to the
   presenter.
-- `src/backend/runtime/attachment.zig` proves per-client delivery cursors for
+- `src/backend/runtime/attachment/` proves per-client delivery cursors for
   both runtime-owned facts.

@@ -21,11 +21,13 @@ A design is incomplete while any item is unknown.
 ## Code organization and tracing
 
 - A capability directory owns one cohesive abstraction or one indivisible set
-  of invariants. Its `root.zig` is the supported public namespace.
-- Files inside a capability directory are implementation details. Code outside
-  the capability imports its `root.zig`, not those files directly.
-- A file owns one primary abstraction and exposes the smallest complete
-  protocol for it. Method count and line count are not design targets.
+  of invariants. Its supported public files define the import boundary; a
+  directory-level `root.zig` is not required.
+- Code outside a capability imports only its public entries, not its internal
+  helpers. Process and module dependency direction remains enforced.
+- Apply [Zig source layout](zig-source-layout.md) to concrete structs, generic
+  families and namespaces. A file exposes the smallest complete protocol for
+  its abstraction. Method count and line count are not design targets.
 - An external event has one explicit entrypoint in the process that receives
   it. Event loops classify and delegate; they do not contain the flow itself.
 - A new or materially refactored client mutation uses a request controller for

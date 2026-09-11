@@ -7,614 +7,29 @@
 //! renderer fully functional.
 
 const std = @import("std");
-const core = @import("telar-core");
-const icon_graphics = @import("icons.zig");
-const kitty = @import("kitty.zig");
-const raster = @import("rasterizer.zig");
-const ui_icons = @import("../ui/root.zig").icons;
-const theme = @import("../ui/root.zig").theme;
-const widgets = @import("../widgets/root.zig");
-const notifications = @import("telar-client").notifications;
-const toast = widgets.toast;
-
-const ui = core.ui;
+const PaletteType = @import("../ui/Palette.zig");
+const Colors = @import("Colors.zig");
+const ColorType = @import("telar-core").Color;
+const GraphicsColor = @import("Color.zig");
+const MetricsType = @import("Metrics.zig");
+const SurfaceType = @import("Surface.zig");
+const PixelRectangle = @import("PixelRectangle.zig");
+const OutputPlacementType = @import("kitty_protocol").OutputPlacement;
+const ToastRenderer = @import("ToastRenderer.zig");
+const CenterType = @import("telar-client").Center;
+const theme = @import("../ui/theme_support.zig");
+const transition_duration_ns_module = @import("telar-client").transition_duration_ns;
+const ThemeType = @import("telar-client").Theme;
+const RectType = @import("telar-core").Rect;
+const kitty_codec = @import("kitty_codec.zig");
 
 pub const max_image_bytes: usize = 1536 * 1024;
 pub const idle_after_ns: u64 = 250 * std.time.ns_per_ms;
 const first_image_id: u32 = 0x80001000;
 const first_placement_id: u32 = 0x80001100;
-const toast_z_index: i32 = 1000;
+pub const toast_z_index: i32 = 1000;
 
-const RenderKey = struct {
-    id: notifications.Id,
-    level: notifications.Level,
-    cell_width: u16,
-    cell_height: u16,
-    card_columns: u16,
-    icon_theme: ui_icons.Theme,
-    background: [3]u8,
-    accent: [3]u8,
-    text: [3]u8,
-    subtext: [3]u8,
-};
-
-const SlotRender = struct {
-    slot: *Slot,
-    item: *const notifications.Item,
-    key: RenderKey,
-};
-
-const PixelRectangle = struct {
-    x: u32,
-    y: u32,
-    width: u32,
-    height: u32,
-};
-
-pub const Preparation = struct {
-    area: ui.Rect,
-    center: *const notifications.Center,
-    palette: *const theme.Palette,
-    icon_theme: ui_icons.Theme = .unicode,
-};
-
-const Slot = struct {
-    id: notifications.Id = .invalid,
-    pixels: []u8 = &.{},
-    width: u32 = 0,
-    height: u32 = 0,
-    key: ?RenderKey = null,
-    failed_key: ?RenderKey = null,
-    placement: ?kitty.OutputPlacement = null,
-    emitted_placement: ?kitty.OutputPlacement = null,
-    visible: bool = false,
-    image_dirty: bool = false,
-    image_emitted: bool = false,
-    transfer_offset: usize = 0,
-    transfer_key: ?RenderKey = null,
-};
-
-pub const Renderer = struct {
-    gpa: std.mem.Allocator,
-    text: ?raster.Rasterizer,
-    icons: ?raster.Rasterizer,
-    supported: bool = false,
-    media_idle: bool = false,
-    cell_width: u16 = 0,
-    cell_height: u16 = 0,
-    frame_usable: bool = false,
-    render_deferred: bool = false,
-    visible_count: u8 = 0,
-    slots: [notifications.max_items]Slot = @splat(.{}),
-
-    pub fn init(gpa: std.mem.Allocator) Renderer {
-        return .{
-            .gpa = gpa,
-            .text = raster.Rasterizer.init() catch null,
-            .icons = raster.Rasterizer.initFont(icon_graphics.embedded_font) catch null,
-        };
-    }
-
-    pub fn deinit(renderer: *Renderer) void {
-        for (&renderer.slots) |*slot| if (slot.pixels.len != 0)
-            renderer.gpa.free(slot.pixels);
-        if (renderer.text) |*text| {
-            text.deinit();
-        }
-        if (renderer.icons) |*icons| {
-            icons.deinit();
-        }
-    }
-
-    pub fn retainedBytes(renderer: *const Renderer) usize {
-        var total: usize = 0;
-        for (renderer.slots) |slot| total += slot.pixels.len;
-        return total;
-    }
-
-    /// Applies host graphics support and cell geometry to toast rendering.
-    /// For example: `_ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });`.
-    pub fn configure(renderer: *Renderer, configuration: kitty.Configuration) bool {
-        const supported = configuration.support == .supported;
-        if (renderer.supported == supported and renderer.cell_width == configuration.cell_width and
-            renderer.cell_height == configuration.cell_height)
-        {
-            return false;
-        }
-        renderer.supported = supported;
-        renderer.cell_width = configuration.cell_width;
-        renderer.cell_height = configuration.cell_height;
-        for (&renderer.slots) |*slot| {
-            slot.key = null;
-            slot.failed_key = null;
-        }
-        return true;
-    }
-
-    pub fn setMediaIdle(renderer: *Renderer, idle: bool) void {
-        renderer.media_idle = idle;
-    }
-
-    /// Prepares visible toast slots for one themed frame.
-    /// For example: `renderer.prepare(.{ .area = area, .center = center, .palette = palette });`.
-    pub fn prepare(renderer: *Renderer, preparation: Preparation) void {
-        for (&renderer.slots) |*slot| slot.visible = false;
-        renderer.visible_count = 0;
-        renderer.render_deferred = false;
-        renderer.frame_usable = renderer.supported and renderer.text != null and
-            (preparation.icon_theme != .nerd_font or renderer.icons != null) and
-            renderer.cell_width != 0 and renderer.cell_height != 0 and
-            !preparation.area.isEmpty();
-        const colors = resolveColors(preparation.palette) orelse {
-            renderer.frame_usable = false;
-            renderer.retireInvisible();
-            return;
-        };
-        if (!renderer.frame_usable) {
-            renderer.retireInvisible();
-            return;
-        }
-
-        const count = @min(
-            @as(usize, preparation.center.count),
-            @as(usize, (preparation.area.h + toast.card_gap) / (toast.card_height + toast.card_gap)),
-        );
-        renderer.visible_count = @intCast(count);
-        // Release the one id that the bounded center may have evicted before
-        // assigning a slot to the new front item. Existing ids retain their
-        // stable host image ids even though their vertical order changed.
-        for (&renderer.slots) |*slot| {
-            if (slot.id == .invalid) {
-                continue;
-            }
-            var retained = false;
-            for (0..count) |index| {
-                if (preparation.center.itemAt(index).?.id == slot.id) {
-                    retained = true;
-                    break;
-                }
-            }
-            if (!retained) {
-                slot.id = .invalid;
-                slot.key = null;
-                slot.failed_key = null;
-                slot.placement = null;
-                slot.image_dirty = false;
-            }
-        }
-        for (0..count) |index| {
-            const item = preparation.center.itemAt(index).?;
-            const slot = renderer.slotFor(item.id) orelse {
-                renderer.frame_usable = false;
-                break;
-            };
-            slot.visible = true;
-            const key: RenderKey = .{
-                .id = item.id,
-                .level = item.level,
-                .cell_width = renderer.cell_width,
-                .cell_height = renderer.cell_height,
-                .card_columns = preparation.area.w,
-                .icon_theme = preparation.icon_theme,
-                .background = colors.surface0,
-                .accent = colors.level(item.level),
-                .text = colors.text,
-                .subtext = colors.subtext,
-            };
-            if (slot.key == null or !std.meta.eql(slot.key.?, key)) {
-                if (!renderer.media_idle) {
-                    renderer.frame_usable = false;
-                    renderer.render_deferred = true;
-                    continue;
-                }
-                if (slot.failed_key != null and std.meta.eql(slot.failed_key.?, key)) {
-                    renderer.frame_usable = false;
-                    continue;
-                }
-                renderer.renderSlot(.{ .slot = slot, .item = item, .key = key }) catch {
-                    slot.key = null;
-                    slot.failed_key = key;
-                    renderer.frame_usable = false;
-                    continue;
-                };
-            }
-            const full_width = slot.width;
-            const visible_width = item.animatedPixels(full_width);
-            const right = (@as(u32, preparation.area.x) + preparation.area.w) * renderer.cell_width;
-            const pixel_x = right -| visible_width;
-            const pixel_y = (@as(u32, preparation.area.y) + @as(u32, @intCast(index)) *
-                (toast.card_height + toast.card_gap)) * renderer.cell_height;
-            slot.placement = if (visible_width == 0) null else .{
-                .column = pixel_x / renderer.cell_width,
-                .row = pixel_y / renderer.cell_height,
-                .offset_x = pixel_x % renderer.cell_width,
-                .offset_y = pixel_y % renderer.cell_height,
-                .source_x = full_width - visible_width,
-                .source_y = 0,
-                .source_width = visible_width,
-                .source_height = slot.height,
-                .columns = 0,
-                .rows = 0,
-            };
-        }
-        renderer.retireInvisible();
-    }
-
-    /// True only after every visible texture and placement reached the host.
-    /// Until then the composition keeps the complete cell fallback visible.
-    pub fn coversAll(renderer: *const Renderer) bool {
-        if (!renderer.frame_usable or renderer.visible_count == 0) {
-            return false;
-        }
-        var count: u8 = 0;
-        for (&renderer.slots) |*slot| {
-            if (!slot.visible) {
-                continue;
-            }
-            count += 1;
-            if (!slot.image_emitted or slot.image_dirty) {
-                return false;
-            }
-            if (slot.placement != null and slot.emitted_placement == null) {
-                return false;
-            }
-        }
-        return count == renderer.visible_count;
-    }
-
-    /// The notification center may change before the lower-priority media
-    /// pass catches up. Never hide the cell fallback for a stale texture set.
-    pub fn covers(renderer: *const Renderer, center: *const notifications.Center) bool {
-        if (!renderer.coversAll() or renderer.visible_count != center.count) {
-            return false;
-        }
-        for (0..center.count) |index| {
-            const id = center.itemAt(index).?.id;
-            for (renderer.slots) |slot| {
-                if (slot.id == id and slot.visible and slot.image_emitted and
-                    !slot.image_dirty)
-                {
-                    break;
-                }
-            } else return false;
-        }
-        return true;
-    }
-
-    pub fn damaged(renderer: *const Renderer) bool {
-        if (renderer.render_deferred) {
-            return true;
-        }
-        if (renderer.transmissionPending()) {
-            return true;
-        }
-        const placements_enabled = renderer.allImagesReady();
-        for (&renderer.slots) |*slot| {
-            if (slot.transfer_offset != 0) {
-                return true;
-            }
-            if (!renderer.frame_usable and slot.image_emitted) {
-                return true;
-            }
-            const desired = if (placements_enabled and slot.visible) slot.placement else null;
-            if (!optionalPlacementEql(desired, slot.emitted_placement)) {
-                return true;
-            }
-            if (!slot.visible and slot.image_emitted) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    pub fn transmissionPending(renderer: *const Renderer) bool {
-        if (!renderer.frame_usable) {
-            return false;
-        }
-        for (&renderer.slots) |slot| if (slot.visible and slot.image_dirty) return true;
-        return false;
-    }
-
-    pub fn preparationDeferred(renderer: *const Renderer) bool {
-        return renderer.render_deferred;
-    }
-
-    pub fn transferInProgress(renderer: *const Renderer) bool {
-        for (renderer.slots) |slot| if (slot.transfer_offset != 0) return true;
-        return false;
-    }
-
-    /// True when the remaining toast work cannot emit anything until the
-    /// client has been idle long enough to rasterize a replacement texture.
-    pub fn waitingForMediaIdle(renderer: *const Renderer) bool {
-        if (!renderer.render_deferred) {
-            return false;
-        }
-        const placements_enabled = renderer.allImagesReady();
-        for (renderer.slots) |slot| {
-            if (slot.transfer_offset != 0) {
-                return false;
-            }
-            if ((!slot.visible or slot.image_dirty or !renderer.frame_usable) and
-                slot.image_emitted)
-            {
-                return false;
-            }
-            const desired = if (placements_enabled and slot.visible) slot.placement else null;
-            if (!optionalPlacementEql(desired, slot.emitted_placement)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /// Deletions and placements are always cheap enough to emit. A new image
-    /// is sent only when the pane-media writer used no budget in this pass.
-    pub fn write(renderer: *Renderer, writer: *std.Io.Writer, allow_transmission: bool) std.Io.Writer.Error!usize {
-        var written: usize = 0;
-        for (&renderer.slots, 0..) |*slot, index| {
-            const transfer_stale = slot.transfer_offset != 0 and
-                (!slot.visible or !renderer.frame_usable or slot.key == null or
-                    slot.transfer_key == null or
-                    !std.meta.eql(slot.transfer_key.?, slot.key.?));
-            if (transfer_stale) {
-                written += try kitty.writeTransmissionAbort(writer);
-                slot.transfer_offset = 0;
-                slot.transfer_key = null;
-            }
-            if ((!slot.visible or slot.image_dirty or !renderer.frame_usable) and
-                slot.image_emitted)
-            {
-                written += try kitty.writeDeleteImage(writer, imageId(index));
-                slot.image_emitted = false;
-                slot.emitted_placement = null;
-                if (renderer.render_deferred and slot.visible and slot.key != null) {
-                    slot.image_dirty = true;
-                }
-            }
-        }
-
-        if ((allow_transmission or renderer.transferInProgress()) and
-            renderer.frame_usable)
-        transmit: {
-            for (&renderer.slots, 0..) |*slot, index| {
-                if (!slot.visible or !slot.image_dirty or slot.key == null) {
-                    continue;
-                }
-                if (slot.transfer_offset == 0) {
-                    slot.transfer_key = slot.key;
-                }
-                const progress = try kitty.writeTransmissionChunks(writer, .{
-                    .external_id = imageId(index),
-                    .image = .{
-                        .key = .{ .image_id = imageId(index), .generation = 1 },
-                        .format = .rgba,
-                        .width = slot.width,
-                        .height = slot.height,
-                        .byte_len = slot.pixels.len,
-                    },
-                    .pixels = slot.pixels,
-                    .start_offset = slot.transfer_offset,
-                    .budget = kitty.transmission_budget_per_frame,
-                    .compressed = false,
-                });
-                written += progress.written;
-                slot.transfer_offset = progress.offset;
-                if (progress.offset == slot.pixels.len) {
-                    slot.transfer_offset = 0;
-                    slot.transfer_key = null;
-                    slot.image_dirty = false;
-                    slot.image_emitted = true;
-                }
-                break :transmit;
-            }
-        }
-
-        const placements_enabled = renderer.allImagesReady();
-        for (&renderer.slots, 0..) |*slot, index| {
-            const desired = if (placements_enabled and slot.visible) slot.placement else null;
-            if (optionalPlacementEql(desired, slot.emitted_placement)) {
-                continue;
-            }
-            if (slot.emitted_placement != null) {
-                written += try kitty.writeDeletePlacement(
-                    writer,
-                    imageId(index),
-                    placementId(index),
-                );
-            }
-            if (desired) |placement| {
-                written += try kitty.writePlacement(writer, .{
-                    .image_id = imageId(index),
-                    .placement_id = placementId(index),
-                    .value = placement,
-                    .z = toast_z_index,
-                });
-            }
-            slot.emitted_placement = desired;
-        }
-        return written;
-    }
-
-    fn slotFor(renderer: *Renderer, id: notifications.Id) ?*Slot {
-        for (&renderer.slots) |*slot| if (slot.id == id) return slot;
-        for (&renderer.slots) |*slot| {
-            if (slot.visible or slot.id != .invalid) {
-                continue;
-            }
-            slot.id = id;
-            return slot;
-        }
-        for (&renderer.slots) |*slot| {
-            if (slot.visible) {
-                continue;
-            }
-            slot.id = id;
-            slot.key = null;
-            slot.failed_key = null;
-            slot.placement = null;
-            slot.image_dirty = false;
-            return slot;
-        }
-        return null;
-    }
-
-    fn retireInvisible(renderer: *Renderer) void {
-        for (&renderer.slots) |*slot| {
-            if (slot.visible) {
-                continue;
-            }
-            slot.id = .invalid;
-            slot.key = null;
-            slot.failed_key = null;
-            slot.placement = null;
-            slot.image_dirty = false;
-        }
-    }
-
-    fn renderSlot(renderer: *Renderer, rendering: SlotRender) !void {
-        const slot = rendering.slot;
-        const item = rendering.item;
-        const key = rendering.key;
-
-        const width = std.math.mul(u32, key.card_columns, renderer.cell_width) catch
-            return error.ToastTooLarge;
-        const height = std.math.mul(u32, toast.card_height, renderer.cell_height) catch
-            return error.ToastTooLarge;
-        const pixel_count = std.math.mul(usize, width, height) catch
-            return error.ToastTooLarge;
-        const byte_count = std.math.mul(usize, pixel_count, 4) catch
-            return error.ToastTooLarge;
-        if (byte_count > max_image_bytes) {
-            return error.ToastTooLarge;
-        }
-        if (slot.pixels.len != byte_count) {
-            if (slot.pixels.len == 0) {
-                slot.pixels = try renderer.gpa.alloc(u8, byte_count);
-            } else {
-                slot.pixels = try renderer.gpa.realloc(slot.pixels, byte_count);
-            }
-        }
-        slot.width = width;
-        slot.height = height;
-        const surface: raster.Surface = .{
-            .pixels = slot.pixels,
-            .width = width,
-            .height = height,
-        };
-        fill(surface, .{ key.background[0], key.background[1], key.background[2], 255 });
-        const accent = rasterColor(key.accent);
-        const border = @min(
-            @max(@as(u32, 1), renderer.cell_width / 8),
-            @max(@as(u32, 1), @min(width, height) / 2),
-        );
-        fillRect(surface, .{ .x = 0, .y = 0, .width = width, .height = border }, accent);
-        fillRect(surface, .{ .x = 0, .y = height - border, .width = width, .height = border }, accent);
-        fillRect(surface, .{ .x = 0, .y = 0, .width = border, .height = height }, accent);
-        fillRect(surface, .{ .x = width - border, .y = 0, .width = border, .height = height }, accent);
-        fillRect(surface, .{
-            .x = border,
-            .y = border,
-            .width = @max(border, renderer.cell_width / 3),
-            .height = height - border * 2,
-        }, accent);
-
-        const font_height: u16 = @intCast(std.math.clamp(
-            @as(u32, renderer.cell_height) * 3 / 4,
-            6,
-            64,
-        ));
-        const text = &renderer.text.?;
-        try text.setPixelHeight(font_height);
-        const metrics = text.metrics();
-        const left = @as(i32, renderer.cell_width) * 2;
-        const right_padding = @as(u32, renderer.cell_width) * 4;
-        const max_text_width = width -| @as(u32, @intCast(left)) -| right_padding;
-        _ = try text.drawText(.{
-            .surface = surface,
-            .origin = .{ .x = left, .y = baseline(metrics, 0, renderer.cell_height) },
-            .text = item.title(),
-            .color = accent,
-            .max_width = max_text_width,
-        });
-        _ = try text.drawText(.{
-            .surface = surface,
-            .origin = .{ .x = left, .y = baseline(metrics, renderer.cell_height, renderer.cell_height) },
-            .text = item.message(),
-            .color = rasterColor(key.text),
-            .max_width = width -| @as(u32, @intCast(left)) -| @as(u32, renderer.cell_width) * 2,
-        });
-        const hint = if (item.clickable()) "click to open" else "click to dismiss";
-        _ = try text.drawText(.{
-            .surface = surface,
-            .origin = .{ .x = left, .y = baseline(metrics, @as(u32, renderer.cell_height) * 2, renderer.cell_height) },
-            .text = hint,
-            .color = rasterColor(key.subtext),
-            .max_width = width -| @as(u32, @intCast(left)) -| @as(u32, renderer.cell_width) * 2,
-        });
-        const close_x: i32 = @intCast(width -| @as(u32, renderer.cell_width) * 3);
-        if (key.icon_theme == .nerd_font) {
-            const icons = &renderer.icons.?;
-            try icons.setPixelHeight(font_height);
-            _ = try icons.drawText(.{
-                .surface = surface,
-                .origin = .{ .x = close_x, .y = baseline(icons.metrics(), 0, renderer.cell_height) },
-                .text = ui_icons.Icon.close.nerdGlyph(),
-                .color = accent,
-                .max_width = @as(u32, renderer.cell_width) * 2,
-            });
-        } else {
-            _ = try text.drawText(.{
-                .surface = surface,
-                .origin = .{ .x = close_x, .y = baseline(metrics, 0, renderer.cell_height) },
-                .text = ui_icons.Icon.close.unicodeGlyph(),
-                .color = accent,
-                .max_width = @as(u32, renderer.cell_width) * 2,
-            });
-        }
-        slot.key = key;
-        slot.failed_key = null;
-        slot.image_dirty = true;
-    }
-
-    fn allImagesReady(renderer: *const Renderer) bool {
-        if (!renderer.frame_usable or renderer.visible_count == 0) {
-            return false;
-        }
-        var count: u8 = 0;
-        for (&renderer.slots) |slot| {
-            if (!slot.visible) {
-                continue;
-            }
-            count += 1;
-            if (slot.key == null or slot.image_dirty or !slot.image_emitted) {
-                return false;
-            }
-        }
-        return count == renderer.visible_count;
-    }
-};
-
-const Colors = struct {
-    surface0: [3]u8,
-    text: [3]u8,
-    subtext: [3]u8,
-    blue: [3]u8,
-    green: [3]u8,
-    yellow: [3]u8,
-    red: [3]u8,
-
-    fn level(colors: Colors, value: notifications.Level) [3]u8 {
-        return switch (value) {
-            .info => colors.blue,
-            .success => colors.green,
-            .warning => colors.yellow,
-            .failure => colors.red,
-        };
-    }
-};
-
-fn resolveColors(palette: *const theme.Palette) ?Colors {
+pub fn resolveColors(palette: *const PaletteType) ?Colors {
     return .{
         .surface0 = rgb(palette.surface0) orelse return null,
         .text = rgb(palette.text) orelse return null,
@@ -626,30 +41,30 @@ fn resolveColors(palette: *const theme.Palette) ?Colors {
     };
 }
 
-fn rgb(color: ui.Color) ?[3]u8 {
+fn rgb(color: ColorType) ?[3]u8 {
     return switch (color) {
         .rgb => |value| value,
         else => null,
     };
 }
 
-fn rasterColor(value: [3]u8) raster.Color {
+pub fn rasterColor(value: [3]u8) GraphicsColor {
     return .{ .red = value[0], .green = value[1], .blue = value[2] };
 }
 
-fn baseline(metrics: raster.Metrics, row_y: u32, row_height: u16) i32 {
+pub fn baseline(metrics: MetricsType, row_y: u32, row_height: u16) i32 {
     const spare = @as(i32, row_height) - @as(i32, @intCast(metrics.line_height));
     const centered_y: i32 = @intCast(row_y + @as(u32, @intCast(@max(0, @divTrunc(spare, 2)))));
     return centered_y + metrics.ascender;
 }
 
-fn fill(surface: raster.Surface, color: [4]u8) void {
+pub fn fill(surface: SurfaceType, color: [4]u8) void {
     var index: usize = 0;
     while (index < surface.pixels.len) : (index += 4)
         @memcpy(surface.pixels[index..][0..4], &color);
 }
 
-fn fillRect(surface: raster.Surface, rectangle: PixelRectangle, color: raster.Color) void {
+pub fn fillRect(surface: SurfaceType, rectangle: PixelRectangle, color: GraphicsColor) void {
     const right = @min(surface.width, rectangle.x +| rectangle.width);
     const bottom = @min(surface.height, rectangle.y +| rectangle.height);
     var row = rectangle.y;
@@ -662,15 +77,15 @@ fn fillRect(surface: raster.Surface, rectangle: PixelRectangle, color: raster.Co
     }
 }
 
-fn imageId(index: usize) u32 {
+pub fn imageId(index: usize) u32 {
     return first_image_id + @as(u32, @intCast(index));
 }
 
-fn placementId(index: usize) u32 {
+pub fn placementId(index: usize) u32 {
     return first_placement_id + @as(u32, @intCast(index));
 }
 
-fn optionalPlacementEql(a: ?kitty.OutputPlacement, b: ?kitty.OutputPlacement) bool {
+pub fn optionalPlacementEql(a: ?OutputPlacementType, b: ?OutputPlacementType) bool {
     if (a == null or b == null) {
         return a == null and b == null;
     }
@@ -678,10 +93,10 @@ fn optionalPlacementEql(a: ?kitty.OutputPlacement, b: ?kitty.OutputPlacement) bo
 }
 
 test "terminal-derived palettes keep the cell fallback" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = ToastRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var center: notifications.Center = .{};
+    var center: CenterType = .{};
     _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
     renderer.prepare(.{
         .area = .{ .w = 48, .h = 4 },
@@ -693,14 +108,14 @@ test "terminal-derived palettes keep the cell fallback" {
 }
 
 test "Nerd Font theme rasterizes the close icon into graphical toasts" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = ToastRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     try std.testing.expect(renderer.icons != null);
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     renderer.setMediaIdle(true);
-    var center: notifications.Center = .{};
+    var center: CenterType = .{};
     _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
-    _ = center.advance(notifications.transition_duration_ns);
+    _ = center.advance(transition_duration_ns_module);
     renderer.prepare(.{
         .area = .{ .w = 48, .h = 4 },
         .center = &center,
@@ -708,7 +123,7 @@ test "Nerd Font theme rasterizes the close icon into graphical toasts" {
         .icon_theme = .nerd_font,
     });
     try std.testing.expect(renderer.frame_usable);
-    try std.testing.expectEqual(ui_icons.Theme.nerd_font, renderer.slots[0].key.?.icon_theme);
+    try std.testing.expectEqual(ThemeType.nerd_font, renderer.slots[0].key.?.icon_theme);
 }
 
 test "toast pixel cache is bounded independently of wire pacing" {
@@ -717,21 +132,21 @@ test "toast pixel cache is bounded independently of wire pacing" {
 
 test "large toast transmission is chunked across bounded media passes" {
     const Io = std.Io;
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = ToastRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     // These are the cell dimensions from the instrumented Ghostty session:
     // one 48x4-cell toast is 1,056x232 pixels, or 979,968 retained RGBA bytes.
     _ = renderer.configure(.{ .support = .supported, .cell_width = 22, .cell_height = 58 });
     renderer.setMediaIdle(true);
-    var center: notifications.Center = .{};
+    var center: CenterType = .{};
     const id = center.push(0, .{
         .level = .success,
         .title = "Build complete",
         .message = "Open the result",
         .target = .{ .select_tab = @enumFromInt(7) },
     });
-    _ = center.advance(notifications.transition_duration_ns);
-    const area: ui.Rect = .{ .x = 20, .y = 1, .w = 48, .h = 4 };
+    _ = center.advance(transition_duration_ns_module);
+    const area: RectType = .{ .x = 20, .y = 1, .w = 48, .h = 4 };
     renderer.prepare(.{ .area = area, .center = &center, .palette = &theme.default_theme.palette });
     try std.testing.expect(renderer.transmissionPending());
     try std.testing.expect(!renderer.coversAll());
@@ -740,7 +155,7 @@ test "large toast transmission is chunked across bounded media passes" {
     defer first.deinit();
     _ = try renderer.write(&first.writer, true);
     try std.testing.expect(std.mem.indexOf(u8, first.written(), "a=t") != null);
-    try std.testing.expect(first.written().len <= kitty.transmission_budget_per_frame + 8192);
+    try std.testing.expect(first.written().len <= kitty_codec.transmission_budget_per_frame + 8192);
     try std.testing.expect(renderer.transmissionPending());
     var placed = std.mem.indexOf(u8, first.written(), "a=p") != null;
     var passes: usize = 1;
@@ -751,15 +166,15 @@ test "large toast transmission is chunked across bounded media passes" {
         // Once the first m=1 chunk is on the wire, the transfer must close
         // even if fresh host input disables starting another texture.
         _ = try renderer.write(&chunk.writer, false);
-        try std.testing.expect(chunk.written().len <= kitty.transmission_budget_per_frame + 8192);
+        try std.testing.expect(chunk.written().len <= kitty_codec.transmission_budget_per_frame + 8192);
         placed = placed or std.mem.indexOf(u8, chunk.written(), "a=p") != null;
     }
     try std.testing.expect(passes > 1);
     try std.testing.expect(renderer.coversAll());
     try std.testing.expect(placed);
 
-    _ = center.dismiss(id, notifications.transition_duration_ns);
-    _ = center.advance(notifications.transition_duration_ns + notifications.transition_duration_ns / 2);
+    _ = center.dismiss(id, transition_duration_ns_module);
+    _ = center.advance(transition_duration_ns_module + transition_duration_ns_module / 2);
     renderer.prepare(.{ .area = area, .center = &center, .palette = &theme.default_theme.palette });
     var moving: Io.Writer.Allocating = .init(std.testing.allocator);
     defer moving.deinit();
@@ -767,7 +182,7 @@ test "large toast transmission is chunked across bounded media passes" {
     try std.testing.expect(std.mem.indexOf(u8, moving.written(), "a=t") == null);
     try std.testing.expect(std.mem.indexOf(u8, moving.written(), "a=p") != null);
 
-    _ = center.advance(notifications.transition_duration_ns * 2);
+    _ = center.advance(transition_duration_ns_module * 2);
     renderer.prepare(.{ .area = area, .center = &center, .palette = &theme.default_theme.palette });
     var removed: Io.Writer.Allocating = .init(std.testing.allocator);
     defer removed.deinit();
@@ -776,13 +191,13 @@ test "large toast transmission is chunked across bounded media passes" {
 }
 
 test "rasterization waits for media idle and oversized cells fall back" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = ToastRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var center: notifications.Center = .{};
+    var center: CenterType = .{};
     _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
-    _ = center.advance(notifications.transition_duration_ns);
-    const area: ui.Rect = .{ .w = 48, .h = 4 };
+    _ = center.advance(transition_duration_ns_module);
+    const area: RectType = .{ .w = 48, .h = 4 };
 
     renderer.setMediaIdle(false);
     renderer.prepare(.{ .area = area, .center = &center, .palette = &theme.default_theme.palette });

@@ -1,14 +1,14 @@
 //! Vertical and application tests for cell snapshot recovery.
 
+const GenericRequestSnapshotController = @import("../entrypoints/requests/GenericRequestSnapshotController.zig").Type;
+const RequestCellSnapshotHandlerType = @import("../application/commands/RequestCellSnapshotHandler.zig");
+const PaneFixture = @import("PaneFixture.zig");
 const std = @import("std");
-const core = @import("telar-core");
 const request_snapshot_commands = @import("../application/commands/request_snapshot.zig");
-const request_snapshot_controller = @import("../entrypoints/requests/request_snapshot.zig");
-const test_support = @import("support.zig");
+const pane_module = @import("telar-core").pane;
+const decodeServer_module = @import("telar-core").decodeServer;
 
-const schema = core.schema;
-const PaneFixture = test_support.PaneFixture;
-const SnapshotController = request_snapshot_controller.Controller(*request_snapshot_commands.RequestCellSnapshotHandler);
+const SnapshotController = GenericRequestSnapshotController(*RequestCellSnapshotHandlerType);
 
 test "RequestCellSnapshotHandler marks an attached pane and coalesces repeats" {
     var fixture: PaneFixture = .{};
@@ -17,7 +17,7 @@ test "RequestCellSnapshotHandler marks an attached pane and coalesces repeats" {
 
     const attachment = fixture.attachments.find(fixture.pane.id).?;
     attachment.cells.snapshot_pending = false;
-    var handler: request_snapshot_commands.RequestCellSnapshotHandler = .{
+    var handler: RequestCellSnapshotHandlerType = .{
         .attachments = &fixture.attachments,
     };
 
@@ -40,11 +40,11 @@ test "RequestCellSnapshotHandler leaves an existing attachment unchanged for ano
 
     const attachment = fixture.attachments.find(fixture.pane.id).?;
     attachment.cells.snapshot_pending = false;
-    var handler: request_snapshot_commands.RequestCellSnapshotHandler = .{
+    var handler: RequestCellSnapshotHandlerType = .{
         .attachments = &fixture.attachments,
     };
 
-    const result = try handler.execute(.{ .pane_id = try schema.id.pane(99) });
+    const result = try handler.execute(.{ .pane_id = try pane_module(99) });
 
     try std.testing.expectEqual(request_snapshot_commands.RequestCellSnapshotResult.pane_not_attached, result);
     try std.testing.expect(!attachment.cells.snapshot_pending);
@@ -57,7 +57,7 @@ test "snapshot recovery crosses controller and handler without stale accounting"
 
     const attachment = fixture.attachments.find(fixture.pane.id).?;
     attachment.cells.snapshot_pending = false;
-    var handler: request_snapshot_commands.RequestCellSnapshotHandler = .{
+    var handler: RequestCellSnapshotHandlerType = .{
         .attachments = &fixture.attachments,
     };
     var controller = SnapshotController.init(&fixture.metrics, &handler);
@@ -83,7 +83,7 @@ test "repeated recovery requests replace one outstanding frame with one full sna
         .buffer = &buffer,
         .metrics = &fixture.metrics,
     })).?;
-    const initial_message = try schema.decodeServer(initial.bytes);
+    const initial_message = try decodeServer_module(initial.bytes);
     const initial_frame = switch (initial_message) {
         .pane_frame => |frame| frame,
         else => return error.ExpectedPaneFrame,
@@ -91,7 +91,7 @@ test "repeated recovery requests replace one outstanding frame with one full sna
     const initial_frame_id = initial_frame.frame_id;
     try std.testing.expectEqual(@as(u64, 0), initial_frame.base_frame_id);
 
-    var handler: request_snapshot_commands.RequestCellSnapshotHandler = .{
+    var handler: RequestCellSnapshotHandlerType = .{
         .attachments = &fixture.attachments,
     };
     var controller = SnapshotController.init(&fixture.metrics, &handler);
@@ -109,7 +109,7 @@ test "repeated recovery requests replace one outstanding frame with one full sna
         .buffer = &buffer,
         .metrics = &fixture.metrics,
     })).?;
-    const recovered_message = try schema.decodeServer(recovered.bytes);
+    const recovered_message = try decodeServer_module(recovered.bytes);
     const recovered_frame = switch (recovered_message) {
         .pane_frame => |frame| frame,
         else => return error.ExpectedPaneFrame,

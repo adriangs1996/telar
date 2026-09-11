@@ -64,7 +64,7 @@ frontend never import each other. `src/main.zig` selects a CLI entrypoint.
 | `telar-client` | disposable model, handlers, input policy, resource retention and presentation contracts |
 | `telar-frontend` | TUI assembly, host terminal, decoder, compositor, diff, pacing and Kitty delivery |
 
-Each package exposes `src/{core,backend,client,frontend}/root.zig`. Put a type in
+Each package has an explicit module entrypoint in `build.zig`. Put a type in
 core only when both processes need it. Each connection owns independent client
 state. A future native adapter reuses client behavior, not another connection's
 focus or navigation.
@@ -137,6 +137,12 @@ Watch out for memory problems. Take inspiration from Rust for keeping track of m
 - client means the TUI that connects to a telar's server.
 
 ## Code Style
+
+Before adding, splitting, moving or importing Zig types, apply
+[`docs/zig-source-layout.md`](docs/zig-source-layout.md): concrete structs are
+implicit PascalCase files; generic families are `GenericName.zig` with one public
+`Type` constructor, imported directly as `GenericName`; function/enum/union
+namespaces use snake_case. Explicit packed/extern layouts are the exceptions.
 
 - Do not end function's signature's parameter list with a ",".
 - Always write the function's signature on a single line.

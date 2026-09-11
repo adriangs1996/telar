@@ -6,9 +6,9 @@
 //! Records are JSON objects with a `type`; command replies carry
 //! `type = "response"`, the echoed `command` and a `success` flag.
 
+const RecordType = @import("Record.zig");
 const std = @import("std");
-
-const Io = std.Io;
+const Envelope = @import("Envelope.zig");
 
 /// Longest record the engine parses. Longer records are discarded whole; a
 /// discarded reply surfaces as `invalid_output` rather than a timeout.
@@ -22,38 +22,7 @@ pub const Kind = enum {
     other,
 };
 
-const Envelope = struct {
-    type: []const u8 = "",
-    command: []const u8 = "",
-    success: ?bool = null,
-    data: ?Data = null,
-
-    const Data = struct {
-        text: ?[]const u8 = null,
-    };
-};
-
-/// One parsed record. `text` borrows the parse arena, so copy it before
-/// `deinit`.
-pub const Record = struct {
-    parsed: std.json.Parsed(Envelope),
-    kind: Kind,
-
-    /// The assistant text of a `get_last_assistant_text` reply, or null when
-    /// the session holds no assistant message.
-    ///
-    /// ```zig
-    /// const text = record.text() orelse return;
-    /// ```
-    pub fn text(record: *const Record) ?[]const u8 {
-        const data = record.parsed.value.data orelse return null;
-        return data.text;
-    }
-
-    pub fn deinit(record: *Record) void {
-        record.parsed.deinit();
-    }
-};
+pub const Record = @import("Record.zig");
 
 /// Parses one record. Malformed JSON, arrays and records above the line
 /// bound return null so a noisy stream never stalls the engine.
@@ -62,7 +31,7 @@ pub const Record = struct {
 /// var record = parse(gpa, line) orelse continue;
 /// defer record.deinit();
 /// ```
-pub fn parse(gpa: std.mem.Allocator, line: []const u8) ?Record {
+pub fn parse(gpa: std.mem.Allocator, line: []const u8) ?RecordType {
     if (line.len == 0 or line.len > max_line_bytes) {
         return null;
     }
@@ -118,95 +87,7 @@ pub fn encodeCommand(buffer: []u8, command: []const u8) ![]const u8 {
     return writer.buffered();
 }
 
-/// One LF-framed record stream over a child's stdout. Unparseable lines are
-/// skipped and lines above `max_line_bytes` are discarded whole, so a noisy
-/// or hostile child never stalls the reader or grows its buffer. The stream
-/// must live at a stable address from `init` to `deinit`.
-pub const Stream = struct {
-    streams: Io.File.MultiReader.Buffer(1) = undefined,
-    reader: Io.File.MultiReader = undefined,
-    discarding: bool = false,
-
-    pub const Next = union(enum) {
-        record: Record,
-        /// A record above the line bound was dropped whole.
-        discarded,
-        /// The child closed its output.
-        closed,
-    };
-
-    pub const Error = error{ Timeout, ReadFailed };
-
-    pub const InitOptions = struct {
-        allocator: std.mem.Allocator,
-        io: Io,
-        stdout: Io.File,
-    };
-
-    /// Follows `stdout` until `deinit`.
-    ///
-    /// ```zig
-    /// session.stream.init(.{ .allocator = gpa, .io = io, .stdout = child.stdout.? });
-    /// defer session.stream.deinit();
-    /// ```
-    pub fn init(stream: *Stream, options: InitOptions) void {
-        stream.discarding = false;
-        stream.reader.init(options.allocator, options.io, stream.streams.toStreams(), &.{options.stdout});
-    }
-
-    pub fn deinit(stream: *Stream) void {
-        stream.reader.deinit();
-    }
-
-    /// Yields the next parseable record. Waits at most until `timeout`.
-    ///
-    /// ```zig
-    /// var step = try stream.next(gpa, timeout);
-    /// switch (step) {
-    ///     .record => |*record| defer record.deinit(),
-    ///     .discarded, .closed => {},
-    /// }
-    /// ```
-    pub fn next(stream: *Stream, gpa: std.mem.Allocator, timeout: Io.Timeout) Error!Next {
-        const reader = stream.reader.reader(0);
-
-        while (true) {
-            const buffered = reader.buffered();
-            if (std.mem.indexOfScalar(u8, buffered, '\n')) |newline| {
-                var line = buffered[0..newline];
-                if (line.len != 0 and line[line.len - 1] == '\r') {
-                    line = line[0 .. line.len - 1];
-                }
-
-                const was_discarding = stream.discarding;
-                stream.discarding = false;
-                if (was_discarding) {
-                    reader.toss(newline + 1);
-                    return .discarded;
-                }
-
-                const record = parse(gpa, line);
-                reader.toss(newline + 1);
-                if (record) |value| {
-                    return .{ .record = value };
-                }
-
-                continue;
-            }
-
-            if (buffered.len > max_line_bytes) {
-                reader.toss(buffered.len);
-                stream.discarding = true;
-            }
-
-            stream.reader.fill(1, timeout) catch |err| switch (err) {
-                error.EndOfStream => return .closed,
-                error.Timeout => return error.Timeout,
-                else => return error.ReadFailed,
-            };
-        }
-    }
-};
+pub const Stream = @import("Stream.zig");
 
 test "prompt encoding escapes the message and ends the record with LF" {
     var buffer: [256]u8 = undefined;

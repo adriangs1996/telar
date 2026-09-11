@@ -1,40 +1,24 @@
 //! Vertical contract tests for the runtime tab rename flow.
 
+const StateType = @import("../../workspace/State.zig");
+const RepositoryType = @import("../../workspace/Repository.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const rename_tab_commands = @import("../application/commands/rename_tab.zig");
-const rename_tab_controller = @import("../entrypoints/requests/rename_tab.zig");
-const delivery_mod = @import("../delivery/root.zig");
-const workspace_mod = @import("../../workspace/root.zig");
-
-const schema = core.schema;
-
-const EventCapture = struct {
-    count: usize = 0,
-    last: ?workspace_mod.TabRenamed = null,
-
-    fn publisher(capture: *EventCapture) rename_tab_commands.EventPublisher {
-        return .{ .context = capture, .publish = publish };
-    }
-
-    fn publish(context: *anyopaque, event: workspace_mod.TabRenamed) void {
-        const capture: *EventCapture = @ptrCast(@alignCast(context));
-        capture.count += 1;
-        capture.last = event;
-    }
-};
+const RenameTabTestEventCapture = @import("RenameTabTestEventCapture.zig");
+const RenameTabHandlerType = @import("../application/commands/RenameTabHandler.zig");
+const ResponseQueueType = @import("../delivery/ResponseQueue.zig");
+const RenameTabController = @import("../entrypoints/requests/RenameTabController.zig");
 
 test "a committed rename survives response queue backpressure" {
-    var state: workspace_mod.State = .{};
-    var workspaces = workspace_mod.Repository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location;
-    var events: EventCapture = .{};
-    var handler: rename_tab_commands.RenameTabHandler = .{
+    var events: RenameTabTestEventCapture = .{};
+    var handler: RenameTabHandlerType = .{
         .workspaces = &workspaces,
         .events = events.publisher(),
     };
-    var responses: delivery_mod.ResponseQueue = .{};
+    var responses: ResponseQueueType = .{};
 
     while (responses.len < responses.items.len) {
         try responses.push(.{ .tab_moved = .{
@@ -44,7 +28,7 @@ test "a committed rename survives response queue backpressure" {
         } });
     }
 
-    var controller = rename_tab_controller.Controller.init(&responses, handler.executor());
+    var controller = RenameTabController.init(&responses, handler.executor());
     try std.testing.expectError(error.ResponseQueueFull, controller.renameTab(.{
         .request_id = @enumFromInt(31),
         .location = location,

@@ -1,143 +1,33 @@
 //! Owns configured bar ticks, bounded Lua evaluation and command workers.
 
 const std = @import("std");
-const bars = @import("../../../bars/root.zig");
-const lua_config = @import("../../../config/root.zig");
-const platform = @import("../../../platform/root.zig");
-const configuration_application = @import("telar-client").application.configuration;
-const client_clock = @import("telar-client").resources.clock;
-const deadline_timer = @import("telar-client").resources.deadline_timer;
+const PositionType = @import("telar-client").Position;
+const Client = @import("../../Client.zig");
+const monotonic_module = @import("telar-client").monotonic;
+const BarUpdatesCompletion = @import("BarUpdatesCompletion.zig");
+const CallbackRequest = @import("CallbackRequest.zig");
+const ApplicationConfigurationBarUpdateOutcome = @import("telar-client").ApplicationConfigurationBarUpdateOutcome;
+const DiagnosticType = @import("telar-client").Diagnostic;
+const CommandOutput = @import("CommandOutput.zig");
+const ContentType = @import("telar-client").Content;
+const Failure = @import("Failure.zig");
+const BarUpdateCommand = @import("telar-client").BarUpdateCommand;
+const ApplyBarUpdateHandlerType = @import("telar-client").ApplyBarUpdateHandler;
+const BarCallbackContextType = @import("../../../config/BarCallbackContext.zig");
+const platform = @import("../../../platform/platform.zig");
+const BarMetricsType = @import("../../../config/BarMetrics.zig");
+const ConfigurationType = @import("telar-client").Configuration;
+const BarUpdatesJob = @import("BarUpdatesJob.zig");
+const command_module = @import("../../../bars/command.zig");
+const wait_module = @import("telar-client").wait;
+const State = @import("State.zig");
 
-const Client = @import("../../client.zig");
-const apply_bar_update = configuration_application.bar_update;
-const no_deadline: u64 = std.math.maxInt(u64);
-const position_count = @typeInfo(bars.Position).@"enum".fields.len;
+pub const no_deadline: u64 = std.math.maxInt(u64);
+pub const position_count = @typeInfo(PositionType).@"enum".fields.len;
 
 pub const CommandExecutionId = enum(u64) {
     none = 0,
     _,
-};
-
-pub const Completion = struct {
-    execution_id: CommandExecutionId,
-    result: anyerror!bars.command.Output,
-};
-
-const CommandExecution = struct {
-    id: CommandExecutionId,
-    generation: u64,
-    position: bars.Position,
-};
-
-const Job = struct {
-    execution_id: CommandExecutionId,
-    command: bars.Command,
-};
-
-const Synchronization = struct {
-    generation: u64,
-    configuration: ?*const bars.Configuration,
-    now_ns: u64,
-};
-
-const DueInput = struct {
-    generation: u64,
-    configuration: *const bars.Configuration,
-    now_ns: u64,
-};
-
-const Due = struct {
-    dynamic_mask: u8 = 0,
-    command_mask: u8 = 0,
-};
-
-pub const State = struct {
-    scheduler: deadline_timer.Scheduler = .{},
-    generation: u64 = 0,
-    deadlines: [position_count]u64 = @splat(no_deadline),
-    pending_callbacks: u8 = 0,
-    pending_commands: u8 = 0,
-    command_execution: ?CommandExecution = null,
-    next_command_execution_id: u64 = 1,
-
-    fn synchronize(state: *State, input: Synchronization) void {
-        state.generation = input.generation;
-        state.deadlines = @splat(no_deadline);
-        state.pending_callbacks = 0;
-        state.pending_commands = 0;
-        const configuration = input.configuration orelse return;
-
-        for (std.enums.values(bars.Position)) |position| {
-            if (configuration.source(position).interval() != null) {
-                state.deadlines[@intFromEnum(position)] = input.now_ns;
-            }
-        }
-    }
-
-    fn takeDue(state: *State, input: DueInput) Due {
-        if (state.generation != input.generation) {
-            return .{};
-        }
-
-        var due: Due = .{};
-        for (std.enums.values(bars.Position)) |position| {
-            const index = @intFromEnum(position);
-            const deadline_ns = state.deadlines[index];
-            if (deadline_ns == no_deadline or deadline_ns > input.now_ns) {
-                continue;
-            }
-
-            const source = input.configuration.source(position);
-            const interval_ns = source.interval() orelse {
-                state.deadlines[index] = no_deadline;
-                continue;
-            };
-            state.deadlines[index] = followingDeadline(deadline_ns, interval_ns, input.now_ns);
-            switch (source.*) {
-                .dynamic => due.dynamic_mask |= position.bit(),
-                .command => due.command_mask |= position.bit(),
-                else => state.deadlines[index] = no_deadline,
-            }
-        }
-
-        return due;
-    }
-
-    fn nextDeadline(state: *const State) ?u64 {
-        var next: u64 = no_deadline;
-        for (state.deadlines) |deadline_ns| {
-            next = @min(next, deadline_ns);
-        }
-
-        return if (next == no_deadline) null else next;
-    }
-
-    fn reserveCommand(state: *State, generation: u64, position: bars.Position) !CommandExecution {
-        std.debug.assert(state.command_execution == null);
-        if (state.next_command_execution_id == 0) {
-            return error.BarCommandExecutionIdExhausted;
-        }
-
-        const execution: CommandExecution = .{
-            .id = @enumFromInt(state.next_command_execution_id),
-            .generation = generation,
-            .position = position,
-        };
-        state.next_command_execution_id +%= 1;
-        state.command_execution = execution;
-
-        return execution;
-    }
-
-    fn finishCommand(state: *State, execution_id: CommandExecutionId) ?CommandExecution {
-        const execution = state.command_execution orelse return null;
-        if (execution.id != execution_id) {
-            return null;
-        }
-
-        state.command_execution = null;
-        return execution;
-    }
 };
 
 /// Replaces all deadlines from the active typed configuration generation.
@@ -151,7 +41,7 @@ pub fn synchronize(client: *Client) !void {
     client.bar_updates.synchronize(.{
         .generation = if (generation) |value| value.number else client.model.configurationGeneration(),
         .configuration = configuration,
-        .now_ns = client_clock.monotonic(client.io),
+        .now_ns = monotonic_module(client.io),
     });
 
     try rearm(client);
@@ -175,7 +65,7 @@ pub fn handleTick(client: *Client, result: anyerror!void) !void {
     const due = client.bar_updates.takeDue(.{
         .generation = generation.number,
         .configuration = configuration,
-        .now_ns = client_clock.monotonic(client.io),
+        .now_ns = monotonic_module(client.io),
     });
 
     client.bar_updates.pending_callbacks |= due.dynamic_mask;
@@ -190,7 +80,7 @@ pub fn handleTick(client: *Client, result: anyerror!void) !void {
 /// ```zig
 /// try completeCommand(client, completion);
 /// ```
-pub fn completeCommand(client: *Client, completion: Completion) !void {
+pub fn completeCommand(client: *Client, completion: BarUpdatesCompletion) !void {
     const execution = client.bar_updates.finishCommand(completion.execution_id) orelse return;
     const generation = client.lua_generation;
     const configuration = activeConfiguration(client);
@@ -217,15 +107,9 @@ pub fn completeCommand(client: *Client, completion: Completion) !void {
     try startNextCommand(client);
 }
 
-const CallbackRequest = struct {
-    position: bars.Position,
-    reference: bars.CallbackRef,
-    output: ?[]const u8 = null,
-};
-
-fn invokeCallback(client: *Client, request: CallbackRequest) !apply_bar_update.Outcome {
+fn invokeCallback(client: *Client, request: CallbackRequest) !ApplicationConfigurationBarUpdateOutcome {
     const generation = client.lua_generation orelse return .stale;
-    var diagnostic: lua_config.Diagnostic = .{};
+    var diagnostic: DiagnosticType = .{};
     const content = generation.invokeBar(.{
         .reference = request.reference,
         .context = callbackContext(client, request.output),
@@ -248,12 +132,6 @@ fn invokeCallback(client: *Client, request: CallbackRequest) !apply_bar_update.O
     });
 }
 
-const CommandOutput = struct {
-    execution: CommandExecution,
-    command: bars.Command,
-    output: bars.command.Output,
-};
-
 fn applyCommandOutput(client: *Client, completed: CommandOutput) !void {
     if (completed.command.render) |reference| {
         _ = try invokeCallback(client, .{
@@ -264,7 +142,7 @@ fn applyCommandOutput(client: *Client, completed: CommandOutput) !void {
         return;
     }
 
-    var content: bars.Content = .{};
+    var content: ContentType = .{};
     if (completed.output.len != 0) {
         try content.append(.{ .text = completed.output.slice() });
     }
@@ -275,15 +153,8 @@ fn applyCommandOutput(client: *Client, completed: CommandOutput) !void {
     });
 }
 
-const Failure = struct {
-    generation: u64,
-    position: bars.Position,
-    reason: anyerror,
-    kind: []const u8,
-};
-
-fn publishFailure(client: *Client, failure: Failure) !apply_bar_update.Outcome {
-    var diagnostic: lua_config.Diagnostic = .{};
+fn publishFailure(client: *Client, failure: Failure) !ApplicationConfigurationBarUpdateOutcome {
+    var diagnostic: DiagnosticType = .{};
     diagnostic.set(
         "bar {s} at {s} failed: {s}",
         .{ failure.kind, @tagName(failure.position), @errorName(failure.reason) },
@@ -299,15 +170,15 @@ fn publishFailure(client: *Client, failure: Failure) !apply_bar_update.Outcome {
     });
 }
 
-fn publishEvaluation(client: *Client, command: apply_bar_update.Command) !apply_bar_update.Outcome {
-    var handler: apply_bar_update.ApplyBarUpdateHandler = .{ .model = &client.model };
+fn publishEvaluation(client: *Client, command: BarUpdateCommand) !ApplicationConfigurationBarUpdateOutcome {
+    var handler: ApplyBarUpdateHandlerType = .{ .model = &client.model };
 
     return handler.execute(command);
 }
 
-fn callbackContext(client: *const Client, output: ?[]const u8) lua_config.BarCallbackContext {
+fn callbackContext(client: *const Client, output: ?[]const u8) BarCallbackContextType {
     const local = platform.localTime();
-    const metrics: ?lua_config.BarMetrics = if (client.model.systemMetrics()) |value| .{
+    const metrics: ?BarMetricsType = if (client.model.systemMetrics()) |value| .{
         .cpu_percent = value.cpu_percent,
         .memory_used_decigib = value.memory_used_decigib,
         .battery_percent = value.battery_percent,
@@ -331,7 +202,7 @@ fn callbackContext(client: *const Client, output: ?[]const u8) lua_config.BarCal
     };
 }
 
-fn activeConfiguration(client: *const Client) ?*const bars.Configuration {
+fn activeConfiguration(client: *const Client) ?*const ConfigurationType {
     const generation = client.lua_generation orelse return null;
     if (generation.number != client.model.configurationGeneration()) {
         return null;
@@ -340,8 +211,8 @@ fn activeConfiguration(client: *const Client) ?*const bars.Configuration {
     return &generation.snapshot.bars;
 }
 
-fn invokeNextCallback(client: *Client, configuration: *const bars.Configuration) !void {
-    for (std.enums.values(bars.Position)) |position| {
+fn invokeNextCallback(client: *Client, configuration: *const ConfigurationType) !void {
+    for (std.enums.values(PositionType)) |position| {
         if (client.bar_updates.pending_callbacks & position.bit() == 0) {
             continue;
         }
@@ -367,7 +238,7 @@ fn startNextCommand(client: *Client) !void {
     const generation = client.lua_generation orelse return;
     const configuration = activeConfiguration(client) orelse return;
 
-    for (std.enums.values(bars.Position)) |position| {
+    for (std.enums.values(PositionType)) |position| {
         if (client.bar_updates.pending_commands & position.bit() == 0) {
             continue;
         }
@@ -381,7 +252,7 @@ fn startNextCommand(client: *Client) !void {
         const execution = try client.bar_updates.reserveCommand(generation.number, position);
         client.select.concurrent(.bar_command, executeCommand, .{
             client.io,
-            Job{ .execution_id = execution.id, .command = source.command },
+            BarUpdatesJob{ .execution_id = execution.id, .command = source.command },
         }) catch |err| {
             client.bar_updates.command_execution = null;
             return err;
@@ -390,22 +261,22 @@ fn startNextCommand(client: *Client) !void {
     }
 }
 
-fn executeCommand(io: std.Io, job: Job) Completion {
+fn executeCommand(io: std.Io, job: BarUpdatesJob) BarUpdatesCompletion {
     return .{
         .execution_id = job.execution_id,
-        .result = bars.command.run(io, job.command),
+        .result = command_module.run(io, job.command),
     };
 }
 
 fn rearm(client: *Client) !void {
     const scheduler = &client.bar_updates.scheduler;
     const deadline_ns = if (client.bar_updates.pending_callbacks != 0)
-        client_clock.monotonic(client.io)
+        monotonic_module(client.io)
     else
         client.bar_updates.nextDeadline();
     switch (scheduler.update(client.io, deadline_ns)) {
         .idle, .retained => {},
-        .schedule => client.select.concurrent(.bar_tick, deadline_timer.wait, .{
+        .schedule => client.select.concurrent(.bar_tick, wait_module, .{
             client.io,
             scheduler,
         }) catch |err| {
@@ -415,7 +286,7 @@ fn rearm(client: *Client) !void {
     }
 }
 
-fn followingDeadline(deadline_ns: u64, interval_ns: u64, now_ns: u64) u64 {
+pub fn followingDeadline(deadline_ns: u64, interval_ns: u64, now_ns: u64) u64 {
     std.debug.assert(interval_ns != 0);
     const elapsed = now_ns - deadline_ns;
     const skipped = elapsed / interval_ns;
@@ -425,7 +296,7 @@ fn followingDeadline(deadline_ns: u64, interval_ns: u64, now_ns: u64) u64 {
 }
 
 test "bar deadlines start immediately and coalesce elapsed intervals" {
-    const configuration: bars.Configuration = .{
+    const configuration: ConfigurationType = .{
         .bottom = .{
             .{ .dynamic = .{ .callback = .{ .generation = 4, .id = 0 }, .interval_ns = 100 } },
             .{ .command = .{ .generation = 4, .interval_ns = 250, .timeout_ms = 100 } },
@@ -442,16 +313,16 @@ test "bar deadlines start immediately and coalesce elapsed intervals" {
         .now_ns = 1_750,
     });
 
-    try std.testing.expectEqual(bars.Position.bottom_left.bit(), due.dynamic_mask);
-    try std.testing.expectEqual(bars.Position.bottom_center.bit(), due.command_mask);
-    try std.testing.expectEqual(@as(u64, 1_800), state.deadlines[@intFromEnum(bars.Position.bottom_left)]);
-    try std.testing.expectEqual(@as(u64, 2_000), state.deadlines[@intFromEnum(bars.Position.bottom_center)]);
+    try std.testing.expectEqual(PositionType.bottom_left.bit(), due.dynamic_mask);
+    try std.testing.expectEqual(PositionType.bottom_center.bit(), due.command_mask);
+    try std.testing.expectEqual(@as(u64, 1_800), state.deadlines[@intFromEnum(PositionType.bottom_left)]);
+    try std.testing.expectEqual(@as(u64, 2_000), state.deadlines[@intFromEnum(PositionType.bottom_center)]);
 }
 
 test "bar synchronization clears queued work but preserves one in-flight command identity" {
     var state: State = .{};
-    state.pending_callbacks = bars.Position.top_right.bit();
-    state.pending_commands = bars.Position.bottom_left.bit();
+    state.pending_callbacks = PositionType.top_right.bit();
+    state.pending_commands = PositionType.bottom_left.bit();
     const execution = try state.reserveCommand(3, .bottom_left);
 
     state.synchronize(.{ .generation = 4, .configuration = null, .now_ns = 2_000 });

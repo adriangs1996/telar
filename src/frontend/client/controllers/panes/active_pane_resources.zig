@@ -1,18 +1,16 @@
 //! Adapts active-pane resource commands to one concrete client.
 
-const core = @import("telar-core");
-const agents = @import("telar-client").agents;
-const attachments = @import("../../../attachments/root.zig");
-const panes_application = @import("telar-client").application.panes;
-const client_model = @import("telar-client").model;
-const pane_focus_reports = @import("pane_focus_reports.zig");
-const pane_geometry = @import("pane_geometry.zig");
-const tab_snapshots = @import("../tabs/tab_snapshots.zig");
+const Client = @import("../../Client.zig");
+const PaneFocusType = @import("telar-client").PaneFocus;
+const RectType = @import("telar-core").Rect;
+const DeliverActivePaneResourcesHandlerType = @import("telar-client").DeliverActivePaneResourcesHandler;
+const AgentKeyType = @import("telar-client").AgentKey;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
-
-const Client = @import("../../client.zig");
-const active_pane_resource_delivery = panes_application.active_pane_resource_delivery;
-const ui = core.ui;
+const TargetType = @import("telar-client").AttachmentTarget;
+const pane_focus_reports = @import("pane_focus_reports.zig");
+const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
+const tab_snapshots = @import("../tabs/tab_snapshots.zig");
+const pane_geometry = @import("pane_geometry.zig");
 
 /// Synchronizes attachment geometry and child focus reporting from the active
 /// focused pane.
@@ -42,13 +40,13 @@ pub fn synchronizeAttachments(client: *Client) !bool {
 /// ```zig
 /// try deliverFocus(client, focus, area);
 /// ```
-pub fn deliverFocus(client: *Client, focus: client_model.PaneFocus, area: ui.Rect) !void {
+pub fn deliverFocus(client: *Client, focus: PaneFocusType, area: RectType) !void {
     var use_case = handler(client);
 
     try use_case.deliverFocus(focus, area);
 }
 
-fn handler(client: *Client) active_pane_resource_delivery.DeliverActivePaneResourcesHandler {
+fn handler(client: *Client) DeliverActivePaneResourcesHandlerType {
     return .{
         .model = &client.model,
         .effects = .{
@@ -63,7 +61,7 @@ fn handler(client: *Client) active_pane_resource_delivery.DeliverActivePaneResou
     };
 }
 
-fn acknowledgeAgent(raw_context: *anyopaque, key: agents.AgentKey) !void {
+fn acknowledgeAgent(raw_context: *anyopaque, key: AgentKeyType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     try runtime_transport.enqueue(client, .{ .acknowledge_agent = .{
@@ -72,7 +70,7 @@ fn acknowledgeAgent(raw_context: *anyopaque, key: agents.AgentKey) !void {
     } });
 }
 
-fn syncAttachmentTarget(raw_context: *anyopaque, target: ?attachments.Target) ?ui.Rect {
+fn syncAttachmentTarget(raw_context: *anyopaque, target: ?TargetType) ?RectType {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     if (!client.view.syncAttachmentTarget(target)) {
         return null;
@@ -90,16 +88,16 @@ fn syncFocusReporting(raw_context: *anyopaque) !void {
 fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
-    @import("../../../graphics/root.zig").kitty.delivery.invalidatePlacements(&client.graphics_store);
+    kitty_delivery.invalidatePlacements(&client.graphics_store);
 }
 
-fn requestVisibleAttachments(raw_context: *anyopaque, area: ui.Rect) !void {
+fn requestVisibleAttachments(raw_context: *anyopaque, area: RectType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     try tab_snapshots.attachActive(client, area);
 }
 
-fn offerPaneGeometry(raw_context: *anyopaque, area: ui.Rect) !void {
+fn offerPaneGeometry(raw_context: *anyopaque, area: RectType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     try pane_geometry.offerActive(client, area);

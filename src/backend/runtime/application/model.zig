@@ -4,22 +4,15 @@
 //! and `Tracker` remain transitional capability roots until their semantic
 //! state is separated from live resources and observation behavior.
 
+const GraphicsLimitsType = @import("../../media/GraphicsLimits.zig");
+const RuntimeModel = @import("RuntimeModel.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const agent = @import("../../agent/root.zig");
-const pane = @import("../../pane/root.zig");
-const workspace = @import("../../workspace/root.zig");
-const client_layout_store = @import("client_layout_store.zig");
-
-pub const RuntimeModel = struct {
-    workspaces: workspace.State = .{},
-    panes: pane.PaneStore,
-    agents: agent.Tracker = .{},
-    client_layouts: client_layout_store.Store = .{},
-};
+const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
+const AgentSnapshotEntryType = @import("telar-core").AgentSnapshotEntry;
+const RepositoryType = @import("../../workspace/Repository.zig");
 
 test "runtime model starts with empty configured capability roots" {
-    const graphics_limits: pane.GraphicsLimits = .{
+    const graphics_limits: GraphicsLimitsType = .{
         .pane_bytes = 1024,
         .global_bytes = 4096,
         .images_per_pane = 2,
@@ -40,14 +33,14 @@ test "runtime model starts with empty configured capability roots" {
     try std.testing.expectEqual(graphics_limits.global_bytes, model.panes.graphics_budget.limit);
     try std.testing.expectEqualDeep(graphics_limits, model.panes.graphics_limits);
 
-    var entries: [agent.max_records]core.schema.AgentSnapshotEntry = undefined;
+    var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
     try std.testing.expectEqual(@as(usize, 0), model.agents.snapshot(&entries).len);
 }
 
 test "workspace repository releases allocations retained by the runtime model" {
     var model: RuntimeModel = .{ .panes = .{} };
     defer model.panes.deinit();
-    var repository = workspace.Repository.init(&model.workspaces, std.testing.allocator);
+    var repository = RepositoryType.init(&model.workspaces, std.testing.allocator);
     defer repository.deinit();
 
     _ = try repository.ensure("/tmp/telar-model-test");

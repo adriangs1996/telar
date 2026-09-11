@@ -1,18 +1,24 @@
 //! Adapts committed workspace transitions to navigation and client ports.
 
-const core = @import("telar-core");
-const panes_application = @import("telar-client").application.panes;
-const workspaces_application = @import("telar-client").application.workspaces;
-const client_model = @import("telar-client").model;
-const host_inputs = @import("../input/host_inputs.zig");
+const Client = @import("../../Client.zig");
+const OpenedPaneType = @import("telar-client").OpenedPane;
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const WorkspaceArrivalType = @import("telar-client").WorkspaceArrival;
+const PlanWorkspaceArrivalHandlerType = @import("telar-client").PlanWorkspaceArrivalHandler;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const BookmarkType = @import("telar-client").Bookmark;
+const WorkspaceDepartureType = @import("telar-client").WorkspaceDeparture;
+const ReleaseWorkspaceResourcesHandlerType = @import("telar-client").ReleaseWorkspaceResourcesHandler;
+const WorkspaceActivationType = @import("telar-client").WorkspaceActivation;
+const ActivateWorkspaceHandlerType = @import("telar-client").ActivateWorkspaceHandler;
+const ReleaseEffectsType = @import("telar-client").ReleaseEffects;
+const ActivationEffectsType = @import("telar-client").ActivationEffects;
+const WorkspaceBookmarkType = @import("telar-client").WorkspaceBookmark;
+const PaneIdType = @import("telar-core").PaneId;
 const active_pane_resources = @import("../panes/active_pane_resources.zig");
+const host_inputs = @import("../input/host_inputs.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-
-const Client = @import("../../client.zig");
-const pane_open_delivery = panes_application.pane_open_delivery;
-const workspace_arrival_planning = workspaces_application.workspace_arrival_planning;
-const workspace_transition_delivery = workspaces_application.workspace_transition_delivery;
-const schema = core.schema;
+const TabLocationType = @import("telar-core").TabLocation;
 
 /// Builds a workspace arrival from the runtime-selected root and an exact
 /// remembered layout when that bookmark still names the same tab.
@@ -20,20 +26,20 @@ const schema = core.schema;
 /// ```zig
 /// const command = arrival(client, opened, requested_size);
 /// ```
-pub fn arrival(client: *Client, opened: pane_open_delivery.OpenedPane, size: schema.TerminalSize) client_model.WorkspaceArrival {
+pub fn arrival(client: *Client, opened: OpenedPaneType, size: TerminalSizeType) WorkspaceArrivalType {
     const planner = arrivalPlanner(client);
 
     return planner.execute(opened, size);
 }
 
-fn arrivalPlanner(client: *Client) workspace_arrival_planning.PlanWorkspaceArrivalHandler {
+fn arrivalPlanner(client: *Client) PlanWorkspaceArrivalHandlerType {
     return .{ .bookmarks = .{
         .context = client,
         .find = findBookmark,
     } };
 }
 
-fn findBookmark(context: *anyopaque, workspace: schema.WorkspaceLocation) ?workspace_arrival_planning.Bookmark {
+fn findBookmark(context: *anyopaque, workspace: WorkspaceLocationType) ?BookmarkType {
     const client: *Client = @ptrCast(@alignCast(context));
     const bookmark = client.navigation_history.find(workspace) orelse return null;
 
@@ -49,8 +55,8 @@ fn findBookmark(context: *anyopaque, workspace: schema.WorkspaceLocation) ?works
 /// ```zig
 /// release(client, &departure);
 /// ```
-pub fn release(client: *Client, departure: *const client_model.WorkspaceDeparture) void {
-    var use_case: workspace_transition_delivery.ReleaseWorkspaceResourcesHandler = .{
+pub fn release(client: *Client, departure: *const WorkspaceDepartureType) void {
+    var use_case: ReleaseWorkspaceResourcesHandlerType = .{
         .model = &client.model,
         .effects = releaseEffects(client),
     };
@@ -64,8 +70,8 @@ pub fn release(client: *Client, departure: *const client_model.WorkspaceDepartur
 /// ```zig
 /// try activate(client, activation);
 /// ```
-pub fn activate(client: *Client, activation: client_model.WorkspaceActivation) !void {
-    var use_case: workspace_transition_delivery.ActivateWorkspaceHandler = .{
+pub fn activate(client: *Client, activation: WorkspaceActivationType) !void {
+    var use_case: ActivateWorkspaceHandlerType = .{
         .model = &client.model,
         .effects = activationEffects(client),
     };
@@ -78,7 +84,7 @@ pub fn activate(client: *Client, activation: client_model.WorkspaceActivation) !
 /// ```zig
 /// const effects = releaseEffects(client);
 /// ```
-pub fn releaseEffects(client: *Client) workspace_transition_delivery.ReleaseEffects {
+pub fn releaseEffects(client: *Client) ReleaseEffectsType {
     return .{
         .context = client,
         .remember_bookmark = rememberBookmark,
@@ -91,7 +97,7 @@ pub fn releaseEffects(client: *Client) workspace_transition_delivery.ReleaseEffe
 /// ```zig
 /// const effects = activationEffects(client);
 /// ```
-pub fn activationEffects(client: *Client) workspace_transition_delivery.ActivationEffects {
+pub fn activationEffects(client: *Client) ActivationEffectsType {
     return .{
         .context = client,
         .synchronize_active_resources = synchronizeActiveResources,
@@ -101,7 +107,7 @@ pub fn activationEffects(client: *Client) workspace_transition_delivery.Activati
     };
 }
 
-fn rememberBookmark(raw_context: *anyopaque, bookmark: client_model.WorkspaceBookmark) void {
+fn rememberBookmark(raw_context: *anyopaque, bookmark: WorkspaceBookmarkType) void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     client.navigation_history.remember(.{
@@ -111,7 +117,7 @@ fn rememberBookmark(raw_context: *anyopaque, bookmark: client_model.WorkspaceBoo
     });
 }
 
-fn clearPaneGraphics(raw_context: *anyopaque, pane_id: schema.PaneId) void {
+fn clearPaneGraphics(raw_context: *anyopaque, pane_id: PaneIdType) void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     client.graphics_store.clearPane(pane_id);
@@ -129,13 +135,13 @@ fn scheduleHostInput(raw_context: *anyopaque) !void {
     try host_inputs.scheduleRead(client);
 }
 
-fn requestWorkspaceSnapshot(raw_context: *anyopaque, workspace: schema.WorkspaceLocation) !void {
+fn requestWorkspaceSnapshot(raw_context: *anyopaque, workspace: WorkspaceLocationType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     try request_lifecycle.requestWorkspaceSnapshot(client, workspace);
 }
 
-fn requestTabSnapshot(raw_context: *anyopaque, location: schema.TabLocation) !void {
+fn requestTabSnapshot(raw_context: *anyopaque, location: TabLocationType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     try request_lifecycle.requestTabSnapshot(client, location);

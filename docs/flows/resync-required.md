@@ -78,15 +78,15 @@ tab and pane state, so a new client can rebuild its projection.
 
 ## Proof
 
-- `src/frontend/client/application/resync_required.zig` proves workspace
+- `src/client/application/session/resync_required.zig` proves workspace
   validation, snapshot coalescence, closure policy, effect order and failure
   retention.
-- `src/frontend/client/resync_requirements.zig` owns client-state translation
+- `src/frontend/client/controllers/session/resync_requirements.zig` owns client-state translation
   and concrete snapshot, history and handoff effects.
-- `src/frontend/client/client_test.zig` proves bounded request delivery,
+- `src/frontend/client/tests/` proves bounded request delivery,
   mismatched-workspace rejection, predecessor handoff, final exit and presenter
   silence through the real adapters.
-- `src/backend/runtime/response_queue.zig` and
-  `src/backend/runtime/delivery.zig` prove bounded loss accounting and resync
+- `src/backend/runtime/delivery/response_queue.zig` and
+  `src/backend/runtime/delivery/` prove bounded loss accounting and resync
   wire order.
-- `src/core/schema/root.zig` proves closure and predecessor validation.
+- `src/core/schema/schema.zig` proves closure and predecessor validation.

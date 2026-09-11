@@ -1,14 +1,22 @@
 //! Disposable client state for the ordered tabs of one workspace.
 
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
 const std = @import("std");
-const core = @import("telar-core");
-const layout_mod = @import("layout.zig");
+const TabsModel = @import("TabsModel.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabIdType = @import("telar-core").TabId;
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
 const multiplexer = @import("multiplexer.zig");
-const ui = core.ui;
-
-const schema = core.schema;
-
-pub const max_tabs = schema.max_tabs_per_workspace;
+const WorkspaceTabInput = @import("WorkspaceTabInput.zig");
+const WorkspaceSnapshotInput = @import("WorkspaceSnapshotInput.zig");
+const max_tabs_per_workspace_module = @import("telar-core").max_tabs_per_workspace;
+const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
+const max_workspace_name_bytes_module = @import("telar-core").max_workspace_name_bytes;
+const PaneSnapshot = @import("PaneSnapshot.zig");
+const RectType = @import("telar-core").Rect;
+const LayoutType = @import("WorkspaceLayout.zig");
+const LayoutSnapshot = @import("LayoutSnapshot.zig");
 
 pub const PositionChange = enum {
     unchanged,
@@ -20,8 +28,8 @@ pub const LabelChange = enum {
     changed,
 };
 
-fn validateLabel(label: []const u8) !void {
-    if (label.len == 0 or label.len > schema.max_tab_label_bytes) {
+pub fn validateLabel(label: []const u8) !void {
+    if (label.len == 0 or label.len > max_tab_label_bytes_module) {
         return error.InvalidTabLabel;
     }
 
@@ -36,670 +44,10 @@ fn validateLabel(label: []const u8) !void {
     }
 }
 
-pub const CreatedTab = struct {
-    location: schema.TabLocation,
-    position: u16,
-    label: []const u8,
-    root_pane_id: schema.PaneId,
-};
-
-pub const WorkspaceTabInput = struct {
-    tab_id: schema.TabId,
-    pane_count: u16,
-    label: []const u8,
-};
-
-pub const WorkspaceSnapshotInput = struct {
-    workspace: schema.WorkspaceLocation,
-    name: []const u8,
-    /// Borrowed only for synchronous reconciliation. Slice order is the
-    /// canonical runtime tab order.
-    tabs: []const WorkspaceTabInput,
-};
-
-pub const PaneSnapshot = struct {
-    location: schema.TabLocation,
-    /// Borrowed only for synchronous reconciliation. Order is the canonical
-    /// display order used when a tab has no retained client layout.
-    panes: []const schema.PaneId,
-};
-
-pub const RootTab = struct {
-    pane_id: schema.PaneId,
-    location: schema.TabLocation,
-    size: schema.TerminalSize,
-};
-
-const PendingLayoutRestore = struct {
-    location: schema.TabLocation,
-    layout: layout_mod.Layout,
-    restore_saved_focus: bool = false,
-};
-
-const TabInit = struct {
-    location: schema.TabLocation,
-    label: []const u8,
-    pane_gaps: bool,
-};
-
-pub const Tab = struct {
-    location: schema.TabLocation,
-    label: [schema.max_tab_label_bytes]u8 = undefined,
-    label_len: u8 = 0,
-    model: multiplexer.Model,
-    snapshot_loaded: bool = false,
-    restore_display_order: bool = false,
-
-    fn init(gpa: std.mem.Allocator, input: TabInit) Tab {
-        var tab: Tab = .{
-            .location = input.location,
-            .model = .init(gpa),
-        };
-
-        tab.model.setPaneGaps(input.pane_gaps);
-        tab.setLabel(input.label);
-
-        return tab;
-    }
-
-    fn deinit(tab: *Tab) void {
-        tab.model.deinit();
-    }
-
-    pub fn labelSlice(tab: *const Tab) []const u8 {
-        return tab.label[0..tab.label_len];
-    }
-
-    fn setLabel(tab: *Tab, label: []const u8) void {
-        std.debug.assert(label.len != 0 and label.len <= tab.label.len);
-        @memcpy(tab.label[0..label.len], label);
-        tab.label_len = @intCast(label.len);
-    }
-};
-
-pub const Model = struct {
-    gpa: std.mem.Allocator,
-    workspace: ?schema.WorkspaceLocation = null,
-    workspace_name: [schema.max_workspace_name_bytes]u8 = undefined,
-    workspace_name_len: u16 = 0,
-    items: [max_tabs]?Tab = [_]?Tab{null} ** max_tabs,
-    count: usize = 0,
-    active_index: usize = 0,
-    pane_gaps: bool = true,
-    cell_width_px: u16 = 0,
-    cell_height_px: u16 = 0,
-    pending_layout_restore: ?PendingLayoutRestore = null,
-
-    pub fn init(gpa: std.mem.Allocator) Model {
-        return .{ .gpa = gpa };
-    }
-
-    pub fn deinit(model: *Model) void {
-        for (&model.items) |*slot| {
-            if (slot.*) |*tab| {
-                tab.deinit();
-            }
-            slot.* = null;
-        }
-        model.count = 0;
-        model.workspace = null;
-        model.workspace_name_len = 0;
-        model.pending_layout_restore = null;
-    }
-
-    pub fn setPaneGaps(model: *Model, enabled: bool) void {
-        if (model.pane_gaps == enabled) {
-            return;
-        }
-        model.pane_gaps = enabled;
-        for (model.items[0..model.count]) |*slot|
-            if (slot.*) |*tab| tab.model.setPaneGaps(enabled);
-    }
-
-    /// Sets the host cell geometry for current and future tabs.
-    ///
-    /// ```zig
-    /// model.setCellSize(8, 16);
-    /// ```
-    pub fn setCellSize(model: *Model, width: u16, height: u16) void {
-        if (model.cell_width_px == width and model.cell_height_px == height) {
-            return;
-        }
-
-        model.cell_width_px = width;
-        model.cell_height_px = height;
-        for (model.items[0..model.count]) |*slot| {
-            if (slot.*) |*tab| {
-                tab.model.setCellSize(width, height);
-            }
-        }
-    }
-
-    /// Creates the initial tab from its root pane description.
-    ///
-    /// ```zig
-    /// try model.bootstrap(.{ .pane_id = pane_id, .location = location, .size = size });
-    /// ```
-    pub fn bootstrap(model: *Model, root: RootTab) !void {
-        if (model.count != 0) {
-            return error.ModelNotEmpty;
-        }
-
-        try model.replaceWithRoot(root);
-    }
-
-    /// Constructs a root tab before retiring the current workspace. Failure
-    /// preserves every existing tab and pane.
-    ///
-    /// ```zig
-    /// try model.replaceWithRoot(root);
-    /// ```
-    pub fn replaceWithRoot(model: *Model, root: RootTab) !void {
-        var tab = Tab.init(model.gpa, .{
-            .location = root.location,
-            .label = "main",
-            .pane_gaps = model.pane_gaps,
-        });
-        errdefer tab.deinit();
-        tab.model.setCellSize(model.cell_width_px, model.cell_height_px);
-        try tab.model.addRoot(.{ .pane_id = root.pane_id, .location = root.location, .size = root.size });
-        tab.restore_display_order = true;
-
-        model.deinit();
-        model.items[0] = tab;
-        model.count = 1;
-        model.active_index = 0;
-        model.workspace = root.location.workspace;
-    }
-
-    pub fn restoreLayoutOnNextSnapshot(model: *Model, location: schema.TabLocation, saved: layout_mod.Layout) bool {
-        if (model.find(location.tab_id) == null) {
-            return false;
-        }
-        model.pending_layout_restore = .{ .location = location, .layout = saved };
-        return true;
-    }
-
-    /// Stages a retained client tree including its saved pane focus. An
-    /// already staged arrival for this tab keeps its explicit navigation focus.
-    ///
-    /// ```zig
-    /// _ = model.restoreClientLayoutOnNextSnapshot(location, saved);
-    /// ```
-    pub fn restoreClientLayoutOnNextSnapshot(model: *Model, location: schema.TabLocation, saved: layout_mod.Layout) bool {
-        if (model.find(location.tab_id) == null) {
-            return false;
-        }
-
-        if (model.pending_layout_restore) |pending| {
-            if (std.meta.eql(pending.location, location)) {
-                return true;
-            }
-        }
-
-        model.pending_layout_restore = .{
-            .location = location,
-            .layout = saved,
-            .restore_saved_focus = true,
-        };
-        return true;
-    }
-
-    /// Iterates the open tabs in order without exposing the slot array.
-    pub const TabIterator = struct {
-        items: []?Tab,
-        index: usize = 0,
-
-        pub fn next(iterator: *TabIterator) ?*Tab {
-            while (iterator.index < iterator.items.len) {
-                const slot = &iterator.items[iterator.index];
-                iterator.index += 1;
-                if (slot.*) |*tab| {
-                    return tab;
-                }
-            }
-            return null;
-        }
-    };
-
-    pub fn tabIterator(model: *Model) TabIterator {
-        return .{ .items = model.items[0..model.count] };
-    }
-
-    pub fn active(model: *Model) ?*Tab {
-        if (model.count == 0) {
-            return null;
-        }
-        return &model.items[model.active_index].?;
-    }
-
-    pub fn activeConst(model: *const Model) ?*const Tab {
-        if (model.count == 0) {
-            return null;
-        }
-        return &model.items[model.active_index].?;
-    }
-
-    pub fn activeIndex(model: *const Model) ?usize {
-        return if (model.count == 0) null else model.active_index;
-    }
-
-    pub fn workspaceName(model: *const Model) []const u8 {
-        return model.workspace_name[0..model.workspace_name_len];
-    }
-
-    pub fn displayedWorkspaceName(model: *const Model) []const u8 {
-        return model.workspaceName();
-    }
-
-    pub fn find(model: *Model, tab_id: schema.TabId) ?*Tab {
-        for (model.items[0..model.count]) |*slot| {
-            const tab = if (slot.*) |*value| value else continue;
-            if (tab.location.tab_id == tab_id) {
-                return tab;
-            }
-        }
-        return null;
-    }
-
-    pub fn indexOf(model: *const Model, tab_id: schema.TabId) ?usize {
-        for (model.items[0..model.count], 0..) |slot, index|
-            if (slot != null and slot.?.location.tab_id == tab_id) return index;
-        return null;
-    }
-
-    pub fn findPane(model: *Model, pane_id: schema.PaneId) ?*multiplexer.Pane {
-        for (model.items[0..model.count]) |*slot| {
-            const tab = if (slot.*) |*value| value else continue;
-            if (tab.model.find(pane_id)) |pane| {
-                return pane;
-            }
-        }
-        return null;
-    }
-
-    pub fn detachAll(tab: *Tab) void {
-        for (&tab.model.panes) |*slot| {
-            const pane = if (slot.*) |*value| value else continue;
-            pane.attached = false;
-            pane.pending_frame_id = 0;
-        }
-    }
-
-    /// Reconciles canonical pane membership while retaining matching pane
-    /// buffers and client layout state.
-    ///
-    /// ```zig
-    /// const tab = try model.reconcileTab(snapshot, workbench);
-    /// ```
-    pub fn reconcileTab(model: *Model, snapshot: PaneSnapshot, area: ui.Rect) !*Tab {
-        const tab = model.find(snapshot.location.tab_id) orelse return error.UnexpectedTab;
-        if (!std.meta.eql(tab.location, snapshot.location)) {
-            return error.UnexpectedTab;
-        }
-        if (snapshot.panes.len > multiplexer.max_panes) {
-            return error.TooManyPanes;
-        }
-        for (snapshot.panes, 0..) |pane_id, index| {
-            if (std.mem.findScalar(schema.PaneId, snapshot.panes[0..index], pane_id) != null) {
-                return error.DuplicatePane;
-            }
-        }
-
-        const focused_before = tab.model.layout.focused();
-        var removed: [multiplexer.max_panes]schema.PaneId = undefined;
-        var removed_count: usize = 0;
-        for (&tab.model.panes) |*slot| {
-            const pane = if (slot.*) |*value| value else continue;
-            if (std.mem.findScalar(schema.PaneId, snapshot.panes, pane.id) == null) {
-                removed[removed_count] = pane.id;
-                removed_count += 1;
-            }
-        }
-
-        for (removed[0..removed_count]) |pane_id| {
-            _ = tab.model.removePane(pane_id);
-        }
-
-        for (snapshot.panes) |pane_id| {
-            if (tab.model.find(pane_id) == null) {
-                try tab.model.addDiscovered(.{ .pane_id = pane_id, .location = snapshot.location, .area = area });
-            }
-        }
-
-        var focus_after = tab.model.layout.focused();
-        if (focused_before) |pane_id| {
-            if (std.mem.findScalar(schema.PaneId, snapshot.panes, pane_id) != null) {
-                focus_after = pane_id;
-            }
-        }
-
-        if (focus_after) |pane_id| {
-            const restored_layout = if (model.pending_layout_restore) |pending|
-                std.meta.eql(pending.location, snapshot.location) and
-                    tab.model.restoreSavedLayout(
-                        pending.layout,
-                        .{
-                            .ids = snapshot.panes,
-                            .focused = if (pending.restore_saved_focus) pending.layout.focused() orelse pane_id else pane_id,
-                        },
-                    )
-            else
-                false;
-            if (model.pending_layout_restore) |pending| {
-                if (std.meta.eql(pending.location, snapshot.location)) {
-                    model.pending_layout_restore = null;
-                }
-            }
-
-            if (!restored_layout) {
-                if (tab.restore_display_order) {
-                    try tab.model.restoreDisplayOrder(snapshot.panes, pane_id);
-                } else {
-                    _ = tab.model.focusPane(pane_id);
-                }
-            }
-        }
-
-        tab.restore_display_order = false;
-        tab.snapshot_loaded = true;
-        return tab;
-    }
-
-    pub fn tabForPane(model: *Model, pane_id: schema.PaneId) ?*Tab {
-        for (model.items[0..model.count]) |*slot| {
-            const tab = if (slot.*) |*value| value else continue;
-            if (tab.model.find(pane_id) != null) {
-                return tab;
-            }
-        }
-        return null;
-    }
-
-    /// Finds the tab containing one pane without exposing mutable storage.
-    ///
-    /// ```zig
-    /// const tab = model.tabForPaneConst(pane_id) orelse return;
-    /// ```
-    pub fn tabForPaneConst(model: *const Model, pane_id: schema.PaneId) ?*const Tab {
-        for (model.items[0..model.count]) |*slot| {
-            const tab = if (slot.*) |*value| value else continue;
-            if (tab.model.findConst(pane_id) != null) {
-                return tab;
-            }
-        }
-
-        return null;
-    }
-
-    /// Reconciles one canonical snapshot without replacing retained tab
-    /// layouts. Validation completes before the first mutation.
-    ///
-    /// ```zig
-    /// try model.reconcileWorkspace(snapshot);
-    /// ```
-    pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !void {
-        if (model.workspace == null or !std.meta.eql(model.workspace.?, snapshot.workspace)) {
-            return error.UnexpectedWorkspace;
-        }
-
-        if (snapshot.tabs.len == 0) {
-            return error.WorkspaceHasNoTabs;
-        }
-
-        if (snapshot.tabs.len > max_tabs) {
-            return error.TabLimitReached;
-        }
-
-        if (snapshot.name.len == 0 or snapshot.name.len > schema.max_workspace_name_bytes or
-            std.mem.findScalar(u8, snapshot.name, 0) != null)
-        {
-            return error.InvalidWorkspaceName;
-        }
-
-        for (snapshot.tabs, 0..) |descriptor, index| {
-            if (descriptor.tab_id == .invalid) {
-                return error.InvalidTabId;
-            }
-
-            if (descriptor.pane_count > schema.max_panes_per_tab) {
-                return error.TooManyPanes;
-            }
-
-            try validateLabel(descriptor.label);
-            for (snapshot.tabs[0..index]) |previous| {
-                if (previous.tab_id == descriptor.tab_id) {
-                    return error.DuplicateTab;
-                }
-            }
-        }
-
-        const active_id = (model.activeConst() orelse return error.WorkspaceHasNoTabs).location.tab_id;
-        var canonical_ids: [max_tabs]schema.TabId = undefined;
-        for (snapshot.tabs, 0..) |descriptor, index| {
-            canonical_ids[index] = descriptor.tab_id;
-        }
-
-        var current = model.count;
-        while (current > 0) {
-            current -= 1;
-            const tab_id = model.items[current].?.location.tab_id;
-            if (std.mem.findScalar(schema.TabId, canonical_ids[0..snapshot.tabs.len], tab_id) == null) {
-                model.removeForReconciliation(current);
-            }
-        }
-
-        for (snapshot.tabs, 0..) |descriptor, index| {
-            if (model.indexOf(descriptor.tab_id)) |existing_index| {
-                if (existing_index != index) {
-                    std.mem.swap(?Tab, &model.items[existing_index], &model.items[index]);
-                }
-            } else {
-                model.insertDiscovered(descriptor, index);
-            }
-
-            const tab = &model.items[index].?;
-            tab.setLabel(descriptor.label);
-            if (tab.model.pane_count != descriptor.pane_count) {
-                tab.snapshot_loaded = false;
-            }
-        }
-
-        std.debug.assert(model.count == snapshot.tabs.len);
-        if (model.pending_layout_restore) |pending| {
-            if (std.mem.findScalar(schema.TabId, canonical_ids[0..snapshot.tabs.len], pending.location.tab_id) == null) {
-                model.pending_layout_restore = null;
-            }
-        }
-
-        @memcpy(model.workspace_name[0..snapshot.name.len], snapshot.name);
-        model.workspace_name_len = @intCast(snapshot.name.len);
-        model.active_index = model.indexOf(active_id) orelse 0;
-    }
-
-    fn removeForReconciliation(model: *Model, index: usize) void {
-        model.items[index].?.deinit();
-
-        var cursor = index;
-        while (cursor + 1 < model.count) : (cursor += 1) {
-            model.items[cursor] = model.items[cursor + 1];
-        }
-
-        model.count -= 1;
-        model.items[model.count] = null;
-    }
-
-    fn insertDiscovered(model: *Model, descriptor: WorkspaceTabInput, index: usize) void {
-        std.debug.assert(model.count < max_tabs);
-        std.debug.assert(index <= model.count);
-
-        var cursor = model.count;
-        while (cursor > index) : (cursor -= 1) {
-            model.items[cursor] = model.items[cursor - 1];
-        }
-
-        model.items[index] = Tab.init(model.gpa, .{
-            .location = .{
-                .workspace = model.workspace.?,
-                .tab_id = descriptor.tab_id,
-            },
-            .label = descriptor.label,
-            .pane_gaps = model.pane_gaps,
-        });
-        model.items[index].?.model.setCellSize(model.cell_width_px, model.cell_height_px);
-        model.count += 1;
-    }
-
-    /// Adds a runtime-confirmed tab and makes it active.
-    ///
-    /// ```zig
-    /// const tab = try model.addCreated(created, size);
-    /// ```
-    pub fn addCreated(model: *Model, created: CreatedTab, size: schema.TerminalSize) !*Tab {
-        const workspace = model.workspace orelse return error.UnexpectedWorkspace;
-        if (!std.meta.eql(workspace, created.location.workspace)) {
-            return error.UnexpectedWorkspace;
-        }
-        if (model.indexOf(created.location.tab_id) != null) {
-            return error.TabAlreadyExists;
-        }
-        if (model.findPane(created.root_pane_id) != null) {
-            return error.PaneAlreadyExists;
-        }
-        if (model.count == max_tabs) {
-            return error.TabLimitReached;
-        }
-        if (created.position > model.count) {
-            return error.InvalidTabPosition;
-        }
-
-        var tab = Tab.init(model.gpa, .{
-            .location = created.location,
-            .label = created.label,
-            .pane_gaps = model.pane_gaps,
-        });
-        errdefer tab.deinit();
-        tab.model.setCellSize(model.cell_width_px, model.cell_height_px);
-        try tab.model.addRoot(.{ .pane_id = created.root_pane_id, .location = created.location, .size = size });
-        tab.snapshot_loaded = true;
-
-        var cursor = model.count;
-        while (cursor > created.position) : (cursor -= 1) {
-            model.items[cursor] = model.items[cursor - 1];
-        }
-
-        model.items[created.position] = tab;
-        model.count += 1;
-        model.active_index = created.position;
-
-        return &model.items[created.position].?;
-    }
-
-    /// Applies one canonical label and reports whether visible state changed.
-    ///
-    /// ```zig
-    /// const change = try model.applyLabel(tab_id, "server");
-    /// ```
-    pub fn applyLabel(model: *Model, tab_id: schema.TabId, label: []const u8) !LabelChange {
-        const tab = model.find(tab_id) orelse return error.TabNotFound;
-        try validateLabel(label);
-
-        if (std.mem.eql(u8, tab.labelSlice(), label)) {
-            return .unchanged;
-        }
-
-        tab.setLabel(label);
-        return .changed;
-    }
-
-    pub fn select(model: *Model, tab_id: schema.TabId) bool {
-        const index = model.indexOf(tab_id) orelse return false;
-        if (index == model.active_index) {
-            return false;
-        }
-
-        model.active_index = index;
-        return true;
-    }
-
-    pub fn selectOffset(model: *Model, offset: isize) bool {
-        if (model.count < 2) {
-            return false;
-        }
-
-        const count: isize = @intCast(model.count);
-        const wrapped_offset: usize = @intCast(@mod(offset, count));
-        const position = (model.active_index + wrapped_offset) % model.count;
-
-        return model.selectPosition(position);
-    }
-
-    pub fn selectPosition(model: *Model, position: usize) bool {
-        if (position >= model.count or position == model.active_index) {
-            return false;
-        }
-
-        model.active_index = position;
-        return true;
-    }
-
-    /// Applies a canonical runtime position while preserving the active tab.
-    ///
-    /// ```zig
-    /// const change = try model.applyPosition(tab_id, 1);
-    /// ```
-    pub fn applyPosition(model: *Model, tab_id: schema.TabId, position: u16) !PositionChange {
-        const from = model.indexOf(tab_id) orelse return error.TabNotFound;
-        const target: usize = position;
-        if (target >= model.count) {
-            return error.InvalidTabPosition;
-        }
-
-        if (from == target) {
-            return .unchanged;
-        }
-
-        const active_id = model.activeConst().?.location.tab_id;
-        if (from < target) {
-            var index = from;
-            while (index < target) : (index += 1) {
-                std.mem.swap(?Tab, &model.items[index], &model.items[index + 1]);
-            }
-        } else {
-            var index = from;
-            while (index > target) : (index -= 1) {
-                std.mem.swap(?Tab, &model.items[index], &model.items[index - 1]);
-            }
-        }
-
-        model.active_index = model.indexOf(active_id).?;
-        return .changed;
-    }
-
-    pub fn remove(model: *Model, tab_id: schema.TabId) bool {
-        const index = model.indexOf(tab_id) orelse return false;
-        const active_id = model.activeConst().?.location.tab_id;
-        model.items[index].?.deinit();
-        var cursor = index;
-        while (cursor + 1 < model.count) : (cursor += 1)
-            model.items[cursor] = model.items[cursor + 1];
-        model.count -= 1;
-        model.items[model.count] = null;
-        if (model.count == 0) {
-            model.active_index = 0;
-            model.workspace = null;
-            model.workspace_name_len = 0;
-            return true;
-        }
-        model.active_index = model.indexOf(active_id) orelse @min(index, model.count - 1);
-        return true;
-    }
-};
-
 test "selection wraps and moving tabs preserves the active identity" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
     try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
@@ -711,24 +59,24 @@ test "selection wraps and moving tabs preserves the active identity" {
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(model.selectOffset(1));
-    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(1)), model.activeConst().?.location.tab_id);
+    try std.testing.expectEqual(@as(TabIdType, @enumFromInt(1)), model.activeConst().?.location.tab_id);
     try std.testing.expect(!model.selectOffset(0));
     try std.testing.expect(!model.selectOffset(2));
     try std.testing.expect(model.selectOffset(std.math.maxInt(isize)));
-    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(2)), model.activeConst().?.location.tab_id);
+    try std.testing.expectEqual(@as(TabIdType, @enumFromInt(2)), model.activeConst().?.location.tab_id);
     try std.testing.expect(!model.selectOffset(std.math.minInt(isize)));
     try std.testing.expectEqual(PositionChange.changed, try model.applyPosition(@enumFromInt(1), 1));
-    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(2)), model.activeConst().?.location.tab_id);
+    try std.testing.expectEqual(@as(TabIdType, @enumFromInt(2)), model.activeConst().?.location.tab_id);
     try std.testing.expectEqual(PositionChange.unchanged, try model.applyPosition(@enumFromInt(1), 1));
     try std.testing.expectError(error.TabNotFound, model.applyPosition(@enumFromInt(9), 0));
     try std.testing.expectError(error.InvalidTabPosition, model.applyPosition(@enumFromInt(1), 2));
 }
 
 test "canonical tab labels distinguish changes and reject invalid values" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
 
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
@@ -746,10 +94,10 @@ test "canonical tab labels distinguish changes and reject invalid values" {
 }
 
 test "failed tab construction does not publish a shifted slot" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const first: schema.TabLocation = .{
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const first: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
@@ -770,18 +118,18 @@ test "failed tab construction does not publish a shifted slot" {
 }
 
 test "root replacement constructs before retiring the current workspace" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const previous: schema.TabLocation = .{
+    const previous: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const replacement: schema.TabLocation = .{
+    const replacement: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
         .tab_id = @enumFromInt(2),
     };
-    const previous_pane: schema.PaneId = @enumFromInt(1);
-    const replacement_pane: schema.PaneId = @enumFromInt(2);
+    const previous_pane: PaneIdType = @enumFromInt(1);
+    const replacement_pane: PaneIdType = @enumFromInt(2);
     try model.bootstrap(.{ .pane_id = previous_pane, .location = previous, .size = .{ .cols = 20, .rows = 5 } });
     var failing: std.testing.FailingAllocator = .init(std.testing.allocator, .{ .fail_index = 0 });
     model.gpa = failing.allocator();
@@ -810,9 +158,9 @@ test "root replacement constructs before retiring the current workspace" {
 }
 
 test "displayed workspace name stays canonical when pane cwd changes" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
     try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
@@ -838,10 +186,10 @@ test "displayed workspace name stays canonical when pane cwd changes" {
 }
 
 test "pane gap configuration reaches current and future tabs" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
     model.setPaneGaps(false);
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
     try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
@@ -862,10 +210,10 @@ test "pane gap configuration reaches current and future tabs" {
 }
 
 test "host cell geometry reaches current and future tabs" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
     model.setCellSize(8, 16);
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
     try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
@@ -903,9 +251,9 @@ test "host cell geometry reaches current and future tabs" {
 }
 
 test "workspace snapshots restore labels and order without losing pane layouts" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
     try model.bootstrap(.{ .pane_id = @enumFromInt(7), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
@@ -928,19 +276,19 @@ test "workspace snapshots restore labels and order without losing pane layouts" 
     @memset(&main_label, 'x');
 
     try std.testing.expectEqualStrings("telar", model.workspaceName());
-    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(2)), model.items[0].?.location.tab_id);
+    try std.testing.expectEqual(@as(TabIdType, @enumFromInt(2)), model.items[0].?.location.tab_id);
     try std.testing.expectEqualStrings("logs", model.items[0].?.labelSlice());
     try std.testing.expectEqualStrings("main", model.items[1].?.labelSlice());
     try std.testing.expect(model.find(@enumFromInt(1)).?.model.find(@enumFromInt(7)) != null);
 }
 
 test "workspace reconciliation rejects malformed snapshots before mutation" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
 
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const root_tab: schema.TabId = @enumFromInt(1);
-    const root_pane: schema.PaneId = @enumFromInt(7);
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const root_tab: TabIdType = @enumFromInt(1);
+    const root_pane: PaneIdType = @enumFromInt(7);
     try model.bootstrap(.{ .pane_id = root_pane, .location = .{
         .workspace = workspace,
         .tab_id = root_tab,
@@ -953,7 +301,7 @@ test "workspace reconciliation rejects malformed snapshots before mutation" {
     };
     try std.testing.expectError(error.WorkspaceHasNoTabs, model.reconcileWorkspace(empty));
 
-    var excessive_tabs: [max_tabs + 1]WorkspaceTabInput = undefined;
+    var excessive_tabs: [max_tabs_per_workspace_module + 1]WorkspaceTabInput = undefined;
     for (&excessive_tabs, 0..) |*tab, index| {
         tab.* = .{
             .tab_id = @enumFromInt(@as(u64, @intCast(index + 1))),
@@ -990,7 +338,7 @@ test "workspace reconciliation rejects malformed snapshots before mutation" {
         .name = "project",
         .tabs = &.{.{
             .tab_id = root_tab,
-            .pane_count = schema.max_panes_per_tab + 1,
+            .pane_count = max_panes_per_tab_module + 1,
             .label = "main",
         }},
     };
@@ -1017,7 +365,7 @@ test "workspace reconciliation rejects malformed snapshots before mutation" {
     };
     try std.testing.expectError(error.InvalidWorkspaceName, model.reconcileWorkspace(embedded_nul));
 
-    const oversized_name: [schema.max_workspace_name_bytes + 1]u8 = @splat('x');
+    const oversized_name: [max_workspace_name_bytes_module + 1]u8 = @splat('x');
     const oversized: WorkspaceSnapshotInput = .{
         .workspace = workspace,
         .name = &oversized_name,
@@ -1032,15 +380,15 @@ test "workspace reconciliation rejects malformed snapshots before mutation" {
 }
 
 test "workspace reconciliation replaces a tab at full capacity" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
 
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
     try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     }, .size = .{ .cols = 2, .rows = 1 } });
-    for (1..max_tabs) |index| {
+    for (1..max_tabs_per_workspace_module) |index| {
         const raw_id = index + 1;
         _ = try model.addCreated(.{
             .location = .{
@@ -1053,7 +401,7 @@ test "workspace reconciliation replaces a tab at full capacity" {
         }, .{ .cols = 2, .rows = 1 });
     }
 
-    var descriptors: [max_tabs]WorkspaceTabInput = undefined;
+    var descriptors: [max_tabs_per_workspace_module]WorkspaceTabInput = undefined;
     for (&descriptors, 0..) |*descriptor, index| {
         descriptor.* = .{
             .tab_id = @enumFromInt(index + 2),
@@ -1069,20 +417,20 @@ test "workspace reconciliation replaces a tab at full capacity" {
 
     try model.reconcileWorkspace(snapshot);
 
-    try std.testing.expectEqual(@as(usize, max_tabs), model.count);
+    try std.testing.expectEqual(@as(usize, max_tabs_per_workspace_module), model.count);
     try std.testing.expect(model.find(@enumFromInt(1)) == null);
-    try std.testing.expect(model.find(@enumFromInt(max_tabs + 1)) != null);
-    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(max_tabs)), model.activeConst().?.location.tab_id);
+    try std.testing.expect(model.find(@enumFromInt(max_tabs_per_workspace_module + 1)) != null);
+    try std.testing.expectEqual(@as(TabIdType, @enumFromInt(max_tabs_per_workspace_module)), model.activeConst().?.location.tab_id);
 }
 
 test "tab reconciliation preserves the pane selected for workspace restoration" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(2),
     };
-    const restored: schema.PaneId = @enumFromInt(42);
+    const restored: PaneIdType = @enumFromInt(42);
     try model.bootstrap(.{ .pane_id = restored, .location = location, .size = .{ .cols = 30, .rows = 8 } });
     const snapshot: PaneSnapshot = .{
         .location = location,
@@ -1098,14 +446,14 @@ test "tab reconciliation preserves the pane selected for workspace restoration" 
 }
 
 test "initial tab reconciliation replaces a vanished focused pane" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(2),
     };
-    const vanished: schema.PaneId = @enumFromInt(10);
-    const replacement: schema.PaneId = @enumFromInt(42);
+    const vanished: PaneIdType = @enumFromInt(10);
+    const replacement: PaneIdType = @enumFromInt(42);
     try model.bootstrap(.{ .pane_id = vanished, .location = location, .size = .{ .cols = 30, .rows = 8 } });
     const snapshot: PaneSnapshot = .{
         .location = location,
@@ -1120,14 +468,14 @@ test "initial tab reconciliation replaces a vanished focused pane" {
 }
 
 test "tab reconciliation rejects duplicate pane membership atomically" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
 
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const root_pane: schema.PaneId = @enumFromInt(10);
+    const root_pane: PaneIdType = @enumFromInt(10);
     try model.bootstrap(.{ .pane_id = root_pane, .location = location, .size = .{ .cols = 30, .rows = 8 } });
     const snapshot: PaneSnapshot = .{
         .location = location,
@@ -1143,18 +491,18 @@ test "tab reconciliation rejects duplicate pane membership atomically" {
 }
 
 test "tab reconciliation restores a bookmarked nested split tree" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(2),
     };
-    const left: schema.PaneId = @enumFromInt(10);
-    const top_right: schema.PaneId = @enumFromInt(42);
-    const bottom_right: schema.PaneId = @enumFromInt(77);
-    const area: ui.Rect = .{ .w = 60, .h = 20 };
+    const left: PaneIdType = @enumFromInt(10);
+    const top_right: PaneIdType = @enumFromInt(42);
+    const bottom_right: PaneIdType = @enumFromInt(77);
+    const area: RectType = .{ .w = 60, .h = 20 };
 
-    var saved: layout_mod.Layout = .{};
+    var saved: LayoutType = .{};
     try saved.addRoot(left);
     try saved.split(.{ .existing_pane = left, .new_pane = top_right, .axis = .horizontal });
     try saved.split(.{ .existing_pane = top_right, .new_pane = bottom_right, .axis = .vertical });
@@ -1162,7 +510,7 @@ test "tab reconciliation restores a bookmarked nested split tree" {
     try std.testing.expect(saved.resizeFocused(.right, area));
     try std.testing.expect(saved.focusPane(top_right));
     try std.testing.expect(saved.resizeFocused(.down, area));
-    var expected: layout_mod.Snapshot = .{};
+    var expected: LayoutSnapshot = .{};
     saved.snapshot(area, &expected);
 
     try model.bootstrap(.{ .pane_id = top_right, .location = location, .size = .{ .cols = 30, .rows = 8 } });
@@ -1173,23 +521,23 @@ test "tab reconciliation restores a bookmarked nested split tree" {
     };
 
     const restored = try model.reconcileTab(snapshot, area);
-    var actual: layout_mod.Snapshot = .{};
+    var actual: LayoutSnapshot = .{};
     restored.model.layout.snapshot(area, &actual);
-    for ([_]schema.PaneId{ left, top_right, bottom_right }) |pane_id|
+    for ([_]PaneIdType{ left, top_right, bottom_right }) |pane_id|
         try std.testing.expectEqual(expected.find(pane_id).?.outer, actual.find(pane_id).?.outer);
     try std.testing.expectEqual(top_right, restored.model.layout.focused().?);
 }
 
 test "client layout reconciliation restores its saved pane focus" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(2),
     };
-    const left: schema.PaneId = @enumFromInt(10);
-    const right: schema.PaneId = @enumFromInt(42);
-    var saved: layout_mod.Layout = .{};
+    const left: PaneIdType = @enumFromInt(10);
+    const right: PaneIdType = @enumFromInt(42);
+    var saved: LayoutType = .{};
     try saved.addRoot(left);
     try saved.split(.{ .existing_pane = left, .new_pane = right, .axis = .horizontal });
     try std.testing.expect(saved.focusPane(left));
@@ -1207,14 +555,14 @@ test "client layout reconciliation restores its saved pane focus" {
 }
 
 test "tab reconciliation rejects a bookmarked tree for a changed pane set" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(2),
     };
-    const selected: schema.PaneId = @enumFromInt(42);
-    var saved: layout_mod.Layout = .{};
+    const selected: PaneIdType = @enumFromInt(42);
+    var saved: LayoutType = .{};
     try saved.addRoot(@enumFromInt(10));
     try saved.split(.{ .existing_pane = @enumFromInt(10), .new_pane = selected, .axis = .horizontal });
     try saved.split(.{ .existing_pane = selected, .new_pane = @enumFromInt(77), .axis = .vertical });
@@ -1234,9 +582,9 @@ test "tab reconciliation rejects a bookmarked tree for a changed pane set" {
 }
 
 test "later tab reconciliation preserves the client layout order" {
-    var model = Model.init(std.testing.allocator);
+    var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(2),
     };

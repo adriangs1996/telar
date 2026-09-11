@@ -94,23 +94,23 @@ but schedules no frame.
 
 ## Proof
 
-- `src/frontend/workspace/tabs.zig` proves that current and future tabs share
+- `src/client/workspace/tabs.zig` proves that current and future tabs share
   one cell geometry.
-- `src/frontend/client/model.zig` proves validation, atomic capability and
+- `src/client/model/Model.zig` proves validation, atomic capability and
   geometry commits, no-op behavior and isolated host revisions.
-- `src/frontend/client/application/host_resize.zig` proves commit-before-
+- `src/client/application/host/host_resize.zig` proves commit-before-
   delivery ordering and retained commits after delivery failure.
-- `src/frontend/client/application/host_resource_delivery.zig` proves exact
+- `src/client/application/host/host_resource_delivery.zig` proves exact
   branch ordering, no-op policy, stale-commit rejection and partial failures.
-- `src/frontend/client/host_resizes.zig` owns platform measurement, pixel
+- `src/frontend/client/controllers/host/host_resizes.zig` owns platform measurement, pixel
   refresh requests and watcher rearming.
-- `src/frontend/client/host_resources.zig` implements the physical host effect
+- `src/frontend/client/controllers/host/host_resources.zig` implements the physical host effect
   ports shared by resize and capability delivery.
-- `src/frontend/client/pane_geometry.zig` owns translation and bounded delivery
+- `src/frontend/client/controllers/panes/pane_geometry.zig` owns translation and bounded delivery
   of visible attached pane sizes.
-- `src/frontend/client/application/panes/pane_attachment_requests.zig` proves
+- `src/client/application/panes/pane_attachment_requests.zig` proves
   that a resize attaches only detached panes with content, once each, after a
   crowded layout left them detached.
-- `src/frontend/client/client_test.zig` proves exact pane geometry,
+- `src/frontend/client/tests/` proves exact pane geometry,
   backpressure policy, capability-response consistency and presenter-owned
   frame scheduling.

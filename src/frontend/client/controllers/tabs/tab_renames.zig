@@ -1,14 +1,13 @@
 //! Wires tab-rename use cases to one client's protocol state.
 
-const std = @import("std");
-const core = @import("telar-core");
-const tabs_application = @import("telar-client").application.tabs;
-const client_model = @import("telar-client").model;
-
-const Client = @import("../../client.zig");
-const rename_tab = tabs_application.rename_tab;
+const Client = @import("../../Client.zig");
+const RequestRenameTabHandlerType = @import("telar-client").RequestRenameTabHandler;
+const TabRenamedType = @import("telar-core").TabRenamed;
+const ChangeType = @import("telar-client").Change;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-const schema = core.schema;
+const std = @import("std");
+const ConfirmTabRenameHandlerType = @import("telar-client").ConfirmTabRenameHandler;
+const TabRenameIntentType = @import("telar-client").TabRenameIntent;
 
 /// Wires a rename request to the client's continuation tracker and outbox.
 ///
@@ -18,7 +17,7 @@ const schema = core.schema;
 ///     return;
 /// }
 /// ```
-pub fn requestHandler(client: *Client) rename_tab.RequestRenameTabHandler {
+pub fn requestHandler(client: *Client) RequestRenameTabHandlerType {
     return .{
         .model = &client.model,
         .gate = .{
@@ -37,7 +36,7 @@ pub fn requestHandler(client: *Client) rename_tab.RequestRenameTabHandler {
 /// ```zig
 /// const change = try apply(client, renamed);
 /// ```
-pub fn apply(client: *Client, renamed: schema.TabRenamed) !client_model.Change {
+pub fn apply(client: *Client, renamed: TabRenamedType) !ChangeType {
     const continuation = request_lifecycle.consume(client, renamed.request_id) orelse
         return error.UnexpectedTabRenamed;
     const expected_location = switch (continuation) {
@@ -56,7 +55,7 @@ pub fn apply(client: *Client, renamed: schema.TabRenamed) !client_model.Change {
     }) catch return error.UnexpectedTabRenamed;
 }
 
-fn confirmationHandler(client: *Client) rename_tab.ConfirmTabRenameHandler {
+fn confirmationHandler(client: *Client) ConfirmTabRenameHandlerType {
     return .{ .model = &client.model };
 }
 
@@ -65,7 +64,7 @@ fn tabOperationPending(context: *anyopaque) bool {
     return request_lifecycle.has(client, .tab_operation);
 }
 
-fn sendRename(context: *anyopaque, requested: rename_tab.TabRenameIntent) !void {
+fn sendRename(context: *anyopaque, requested: TabRenameIntentType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try request_lifecycle.nextId(client);
     try request_lifecycle.deliverRename(client, .{

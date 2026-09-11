@@ -1,16 +1,13 @@
 //! Wires committed pane viewports to graphics and the runtime attachment.
 
-const core = @import("telar-core");
-const panes_application = @import("telar-client").application.panes;
-const client_model = @import("telar-client").model;
-
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
+const SetPaneViewportHandlerType = @import("telar-client").SetPaneViewportHandler;
+const PaneViewportEffectsType = @import("telar-client").PaneViewportEffects;
+const PaneViewportChangeType = @import("telar-client").PaneViewportChange;
+const DeliverPaneViewportHandlerType = @import("telar-client").DeliverPaneViewportHandler;
+const PaneIdType = @import("telar-core").PaneId;
+const SetPaneViewportType = @import("telar-core").SetPaneViewport;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
-const pane_viewport_delivery = panes_application.pane_viewport_delivery;
-const set_pane_viewport = panes_application.set_pane_viewport;
-const schema = core.schema;
-
-pub const Target = client_model.PaneViewportTarget;
 
 /// Wires viewport intent to the shared graphics and runtime effect.
 ///
@@ -18,7 +15,7 @@ pub const Target = client_model.PaneViewportTarget;
 /// var use_case = handler(client);
 /// _ = try use_case.execute(.{ .pane_id = pane_id, .target = .bottom });
 /// ```
-pub fn handler(client: *Client) set_pane_viewport.SetPaneViewportHandler {
+pub fn handler(client: *Client) SetPaneViewportHandlerType {
     return .{
         .model = &client.model,
         .effects = effects(client),
@@ -30,16 +27,16 @@ pub fn handler(client: *Client) set_pane_viewport.SetPaneViewportHandler {
 /// ```zig
 /// const viewport_effects = effects(client);
 /// ```
-pub fn effects(client: *Client) set_pane_viewport.PaneViewportEffects {
+pub fn effects(client: *Client) PaneViewportEffectsType {
     return .{
         .context = client,
         .sync = sync,
     };
 }
 
-fn sync(context: *anyopaque, change: client_model.PaneViewportChange) !void {
+fn sync(context: *anyopaque, change: PaneViewportChangeType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const delivery_handler: pane_viewport_delivery.DeliverPaneViewportHandler = .{
+    const delivery_handler: DeliverPaneViewportHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = client,
@@ -51,13 +48,13 @@ fn sync(context: *anyopaque, change: client_model.PaneViewportChange) !void {
     try delivery_handler.execute(change);
 }
 
-fn setGraphicsVisible(context: *anyopaque, pane_id: schema.PaneId, visible: bool) !void {
+fn setGraphicsVisible(context: *anyopaque, pane_id: PaneIdType, visible: bool) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try client.graphics_store.setPaneVisible(pane_id, visible);
 }
 
-fn deliverViewport(context: *anyopaque, viewport: schema.SetPaneViewport) !void {
+fn deliverViewport(context: *anyopaque, viewport: SetPaneViewportType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try runtime_transport.enqueue(client, .{ .set_pane_viewport = viewport });

@@ -121,20 +121,20 @@ another workspace is a protocol error. Every known continuation is consumed
 before rejection. A duplicate tab fails in the model without detaching the
 active tab.
 
-- `src/frontend/client/application/create_tab.zig` proves request gating,
+- `src/client/application/tabs/create_tab.zig` proves request gating,
   label validation, exact planning, no provisional mutation,
   commit-before-delivery and post-commit failure behavior.
-- `src/frontend/client/application/tab_creation_delivery.zig` proves exact
+- `src/client/application/tabs/tab_creation_delivery.zig` proves exact
   revision, identity, root and layout validation, attachment-before-resource
   order, ABA rejection and partial failure semantics.
-- `src/frontend/client/tab_creations.zig` owns response correlation and
+- `src/frontend/client/controllers/tabs/tab_creations.zig` owns response correlation and
   wire-to-command translation plus physical port wiring.
-- `src/frontend/client/model.zig` proves attached-source planning,
+- `src/client/model/Model.zig` proves attached-source planning,
   transactional insertion, identity checks and exact version changes.
-- `src/frontend/client/outbox.zig` proves queued creation owns its label,
+- `src/client/connection/outbox_support.zig` proves queued creation owns its label,
   cwd and argument bytes until encoding.
-- `src/frontend/client/client_test.zig` proves request correlation, preserved
+- `src/frontend/client/tests/` proves request correlation, preserved
   geometry, failure notification, attachment order and presenter observation.
-- `src/backend/runtime/commands/create_tab.zig` and
-  `src/backend/runtime/controllers/create_tab.zig` prove runtime rollback,
+- `src/backend/runtime/application/commands/create_tab.zig` and
+  `src/backend/runtime/entrypoints/requests/create_tab.zig` prove runtime rollback,
   commit ordering and expected wire failures.

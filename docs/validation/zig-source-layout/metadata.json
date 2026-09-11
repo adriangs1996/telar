@@ -1,0 +1,61 @@
+{
+  "source_commit": "4d8c90246fb5d8d42bea054f5eb8c161b38052cd",
+  "baseline_commit": "3b801c8538d05830df53f42da9b43eaceb6c3472",
+  "branch": "refactor/zig-source-layout",
+  "date_utc": "2026-09-11T14:34:08.500351+00:00",
+  "zig": "0.16.0",
+  "host": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83",
+  "cpu": "Apple M3",
+  "memory_bytes": 17179869184,
+  "build_options": {
+    "baseline": {
+      "optimize": "ReleaseFast",
+      "diagnostics": true,
+      "echo_trace": false,
+      "echo_trace_cpu": false
+    },
+    "candidate": {
+      "optimize": "ReleaseFast",
+      "diagnostics": true,
+      "echo_trace": false,
+      "echo_trace_cpu": false
+    },
+    "trace-cpu": {
+      "optimize": "ReleaseFast",
+      "diagnostics": true,
+      "echo_trace": true,
+      "echo_trace_cpu": true
+    }
+  },
+  "binaries": {
+    "baseline": {
+      "path": "/tmp/telar-layout-release-binaries/baseline",
+      "sha256": "7b6aaf7d80e40428baa8ba76decd6a98a34df224fdff189ee6fc5f3f3865486c",
+      "bytes": 11850200
+    },
+    "candidate": {
+      "path": "/tmp/telar-layout-release-binaries/candidate",
+      "sha256": "22ce2441574c89aabc4584bf2a2741ffa1cb8a7344dea9d80fa10a3b392af5bc",
+      "bytes": 11849384
+    },
+    "trace-cpu": {
+      "path": "/tmp/telar-layout-release-binaries/trace-cpu",
+      "sha256": "f4d25e9e83598deefc61d66583bae9e67e0df2b638f5c8ae2b5a061a876ee1ca",
+      "bytes": 11867096
+    },
+    "echo-probe": {
+      "path": "/tmp/telar-layout-release-binaries/echo-probe",
+      "sha256": "08415f2745389e374ec00e485d8d60df7ebf4cee6bdafecfdb1f495b8b20901f",
+      "bytes": 2013832
+    }
+  },
+  "matching_benchmark_payloads": 34,
+  "performance_verdict": "not accepted; functional smoke only",
+  "source_preservation": {
+    "config_sha256": "71fd27778fcd21db48af66387486195258f3a1930a64f32eb0a6490dd3cca37f",
+    "asteroids_sha256": "f61d2ad91e1aea3417427e71f696fa128a004dd8923b8860735c8abf9eb40843",
+    "geometry_without_new_trailing_marker_sha256": "2ed8c682d42d736b2be15e736778c5ffc5f216257a74f0757ff4f90dc523879c",
+    "geometry_current_sha256": "a83e6f73901510c8112e7378325dc03ea45ee1c5070ae7a55bad7349a22561b4",
+    "geometry_note": "Original checkout has an additional trailing // bench-marker-2. Its origin was not established; it was left untouched."
+  }
+}

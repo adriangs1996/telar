@@ -105,18 +105,18 @@ latest model state.
 
 ## Proof
 
-- `src/frontend/client/name_prompt.zig` proves bounded editing, revisions,
+- `src/client/model/name_prompt.zig` proves bounded editing, revisions,
   cancellation and exact-target completion.
-- `src/frontend/client/application/name_prompt.zig` proves effect ordering and
+- `src/client/application/input/name_prompt.zig` proves effect ordering and
   prompt retention after blocked or failed submissions.
-- `src/frontend/client/application/name_prompt_opening.zig` proves input
+- `src/client/application/input/name_prompt_opening.zig` proves input
   authority, workspace-creation gating, target resolution and canonical text.
-- `src/frontend/client/name_prompts.zig` proves terminal parsing, bracketed
+- `src/frontend/client/controllers/input/name_prompts.zig` proves terminal parsing, bracketed
   paste handling and the zero-length incomplete-sequence regression.
-- `src/frontend/client/application/paste_routing.zig` proves exclusive prompt
+- `src/client/application/input/paste_routing.zig` proves exclusive prompt
   or pane ownership and ignored unowned phases.
-- `src/frontend/client/client_test.zig` proves request ownership, outbox
+- `src/frontend/client/tests/` proves request ownership, outbox
   failure recovery and presenter-only frame scheduling through the real client
   adapters.
-- `src/frontend/client/view.zig` and `src/frontend/client/presenter.zig` prove
+- `src/frontend/client/presentation/view.zig` and `src/frontend/client/presentation/Presenter.zig` prove
   that presentation receives model state without becoming its owner.

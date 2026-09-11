@@ -2,52 +2,23 @@
 //! projections for the goto picker. Deterministic for one (sources, query)
 //! pair, so the renderer and the submit path always agree on ordering.
 
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const TabIdType = @import("telar-core").TabId;
+const AgentKeyType = @import("../agents/AgentKey.zig");
+const Sources = @import("Sources.zig");
+const Results = @import("Results.zig");
+const Scorer = @import("Scorer.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("../agents/root.zig");
-const workspace_capability = @import("../workspace/root.zig");
-
-const schema = core.schema;
-const workspace_list = workspace_capability.workspace_list;
-const tabs_mod = workspace_capability.tabs;
+const SnapshotType = @import("../agents/AgentSnapshot.zig");
+const WorkspaceListSnapshot = @import("../workspace/WorkspaceListSnapshot.zig");
 
 pub const max_results = 64;
 pub const max_label_bytes = 160;
 
 pub const Item = union(enum) {
-    workspace: schema.WorkspaceId,
-    tab: schema.TabId,
-    agent: agents.AgentKey,
-};
-
-pub const Match = struct {
-    item: Item,
-    score: u32,
-};
-
-pub const Results = struct {
-    matches: [max_results]Match = undefined,
-    len: u8 = 0,
-
-    pub fn slice(results: *const Results) []const Match {
-        return results.matches[0..results.len];
-    }
-};
-
-pub const Sources = struct {
-    agents: *const agents.Snapshot,
-    workspaces: *const workspace_list.Snapshot,
-    tabs: ?*const tabs_mod.Model,
-};
-
-const Scorer = struct {
-    sources: Sources,
-    query: []const u8,
-    label: [max_label_bytes]u8 = undefined,
-
-    fn scoreItem(scorer: *Scorer, item: Item) ?u32 {
-        return score(describe(scorer.sources, item, &scorer.label), scorer.query);
-    }
+    workspace: WorkspaceIdType,
+    tab: TabIdType,
+    agent: AgentKeyType,
 };
 
 /// Fills `results` with every candidate matching `query`, best score first.
@@ -127,9 +98,6 @@ pub fn describe(sources: Sources, item: Item, buffer: *[max_label_bytes]u8) []co
     return writer.buffered();
 }
 
-/// Shared subsequence scorer; see `telar-core`'s `fuzzy.score`.
-pub const score = core.fuzzy.score;
-
 fn insert(results: *Results, item: Item, item_score: u32) void {
     var index: usize = results.len;
     while (index > 0 and results.matches[index - 1].score < item_score) {
@@ -153,8 +121,8 @@ fn insert(results: *Results, item: Item, item_score: u32) void {
 
 test "collect keeps matches ordered by score with a stable bound" {
     var results: Results = .{};
-    var snapshot: agents.Snapshot = .{};
-    var workspaces: workspace_list.Snapshot = .{};
+    var snapshot: SnapshotType = .{};
+    var workspaces: WorkspaceListSnapshot = .{};
     const sources: Sources = .{
         .agents = &snapshot,
         .workspaces = &workspaces,

@@ -64,7 +64,7 @@ tab.
 - `src/backend/runtime/tests/pane_title_test.zig` proves capture, sanitizing,
   clearing, delivery and revision bookkeeping through a real attachment.
 - `src/core/schema_contract_test.zig` pins the `pane_title` bytes.
-- `src/frontend/client/model/tests/observations.zig` proves per-pane storage,
+- `src/client/model/tests/observations.zig` proves per-pane storage,
   no-op repeats and the focused-pane accessor.
 - `src/frontend/presentation/window_title.zig` proves token rendering and
   send-on-change.

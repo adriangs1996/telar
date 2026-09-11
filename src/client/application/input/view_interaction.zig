@@ -1,153 +1,57 @@
 //! Application policy for dispatching one semantic view interaction.
 
+const AgentKeyType = @import("../../agents/AgentKey.zig");
+const TabIdType = @import("telar-core").TabId;
+const PaneIdType = @import("telar-core").PaneId;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const notification_capability = @import("../../notifications/notifications.zig");
+const types = @import("../../attachments/types.zig");
+const ViewInteractionCapture = @import("ViewInteractionCapture.zig");
+const DispatchViewInteractionHandler = @import("DispatchViewInteractionHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("../../root.zig").agents;
-const attachments = @import("../../attachments/root.zig");
-const notification_capability = @import("../../root.zig").notifications;
-
-const schema = core.schema;
+const ViewInteractionOutcome = @import("ViewInteractionOutcome.zig");
+const ViewInteractionCommand = @import("ViewInteractionCommand.zig");
 
 pub const Intent = union(enum) {
     none,
     toggle_sidebar,
     resize_sidebar: u16,
     toggle_workspace_list,
-    focus_agent: agents.AgentKey,
-    select_tab: schema.TabId,
-    focus_pane: schema.PaneId,
-    rename_tab: schema.TabId,
-    select_workspace: schema.WorkspaceId,
+    focus_agent: AgentKeyType,
+    select_tab: TabIdType,
+    focus_pane: PaneIdType,
+    rename_tab: TabIdType,
+    select_workspace: WorkspaceIdType,
     notification_activate: notification_capability.Id,
     notification_dismiss: notification_capability.Id,
-    attachment_dismiss: attachments.Id,
+    attachment_dismiss: types.Id,
 };
 
-pub const Command = struct {
-    intent: Intent = .none,
-    layout_changed: bool = false,
-    consumed: bool = false,
-};
-
-pub const Outcome = struct {
-    consume_pane_input: bool,
-};
-
-pub const IntentOutcome = struct {
-    layout_changed: bool = false,
-};
-
-pub const Effects = struct {
-    context: *anyopaque,
-    apply_intent: *const fn (*anyopaque, Intent) anyerror!IntentOutcome,
-    invalidate_graphics_placements: *const fn (*anyopaque) void,
-    offer_pane_geometry: *const fn (*anyopaque) anyerror!void,
-};
-
-pub const DispatchViewInteractionHandler = struct {
-    effects: Effects,
-
-    /// Applies the single semantic intent before ordered layout delivery, then
-    /// returns only the routing decision needed by host input.
-    ///
-    /// ```zig
-    /// const outcome = try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *DispatchViewInteractionHandler, command: Command) !Outcome {
-        var layout_changed = command.layout_changed;
-        switch (command.intent) {
-            .none => {},
-            else => {
-                const applied = try handler.effects.apply_intent(handler.effects.context, command.intent);
-                layout_changed = layout_changed or applied.layout_changed;
-            },
-        }
-
-        if (layout_changed) {
-            handler.effects.invalidate_graphics_placements(handler.effects.context);
-            try handler.effects.offer_pane_geometry(handler.effects.context);
-        }
-
-        return .{
-            .consume_pane_input = command.consumed or capturesPaneInput(command.intent),
-        };
-    }
-};
-
-fn capturesPaneInput(intent: Intent) bool {
+pub fn capturesPaneInput(intent: Intent) bool {
     return switch (intent) {
         .select_tab, .focus_agent => true,
         else => false,
     };
 }
 
-const Event = union(enum) {
+pub const Event = union(enum) {
     intent: Intent,
     invalidate_graphics_placements,
     offer_pane_geometry,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     intent,
     pane_geometry,
 };
 
-const Capture = struct {
-    events: [3]Event = undefined,
-    count: usize = 0,
-    failure: Failure = .none,
-
-    fn effects(capture: *Capture) Effects {
-        return .{
-            .context = capture,
-            .apply_intent = applyIntent,
-            .invalidate_graphics_placements = invalidateGraphicsPlacements,
-            .offer_pane_geometry = offerPaneGeometry,
-        };
-    }
-
-    fn record(capture: *Capture, event: Event) void {
-        capture.events[capture.count] = event;
-        capture.count += 1;
-    }
-
-    fn applyIntent(context: *anyopaque, intent: Intent) !IntentOutcome {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.record(.{ .intent = intent });
-
-        if (capture.failure == .intent) {
-            return error.ViewIntentFailed;
-        }
-
-        return .{ .layout_changed = switch (intent) {
-            .attachment_dismiss => true,
-            else => false,
-        } };
-    }
-
-    fn invalidateGraphicsPlacements(context: *anyopaque) void {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-
-        capture.record(.invalidate_graphics_placements);
-    }
-
-    fn offerPaneGeometry(context: *anyopaque) !void {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.record(.offer_pane_geometry);
-
-        if (capture.failure == .pane_geometry) {
-            return error.PaneGeometryFailed;
-        }
-    }
-};
-
 test "DispatchViewInteractionHandler orders intent invalidation and pane geometry" {
-    const key: agents.AgentKey = .{
+    const key: AgentKeyType = .{
         .pane_id = @enumFromInt(3),
         .pane_generation = 7,
     };
-    var capture: Capture = .{};
+    var capture: ViewInteractionCapture = .{};
     var handler: DispatchViewInteractionHandler = .{ .effects = capture.effects() };
 
     const outcome = try handler.execute(.{
@@ -155,7 +59,7 @@ test "DispatchViewInteractionHandler orders intent invalidation and pane geometr
         .layout_changed = true,
     });
 
-    try std.testing.expectEqualDeep(Outcome{
+    try std.testing.expectEqualDeep(ViewInteractionOutcome{
         .consume_pane_input = true,
     }, outcome);
     try std.testing.expectEqual(@as(usize, 3), capture.count);
@@ -165,9 +69,9 @@ test "DispatchViewInteractionHandler orders intent invalidation and pane geometr
 }
 
 test "attachment dismissal can discover its layout change while applying the intent" {
-    var capture: Capture = .{};
+    var capture: ViewInteractionCapture = .{};
     var handler: DispatchViewInteractionHandler = .{ .effects = capture.effects() };
-    const id: attachments.Id = @enumFromInt(4);
+    const id: types.Id = @enumFromInt(4);
 
     _ = try handler.execute(.{ .intent = .{ .attachment_dismiss = id } });
 
@@ -178,9 +82,9 @@ test "attachment dismissal can discover its layout change while applying the int
 }
 
 test "DispatchViewInteractionHandler preserves completed stages across failures" {
-    var capture: Capture = .{ .failure = .intent };
+    var capture: ViewInteractionCapture = .{ .failure = .intent };
     var handler: DispatchViewInteractionHandler = .{ .effects = capture.effects() };
-    const command: Command = .{
+    const command: ViewInteractionCommand = .{
         .intent = .{ .rename_tab = @enumFromInt(4) },
         .layout_changed = true,
     };
@@ -197,7 +101,7 @@ test "DispatchViewInteractionHandler preserves completed stages across failures"
 }
 
 test "DispatchViewInteractionHandler delivers layout without a semantic intent" {
-    var capture: Capture = .{};
+    var capture: ViewInteractionCapture = .{};
     var handler: DispatchViewInteractionHandler = .{ .effects = capture.effects() };
 
     const outcome = try handler.execute(.{ .layout_changed = true, .consumed = true });
@@ -210,7 +114,7 @@ test "DispatchViewInteractionHandler delivers layout without a semantic intent" 
 
 test "DispatchViewInteractionHandler owns pane-input capture policy" {
     const cases = [_]struct {
-        command: Command,
+        command: ViewInteractionCommand,
         consume: bool,
     }{
         .{ .command = .{}, .consume = false },
@@ -225,7 +129,7 @@ test "DispatchViewInteractionHandler owns pane-input capture policy" {
     };
 
     for (cases) |case| {
-        var capture: Capture = .{};
+        var capture: ViewInteractionCapture = .{};
         var handler: DispatchViewInteractionHandler = .{ .effects = capture.effects() };
 
         const outcome = try handler.execute(case.command);

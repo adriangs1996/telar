@@ -205,17 +205,17 @@ for `SessionEnd` and `Interrupt`.
 
 ## Proof
 
-- `src/backend/agent/tracker.zig` proves precedence over screen evidence,
+- `src/backend/agent/tracker_support.zig` proves precedence over screen evidence,
   `exited` withdrawal and expiry.
 - `src/backend/runtime/entrypoints/requests/report_agent.zig` and
   `report_agent_title.zig` prove the reply contracts.
-- `src/backend/agent/tracker.zig` proves that an agent title outranks a
+- `src/backend/agent/tracker_support.zig` proves that an agent title outranks a
   generated one, never clears a manual one, clears on an empty report and is
   durable.
 - `src/cli/hook.zig` proves the event mapping and subagent filtering for
   Claude Code, Codex and Pi; installed payload shapes; manifest-based shell
   extraction; and the parsed arena lifetime that backs both requests.
-- `src/cli/integration.zig` proves idempotent install and selective removal
+- `src/cli/integration_support.zig` proves idempotent install and selective removal
   for Claude Code, and rendering, marker detection and atomic owner-only
   installation for the Pi extension.
 - `src/backend/history/persistence/sqlite.zig` proves that native start/finish

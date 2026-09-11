@@ -1,16 +1,11 @@
 //! Isolated one-shot Lua plugin worker.
 
 const std = @import("std");
-const lua_config = @import("../config/root.zig");
+const Input = @import("Input.zig");
+const generation_support = @import("../config/generation_support.zig");
+const DiagnosticType = @import("telar-client").Diagnostic;
+const GenerationType = @import("../config/Generation.zig");
 const protocol = @import("protocol.zig");
-
-const Io = std.Io;
-
-pub const Input = struct {
-    entry_path: []const u8,
-    action_name: []const u8,
-    context: lua_config.CallbackContext,
-};
 
 /// Runs one validated plugin callback and writes its encoded effect batch.
 /// For example: `try run(init, .{ .entry_path = entry, .action_name = action, .context = context });`.
@@ -21,11 +16,11 @@ pub fn run(init: std.process.Init, input: Input) !void {
     if (!validActionName(action_name)) {
         return error.InvalidPluginAction;
     }
-    const entry = try Io.Dir.cwd().readFileAlloc(
+    const entry = try std.Io.Dir.cwd().readFileAlloc(
         init.io,
         entry_path,
         init.gpa,
-        .limited(lua_config.max_config_bytes),
+        .limited(generation_support.max_config_bytes),
     );
     defer init.gpa.free(entry);
 
@@ -55,8 +50,8 @@ pub fn run(init: std.process.Init, input: Input) !void {
         \\} } }
     );
 
-    var diagnostic: lua_config.Diagnostic = .{};
-    const generation = lua_config.Generation.loadSource(.{
+    var diagnostic: DiagnosticType = .{};
+    const generation = GenerationType.loadSource(.{
         .gpa = init.gpa,
         .io = init.io,
         .diagnostic = &diagnostic,
@@ -79,7 +74,7 @@ pub fn run(init: std.process.Init, input: Input) !void {
         return err;
     };
     var encoded: [protocol.max_bytes]u8 = undefined;
-    try Io.File.stdout().writeStreamingAll(init.io, try protocol.encode(&encoded, &batch));
+    try std.Io.File.stdout().writeStreamingAll(init.io, try protocol.encode(&encoded, &batch));
 }
 
 fn validActionName(value: []const u8) bool {

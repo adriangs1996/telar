@@ -1,80 +1,14 @@
 //! Application policy for delivering one atomically committed workspace
 //! creation replacement.
 
+const PaneIdType = @import("telar-core").PaneId;
+const ModelType = @import("../../model/Model.zig");
+const WorkspaceCreationDeliveryEffectsCapture = @import("WorkspaceCreationDeliveryEffectsCapture.zig");
+const DeliverWorkspaceCreationHandler = @import("DeliverWorkspaceCreationHandler.zig");
+const WorkspaceCreationDeliveryTestingModel = @import("WorkspaceCreationDeliveryTestingModel.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-const workspace_transition_delivery = @import("workspace_transition_delivery.zig");
 
-const schema = core.schema;
-
-pub const DeliverWorkspaceCreationHandler = struct {
-    model: *client_model.Model,
-    release_effects: workspace_transition_delivery.ReleaseEffects,
-    activation_effects: workspace_transition_delivery.ActivationEffects,
-
-    /// Validates an exact replacement before releasing its departed resources
-    /// and activating the runtime-created root.
-    ///
-    /// ```zig
-    /// try handler.execute(&replacement);
-    /// ```
-    pub fn execute(handler: *DeliverWorkspaceCreationHandler, replacement: *const client_model.WorkspaceReplacement) !void {
-        var activate: workspace_transition_delivery.ActivateWorkspaceHandler = .{
-            .model = handler.model,
-            .effects = handler.activation_effects,
-        };
-        try activate.validate(replacement.activation);
-        try handler.validateDeparture(replacement);
-
-        var release: workspace_transition_delivery.ReleaseWorkspaceResourcesHandler = .{
-            .model = handler.model,
-            .effects = handler.release_effects,
-        };
-        release.execute(&replacement.departure);
-
-        try activate.execute(replacement.activation);
-    }
-
-    fn validateDeparture(handler: *const DeliverWorkspaceCreationHandler, replacement: *const client_model.WorkspaceReplacement) !void {
-        const panes = replacement.departure.panes.slice();
-        const source = replacement.departure.source orelse {
-            if (replacement.departure.bookmark != null or panes.len != 0) {
-                return error.StaleWorkspaceCreation;
-            }
-            return;
-        };
-        if (std.meta.eql(source, replacement.activation.location.workspace)) {
-            return error.StaleWorkspaceCreation;
-        }
-
-        if (replacement.departure.bookmark) |bookmark| {
-            if (!std.meta.eql(bookmark.location.workspace, source) or
-                bookmark.tab_layout.focused() != bookmark.pane_id or
-                !containsPane(panes, bookmark.pane_id))
-            {
-                return error.StaleWorkspaceCreation;
-            }
-        }
-
-        for (panes, 0..) |pane_id, index| {
-            if (pane_id == .invalid or
-                pane_id == replacement.activation.pane_id or
-                handler.model.workspace.findPane(pane_id) != null)
-            {
-                return error.StaleWorkspaceCreation;
-            }
-
-            for (panes[0..index]) |previous| {
-                if (previous == pane_id) {
-                    return error.StaleWorkspaceCreation;
-                }
-            }
-        }
-    }
-};
-
-fn containsPane(panes: []const schema.PaneId, wanted: schema.PaneId) bool {
+pub fn containsPane(panes: []const PaneIdType, wanted: PaneIdType) bool {
     for (panes) |pane_id| {
         if (pane_id == wanted) {
             return true;
@@ -84,7 +18,7 @@ fn containsPane(panes: []const schema.PaneId, wanted: schema.PaneId) bool {
     return false;
 }
 
-const Event = enum {
+pub const Event = enum {
     remember_bookmark,
     clear_pane_graphics,
     synchronize_active_resources,
@@ -93,171 +27,12 @@ const Event = enum {
     request_tab_snapshot,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     active_resources,
 };
 
-const TestingModel = struct {
-    model: *client_model.Model,
-    previous: schema.TabLocation,
-    previous_root: schema.PaneId,
-    previous_sibling: schema.PaneId,
-    created: schema.TabLocation,
-    created_root: schema.PaneId,
-
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const previous: schema.TabLocation = .{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(1),
-        };
-        const created: schema.TabLocation = .{
-            .workspace = .{ .workspace = @enumFromInt(2) },
-            .tab_id = @enumFromInt(2),
-        };
-        const previous_root: schema.PaneId = @enumFromInt(1);
-        const previous_sibling: schema.PaneId = @enumFromInt(2);
-        const created_root: schema.PaneId = @enumFromInt(3);
-        try model.workspace.bootstrap(.{ .pane_id = previous_root, .location = previous, .size = .{ .cols = 40, .rows = 10 } });
-        try model.workspace.active().?.model.split(.{ .existing_pane = previous_root, .new_pane = previous_sibling, .location = previous, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
-        if (!model.workspace.active().?.model.focusPane(previous_root)) {
-            return error.PreviousFocusNotRestored;
-        }
-
-        const pane = model.workspace.findPane(previous_root).?;
-        pane.input_modes.bracketed_paste = true;
-        pane.input_modes.focus_events = true;
-        _ = model.beginPanePaste().?;
-        _ = model.syncReportedPaneFocus().?;
-
-        return .{
-            .model = model,
-            .previous = previous,
-            .previous_root = previous_root,
-            .previous_sibling = previous_sibling,
-            .created = created,
-            .created_root = created_root,
-        };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-
-    fn replace(testing: *TestingModel) !client_model.WorkspaceReplacement {
-        return testing.model.replaceWorkspace(.{
-            .pane_id = testing.created_root,
-            .location = testing.created,
-            .size = .{ .cols = 50, .rows = 12 },
-        });
-    }
-};
-
-const EffectsCapture = struct {
-    model: *client_model.Model,
-    replacement: *const client_model.WorkspaceReplacement,
-    events: [12]Event = undefined,
-    event_count: usize = 0,
-    cleared_panes: [4]schema.PaneId = undefined,
-    cleared_count: usize = 0,
-    remembered: ?client_model.WorkspaceBookmark = null,
-    workspace_request: ?schema.WorkspaceLocation = null,
-    tab_request: ?schema.TabLocation = null,
-    exact_commit_observed: bool = true,
-    release_complete_before_activation: bool = false,
-    failure: Failure = .none,
-
-    fn releaseEffects(capture: *EffectsCapture) workspace_transition_delivery.ReleaseEffects {
-        return .{
-            .context = capture,
-            .remember_bookmark = rememberBookmark,
-            .clear_pane_graphics = clearPaneGraphics,
-        };
-    }
-
-    fn activationEffects(capture: *EffectsCapture) workspace_transition_delivery.ActivationEffects {
-        return .{
-            .context = capture,
-            .synchronize_active_resources = synchronizeActiveResources,
-            .schedule_host_input = scheduleHostInput,
-            .request_workspace_snapshot = requestWorkspaceSnapshot,
-            .request_tab_snapshot = requestTabSnapshot,
-        };
-    }
-
-    fn rememberBookmark(context: *anyopaque, bookmark: client_model.WorkspaceBookmark) void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.remember_bookmark);
-        capture.remembered = bookmark;
-    }
-
-    fn clearPaneGraphics(context: *anyopaque, pane_id: schema.PaneId) void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.clear_pane_graphics);
-        capture.cleared_panes[capture.cleared_count] = pane_id;
-        capture.cleared_count += 1;
-    }
-
-    fn synchronizeActiveResources(context: *anyopaque) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.synchronize_active_resources);
-        capture.release_complete_before_activation =
-            capture.cleared_count == capture.replacement.departure.panes.slice().len and
-            !capture.model.panePasteActive() and
-            capture.model.reportedPaneFocus() == null;
-
-        if (capture.failure == .active_resources) {
-            return error.ActiveResourcesFailed;
-        }
-    }
-
-    fn scheduleHostInput(context: *anyopaque) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.schedule_host_input);
-    }
-
-    fn requestWorkspaceSnapshot(context: *anyopaque, workspace: schema.WorkspaceLocation) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.request_workspace_snapshot);
-        capture.workspace_request = workspace;
-    }
-
-    fn requestTabSnapshot(context: *anyopaque, location: schema.TabLocation) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.append(.request_tab_snapshot);
-        capture.tab_request = location;
-    }
-
-    fn append(capture: *EffectsCapture, event: Event) void {
-        capture.exact_commit_observed = capture.exact_commit_observed and capture.observesCommit();
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn observesCommit(capture: *const EffectsCapture) bool {
-        const activation = capture.replacement.activation;
-        const version = capture.model.version();
-
-        return std.meta.eql(capture.model.activeTabLocation(), activation.location) and
-            version.workspace == activation.workspace_revision and
-            version.tabs == activation.tabs_revision and
-            version.active_tab == activation.active_tab_revision and
-            version.panes == activation.panes_revision and
-            version.copy == activation.copy_revision;
-    }
-
-    fn eventSlice(capture: *const EffectsCapture) []const Event {
-        return capture.events[0..capture.event_count];
-    }
-};
-
-fn deliveryHandler(model: *client_model.Model, capture: *EffectsCapture) DeliverWorkspaceCreationHandler {
+fn deliveryHandler(model: *ModelType, capture: *WorkspaceCreationDeliveryEffectsCapture) DeliverWorkspaceCreationHandler {
     return .{
         .model = model,
         .release_effects = capture.releaseEffects(),
@@ -266,10 +41,10 @@ fn deliveryHandler(model: *client_model.Model, capture: *EffectsCapture) Deliver
 }
 
 test "DeliverWorkspaceCreationHandler releases before ordered activation" {
-    var testing = try TestingModel.init();
+    var testing = try WorkspaceCreationDeliveryTestingModel.init();
     defer testing.deinit();
     const replacement = try testing.replace();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceCreationDeliveryEffectsCapture = .{
         .model = testing.model,
         .replacement = &replacement,
     };
@@ -287,7 +62,7 @@ test "DeliverWorkspaceCreationHandler releases before ordered activation" {
         .request_tab_snapshot,
     }, capture.eventSlice());
     try std.testing.expectEqualDeep(replacement.departure.bookmark.?, capture.remembered.?);
-    try std.testing.expectEqualSlices(schema.PaneId, replacement.departure.panes.slice(), capture.cleared_panes[0..capture.cleared_count]);
+    try std.testing.expectEqualSlices(PaneIdType, replacement.departure.panes.slice(), capture.cleared_panes[0..capture.cleared_count]);
     try std.testing.expectEqualDeep(replacement.activation.location.workspace, capture.workspace_request.?);
     try std.testing.expectEqualDeep(replacement.activation.location, capture.tab_request.?);
     try std.testing.expect(capture.release_complete_before_activation);
@@ -295,13 +70,13 @@ test "DeliverWorkspaceCreationHandler releases before ordered activation" {
 }
 
 test "DeliverWorkspaceCreationHandler accepts an exact invalid-copy release" {
-    var testing = try TestingModel.init();
+    var testing = try WorkspaceCreationDeliveryTestingModel.init();
     defer testing.deinit();
     const paste = testing.model.panePasteSession().?;
     try std.testing.expect(testing.model.finishPanePaste(paste));
     try std.testing.expect(testing.model.enterCopyMode());
     const replacement = try testing.replace();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceCreationDeliveryEffectsCapture = .{
         .model = testing.model,
         .replacement = &replacement,
     };
@@ -317,10 +92,10 @@ test "DeliverWorkspaceCreationHandler accepts an exact invalid-copy release" {
 }
 
 test "DeliverWorkspaceCreationHandler validates replacement before release" {
-    var testing = try TestingModel.init();
+    var testing = try WorkspaceCreationDeliveryTestingModel.init();
     defer testing.deinit();
     const replacement = try testing.replace();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceCreationDeliveryEffectsCapture = .{
         .model = testing.model,
         .replacement = &replacement,
     };
@@ -369,10 +144,10 @@ test "DeliverWorkspaceCreationHandler validates replacement before release" {
 }
 
 test "DeliverWorkspaceCreationHandler preserves release after activation failure" {
-    var testing = try TestingModel.init();
+    var testing = try WorkspaceCreationDeliveryTestingModel.init();
     defer testing.deinit();
     const replacement = try testing.replace();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceCreationDeliveryEffectsCapture = .{
         .model = testing.model,
         .replacement = &replacement,
         .failure = .active_resources,
@@ -392,7 +167,7 @@ test "DeliverWorkspaceCreationHandler preserves release after activation failure
 }
 
 test "DeliverWorkspaceCreationHandler activates an exact replacement from an empty source" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const replacement = try model.replaceWorkspace(.{
         .pane_id = @enumFromInt(3),
@@ -402,7 +177,7 @@ test "DeliverWorkspaceCreationHandler activates an exact replacement from an emp
         },
         .size = .{ .cols = 50, .rows = 12 },
     });
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceCreationDeliveryEffectsCapture = .{
         .model = &model,
         .replacement = &replacement,
     };

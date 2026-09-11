@@ -1,13 +1,12 @@
 //! Read-only adapter for the Codex thread-name database.
 
+const Job = @import("Job.zig");
+const Completion = @import("../Completion.zig");
+const max_agent_session_file_bytes = @import("telar-core").max_agent_session_file_bytes;
 const std = @import("std");
-const core = @import("telar-core");
-const types = @import("types.zig");
-const Job = types.Job;
-const Completion = types.Completion;
-const Io = std.Io;
-const schema = core.schema;
-const session_file = @import("../session_file.zig");
+const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
+const truncateSessionTitle_module = @import("telar-core").truncateSessionTitle;
+
 const c = @cImport({
     @cInclude("sqlite3.h");
 });
@@ -19,7 +18,7 @@ const thread_name_sql = "SELECT name FROM threads WHERE id = ?1";
 /// missing database, or a thread not yet inserted, reports nothing. A NULL
 /// name reports an empty title, which clears an earlier agent title.
 pub fn probe(job: Job, completion: *Completion) void {
-    var path_buffer: [session_file.max_path_bytes + 1]u8 = undefined;
+    var path_buffer: [max_agent_session_file_bytes + 1]u8 = undefined;
     const path = std.fmt.bufPrintZ(&path_buffer, "{s}", .{job.watch.pathSlice()}) catch return;
     var db: ?*c.sqlite3 = null;
     const opened = if (c.sqlite3_open_v2(path.ptr, &db, c.SQLITE_OPEN_READONLY | c.SQLITE_OPEN_NOMUTEX, null) == c.SQLITE_OK) db else null;
@@ -43,9 +42,9 @@ pub fn probe(job: Job, completion: *Completion) void {
         return;
     }
 
-    var title_buffer: [schema.max_agent_session_title_bytes]u8 = undefined;
+    var title_buffer: [max_agent_session_title_bytes_module]u8 = undefined;
     const name = columnText(statement, 0);
-    completion.setTitle(schema.truncateSessionTitle(&title_buffer, name));
+    completion.setTitle(truncateSessionTitle_module(&title_buffer, name));
 }
 
 fn columnText(statement: *c.sqlite3_stmt, column: c_int) []const u8 {

@@ -1,18 +1,16 @@
 //! Adapts runtime agent messages to the client application boundary.
 
-const core = @import("telar-core");
-const agents = @import("telar-client").agents;
+const Client = @import("../../Client.zig");
+const AgentSnapshotViewType = @import("telar-core").AgentSnapshotView;
+const AgentSnapshotCommitType = @import("telar-client").AgentSnapshotCommit;
+const max_agent_snapshot_entries_module = @import("telar-core").max_agent_snapshot_entries;
+const AgentInputType = @import("telar-client").AgentInput;
+const ApplyAgentSnapshotHandlerType = @import("telar-client").ApplyAgentSnapshotHandler;
+const DeliverAgentSnapshotHandlerType = @import("telar-client").DeliverAgentSnapshotHandler;
 const active_pane_resources = @import("../panes/active_pane_resources.zig");
-const agents_application = @import("telar-client").application.agents;
-const client_model = @import("telar-client").model;
-const notifications = @import("telar-client").notifications;
+const InputType = @import("telar-client").NotificationInput;
 const notification_flow = @import("../notifications/notifications.zig");
 const sidebar_animations = @import("../notifications/sidebar_animations.zig");
-
-const Client = @import("../../client.zig");
-const agent_snapshot = agents_application.agent_snapshot;
-const agent_snapshot_delivery = agents_application.agent_snapshot_delivery;
-const schema = core.schema;
 
 /// Maps one validated wire view into bounded agent inputs and synchronizes
 /// dependent client slices after the application handler commits it.
@@ -20,8 +18,8 @@ const schema = core.schema;
 /// ```zig
 /// _ = try apply(client, snapshot);
 /// ```
-pub fn apply(client: *Client, snapshot: schema.AgentSnapshotView) !?client_model.AgentSnapshotCommit {
-    var entries: [schema.max_agent_snapshot_entries]agents.AgentInput = undefined;
+pub fn apply(client: *Client, snapshot: AgentSnapshotViewType) !?AgentSnapshotCommitType {
+    var entries: [max_agent_snapshot_entries_module]AgentInputType = undefined;
     var count: usize = 0;
     var iterator = snapshot.entries();
     while (try iterator.next()) |entry| {
@@ -55,7 +53,7 @@ pub fn apply(client: *Client, snapshot: schema.AgentSnapshotView) !?client_model
     });
 }
 
-fn handler(client: *Client) agent_snapshot.ApplyAgentSnapshotHandler {
+fn handler(client: *Client) ApplyAgentSnapshotHandlerType {
     return .{
         .model = &client.model,
         .delivery = .{
@@ -65,9 +63,9 @@ fn handler(client: *Client) agent_snapshot.ApplyAgentSnapshotHandler {
     };
 }
 
-fn deliverCommit(context: *anyopaque, commit: *const client_model.AgentSnapshotCommit) !void {
+fn deliverCommit(context: *anyopaque, commit: *const AgentSnapshotCommitType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    var use_case: agent_snapshot_delivery.DeliverAgentSnapshotHandler = .{
+    var use_case: DeliverAgentSnapshotHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = client,
@@ -86,7 +84,7 @@ fn synchronizeAttachments(context: *anyopaque) !void {
     _ = try active_pane_resources.synchronizeAttachments(client);
 }
 
-fn publishAlert(context: *anyopaque, input: notifications.Input) !void {
+fn publishAlert(context: *anyopaque, input: InputType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try notification_flow.publishNow(client, input);

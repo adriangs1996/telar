@@ -1,47 +1,18 @@
 //! Construction of owned messages accepted by the history channel.
 
 const std = @import("std");
+const LaunchAttemptRequest = @import("LaunchAttemptRequest.zig");
 const model = @import("model.zig");
-const terminal = @import("terminal.zig");
-
-pub const LaunchAttemptRequest = struct {
-    pane_id: model.schema.PaneId,
-    pane_generation: u64,
-    location: model.schema.TabLocation,
-    workspace_path: []const u8,
-    shell: []const u8,
-    started_at_ms: i64,
-    phase: model.LaunchPhase,
-    cause: []const u8,
-};
-
-pub const SessionStartRequest = struct {
-    session_id: model.SessionId,
-    pane_id: model.schema.PaneId,
-    location: model.schema.TabLocation,
-    workspace_path: []const u8,
-    shell: []const u8,
-    started_at_ms: i64,
-};
-
-pub const CommandContext = struct {
-    author: model.schema.HistoryAuthor = .human,
-    origin: model.schema.HistoryOrigin = .pane,
-    session_id: model.SessionId,
-    pane_id: model.schema.PaneId,
-    location: model.schema.TabLocation,
-    sequence: u64,
-    workspace_path: []const u8,
-    cols: u16,
-    rows: u16,
-    provider: []const u8 = "",
-    tool_call_id: []const u8 = "",
-};
-
-pub const CommandRecord = struct {
-    context: CommandContext,
-    command: terminal.Command,
-};
+const LaunchAttemptType = @import("LaunchAttempt.zig");
+const SessionStartRequest = @import("SessionStartRequest.zig");
+const SessionStartedType = @import("SessionStarted.zig");
+const DefinitionType = @import("Definition.zig");
+const SessionTitleType = @import("SessionTitle.zig");
+const ImportHistoryViewType = @import("telar-core").ImportHistoryView;
+const ImportBatchType = @import("ImportBatch.zig");
+const CommandRecord = @import("CommandRecord.zig");
+const CommandFinishedType = @import("CommandFinished.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 
 /// Copies a failed launch into one request whose ownership can cross the
 /// history channel. Partial allocation failure releases every prior copy.
@@ -50,7 +21,7 @@ pub const CommandRecord = struct {
 /// const request = try launchAttempt(gpa, io, input);
 /// ```
 pub fn launchAttempt(gpa: std.mem.Allocator, io: std.Io, input: LaunchAttemptRequest) !model.Request {
-    const value = try gpa.create(model.LaunchAttempt);
+    const value = try gpa.create(LaunchAttemptType);
     errdefer gpa.destroy(value);
 
     const workspace_path = try gpa.dupe(u8, input.workspace_path);
@@ -84,7 +55,7 @@ pub fn launchAttempt(gpa: std.mem.Allocator, io: std.Io, input: LaunchAttemptReq
 /// const request = try sessionStarted(gpa, input);
 /// ```
 pub fn sessionStarted(gpa: std.mem.Allocator, input: SessionStartRequest) !model.Request {
-    const value = try gpa.create(model.SessionStarted);
+    const value = try gpa.create(SessionStartedType);
     errdefer gpa.destroy(value);
 
     const workspace_path = try gpa.dupe(u8, input.workspace_path);
@@ -110,8 +81,8 @@ pub fn sessionStarted(gpa: std.mem.Allocator, input: SessionStartRequest) !model
 /// ```zig
 /// const request = try sessionTitle(definition);
 /// ```
-pub fn sessionTitle(definition: model.SessionTitle.Definition) !model.Request {
-    return .{ .session_title = try model.SessionTitle.init(definition) };
+pub fn sessionTitle(definition: DefinitionType) !model.Request {
+    return .{ .session_title = try SessionTitleType.init(definition) };
 }
 
 /// Copies one decoded wire batch before its borrowed transport buffer is
@@ -120,8 +91,8 @@ pub fn sessionTitle(definition: model.SessionTitle.Definition) !model.Request {
 /// ```zig
 /// const request = try importBatch(gpa, view);
 /// ```
-pub fn importBatch(gpa: std.mem.Allocator, view: model.schema.ImportHistoryView) !model.Request {
-    return .{ .import = try model.ImportBatch.init(gpa, view) };
+pub fn importBatch(gpa: std.mem.Allocator, view: ImportHistoryViewType) !model.Request {
+    return .{ .import = try ImportBatchType.init(gpa, view) };
 }
 
 /// Copies a completed command and every borrowed byte slice into one aligned
@@ -133,12 +104,12 @@ pub fn importBatch(gpa: std.mem.Allocator, view: model.schema.ImportHistoryView)
 pub fn commandFinished(gpa: std.mem.Allocator, record: CommandRecord) !model.Request {
     const context = record.context;
     const command = record.command;
-    const allocation_len = @sizeOf(model.CommandFinished) + command.bytes.len +
+    const allocation_len = @sizeOf(CommandFinishedType) + command.bytes.len +
         command.cwd.len + context.workspace_path.len + context.provider.len +
         context.tool_call_id.len + command.output.len;
-    const allocation = try gpa.alignedAlloc(u8, .of(model.CommandFinished), allocation_len);
-    const value: *model.CommandFinished = @ptrCast(allocation);
-    var cursor: usize = @sizeOf(model.CommandFinished);
+    const allocation = try gpa.alignedAlloc(u8, .of(CommandFinishedType), allocation_len);
+    const value: *CommandFinishedType = @ptrCast(allocation);
+    var cursor: usize = @sizeOf(CommandFinishedType);
 
     const command_copy = allocation[cursor..][0..command.bytes.len];
     cursor += command_copy.len;
@@ -189,7 +160,7 @@ pub fn commandFinished(gpa: std.mem.Allocator, record: CommandRecord) !model.Req
     return .{ .command_finished = value };
 }
 
-const test_location: model.schema.TabLocation = .{
+const test_location: TabLocationType = .{
     .workspace = .{ .workspace = @enumFromInt(2) },
     .tab_id = @enumFromInt(5),
 };

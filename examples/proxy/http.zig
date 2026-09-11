@@ -1,5 +1,9 @@
 const std = @import("std");
-const tls = @import("tls.zig");
+const SessionType = @import("Session.zig");
+const Direction = @import("Direction.zig");
+const Buffers = @import("Buffers.zig");
+const Summary = @import("Summary.zig");
+const CaptureState = @import("CaptureState.zig");
 
 // HTTP/1.1 message framing over an intercepted connection.
 //
@@ -9,19 +13,6 @@ const tls = @import("tls.zig");
 // is forwarded as it arrives, so SSE still streams.
 
 pub const Framing = enum { length, chunked, until_close, none };
-
-pub const Summary = struct {
-    /// The full head, borrowed from the caller's scratch buffer and therefore
-    /// only valid until the next `relay` call that reuses it.
-    head: []const u8,
-    /// First line, verbatim: "POST /v1/messages HTTP/1.1" or "HTTP/1.1 200 OK".
-    start_line: []const u8,
-    body_bytes: usize,
-    /// Body text, truncated to the caller's budget. Auth headers never reach
-    /// here — see `redactedHead`.
-    body: []const u8,
-    truncated: bool,
-};
 
 /// Headers whose value is a credential. Dropped before anything is recorded:
 /// not redacted late, never captured at all.
@@ -119,42 +110,7 @@ fn withoutCompression(head: []const u8, out: []u8) ?usize {
     return len - 2;
 }
 
-/// Reads one message from `from`, forwards it to `to`, and reports what it was.
-/// `scratch` holds the head; `capture` receives up to its own length of body.
-/// Returns null when the peer is done talking.
-pub const Direction = struct {
-    from: tls.Session.Side,
-    to: tls.Session.Side,
-    is_response: bool,
-};
-
-pub const Buffers = struct {
-    scratch: []u8,
-    capture: []u8,
-};
-
-const CaptureState = struct {
-    buffer: []u8,
-    kept: usize = 0,
-    truncated: bool = false,
-
-    fn keep(state: *CaptureState, bytes: []const u8) void {
-        if (state.kept >= state.buffer.len) {
-            state.truncated = true;
-            return;
-        }
-
-        const room = state.buffer.len - state.kept;
-        const take = @min(room, bytes.len);
-        @memcpy(state.buffer[state.kept .. state.kept + take], bytes[0..take]);
-        state.kept += take;
-        if (take < bytes.len) {
-            state.truncated = true;
-        }
-    }
-};
-
-pub fn relay(session: *tls.Session, direction: Direction, buffers: Buffers) ?Summary {
+pub fn relay(session: *SessionType, direction: Direction, buffers: Buffers) ?Summary {
     const from = direction.from;
     const to = direction.to;
     const is_response = direction.is_response;
@@ -260,14 +216,12 @@ pub fn relay(session: *tls.Session, direction: Direction, buffers: Buffers) ?Sum
 // Tests
 // ---------------------------------------------------------------------------
 
-const testing = std.testing;
-
 test "credential headers are recognised regardless of case" {
-    try testing.expect(isSecretHeader("Authorization"));
-    try testing.expect(isSecretHeader("x-api-key"));
-    try testing.expect(isSecretHeader("X-API-Key"));
-    try testing.expect(!isSecretHeader("content-type"));
-    try testing.expect(!isSecretHeader("x-api-version"));
+    try std.testing.expect(isSecretHeader("Authorization"));
+    try std.testing.expect(isSecretHeader("x-api-key"));
+    try std.testing.expect(isSecretHeader("X-API-Key"));
+    try std.testing.expect(!isSecretHeader("content-type"));
+    try std.testing.expect(!isSecretHeader("x-api-version"));
 }
 
 test "redaction removes credential values and keeps the rest" {
@@ -283,12 +237,12 @@ test "redaction removes credential values and keeps the rest" {
     try redactedHead(head, &w);
     const out = w.buffered();
 
-    try testing.expect(std.mem.indexOf(u8, out, "sk-ant-super-secret") == null);
-    try testing.expect(std.mem.indexOf(u8, out, "Bearer nope") == null);
-    try testing.expect(std.mem.indexOf(u8, out, "x-api-key: <redacted>") != null);
-    try testing.expect(std.mem.indexOf(u8, out, "Authorization: <redacted>") != null);
-    try testing.expect(std.mem.indexOf(u8, out, "content-type: application/json") != null);
-    try testing.expect(std.mem.indexOf(u8, out, "POST /v1/messages HTTP/1.1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "sk-ant-super-secret") == null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "Bearer nope") == null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "x-api-key: <redacted>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "Authorization: <redacted>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "content-type: application/json") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "POST /v1/messages HTTP/1.1") != null);
 }
 
 test "compression is downgraded to identity" {
@@ -302,21 +256,21 @@ test "compression is downgraded to identity" {
     const n = withoutCompression(head, &out).?;
     const rewritten = out[0..n];
 
-    try testing.expect(std.mem.indexOf(u8, rewritten, "gzip") == null);
-    try testing.expect(std.mem.indexOf(u8, rewritten, "accept-encoding: identity") != null);
-    try testing.expect(std.mem.indexOf(u8, rewritten, "host: api.anthropic.com") != null);
-    try testing.expect(std.mem.endsWith(u8, rewritten, "\r\n\r\n"));
+    try std.testing.expect(std.mem.indexOf(u8, rewritten, "gzip") == null);
+    try std.testing.expect(std.mem.indexOf(u8, rewritten, "accept-encoding: identity") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rewritten, "host: api.anthropic.com") != null);
+    try std.testing.expect(std.mem.endsWith(u8, rewritten, "\r\n\r\n"));
 }
 
 test "framing is read from the headers" {
     const with_length = "HTTP/1.1 200 OK\r\ncontent-length: 42\r\n\r\n";
     const framing, const len = framingOf(with_length, false);
-    try testing.expectEqual(Framing.length, framing);
-    try testing.expectEqual(@as(usize, 42), len);
+    try std.testing.expectEqual(Framing.length, framing);
+    try std.testing.expectEqual(@as(usize, 42), len);
 
     const streamed = "HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\n\r\n";
-    try testing.expectEqual(Framing.chunked, framingOf(streamed, false)[0]);
+    try std.testing.expectEqual(Framing.chunked, framingOf(streamed, false)[0]);
 
     const nothing = "HTTP/1.1 204 No Content\r\n\r\n";
-    try testing.expectEqual(Framing.none, framingOf(nothing, true)[0]);
+    try std.testing.expectEqual(Framing.none, framingOf(nothing, true)[0]);
 }

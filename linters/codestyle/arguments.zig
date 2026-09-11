@@ -1,9 +1,5 @@
+const Config = @import("Config.zig");
 const std = @import("std");
-
-pub const Config = struct {
-    fix: bool,
-    paths: []const []const u8,
-};
 
 pub const ParseResult = union(enum) {
     config: Config,

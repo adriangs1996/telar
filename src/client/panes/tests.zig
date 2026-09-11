@@ -1,10 +1,15 @@
+const InitialType = @import("Initial.zig");
+const FrameInput = @import("FrameInput.zig");
+const FrameViewType = @import("telar-core").FrameView;
+const CellType = @import("telar-core").Cell;
+const SpanType = @import("telar-core").Span;
+const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
+const decodeServer_module = @import("telar-core").decodeServer;
+const Pane = @import("Pane.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const panes = @import("root.zig");
-const schema = core.schema;
-const Pane = panes.Pane;
+const PresentationCommitType = @import("PresentationCommit.zig");
 
-const initial: Pane.Initial = .{
+const initial: InitialType = .{
     .spec = .{
         .pane_id = @enumFromInt(1),
         .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
@@ -13,21 +18,12 @@ const initial: Pane.Initial = .{
     .attached = true,
 };
 
-const FrameInput = struct {
-    pane_id: schema.PaneId = @enumFromInt(1),
-    id: u64 = 1,
-    base: u64 = 0,
-    cols: u16 = 2,
-    rows: u16 = 2,
-    character: u8 = 'a',
-};
-
-fn frame(storage: []u8, input: FrameInput) !schema.frame.FrameView {
-    var cells = [_]core.ui.Cell{.{}} ** 9;
+fn frame(storage: []u8, input: FrameInput) !FrameViewType {
+    var cells = [_]CellType{.{}} ** 9;
     cells[0].bytes[0] = input.character;
     const count = if (input.base == 0) @as(usize, input.cols) * input.rows else 1;
-    const spans = [_]schema.frame.Span{.{ .start = 0, .cells = cells[0..count] }};
-    const bytes = try schema.encodePaneFrame(storage, .{
+    const spans = [_]SpanType{.{ .start = 0, .cells = cells[0..count] }};
+    const bytes = try encodePaneFrame_module(storage, .{
         .pane_id = input.pane_id,
         .frame_id = input.id,
         .base_frame_id = input.base,
@@ -40,7 +36,7 @@ fn frame(storage: []u8, input: FrameInput) !schema.frame.FrameView {
         .scroll = .{ .total_rows = input.rows, .offset = 0 },
         .spans = &spans,
     });
-    return (try schema.decodeServer(bytes)).pane_frame;
+    return (try decodeServer_module(bytes)).pane_frame;
 }
 
 test "pane snapshot owns cells and child modes independently of the receive buffer" {
@@ -74,7 +70,7 @@ test "an obsolete presentation cannot retire newer pane damage" {
     defer pane.deinit();
     var bytes: [1024]u8 = undefined;
     _ = try pane.applyFrame(try frame(&bytes, .{}));
-    var commit: panes.PresentationCommit = .{ .location = initial.spec.location };
+    var commit: PresentationCommitType = .{ .location = initial.spec.location };
     commit.append(&pane);
     _ = try pane.applyFrame(try frame(&bytes, .{ .id = 2, .base = 1, .character = 'b' }));
     pane.commitPresentation(commit.slice()[0].frame_id);

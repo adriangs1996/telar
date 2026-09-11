@@ -2,9 +2,14 @@
 //! Run `zig build history-preview -- --inspect` and redirect stdout to a local SVG.
 
 const std = @import("std");
-const frontend = @import("telar-frontend");
-const ui = frontend.ui;
-const browser = frontend.widgets.history_browser;
+const BufferType = @import("telar-core").Buffer;
+const default_theme_module = @import("telar-frontend").default_theme;
+const HitsType = @import("telar-frontend").Hits;
+const ContextType = @import("telar-frontend").Context;
+const FieldType = @import("telar-frontend").Field;
+const EntryType = @import("telar-frontend").Entry;
+const render_module = @import("telar-frontend").render;
+const ColorType = @import("telar-core").Color;
 
 pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
@@ -18,20 +23,20 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 
-    var buffer = try ui.Buffer.init(init.gpa, if (narrow) 56 else 150, 36);
+    var buffer = try BufferType.init(init.gpa, if (narrow) 56 else 150, 36);
     defer buffer.deinit();
-    const palette = &ui.theme.default_theme.palette;
+    const palette = &default_theme_module.palette;
     buffer.fill(buffer.area(), .{ .glyph = " ", .style = .{ .bg = palette.surface_dim } });
-    var hits: frontend.widgets.Hits = .{};
-    var context: frontend.widgets.Context = .{ .buffer = &buffer, .hits = &hits, .palette = palette, .hovered = null };
-    var field: frontend.widgets.goto_picker.Field = .init("zig");
+    var hits: HitsType = .{};
+    var context: ContextType = .{ .buffer = &buffer, .hits = &hits, .palette = palette, .hovered = null };
+    var field: FieldType = .init("zig");
     const commands = [_][]const u8{ "zig build test", "zig build -Doptimize=ReleaseFast", "zig fmt src/frontend/widgets/history_browser.zig", "zig build test-frontend", "zig build codestyle", "zig version" };
-    var entries: [commands.len]browser.Entry = undefined;
+    var entries: [commands.len]EntryType = undefined;
     for (commands, 0..) |command, index| {
         entries[index] = .{ .id = 240 - index, .pane_id = @enumFromInt(7), .command = command, .cwd = "/Users/adrian/sandbox/telar", .started_at_ms = 1788600000000 - @as(i64, @intCast(index)) * 3600000, .duration_ns = 1800000000, .exit_code = if (index == 1) 1 else 0, .status = .completed, .author = .human };
     }
 
-    _ = browser.render(&context, buffer.area(), .{ .field = &field, .entries = &entries, .selection = 0, .scope = "global", .inspecting = inspecting, .now_ms = 1788600120000, .output_hint = "Captured output", .output = "Build Summary: 82/82 steps succeeded\n3298 tests passed\n\nAll checks completed." });
+    _ = render_module(&context, buffer.area(), .{ .field = &field, .entries = &entries, .selection = 0, .scope = "global", .inspecting = inspecting, .now_ms = 1788600120000, .output_hint = "Captured output", .output = "Build Summary: 82/82 steps succeeded\n3298 tests passed\n\nAll checks completed." });
     var output_buffer: [16384]u8 = undefined;
     var output = std.Io.File.stdout().writer(init.io, &output_buffer);
     const writer = &output.interface;
@@ -52,7 +57,7 @@ pub fn main(init: std.process.Init) !void {
     try writer.flush();
 }
 
-fn rgb(color: ui.Color) u24 {
+fn rgb(color: ColorType) u24 {
     return switch (color) {
         .rgb => |value| (@as(u24, value[0]) << 16) | (@as(u24, value[1]) << 8) | value[2],
         else => 0xffffff,

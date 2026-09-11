@@ -1,10 +1,12 @@
 //! Measurement-only VT oracle and minimal interposition controls, not a multiplexer.
-const std = @import("std");
-const vt = @import("ghostty-vt");
-const backend = @import("telar-backend");
-const frontend = @import("telar-frontend");
 
-const Link = struct { input: std.c.fd_t, output: std.c.fd_t };
+const std = @import("std");
+const Link = @import("Link.zig");
+const vt = @import("ghostty-vt");
+const SessionType = @import("telar-backend").Session;
+const builtin = @import("builtin");
+const CommandType = @import("telar-backend").Command;
+const TtyType = @import("telar-frontend").Tty;
 
 fn writeAll(fd: std.c.fd_t, bytes: []const u8) !void {
     var offset: usize = 0;
@@ -101,14 +103,14 @@ fn oracle(init: std.process.Init, size: struct { cols: u16, rows: u16 }) !void {
     }
 }
 
-fn foregroundBatch(io: std.Io, session: *const backend.pty.Session, direct: bool) !u64 {
+fn foregroundBatch(io: std.Io, session: *const SessionType, direct: bool) !u64 {
     const Libc = struct {
         extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
     };
     const started = std.Io.Clock.awake.now(io).nanoseconds;
     for (0..10000) |_| {
         const group = if (direct) query: {
-            const request: c_int = switch (@import("builtin").os.tag) {
+            const request: c_int = switch (builtin.os.tag) {
                 .macos => 0x40047477,
                 .linux => @intCast(std.c.T.IOCGPGRP),
                 else => return error.UnsupportedPlatform,
@@ -129,8 +131,8 @@ fn foregroundBatch(io: std.Io, session: *const backend.pty.Session, direct: bool
 }
 
 fn foregroundBenchmark(init: std.process.Init) !void {
-    const command = try backend.pty.Command.fromArgv(&.{"/bin/cat"});
-    var session = try backend.pty.Session.spawn(&command, .{ .cols = 80, .rows = 24 });
+    const command = try CommandType.fromArgv(&.{"/bin/cat"});
+    var session = try SessionType.spawn(&command, .{ .cols = 80, .rows = 24 });
     defer session.deinit();
     var buffer: [256]u8 = undefined;
     _ = try foregroundBatch(init.io, &session, false);
@@ -168,7 +170,7 @@ pub fn main(init: std.process.Init) !void {
         return oracle(init, .{ .cols = cols, .rows = rows });
     }
     if (std.mem.eql(u8, mode, "app")) {
-        var tty = try frontend.platform.Tty.open();
+        var tty = try TtyType.open();
         defer tty.deinit();
         var byte: [1]u8 = undefined;
         while (try readExact(0, &byte)) {
@@ -178,20 +180,20 @@ pub fn main(init: std.process.Init) !void {
     }
     const socket = if (std.mem.eql(u8, mode, "one")) @as(c_int, 0) else try std.fmt.parseInt(c_int, args.next() orelse return error.MissingSocket, 10);
     if (std.mem.eql(u8, mode, "client")) {
-        var tty = try frontend.platform.Tty.open();
+        var tty = try TtyType.open();
         defer tty.deinit();
         return relay(.{ .{ .input = 0, .output = socket }, .{ .input = socket, .output = 1 } });
     }
     if (!std.mem.eql(u8, mode, "one") and !std.mem.eql(u8, mode, "server")) {
         return error.InvalidMode;
     }
-    var tty: ?frontend.platform.Tty = if (socket == 0) try frontend.platform.Tty.open() else null;
+    var tty: ?TtyType = if (socket == 0) try TtyType.open() else null;
     defer if (tty) |*value| {
         value.deinit();
     };
     const shell = args.next() orelse "/bin/cat";
-    const command = try backend.pty.Command.fromArgv(&.{shell.ptr});
-    var session = try backend.pty.Session.spawn(&command, .{ .cols = 160, .rows = 40 });
+    const command = try CommandType.fromArgv(&.{shell.ptr});
+    var session = try SessionType.spawn(&command, .{ .cols = 160, .rows = 40 });
     defer session.deinit();
     return relay(.{ .{ .input = socket, .output = session.master }, .{ .input = session.master, .output = if (socket == 0) 1 else socket } });
 }

@@ -1,17 +1,15 @@
 //! Adapts runtime host-health messages to the client application boundary.
 
-const core = @import("telar-core");
-const client_model = @import("telar-client").model;
-
-const Client = @import("../../client.zig");
-const schema = core.schema;
+const Client = @import("../../Client.zig");
+const SystemMetricsType = @import("telar-core").SystemMetrics;
+const SystemMetricsCommitType = @import("telar-client").SystemMetricsCommit;
 
 /// Maps one validated wire value into the model-owned metrics replica.
 ///
 /// ```zig
 /// _ = try apply(client, message);
 /// ```
-pub fn apply(client: *Client, message: schema.SystemMetrics) !?client_model.SystemMetricsCommit {
+pub fn apply(client: *Client, message: SystemMetricsType) !?SystemMetricsCommitType {
     return client.model.reconcileSystemMetrics(.{
         .runtime_revision = message.revision,
         .cpu_percent = message.cpu_percent,

@@ -1,147 +1,66 @@
 //! Exhaustive classification and delegation for decoded client requests.
 
 const std = @import("std");
-const core = @import("telar-core");
+const ClientMessageType = @import("telar-core").ClientMessage;
+const RequestRouterCapture = @import("RequestRouterCapture.zig");
+const PaneInputType = @import("telar-core").PaneInput;
+const GenericHandlers = @import("GenericHandlers.zig").Type;
+const OpenPaneViewType = @import("telar-core").OpenPaneView;
+const PaneResizeType = @import("telar-core").PaneResize;
+const FrameAckType = @import("telar-core").FrameAck;
+const RequestSnapshotType = @import("telar-core").RequestSnapshot;
+const DetachPaneType = @import("telar-core").DetachPane;
+const RequestTabSnapshotType = @import("telar-core").RequestTabSnapshot;
+const CreatePaneViewType = @import("telar-core").CreatePaneView;
+const ClosePaneType = @import("telar-core").ClosePane;
+const QueryHistoryType = @import("telar-core").QueryHistory;
+const SuggestCommandType = @import("telar-core").SuggestCommand;
+const RequestWorkspaceSnapshotType = @import("telar-core").RequestWorkspaceSnapshot;
+const CreateTabViewType = @import("telar-core").CreateTabView;
+const RenameTabType = @import("telar-core").RenameTab;
+const CloseTabType = @import("telar-core").CloseTab;
+const MoveTabType = @import("telar-core").MoveTab;
+const RequestGraphicsSnapshotType = @import("telar-core").RequestGraphicsSnapshot;
+const GraphicsCreditType = @import("telar-core").GraphicsCredit;
+const ConfigureGraphicsType = @import("telar-core").ConfigureGraphics;
+const TerminalColors = @import("telar-core").TerminalColors;
+const RequestRuntimeStateType = @import("telar-core").RequestRuntimeState;
+const CreateWorkspaceViewType = @import("telar-core").CreateWorkspaceView;
+const RenameWorkspaceType = @import("telar-core").RenameWorkspace;
+const SetPaneViewportType = @import("telar-core").SetPaneViewport;
+const CopySelectionType = @import("telar-core").CopySelection;
+const ShowNotificationType = @import("telar-core").ShowNotification;
+const ClientLayoutUpdateViewType = @import("telar-core").ClientLayoutUpdateView;
+const AcknowledgeAgentType = @import("telar-core").AcknowledgeAgent;
+const QueryAgentsType = @import("telar-core").QueryAgents;
+const ReadPaneType = @import("telar-core").ReadPane;
+const SendPaneTextType = @import("telar-core").SendPaneText;
+const ReportAgentSessionType = @import("telar-core").ReportAgentSession;
+const ReportAgentType = @import("telar-core").ReportAgent;
+const ReportAgentCommandType = @import("telar-core").ReportAgentCommand;
+const ReportAgentTitleType = @import("telar-core").ReportAgentTitle;
+const SearchPaneType = @import("telar-core").SearchPane;
+const ImportHistoryViewType = @import("telar-core").ImportHistoryView;
+const DeleteHistoryType = @import("telar-core").DeleteHistory;
+const PruneHistoryType = @import("telar-core").PruneHistory;
+const ReadHistoryOutputType = @import("telar-core").ReadHistoryOutput;
+const HistoryStatsQueryType = @import("telar-core").HistoryStatsQuery;
+const RequestPaneFocusType = @import("telar-core").RequestPaneFocus;
+const CompletePaneFocusType = @import("telar-core").CompletePaneFocus;
+const GenericRouter = @import("GenericRouter.zig").Type;
+const RequestIdType = @import("telar-core").RequestId;
+const PaneIdType = @import("telar-core").PaneId;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabLocationType = @import("telar-core").TabLocation;
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const LaunchViewType = @import("telar-core").LaunchView;
 
-const schema = core.schema;
-
-pub const Tag = std.meta.Tag(schema.ClientMessage);
+pub const Tag = std.meta.Tag(ClientMessageType);
 
 pub const RequestClass = enum {
     ui,
     control,
 };
-
-/// Defines the complete set of request handlers for one context type.
-///
-/// ```zig
-/// const handlers: Handlers(Context) = .{ ... };
-/// ```
-pub fn Handlers(comptime Context: type) type {
-    return struct {
-        open_pane: *const fn (*Context, schema.OpenPaneView) anyerror!void,
-        pane_input: *const fn (*Context, schema.PaneInput) anyerror!void,
-        pane_resize: *const fn (*Context, schema.PaneResize) anyerror!void,
-        frame_ack: *const fn (*Context, schema.FrameAck) anyerror!void,
-        request_snapshot: *const fn (*Context, schema.RequestSnapshot) anyerror!void,
-        detach_pane: *const fn (*Context, schema.DetachPane) anyerror!void,
-        runtime_stop: *const fn (*Context) anyerror!void,
-        request_tab_snapshot: *const fn (*Context, schema.RequestTabSnapshot) anyerror!void,
-        create_pane: *const fn (*Context, schema.CreatePaneView) anyerror!void,
-        close_pane: *const fn (*Context, schema.ClosePane) anyerror!void,
-        query_history: *const fn (*Context, schema.QueryHistory) anyerror!void,
-        suggest_command: *const fn (*Context, schema.SuggestCommand) anyerror!void,
-        request_workspace_snapshot: *const fn (*Context, schema.RequestWorkspaceSnapshot) anyerror!void,
-        create_tab: *const fn (*Context, schema.CreateTabView) anyerror!void,
-        rename_tab: *const fn (*Context, schema.RenameTab) anyerror!void,
-        close_tab: *const fn (*Context, schema.CloseTab) anyerror!void,
-        move_tab: *const fn (*Context, schema.MoveTab) anyerror!void,
-        request_graphics_snapshot: *const fn (*Context, schema.RequestGraphicsSnapshot) anyerror!void,
-        graphics_credit: *const fn (*Context, schema.GraphicsCredit) anyerror!void,
-        configure_graphics: *const fn (*Context, schema.ConfigureGraphics) anyerror!void,
-        configure_terminal_colors: *const fn (*Context, schema.ConfigureTerminalColors) anyerror!void,
-        request_runtime_state: *const fn (*Context, schema.RequestRuntimeState) anyerror!void,
-        create_workspace: *const fn (*Context, schema.CreateWorkspaceView) anyerror!void,
-        rename_workspace: *const fn (*Context, schema.RenameWorkspace) anyerror!void,
-        set_pane_viewport: *const fn (*Context, schema.SetPaneViewport) anyerror!void,
-        copy_selection: *const fn (*Context, schema.CopySelection) anyerror!void,
-        show_notification: *const fn (*Context, schema.ShowNotification) anyerror!void,
-        update_client_layout: *const fn (*Context, schema.ClientLayoutUpdateView) anyerror!void,
-        acknowledge_agent: *const fn (*Context, schema.AcknowledgeAgent) anyerror!void,
-        query_agents: *const fn (*Context, schema.QueryAgents) anyerror!void,
-        read_pane: *const fn (*Context, schema.ReadPane) anyerror!void,
-        send_pane_text: *const fn (*Context, schema.SendPaneText) anyerror!void,
-        report_agent_session: *const fn (*Context, schema.ReportAgentSession) anyerror!void,
-        report_agent: *const fn (*Context, schema.ReportAgent) anyerror!void,
-        report_agent_command: *const fn (*Context, schema.ReportAgentCommand) anyerror!void,
-        report_agent_title: *const fn (*Context, schema.ReportAgentTitle) anyerror!void,
-        search_pane: *const fn (*Context, schema.SearchPane) anyerror!void,
-        import_history: *const fn (*Context, schema.ImportHistoryView) anyerror!void,
-        delete_history: *const fn (*Context, schema.DeleteHistory) anyerror!void,
-        prune_history: *const fn (*Context, schema.PruneHistory) anyerror!void,
-        read_history_output: *const fn (*Context, schema.ReadHistoryOutput) anyerror!void,
-        history_stats: *const fn (*Context, schema.HistoryStatsQuery) anyerror!void,
-        request_pane_focus: *const fn (*Context, schema.RequestPaneFocus) anyerror!void,
-        complete_pane_focus: *const fn (*Context, schema.CompletePaneFocus) anyerror!void,
-    };
-}
-
-/// Creates an exhaustive router whose callbacks are resolved at compile time.
-///
-/// ```zig
-/// const RequestRouter = Router(Context, handlers);
-/// ```
-pub fn Router(comptime Context: type, comptime handlers: Handlers(Context)) type {
-    return struct {
-        const Self = @This();
-
-        context: *Context,
-
-        /// Binds one request-scoped runtime context to the exhaustive router.
-        ///
-        /// ```zig
-        /// const router = RequestRouter.init(&context);
-        /// ```
-        pub fn init(context: *Context) Self {
-            return .{ .context = context };
-        }
-
-        /// Delegates exactly one decoded message without implementing its use
-        /// case. Handler errors cross the router unchanged.
-        ///
-        /// ```zig
-        /// try router.route(message);
-        /// ```
-        pub fn route(router: Self, message: schema.ClientMessage) !void {
-            return switch (message) {
-                .open_pane => |request| handlers.open_pane(router.context, request),
-                .pane_input => |request| handlers.pane_input(router.context, request),
-                .pane_resize => |request| handlers.pane_resize(router.context, request),
-                .frame_ack => |request| handlers.frame_ack(router.context, request),
-                .request_snapshot => |request| handlers.request_snapshot(router.context, request),
-                .detach_pane => |request| handlers.detach_pane(router.context, request),
-                .runtime_stop => handlers.runtime_stop(router.context),
-                .request_tab_snapshot => |request| handlers.request_tab_snapshot(router.context, request),
-                .create_pane => |request| handlers.create_pane(router.context, request),
-                .close_pane => |request| handlers.close_pane(router.context, request),
-                .query_history => |request| handlers.query_history(router.context, request),
-                .suggest_command => |request| handlers.suggest_command(router.context, request),
-                .request_workspace_snapshot => |request| handlers.request_workspace_snapshot(router.context, request),
-                .create_tab => |request| handlers.create_tab(router.context, request),
-                .rename_tab => |request| handlers.rename_tab(router.context, request),
-                .close_tab => |request| handlers.close_tab(router.context, request),
-                .move_tab => |request| handlers.move_tab(router.context, request),
-                .request_graphics_snapshot => |request| handlers.request_graphics_snapshot(router.context, request),
-                .graphics_credit => |request| handlers.graphics_credit(router.context, request),
-                .configure_graphics => |request| handlers.configure_graphics(router.context, request),
-                .configure_terminal_colors => |request| handlers.configure_terminal_colors(router.context, request),
-                .request_runtime_state => |request| handlers.request_runtime_state(router.context, request),
-                .create_workspace => |request| handlers.create_workspace(router.context, request),
-                .rename_workspace => |request| handlers.rename_workspace(router.context, request),
-                .set_pane_viewport => |request| handlers.set_pane_viewport(router.context, request),
-                .copy_selection => |request| handlers.copy_selection(router.context, request),
-                .show_notification => |request| handlers.show_notification(router.context, request),
-                .update_client_layout => |request| handlers.update_client_layout(router.context, request),
-                .acknowledge_agent => |request| handlers.acknowledge_agent(router.context, request),
-                .query_agents => |request| handlers.query_agents(router.context, request),
-                .read_pane => |request| handlers.read_pane(router.context, request),
-                .send_pane_text => |request| handlers.send_pane_text(router.context, request),
-                .report_agent_session => |request| handlers.report_agent_session(router.context, request),
-                .report_agent => |request| handlers.report_agent(router.context, request),
-                .report_agent_command => |request| handlers.report_agent_command(router.context, request),
-                .report_agent_title => |request| handlers.report_agent_title(router.context, request),
-                .search_pane => |request| handlers.search_pane(router.context, request),
-                .import_history => |request| handlers.import_history(router.context, request),
-                .delete_history => |request| handlers.delete_history(router.context, request),
-                .prune_history => |request| handlers.prune_history(router.context, request),
-                .read_history_output => |request| handlers.read_history_output(router.context, request),
-                .history_stats => |request| handlers.history_stats(router.context, request),
-                .request_pane_focus => |request| handlers.request_pane_focus(router.context, request),
-                .complete_pane_focus => |request| handlers.complete_pane_focus(router.context, request),
-            };
-        }
-    };
-}
 
 /// Classifies the first request on a connection without coupling the event
 /// loop to individual payload types.
@@ -172,20 +91,13 @@ pub fn classify(tag: Tag) RequestClass {
     };
 }
 
-const Capture = struct {
-    calls: usize = 0,
-    last: ?Tag = null,
-    failure: ?Tag = null,
-    pane_input: ?schema.PaneInput = null,
-};
-
-fn captureHandler(comptime tag: Tag, comptime Payload: type) *const fn (*Capture, Payload) anyerror!void {
+fn captureHandler(comptime tag: Tag, comptime Payload: type) *const fn (*RequestRouterCapture, Payload) anyerror!void {
     return struct {
-        fn call(capture: *Capture, payload: Payload) !void {
+        fn call(capture: *RequestRouterCapture, payload: Payload) !void {
             capture.calls += 1;
             capture.last = tag;
 
-            if (comptime Payload == schema.PaneInput) {
+            if (comptime Payload == PaneInputType) {
                 capture.pane_input = payload;
             }
 
@@ -196,9 +108,9 @@ fn captureHandler(comptime tag: Tag, comptime Payload: type) *const fn (*Capture
     }.call;
 }
 
-fn captureVoidHandler(comptime tag: Tag) *const fn (*Capture) anyerror!void {
+fn captureVoidHandler(comptime tag: Tag) *const fn (*RequestRouterCapture) anyerror!void {
     return struct {
-        fn call(capture: *Capture) !void {
+        fn call(capture: *RequestRouterCapture) !void {
             capture.calls += 1;
             capture.last = tag;
 
@@ -209,65 +121,65 @@ fn captureVoidHandler(comptime tag: Tag) *const fn (*Capture) anyerror!void {
     }.call;
 }
 
-const testing_handlers: Handlers(Capture) = .{
-    .open_pane = captureHandler(.open_pane, schema.OpenPaneView),
-    .pane_input = captureHandler(.pane_input, schema.PaneInput),
-    .pane_resize = captureHandler(.pane_resize, schema.PaneResize),
-    .frame_ack = captureHandler(.frame_ack, schema.FrameAck),
-    .request_snapshot = captureHandler(.request_snapshot, schema.RequestSnapshot),
-    .detach_pane = captureHandler(.detach_pane, schema.DetachPane),
+const testing_handlers: GenericHandlers(RequestRouterCapture) = .{
+    .open_pane = captureHandler(.open_pane, OpenPaneViewType),
+    .pane_input = captureHandler(.pane_input, PaneInputType),
+    .pane_resize = captureHandler(.pane_resize, PaneResizeType),
+    .frame_ack = captureHandler(.frame_ack, FrameAckType),
+    .request_snapshot = captureHandler(.request_snapshot, RequestSnapshotType),
+    .detach_pane = captureHandler(.detach_pane, DetachPaneType),
     .runtime_stop = captureVoidHandler(.runtime_stop),
-    .request_tab_snapshot = captureHandler(.request_tab_snapshot, schema.RequestTabSnapshot),
-    .create_pane = captureHandler(.create_pane, schema.CreatePaneView),
-    .close_pane = captureHandler(.close_pane, schema.ClosePane),
-    .query_history = captureHandler(.query_history, schema.QueryHistory),
-    .suggest_command = captureHandler(.suggest_command, schema.SuggestCommand),
-    .request_workspace_snapshot = captureHandler(.request_workspace_snapshot, schema.RequestWorkspaceSnapshot),
-    .create_tab = captureHandler(.create_tab, schema.CreateTabView),
-    .rename_tab = captureHandler(.rename_tab, schema.RenameTab),
-    .close_tab = captureHandler(.close_tab, schema.CloseTab),
-    .move_tab = captureHandler(.move_tab, schema.MoveTab),
-    .request_graphics_snapshot = captureHandler(.request_graphics_snapshot, schema.RequestGraphicsSnapshot),
-    .graphics_credit = captureHandler(.graphics_credit, schema.GraphicsCredit),
-    .configure_graphics = captureHandler(.configure_graphics, schema.ConfigureGraphics),
-    .configure_terminal_colors = captureHandler(.configure_terminal_colors, schema.ConfigureTerminalColors),
-    .request_runtime_state = captureHandler(.request_runtime_state, schema.RequestRuntimeState),
-    .create_workspace = captureHandler(.create_workspace, schema.CreateWorkspaceView),
-    .rename_workspace = captureHandler(.rename_workspace, schema.RenameWorkspace),
-    .set_pane_viewport = captureHandler(.set_pane_viewport, schema.SetPaneViewport),
-    .copy_selection = captureHandler(.copy_selection, schema.CopySelection),
-    .show_notification = captureHandler(.show_notification, schema.ShowNotification),
-    .update_client_layout = captureHandler(.update_client_layout, schema.ClientLayoutUpdateView),
-    .acknowledge_agent = captureHandler(.acknowledge_agent, schema.AcknowledgeAgent),
-    .query_agents = captureHandler(.query_agents, schema.QueryAgents),
-    .read_pane = captureHandler(.read_pane, schema.ReadPane),
-    .send_pane_text = captureHandler(.send_pane_text, schema.SendPaneText),
-    .report_agent_session = captureHandler(.report_agent_session, schema.ReportAgentSession),
-    .report_agent = captureHandler(.report_agent, schema.ReportAgent),
-    .report_agent_command = captureHandler(.report_agent_command, schema.ReportAgentCommand),
-    .report_agent_title = captureHandler(.report_agent_title, schema.ReportAgentTitle),
-    .search_pane = captureHandler(.search_pane, schema.SearchPane),
-    .import_history = captureHandler(.import_history, schema.ImportHistoryView),
-    .delete_history = captureHandler(.delete_history, schema.DeleteHistory),
-    .prune_history = captureHandler(.prune_history, schema.PruneHistory),
-    .read_history_output = captureHandler(.read_history_output, schema.ReadHistoryOutput),
-    .history_stats = captureHandler(.history_stats, schema.HistoryStatsQuery),
-    .request_pane_focus = captureHandler(.request_pane_focus, schema.RequestPaneFocus),
-    .complete_pane_focus = captureHandler(.complete_pane_focus, schema.CompletePaneFocus),
+    .request_tab_snapshot = captureHandler(.request_tab_snapshot, RequestTabSnapshotType),
+    .create_pane = captureHandler(.create_pane, CreatePaneViewType),
+    .close_pane = captureHandler(.close_pane, ClosePaneType),
+    .query_history = captureHandler(.query_history, QueryHistoryType),
+    .suggest_command = captureHandler(.suggest_command, SuggestCommandType),
+    .request_workspace_snapshot = captureHandler(.request_workspace_snapshot, RequestWorkspaceSnapshotType),
+    .create_tab = captureHandler(.create_tab, CreateTabViewType),
+    .rename_tab = captureHandler(.rename_tab, RenameTabType),
+    .close_tab = captureHandler(.close_tab, CloseTabType),
+    .move_tab = captureHandler(.move_tab, MoveTabType),
+    .request_graphics_snapshot = captureHandler(.request_graphics_snapshot, RequestGraphicsSnapshotType),
+    .graphics_credit = captureHandler(.graphics_credit, GraphicsCreditType),
+    .configure_graphics = captureHandler(.configure_graphics, ConfigureGraphicsType),
+    .configure_terminal_colors = captureHandler(.configure_terminal_colors, TerminalColors),
+    .request_runtime_state = captureHandler(.request_runtime_state, RequestRuntimeStateType),
+    .create_workspace = captureHandler(.create_workspace, CreateWorkspaceViewType),
+    .rename_workspace = captureHandler(.rename_workspace, RenameWorkspaceType),
+    .set_pane_viewport = captureHandler(.set_pane_viewport, SetPaneViewportType),
+    .copy_selection = captureHandler(.copy_selection, CopySelectionType),
+    .show_notification = captureHandler(.show_notification, ShowNotificationType),
+    .update_client_layout = captureHandler(.update_client_layout, ClientLayoutUpdateViewType),
+    .acknowledge_agent = captureHandler(.acknowledge_agent, AcknowledgeAgentType),
+    .query_agents = captureHandler(.query_agents, QueryAgentsType),
+    .read_pane = captureHandler(.read_pane, ReadPaneType),
+    .send_pane_text = captureHandler(.send_pane_text, SendPaneTextType),
+    .report_agent_session = captureHandler(.report_agent_session, ReportAgentSessionType),
+    .report_agent = captureHandler(.report_agent, ReportAgentType),
+    .report_agent_command = captureHandler(.report_agent_command, ReportAgentCommandType),
+    .report_agent_title = captureHandler(.report_agent_title, ReportAgentTitleType),
+    .search_pane = captureHandler(.search_pane, SearchPaneType),
+    .import_history = captureHandler(.import_history, ImportHistoryViewType),
+    .delete_history = captureHandler(.delete_history, DeleteHistoryType),
+    .prune_history = captureHandler(.prune_history, PruneHistoryType),
+    .read_history_output = captureHandler(.read_history_output, ReadHistoryOutputType),
+    .history_stats = captureHandler(.history_stats, HistoryStatsQueryType),
+    .request_pane_focus = captureHandler(.request_pane_focus, RequestPaneFocusType),
+    .complete_pane_focus = captureHandler(.complete_pane_focus, CompletePaneFocusType),
 };
 
-const TestRouter = Router(Capture, testing_handlers);
+const TestRouter = GenericRouter(RequestRouterCapture, testing_handlers);
 
-fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]schema.ClientMessage {
-    const request_id: schema.RequestId = @enumFromInt(1);
-    const pane_id: schema.PaneId = @enumFromInt(2);
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(3) };
-    const location: schema.TabLocation = .{
+fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]ClientMessageType {
+    const request_id: RequestIdType = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(2);
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(3) };
+    const location: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(4),
     };
-    const size: schema.TerminalSize = .{ .cols = 80, .rows = 24 };
-    const launch: schema.LaunchView = .{
+    const size: TerminalSizeType = .{ .cols = 80, .rows = 24 };
+    const launch: LaunchViewType = .{
         .cwd = "/work",
         .argument_count = 0,
         .encoded_arguments = "",
@@ -345,7 +257,7 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]schema.ClientMessage {
 }
 
 test "Router delegates every client tag exactly once and preserves classification" {
-    var capture: Capture = .{};
+    var capture: RequestRouterCapture = .{};
     const router = TestRouter.init(&capture);
     const messages = testingMessages();
     var seen: [messages.len]bool = @splat(false);
@@ -388,12 +300,12 @@ test "Router delegates every client tag exactly once and preserves classificatio
     }
 
     try std.testing.expectEqual(messages.len, capture.calls);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), capture.pane_input.?.pane_id);
+    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(2)), capture.pane_input.?.pane_id);
     try std.testing.expectEqualStrings("input", capture.pane_input.?.bytes);
 }
 
 test "Router propagates handler failure without a second delegation" {
-    var capture: Capture = .{ .failure = .move_tab };
+    var capture: RequestRouterCapture = .{ .failure = .move_tab };
     const router = TestRouter.init(&capture);
     const messages = testingMessages();
     const move_tab = messages[@intFromEnum(Tag.move_tab)];

@@ -2,36 +2,29 @@
 //! publishes the resulting presentation observation before the next event.
 
 const std = @import("std");
-const core = @import("telar-core");
-const platform = @import("../../platform/root.zig");
-
-const Client = @import("../client.zig");
+const Client = @import("../Client.zig");
+const Resources = @import("Resources.zig");
+const enter_module = @import("telar-core").enter;
+const client_startup = @import("../controllers/session/client_startup.zig");
+const client_layouts = @import("../resources/client_layouts.zig");
+const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
+const host_inputs = @import("../controllers/input/host_inputs.zig");
+const host_capabilities = @import("../controllers/host/host_capabilities.zig");
+const host_resizes = @import("../controllers/host/host_resizes.zig");
+const runtime_transport = @import("runtime_io.zig");
+const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
+const sidebar_animations = @import("../controllers/notifications/sidebar_animations.zig");
+const notifications = @import("../controllers/notifications/notifications.zig");
+const bar_updates = @import("../controllers/configuration/bar_updates.zig");
 const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
 const client_telemetry = @import("../resources/telemetry.zig");
-const client_layouts = @import("../resources/client_layouts.zig");
-const client_startup = @import("../controllers/session/client_startup.zig");
-const clipboard_images = @import("../controllers/host/clipboard_images.zig");
-const bar_updates = @import("../controllers/configuration/bar_updates.zig");
 const config_reloads = @import("../controllers/configuration/config_reloads.zig");
-const host_capabilities = @import("../controllers/host/host_capabilities.zig");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
-const link_openings = @import("../controllers/input/link_openings.zig");
-const host_resizes = @import("../controllers/host/host_resizes.zig");
-const notifications = @import("../controllers/notifications/notifications.zig");
-const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const plugin_actions = @import("../controllers/configuration/plugin_actions.zig");
-const runtime_transport = @import("runtime_io.zig");
-const sidebar_animations = @import("../controllers/notifications/sidebar_animations.zig");
+const clipboard_images = @import("../controllers/host/clipboard_images.zig");
+const link_openings = @import("../controllers/input/link_openings.zig");
+const PathType = @import("telar-core").Path;
 
-const diagnostics = core.diagnostics;
-const Event = Client.ClientEvent;
-const EventTag = std.meta.Tag(Event);
-
-pub const Resources = struct {
-    tty: *const platform.Tty,
-    resize_watcher: *platform.ResizeWatcher,
-    heap: *const diagnostics.Heap,
-};
+const EventTag = std.meta.Tag(Client.ClientEvent);
 
 pub const Outcome = union(enum) {
     keep_running,
@@ -45,8 +38,8 @@ pub const Outcome = union(enum) {
 /// ```zig
 /// const outcome = try handle(client, event, resources);
 /// ```
-pub fn handle(client: *Client, event: Event, resources: Resources) !Outcome {
-    const path = diagnostics.enter(pathFor(@as(EventTag, event)));
+pub fn handle(client: *Client, event: Client.ClientEvent, resources: Resources) !Outcome {
+    const path = enter_module(pathFor(@as(EventTag, event)));
     defer path.restore();
 
     switch (try route(client, event, resources)) {
@@ -65,7 +58,7 @@ pub fn handle(client: *Client, event: Event, resources: Resources) !Outcome {
     return .keep_running;
 }
 
-fn route(client: *Client, event: Event, resources: Resources) !Outcome {
+fn route(client: *Client, event: Client.ClientEvent, resources: Resources) !Outcome {
     switch (event) {
         .input => |result| {
             if (try host_inputs.handleOwnedRead(client, result)) {
@@ -97,7 +90,7 @@ fn route(client: *Client, event: Event, resources: Resources) !Outcome {
         .media_tick => |result| try presentation_lifecycle.handleMediaTick(client, result),
         .host_written => |result| try presentation_lifecycle.handleWritten(client, result),
         .compression_done => |job| {
-            @import("../../graphics/root.zig").kitty.delivery.completeCompression(&client.graphics_store, job);
+            kitty_delivery.completeCompression(&client.graphics_store, job);
             try client.presenter.requestMedia();
         },
         .sidebar_animation_tick => |result| _ = try sidebar_animations.handleTick(client, result),
@@ -121,7 +114,7 @@ fn route(client: *Client, event: Event, resources: Resources) !Outcome {
     return .keep_running;
 }
 
-fn pathFor(tag: EventTag) diagnostics.Path {
+fn pathFor(tag: EventTag) PathType {
     return switch (tag) {
         .input,
         .input_timeout,
@@ -177,12 +170,12 @@ test "client event paths preserve interactive media and observation budgets" {
     };
 
     for (interactive) |tag| {
-        try std.testing.expectEqual(diagnostics.Path.interactive, pathFor(tag));
+        try std.testing.expectEqual(PathType.interactive, pathFor(tag));
     }
     for (media) |tag| {
-        try std.testing.expectEqual(diagnostics.Path.media, pathFor(tag));
+        try std.testing.expectEqual(PathType.media, pathFor(tag));
     }
     for (observation) |tag| {
-        try std.testing.expectEqual(diagnostics.Path.observation, pathFor(tag));
+        try std.testing.expectEqual(PathType.observation, pathFor(tag));
     }
 }

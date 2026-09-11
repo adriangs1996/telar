@@ -62,15 +62,15 @@ version and `Presenter` folds a real diagnostic revision into its paced frame.
 The transition allocates nothing, copies only fixed-capacity values and runs
 independently of notification timers or runtime transport.
 
-- `src/frontend/client/model.zig` proves UTF-8 and length validation, equality,
+- `src/client/model/Model.zig` proves UTF-8 and length validation, equality,
   clear behavior and isolated diagnostic revisions.
-- `src/frontend/client/application/client_diagnostic.zig` proves valid commit,
+- `src/client/application/configuration/client_diagnostic.zig` proves valid commit,
   explicit fallback, preservation after two malformed values and idempotent
   clear.
-- `src/frontend/client/application/lua_action.zig` proves failure fallback and
+- `src/client/application/input/lua_action.zig` proves failure fallback and
   clear-before-effects ordering through the shared handler.
-- `src/frontend/client/application/config_reload_delivery.zig` and
+- `src/client/application/configuration/config_reload_delivery.zig` and
   `plugin_action_delivery.zig` prove diagnostic-before-notification ordering
   and preservation after publication failure.
-- `src/frontend/client/client_test.zig` proves configuration, Lua and plugin
+- `src/frontend/client/tests/` proves configuration, Lua and plugin
   outcomes plus presenter observation on a real client.

@@ -1,15 +1,14 @@
 //! Adapts tab attachment retirement to transport, requests and graphics.
 
-const core = @import("telar-core");
-const tabs_application = @import("telar-client").application.tabs;
-const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
+const Client = @import("../../Client.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const RetireTabAttachmentsHandlerType = @import("telar-client").RetireTabAttachmentsHandler;
 const pane_pastes = @import("../input/pane_pastes.zig");
+const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
+const TabAttachmentRetirementEffects = @import("telar-client").TabAttachmentRetirementEffects;
+const PaneIdType = @import("telar-core").PaneId;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-
-const Client = @import("../../client.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
-const schema = core.schema;
-const tab_attachment_retirement = tabs_application.tab_attachment_retirement;
 
 /// Finishes a captured paste, clears reported focus and then detaches every
 /// attached or in-flight pane in protocol order.
@@ -17,8 +16,8 @@ const tab_attachment_retirement = tabs_application.tab_attachment_retirement;
 /// ```zig
 /// try detach(client, location);
 /// ```
-pub fn detach(client: *Client, location: schema.TabLocation) !void {
-    var use_case: tab_attachment_retirement.RetireTabAttachmentsHandler = .{
+pub fn detach(client: *Client, location: TabLocationType) !void {
+    var use_case: RetireTabAttachmentsHandlerType = .{
         .model = &client.model,
         .paste_effects = pane_pastes.effects(client),
         .focus_effects = pane_focus_reports.effects(client),
@@ -34,7 +33,7 @@ pub fn detach(client: *Client, location: schema.TabLocation) !void {
 /// ```zig
 /// const attachment_effects = effects(client);
 /// ```
-pub fn effects(client: *Client) tab_attachment_retirement.Effects {
+pub fn effects(client: *Client) TabAttachmentRetirementEffects {
     return .{
         .context = client,
         .attachment_pending = attachmentPending,
@@ -44,23 +43,23 @@ pub fn effects(client: *Client) tab_attachment_retirement.Effects {
     };
 }
 
-fn attachmentPending(context: *anyopaque, pane_id: schema.PaneId) bool {
+fn attachmentPending(context: *anyopaque, pane_id: PaneIdType) bool {
     const client: *Client = @ptrCast(@alignCast(context));
 
     return request_lifecycle.hasPane(client, .attachment, pane_id);
 }
 
-fn detachPane(context: *anyopaque, pane_id: schema.PaneId) !void {
+fn detachPane(context: *anyopaque, pane_id: PaneIdType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     try runtime_transport.enqueue(client, .{ .detach_pane = .{ .pane_id = pane_id } });
 }
 
-fn retireAttachment(context: *anyopaque, pane_id: schema.PaneId) void {
+fn retireAttachment(context: *anyopaque, pane_id: PaneIdType) void {
     const client: *Client = @ptrCast(@alignCast(context));
     _ = request_lifecycle.ignoreAttachment(client, pane_id);
 }
 
-fn hideGraphics(context: *anyopaque, pane_id: schema.PaneId) !void {
+fn hideGraphics(context: *anyopaque, pane_id: PaneIdType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     try client.graphics_store.setPaneVisible(pane_id, false);
 }

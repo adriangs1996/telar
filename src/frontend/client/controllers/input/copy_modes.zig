@@ -1,16 +1,21 @@
 //! Adapts client ports to the copy-mode application use case.
 
-const core = @import("telar-core");
-const input_capability = @import("../../../input/root.zig");
-const input_application = @import("telar-client").application.input;
+const Client = @import("../../Client.zig");
+const PointerPressType = @import("telar-client").PointerPress;
+const PointerMotionType = @import("telar-client").PointerMotion;
+const ApplicationInputCopyModeOutcome = @import("telar-client").ApplicationInputCopyModeOutcome;
+const KeyType = @import("telar-client").Key;
+const PaneMatchesViewType = @import("telar-core").PaneMatchesView;
+const max_search_matches = @import("telar-core").max_search_matches;
+const SearchMatchType = @import("telar-core").SearchMatch;
+const CopyModeHandlerType = @import("telar-client").CopyModeHandler;
 const pane_viewports = @import("../panes/pane_viewports.zig");
+const TargetType = @import("telar-client").LinkTarget;
 const link_openings = @import("link_openings.zig");
-
-const Client = @import("../../client.zig");
-const copy_mode = input_application.copy_mode;
-const keybind = input_capability.keybind;
+const InputCopyModeDirection = @import("telar-client").InputCopyModeDirection;
+const name_prompts_module = @import("name_prompts.zig");
+const CopySelectionType = @import("telar-core").CopySelection;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
-const schema = core.schema;
 
 /// Enters copy mode on the attached focused pane.
 ///
@@ -25,7 +30,7 @@ pub fn enter(client: *Client) bool {
 
 /// Starts a pane-local mouse selection after focus and ownership resolution.
 /// Example: `_ = beginPointer(client, press);`.
-pub fn beginPointer(client: *Client, press: input_capability.copy_mode.PointerPress) bool {
+pub fn beginPointer(client: *Client, press: PointerPressType) bool {
     var use_case = handler(client);
 
     return use_case.beginPointer(press);
@@ -33,7 +38,7 @@ pub fn beginPointer(client: *Client, press: input_capability.copy_mode.PointerPr
 
 /// Extends or copies the captured mouse selection through the copy transaction.
 /// Example: `_ = try pointer(client, motion);`.
-pub fn pointer(client: *Client, motion: input_capability.copy_mode.PointerMotion) !copy_mode.Outcome {
+pub fn pointer(client: *Client, motion: PointerMotionType) !ApplicationInputCopyModeOutcome {
     var use_case = handler(client);
 
     return use_case.execute(.{ .pointer = motion });
@@ -41,7 +46,7 @@ pub fn pointer(client: *Client, motion: input_capability.copy_mode.PointerMotion
 
 /// Cancels mouse highlighting and physical capture without touching keyboard copy mode.
 /// Example: `_ = try cancelPointer(client);`.
-pub fn cancelPointer(client: *Client) !copy_mode.Outcome {
+pub fn cancelPointer(client: *Client) !ApplicationInputCopyModeOutcome {
     var use_case = handler(client);
 
     return use_case.execute(.cancel_pointer);
@@ -52,7 +57,7 @@ pub fn cancelPointer(client: *Client) !copy_mode.Outcome {
 /// ```zig
 /// _ = try key(client, pressed);
 /// ```
-pub fn key(client: *Client, pressed: keybind.Key) !copy_mode.Outcome {
+pub fn key(client: *Client, pressed: KeyType) !ApplicationInputCopyModeOutcome {
     var use_case = handler(client);
 
     return use_case.execute(.{ .key = pressed });
@@ -63,7 +68,7 @@ pub fn key(client: *Client, pressed: keybind.Key) !copy_mode.Outcome {
 /// ```zig
 /// _ = try vertical(client, -3);
 /// ```
-pub fn vertical(client: *Client, delta: i32) !copy_mode.Outcome {
+pub fn vertical(client: *Client, delta: i32) !ApplicationInputCopyModeOutcome {
     var use_case = handler(client);
 
     return use_case.execute(.{ .vertical = delta });
@@ -74,7 +79,7 @@ pub fn vertical(client: *Client, delta: i32) !copy_mode.Outcome {
 /// ```zig
 /// _ = try leave(client);
 /// ```
-pub fn leave(client: *Client) !copy_mode.Outcome {
+pub fn leave(client: *Client) !ApplicationInputCopyModeOutcome {
     var use_case = handler(client);
 
     return use_case.execute(.leave);
@@ -85,8 +90,8 @@ pub fn leave(client: *Client) !copy_mode.Outcome {
 /// ```zig
 /// _ = try matches(client, view);
 /// ```
-pub fn matches(client: *Client, view: schema.PaneMatchesView) !copy_mode.Outcome {
-    var storage: [input_capability.copy_mode.max_matches]schema.SearchMatch = undefined;
+pub fn matches(client: *Client, view: PaneMatchesViewType) !ApplicationInputCopyModeOutcome {
+    var storage: [max_search_matches]SearchMatchType = undefined;
     var count: usize = 0;
     var iterator = view.matches();
     while (try iterator.next()) |match| {
@@ -101,7 +106,7 @@ pub fn matches(client: *Client, view: schema.PaneMatchesView) !copy_mode.Outcome
     return use_case.execute(.{ .matches = .{ .pane_id = view.pane_id, .matches = storage[0..count] } });
 }
 
-fn handler(client: *Client) copy_mode.CopyModeHandler {
+fn handler(client: *Client) CopyModeHandlerType {
     return .{
         .model = &client.model,
         .effects = .{
@@ -114,20 +119,20 @@ fn handler(client: *Client) copy_mode.CopyModeHandler {
     };
 }
 
-fn openLink(context: *anyopaque, target: @import("telar-client").links.Target) !void {
+fn openLink(context: *anyopaque, target: TargetType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     _ = try link_openings.apply(client, target);
 }
 
-fn openSearch(context: *anyopaque, direction: input_capability.copy_mode.Direction) !void {
+fn openSearch(context: *anyopaque, direction: InputCopyModeDirection) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const name_prompts = @import("name_prompts.zig");
+    const name_prompts = name_prompts_module;
 
     _ = name_prompts.beginCopySearch(client, direction);
 }
 
-fn copySelection(context: *anyopaque, selection: schema.CopySelection) !void {
+fn copySelection(context: *anyopaque, selection: CopySelectionType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try runtime_transport.enqueue(client, .{ .copy_selection = selection });

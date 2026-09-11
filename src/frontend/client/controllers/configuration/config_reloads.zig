@@ -1,22 +1,23 @@
 //! Adapts asynchronous configuration reloads to one client's application state.
 
-const std = @import("std");
-const configuration_application = @import("telar-client").application.configuration;
-const client_model = @import("telar-client").model;
-const notifications = @import("telar-client").notifications;
-const bar_updates = @import("bar_updates.zig");
-const notification_flow = @import("../notifications/notifications.zig");
-const pane_geometry = @import("../panes/pane_geometry.zig");
-const sidebar_projection = @import("../notifications/sidebar_projection.zig");
-
-const Client = @import("../../client.zig");
+const Client = @import("../../Client.zig");
 const reload_worker = @import("../../resources/config_reload.zig");
-const config_use_case = configuration_application.config_reload;
-const config_delivery = configuration_application.config_reload_delivery;
-
-pub const Adoption = reload_worker.Adoption;
-
-pub const Outcome = config_delivery.Outcome;
+const Outcome = @import("telar-client").Outcome;
+const DeliveryContext = @import("DeliveryContext.zig");
+const ResolutionType = @import("telar-client").Resolution;
+const DeliverConfigReloadHandlerType = @import("telar-client").DeliverConfigReloadHandler;
+const Adoption = @import("../../resources/Adoption.zig");
+const ConfigurationCommitType = @import("telar-client").ConfigurationCommit;
+const AdoptionContext = @import("AdoptionContext.zig");
+const ApplyConfigHandlerType = @import("telar-client").ApplyConfigHandler;
+const std = @import("std");
+const bar_updates = @import("bar_updates.zig");
+const SidebarLayoutType = @import("telar-client").SidebarLayout;
+const sidebar_projection = @import("../notifications/sidebar_projection.zig");
+const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
+const pane_geometry = @import("../panes/pane_geometry.zig");
+const InputType = @import("telar-client").NotificationInput;
+const notification_flow = @import("../notifications/notifications.zig");
 
 /// Schedules the next reload attempt when this client owns a watched
 /// configuration.
@@ -48,7 +49,7 @@ pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Out
     const reload = try result;
     var context: DeliveryContext = .{ .client = client };
     defer context.releaseOwned();
-    const resolution: config_delivery.Resolution = switch (reload_worker.resolve(&client.reload, .{
+    const resolution: ResolutionType = switch (reload_worker.resolve(&client.reload, .{
         .gpa = client.gpa,
         .reload = reload,
         .checks = .{
@@ -64,7 +65,7 @@ pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Out
             break :adopted .adopted;
         },
     };
-    var use_case: config_delivery.DeliverConfigReloadHandler = .{
+    var use_case: DeliverConfigReloadHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = &context,
@@ -77,29 +78,18 @@ pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Out
     return use_case.execute(resolution);
 }
 
-const DeliveryContext = struct {
-    client: *Client,
-    adoption: ?Adoption = null,
-
-    fn releaseOwned(context: *DeliveryContext) void {
-        if (context.adoption) |adoption| {
-            adoption.deinit(context.client.gpa);
-        }
-    }
-};
-
 /// Adopts one validated generation through the client application boundary.
 ///
 /// ```zig
 /// const commit = try apply(client, adoption);
 /// ```
-pub fn apply(client: *Client, adoption: Adoption) !client_model.ConfigurationCommit {
+pub fn apply(client: *Client, adoption: Adoption) !ConfigurationCommitType {
     var context: AdoptionContext = .{
         .client = client,
         .adoption = adoption,
     };
     errdefer context.releaseOwned();
-    var use_case: config_use_case.ApplyConfigHandler = .{
+    var use_case: ApplyConfigHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = &context,
@@ -128,50 +118,7 @@ pub fn apply(client: *Client, adoption: Adoption) !client_model.ConfigurationCom
     return commit;
 }
 
-const AdoptionContext = struct {
-    client: *Client,
-    adoption: Adoption,
-    consumed: bool = false,
-
-    fn releaseOwned(context: *AdoptionContext) void {
-        if (!context.consumed) {
-            context.adoption.deinit(context.client.gpa);
-        }
-    }
-
-    fn swap(context: *AdoptionContext) void {
-        const client = context.client;
-        const snapshot = &context.adoption.generation.snapshot;
-        const previous_generation = client.lua_generation;
-        const previous_registry = client.plugin_registry;
-        const previous_trust = client.trust_store;
-
-        client.lua_generation = context.adoption.generation;
-        client.plugin_registry = context.adoption.registry;
-        client.trust_store = context.adoption.trust_store;
-        client.host_input.replaceRouter(client.io, context.adoption.router);
-        client.sidebar_rendering = context.adoption.sidebar_rendering;
-        client.sound_playback.configure(snapshot.sound);
-        client.notification_delivery = snapshot.notification_delivery;
-        client.history_show_agent_commands = snapshot.history_show_agent_commands;
-        client.history_enter_runs = snapshot.history_enter_runs;
-        client.history_match_fts = snapshot.history_match_fts;
-        client.appearance_themes = .{ .light = snapshot.theme_light, .dark = snapshot.theme_dark };
-        context.consumed = true;
-
-        if (previous_generation) |generation| {
-            generation.deinit();
-        }
-        if (previous_registry) |registry| {
-            client.gpa.destroy(registry);
-        }
-        if (previous_trust) |trust| {
-            client.gpa.destroy(trust);
-        }
-    }
-};
-
-fn adoptResources(raw_context: *anyopaque, commit: client_model.ConfigurationCommit) void {
+fn adoptResources(raw_context: *anyopaque, commit: ConfigurationCommitType) void {
     const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
     std.debug.assert(context.adoption.generation.number == commit.generation);
     context.swap();
@@ -213,7 +160,7 @@ fn configureSidebar(raw_context: *anyopaque) !void {
     );
 }
 
-fn applySidebar(raw_context: *anyopaque, change: client_model.SidebarLayout) !void {
+fn applySidebar(raw_context: *anyopaque, change: SidebarLayoutType) !void {
     const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
     try sidebar_projection.apply(context.client, change);
 }
@@ -221,7 +168,7 @@ fn applySidebar(raw_context: *anyopaque, change: client_model.SidebarLayout) !vo
 fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
     const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
 
-    @import("../../../graphics/root.zig").kitty.delivery.invalidatePlacements(&context.client.graphics_store);
+    kitty_delivery.invalidatePlacements(&context.client.graphics_store);
 }
 
 fn offerActivePaneGeometry(raw_context: *anyopaque) !void {
@@ -230,7 +177,7 @@ fn offerActivePaneGeometry(raw_context: *anyopaque) !void {
     try pane_geometry.offerActive(context.client, context.client.geometry().area);
 }
 
-fn applyAdoption(raw_context: *anyopaque) !client_model.ConfigurationCommit {
+fn applyAdoption(raw_context: *anyopaque) !ConfigurationCommitType {
     const context: *DeliveryContext = @ptrCast(@alignCast(raw_context));
     const adoption = context.adoption orelse return error.ConfigReloadAdoptionMissing;
     // `apply` either installs the concrete owners or releases them on failure.
@@ -239,7 +186,7 @@ fn applyAdoption(raw_context: *anyopaque) !client_model.ConfigurationCommit {
     return apply(context.client, adoption);
 }
 
-fn publishNotification(raw_context: *anyopaque, input: notifications.Input) !void {
+fn publishNotification(raw_context: *anyopaque, input: InputType) !void {
     const context: *DeliveryContext = @ptrCast(@alignCast(raw_context));
 
     try notification_flow.publishNow(context.client, input);

@@ -1,8 +1,6 @@
 const std = @import("std");
-const application = @import("application.zig");
 const arguments = @import("arguments.zig");
-
-const Io = std.Io;
+const application = @import("application.zig");
 
 /// Parses process arguments, owns stderr buffering, and dispatches the command.
 ///
@@ -14,7 +12,7 @@ pub fn run(init: std.process.Init) !u8 {
     const parsed = try arguments.parse(init.arena.allocator(), argv);
 
     var stderr_buffer: [4096]u8 = undefined;
-    var stderr_writer = Io.File.stderr().writer(init.io, &stderr_buffer);
+    var stderr_writer = std.Io.File.stderr().writer(init.io, &stderr_buffer);
     const writer = &stderr_writer.interface;
 
     switch (parsed) {

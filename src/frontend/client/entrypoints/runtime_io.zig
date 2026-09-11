@@ -1,19 +1,26 @@
 //! Coordinates runtime I/O completions with client input, graphics and message delivery.
 
-const std = @import("std");
-const core = @import("telar-core");
-const transport = @import("../connection/root.zig").runtime_transport;
-const Client = @import("../client.zig");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
+const Client = @import("../Client.zig");
+const Snapshot = @import("telar-client").OutboxSnapshot;
+const mark_module = @import("telar-core").mark;
+const now_module = @import("telar-core").now;
+const decodeServer_module = @import("telar-core").decodeServer;
 const server_messages = @import("runtime_messages.zig");
-const Io = std.Io;
-const schema = core.schema;
-const diagnostics = core.diagnostics;
-const State = transport.State;
-pub const Message = transport.Message;
-pub const Snapshot = transport.Snapshot;
-pub const capacity = transport.capacity;
-pub const max_input_bytes = transport.max_input_bytes;
+const host_inputs = @import("../controllers/input/host_inputs.zig");
+const Message = @import("telar-client").Message;
+const PaneIdType = @import("telar-core").PaneId;
+const max_encoded_bytes = @import("telar-client").max_encoded_bytes;
+const RenameTabType = @import("telar-core").RenameTab;
+const RenameWorkspaceType = @import("telar-core").RenameWorkspace;
+const CreateWorkspaceType = @import("telar-core").CreateWorkspace;
+const CreateTabType = @import("telar-core").CreateTab;
+const ShowNotificationType = @import("telar-core").ShowNotification;
+const ClientLayoutUpdateType = @import("telar-core").ClientLayoutUpdate;
+const std = @import("std");
+const RuntimeTransportState = @import("telar-client").RuntimeTransportState;
+const DecodedObservation = @import("DecodedObservation.zig");
+const enabled_module = @import("telar-core").enabled;
+const elapsed_module = @import("telar-core").elapsed;
 
 /// Reports remaining bounded outbound message slots without exposing the
 /// queue representation.
@@ -59,10 +66,10 @@ pub fn scheduleRead(client: *Client) !void {
 /// if (try runtime_transport.handleRead(client, result)) |status| return status;
 /// ```
 pub fn handleRead(client: *Client, result: anyerror![]u8) !?u8 {
-    core.echo_trace.mark(client.io, .client_frame);
+    mark_module(client.io, .client_frame);
     const payload = try client.runtime_transport.completeRead(result);
-    const decode_started = diagnostics.now(client.io);
-    const message = try schema.decodeServer(payload);
+    const decode_started = now_module(client.io);
+    const message = try decodeServer_module(payload);
     recordMessage(client, .{
         .payload_len = payload.len,
         .message = message,
@@ -106,8 +113,8 @@ pub fn enqueue(client: *Client, message: Message) !void {
 /// ```zig
 /// try runtime_transport.enqueueInput(client, pane_id, bytes);
 /// ```
-pub fn enqueueInput(client: *Client, pane_id: schema.PaneId, bytes: []const u8) !void {
-    if (bytes.len > max_input_bytes) {
+pub fn enqueueInput(client: *Client, pane_id: PaneIdType, bytes: []const u8) !void {
+    if (bytes.len > max_encoded_bytes) {
         try client.runtime_transport.outbox.pushInputBatch(pane_id, bytes);
     } else {
         try client.runtime_transport.outbox.pushInput(pane_id, bytes);
@@ -121,7 +128,7 @@ pub fn enqueueInput(client: *Client, pane_id: schema.PaneId, bytes: []const u8) 
 /// ```zig
 /// try runtime_transport.enqueueRename(client, rename);
 /// ```
-pub fn enqueueRename(client: *Client, rename: schema.RenameTab) !void {
+pub fn enqueueRename(client: *Client, rename: RenameTabType) !void {
     try client.runtime_transport.outbox.pushRename(rename);
     try pump(client);
 }
@@ -131,7 +138,7 @@ pub fn enqueueRename(client: *Client, rename: schema.RenameTab) !void {
 /// ```zig
 /// try runtime_transport.enqueueWorkspaceRename(client, rename);
 /// ```
-pub fn enqueueWorkspaceRename(client: *Client, rename: schema.RenameWorkspace) !void {
+pub fn enqueueWorkspaceRename(client: *Client, rename: RenameWorkspaceType) !void {
     try client.runtime_transport.outbox.pushWorkspaceRename(rename);
     try pump(client);
 }
@@ -141,7 +148,7 @@ pub fn enqueueWorkspaceRename(client: *Client, rename: schema.RenameWorkspace) !
 /// ```zig
 /// try runtime_transport.enqueueCreateWorkspace(client, request);
 /// ```
-pub fn enqueueCreateWorkspace(client: *Client, request: schema.CreateWorkspace) !void {
+pub fn enqueueCreateWorkspace(client: *Client, request: CreateWorkspaceType) !void {
     try client.runtime_transport.outbox.pushCreateWorkspace(request);
     try pump(client);
 }
@@ -151,7 +158,7 @@ pub fn enqueueCreateWorkspace(client: *Client, request: schema.CreateWorkspace) 
 /// ```zig
 /// try runtime_transport.enqueueCreateTab(client, request);
 /// ```
-pub fn enqueueCreateTab(client: *Client, request: schema.CreateTab) !void {
+pub fn enqueueCreateTab(client: *Client, request: CreateTabType) !void {
     try client.runtime_transport.outbox.pushCreateTab(request);
     try pump(client);
 }
@@ -161,7 +168,7 @@ pub fn enqueueCreateTab(client: *Client, request: schema.CreateTab) !void {
 /// ```zig
 /// try runtime_transport.enqueueNotification(client, request);
 /// ```
-pub fn enqueueNotification(client: *Client, request: schema.ShowNotification) !void {
+pub fn enqueueNotification(client: *Client, request: ShowNotificationType) !void {
     try client.runtime_transport.outbox.pushNotification(request);
     try pump(client);
 }
@@ -171,7 +178,7 @@ pub fn enqueueNotification(client: *Client, request: schema.ShowNotification) !v
 /// ```zig
 /// try runtime_transport.enqueueClientLayout(client, update);
 /// ```
-pub fn enqueueClientLayout(client: *Client, update: schema.ClientLayoutUpdate) !void {
+pub fn enqueueClientLayout(client: *Client, update: ClientLayoutUpdateType) !void {
     try client.runtime_transport.outbox.pushClientLayout(update);
     try pump(client);
 }
@@ -208,26 +215,20 @@ fn pump(client: *Client) !void {
     };
 }
 
-fn receive(io: Io, state: *State) anyerror![]u8 {
+fn receive(io: std.Io, state: *RuntimeTransportState) anyerror![]u8 {
     const bytes = try state.read(io);
-    core.echo_trace.mark(io, .client_read);
+    mark_module(io, .client_read);
     return bytes;
 }
 
-fn send(io: Io, state: *State, payload: []const u8) anyerror!void {
-    core.echo_trace.mark(io, .client_send_start);
-    defer core.echo_trace.mark(io, .client_send_done);
+fn send(io: std.Io, state: *RuntimeTransportState, payload: []const u8) anyerror!void {
+    mark_module(io, .client_send_start);
+    defer mark_module(io, .client_send_done);
     return state.send(io, payload);
 }
 
-const DecodedObservation = struct {
-    payload_len: usize,
-    message: schema.ServerMessage,
-    decode_started_ns: u64,
-};
-
 fn recordMessage(client: *Client, observation: DecodedObservation) void {
-    if (comptime !diagnostics.enabled) {
+    if (comptime !enabled_module) {
         return;
     }
 
@@ -248,6 +249,6 @@ fn recordMessage(client: *Client, observation: DecodedObservation) void {
         else => {},
     }
     client.telemetry.metrics.decode.observe(
-        diagnostics.elapsed(observation.decode_started_ns, diagnostics.now(client.io)),
+        elapsed_module(observation.decode_started_ns, now_module(client.io)),
     );
 }

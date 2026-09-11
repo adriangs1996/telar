@@ -1,13 +1,17 @@
 //! History flow proof through host input, runtime messages and the real client outbox.
 
+const HistoryEntryType = @import("telar-core").HistoryEntry;
+const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
-const schema = @import("telar-core").schema;
-const TestHarness = @import("support.zig").TestHarness;
 const history = @import("../controllers/input/history_palettes.zig");
-const prompts = @import("../controllers/input/name_prompts.zig");
+const encodeHistoryResults_module = @import("telar-core").encodeHistoryResults;
 const server = @import("../entrypoints/runtime_messages.zig");
+const decodeServer_module = @import("telar-core").decodeServer;
+const prompts = @import("../controllers/input/name_prompts.zig");
+const encodeHistoryOutput_module = @import("telar-core").encodeHistoryOutput;
+const RequestFailedType = @import("telar-core").RequestFailed;
 
-const entry: schema.HistoryEntry = .{ .id = 20, .pane_id = TestHarness.bootstrap_pane, .started_at_ms = 1000, .duration_ns = 1000000, .exit_code = 0, .status = .completed, .command = "zig build", .cwd = "/work", .workspace_path = "/work" };
+const entry: HistoryEntryType = .{ .id = 20, .pane_id = TestHarness.bootstrap_pane, .started_at_ms = 1000, .duration_ns = 1000000, .exit_code = 0, .status = .completed, .command = "zig build", .cwd = "/work", .workspace_path = "/work" };
 
 test "history input preserves search through inspection and pages past the first reply" {
     var harness: TestHarness = undefined;
@@ -22,15 +26,15 @@ test "history input preserves search through inspection and pages past the first
     try std.testing.expectEqual(@as(u16, 100), query.limit);
     try std.testing.expect(!query.distinct);
 
-    const results = try schema.encodeHistoryResults(&buffer, .{ .request_id = query.request_id, .entries = &.{entry}, .snapshot_id = 20, .has_more = true });
-    _ = try server.handleServerMessage(client, try schema.decodeServer(results));
+    const results = try encodeHistoryResults_module(&buffer, .{ .request_id = query.request_id, .entries = &.{entry}, .snapshot_id = 20, .has_more = true });
+    _ = try server.handleServerMessage(client, try decodeServer_module(results));
     _ = try prompts.handleInput(client, "\x0f");
     try std.testing.expect(client.model.name_prompt.currentConst().?.inspecting());
     try harness.settle();
     const read = (try harness.nextClientMessage(&buffer)).read_history_output;
     try std.testing.expectEqual(entry.id, read.id);
-    const output = try schema.encodeHistoryOutput(&buffer, .{ .request_id = read.request_id, .id = read.id, .content = "done", .observed_bytes = 4, .truncated = false });
-    _ = try server.handleServerMessage(client, try schema.decodeServer(output));
+    const output = try encodeHistoryOutput_module(&buffer, .{ .request_id = read.request_id, .id = read.id, .content = "done", .observed_bytes = 4, .truncated = false });
+    _ = try server.handleServerMessage(client, try decodeServer_module(output));
     try std.testing.expectEqualStrings("done", client.model.history_palette.outputSlice());
 
     _ = try prompts.handleInput(client, "\x1b[6~");
@@ -46,10 +50,10 @@ test "history input preserves search through inspection and pages past the first
     try std.testing.expectEqual(@as(u64, 20), next.snapshot_id);
     try std.testing.expect(!history.canSubmit(client, 0));
 
-    const old = try schema.encodeHistoryResults(&buffer, .{ .request_id = query.request_id, .entries = &.{entry} });
-    _ = try server.handleServerMessage(client, try schema.decodeServer(old));
+    const old = try encodeHistoryResults_module(&buffer, .{ .request_id = query.request_id, .entries = &.{entry} });
+    _ = try server.handleServerMessage(client, try decodeServer_module(old));
     try std.testing.expect(client.model.history_palette.phase == .loading);
-    const failure: schema.RequestFailed = .{ .request_id = next.request_id, .code = .resource_limit, .message = "Query busy" };
+    const failure: RequestFailedType = .{ .request_id = next.request_id, .code = .resource_limit, .message = "Query busy" };
     _ = try server.handleServerMessage(client, .{ .request_failed = failure });
     try std.testing.expect(client.model.history_palette.phase == .failed);
     try std.testing.expectEqualStrings("Query busy", client.model.history_palette.errorSlice());
@@ -99,8 +103,8 @@ test "history submission sends a complete command longer than its preview" {
     const command = "x" ** 9000;
     var long_entry = entry;
     long_entry.command = command;
-    const results = try schema.encodeHistoryResults(&buffer, .{ .request_id = query.request_id, .entries = &.{long_entry} });
-    _ = try server.handleServerMessage(client, try schema.decodeServer(results));
+    const results = try encodeHistoryResults_module(&buffer, .{ .request_id = query.request_id, .entries = &.{long_entry} });
+    _ = try server.handleServerMessage(client, try decodeServer_module(results));
     client.history_enter_runs = false;
     _ = try prompts.handleInput(client, "\r");
     try std.testing.expect(!client.model.name_prompt.active());

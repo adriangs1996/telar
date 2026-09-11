@@ -79,16 +79,16 @@ continues independently and later exact sound events may start a new queue.
 ## Proof
 
 - `src/frontend/sound/types.zig` proves per-kind policy filtering.
-- `src/frontend/sound/playback.zig` proves one active token, one coalesced
+- `src/frontend/sound/playback_support.zig` proves one active token, one coalesced
   successor, priority, configuration replacement and scheduling failure
   recovery.
 - `src/frontend/sound/worker.zig` owns the bounded host adapters; the cross
   build compiles the Linux and Windows paths.
-- `src/frontend/client/application/agent_sound.zig` proves exact-identity
+- `src/client/application/agents/agent_sound.zig` proves exact-identity
   gating, stale suppression and effect-error propagation.
-- `src/frontend/client/agent_sounds.zig` owns protocol translation, worker
+- `src/frontend/client/controllers/agents/agent_sounds.zig` owns protocol translation, worker
   scheduling and the completion entrypoint.
-- `src/frontend/client/client_test.zig` proves wire identity, bounded queuing,
+- `src/frontend/client/tests/` proves wire identity, bounded queuing,
   unchanged model and presentation versions, and configuration adoption.
-- `src/backend/runtime/root.zig` proves the exact transition policy and adds
+- `src/backend/runtime/Runtime.zig` proves the exact transition policy and adds
   the pane generation used by the client gate.

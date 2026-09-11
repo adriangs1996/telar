@@ -1,26 +1,28 @@
 //! Adapts pane-geometry application commands to graphics and runtime ports.
 
-const core = @import("telar-core");
-const workspace_capability = @import("../../../workspace/root.zig");
-const panes_application = @import("telar-client").application.panes;
-const client_model = @import("telar-client").model;
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
+const Client = @import("../../Client.zig");
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const RectType = @import("telar-core").Rect;
+const OfferPaneGeometryHandlerType = @import("telar-client").OfferPaneGeometryHandler;
+const OfferActivePaneGeometryHandlerType = @import("telar-client").OfferActivePaneGeometryHandler;
+const OfferEffectsType = @import("telar-client").OfferEffects;
+const ResizePaneHandlerType = @import("telar-client").ResizePaneHandler;
+const TogglePaneFullscreenHandlerType = @import("telar-client").TogglePaneFullscreenHandler;
+const PaneGeometryChangeType = @import("telar-client").PaneGeometryChange;
+const DeliverPaneGeometryHandlerType = @import("telar-client").DeliverPaneGeometryHandler;
 const tab_snapshots = @import("../tabs/tab_snapshots.zig");
-
-const Client = @import("../../client.zig");
-const pane_geometry_delivery = panes_application.pane_geometry_delivery;
-const resize_pane = panes_application.resize_pane;
-const multiplexer = workspace_capability.multiplexer;
-const toggle_pane_fullscreen = panes_application.toggle_pane_fullscreen;
-const ui = core.ui;
+const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
+const PaneResizeType = @import("telar-core").PaneResize;
+const runtime_transport = @import("../../entrypoints/runtime_io.zig");
+const PaneBottomReservationType = @import("telar-client").PaneBottomReservation;
 
 /// Offers the current visible size of every attached pane to the runtime.
 ///
 /// ```zig
 /// try offerAttached(client, model, client.geometry().area);
 /// ```
-pub fn offerAttached(client: *Client, model: *multiplexer.Model, area: ui.Rect) !void {
-    var use_case: pane_geometry_delivery.OfferPaneGeometryHandler = .{
+pub fn offerAttached(client: *Client, model: *MultiplexerModel, area: RectType) !void {
+    var use_case: OfferPaneGeometryHandlerType = .{
         .effects = offerEffects(client),
     };
 
@@ -32,8 +34,8 @@ pub fn offerAttached(client: *Client, model: *multiplexer.Model, area: ui.Rect) 
 /// ```zig
 /// try offerActive(client, client.geometry().area);
 /// ```
-pub fn offerActive(client: *Client, area: ui.Rect) !void {
-    var use_case: pane_geometry_delivery.OfferActivePaneGeometryHandler = .{
+pub fn offerActive(client: *Client, area: RectType) !void {
+    var use_case: OfferActivePaneGeometryHandlerType = .{
         .model = &client.model,
         .effects = offerEffects(client),
     };
@@ -46,7 +48,7 @@ pub fn offerActive(client: *Client, area: ui.Rect) !void {
 /// ```zig
 /// const effects = offerEffects(client);
 /// ```
-pub fn offerEffects(client: *Client) pane_geometry_delivery.OfferEffects {
+pub fn offerEffects(client: *Client) OfferEffectsType {
     return .{
         .context = client,
         .deliver_resize = deliverResize,
@@ -60,7 +62,7 @@ pub fn offerEffects(client: *Client) pane_geometry_delivery.OfferEffects {
 /// var use_case = resizeHandler(client);
 /// _ = try use_case.execute(.{ .direction = .right, .area = area });
 /// ```
-pub fn resizeHandler(client: *Client) resize_pane.ResizePaneHandler {
+pub fn resizeHandler(client: *Client) ResizePaneHandlerType {
     return .{
         .model = &client.model,
         .effects = .{
@@ -76,7 +78,7 @@ pub fn resizeHandler(client: *Client) resize_pane.ResizePaneHandler {
 /// var use_case = fullscreenHandler(client);
 /// _ = try use_case.execute(.{ .area = area });
 /// ```
-pub fn fullscreenHandler(client: *Client) toggle_pane_fullscreen.TogglePaneFullscreenHandler {
+pub fn fullscreenHandler(client: *Client) TogglePaneFullscreenHandlerType {
     return .{
         .model = &client.model,
         .effects = .{
@@ -86,9 +88,9 @@ pub fn fullscreenHandler(client: *Client) toggle_pane_fullscreen.TogglePaneFulls
     };
 }
 
-fn deliverGeometry(context: *anyopaque, change: client_model.PaneGeometryChange) !void {
+fn deliverGeometry(context: *anyopaque, change: PaneGeometryChangeType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    var use_case: pane_geometry_delivery.DeliverPaneGeometryHandler = .{
+    var use_case: DeliverPaneGeometryHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = client,
@@ -102,7 +104,7 @@ fn deliverGeometry(context: *anyopaque, change: client_model.PaneGeometryChange)
     _ = try use_case.execute(change);
 }
 
-fn requestVisibleAttachments(raw_context: *anyopaque, area: ui.Rect) !void {
+fn requestVisibleAttachments(raw_context: *anyopaque, area: RectType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     try tab_snapshots.attachActive(client, area);
@@ -111,16 +113,16 @@ fn requestVisibleAttachments(raw_context: *anyopaque, area: ui.Rect) !void {
 fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
-    @import("../../../graphics/root.zig").kitty.delivery.invalidatePlacements(&client.graphics_store);
+    kitty_delivery.invalidatePlacements(&client.graphics_store);
 }
 
-fn deliverResize(raw_context: *anyopaque, resize: core.schema.PaneResize) !void {
+fn deliverResize(raw_context: *anyopaque, resize: PaneResizeType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     try runtime_transport.enqueue(client, .{ .pane_resize = resize });
 }
 
-fn bottomReservation(raw_context: *anyopaque) ?workspace_capability.layout.PaneBottomReservation {
+fn bottomReservation(raw_context: *anyopaque) ?PaneBottomReservationType {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     return client.view.attachmentReservation();

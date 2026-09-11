@@ -6,8 +6,10 @@
 //! Which agent owns an exchange is the runtime's decision, made from process
 //! evidence first. The proxy only says what protocol it saw.
 
+const types = @import("../../agent/types.zig");
 const std = @import("std");
-pub const ApiDialect = @import("../../agent/root.zig").ApiDialect;
+
+pub const ApiDialect = types.ApiDialect;
 
 /// Identifies the dialect that owns an authenticated CONNECT target. Matching
 /// is ASCII case-insensitive and requires a DNS label boundary.
@@ -15,7 +17,7 @@ pub const ApiDialect = @import("../../agent/root.zig").ApiDialect;
 /// ```zig
 /// const dialect = identify("api.anthropic.com");
 /// ```
-pub fn identify(host: []const u8) ApiDialect {
+pub fn identify(host: []const u8) types.ApiDialect {
     if (hostMatches(host, "anthropic.com")) {
         return .anthropic_messages;
     }
@@ -40,10 +42,10 @@ fn hostMatches(host: []const u8, domain: []const u8) bool {
 }
 
 test "dialect identification requires a DNS label boundary" {
-    try std.testing.expectEqual(ApiDialect.anthropic_messages, identify("anthropic.com"));
-    try std.testing.expectEqual(ApiDialect.anthropic_messages, identify("API.ANTHROPIC.COM"));
-    try std.testing.expectEqual(ApiDialect.openai_responses, identify("api.openai.com"));
-    try std.testing.expectEqual(ApiDialect.openai_responses, identify("ab.chatgpt.com"));
+    try std.testing.expectEqual(types.ApiDialect.anthropic_messages, identify("anthropic.com"));
+    try std.testing.expectEqual(types.ApiDialect.anthropic_messages, identify("API.ANTHROPIC.COM"));
+    try std.testing.expectEqual(types.ApiDialect.openai_responses, identify("api.openai.com"));
+    try std.testing.expectEqual(types.ApiDialect.openai_responses, identify("ab.chatgpt.com"));
 
     inline for (.{
         "",
@@ -52,6 +54,6 @@ test "dialect identification requires a DNS label boundary" {
         "evilopenai.com",
         "chatgpt.com.evil.test",
     }) |host| {
-        try std.testing.expectEqual(ApiDialect.unknown, identify(host));
+        try std.testing.expectEqual(types.ApiDialect.unknown, identify(host));
     }
 }

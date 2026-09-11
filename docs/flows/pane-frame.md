@@ -99,7 +99,7 @@ outbox without terminal resources.
 
 ## Proof
 
-- `src/client/model/root.zig` and `src/client/model/tests/` proves atomic screen and copy-state commit,
+- `src/client/model/Model.zig` and `src/client/model/tests/` proves atomic screen and copy-state commit,
   exact revisions, stale detach handling, base recovery and failed-apply
   behavior.
 - `src/client/application/panes/pane_frame.zig` proves effect selection,

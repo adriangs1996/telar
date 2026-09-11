@@ -1,153 +1,37 @@
 //! Application policy for delivering the irreversible effects produced by one
 //! successful host presentation.
 
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
+const PresentationCommitType = @import("../../panes/PresentationCommit.zig");
+const ModelType = @import("../../model/Model.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const workspace_capability = @import("../../workspace/root.zig");
-const client_model = @import("../../root.zig").model;
+const EffectCapture = @import("EffectCapture.zig");
+const DeliverPresentationHandler = @import("DeliverPresentationHandler.zig");
+const FrameAckType = @import("telar-core").FrameAck;
+const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
 
-const multiplexer = workspace_capability.multiplexer;
-const schema = core.schema;
-
-pub const Command = struct {
-    commit: multiplexer.PresentationCommit,
-    media_pending: bool,
-};
-
-pub const Effects = struct {
-    context: *anyopaque,
-    flush_graphics_credits: *const fn (*anyopaque) anyerror!void,
-    acknowledge_frame: *const fn (*anyopaque, schema.FrameAck) anyerror!void,
-    request_media: *const fn (*anyopaque) anyerror!void,
-};
-
-pub const DeliverPresentationHandler = struct {
-    model: *client_model.Model,
-    effects: Effects,
-
-    /// Commits one successful host presentation before delivering transport
-    /// effects in credits, frame and media order.
-    ///
-    /// ```zig
-    /// try handler.execute(command);
-    /// ```
-    pub fn execute(handler: *DeliverPresentationHandler, command: Command) !void {
-        if (command.commit.len > multiplexer.max_panes) {
-            return error.InvalidPresentationCommit;
-        }
-
-        const accepted = handler.model.commitPresentation(command.commit);
-        try handler.effects.flush_graphics_credits(handler.effects.context);
-
-        for (accepted.slice()) |pane| {
-            if (!pane.attached or pane.frame_id == 0) {
-                continue;
-            }
-
-            try handler.effects.acknowledge_frame(handler.effects.context, .{ .pane_id = pane.pane_id, .frame_id = pane.frame_id });
-        }
-
-        if (command.media_pending) {
-            try handler.effects.request_media(handler.effects.context);
-        }
-    }
-};
-
-const Event = enum {
+pub const Event = enum {
     credits,
     acknowledgement,
     media,
 };
 
-const Failure = enum {
+pub const Failure = enum {
     none,
     credits,
     second_acknowledgement,
     media,
 };
 
-const EffectCapture = struct {
-    model: *client_model.Model,
-    pane_id: schema.PaneId,
-    events: [multiplexer.max_panes + 2]Event = undefined,
-    event_count: usize = 0,
-    acknowledgements: [multiplexer.max_panes]schema.FrameAck = undefined,
-    acknowledgement_count: usize = 0,
-    commit_observed: bool = true,
-    failure: Failure = .none,
-
-    fn effects(capture: *EffectCapture) Effects {
-        return .{
-            .context = capture,
-            .flush_graphics_credits = flushGraphicsCredits,
-            .acknowledge_frame = acknowledgeFrame,
-            .request_media = requestMedia,
-        };
-    }
-
-    fn flushGraphicsCredits(context: *anyopaque) !void {
-        const capture: *EffectCapture = @ptrCast(@alignCast(context));
-        capture.observeCommit();
-        capture.append(.credits);
-
-        if (capture.failure == .credits) {
-            return error.CreditFailure;
-        }
-    }
-
-    fn acknowledgeFrame(context: *anyopaque, ack: schema.FrameAck) !void {
-        const capture: *EffectCapture = @ptrCast(@alignCast(context));
-        capture.observeCommit();
-        capture.append(.acknowledgement);
-        capture.acknowledgements[capture.acknowledgement_count] = ack;
-        capture.acknowledgement_count += 1;
-
-        if (capture.failure == .second_acknowledgement and capture.acknowledgement_count == 2) {
-            return error.AcknowledgementFailure;
-        }
-    }
-
-    fn requestMedia(context: *anyopaque) !void {
-        const capture: *EffectCapture = @ptrCast(@alignCast(context));
-        capture.observeCommit();
-        capture.append(.media);
-
-        if (capture.failure == .media) {
-            return error.MediaFailure;
-        }
-    }
-
-    fn observeCommit(capture: *EffectCapture) void {
-        const pane = capture.model.workspace.findPane(capture.pane_id) orelse {
-            capture.commit_observed = false;
-            return;
-        };
-
-        capture.commit_observed = capture.commit_observed and pane.pending_frame_id == 0;
-    }
-
-    fn append(capture: *EffectCapture, event: Event) void {
-        capture.events[capture.event_count] = event;
-        capture.event_count += 1;
-    }
-
-    fn eventSlice(capture: *const EffectCapture) []const Event {
-        return capture.events[0..capture.event_count];
-    }
-
-    fn acknowledgementSlice(capture: *const EffectCapture) []const schema.FrameAck {
-        return capture.acknowledgements[0..capture.acknowledgement_count];
-    }
-};
-
-const location: schema.TabLocation = .{
+const location: TabLocationType = .{
     .workspace = .{ .workspace = @enumFromInt(1) },
     .tab_id = @enumFromInt(1),
 };
-const pane_id: schema.PaneId = @enumFromInt(1);
+const pane_id: PaneIdType = @enumFromInt(1);
 
-fn presentationCommit(frame_id: u64) multiplexer.PresentationCommit {
-    var commit: multiplexer.PresentationCommit = .{ .location = location };
+fn presentationCommit(frame_id: u64) PresentationCommitType {
+    var commit: PresentationCommitType = .{ .location = location };
     commit.panes[0] = .{
         .pane_id = pane_id,
         .frame_id = frame_id,
@@ -159,7 +43,7 @@ fn presentationCommit(frame_id: u64) multiplexer.PresentationCommit {
     return commit;
 }
 
-fn prepareModel(model: *client_model.Model, frame_id: u64) !void {
+fn prepareModel(model: *ModelType, frame_id: u64) !void {
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
     const active = model.workspace.active().?;
     try active.model.split(.{ .existing_pane = pane_id, .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = .{ .w = 10, .h = 10 } });
@@ -168,7 +52,7 @@ fn prepareModel(model: *client_model.Model, frame_id: u64) !void {
 }
 
 test "DeliverPresentationHandler commits before ordered delivery" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     try prepareModel(&model, 7);
     var capture: EffectCapture = .{ .model = &model, .pane_id = pane_id };
@@ -176,7 +60,7 @@ test "DeliverPresentationHandler commits before ordered delivery" {
         .model = &model,
         .effects = capture.effects(),
     };
-    const acknowledgements = [_]schema.FrameAck{
+    const acknowledgements = [_]FrameAckType{
         .{ .pane_id = pane_id, .frame_id = 7 },
         .{ .pane_id = @enumFromInt(2), .frame_id = 9 },
     };
@@ -190,11 +74,11 @@ test "DeliverPresentationHandler commits before ordered delivery" {
     try std.testing.expect(capture.commit_observed);
     try std.testing.expectEqual(@as(u64, 0), model.workspace.findPane(pane_id).?.pending_frame_id);
     try std.testing.expectEqualSlices(Event, &.{ .credits, .acknowledgement, .acknowledgement, .media }, capture.eventSlice());
-    try std.testing.expectEqualSlices(schema.FrameAck, &acknowledgements, capture.acknowledgementSlice());
+    try std.testing.expectEqualSlices(FrameAckType, &acknowledgements, capture.acknowledgementSlice());
 }
 
 test "DeliverPresentationHandler rejects unbounded input before commit" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     try prepareModel(&model, 7);
     var capture: EffectCapture = .{ .model = &model, .pane_id = pane_id };
@@ -203,7 +87,7 @@ test "DeliverPresentationHandler rejects unbounded input before commit" {
         .effects = capture.effects(),
     };
     var invalid_commit = presentationCommit(7);
-    invalid_commit.len = multiplexer.max_panes + 1;
+    invalid_commit.len = max_panes_per_tab + 1;
 
     try std.testing.expectError(error.InvalidPresentationCommit, handler.execute(.{
         .commit = invalid_commit,
@@ -243,7 +127,7 @@ test "DeliverPresentationHandler preserves applied effects across delivery failu
         },
     };
     for (scenarios) |scenario| {
-        var model = client_model.Model.init(std.testing.allocator, true);
+        var model = ModelType.init(std.testing.allocator, true);
         defer model.deinit();
         try prepareModel(&model, 7);
         var capture: EffectCapture = .{
@@ -270,7 +154,7 @@ test "DeliverPresentationHandler preserves applied effects across delivery failu
 }
 
 test "DeliverPresentationHandler skips media without pending work" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     try prepareModel(&model, 7);
     var capture: EffectCapture = .{ .model = &model, .pane_id = pane_id };

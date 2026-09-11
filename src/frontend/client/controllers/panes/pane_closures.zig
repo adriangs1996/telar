@@ -1,16 +1,18 @@
 //! Wires pane closure and exit use cases to one disposable client.
 
-const core = @import("telar-core");
-const panes_application = @import("telar-client").application.panes;
-const client_model = @import("telar-client").model;
-const active_pane_resources = @import("active_pane_resources.zig");
-const pane_geometry = @import("pane_geometry.zig");
+const Client = @import("../../Client.zig");
+const RequestClosePaneHandlerType = @import("telar-client").RequestClosePaneHandler;
+const PaneExitedType = @import("telar-core").PaneExited;
+const PaneExitType = @import("telar-client").PaneExit;
+const HandlePaneExitHandlerType = @import("telar-client").HandlePaneExitHandler;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-
-const Client = @import("../../client.zig");
-const close_pane = panes_application.close_pane;
-const pane_closure_delivery = panes_application.pane_closure_delivery;
-const schema = core.schema;
+const PaneClosureType = @import("telar-client").PaneClosure;
+const DeliverPaneClosureHandlerType = @import("telar-client").DeliverPaneClosureHandler;
+const pane_geometry = @import("pane_geometry.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
+const active_pane_resources = @import("active_pane_resources.zig");
+const RectType = @import("telar-core").Rect;
 
 /// Wires an interactive close request to the client request tracker and wire.
 ///
@@ -18,7 +20,7 @@ const schema = core.schema;
 /// var handler = requestHandler(client);
 /// _ = try handler.execute();
 /// ```
-pub fn requestHandler(client: *Client) close_pane.RequestClosePaneHandler {
+pub fn requestHandler(client: *Client) RequestClosePaneHandlerType {
     return .{
         .model = &client.model,
         .gate = .{
@@ -37,13 +39,13 @@ pub fn requestHandler(client: *Client) close_pane.RequestClosePaneHandler {
 /// ```zig
 /// const transition = try applyExit(client, exited);
 /// ```
-pub fn applyExit(client: *Client, exited: schema.PaneExited) !client_model.PaneExit {
+pub fn applyExit(client: *Client, exited: PaneExitedType) !PaneExitType {
     var use_case = exitHandler(client);
 
     return use_case.execute(exited.pane_id);
 }
 
-fn exitHandler(client: *Client) close_pane.HandlePaneExitHandler {
+fn exitHandler(client: *Client) HandlePaneExitHandlerType {
     return .{
         .model = &client.model,
         .effects = .{
@@ -58,7 +60,7 @@ fn paneOperationPending(context: *anyopaque) bool {
     return request_lifecycle.has(client, .pane_operation);
 }
 
-fn sendClosure(context: *anyopaque, closure: client_model.PaneClosure) !void {
+fn sendClosure(context: *anyopaque, closure: PaneClosureType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try request_lifecycle.nextId(client);
     try request_lifecycle.deliver(client, .{
@@ -76,9 +78,9 @@ fn sendClosure(context: *anyopaque, closure: client_model.PaneClosure) !void {
     });
 }
 
-fn deliverExit(context: *anyopaque, transition: client_model.PaneExit) !void {
+fn deliverExit(context: *anyopaque, transition: PaneExitType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    var use_case: pane_closure_delivery.DeliverPaneClosureHandler = .{
+    var use_case: DeliverPaneClosureHandlerType = .{
         .model = &client.model,
         .geometry_effects = pane_geometry.offerEffects(client),
         .effects = .{
@@ -95,19 +97,19 @@ fn deliverExit(context: *anyopaque, transition: client_model.PaneExit) !void {
     try use_case.execute(transition);
 }
 
-fn ignoreAttachment(context: *anyopaque, pane_id: schema.PaneId) void {
+fn ignoreAttachment(context: *anyopaque, pane_id: PaneIdType) void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     _ = request_lifecycle.ignoreAttachment(client, pane_id);
 }
 
-fn completeClose(context: *anyopaque, pane_id: schema.PaneId) void {
+fn completeClose(context: *anyopaque, pane_id: PaneIdType) void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     _ = request_lifecycle.completePaneClose(client, pane_id);
 }
 
-fn clearPaneGraphics(context: *anyopaque, pane_id: schema.PaneId) void {
+fn clearPaneGraphics(context: *anyopaque, pane_id: PaneIdType) void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     client.graphics_store.clearPane(pane_id);
@@ -116,7 +118,7 @@ fn clearPaneGraphics(context: *anyopaque, pane_id: schema.PaneId) void {
 fn invalidateGraphicsPlacements(context: *anyopaque) void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    @import("../../../graphics/root.zig").kitty.delivery.invalidatePlacements(&client.graphics_store);
+    kitty_delivery.invalidatePlacements(&client.graphics_store);
 }
 
 fn synchronizeActiveResources(context: *anyopaque) !void {
@@ -125,7 +127,7 @@ fn synchronizeActiveResources(context: *anyopaque) !void {
     try active_pane_resources.synchronize(client);
 }
 
-fn activeGeometryArea(context: *anyopaque) core.ui.Rect {
+fn activeGeometryArea(context: *anyopaque) RectType {
     const client: *Client = @ptrCast(@alignCast(context));
 
     return client.geometry().area;

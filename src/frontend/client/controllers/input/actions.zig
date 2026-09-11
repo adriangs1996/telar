@@ -1,43 +1,47 @@
 //! Dispatches bounded semantic actions independently of their input source.
 
-const std = @import("std");
-const core = @import("telar-core");
-const input = @import("../../../input/root.zig");
-const workspace = @import("../../../workspace/root.zig");
-const input_application = @import("telar-client").application.input;
-
-const Client = @import("../../client.zig");
-const client_detachments = @import("../session/client_detachments.zig");
-const client_layouts = @import("../../resources/client_layouts.zig");
+const parseKey_module = @import("telar-client").parseKey;
+const Client = @import("../../Client.zig");
+const Action = @import("telar-client").Action;
+const ControlType = @import("telar-client").Control;
+const NativeActionHandlerType = @import("telar-client").NativeActionHandler;
 const copy_modes = @import("copy_modes.zig");
+const ApplicationInputActionRoutingControl = @import("telar-client").ApplicationInputActionRoutingControl;
+const ToggleAgentModeHandler = @import("telar-client").ToggleAgentModeHandler;
+const name_prompts = @import("name_prompts.zig");
+const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
+const client_layouts = @import("../../resources/client_layouts.zig");
+const client_detachments = @import("../session/client_detachments.zig");
 const history_palettes = @import("history_palettes.zig");
 const suggestions = @import("suggestions.zig");
-const name_prompts = @import("name_prompts.zig");
 const notification_flow = @import("../notifications/notifications.zig");
-const pane_closures = @import("../panes/pane_closures.zig");
-const pane_focus = @import("../panes/pane_focus.zig");
-const pane_inputs = @import("pane_inputs.zig");
-const pane_geometry = @import("../panes/pane_geometry.zig");
-const pane_splits = @import("../panes/pane_splits.zig");
-const sidebar_toggles = @import("../notifications/sidebar_toggles.zig");
-const tab_closures = @import("../tabs/tab_closures.zig");
-const tab_creations = @import("../tabs/tab_creations.zig");
-const tab_moves = @import("../tabs/tab_moves.zig");
+const TabSelectionTarget = @import("telar-client").TabSelectionTarget;
 const tab_selections = @import("../tabs/tab_selections.zig");
-const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
+const PaneFocusTarget = @import("telar-client").PaneFocusTarget;
+const pane_focus = @import("../panes/pane_focus.zig");
+const DirectionType = @import("telar-client").Direction;
+const std = @import("std");
+const pane_inputs = @import("pane_inputs.zig");
+const KeyType = @import("telar-client").Key;
+const ScrollDirectionType = @import("telar-client").ScrollDirection;
 const pane_mouse_input = @import("pane_mouse_inputs.zig");
-const presentation = @import("telar-client").application.presentation;
+const AxisType = @import("telar-client").Axis;
+const pane_splits = @import("../panes/pane_splits.zig");
+const WorkspaceLayoutSupportDirection = @import("telar-client").WorkspaceLayoutSupportDirection;
+const pane_geometry = @import("../panes/pane_geometry.zig");
+const sidebar_toggles = @import("../notifications/sidebar_toggles.zig");
+const LayoutSidebarDirection = @import("telar-client").LayoutSidebarDirection;
+const pane_closures = @import("../panes/pane_closures.zig");
+const CommandTabType = @import("telar-client").CommandTab;
+const tab_creations = @import("../tabs/tab_creations.zig");
+const tab_closures = @import("../tabs/tab_closures.zig");
+const TabMoveDirectionType = @import("telar-core").TabMoveDirection;
+const tab_moves = @import("../tabs/tab_moves.zig");
 
-const Action = input.action.Action;
-const keybind = input.keybind;
-const layout = workspace.layout;
-const native_action = input_application.native_action;
-const schema = core.schema;
-
-const ctrl_h = keybind.parseKey("ctrl+h") catch unreachable;
-const ctrl_j = keybind.parseKey("ctrl+j") catch unreachable;
-const ctrl_k = keybind.parseKey("ctrl+k") catch unreachable;
-const ctrl_l = keybind.parseKey("ctrl+l") catch unreachable;
+const ctrl_h = parseKey_module("ctrl+h") catch unreachable;
+const ctrl_j = parseKey_module("ctrl+j") catch unreachable;
+const ctrl_k = parseKey_module("ctrl+k") catch unreachable;
+const ctrl_l = parseKey_module("ctrl+l") catch unreachable;
 
 /// Applies one native semantic action from host input, Lua or a plugin.
 ///
@@ -46,8 +50,8 @@ const ctrl_l = keybind.parseKey("ctrl+l") catch unreachable;
 ///     return;
 /// }
 /// ```
-pub fn apply(client: *Client, value: Action) !keybind.Control {
-    var use_case: native_action.NativeActionHandler = .{
+pub fn apply(client: *Client, value: Action) !ControlType {
+    var use_case: NativeActionHandlerType = .{
         .effects = .{
             .context = client,
             .leave_copy_mode = leaveCopyMode,
@@ -70,12 +74,12 @@ fn leaveCopyMode(raw_context: *anyopaque) !void {
     _ = try copy_modes.leave(client);
 }
 
-fn deliver(raw_context: *anyopaque, value: Action) !native_action.Control {
+fn deliver(raw_context: *anyopaque, value: Action) !ApplicationInputActionRoutingControl {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     switch (value) {
         .toggle_agent_mode => {
-            var handler: presentation.ToggleAgentMode = .{ .model = &client.model };
+            var handler: ToggleAgentModeHandler = .{ .model = &client.model };
             handler.execute();
         },
         .scroll_pane => |direction| try scrollPane(client, direction),
@@ -134,13 +138,13 @@ fn deliver(raw_context: *anyopaque, value: Action) !native_action.Control {
     return .continue_routing;
 }
 
-fn selectTab(client: *Client, target: tab_selections.Target) !void {
+fn selectTab(client: *Client, target: TabSelectionTarget) !void {
     var use_case = tab_selections.selectionHandler(client);
 
     _ = try use_case.execute(.{ .target = target });
 }
 
-fn focusPane(client: *Client, target: pane_focus.Target) !bool {
+fn focusPane(client: *Client, target: PaneFocusTarget) !bool {
     var use_case = pane_focus.handler(client);
 
     return try use_case.execute(.{
@@ -149,7 +153,7 @@ fn focusPane(client: *Client, target: pane_focus.Target) !bool {
     }) != null;
 }
 
-fn navigatePane(client: *Client, direction: input.action.Direction) !void {
+fn navigatePane(client: *Client, direction: DirectionType) !void {
     const key = navigationKey(direction);
     if (std.mem.eql(u8, client.model.focusedPaneForeground(), "nvim")) {
         _ = try pane_inputs.send(client, .{ .target = .focused, .source = .host, .payload = .{ .key = key } });
@@ -164,7 +168,7 @@ fn navigatePane(client: *Client, direction: input.action.Direction) !void {
     } });
 }
 
-fn navigationKey(direction: input.action.Direction) keybind.Key {
+fn navigationKey(direction: DirectionType) KeyType {
     return switch (direction) {
         .left => ctrl_h,
         .right => ctrl_l,
@@ -173,7 +177,7 @@ fn navigationKey(direction: input.action.Direction) keybind.Key {
     };
 }
 
-fn scrollPane(client: *Client, direction: input.action.ScrollDirection) !void {
+fn scrollPane(client: *Client, direction: ScrollDirectionType) !void {
     const model = client.model.activeTabModel() orelse return;
 
     _ = try pane_mouse_input.apply(
@@ -183,7 +187,7 @@ fn scrollPane(client: *Client, direction: input.action.ScrollDirection) !void {
     );
 }
 
-fn beginSplit(client: *Client, axis: layout.Axis) !void {
+fn beginSplit(client: *Client, axis: AxisType) !void {
     var use_case = pane_splits.requestHandler(client);
     _ = try use_case.execute(.{
         .axis = axis,
@@ -191,7 +195,7 @@ fn beginSplit(client: *Client, axis: layout.Axis) !void {
     });
 }
 
-fn resizePane(client: *Client, direction: layout.Direction) !void {
+fn resizePane(client: *Client, direction: WorkspaceLayoutSupportDirection) !void {
     var use_case = pane_geometry.resizeHandler(client);
 
     _ = try use_case.execute(.{
@@ -212,7 +216,7 @@ fn toggleSidebar(client: *Client) !void {
     _ = try use_case.execute();
 }
 
-fn resizeSidebar(client: *Client, direction: @import("../../../ui/root.zig").sidebar.Direction) !void {
+fn resizeSidebar(client: *Client, direction: LayoutSidebarDirection) !void {
     var use_case = sidebar_toggles.resizeHandler(client);
 
     _ = try use_case.execute(.{ .direction = direction });
@@ -228,8 +232,8 @@ fn closeFocused(client: *Client) !void {
     _ = try use_case.execute();
 }
 
-fn createCommandTab(client: *Client, command: *const input.action.CommandTab) !void {
-    var arguments: [input.action.CommandTab.max_arguments][]const u8 = undefined;
+fn createCommandTab(client: *Client, command: *const CommandTabType) !void {
+    var arguments: [CommandTabType.max_arguments][]const u8 = undefined;
     for (0..command.argument_count) |index| {
         arguments[index] = command.argument(index);
     }
@@ -253,7 +257,7 @@ fn closeTab(client: *Client) !void {
     _ = try use_case.execute();
 }
 
-fn moveTab(client: *Client, direction: schema.TabMoveDirection) !void {
+fn moveTab(client: *Client, direction: TabMoveDirectionType) !void {
     var use_case = tab_moves.requestHandler(client);
 
     _ = try use_case.execute(.{ .direction = direction });

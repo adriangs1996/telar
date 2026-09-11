@@ -1,31 +1,8 @@
 //! Bounded cell damage independent of the eventual presentation target.
 
+const DamageRow = @import("DamageRow.zig");
+const CellSpan = @import("CellSpan.zig");
 const std = @import("std");
-
-pub const DamageRow = struct {
-    start: u16 = std.math.maxInt(u16),
-    end: u16 = 0,
-
-    /// Accumulates one conservative dirty range. Example: row.mark(2, 5);
-    pub fn mark(row: *DamageRow, start: u16, end: u16) void {
-        std.debug.assert(start < end);
-        row.start = @min(row.start, start);
-        row.end = @max(row.end, end);
-    }
-
-    pub fn clear(row: *DamageRow) void {
-        row.* = .{};
-    }
-
-    pub fn dirty(row: DamageRow) bool {
-        return row.start < row.end;
-    }
-};
-
-pub const CellSpan = struct {
-    start: usize,
-    count: usize,
-};
 
 /// Splits a validated cell span at row boundaries without allocating.
 /// The caller guarantees start + count <= rows.len * width.

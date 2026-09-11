@@ -1,22 +1,12 @@
+const Seed = @import("build/Seed.zig");
+const Fuzzer = @import("build/Fuzzer.zig");
 const std = @import("std");
 const builtin = @import("builtin");
 const afl = @import("afl");
 
-const Seed = struct {
-    name: []const u8,
-    bytes: []const u8,
-};
-
-const ModuleKind = enum {
+pub const ModuleKind = enum {
     schema,
     escape,
-};
-
-const Fuzzer = struct {
-    name: []const u8,
-    source: []const u8,
-    module: ModuleKind,
-    seeds: []const Seed,
 };
 
 const client_seeds = [_]Seed{
@@ -82,7 +72,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const core = b.createModule(.{
-        .root_source_file = b.path("../../src/core/root.zig"),
+        .root_source_file = b.path("../../src/core/core.zig"),
         .target = target,
         .optimize = optimize,
     });

@@ -1,23 +1,22 @@
 //! Vertical contract tests for the runtime workspace-snapshot flow.
 
+const StateType = @import("../../workspace/State.zig");
+const RepositoryType = @import("../../workspace/Repository.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const workspace_snapshot_query = @import("../application/queries/workspace_snapshot.zig");
-const workspace_snapshot_controller = @import("../entrypoints/requests/workspace_snapshot.zig");
-const delivery_mod = @import("../delivery/root.zig");
-const workspace_mod = @import("../../workspace/root.zig");
-
-const schema = core.schema;
+const WorkspaceSnapshotHandler = @import("../application/queries/WorkspaceSnapshotHandler.zig");
+const ResponseQueueType = @import("../delivery/ResponseQueue.zig");
+const WorkspaceSnapshotController = @import("../entrypoints/requests/WorkspaceSnapshotController.zig");
+const RequestIdType = @import("telar-core").RequestId;
 
 test "an aggregate crosses workspace query and controller boundaries" {
-    var state: workspace_mod.State = .{};
-    var workspaces = workspace_mod.Repository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location.workspace;
-    var handler: workspace_snapshot_query.Handler = .{ .workspaces = workspaces.reader() };
-    var responses: delivery_mod.ResponseQueue = .{};
-    var controller = workspace_snapshot_controller.Controller.init(&responses, handler.executor());
-    const request_id: schema.RequestId = @enumFromInt(41);
+    var handler: WorkspaceSnapshotHandler = .{ .workspaces = workspaces.reader() };
+    var responses: ResponseQueueType = .{};
+    var controller = WorkspaceSnapshotController.init(&responses, handler.executor());
+    const request_id: RequestIdType = @enumFromInt(41);
 
     try controller.requestWorkspaceSnapshot(.{
         .request_id = request_id,

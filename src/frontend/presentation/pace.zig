@@ -1,4 +1,5 @@
 const std = @import("std");
+const Pacer = @import("Pacer.zig");
 
 // Deciding when to draw, and what to throw away first.
 //
@@ -56,129 +57,9 @@ pub const default_input_grace: u64 = 30 * ns_per_ms;
 /// frames.
 pub const default_input_frames: u32 = 16;
 
-/// Bounds the frame rate without adding latency to an idle UI.
-///
-/// A naive throttle waits out the interval before every frame, so a keypress
-/// into a still screen is up to 16ms late for no reason at all - and that
-/// delay is exactly the one a user can feel, because it lands on the
-/// keystroke they were paying attention to. Here credits accrue while the UI
-/// is quiet, one per interval up to `burst`, each immediate frame spends one,
-/// and only a frame that finds no credit waits for the next cadence slot.
-pub const Pacer = struct {
-    pub const Record = struct {
-        now: u64,
-        scheduled_deadline: ?u64,
-        absorbed: usize,
-    };
-
-    interval: u64 = default_interval,
-    /// Maximum credits held; zero makes every frame wait, which tests use to
-    /// exercise the scheduled path deterministically.
-    burst: u32 = default_burst,
-    /// Credits left at `anchor_ns`. Refill is computed from elapsed time, so
-    /// nothing has to tick while the UI idles.
-    credits: u32 = default_burst,
-    /// The cadence slot of the last presented frame. Null until the first
-    /// frame, so a program's opening frame is never delayed.
-    anchor_ns: ?u64 = null,
-    input_grace: u64 = default_input_grace,
-    input_frames: u32 = default_input_frames,
-    /// When the host last delivered input; frames inside the grace window
-    /// after it never wait, up to `input_frames` of them.
-    last_input_ns: ?u64 = null,
-    /// Grace frames left for the current input.
-    input_frames_left: u32 = 0,
-    stats: Stats = .{},
-
-    pub const Stats = struct {
-        /// Frames actually drawn.
-        drawn: u64 = 0,
-        /// Frames that had to wait for the budget. The ratio against `drawn`
-        /// is how much of the session was a burst.
-        throttled: u64 = 0,
-        /// Messages that were folded into a frame rather than getting one of
-        /// their own. This is the number the throttle exists to produce.
-        absorbed: u64 = 0,
-        /// Messages dropped as superseded.
-        dropped: u64 = 0,
-    };
-
-    /// Absolute monotonic deadline for the next frame. Null means draw now.
-    ///
-    /// Returning the deadline instead of a duration matters once the caller
-    /// hands the wait to another actor. A relative sleep starts when that actor
-    /// gets CPU time and adds dispatch latency to every frame.
-    pub fn waitUntil(p: *const Pacer, now: u64) ?u64 {
-        if (p.available(now) != 0 or p.inputRecent(now)) {
-            return null;
-        }
-
-        const anchor = p.anchor_ns orelse now;
-        return anchor +| p.interval;
-    }
-
-    /// Records a frame presented at `now`.
-    ///
-    /// `scheduled_deadline` is the deadline returned by `waitUntil` when the
-    /// frame had to wait. Scheduled frames stay on that cadence even if the OS
-    /// wakes the actor late. Immediate frames anchor a fresh cadence because
-    /// they only happen while credit is available.
-    ///
-    /// ```zig
-    /// pacer.record(.{ .now = now_ns, .scheduled_deadline = deadline_ns, .absorbed = pending_updates });
-    /// ```
-    pub fn record(p: *Pacer, frame: Record) void {
-        std.debug.assert(p.interval != 0);
-        const usable = p.available(frame.now);
-        if (usable == 0 and frame.scheduled_deadline == null) {
-            p.input_frames_left -|= 1;
-        }
-        p.credits = usable -| 1;
-        p.anchor_ns = if (frame.scheduled_deadline) |deadline|
-            latestCadenceSlot(deadline, frame.now, p.interval)
-        else
-            frame.now;
-        p.stats.drawn += 1;
-        // The first message earned the frame; the rest rode along.
-        p.stats.absorbed += frame.absorbed -| 1;
-    }
-
-    /// Records host input at `now`, opening the grace window.
-    ///
-    /// ```zig
-    /// pacer.noteInput(now_ns);
-    /// ```
-    pub fn noteInput(p: *Pacer, now: u64) void {
-        p.last_input_ns = now;
-        p.input_frames_left = p.input_frames;
-    }
-
-    pub fn noteThrottled(p: *Pacer) void {
-        p.stats.throttled += 1;
-    }
-
-    pub fn noteDropped(p: *Pacer, n: usize) void {
-        p.stats.dropped += n;
-    }
-
-    fn inputRecent(p: *const Pacer, now: u64) bool {
-        const input = p.last_input_ns orelse return false;
-        return p.input_frames_left != 0 and now -| input < p.input_grace;
-    }
-
-    /// Credits usable at `now`: what was left at the anchor plus one per
-    /// interval elapsed since, capped at `burst`.
-    fn available(p: *const Pacer, now: u64) u32 {
-        const anchor = p.anchor_ns orelse return p.burst;
-        const refilled = (now -| anchor) / p.interval;
-        const total = @as(u64, p.credits) +| refilled;
-        return @intCast(@min(total, p.burst));
-    }
-};
-
 /// The last cadence slot at or before `now`, so a late wakeup neither shifts
 /// the cadence nor owes the slots it slept through.
-fn latestCadenceSlot(deadline: u64, now: u64, interval: u64) u64 {
+pub fn latestCadenceSlot(deadline: u64, now: u64, interval: u64) u64 {
     std.debug.assert(interval != 0);
     if (now <= deadline) {
         return deadline;
@@ -255,18 +136,16 @@ pub fn coalesce(comptime T: type, items: []T, comptime keyOf: fn (T) ?u32) usize
 // Tests
 // ---------------------------------------------------------------------------
 
-const testing = std.testing;
-
 test "an idle ui draws immediately" {
     // The delay a throttle adds is only acceptable while it is invisible, and
     // it is visible precisely here: one keypress into a still screen. If this
     // ever returns a deadline the UI feels sticky no matter how fast it draws.
     var p: Pacer = .{};
-    try testing.expectEqual(@as(?u64, null), p.waitUntil(0));
+    try std.testing.expectEqual(@as(?u64, null), p.waitUntil(0));
 
     p.record(.{ .now = 1000 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
     // Long after the budget elapsed.
-    try testing.expectEqual(@as(?u64, null), p.waitUntil(1100 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, null), p.waitUntil(1100 * ns_per_ms));
 }
 
 test "an interaction's follow-up frames spend credit instead of waiting" {
@@ -276,29 +155,29 @@ test "an interaction's follow-up frames spend credit instead of waiting" {
     var now: u64 = 100 * ns_per_ms;
     var frame: u32 = 0;
     while (frame < default_burst) : (frame += 1) {
-        try testing.expectEqual(@as(?u64, null), p.waitUntil(now));
+        try std.testing.expectEqual(@as(?u64, null), p.waitUntil(now));
         p.record(.{ .now = now, .scheduled_deadline = null, .absorbed = 1 });
         now += ns_per_ms;
     }
 
     // Credit is spent: the next frame waits for the slot after the last one.
-    try testing.expectEqual(@as(?u64, (100 + default_burst - 1 + 16) * ns_per_ms), p.waitUntil(now));
+    try std.testing.expectEqual(@as(?u64, (100 + default_burst - 1 + 16) * ns_per_ms), p.waitUntil(now));
 }
 
 test "with no burst a second frame inside the budget gets an absolute deadline" {
     var p: Pacer = .{ .interval = 16 * ns_per_ms, .burst = 1, .credits = 1 };
     p.record(.{ .now = 100 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
 
-    try testing.expectEqual(@as(?u64, 116 * ns_per_ms), p.waitUntil(104 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, 116 * ns_per_ms), p.waitUntil(104 * ns_per_ms));
     // Exactly on the boundary the frame is due.
-    try testing.expectEqual(@as(?u64, null), p.waitUntil(116 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, null), p.waitUntil(116 * ns_per_ms));
 }
 
 test "a clock that does not advance keeps the same deadline" {
     var p: Pacer = .{ .interval = 16 * ns_per_ms, .burst = 1, .credits = 1 };
     p.record(.{ .now = 500, .scheduled_deadline = null, .absorbed = 1 });
-    try testing.expectEqual(@as(?u64, 500 + 16 * ns_per_ms), p.waitUntil(500));
-    try testing.expectEqual(@as(?u64, 500 + 16 * ns_per_ms), p.waitUntil(499));
+    try std.testing.expectEqual(@as(?u64, 500 + 16 * ns_per_ms), p.waitUntil(500));
+    try std.testing.expectEqual(@as(?u64, 500 + 16 * ns_per_ms), p.waitUntil(499));
 }
 
 test "credit refills one frame per interval of quiet" {
@@ -306,35 +185,35 @@ test "credit refills one frame per interval of quiet" {
     p.record(.{ .now = 0, .scheduled_deadline = null, .absorbed = 1 });
     p.record(.{ .now = 0, .scheduled_deadline = null, .absorbed = 1 });
     p.record(.{ .now = 0, .scheduled_deadline = null, .absorbed = 1 });
-    try testing.expectEqual(@as(?u64, 10 * ns_per_ms), p.waitUntil(5 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, 10 * ns_per_ms), p.waitUntil(5 * ns_per_ms));
 
     // One interval of quiet buys one immediate frame, not the whole burst.
-    try testing.expectEqual(@as(?u64, null), p.waitUntil(10 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, null), p.waitUntil(10 * ns_per_ms));
     p.record(.{ .now = 10 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
-    try testing.expectEqual(@as(?u64, 20 * ns_per_ms), p.waitUntil(11 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, 20 * ns_per_ms), p.waitUntil(11 * ns_per_ms));
 
     // Long quiet caps at the burst.
-    try testing.expectEqual(@as(?u64, null), p.waitUntil(1000 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, null), p.waitUntil(1000 * ns_per_ms));
     p.record(.{ .now = 1000 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
     p.record(.{ .now = 1000 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
     p.record(.{ .now = 1000 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
-    try testing.expectEqual(@as(?u64, 1010 * ns_per_ms), p.waitUntil(1000 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, 1010 * ns_per_ms), p.waitUntil(1000 * ns_per_ms));
 }
 
 test "frames inside the input grace window never wait" {
     var p: Pacer = .{ .interval = 16 * ns_per_ms, .burst = 0, .credits = 0 };
     p.record(.{ .now = 100 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
-    try testing.expectEqual(@as(?u64, 116 * ns_per_ms), p.waitUntil(101 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, 116 * ns_per_ms), p.waitUntil(101 * ns_per_ms));
 
     // A keystroke lands: the in-flight frame and the echo frame both present.
     p.noteInput(101 * ns_per_ms);
-    try testing.expectEqual(@as(?u64, null), p.waitUntil(102 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, null), p.waitUntil(102 * ns_per_ms));
     p.record(.{ .now = 102 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
-    try testing.expectEqual(@as(?u64, null), p.waitUntil(104 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, null), p.waitUntil(104 * ns_per_ms));
     p.record(.{ .now = 104 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
 
     // The window closes and the flood is back on cadence.
-    try testing.expectEqual(
+    try std.testing.expectEqual(
         @as(?u64, (104 + 16) * ns_per_ms),
         p.waitUntil((101 + 30) * ns_per_ms),
     );
@@ -343,34 +222,34 @@ test "frames inside the input grace window never wait" {
 test "input grace is bounded in frames so a flood after Enter is paced" {
     var p: Pacer = .{ .interval = 16 * ns_per_ms, .burst = 0, .credits = 0, .input_frames = 2 };
     p.noteInput(0);
-    try testing.expectEqual(@as(?u64, null), p.waitUntil(1 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, null), p.waitUntil(1 * ns_per_ms));
     p.record(.{ .now = 1 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
-    try testing.expectEqual(@as(?u64, null), p.waitUntil(2 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, null), p.waitUntil(2 * ns_per_ms));
     p.record(.{ .now = 2 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
 
     // Two frames spent: the third waits even though the window is open.
-    try testing.expectEqual(@as(?u64, 18 * ns_per_ms), p.waitUntil(3 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, 18 * ns_per_ms), p.waitUntil(3 * ns_per_ms));
 
     // New input refills the grace frames.
     p.noteInput(4 * ns_per_ms);
-    try testing.expectEqual(@as(?u64, null), p.waitUntil(5 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, null), p.waitUntil(5 * ns_per_ms));
 }
 
 test "a zero burst schedules every frame" {
     var p: Pacer = .{ .interval = 10 * ns_per_ms, .burst = 0, .credits = 0 };
-    try testing.expectEqual(@as(?u64, 10 * ns_per_ms), p.waitUntil(0));
+    try std.testing.expectEqual(@as(?u64, 10 * ns_per_ms), p.waitUntil(0));
     p.record(.{ .now = 10 * ns_per_ms, .scheduled_deadline = 10 * ns_per_ms, .absorbed = 1 });
-    try testing.expectEqual(@as(?u64, 20 * ns_per_ms), p.waitUntil(10 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, 20 * ns_per_ms), p.waitUntil(10 * ns_per_ms));
 }
 
 test "a late scheduled frame does not shift the cadence" {
     var p: Pacer = .{ .interval = 10 * ns_per_ms, .burst = 1, .credits = 1 };
     p.record(.{ .now = 0, .scheduled_deadline = null, .absorbed = 1 });
     const deadline = p.waitUntil(2 * ns_per_ms).?;
-    try testing.expectEqual(10 * ns_per_ms, deadline);
+    try std.testing.expectEqual(10 * ns_per_ms, deadline);
 
     p.record(.{ .now = 13 * ns_per_ms, .scheduled_deadline = deadline, .absorbed = 1 });
-    try testing.expectEqual(@as(?u64, 20 * ns_per_ms), p.waitUntil(13 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, 20 * ns_per_ms), p.waitUntil(13 * ns_per_ms));
 }
 
 test "a badly late frame skips missed cadence slots" {
@@ -380,11 +259,11 @@ test "a badly late frame skips missed cadence slots" {
 
     p.record(.{ .now = 35 * ns_per_ms, .scheduled_deadline = deadline, .absorbed = 1 });
     // The frame lands on slot 30, and the next one waits for the slot after.
-    try testing.expectEqual(@as(?u64, 40 * ns_per_ms), p.waitUntil(35 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, 40 * ns_per_ms), p.waitUntil(35 * ns_per_ms));
 }
 
 test "cadence arithmetic saturates at the end of monotonic time" {
-    try testing.expectEqual(
+    try std.testing.expectEqual(
         std.math.maxInt(u64),
         latestCadenceSlot(0, std.math.maxInt(u64), 1),
     );
@@ -393,10 +272,10 @@ test "cadence arithmetic saturates at the end of monotonic time" {
 test "an immediate frame after idle starts a fresh cadence" {
     var p: Pacer = .{ .interval = 10 * ns_per_ms, .burst = 1, .credits = 1 };
     p.record(.{ .now = 0, .scheduled_deadline = null, .absorbed = 1 });
-    try testing.expectEqual(@as(?u64, null), p.waitUntil(100 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, null), p.waitUntil(100 * ns_per_ms));
 
     p.record(.{ .now = 100 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
-    try testing.expectEqual(@as(?u64, 110 * ns_per_ms), p.waitUntil(101 * ns_per_ms));
+    try std.testing.expectEqual(@as(?u64, 110 * ns_per_ms), p.waitUntil(101 * ns_per_ms));
 }
 
 test "a burst is bounded and the frames it skips are counted" {
@@ -417,10 +296,10 @@ test "a burst is bounded and the frames it skips are counted" {
         frames += 1;
     }
 
-    try testing.expectEqual(frames, p.stats.drawn);
-    try testing.expect(frames <= 300 / 16 + 1 + default_burst);
+    try std.testing.expectEqual(frames, p.stats.drawn);
+    try std.testing.expect(frames <= 300 / 16 + 1 + default_burst);
     // Every event that did not earn a frame rode along on one.
-    try testing.expect(p.stats.absorbed >= 250);
+    try std.testing.expect(p.stats.absorbed >= 250);
 }
 
 // A message shaped like the ones a real loop carries.
@@ -452,25 +331,25 @@ test "no keystroke is ever dropped" {
     // character". Any coalescing rule that treats keys as superseding each
     // other produces it, and it is invisible until someone types fast.
     var items = [_]Msg{ .{ .key = 'h' }, .{ .key = 'o' }, .{ .key = 'l' }, .{ .key = 'a' } };
-    try testing.expectEqual(@as(usize, 4), fold(&items));
-    try testing.expectEqualSlices(u8, "hola", &.{
+    try std.testing.expectEqual(@as(usize, 4), fold(&items));
+    try std.testing.expectEqualSlices(u8, "hola", &.{
         items[0].key, items[1].key, items[2].key, items[3].key,
     });
 }
 
 test "only the last resize survives" {
     var items = [_]Msg{ .resize, .resize, .resize };
-    try testing.expectEqual(@as(usize, 1), fold(&items));
+    try std.testing.expectEqual(@as(usize, 1), fold(&items));
 }
 
 test "the survivor keeps the position of its last occurrence" {
     // A resize that arrived after three keystrokes has to be applied after
     // them, or the keys are handled against a layout that no longer exists.
     var items = [_]Msg{ .resize, .{ .key = 'a' }, .{ .key = 'b' }, .resize };
-    try testing.expectEqual(@as(usize, 3), fold(&items));
-    try testing.expectEqual(@as(u8, 'a'), items[0].key);
-    try testing.expectEqual(@as(u8, 'b'), items[1].key);
-    try testing.expect(items[2] == .resize);
+    try std.testing.expectEqual(@as(usize, 3), fold(&items));
+    try std.testing.expectEqual(@as(u8, 'a'), items[0].key);
+    try std.testing.expectEqual(@as(u8, 'b'), items[1].key);
+    try std.testing.expect(items[2] == .resize);
 }
 
 test "kinds fold independently of each other" {
@@ -482,25 +361,25 @@ test "kinds fold independently of each other" {
         .{ .mouse_move = .{ .x = 9, .y = 9 } },
         .resize,
     };
-    try testing.expectEqual(@as(usize, 3), fold(&items));
-    try testing.expectEqual(@as(u8, 'q'), items[0].key);
+    try std.testing.expectEqual(@as(usize, 3), fold(&items));
+    try std.testing.expectEqual(@as(u8, 'q'), items[0].key);
     // The newest position, not the path that led to it.
-    try testing.expectEqual(@as(u16, 9), items[1].mouse_move.x);
-    try testing.expect(items[2] == .resize);
+    try std.testing.expectEqual(@as(u16, 9), items[1].mouse_move.x);
+    try std.testing.expect(items[2] == .resize);
 }
 
 test "a drag collapses to where the pointer ended up" {
     var items: [64]Msg = undefined;
     for (&items, 0..) |*m, i| m.* = .{ .mouse_move = .{ .x = @intCast(i), .y = 0 } };
-    try testing.expectEqual(@as(usize, 1), fold(&items));
-    try testing.expectEqual(@as(u16, 63), items[0].mouse_move.x);
+    try std.testing.expectEqual(@as(usize, 1), fold(&items));
+    try std.testing.expectEqual(@as(u16, 63), items[0].mouse_move.x);
 }
 
 test "folding an empty or single batch is a no-op" {
     var none: [0]Msg = .{};
-    try testing.expectEqual(@as(usize, 0), fold(&none));
+    try std.testing.expectEqual(@as(usize, 0), fold(&none));
     var one = [_]Msg{.resize};
-    try testing.expectEqual(@as(usize, 1), fold(&one));
+    try std.testing.expectEqual(@as(usize, 1), fold(&one));
 }
 
 test "more kinds than can be tracked keeps everything rather than some" {
@@ -514,7 +393,7 @@ test "more kinds than can be tracked keeps everything rather than some" {
     };
     var items: [max_kinds * 2]Many = undefined;
     for (&items, 0..) |*m, i| m.* = .{ .k = @intCast(i) };
-    try testing.expectEqual(items.len, coalesce(Many, &items, Many.key_of));
+    try std.testing.expectEqual(items.len, coalesce(Many, &items, Many.key_of));
     // Order intact.
-    for (items, 0..) |m, i| try testing.expectEqual(@as(u32, @intCast(i)), m.k);
+    for (items, 0..) |m, i| try std.testing.expectEqual(@as(u32, @intCast(i)), m.k);
 }

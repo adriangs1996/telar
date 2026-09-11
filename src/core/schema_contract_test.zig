@@ -6,33 +6,53 @@
 //! change cannot ship without a visible schema bump.
 
 const std = @import("std");
-const schema = @import("schema/root.zig");
-const frame = schema.frame;
-const graphics = schema.graphics;
+const schema = @import("schema/schema.zig");
+const Entry = @import("Entry.zig");
+const TabLocationType = @import("schema/TabLocation.zig");
+const EnvironmentEntryType = @import("schema/EnvironmentEntry.zig");
+const types = @import("schema/types.zig");
+const ClientTabLayoutType = @import("schema/ClientTabLayout.zig");
+const EntryMetadata = @import("EntryMetadata.zig");
+const golden = @import("golden.zig");
+const pane_module = @import("schema/messages/pane.zig");
+const workspace_module = @import("schema/messages/workspace.zig");
+const runtime = @import("schema/messages/runtime.zig");
+const tab_module = @import("schema/messages/tab.zig");
+const history = @import("schema/messages/history.zig");
+const ImportEntryType = @import("schema/messages/ImportEntry.zig");
+const graphics = @import("schema/messages/graphics.zig");
+const notification_support = @import("schema/messages/notification_support.zig");
+const layout = @import("schema/messages/layout.zig");
+const agent_module = @import("schema/messages/agent.zig");
+const focus = @import("schema/messages/focus.zig");
+const CellType = @import("ui/Cell.zig");
+const SpanType = @import("schema/Span.zig");
+const PaneDescriptorType = @import("schema/PaneDescriptor.zig");
+const HistoryEntryType = @import("schema/HistoryEntry.zig");
+const HistoryStatsTopType = @import("schema/messages/HistoryStatsTop.zig");
+const suggestion = @import("schema/messages/suggestion.zig");
+const TabDescriptorType = @import("schema/TabDescriptor.zig");
+const ShmNameType = @import("ShmName.zig");
+const AgentSnapshotEntryType = @import("schema/AgentSnapshotEntry.zig");
+const WorkspaceListEntryType = @import("schema/messages/WorkspaceListEntry.zig");
+const root = @import("schema/messages/messages.zig");
+const TerminalColorsType = @import("schema/TerminalColors.zig");
+const PlacementType = @import("schema/Placement.zig");
+const id_module = @import("schema/id.zig");
+const TerminalSizeType = @import("schema/TerminalSize.zig");
+const FrameViewType = @import("schema/FrameView.zig");
+const LaunchViewType = @import("schema/messages/LaunchView.zig");
+const frame = @import("schema/frame_support.zig");
 const handshake = @import("schema/handshake.zig");
-const ui = @import("ui/root.zig");
+const OpenPaneType = @import("schema/messages/OpenPane.zig");
+const FrameType = @import("schema/Frame.zig");
+const tags = @import("schema/messages/tags.zig");
 
 test {
     std.testing.refAllDecls(schema);
 }
 
-const Direction = enum { client, server };
-
-const Entry = struct {
-    name: []const u8,
-    direction: Direction,
-    /// The payload tail is raw bytes without a length prefix, so a prefix of
-    /// the message can decode as a valid shorter message.
-    tail_tolerant: bool = false,
-    bytes: []const u8,
-    golden_hex: []const u8,
-};
-
-const EntryMetadata = struct {
-    name: []const u8,
-    direction: Direction,
-    golden_hex: []const u8,
-};
+pub const Direction = enum { client, server };
 
 const corpus_len = 90;
 const corpus_storage_size = 8 * 1024;
@@ -42,22 +62,22 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     var used: usize = 0;
     var index: usize = 0;
 
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(7) },
         .tab_id = @enumFromInt(3),
     };
 
     const arguments = [_][]const u8{ "/bin/sh", "-l" };
-    const environment = [_]schema.EnvironmentEntry{
+    const environment = [_]EnvironmentEntryType{
         .{ .name = "TERM", .value = "xterm-256color" },
         .{ .name = "EMPTY", .value = "" },
     };
-    const client_layout_nodes = [_]schema.ClientLayoutNode{
+    const client_layout_nodes = [_]types.ClientLayoutNode{
         .{ .split = .{ .axis = .horizontal, .ratio = 6000 } },
         .{ .pane = @enumFromInt(5) },
         .{ .pane = @enumFromInt(6) },
     };
-    const client_layout_tabs = [_]schema.ClientTabLayout{.{
+    const client_layout_tabs = [_]ClientTabLayoutType{.{
         .location = location,
         .focused_pane = @enumFromInt(5),
         .fullscreen = false,
@@ -98,7 +118,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
 
     // -- client ------------------------------------------------------------
     helper.add(.{ .name = "open_pane_default", .direction = .client, .golden_hex = golden.open_pane_default }, helper.commit(
-        try schema.encodeOpenPane(helper.space(), .{
+        try pane_module.encodeOpenPane(helper.space(), .{
             .request_id = @enumFromInt(9),
             .size = .{ .cols = 120, .rows = 40, .cell_width_px = 8, .cell_height_px = 16 },
             .launch = .{
@@ -110,7 +130,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "open_pane_attach", .direction = .client, .golden_hex = golden.open_pane_attach }, helper.commit(
-        try schema.encodeOpenPane(helper.space(), .{
+        try pane_module.encodeOpenPane(helper.space(), .{
             .request_id = @enumFromInt(2),
             .target = .{ .pane = @enumFromInt(41) },
             .size = .{ .cols = 80, .rows = 24 },
@@ -118,7 +138,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "open_workspace", .direction = .client, .golden_hex = golden.open_workspace }, helper.commit(
-        try schema.encodeOpenPane(helper.space(), .{
+        try pane_module.encodeOpenPane(helper.space(), .{
             .request_id = @enumFromInt(3),
             .target = .{ .workspace = @enumFromInt(7) },
             .size = .{ .cols = 80, .rows = 24 },
@@ -126,7 +146,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "create_workspace", .direction = .client, .golden_hex = golden.create_workspace }, helper.commit(
-        try schema.encodeCreateWorkspace(helper.space(), .{
+        try workspace_module.encodeCreateWorkspace(helper.space(), .{
             .request_id = @enumFromInt(4),
             .size = .{ .cols = 80, .rows = 24 },
             .name = "agents",
@@ -140,50 +160,50 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "rename_workspace", .direction = .client, .golden_hex = golden.rename_workspace }, helper.commit(
-        try schema.encodeRenameWorkspace(helper.space(), .{
+        try workspace_module.encodeRenameWorkspace(helper.space(), .{
             .request_id = @enumFromInt(5),
             .workspace = .{ .workspace = @enumFromInt(7) },
             .name = "agents",
         }),
     ));
     helper.addTailTolerant(.{ .name = "pane_input", .direction = .client, .golden_hex = golden.pane_input }, helper.commit(
-        try schema.encodePaneInput(helper.space(), .{
+        try pane_module.encodePaneInput(helper.space(), .{
             .pane_id = @enumFromInt(3),
             .bytes = "abc",
         }),
     ));
     helper.add(.{ .name = "pane_resize", .direction = .client, .golden_hex = golden.pane_resize }, helper.commit(
-        try schema.encodePaneResize(helper.space(), .{
+        try pane_module.encodePaneResize(helper.space(), .{
             .pane_id = @enumFromInt(3),
             .size = .{ .cols = 90, .rows = 30 },
         }),
     ));
     helper.add(.{ .name = "frame_ack", .direction = .client, .golden_hex = golden.frame_ack }, helper.commit(
-        try schema.encodeFrameAck(helper.space(), .{
+        try pane_module.encodeFrameAck(helper.space(), .{
             .pane_id = @enumFromInt(3),
             .frame_id = 8,
         }),
     ));
     helper.add(.{ .name = "request_snapshot", .direction = .client, .golden_hex = golden.request_snapshot }, helper.commit(
-        try schema.encodeRequestSnapshot(helper.space(), .{
+        try pane_module.encodeRequestSnapshot(helper.space(), .{
             .pane_id = @enumFromInt(3),
             .known_frame_id = 7,
         }),
     ));
     helper.add(.{ .name = "detach_pane", .direction = .client, .golden_hex = golden.detach_pane }, helper.commit(
-        try schema.encodeDetachPane(helper.space(), .{ .pane_id = @enumFromInt(3) }),
+        try pane_module.encodeDetachPane(helper.space(), .{ .pane_id = @enumFromInt(3) }),
     ));
     helper.add(.{ .name = "runtime_stop", .direction = .client, .golden_hex = golden.runtime_stop }, helper.commit(
-        try schema.encodeRuntimeStop(helper.space()),
+        try runtime.encodeRuntimeStop(helper.space()),
     ));
     helper.add(.{ .name = "request_tab_snapshot", .direction = .client, .golden_hex = golden.request_tab_snapshot }, helper.commit(
-        try schema.encodeRequestTabSnapshot(helper.space(), .{
+        try tab_module.encodeRequestTabSnapshot(helper.space(), .{
             .request_id = @enumFromInt(20),
             .location = location,
         }),
     ));
     helper.add(.{ .name = "create_pane", .direction = .client, .golden_hex = golden.create_pane }, helper.commit(
-        try schema.encodeCreatePane(helper.space(), .{
+        try pane_module.encodeCreatePane(helper.space(), .{
             .request_id = @enumFromInt(21),
             .location = location,
             .size = .{ .cols = 60, .rows = 20 },
@@ -195,13 +215,13 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "close_pane", .direction = .client, .golden_hex = golden.close_pane }, helper.commit(
-        try schema.encodeClosePane(helper.space(), .{
+        try pane_module.encodeClosePane(helper.space(), .{
             .request_id = @enumFromInt(22),
             .pane_id = @enumFromInt(8),
         }),
     ));
     helper.add(.{ .name = "query_history_cwd", .direction = .client, .golden_hex = golden.query_history_cwd }, helper.commit(
-        try schema.encodeQueryHistory(helper.space(), .{
+        try history.encodeQueryHistory(helper.space(), .{
             .request_id = @enumFromInt(31),
             .query = "zig build",
             .scope = .cwd,
@@ -212,12 +232,12 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .limit = 12,
         }),
     ));
-    const import_entries = [_]schema.ImportEntry{
+    const import_entries = [_]ImportEntryType{
         .{ .started_at_ms = 1700000002000, .command = "git status" },
         .{ .started_at_ms = 1700000003000, .command = "make -j4" },
     };
     helper.add(.{ .name = "import_history", .direction = .client, .golden_hex = golden.import_history }, helper.commit(
-        try schema.encodeImportHistory(helper.space(), .{
+        try history.encodeImportHistory(helper.space(), .{
             .request_id = @enumFromInt(34),
             .source = "zsh:/home/u/.zsh_history",
             .base_sequence = 100,
@@ -225,13 +245,13 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "delete_history", .direction = .client, .golden_hex = golden.delete_history }, helper.commit(
-        try schema.encodeDeleteHistory(helper.space(), .{
+        try history.encodeDeleteHistory(helper.space(), .{
             .request_id = @enumFromInt(35),
             .id = 11,
         }),
     ));
     helper.add(.{ .name = "prune_history", .direction = .client, .golden_hex = golden.prune_history }, helper.commit(
-        try schema.encodePruneHistory(helper.space(), .{
+        try history.encodePruneHistory(helper.space(), .{
             .request_id = @enumFromInt(36),
             .scope = .workspace,
             .scope_value = "/work/telar",
@@ -241,13 +261,13 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "read_history_output", .direction = .client, .golden_hex = golden.read_history_output }, helper.commit(
-        try schema.encodeReadHistoryOutput(helper.space(), .{
+        try history.encodeReadHistoryOutput(helper.space(), .{
             .request_id = @enumFromInt(37),
             .id = 11,
         }),
     ));
     helper.add(.{ .name = "history_stats", .direction = .client, .golden_hex = golden.history_stats }, helper.commit(
-        try schema.encodeHistoryStatsQuery(helper.space(), .{
+        try history.encodeHistoryStatsQuery(helper.space(), .{
             .request_id = @enumFromInt(38),
             .scope = .workspace,
             .scope_value = "/work/telar",
@@ -255,20 +275,20 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "query_history_pane", .direction = .client, .golden_hex = golden.query_history_pane }, helper.commit(
-        try schema.encodeQueryHistory(helper.space(), .{
+        try history.encodeQueryHistory(helper.space(), .{
             .request_id = @enumFromInt(32),
             .scope = .pane,
             .pane_id = @enumFromInt(9),
         }),
     ));
     helper.add(.{ .name = "request_workspace_snapshot", .direction = .client, .golden_hex = golden.request_workspace_snapshot }, helper.commit(
-        try schema.encodeRequestWorkspaceSnapshot(helper.space(), .{
+        try workspace_module.encodeRequestWorkspaceSnapshot(helper.space(), .{
             .request_id = @enumFromInt(40),
             .workspace = .{ .workspace = @enumFromInt(7) },
         }),
     ));
     helper.add(.{ .name = "create_tab", .direction = .client, .golden_hex = golden.create_tab }, helper.commit(
-        try schema.encodeCreateTab(helper.space(), .{
+        try tab_module.encodeCreateTab(helper.space(), .{
             .request_id = @enumFromInt(41),
             .workspace = .{ .workspace = @enumFromInt(7) },
             .label = "logs",
@@ -281,60 +301,60 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "rename_tab", .direction = .client, .golden_hex = golden.rename_tab }, helper.commit(
-        try schema.encodeRenameTab(helper.space(), .{
+        try tab_module.encodeRenameTab(helper.space(), .{
             .request_id = @enumFromInt(42),
             .location = location,
             .label = "server",
         }),
     ));
     helper.add(.{ .name = "close_tab", .direction = .client, .golden_hex = golden.close_tab }, helper.commit(
-        try schema.encodeCloseTab(helper.space(), .{
+        try tab_module.encodeCloseTab(helper.space(), .{
             .request_id = @enumFromInt(43),
             .location = location,
         }),
     ));
     helper.add(.{ .name = "move_tab", .direction = .client, .golden_hex = golden.move_tab }, helper.commit(
-        try schema.encodeMoveTab(helper.space(), .{
+        try tab_module.encodeMoveTab(helper.space(), .{
             .request_id = @enumFromInt(44),
             .location = location,
             .direction = .previous,
         }),
     ));
     helper.add(.{ .name = "request_graphics_snapshot", .direction = .client, .golden_hex = golden.request_graphics_snapshot }, helper.commit(
-        try schema.encodeRequestGraphicsSnapshot(helper.space(), .{
+        try graphics.encodeRequestGraphicsSnapshot(helper.space(), .{
             .pane_id = @enumFromInt(5),
         }),
     ));
     helper.add(.{ .name = "graphics_credit", .direction = .client, .golden_hex = golden.graphics_credit }, helper.commit(
-        try schema.encodeGraphicsCredit(helper.space(), .{
+        try graphics.encodeGraphicsCredit(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .bytes = 4096,
         }),
     ));
     helper.add(.{ .name = "configure_graphics", .direction = .client, .golden_hex = golden.configure_graphics }, helper.commit(
-        try schema.encodeConfigureGraphics(helper.space(), .{
+        try graphics.encodeConfigureGraphics(helper.space(), .{
             .shared = true,
         }),
     ));
     helper.add(.{ .name = "configure_terminal_colors", .direction = .client, .golden_hex = golden.configure_terminal_colors }, helper.commit(
-        try schema.encodeConfigureTerminalColors(helper.space(), .{
+        try runtime.encodeConfigureTerminalColors(helper.space(), .{
             .foreground = .{ 255, 255, 255 },
             .background = .{ 16, 16, 16 },
         }),
     ));
     helper.add(.{ .name = "request_runtime_state", .direction = .client, .golden_hex = golden.request_runtime_state }, helper.commit(
-        try schema.encodeRequestRuntimeState(helper.space(), .{
+        try runtime.encodeRequestRuntimeState(helper.space(), .{
             .client_identity = @enumFromInt(9),
         }),
     ));
     helper.add(.{ .name = "set_pane_viewport", .direction = .client, .golden_hex = golden.set_pane_viewport }, helper.commit(
-        try schema.encodeSetPaneViewport(helper.space(), .{
+        try pane_module.encodeSetPaneViewport(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .offset = 42,
         }),
     ));
     helper.add(.{ .name = "copy_selection", .direction = .client, .golden_hex = golden.copy_selection }, helper.commit(
-        try schema.encodeCopySelection(helper.space(), .{
+        try pane_module.encodeCopySelection(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .start_x = 1,
             .start_y = 2,
@@ -344,7 +364,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "show_notification", .direction = .client, .golden_hex = golden.show_notification }, helper.commit(
-        try schema.encodeShowNotification(helper.space(), .{
+        try notification_support.encodeShowNotification(helper.space(), .{
             .request_id = @enumFromInt(45),
             .notification = .{
                 .level = .success,
@@ -356,7 +376,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "update_client_layout", .direction = .client, .golden_hex = golden.update_client_layout }, helper.commit(
-        try schema.encodeClientLayoutUpdate(helper.space(), .{
+        try layout.encodeClientLayoutUpdate(helper.space(), .{
             .sidebar_visible = true,
             .sidebar_width = 73,
             .workspace_list_collapsed = true,
@@ -365,16 +385,16 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "acknowledge_agent", .direction = .client, .golden_hex = golden.acknowledge_agent }, helper.commit(
-        try schema.encodeAcknowledgeAgent(helper.space(), .{
+        try agent_module.encodeAcknowledgeAgent(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
         }),
     ));
     helper.add(.{ .name = "query_agents", .direction = .client, .golden_hex = golden.query_agents }, helper.commit(
-        try schema.encodeQueryAgents(helper.space(), .{ .request_id = @enumFromInt(5) }),
+        try agent_module.encodeQueryAgents(helper.space(), .{ .request_id = @enumFromInt(5) }),
     ));
     helper.add(.{ .name = "read_pane", .direction = .client, .golden_hex = golden.read_pane }, helper.commit(
-        try schema.encodeReadPane(helper.space(), .{
+        try pane_module.encodeReadPane(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
@@ -383,7 +403,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "send_pane_text", .direction = .client, .golden_hex = golden.send_pane_text }, helper.commit(
-        try schema.encodeSendPaneText(helper.space(), .{
+        try pane_module.encodeSendPaneText(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
@@ -392,7 +412,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "report_agent_session", .direction = .client, .golden_hex = golden.report_agent_session }, helper.commit(
-        try schema.encodeReportAgentSession(helper.space(), .{
+        try agent_module.encodeReportAgentSession(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
@@ -400,7 +420,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "report_agent", .direction = .client, .golden_hex = golden.report_agent }, helper.commit(
-        try schema.encodeReportAgent(helper.space(), .{
+        try agent_module.encodeReportAgent(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
@@ -409,7 +429,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "report_agent_settling", .direction = .client, .golden_hex = golden.report_agent_settling }, helper.commit(
-        try schema.encodeReportAgent(helper.space(), .{
+        try agent_module.encodeReportAgent(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
@@ -418,7 +438,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "report_agent_command", .direction = .client, .golden_hex = golden.report_agent_command }, helper.commit(
-        try schema.encodeReportAgentCommand(helper.space(), .{
+        try agent_module.encodeReportAgentCommand(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
@@ -432,7 +452,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "report_agent_title", .direction = .client, .golden_hex = golden.report_agent_title }, helper.commit(
-        try schema.encodeReportAgentTitle(helper.space(), .{
+        try agent_module.encodeReportAgentTitle(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
@@ -440,14 +460,14 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "search_pane", .direction = .client, .golden_hex = golden.search_pane }, helper.commit(
-        try schema.encodeSearchPane(helper.space(), .{
+        try pane_module.encodeSearchPane(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .needle = "err",
         }),
     ));
     helper.add(.{ .name = "request_pane_focus", .direction = .client, .golden_hex = golden.request_pane_focus }, helper.commit(
-        try schema.encodeRequestPaneFocus(helper.space(), .{
+        try focus.encodeRequestPaneFocus(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
@@ -455,7 +475,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "complete_pane_focus", .direction = .client, .golden_hex = golden.complete_pane_focus }, helper.commit(
-        try schema.encodeCompletePaneFocus(helper.space(), .{
+        try focus.encodeCompletePaneFocus(helper.space(), .{
             .requester = .{ .id = 9, .generation = 10 },
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
@@ -467,7 +487,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
 
     // -- server ------------------------------------------------------------
     helper.add(.{ .name = "pane_opened", .direction = .server, .golden_hex = golden.pane_opened }, helper.commit(
-        try schema.encodePaneOpened(helper.space(), .{
+        try pane_module.encodePaneOpened(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(12),
             .location = .{
@@ -477,10 +497,10 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .created = true,
         }),
     ));
-    const frame_cells = [_]ui.Cell{
+    const frame_cells = [_]CellType{
         .{},
         .{
-            .bytes = [_]u8{'x'} ++ [_]u8{0} ** (ui.Cell.max_bytes - 1),
+            .bytes = [_]u8{'x'} ++ [_]u8{0} ** (CellType.max_bytes - 1),
             .len = 1,
             .width = 1,
             .style = .{
@@ -490,9 +510,9 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             },
         },
     };
-    const frame_spans = [_]frame.Span{.{ .start = 0, .cells = &frame_cells }};
+    const frame_spans = [_]SpanType{.{ .start = 0, .cells = &frame_cells }};
     helper.add(.{ .name = "pane_frame", .direction = .server, .golden_hex = golden.pane_frame }, helper.commit(
-        try schema.encodePaneFrame(helper.space(), .{
+        try pane_module.encodePaneFrame(helper.space(), .{
             .pane_id = @enumFromInt(4),
             .frame_id = 1,
             .base_frame_id = 0,
@@ -510,28 +530,28 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "pane_exited", .direction = .server, .golden_hex = golden.pane_exited }, helper.commit(
-        try schema.encodePaneExited(helper.space(), .{
+        try pane_module.encodePaneExited(helper.space(), .{
             .pane_id = @enumFromInt(12),
             .kind = .exited,
             .value = 7,
         }),
     ));
     helper.addTailTolerant(.{ .name = "request_failed", .direction = .server, .golden_hex = golden.request_failed }, helper.commit(
-        try schema.encodeRequestFailed(helper.space(), .{
+        try runtime.encodeRequestFailed(helper.space(), .{
             .request_id = @enumFromInt(5),
             .code = .pane_not_found,
             .message = "pane 12 does not exist",
         }),
     ));
     helper.add(.{ .name = "runtime_stopping", .direction = .server, .golden_hex = golden.runtime_stopping }, helper.commit(
-        try schema.encodeRuntimeStopping(helper.space()),
+        try runtime.encodeRuntimeStopping(helper.space()),
     ));
-    const panes = [_]schema.PaneDescriptor{
+    const panes = [_]PaneDescriptorType{
         .{ .pane_id = @enumFromInt(3), .lifecycle = .running },
         .{ .pane_id = @enumFromInt(9), .lifecycle = .exited },
     };
     helper.add(.{ .name = "tab_snapshot", .direction = .server, .golden_hex = golden.tab_snapshot }, helper.commit(
-        try schema.encodeTabSnapshot(helper.space(), .{
+        try tab_module.encodeTabSnapshot(helper.space(), .{
             .request_id = @enumFromInt(4),
             .location = .{
                 .workspace = .{ .worktree = @enumFromInt(2) },
@@ -540,7 +560,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .panes = &panes,
         }),
     ));
-    const history_entries = [_]schema.HistoryEntry{
+    const history_entries = [_]HistoryEntryType{
         .{
             .id = 11,
             .pane_id = @enumFromInt(3),
@@ -566,7 +586,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         },
     };
     helper.add(.{ .name = "history_output", .direction = .server, .golden_hex = golden.history_output }, helper.commit(
-        try schema.encodeHistoryOutput(helper.space(), .{
+        try history.encodeHistoryOutput(helper.space(), .{
             .request_id = @enumFromInt(37),
             .id = 11,
             .truncated = true,
@@ -574,12 +594,12 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .content = "error: exit 1\n",
         }),
     ));
-    const stats_top = [_]schema.HistoryStatsTop{
+    const stats_top = [_]HistoryStatsTopType{
         .{ .count = 30, .command = "git status" },
         .{ .count = 12, .command = "zig build" },
     };
     helper.add(.{ .name = "history_stats_result", .direction = .server, .golden_hex = golden.history_stats_result }, helper.commit(
-        try schema.encodeHistoryStats(helper.space(), .{
+        try history.encodeHistoryStats(helper.space(), .{
             .request_id = @enumFromInt(38),
             .total = 120,
             .unique = 40,
@@ -587,37 +607,37 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "history_pruned", .direction = .server, .golden_hex = golden.history_pruned }, helper.commit(
-        try schema.encodeHistoryPruned(helper.space(), .{
+        try history.encodeHistoryPruned(helper.space(), .{
             .request_id = @enumFromInt(36),
             .removed = 3,
         }),
     ));
     helper.add(.{ .name = "history_results", .direction = .server, .golden_hex = golden.history_results }, helper.commit(
-        try schema.encodeHistoryResults(helper.space(), .{
+        try history.encodeHistoryResults(helper.space(), .{
             .request_id = @enumFromInt(33),
             .entries = &history_entries,
         }),
     ));
     helper.add(.{ .name = "suggest_command", .direction = .client, .golden_hex = golden.suggest_command }, helper.commit(
-        try schema.encodeSuggestCommand(helper.space(), .{
+        try suggestion.encodeSuggestCommand(helper.space(), .{
             .request_id = @enumFromInt(41),
             .pane_id = @enumFromInt(9),
             .text = "list files by size",
         }),
     ));
     helper.add(.{ .name = "command_suggestion", .direction = .server, .golden_hex = golden.command_suggestion }, helper.commit(
-        try schema.encodeCommandSuggestion(helper.space(), .{
+        try suggestion.encodeCommandSuggestion(helper.space(), .{
             .request_id = @enumFromInt(41),
             .status = .ready,
             .text = "ls -lS",
         }),
     ));
-    const descriptors = [_]schema.TabDescriptor{
+    const descriptors = [_]TabDescriptorType{
         .{ .tab_id = @enumFromInt(3), .position = 0, .pane_count = 2, .label = "main" },
         .{ .tab_id = @enumFromInt(4), .position = 1, .pane_count = 1, .label = "logs" },
     };
     helper.add(.{ .name = "workspace_snapshot", .direction = .server, .golden_hex = golden.workspace_snapshot }, helper.commit(
-        try schema.encodeWorkspaceSnapshot(helper.space(), .{
+        try workspace_module.encodeWorkspaceSnapshot(helper.space(), .{
             .request_id = @enumFromInt(50),
             .workspace = .{ .workspace = @enumFromInt(7) },
             .name = "telar",
@@ -625,7 +645,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "tab_created", .direction = .server, .golden_hex = golden.tab_created }, helper.commit(
-        try schema.encodeTabCreated(helper.space(), .{
+        try tab_module.encodeTabCreated(helper.space(), .{
             .request_id = @enumFromInt(51),
             .location = location,
             .position = 1,
@@ -634,14 +654,14 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "tab_renamed", .direction = .server, .golden_hex = golden.tab_renamed }, helper.commit(
-        try schema.encodeTabRenamed(helper.space(), .{
+        try tab_module.encodeTabRenamed(helper.space(), .{
             .request_id = @enumFromInt(52),
             .location = location,
             .label = "server",
         }),
     ));
     helper.add(.{ .name = "tab_closed", .direction = .server, .golden_hex = golden.tab_closed }, helper.commit(
-        try schema.encodeTabClosed(helper.space(), .{
+        try tab_module.encodeTabClosed(helper.space(), .{
             .request_id = .none,
             .location = location,
             .workspace_closed = true,
@@ -649,28 +669,28 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "tab_moved", .direction = .server, .golden_hex = golden.tab_moved }, helper.commit(
-        try schema.encodeTabMoved(helper.space(), .{
+        try tab_module.encodeTabMoved(helper.space(), .{
             .request_id = @enumFromInt(54),
             .location = location,
             .position = 0,
         }),
     ));
     helper.add(.{ .name = "resync_required", .direction = .server, .golden_hex = golden.resync_required }, helper.commit(
-        try schema.encodeResyncRequired(helper.space(), .{
+        try workspace_module.encodeResyncRequired(helper.space(), .{
             .workspace = .{ .workspace = @enumFromInt(7) },
             .workspace_closed = true,
             .previous_workspace = @enumFromInt(6),
         }),
     ));
     helper.add(.{ .name = "graphics_snapshot", .direction = .server, .golden_hex = golden.graphics_snapshot }, helper.commit(
-        try schema.encodeGraphicsSnapshot(helper.space(), .{
+        try graphics.encodeGraphicsSnapshot(helper.space(), .{
             .pane_id = @enumFromInt(1),
             .revision = 3,
             .phase = .begin,
         }),
     ));
     helper.add(.{ .name = "graphics_image", .direction = .server, .golden_hex = golden.graphics_image }, helper.commit(
-        try schema.encodeGraphicsImage(helper.space(), .{
+        try graphics.encodeGraphicsImage(helper.space(), .{
             .pane_id = @enumFromInt(1),
             .revision = 3,
             .image = .{
@@ -683,7 +703,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "graphics_image_chunk", .direction = .server, .golden_hex = golden.graphics_image_chunk }, helper.commit(
-        try schema.encodeGraphicsImageChunk(helper.space(), .{
+        try graphics.encodeGraphicsImageChunk(helper.space(), .{
             .pane_id = @enumFromInt(1),
             .revision = 3,
             .key = .{ .image_id = 7, .generation = 8 },
@@ -692,7 +712,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "graphics_shared_image", .direction = .server, .golden_hex = golden.graphics_shared_image }, helper.commit(
-        try schema.encodeGraphicsSharedImage(helper.space(), .{
+        try graphics.encodeGraphicsSharedImage(helper.space(), .{
             .pane_id = @enumFromInt(1),
             .revision = 3,
             .image = .{
@@ -702,11 +722,11 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
                 .height = 2,
                 .byte_len = 16,
             },
-            .name = try graphics.ShmName.init("/tlr0000002a-7"),
+            .name = try ShmNameType.init("/tlr0000002a-7"),
         }),
     ));
     helper.add(.{ .name = "graphics_placement", .direction = .server, .golden_hex = golden.graphics_placement }, helper.commit(
-        try schema.encodeGraphicsPlacement(helper.space(), .{
+        try graphics.encodeGraphicsPlacement(helper.space(), .{
             .pane_id = @enumFromInt(1),
             .revision = 3,
             .placement = .{
@@ -723,14 +743,14 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "graphics_delete_image", .direction = .server, .golden_hex = golden.graphics_delete_image }, helper.commit(
-        try schema.encodeGraphicsDeleteImage(helper.space(), .{
+        try graphics.encodeGraphicsDeleteImage(helper.space(), .{
             .pane_id = @enumFromInt(1),
             .revision = 4,
             .key = .{ .image_id = 7, .generation = 8 },
         }),
     ));
     helper.add(.{ .name = "graphics_delete_placement", .direction = .server, .golden_hex = golden.graphics_delete_placement }, helper.commit(
-        try schema.encodeGraphicsDeletePlacement(helper.space(), .{
+        try graphics.encodeGraphicsDeletePlacement(helper.space(), .{
             .pane_id = @enumFromInt(1),
             .revision = 5,
             .key = .{ .image_id = 7, .generation = 8 },
@@ -739,9 +759,9 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "proxy_status", .direction = .server, .golden_hex = golden.proxy_status }, helper.commit(
-        try schema.encodeProxyStatus(helper.space(), .{ .active = true, .scope = .wildcard, .system_trusted = true }),
+        try runtime.encodeProxyStatus(helper.space(), .{ .active = true, .scope = .wildcard, .system_trusted = true }),
     ));
-    const agent_entries = [_]schema.AgentSnapshotEntry{.{
+    const agent_entries = [_]AgentSnapshotEntryType{.{
         .pane_id = @enumFromInt(5),
         .pane_generation = 7,
         .location = .{
@@ -771,13 +791,13 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         .expires_at_ms = 2000,
     }};
     helper.add(.{ .name = "agent_snapshot", .direction = .server, .golden_hex = golden.agent_snapshot }, helper.commit(
-        try schema.encodeAgentSnapshot(helper.space(), .{
+        try agent_module.encodeAgentSnapshot(helper.space(), .{
             .revision = 9,
             .entries = &agent_entries,
         }),
     ));
     helper.add(.{ .name = "system_metrics", .direction = .server, .golden_hex = golden.system_metrics }, helper.commit(
-        try schema.encodeSystemMetrics(helper.space(), .{
+        try runtime.encodeSystemMetrics(helper.space(), .{
             .revision = 5,
             .cpu_percent = 42,
             .memory_used_decigib = 92,
@@ -785,7 +805,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .battery_percent = 84,
         }),
     ));
-    const workspace_list_entries = [_]schema.WorkspaceListEntry{
+    const workspace_list_entries = [_]WorkspaceListEntryType{
         .{
             .workspace = @enumFromInt(7),
             .name = "telar",
@@ -802,31 +822,31 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         },
     };
     helper.add(.{ .name = "workspace_list", .direction = .server, .golden_hex = golden.workspace_list }, helper.commit(
-        try schema.encodeWorkspaceList(helper.space(), .{
+        try workspace_module.encodeWorkspaceList(helper.space(), .{
             .revision = 3,
             .entries = &workspace_list_entries,
         }),
     ));
     helper.add(.{ .name = "pane_cwd", .direction = .server, .golden_hex = golden.pane_cwd }, helper.commit(
-        try schema.encodePaneCwd(helper.space(), .{
+        try pane_module.encodePaneCwd(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .cwd = "/work/telar",
         }),
     ));
     helper.add(.{ .name = "pane_foreground", .direction = .server, .golden_hex = golden.pane_foreground }, helper.commit(
-        try schema.encodePaneForeground(helper.space(), .{
+        try pane_module.encodePaneForeground(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .name = "zsh",
         }),
     ));
     helper.add(.{ .name = "pane_clipboard", .direction = .server, .golden_hex = golden.pane_clipboard }, helper.commit(
-        try schema.encodePaneClipboard(helper.space(), .{
+        try pane_module.encodePaneClipboard(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .bytes = "abc",
         }),
     ));
     helper.add(.{ .name = "notification", .direction = .server, .golden_hex = golden.notification }, helper.commit(
-        try schema.encodeNotification(helper.space(), .{
+        try notification_support.encodeNotification(helper.space(), .{
             .level = .warning,
             .duration_ms = 3000,
             .target = .{ .tab = @enumFromInt(3) },
@@ -835,20 +855,20 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "notification_shown", .direction = .server, .golden_hex = golden.notification_shown }, helper.commit(
-        try schema.encodeNotificationShown(helper.space(), .{
+        try notification_support.encodeNotificationShown(helper.space(), .{
             .request_id = @enumFromInt(46),
             .delivered_clients = 2,
         }),
     ));
     helper.add(.{ .name = "agent_sound", .direction = .server, .golden_hex = golden.agent_sound }, helper.commit(
-        try schema.encodeAgentSound(helper.space(), .{
+        try agent_module.encodeAgentSound(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .pane_generation = 7,
             .sound = .needs_input,
         }),
     ));
     helper.add(.{ .name = "client_layout_snapshot", .direction = .server, .golden_hex = golden.client_layout_snapshot }, helper.commit(
-        try schema.encodeClientLayoutSnapshot(helper.space(), .{
+        try layout.encodeClientLayoutSnapshot(helper.space(), .{
             .restored = true,
             .sidebar_visible = true,
             .sidebar_width = 73,
@@ -858,7 +878,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "pane_text", .direction = .server, .golden_hex = golden.pane_text }, helper.commit(
-        try schema.encodePaneText(helper.space(), .{
+        try pane_module.encodePaneText(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .truncated = false,
@@ -866,23 +886,23 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "request_completed", .direction = .server, .golden_hex = golden.request_completed }, helper.commit(
-        try schema.encodeRequestCompleted(helper.space(), .{ .request_id = @enumFromInt(5) }),
+        try runtime.encodeRequestCompleted(helper.space(), .{ .request_id = @enumFromInt(5) }),
     ));
     helper.add(.{ .name = "pane_title", .direction = .server, .golden_hex = golden.pane_title }, helper.commit(
-        try schema.encodePaneTitle(helper.space(), .{
+        try pane_module.encodePaneTitle(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .title = "vim",
         }),
     ));
     helper.add(.{ .name = "pane_progress", .direction = .server, .golden_hex = golden.pane_progress }, helper.commit(
-        try schema.encodePaneProgress(helper.space(), .{
+        try pane_module.encodePaneProgress(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .state = .set,
             .percent = 42,
         }),
     ));
     helper.add(.{ .name = "pane_matches", .direction = .server, .golden_hex = golden.pane_matches }, helper.commit(
-        try schema.encodePaneMatches(helper.space(), .{
+        try pane_module.encodePaneMatches(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .truncated = false,
@@ -890,7 +910,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "pane_focus_command", .direction = .server, .golden_hex = golden.pane_focus_command }, helper.commit(
-        try schema.encodePaneFocusCommand(helper.space(), .{
+        try focus.encodePaneFocusCommand(helper.space(), .{
             .requester = .{ .id = 9, .generation = 10 },
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
@@ -899,7 +919,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add(.{ .name = "pane_focus_result", .direction = .server, .golden_hex = golden.pane_focus_result }, helper.commit(
-        try schema.encodePaneFocusResult(helper.space(), .{
+        try focus.encodePaneFocusResult(helper.space(), .{
             .request_id = @enumFromInt(5),
             .outcome = .focused,
             .focused_pane_id = @enumFromInt(6),
@@ -909,102 +929,6 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     std.debug.assert(index == corpus_len);
     return entries;
 }
-
-/// One hex string per corpus entry, in corpus order. Regenerate with the
-/// "GOLDEN" print block below when an encoding change is intentional, and
-/// bump `handshake.schema_id` to the new fingerprint in the same commit.
-const golden = struct {
-    pub const open_pane_default = "01090000000000000000780028000800100005002f776f726b0000000000000000020007002f62696e2f736802002d6c01020004005445524d0e000000787465726d2d323536636f6c6f720500454d50545900000000";
-    pub const open_pane_attach = "0102000000000000000129000000000000005000180000000000";
-    pub const open_workspace = "0103000000000000000207000000000000005000180000000000";
-    pub const create_workspace = "150400000000000000500018000000000006006167656e747305002f776f726b0500000000000000020007002f62696e2f736802002d6c01020004005445524d0e000000787465726d2d323536636f6c6f720500454d50545900000000";
-    pub const rename_workspace = "16050000000000000000070000000000000006006167656e7473";
-    pub const pane_input = "020300000000000000616263";
-    pub const pane_resize = "0303000000000000005a001e0000000000";
-    pub const frame_ack = "0403000000000000000800000000000000";
-    pub const request_snapshot = "0503000000000000000700000000000000";
-    pub const detach_pane = "060300000000000000";
-    pub const runtime_stop = "07";
-    pub const request_tab_snapshot = "0814000000000000000007000000000000000300000000000000";
-    pub const create_pane = "09150000000000000000070000000000000003000000000000003c0014000000000005002f776f726b0600000000000000010007002f62696e2f7368000000";
-    pub const close_pane = "0a16000000000000000800000000000000";
-    pub const query_history_cwd = "0b1f0000000000000009007a6967206275696c64010b002f776f726b2f74656c6172010001010c000000000000000000000000000000000000000000";
-    pub const history_stats = "262600000000000000020b002f776f726b2f74656c61720068e5cf8b010000";
-    pub const history_stats_result = "a6260000000000000078000000000000002800000000000000021e000000000000000a00676974207374617475730c0000000000000009007a6967206275696c64";
-    pub const read_history_output = "2525000000000000000b00000000000000";
-    pub const history_output = "a525000000000000000b000000000000000128230000000000000e0000006572726f723a206578697420310a";
-    pub const delete_history = "2323000000000000000b00000000000000";
-    pub const prune_history = "242400000000000000020b002f776f726b2f74656c61720068e5cf8b0100000103007a6967";
-    pub const history_pruned = "a424000000000000000300000000000000";
-    pub const import_history = "22220000000000000018007a73683a2f686f6d652f752f2e7a73685f686973746f727964000000000000000200d06fe5cf8b0100000a0067697420737461747573b873e5cf8b01000008006d616b65202d6a34";
-    pub const query_history_pane = "0b200000000000000000000309000000000000000000000014000000000000000000000000000000000000000000";
-    pub const request_workspace_snapshot = "0c2800000000000000000700000000000000";
-    pub const create_tab = "0d290000000000000000070000000000000004006c6f6773500018000000000005002f776f726b0700000000000000010007002f62696e2f7368000000";
-    pub const rename_tab = "0e2a0000000000000000070000000000000003000000000000000600736572766572";
-    pub const close_tab = "0f2b000000000000000007000000000000000300000000000000";
-    pub const move_tab = "102c00000000000000000700000000000000030000000000000000";
-    pub const request_graphics_snapshot = "110500000000000000";
-    pub const graphics_credit = "1205000000000000000010000000000000";
-    pub const configure_graphics = "1301";
-    pub const configure_terminal_colors = "2c01ffffff01101010";
-    pub const request_runtime_state = "140900000000000000";
-    pub const set_pane_viewport = "1705000000000000002a000000";
-    pub const copy_selection = "18050000000000000001000200000003000400000001";
-    pub const show_notification = "192d0000000000000001c40900000105000000000000000e004275696c6420636f6d706c6574650d004f70656e207468652070616e65";
-    pub const update_client_layout = "1a0149000100070000000000000003000000000000000100000700000000000000030000000000000005000000000000000001030001007017000500000000000000000600000000000000";
-    pub const acknowledge_agent = "1b05000000000000000300000000000000";
-    pub const query_agents = "1c0500000000000000";
-    pub const read_pane = "1d0500000000000000050000000000000003000000000000002800" ++ "01";
-    pub const send_pane_text = "1e0500000000000000050000000000000003000000000000000102006c73";
-    pub const report_agent_session = "1f0500000000000000050000000000000003000000000000000300616263";
-    pub const report_agent = "20050000000000000005000000000000000300000000000000010300616263000000";
-    pub const report_agent_settling = "20050000000000000005000000000000000300000000000000040300616263000000";
-    pub const report_agent_command = "2a050000000000000005000000000000000300000000000000010500636f646578060063616c6c2d370e0000007a6967206275696c64207465737405002f776f726b03006162630107000000";
-    pub const report_agent_title = "2b05000000000000000500000000000000030000000000000009004669782070726f7879";
-    pub const search_pane = "21050000000000000005000000000000000300657272";
-    pub const request_pane_focus = "2705000000000000000500000000000000030000000000000000";
-    pub const complete_pane_focus = "2809000000000000000a00000000000000050000000000000005000000000000000300000000000000000600000000000000";
-    pub const pane_matches = "a3050000000000000005000000000000000001000200070000000300";
-    pub const pane_text = "a00500000000000000050000000000000000020000006869";
-    pub const request_completed = "a10500000000000000";
-    pub const pane_title = "a20500000000000000030076696d";
-    pub const pane_progress = "aa0500000000000000012a";
-    pub const pane_opened = "8105000000000000000c00000000000000000200000000000000040000000000000001";
-    pub const pane_frame = "8204000000000000000100000000000000000000000000000002000100010100000000000000000001000005010301000000000000000100000000000200000012000000a1000000000020a101030201020301040078";
-    pub const pane_exited = "830c000000000000000007000000";
-    pub const request_failed = "840500000000000000010070616e6520313220646f6573206e6f74206578697374";
-    pub const runtime_stopping = "85";
-    pub const tab_snapshot = "86040000000000000001020000000000000006000000000000000200030000000000000000090000000000000001";
-    pub const history_results = "87210000000000000002000000000000000000000b0000000000000003000000000000000068e5cf8b01000010a4000000000000010700000000000000000e0000007a6967206275696c6420746573740b002f776f726b2f74656c61720b002f776f726b2f74656c6172000c000000000000000300000000000000e86be5cf8b010000090000000000000000010100000009000000736c656570203630300b002f776f726b2f74656c61720b002f776f726b2f74656c617200";
-    pub const workspace_snapshot = "883200000000000000000700000000000000050074656c6172020003000000000000000000020004006d61696e04000000000000000100010004006c6f6773";
-    pub const tab_created = "8933000000000000000007000000000000000300000000000000010004006c6f67730900000000000000";
-    pub const tab_renamed = "8a340000000000000000070000000000000003000000000000000600736572766572";
-    pub const tab_closed = "8b0000000000000000000700000000000000030000000000000001010600000000000000";
-    pub const tab_moved = "8c360000000000000000070000000000000003000000000000000000";
-    pub const resync_required = "9300070000000000000001010600000000000000";
-    pub const graphics_snapshot = "8d0100000000000000030000000000000000";
-    pub const graphics_image = "8e010000000000000003000000000000000700000008000000000000002002000000020000001000000000000000";
-    pub const graphics_image_chunk = "8f0100000000000000030000000000000007000000080000000000000000000000000000000400000001020304";
-    pub const graphics_shared_image = "940100000000000000030000000000000007000000080000000000000020020000000200000010000000000000000e0000002f746c7230303030303032612d37";
-    pub const graphics_placement = "90010000000000000003000000000000000700000008000000000000000100000000000000010000000200000003000000000000000000000002000000020000000100000001000000000000000000000000000000";
-    pub const graphics_delete_image = "9101000000000000000400000000000000070000000800000000000000";
-    pub const graphics_delete_placement = "9201000000000000000500000000000000070000000800000000000000010000000000000001000000";
-    pub const proxy_status = "95010101";
-    pub const agent_snapshot = "960900000000000000010005000000000000000700000000000000000200000000000000040000000000000003002a0000000102030405060708090a0b0c0d0e0f10050074656c61720600746573742d321500496d70726f7665206167656e7420636f6e7465787401020f007e2f73616e64626f782f74656c6172020500636f6465780500436f646578010058010102015f0b00000000000000e803000000000000d007000000000000";
-    pub const system_metrics = "9705000000000000002a5c000154";
-    pub const workspace_list = "98030000000000000002000700000000000000050074656c61720b002f776f726b2f74656c617202000400" ++ "6d61696e" ++ "01" ++ "090000000000000003006170690900" ++ "2f776f726b2f617069" ++ "0100" ++ "0000" ++ "00";
-    pub const pane_cwd = "9905000000000000000b002f776f726b2f74656c6172";
-    pub const pane_foreground = "9d050000000000000003007a7368";
-    pub const pane_clipboard = "9a050000000000000003000000616263";
-    pub const notification = "9b02b80b00000203000000000000000d004167656e742077616974696e67130052657669657720697473207175657374696f6e";
-    pub const notification_shown = "9c2e0000000000000002";
-    pub const agent_sound = "9e0500000000000000070000000000000001";
-    pub const client_layout_snapshot = "9f01014900010100070000000000000003000000000000000100000700000000000000030000000000000005000000000000000001030001007017000500000000000000000600000000000000";
-    pub const pane_focus_command = "a709000000000000000a0000000000000005000000000000000500000000000000030000000000000000";
-    pub const pane_focus_result = "a80500000000000000000600000000000000";
-    pub const suggest_command = "292900000000000000090000000000000012006c6973742066696c65732062792073697a65";
-    pub const command_suggestion = "a929000000000000000006006c73202d6c53";
-};
 
 fn fingerprint(entries: []const Entry) [6]u8 {
     var hasher = std.crypto.hash.sha2.Sha256.init(.{});
@@ -1025,8 +949,8 @@ fn fingerprint(entries: []const Entry) [6]u8 {
 
 fn decodeEntry(entry: Entry, payload: []const u8) !void {
     switch (entry.direction) {
-        .client => _ = try schema.decodeClient(payload),
-        .server => _ = try schema.decodeServer(payload),
+        .client => _ = try root.decodeClient(payload),
+        .server => _ = try root.decodeServer(payload),
     }
 }
 
@@ -1034,14 +958,14 @@ test "terminal color configuration preserves partial unknowns and rejects malfor
     var buffer: [16]u8 = undefined;
     for ([_]?[3]u8{ null, .{ 1, 2, 3 } }) |foreground| {
         for ([_]?[3]u8{ null, .{ 4, 5, 6 } }) |background| {
-            const colors: schema.TerminalColors = .{ .foreground = foreground, .background = background };
-            const encoded = try schema.encodeConfigureTerminalColors(&buffer, colors);
-            const decoded = try schema.decodeClient(encoded);
+            const colors: TerminalColorsType = .{ .foreground = foreground, .background = background };
+            const encoded = try runtime.encodeConfigureTerminalColors(&buffer, colors);
+            const decoded = try root.decodeClient(encoded);
             try std.testing.expectEqualDeep(colors, decoded.configure_terminal_colors);
         }
     }
 
-    try std.testing.expectError(error.InvalidBoolean, schema.decodeClient(&.{ 0x2c, 2, 0 }));
+    try std.testing.expectError(error.InvalidBoolean, root.decodeClient(&.{ 0x2c, 2, 0 }));
 }
 
 test "golden corpus bytes are stable" {
@@ -1093,7 +1017,7 @@ test "a workspace snapshot with zero tabs round trips" {
     // The runtime can transiently hold a workspace with no tabs; the decoder
     // must accept what the encoder produces.
     var buffer: [64]u8 = undefined;
-    const decoded = (try schema.decodeServer(try schema.encodeWorkspaceSnapshot(&buffer, .{
+    const decoded = (try root.decodeServer(try workspace_module.encodeWorkspaceSnapshot(&buffer, .{
         .request_id = @enumFromInt(60),
         .workspace = .{ .workspace = @enumFromInt(7) },
         .name = "telar",
@@ -1102,12 +1026,12 @@ test "a workspace snapshot with zero tabs round trips" {
     try std.testing.expectEqualStrings("telar", decoded.name);
     try std.testing.expectEqual(@as(u16, 0), decoded.tab_count);
     var tabs = decoded.tabs();
-    try std.testing.expectEqual(@as(?schema.TabDescriptor, null), tabs.next());
+    try std.testing.expectEqual(@as(?TabDescriptorType, null), tabs.next());
 }
 
 test "placements with a zero virtual id are rejected on both sides" {
     var buffer: [128]u8 = undefined;
-    const placement: graphics.Placement = .{
+    const placement: PlacementType = .{
         .pane_id = @enumFromInt(1),
         .revision = 3,
         .placement = .{
@@ -1120,11 +1044,11 @@ test "placements with a zero virtual id are rejected on both sides" {
     };
     try std.testing.expectError(
         error.InvalidGraphicsIdentity,
-        schema.encodeGraphicsPlacement(&buffer, placement),
+        graphics.encodeGraphicsPlacement(&buffer, placement),
     );
     try std.testing.expectError(
         error.InvalidGraphicsIdentity,
-        schema.encodeGraphicsDeletePlacement(&buffer, .{
+        graphics.encodeGraphicsDeletePlacement(&buffer, .{
             .pane_id = @enumFromInt(1),
             .revision = 3,
             .key = .{ .image_id = 7, .generation = 8 },
@@ -1140,42 +1064,42 @@ test "placements with a zero virtual id are rejected on both sides" {
     for ([_][]const u8{ golden.graphics_placement, golden.graphics_delete_placement }) |hex| {
         const bytes = try std.fmt.hexToBytes(&payload, hex);
         @memset(bytes[virtual_id_offset..][0..8], 0);
-        try std.testing.expectError(error.InvalidGraphicsIdentity, schema.decodeServer(bytes));
+        try std.testing.expectError(error.InvalidGraphicsIdentity, root.decodeServer(bytes));
     }
 }
 
 test "pane cwd rejects empty nul-containing and oversized paths" {
-    var buffer: [schema.max_cwd_bytes + 32]u8 = undefined;
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    var buffer: [types.max_cwd_bytes + 32]u8 = undefined;
+    const pane_id: id_module.PaneId = @enumFromInt(1);
     try std.testing.expectError(
         error.InvalidByteString,
-        schema.encodePaneCwd(&buffer, .{ .pane_id = pane_id, .cwd = "" }),
+        pane_module.encodePaneCwd(&buffer, .{ .pane_id = pane_id, .cwd = "" }),
     );
     try std.testing.expectError(
         error.EmbeddedNul,
-        schema.encodePaneCwd(&buffer, .{ .pane_id = pane_id, .cwd = "/work\x00hidden" }),
+        pane_module.encodePaneCwd(&buffer, .{ .pane_id = pane_id, .cwd = "/work\x00hidden" }),
     );
-    const oversized = [_]u8{'x'} ** (schema.max_cwd_bytes + 1);
+    const oversized = [_]u8{'x'} ** (types.max_cwd_bytes + 1);
     try std.testing.expectError(
         error.InvalidByteString,
-        schema.encodePaneCwd(&buffer, .{ .pane_id = pane_id, .cwd = &oversized }),
+        pane_module.encodePaneCwd(&buffer, .{ .pane_id = pane_id, .cwd = &oversized }),
     );
 }
 
 test "a large real-world screen fits the frame budget" {
     // 480x150 is a 5K display with a small font. The worst-case single-frame
     // bound must not reject screens that real terminals produce.
-    const size: schema.TerminalSize = .{ .cols = 480, .rows = 150 };
+    const size: TerminalSizeType = .{ .cols = 480, .rows = 150 };
     try size.validate();
 
     const gpa = std.testing.allocator;
-    const cells = try gpa.alloc(ui.Cell, 480 * 150);
+    const cells = try gpa.alloc(CellType, 480 * 150);
     defer gpa.free(cells);
     @memset(cells, .{});
-    const spans = [_]frame.Span{.{ .start = 0, .cells = cells }};
+    const spans = [_]SpanType{.{ .start = 0, .cells = cells }};
     const buffer = try gpa.alloc(u8, 1024 * 1024);
     defer gpa.free(buffer);
-    const payload = try schema.encodePaneFrame(buffer, .{
+    const payload = try pane_module.encodePaneFrame(buffer, .{
         .pane_id = @enumFromInt(1),
         .frame_id = 1,
         .base_frame_id = 0,
@@ -1184,7 +1108,7 @@ test "a large real-world screen fits the frame budget" {
         .scroll = .{ .total_rows = 150, .offset = 0 },
         .spans = &spans,
     });
-    const decoded = (try schema.decodeServer(payload)).pane_frame;
+    const decoded = (try root.decodeServer(payload)).pane_frame;
     try std.testing.expectEqual(@as(u16, 480), decoded.cols);
     try std.testing.expectEqual(@as(u16, 150), decoded.rows);
 }
@@ -1193,7 +1117,7 @@ test "iterators over malformed view bytes return errors instead of trapping" {
     // Views carry raw encoded regions; nothing stops code from constructing
     // one over bytes the decoder never validated. Iteration must fail loudly,
     // not hit unreachable code.
-    var spans = (frame.FrameView{
+    var spans = (FrameViewType{
         .pane_id = @enumFromInt(1),
         .frame_id = 1,
         .base_frame_id = 0,
@@ -1208,7 +1132,7 @@ test "iterators over malformed view bytes return errors instead of trapping" {
     }).spans();
     try std.testing.expectError(error.Truncated, spans.next());
 
-    var arguments = (schema.LaunchView{
+    var arguments = (LaunchViewType{
         .cwd = "/work",
         .argument_count = 1,
         .encoded_arguments = &.{0x04},
@@ -1224,9 +1148,9 @@ test "malformed cell bytes surface as errors during iteration" {
     // structural decode no longer inspects: the error must appear when the
     // consumer iterates the cells.
     var buffer: [128]u8 = undefined;
-    const cells = [_]ui.Cell{.{}};
-    const spans = [_]frame.Span{.{ .start = 0, .cells = &cells }};
-    const payload = try schema.encodePaneFrame(&buffer, .{
+    const cells = [_]CellType{.{}};
+    const spans = [_]SpanType{.{ .start = 0, .cells = &cells }};
+    const payload = try pane_module.encodePaneFrame(&buffer, .{
         .pane_id = @enumFromInt(1),
         .frame_id = 1,
         .base_frame_id = 0,
@@ -1242,7 +1166,7 @@ test "malformed cell bytes surface as errors during iteration" {
     @memcpy(corrupted[0..payload.len], payload);
     const first_cell = 1 + frame.body_header_size + frame.span_header_size;
     corrupted[first_cell] &= 0x7f;
-    const decoded = (try schema.decodeServer(corrupted[0..payload.len])).pane_frame;
+    const decoded = (try root.decodeServer(corrupted[0..payload.len])).pane_frame;
     var span_iterator = decoded.spans();
     const span = (try span_iterator.next()).?;
     var cell_iterator = span.cells();
@@ -1272,11 +1196,11 @@ test "the handshake fingerprint derives from the golden corpus" {
 // ---------------------------------------------------------------------------
 test "default pane open round trips launch data without allocation" {
     const arguments = [_][]const u8{ "/bin/sh", "-l" };
-    const environment = [_]schema.EnvironmentEntry{
+    const environment = [_]EnvironmentEntryType{
         .{ .name = "TERM", .value = "xterm-256color" },
         .{ .name = "EMPTY", .value = "" },
     };
-    const message = schema.OpenPane{
+    const message = OpenPaneType{
         .request_id = @enumFromInt(9),
         .size = .{ .cols = 120, .rows = 40 },
         .launch = .{
@@ -1288,12 +1212,12 @@ test "default pane open round trips launch data without allocation" {
     };
 
     var buffer: [512]u8 = undefined;
-    const decoded = (try schema.decodeClient(try schema.encodeOpenPane(&buffer, message))).open_pane;
+    const decoded = (try root.decodeClient(try pane_module.encodeOpenPane(&buffer, message))).open_pane;
     try std.testing.expectEqual(message.request_id, decoded.request_id);
     try std.testing.expect(decoded.target == .default);
     try std.testing.expectEqual(message.size, decoded.size);
     try std.testing.expectEqualStrings("/work", decoded.launch.?.cwd);
-    try std.testing.expectEqual(schema.EnvironmentMode.replace, decoded.launch.?.environment_mode);
+    try std.testing.expectEqual(types.EnvironmentMode.replace, decoded.launch.?.environment_mode);
 
     var argument_iterator = decoded.launch.?.arguments();
     try std.testing.expectEqualStrings("/bin/sh", (try argument_iterator.next()).?);
@@ -1308,24 +1232,24 @@ test "default pane open round trips launch data without allocation" {
 
 test "notifications enforce text and duration bounds before crossing IPC" {
     var buffer: [512]u8 = undefined;
-    const long_title: [schema.max_notification_title_bytes + 1]u8 = @splat('x');
+    const long_title: [types.max_notification_title_bytes + 1]u8 = @splat('x');
     try std.testing.expectError(
         error.InvalidByteString,
-        schema.encodeShowNotification(&buffer, .{
+        notification_support.encodeShowNotification(&buffer, .{
             .request_id = @enumFromInt(1),
             .notification = .{ .title = &long_title },
         }),
     );
     try std.testing.expectError(
         error.InvalidNotificationDuration,
-        schema.encodeNotification(&buffer, .{
-            .duration_ms = schema.min_notification_duration_ms - 1,
+        notification_support.encodeNotification(&buffer, .{
+            .duration_ms = types.min_notification_duration_ms - 1,
             .title = "Too brief",
         }),
     );
     try std.testing.expectError(
         error.InvalidNotificationText,
-        schema.encodeNotification(&buffer, .{
+        notification_support.encodeNotification(&buffer, .{
             .title = "line one\nline two",
         }),
     );
@@ -1333,29 +1257,29 @@ test "notifications enforce text and duration bounds before crossing IPC" {
 
 test "explicit pane attachment has no launch payload" {
     var buffer: [64]u8 = undefined;
-    const decoded = (try schema.decodeClient(try schema.encodeOpenPane(&buffer, .{
+    const decoded = (try root.decodeClient(try pane_module.encodeOpenPane(&buffer, .{
         .request_id = @enumFromInt(2),
         .target = .{ .pane = @enumFromInt(41) },
         .size = .{ .cols = 80, .rows = 24 },
         .launch = null,
     }))).open_pane;
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(41)), decoded.target.pane);
+    try std.testing.expectEqual(@as(id_module.PaneId, @enumFromInt(41)), decoded.target.pane);
     try std.testing.expect(decoded.launch == null);
 }
 
 test "explicit workspace attachment and creation round trip" {
     var buffer: [512]u8 = undefined;
-    const attached = (try schema.decodeClient(try schema.encodeOpenPane(&buffer, .{
+    const attached = (try root.decodeClient(try pane_module.encodeOpenPane(&buffer, .{
         .request_id = @enumFromInt(2),
         .target = .{ .workspace = @enumFromInt(7) },
         .size = .{ .cols = 80, .rows = 24 },
         .launch = null,
     }))).open_pane;
-    try std.testing.expectEqual(@as(schema.WorkspaceId, @enumFromInt(7)), attached.target.workspace);
+    try std.testing.expectEqual(@as(id_module.WorkspaceId, @enumFromInt(7)), attached.target.workspace);
     try std.testing.expect(attached.launch == null);
 
     const arguments = [_][]const u8{"/bin/sh"};
-    const created = (try schema.decodeClient(try schema.encodeCreateWorkspace(&buffer, .{
+    const created = (try root.decodeClient(try workspace_module.encodeCreateWorkspace(&buffer, .{
         .request_id = @enumFromInt(3),
         .size = .{ .cols = 80, .rows = 24 },
         .name = "agents",
@@ -1367,19 +1291,19 @@ test "explicit workspace attachment and creation round trip" {
     }))).create_workspace;
     try std.testing.expectEqualStrings("agents", created.name);
     try std.testing.expectEqualStrings("/work/project", created.launch.cwd);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(8)), created.launch.cwd_source.?);
+    try std.testing.expectEqual(@as(id_module.PaneId, @enumFromInt(8)), created.launch.cwd_source.?);
     var iterator = created.launch.arguments();
     try std.testing.expectEqualStrings("/bin/sh", (try iterator.next()).?);
     try std.testing.expect((try iterator.next()) == null);
 
-    try std.testing.expectError(error.InvalidByteString, schema.encodeCreateWorkspace(&buffer, .{
+    try std.testing.expectError(error.InvalidByteString, workspace_module.encodeCreateWorkspace(&buffer, .{
         .request_id = @enumFromInt(4),
         .size = .{ .cols = 80, .rows = 24 },
         .name = "",
         .launch = .{ .cwd = "/work/project", .arguments = &arguments },
     }));
 
-    const renamed = (try schema.decodeClient(try schema.encodeRenameWorkspace(&buffer, .{
+    const renamed = (try root.decodeClient(try workspace_module.encodeRenameWorkspace(&buffer, .{
         .request_id = @enumFromInt(5),
         .workspace = .{ .workspace = @enumFromInt(7) },
         .name = "runtime",
@@ -1390,61 +1314,61 @@ test "explicit workspace attachment and creation round trip" {
 test "fixed client messages round trip" {
     var buffer: [128]u8 = undefined;
 
-    const input = (try schema.decodeClient(try schema.encodePaneInput(&buffer, .{
+    const input = (try root.decodeClient(try pane_module.encodePaneInput(&buffer, .{
         .pane_id = @enumFromInt(3),
         .bytes = "abc",
     }))).pane_input;
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(3)), input.pane_id);
+    try std.testing.expectEqual(@as(id_module.PaneId, @enumFromInt(3)), input.pane_id);
     try std.testing.expectEqualStrings("abc", input.bytes);
 
-    const resize = (try schema.decodeClient(try schema.encodePaneResize(&buffer, .{
+    const resize = (try root.decodeClient(try pane_module.encodePaneResize(&buffer, .{
         .pane_id = @enumFromInt(3),
         .size = .{ .cols = 90, .rows = 30 },
     }))).pane_resize;
-    try std.testing.expectEqual(schema.TerminalSize{ .cols = 90, .rows = 30 }, resize.size);
+    try std.testing.expectEqual(TerminalSizeType{ .cols = 90, .rows = 30 }, resize.size);
 
-    const ack = (try schema.decodeClient(try schema.encodeFrameAck(&buffer, .{
+    const ack = (try root.decodeClient(try pane_module.encodeFrameAck(&buffer, .{
         .pane_id = @enumFromInt(3),
         .frame_id = 8,
     }))).frame_ack;
     try std.testing.expectEqual(@as(u64, 8), ack.frame_id);
 
-    const credit = (try schema.decodeClient(try schema.encodeGraphicsCredit(&buffer, .{
+    const credit = (try root.decodeClient(try graphics.encodeGraphicsCredit(&buffer, .{
         .pane_id = @enumFromInt(3),
         .bytes = 4096,
     }))).graphics_credit;
     try std.testing.expectEqual(@as(u64, 4096), credit.bytes);
-    try std.testing.expectError(error.InvalidGraphicsCredit, schema.encodeGraphicsCredit(&buffer, .{
+    try std.testing.expectError(error.InvalidGraphicsCredit, graphics.encodeGraphicsCredit(&buffer, .{
         .pane_id = @enumFromInt(3),
         .bytes = 0,
     }));
 
-    const snapshot = (try schema.decodeClient(try schema.encodeRequestSnapshot(&buffer, .{
+    const snapshot = (try root.decodeClient(try pane_module.encodeRequestSnapshot(&buffer, .{
         .pane_id = @enumFromInt(3),
         .known_frame_id = 7,
     }))).request_snapshot;
     try std.testing.expectEqual(@as(u64, 7), snapshot.known_frame_id);
 
-    const detach = (try schema.decodeClient(try schema.encodeDetachPane(&buffer, .{ .pane_id = @enumFromInt(3) }))).detach_pane;
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(3)), detach.pane_id);
+    const detach = (try root.decodeClient(try pane_module.encodeDetachPane(&buffer, .{ .pane_id = @enumFromInt(3) }))).detach_pane;
+    try std.testing.expectEqual(@as(id_module.PaneId, @enumFromInt(3)), detach.pane_id);
 
-    try std.testing.expect((try schema.decodeClient(try schema.encodeRuntimeStop(&buffer))) == .runtime_stop);
+    try std.testing.expect((try root.decodeClient(try runtime.encodeRuntimeStop(&buffer))) == .runtime_stop);
 }
 
 test "multi-pane client messages round trip" {
     var buffer: [512]u8 = undefined;
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(7) },
         .tab_id = @enumFromInt(3),
     };
 
-    const snapshot = (try schema.decodeClient(try schema.encodeRequestTabSnapshot(&buffer, .{
+    const snapshot = (try root.decodeClient(try tab_module.encodeRequestTabSnapshot(&buffer, .{
         .request_id = @enumFromInt(20),
         .location = location,
     }))).request_tab_snapshot;
     try std.testing.expect(std.meta.eql(location, snapshot.location));
 
-    const created = (try schema.decodeClient(try schema.encodeCreatePane(&buffer, .{
+    const created = (try root.decodeClient(try pane_module.encodeCreatePane(&buffer, .{
         .request_id = @enumFromInt(21),
         .location = location,
         .size = .{ .cols = 60, .rows = 20 },
@@ -1456,9 +1380,9 @@ test "multi-pane client messages round trip" {
     }))).create_pane;
     try std.testing.expectEqual(@as(u16, 60), created.size.cols);
     try std.testing.expectEqualStrings("/work", created.launch.cwd);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(9)), created.launch.cwd_source.?);
+    try std.testing.expectEqual(@as(id_module.PaneId, @enumFromInt(9)), created.launch.cwd_source.?);
 
-    try std.testing.expectError(error.InvalidPaneId, schema.encodeCreatePane(&buffer, .{
+    try std.testing.expectError(error.InvalidPaneId, pane_module.encodeCreatePane(&buffer, .{
         .request_id = @enumFromInt(22),
         .location = location,
         .size = .{ .cols = 60, .rows = 20 },
@@ -1469,25 +1393,25 @@ test "multi-pane client messages round trip" {
         },
     }));
 
-    const closed = (try schema.decodeClient(try schema.encodeClosePane(&buffer, .{
+    const closed = (try root.decodeClient(try pane_module.encodeClosePane(&buffer, .{
         .request_id = @enumFromInt(22),
         .pane_id = @enumFromInt(8),
     }))).close_pane;
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(8)), closed.pane_id);
+    try std.testing.expectEqual(@as(id_module.PaneId, @enumFromInt(8)), closed.pane_id);
 }
 
 test "tab lifecycle client messages round trip" {
     var buffer: [4096]u8 = undefined;
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(7) };
-    const location: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(3) };
+    const workspace: types.WorkspaceLocation = .{ .workspace = @enumFromInt(7) };
+    const location: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(3) };
 
-    const requested = (try schema.decodeClient(try schema.encodeRequestWorkspaceSnapshot(&buffer, .{
+    const requested = (try root.decodeClient(try workspace_module.encodeRequestWorkspaceSnapshot(&buffer, .{
         .request_id = @enumFromInt(40),
         .workspace = workspace,
     }))).request_workspace_snapshot;
     try std.testing.expect(std.meta.eql(workspace, requested.workspace));
 
-    const created = (try schema.decodeClient(try schema.encodeCreateTab(&buffer, .{
+    const created = (try root.decodeClient(try tab_module.encodeCreateTab(&buffer, .{
         .request_id = @enumFromInt(41),
         .workspace = workspace,
         .label = "logs",
@@ -1500,39 +1424,39 @@ test "tab lifecycle client messages round trip" {
     }))).create_tab;
     try std.testing.expectEqualStrings("logs", created.label);
     try std.testing.expectEqualStrings("/work", created.launch.cwd);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(10)), created.launch.cwd_source.?);
+    try std.testing.expectEqual(@as(id_module.PaneId, @enumFromInt(10)), created.launch.cwd_source.?);
 
-    const renamed = (try schema.decodeClient(try schema.encodeRenameTab(&buffer, .{
+    const renamed = (try root.decodeClient(try tab_module.encodeRenameTab(&buffer, .{
         .request_id = @enumFromInt(42),
         .location = location,
         .label = "server",
     }))).rename_tab;
     try std.testing.expectEqualStrings("server", renamed.label);
 
-    const closed = (try schema.decodeClient(try schema.encodeCloseTab(&buffer, .{
+    const closed = (try root.decodeClient(try tab_module.encodeCloseTab(&buffer, .{
         .request_id = @enumFromInt(43),
         .location = location,
     }))).close_tab;
     try std.testing.expectEqualDeep(location, closed.location);
 
-    const moved = (try schema.decodeClient(try schema.encodeMoveTab(&buffer, .{
+    const moved = (try root.decodeClient(try tab_module.encodeMoveTab(&buffer, .{
         .request_id = @enumFromInt(44),
         .location = location,
         .direction = .previous,
     }))).move_tab;
-    try std.testing.expectEqual(schema.TabMoveDirection.previous, moved.direction);
+    try std.testing.expectEqual(types.TabMoveDirection.previous, moved.direction);
 }
 
 test "tab lifecycle server messages round trip" {
     var buffer: [4096]u8 = undefined;
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(7) };
-    const location: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(3) };
-    const descriptors = [_]schema.TabDescriptor{
+    const workspace: types.WorkspaceLocation = .{ .workspace = @enumFromInt(7) };
+    const location: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(3) };
+    const descriptors = [_]TabDescriptorType{
         .{ .tab_id = @enumFromInt(3), .position = 0, .pane_count = 2, .label = "main" },
         .{ .tab_id = @enumFromInt(4), .position = 1, .pane_count = 1, .label = "logs" },
     };
 
-    const snapshot = (try schema.decodeServer(try schema.encodeWorkspaceSnapshot(&buffer, .{
+    const snapshot = (try root.decodeServer(try workspace_module.encodeWorkspaceSnapshot(&buffer, .{
         .request_id = @enumFromInt(50),
         .workspace = workspace,
         .name = "telar",
@@ -1544,7 +1468,7 @@ test "tab lifecycle server messages round trip" {
     try std.testing.expectEqualDeep(descriptors[1], (try tabs.next()).?);
     try std.testing.expect((try tabs.next()) == null);
 
-    const created = (try schema.decodeServer(try schema.encodeTabCreated(&buffer, .{
+    const created = (try root.decodeServer(try tab_module.encodeTabCreated(&buffer, .{
         .request_id = @enumFromInt(51),
         .location = location,
         .position = 1,
@@ -1553,29 +1477,29 @@ test "tab lifecycle server messages round trip" {
     }))).tab_created;
     try std.testing.expectEqualStrings("logs", created.label);
 
-    const renamed = (try schema.decodeServer(try schema.encodeTabRenamed(&buffer, .{
+    const renamed = (try root.decodeServer(try tab_module.encodeTabRenamed(&buffer, .{
         .request_id = @enumFromInt(52),
         .location = location,
         .label = "server",
     }))).tab_renamed;
     try std.testing.expectEqualStrings("server", renamed.label);
 
-    const closed = (try schema.decodeServer(try schema.encodeTabClosed(&buffer, .{
+    const closed = (try root.decodeServer(try tab_module.encodeTabClosed(&buffer, .{
         .request_id = @enumFromInt(53),
         .location = location,
         .workspace_closed = false,
     }))).tab_closed;
     try std.testing.expect(!closed.workspace_closed);
 
-    const lifecycle_closed = (try schema.decodeServer(try schema.encodeTabClosed(&buffer, .{
+    const lifecycle_closed = (try root.decodeServer(try tab_module.encodeTabClosed(&buffer, .{
         .request_id = .none,
         .location = location,
         .workspace_closed = true,
     }))).tab_closed;
-    try std.testing.expectEqual(schema.RequestId.none, lifecycle_closed.request_id);
+    try std.testing.expectEqual(id_module.RequestId.none, lifecycle_closed.request_id);
     try std.testing.expect(lifecycle_closed.workspace_closed);
 
-    const moved = (try schema.decodeServer(try schema.encodeTabMoved(&buffer, .{
+    const moved = (try root.decodeServer(try tab_module.encodeTabMoved(&buffer, .{
         .request_id = @enumFromInt(54),
         .location = location,
         .position = 0,
@@ -1585,7 +1509,7 @@ test "tab lifecycle server messages round trip" {
 
 test "history queries round trip with scopes" {
     var buffer: [2048]u8 = undefined;
-    const cwd = (try schema.decodeClient(try schema.encodeQueryHistory(&buffer, .{
+    const cwd = (try root.decodeClient(try history.encodeQueryHistory(&buffer, .{
         .request_id = @enumFromInt(31),
         .query = "zig build",
         .scope = .cwd,
@@ -1594,22 +1518,22 @@ test "history queries round trip with scopes" {
         .limit = 12,
     }))).query_history;
     try std.testing.expectEqualStrings("zig build", cwd.query);
-    try std.testing.expectEqual(schema.HistoryScope.cwd, cwd.scope);
+    try std.testing.expectEqual(types.HistoryScope.cwd, cwd.scope);
     try std.testing.expectEqualStrings("/work/telar", cwd.scope_value);
     try std.testing.expect(cwd.failed_only);
     try std.testing.expectEqual(@as(u16, 12), cwd.limit);
 
-    const pane = (try schema.decodeClient(try schema.encodeQueryHistory(&buffer, .{
+    const pane = (try root.decodeClient(try history.encodeQueryHistory(&buffer, .{
         .request_id = @enumFromInt(32),
         .scope = .pane,
         .pane_id = @enumFromInt(9),
     }))).query_history;
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(9)), pane.pane_id);
+    try std.testing.expectEqual(@as(id_module.PaneId, @enumFromInt(9)), pane.pane_id);
 }
 
 test "fixed server messages round trip" {
     var buffer: [128]u8 = undefined;
-    const opened = (try schema.decodeServer(try schema.encodePaneOpened(&buffer, .{
+    const opened = (try root.decodeServer(try pane_module.encodePaneOpened(&buffer, .{
         .request_id = @enumFromInt(5),
         .pane_id = @enumFromInt(12),
         .location = .{
@@ -1619,14 +1543,14 @@ test "fixed server messages round trip" {
         .created = true,
     }))).pane_opened;
     try std.testing.expect(opened.created);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(12)), opened.pane_id);
+    try std.testing.expectEqual(@as(id_module.PaneId, @enumFromInt(12)), opened.pane_id);
     try std.testing.expectEqual(
-        @as(schema.WorkspaceId, @enumFromInt(2)),
+        @as(id_module.WorkspaceId, @enumFromInt(2)),
         opened.location.workspace.workspace,
     );
-    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), opened.location.tab_id);
+    try std.testing.expectEqual(@as(id_module.TabId, @enumFromInt(4)), opened.location.tab_id);
 
-    const worktree_opened = (try schema.decodeServer(try schema.encodePaneOpened(&buffer, .{
+    const worktree_opened = (try root.decodeServer(try pane_module.encodePaneOpened(&buffer, .{
         .request_id = @enumFromInt(6),
         .pane_id = @enumFromInt(13),
         .location = .{
@@ -1636,35 +1560,35 @@ test "fixed server messages round trip" {
         .created = false,
     }))).pane_opened;
     try std.testing.expectEqual(
-        @as(schema.WorktreeId, @enumFromInt(3)),
+        @as(id_module.WorktreeId, @enumFromInt(3)),
         worktree_opened.location.workspace.worktree,
     );
 
-    const exited = (try schema.decodeServer(try schema.encodePaneExited(&buffer, .{
+    const exited = (try root.decodeServer(try pane_module.encodePaneExited(&buffer, .{
         .pane_id = @enumFromInt(12),
         .kind = .exited,
         .value = 7,
     }))).pane_exited;
     try std.testing.expectEqual(@as(u32, 7), exited.value);
 
-    const failed = (try schema.decodeServer(try schema.encodeRequestFailed(&buffer, .{
+    const failed = (try root.decodeServer(try runtime.encodeRequestFailed(&buffer, .{
         .request_id = @enumFromInt(5),
         .code = .pane_not_found,
         .message = "pane 12 does not exist",
     }))).request_failed;
-    try std.testing.expectEqual(schema.FailureCode.pane_not_found, failed.code);
+    try std.testing.expectEqual(types.FailureCode.pane_not_found, failed.code);
     try std.testing.expectEqualStrings("pane 12 does not exist", failed.message);
 
-    try std.testing.expect((try schema.decodeServer(try schema.encodeRuntimeStopping(&buffer))) == .runtime_stopping);
+    try std.testing.expect((try root.decodeServer(try runtime.encodeRuntimeStopping(&buffer))) == .runtime_stopping);
 }
 
 test "tab snapshots preserve ordered pane descriptors" {
-    const panes = [_]schema.PaneDescriptor{
+    const panes = [_]PaneDescriptorType{
         .{ .pane_id = @enumFromInt(3), .lifecycle = .running },
         .{ .pane_id = @enumFromInt(9), .lifecycle = .exited },
     };
     var buffer: [128]u8 = undefined;
-    const snapshot = (try schema.decodeServer(try schema.encodeTabSnapshot(&buffer, .{
+    const snapshot = (try root.decodeServer(try tab_module.encodeTabSnapshot(&buffer, .{
         .request_id = @enumFromInt(4),
         .location = .{
             .workspace = .{ .worktree = @enumFromInt(2) },
@@ -1681,7 +1605,7 @@ test "tab snapshots preserve ordered pane descriptors" {
 }
 
 test "history results preserve nullable exits and command metadata" {
-    const entries = [_]schema.HistoryEntry{
+    const entries = [_]HistoryEntryType{
         .{
             .id = 11,
             .pane_id = @enumFromInt(3),
@@ -1707,7 +1631,7 @@ test "history results preserve nullable exits and command metadata" {
         },
     };
     var buffer: [4096]u8 = undefined;
-    const results = (try schema.decodeServer(try schema.encodeHistoryResults(&buffer, .{
+    const results = (try root.decodeServer(try history.encodeHistoryResults(&buffer, .{
         .request_id = @enumFromInt(33),
         .entries = &entries,
     }))).history_results;
@@ -1719,10 +1643,10 @@ test "history results preserve nullable exits and command metadata" {
 }
 
 test "pane frames use the server envelope" {
-    const cells = [_]ui.Cell{.{}};
-    const spans = [_]frame.Span{.{ .start = 0, .cells = &cells }};
+    const cells = [_]CellType{.{}};
+    const spans = [_]SpanType{.{ .start = 0, .cells = &cells }};
     var buffer: [128]u8 = undefined;
-    const message = frame.Frame{
+    const message = FrameType{
         .pane_id = @enumFromInt(4),
         .frame_id = 1,
         .base_frame_id = 0,
@@ -1733,8 +1657,8 @@ test "pane frames use the server envelope" {
         .spans = &spans,
     };
 
-    const decoded = (try schema.decodeServer(try schema.encodePaneFrame(&buffer, message))).pane_frame;
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(4)), decoded.pane_id);
+    const decoded = (try root.decodeServer(try pane_module.encodePaneFrame(&buffer, message))).pane_frame;
+    try std.testing.expectEqual(@as(id_module.PaneId, @enumFromInt(4)), decoded.pane_id);
     try std.testing.expectEqualDeep(message.input_modes, decoded.input_modes);
     var span_iterator = decoded.spans();
     var cell_iterator = ((try span_iterator.next()).?).cells();
@@ -1749,10 +1673,10 @@ test "pane frames preserve every pointer shape and reject unknown wire values" {
     for (0..256) |value| {
         payload[pointer_offset] = @intCast(value);
         if (std.enums.fromInt(frame.PointerShape, @as(u8, @intCast(value)))) |shape| {
-            const decoded = (try schema.decodeServer(payload)).pane_frame;
+            const decoded = (try root.decodeServer(payload)).pane_frame;
             try std.testing.expectEqual(shape, decoded.pointer_shape);
         } else {
-            try std.testing.expectError(error.InvalidPointerShape, schema.decodeServer(payload));
+            try std.testing.expectError(error.InvalidPointerShape, root.decodeServer(payload));
         }
     }
 }
@@ -1764,21 +1688,21 @@ test "pane frames reject unsupported keyboard flags" {
     const keyboard_flags_offset = 1 + 24 + 4 + 5 + 3 + 6;
     for ([_]u8{ 32, 64, 128, 255 }) |flags| {
         payload[keyboard_flags_offset] = flags;
-        try std.testing.expectError(error.InvalidKeyboardFlags, schema.decodeServer(payload));
+        try std.testing.expectError(error.InvalidKeyboardFlags, root.decodeServer(payload));
     }
 }
 
 test "malformed application messages are rejected" {
-    try std.testing.expectError(error.UnknownMessage, schema.decodeClient(&.{0xff}));
-    try std.testing.expectError(error.Truncated, schema.decodeClient(&.{@intFromEnum(schema.ClientTag.pane_resize)}));
+    try std.testing.expectError(error.UnknownMessage, root.decodeClient(&.{0xff}));
+    try std.testing.expectError(error.Truncated, root.decodeClient(&.{@intFromEnum(tags.ClientTag.pane_resize)}));
 
     var buffer: [64]u8 = undefined;
-    try std.testing.expectError(error.InvalidRequestId, schema.encodeOpenPane(&buffer, .{
+    try std.testing.expectError(error.InvalidRequestId, pane_module.encodeOpenPane(&buffer, .{
         .request_id = .none,
         .size = .{ .cols = 80, .rows = 24 },
         .launch = .{ .cwd = "/tmp", .arguments = &.{"/bin/sh"} },
     }));
-    try std.testing.expectError(error.EmbeddedNul, schema.encodeOpenPane(&buffer, .{
+    try std.testing.expectError(error.EmbeddedNul, pane_module.encodeOpenPane(&buffer, .{
         .request_id = @enumFromInt(1),
         .size = .{ .cols = 80, .rows = 24 },
         .launch = .{
@@ -1786,12 +1710,12 @@ test "malformed application messages are rejected" {
             .arguments = &.{"bad\x00argument"},
         },
     }));
-    try std.testing.expectError(error.InvalidPaneId, schema.encodePaneInput(&buffer, .{
+    try std.testing.expectError(error.InvalidPaneId, pane_module.encodePaneInput(&buffer, .{
         .pane_id = .invalid,
         .bytes = "x",
     }));
 
-    const agent_entry: schema.AgentSnapshotEntry = .{
+    const agent_entry: AgentSnapshotEntryType = .{
         .pane_id = @enumFromInt(3),
         .pane_generation = 4,
         .location = .{
@@ -1814,14 +1738,14 @@ test "malformed application messages are rejected" {
         .observed_at_ms = 7,
         .expires_at_ms = 8,
     };
-    const duplicate_entries = [_]schema.AgentSnapshotEntry{ agent_entry, agent_entry };
+    const duplicate_entries = [_]AgentSnapshotEntryType{ agent_entry, agent_entry };
     var agent_buffer: [1024]u8 = undefined;
-    try std.testing.expectError(error.DuplicateAgentEntry, schema.encodeAgentSnapshot(
+    try std.testing.expectError(error.DuplicateAgentEntry, agent_module.encodeAgentSnapshot(
         &agent_buffer,
         .{ .revision = 1, .entries = &duplicate_entries },
     ));
 
-    const single = try schema.encodeAgentSnapshot(
+    const single = try agent_module.encodeAgentSnapshot(
         &agent_buffer,
         .{ .revision = 1, .entries = &.{agent_entry} },
     );
@@ -1831,16 +1755,16 @@ test "malformed application messages are rejected" {
     std.mem.writeInt(u16, agent_buffer[1 + @sizeOf(u64) .. entry_offset], 2, .little);
     try std.testing.expectError(
         error.DuplicateAgentEntry,
-        schema.decodeServer(agent_buffer[0 .. single.len + entry_len]),
+        root.decodeServer(agent_buffer[0 .. single.len + entry_len]),
     );
 }
 
 test "agent snapshot display fields are bounded and validated before allocation" {
-    const workspace = [_]u8{'w'} ** schema.max_agent_workspace_label_bytes;
-    const tab = [_]u8{'t'} ** schema.max_tab_label_bytes;
-    const title = [_]u8{'s'} ** schema.max_agent_session_title_bytes;
-    const cwd = [_]u8{'c'} ** schema.max_agent_cwd_label_bytes;
-    var entry: schema.AgentSnapshotEntry = .{
+    const workspace = [_]u8{'w'} ** types.max_agent_workspace_label_bytes;
+    const tab = [_]u8{'t'} ** types.max_tab_label_bytes;
+    const title = [_]u8{'s'} ** types.max_agent_session_title_bytes;
+    const cwd = [_]u8{'c'} ** types.max_agent_cwd_label_bytes;
+    var entry: AgentSnapshotEntryType = .{
         .pane_id = @enumFromInt(3),
         .pane_generation = 4,
         .location = .{
@@ -1866,11 +1790,11 @@ test "agent snapshot display fields are bounded and validated before allocation"
         .expires_at_ms = 8,
     };
     var buffer: [1024]u8 = undefined;
-    const encoded = try schema.encodeAgentSnapshot(&buffer, .{
+    const encoded = try agent_module.encodeAgentSnapshot(&buffer, .{
         .revision = 1,
         .entries = &.{entry},
     });
-    var iterator = (try schema.decodeServer(encoded)).agent_snapshot.entries();
+    var iterator = (try root.decodeServer(encoded)).agent_snapshot.entries();
     const decoded = (try iterator.next()).?;
     try std.testing.expectEqualSlices(u8, &workspace, decoded.workspace_label);
     try std.testing.expectEqualSlices(u8, &tab, decoded.tab_label);
@@ -1878,48 +1802,48 @@ test "agent snapshot display fields are bounded and validated before allocation"
     try std.testing.expectEqualSlices(u8, &cwd, decoded.cwd_label);
     try std.testing.expect((try iterator.next()) == null);
 
-    const workspace_too_long = [_]u8{'x'} ** (schema.max_agent_workspace_label_bytes + 1);
+    const workspace_too_long = [_]u8{'x'} ** (types.max_agent_workspace_label_bytes + 1);
     entry.workspace_label = &workspace_too_long;
-    try std.testing.expectError(error.InvalidByteString, schema.encodeAgentSnapshot(
+    try std.testing.expectError(error.InvalidByteString, agent_module.encodeAgentSnapshot(
         &buffer,
         .{ .revision = 2, .entries = &.{entry} },
     ));
     entry.workspace_label = &workspace;
-    const tab_too_long = [_]u8{'x'} ** (schema.max_tab_label_bytes + 1);
+    const tab_too_long = [_]u8{'x'} ** (types.max_tab_label_bytes + 1);
     entry.tab_label = &tab_too_long;
-    try std.testing.expectError(error.InvalidByteString, schema.encodeAgentSnapshot(
+    try std.testing.expectError(error.InvalidByteString, agent_module.encodeAgentSnapshot(
         &buffer,
         .{ .revision = 3, .entries = &.{entry} },
     ));
     entry.tab_label = &tab;
-    const title_too_long = [_]u8{'x'} ** (schema.max_agent_session_title_bytes + 1);
+    const title_too_long = [_]u8{'x'} ** (types.max_agent_session_title_bytes + 1);
     entry.session_title = &title_too_long;
-    try std.testing.expectError(error.InvalidByteString, schema.encodeAgentSnapshot(
+    try std.testing.expectError(error.InvalidByteString, agent_module.encodeAgentSnapshot(
         &buffer,
         .{ .revision = 4, .entries = &.{entry} },
     ));
     entry.session_title = &title;
-    const cwd_too_long = [_]u8{'x'} ** (schema.max_agent_cwd_label_bytes + 1);
+    const cwd_too_long = [_]u8{'x'} ** (types.max_agent_cwd_label_bytes + 1);
     entry.cwd_label = &cwd_too_long;
-    try std.testing.expectError(error.InvalidByteString, schema.encodeAgentSnapshot(
+    try std.testing.expectError(error.InvalidByteString, agent_module.encodeAgentSnapshot(
         &buffer,
         .{ .revision = 5, .entries = &.{entry} },
     ));
     entry.cwd_label = &cwd;
     entry.workspace_label = "bad\nlabel";
-    try std.testing.expectError(error.InvalidAgentDisplayText, schema.encodeAgentSnapshot(
+    try std.testing.expectError(error.InvalidAgentDisplayText, agent_module.encodeAgentSnapshot(
         &buffer,
         .{ .revision = 6, .entries = &.{entry} },
     ));
     entry.workspace_label = "\xff";
-    try std.testing.expectError(error.InvalidUtf8, schema.encodeAgentSnapshot(
+    try std.testing.expectError(error.InvalidUtf8, agent_module.encodeAgentSnapshot(
         &buffer,
         .{ .revision = 7, .entries = &.{entry} },
     ));
     entry.workspace_label = &workspace;
     entry.title_source = .generated;
     entry.title_state = .pending;
-    try std.testing.expectError(error.InvalidAgentTitle, schema.encodeAgentSnapshot(
+    try std.testing.expectError(error.InvalidAgentTitle, agent_module.encodeAgentSnapshot(
         &buffer,
         .{ .revision = 8, .entries = &.{entry} },
     ));
@@ -1927,7 +1851,7 @@ test "agent snapshot display fields are bounded and validated before allocation"
 
 test "truncated client and server messages are rejected" {
     var client_buffer: [256]u8 = undefined;
-    const client_payload = try schema.encodeOpenPane(&client_buffer, .{
+    const client_payload = try pane_module.encodeOpenPane(&client_buffer, .{
         .request_id = @enumFromInt(1),
         .size = .{ .cols = 80, .rows = 24 },
         .launch = .{
@@ -1936,11 +1860,11 @@ test "truncated client and server messages are rejected" {
         },
     });
     for (0..client_payload.len) |length| {
-        try std.testing.expectError(error.Truncated, schema.decodeClient(client_payload[0..length]));
+        try std.testing.expectError(error.Truncated, root.decodeClient(client_payload[0..length]));
     }
 
     var server_buffer: [128]u8 = undefined;
-    const server_payload = try schema.encodePaneOpened(&server_buffer, .{
+    const server_payload = try pane_module.encodePaneOpened(&server_buffer, .{
         .request_id = @enumFromInt(1),
         .pane_id = @enumFromInt(2),
         .location = .{
@@ -1950,21 +1874,21 @@ test "truncated client and server messages are rejected" {
         .created = true,
     });
     for (0..server_payload.len) |length| {
-        try std.testing.expectError(error.Truncated, schema.decodeServer(server_payload[0..length]));
+        try std.testing.expectError(error.Truncated, root.decodeServer(server_payload[0..length]));
     }
 }
 
 test "client layout schema validates trees focus and chrome-only recovery" {
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(7) },
         .tab_id = @enumFromInt(3),
     };
-    var buffer: [schema.max_client_layout_wire_bytes]u8 = undefined;
-    const incomplete = [_]schema.ClientLayoutNode{
+    var buffer: [types.max_client_layout_wire_bytes]u8 = undefined;
+    const incomplete = [_]types.ClientLayoutNode{
         .{ .split = .{ .axis = .horizontal, .ratio = 5000 } },
         .{ .pane = @enumFromInt(5) },
     };
-    try std.testing.expectError(error.InvalidClientLayoutTree, schema.encodeClientLayoutUpdate(&buffer, .{
+    try std.testing.expectError(error.InvalidClientLayoutTree, layout.encodeClientLayoutUpdate(&buffer, .{
         .sidebar_visible = true,
         .sidebar_width = 62,
         .workspace_list_collapsed = false,
@@ -1978,12 +1902,12 @@ test "client layout schema validates trees focus and chrome-only recovery" {
         }},
     }));
 
-    const duplicate = [_]schema.ClientLayoutNode{
+    const duplicate = [_]types.ClientLayoutNode{
         .{ .split = .{ .axis = .vertical, .ratio = 5000 } },
         .{ .pane = @enumFromInt(5) },
         .{ .pane = @enumFromInt(5) },
     };
-    try std.testing.expectError(error.DuplicatePane, schema.encodeClientLayoutUpdate(&buffer, .{
+    try std.testing.expectError(error.DuplicatePane, layout.encodeClientLayoutUpdate(&buffer, .{
         .sidebar_visible = true,
         .sidebar_width = 62,
         .workspace_list_collapsed = false,
@@ -1997,8 +1921,8 @@ test "client layout schema validates trees focus and chrome-only recovery" {
         }},
     }));
 
-    const pane = [_]schema.ClientLayoutNode{.{ .pane = @enumFromInt(5) }};
-    const single_fullscreen = try schema.encodeClientLayoutUpdate(&buffer, .{
+    const pane = [_]types.ClientLayoutNode{.{ .pane = @enumFromInt(5) }};
+    const single_fullscreen = try layout.encodeClientLayoutUpdate(&buffer, .{
         .sidebar_visible = true,
         .sidebar_width = 62,
         .workspace_list_collapsed = false,
@@ -2011,19 +1935,19 @@ test "client layout schema validates trees focus and chrome-only recovery" {
             .nodes = &pane,
         }},
     });
-    var single_tabs = (try schema.decodeClient(single_fullscreen)).update_client_layout.tabs();
+    var single_tabs = (try root.decodeClient(single_fullscreen)).update_client_layout.tabs();
     const single_tab = (try single_tabs.next()).?;
     try std.testing.expect(single_tab.fullscreen);
     try std.testing.expectEqual(@as(u16, 1), single_tab.node_count);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(5)), single_tab.focused_pane);
+    try std.testing.expectEqual(@as(id_module.PaneId, @enumFromInt(5)), single_tab.focused_pane);
 
-    const chrome_only = try schema.encodeClientLayoutSnapshot(&buffer, .{
+    const chrome_only = try layout.encodeClientLayoutSnapshot(&buffer, .{
         .restored = true,
         .sidebar_visible = false,
         .sidebar_width = 73,
         .workspace_list_collapsed = true,
     });
-    const restored = (try schema.decodeServer(chrome_only)).client_layout_snapshot;
+    const restored = (try root.decodeServer(chrome_only)).client_layout_snapshot;
     try std.testing.expect(restored.restored);
     try std.testing.expect(!restored.sidebar_visible);
     try std.testing.expectEqual(@as(u16, 73), restored.sidebar_width);
@@ -2034,13 +1958,13 @@ test "client layout schema validates trees focus and chrome-only recovery" {
 
 test "workspace closure handoffs are present only for a different surviving workspace" {
     var buffer: [128]u8 = undefined;
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(7) },
         .tab_id = @enumFromInt(3),
     };
     try std.testing.expectError(
         error.UnexpectedPreviousWorkspace,
-        schema.encodeTabClosed(&buffer, .{
+        tab_module.encodeTabClosed(&buffer, .{
             .request_id = .none,
             .location = location,
             .workspace_closed = false,
@@ -2049,7 +1973,7 @@ test "workspace closure handoffs are present only for a different surviving work
     );
     try std.testing.expectError(
         error.InvalidWorkspaceSuccessor,
-        schema.encodeTabClosed(&buffer, .{
+        tab_module.encodeTabClosed(&buffer, .{
             .request_id = .none,
             .location = location,
             .workspace_closed = true,
@@ -2069,11 +1993,11 @@ test "a frame past the body budget reports FrameTooLarge, not a full buffer" {
     const span_count = frame.max_span_count;
     const per_span = total / span_count;
 
-    const cells = try gpa.alloc(ui.Cell, total);
+    const cells = try gpa.alloc(CellType, total);
     defer gpa.free(cells);
     for (cells, 0..) |*cell, index| {
         cell.* = .{
-            .len = ui.Cell.max_bytes,
+            .len = CellType.max_bytes,
             .width = 1,
             .style = .{
                 .fg = if (index % 2 == 0)
@@ -2084,10 +2008,10 @@ test "a frame past the body budget reports FrameTooLarge, not a full buffer" {
                 .underline_color = .{ .rgb = .{ 4, 5, 6 } },
             },
         };
-        @memset(cell.bytes[0..ui.Cell.max_bytes], 'a');
+        @memset(cell.bytes[0..CellType.max_bytes], 'a');
     }
 
-    const spans = try gpa.alloc(frame.Span, span_count);
+    const spans = try gpa.alloc(SpanType, span_count);
     defer gpa.free(spans);
     for (spans, 0..) |*span, index| {
         const start: u32 = @intCast(index * per_span);
@@ -2097,8 +2021,8 @@ test "a frame past the body budget reports FrameTooLarge, not a full buffer" {
     // Larger than any legal frame, so the only possible failure is the budget.
     const buffer = try gpa.alloc(u8, frame.max_body_size + 128 * 1024);
     defer gpa.free(buffer);
-    try std.testing.expectError(error.FrameTooLarge, schema.encodePaneFrame(buffer, .{
-        .pane_id = try schema.id.pane(7),
+    try std.testing.expectError(error.FrameTooLarge, pane_module.encodePaneFrame(buffer, .{
+        .pane_id = try id_module.pane(7),
         .frame_id = 2,
         .base_frame_id = 1,
         .cols = cols,

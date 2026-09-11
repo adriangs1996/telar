@@ -1,27 +1,23 @@
 //! Wires semantic view interactions to existing client use cases.
 
-const workspace_capability = @import("../../../workspace/root.zig");
-const input_application = @import("telar-client").application.input;
-const agent_navigation = @import("../agents/agent_navigation.zig");
-const attachment_prompts = @import("attachment_prompts.zig");
-const name_prompts = @import("name_prompts.zig");
-const notification_flow = @import("../notifications/notifications.zig");
-const pane_focus = @import("../panes/pane_focus.zig");
-const pane_geometry = @import("../panes/pane_geometry.zig");
+const Client = @import("../../Client.zig");
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const ViewInteractionCommand = @import("telar-client").ViewInteractionCommand;
+const ViewInteractionOutcome = @import("telar-client").ViewInteractionOutcome;
+const ViewInteractionsContext = @import("ViewInteractionsContext.zig");
+const DispatchViewInteractionHandlerType = @import("telar-client").DispatchViewInteractionHandler;
+const IntentType = @import("telar-client").Intent;
+const IntentOutcomeType = @import("telar-client").IntentOutcome;
 const sidebar_toggles = @import("../notifications/sidebar_toggles.zig");
+const agent_navigation = @import("../agents/agent_navigation.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
+const pane_focus = @import("../panes/pane_focus.zig");
+const name_prompts = @import("name_prompts.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
-
-const Client = @import("../../client.zig");
-const multiplexer = workspace_capability.multiplexer;
-const view_interaction = input_application.view_interaction;
-
-pub const Outcome = view_interaction.Outcome;
-
-const Context = struct {
-    client: *Client,
-    model: *multiplexer.Model,
-};
+const notification_flow = @import("../notifications/notifications.zig");
+const attachment_prompts = @import("attachment_prompts.zig");
+const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
+const pane_geometry = @import("../panes/pane_geometry.zig");
 
 /// Applies one interaction emitted by the view and returns its pane-input
 /// routing decision.
@@ -29,12 +25,12 @@ const Context = struct {
 /// ```zig
 /// const outcome = try apply(client, model, interaction);
 /// ```
-pub fn apply(client: *Client, model: *multiplexer.Model, interaction: view_interaction.Command) !Outcome {
-    var context: Context = .{
+pub fn apply(client: *Client, model: *MultiplexerModel, interaction: ViewInteractionCommand) !ViewInteractionOutcome {
+    var context: ViewInteractionsContext = .{
         .client = client,
         .model = model,
     };
-    var use_case: view_interaction.DispatchViewInteractionHandler = .{
+    var use_case: DispatchViewInteractionHandlerType = .{
         .effects = .{
             .context = &context,
             .apply_intent = applyIntent,
@@ -46,10 +42,10 @@ pub fn apply(client: *Client, model: *multiplexer.Model, interaction: view_inter
     return use_case.execute(interaction);
 }
 
-fn applyIntent(raw_context: *anyopaque, intent: view_interaction.Intent) !view_interaction.IntentOutcome {
-    const context: *Context = @ptrCast(@alignCast(raw_context));
+fn applyIntent(raw_context: *anyopaque, intent: IntentType) !IntentOutcomeType {
+    const context: *ViewInteractionsContext = @ptrCast(@alignCast(raw_context));
     const client = context.client;
-    var outcome: view_interaction.IntentOutcome = .{};
+    var outcome: IntentOutcomeType = .{};
 
     switch (intent) {
         .none => {},
@@ -91,13 +87,13 @@ fn applyIntent(raw_context: *anyopaque, intent: view_interaction.Intent) !view_i
 }
 
 fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
-    const context: *Context = @ptrCast(@alignCast(raw_context));
+    const context: *ViewInteractionsContext = @ptrCast(@alignCast(raw_context));
 
-    @import("../../../graphics/root.zig").kitty.delivery.invalidatePlacements(&context.client.graphics_store);
+    kitty_delivery.invalidatePlacements(&context.client.graphics_store);
 }
 
 fn offerPaneGeometry(raw_context: *anyopaque) !void {
-    const context: *Context = @ptrCast(@alignCast(raw_context));
+    const context: *ViewInteractionsContext = @ptrCast(@alignCast(raw_context));
 
     try pane_geometry.offerAttached(context.client, context.model, context.client.geometry().area);
 }

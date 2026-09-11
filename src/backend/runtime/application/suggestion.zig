@@ -6,11 +6,12 @@
 //! Screen text is bounded so the whole prompt fits the engine's prompt
 //! cap, and the user never sees more than one suggested line.
 
+const Context = @import("Context.zig");
+const types = @import("../../engine/types.zig");
+const max_suggestion_request_bytes_module = @import("telar-core").max_suggestion_request_bytes;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
 const std = @import("std");
-const core = @import("telar-core");
-const engine = @import("../../engine/root.zig");
-
-const schema = core.schema;
+const max_suggestion_bytes_module = @import("telar-core").max_suggestion_bytes;
 
 /// Visible rows sent as context; the last rows hold the latest command and
 /// its output.
@@ -24,12 +25,6 @@ const instructions =
     "no quotes around the command, no explanation. If one command cannot fulfil the request, " ++
     "reply with one line starting with '#' that says why.\n";
 
-pub const Context = struct {
-    cwd: []const u8,
-    screen: []const u8,
-    request: []const u8,
-};
-
 /// Writes the complete engine prompt into `buffer`. The screen is
 /// truncated from the front so the newest rows survive; the request is
 /// always included whole because the wire bound keeps it small.
@@ -38,9 +33,9 @@ pub const Context = struct {
 /// var buffer: [engine.max_prompt_bytes]u8 = undefined;
 /// const prompt = buildPrompt(.{ .cwd = cwd, .screen = screen, .request = text }, &buffer);
 /// ```
-pub fn buildPrompt(context: Context, buffer: *[engine.max_prompt_bytes]u8) []const u8 {
-    const request = context.request[0..@min(context.request.len, schema.max_suggestion_request_bytes)];
-    const cwd = context.cwd[0..@min(context.cwd.len, schema.max_cwd_bytes)];
+pub fn buildPrompt(context: Context, buffer: *[types.max_prompt_bytes]u8) []const u8 {
+    const request = context.request[0..@min(context.request.len, max_suggestion_request_bytes_module)];
+    const cwd = context.cwd[0..@min(context.cwd.len, max_cwd_bytes_module)];
     const fixed = instructions.len + "Working directory: ".len + cwd.len + "\nLast screen rows:\n".len +
         "\nRequest: ".len + request.len + 1;
     std.debug.assert(fixed < buffer.len);
@@ -80,7 +75,7 @@ pub fn extractCommand(reply: []const u8) ?[]const u8 {
             continue;
         }
 
-        if (line.len > schema.max_suggestion_bytes) {
+        if (line.len > max_suggestion_bytes_module) {
             return null;
         }
 
@@ -107,7 +102,7 @@ fn tailOnRowBoundary(screen: []const u8, budget: usize) []const u8 {
 }
 
 test "the prompt keeps the newest screen rows inside the engine cap" {
-    var buffer: [engine.max_prompt_bytes]u8 = undefined;
+    var buffer: [types.max_prompt_bytes]u8 = undefined;
     const prompt = buildPrompt(.{ .cwd = "/work/telar", .screen = "$ zig build\nerror: x\n", .request = "fix it" }, &buffer);
     try std.testing.expect(std.mem.endsWith(u8, prompt, "Last screen rows:\n$ zig build\nerror: x\n\nRequest: fix it\n"));
     try std.testing.expect(std.mem.indexOf(u8, prompt, "Working directory: /work/telar\n") != null);
@@ -115,7 +110,7 @@ test "the prompt keeps the newest screen rows inside the engine cap" {
     const row = "0123456789" ** 20 ++ "\n";
     const long = row ** 40;
     const truncated = buildPrompt(.{ .cwd = "/", .screen = long, .request = "x" }, &buffer);
-    try std.testing.expect(truncated.len <= engine.max_prompt_bytes);
+    try std.testing.expect(truncated.len <= types.max_prompt_bytes);
     const rows = std.mem.indexOf(u8, truncated, "Last screen rows:\n").? + "Last screen rows:\n".len;
     try std.testing.expect(std.mem.startsWith(u8, truncated[rows..], "0123456789"));
     try std.testing.expect(std.mem.count(u8, truncated, "\n") < 40);
@@ -129,5 +124,5 @@ test "replies reduce to one command line" {
     try std.testing.expect(extractCommand("\n\n") == null);
     try std.testing.expect(extractCommand("``") == null);
     try std.testing.expect(extractCommand("ls\x07") == null);
-    try std.testing.expect(extractCommand("x" ** (schema.max_suggestion_bytes + 1)) == null);
+    try std.testing.expect(extractCommand("x" ** (max_suggestion_bytes_module + 1)) == null);
 }

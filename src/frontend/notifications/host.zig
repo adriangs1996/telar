@@ -1,39 +1,16 @@
 //! Host-level notification adapters: the outer terminal's OSC 9 channel and
 //! the operating system's notification service.
 
+const max_notification_title_bytes = @import("telar-core").max_notification_title_bytes;
+const max_notification_message_bytes = @import("telar-core").max_notification_message_bytes;
 const std = @import("std");
+const Payload = @import("Payload.zig");
 const builtin = @import("builtin");
-const center = @import("telar-client").notifications;
 
-const Io = std.Io;
+pub const max_payload_bytes = max_notification_title_bytes + max_notification_message_bytes + 8;
 
-pub const max_payload_bytes = center.max_title_bytes + center.max_message_bytes + 8;
-
-const command_timeout: Io.Timeout = .{
+const command_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(3) },
-};
-
-/// One owned, sanitized payload handed to the system-notification worker.
-pub const Payload = struct {
-    title: [center.max_title_bytes]u8 = undefined,
-    title_len: u8 = 0,
-    message: [center.max_message_bytes]u8 = undefined,
-    message_len: u8 = 0,
-
-    pub fn init(title: []const u8, message: []const u8) Payload {
-        var payload: Payload = .{};
-        payload.title_len = copySanitized(&payload.title, title);
-        payload.message_len = copySanitized(&payload.message, message);
-        return payload;
-    }
-
-    pub fn titleSlice(payload: *const Payload) []const u8 {
-        return payload.title[0..payload.title_len];
-    }
-
-    pub fn messageSlice(payload: *const Payload) []const u8 {
-        return payload.message[0..payload.message_len];
-    }
 };
 
 /// Posts one system notification. Runs on a worker; failure is reported but
@@ -42,7 +19,7 @@ pub const Payload = struct {
 /// ```zig
 /// try notify(io, payload);
 /// ```
-pub fn notify(io: Io, payload: Payload) !void {
+pub fn notify(io: std.Io, payload: Payload) !void {
     switch (builtin.os.tag) {
         .macos => {
             var script_buffer: [max_payload_bytes + 64]u8 = undefined;
@@ -65,7 +42,7 @@ pub fn notify(io: Io, payload: Payload) !void {
 
 /// Copies text with quotes, control bytes and backslashes removed, so a
 /// payload can be embedded in an OSC string or a quoted script argument.
-fn copySanitized(storage: []u8, text: []const u8) u8 {
+pub fn copySanitized(storage: []u8, text: []const u8) u8 {
     var len: usize = 0;
     for (text) |byte| {
         if (len == storage.len) {
@@ -80,7 +57,7 @@ fn copySanitized(storage: []u8, text: []const u8) u8 {
     return @intCast(len);
 }
 
-fn commandSucceeded(io: Io, argv: []const []const u8) bool {
+fn commandSucceeded(io: std.Io, argv: []const []const u8) bool {
     const gpa = std.heap.page_allocator;
     const result = std.process.run(gpa, io, .{
         .argv = argv,

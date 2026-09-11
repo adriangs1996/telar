@@ -1,19 +1,17 @@
 //! Writes runtime-approved pane clipboard payloads to the host terminal.
 
-const core = @import("telar-core");
-const presentation = @import("../../../presentation/root.zig");
-
-const Client = @import("../../client.zig");
-const schema = core.schema;
-const term = presentation.screen;
+const Client = @import("../../Client.zig");
+const PaneClipboardType = @import("telar-core").PaneClipboard;
+const HandlerType = @import("telar-client").PaneClipboardHandler;
+const term = @import("../../../presentation/screen_support.zig");
 
 /// Writes one borrowed pane clipboard payload as OSC 52 and flushes it.
 ///
 /// ```zig
 /// try apply(client, clipboard);
 /// ```
-pub fn apply(client: *Client, clipboard: schema.PaneClipboard) !void {
-    const handler: @import("telar-client").application.panes.pane_clipboard.Handler = .{
+pub fn apply(client: *Client, clipboard: PaneClipboardType) !void {
+    const handler: HandlerType = .{
         .clipboard = .{ .context = client, .set = setClipboard },
     };
     try handler.execute(clipboard);

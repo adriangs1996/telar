@@ -1,68 +1,16 @@
 //! Application policy for delivering one classified clipboard image result.
 
+const ClipboardImageDeliveryCapture = @import("ClipboardImageDeliveryCapture.zig");
+const DeliverClipboardImageCompletionHandler = @import("DeliverClipboardImageCompletionHandler.zig");
 const std = @import("std");
-const notification_capability = @import("../../root.zig").notifications;
-const clipboard_image = @import("clipboard_image.zig");
+const notification_capability = @import("../../notifications/notifications.zig");
 
-pub const Effects = struct {
-    context: *anyopaque,
-    publish_notification: *const fn (*anyopaque, notification_capability.Input) anyerror!void,
-};
-
-pub const DeliverClipboardImageCompletionHandler = struct {
-    effects: Effects,
-
-    /// Keeps expected and stale results quiet while translating classified
-    /// media failures into bounded notifications.
-    ///
-    /// ```zig
-    /// try handler.execute(outcome);
-    /// ```
-    pub fn execute(handler: *DeliverClipboardImageCompletionHandler, outcome: clipboard_image.CompletionOutcome) !void {
-        const input: notification_capability.Input = switch (outcome) {
-            .applied, .stale, .ignored, .no_image => return,
-            .too_large => .{
-                .level = .failure,
-                .title = "Image preview skipped",
-                .message = "The clipboard image exceeds Telar's local preview limit",
-            },
-            .worker_failed, .adoption_failed => |err| .{
-                .level = .failure,
-                .title = "Image preview failed",
-                .message = @errorName(err),
-            },
-        };
-
-        try handler.effects.publish_notification(handler.effects.context, input);
-    }
-};
-
-const Capture = struct {
-    calls: usize = 0,
-    input: ?notification_capability.Input = null,
-    fail: bool = false,
-
-    fn effects(capture: *Capture) Effects {
-        return .{ .context = capture, .publish_notification = publishNotification };
-    }
-
-    fn publishNotification(context: *anyopaque, input: notification_capability.Input) !void {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-        capture.input = input;
-
-        if (capture.fail) {
-            return error.NotificationPublicationFailed;
-        }
-    }
-};
-
-fn deliveryHandler(capture: *Capture) DeliverClipboardImageCompletionHandler {
+fn deliveryHandler(capture: *ClipboardImageDeliveryCapture) DeliverClipboardImageCompletionHandler {
     return .{ .effects = capture.effects() };
 }
 
 test "DeliverClipboardImageCompletionHandler keeps successful and obsolete outcomes quiet" {
-    var capture: Capture = .{};
+    var capture: ClipboardImageDeliveryCapture = .{};
     var handler = deliveryHandler(&capture);
 
     try handler.execute(.applied);
@@ -74,7 +22,7 @@ test "DeliverClipboardImageCompletionHandler keeps successful and obsolete outco
 }
 
 test "DeliverClipboardImageCompletionHandler maps classified failures to notifications" {
-    var capture: Capture = .{};
+    var capture: ClipboardImageDeliveryCapture = .{};
     var handler = deliveryHandler(&capture);
 
     try handler.execute(.too_large);
@@ -99,7 +47,7 @@ test "DeliverClipboardImageCompletionHandler maps classified failures to notific
 }
 
 test "DeliverClipboardImageCompletionHandler propagates notification failure" {
-    var capture: Capture = .{ .fail = true };
+    var capture: ClipboardImageDeliveryCapture = .{ .fail = true };
     var handler = deliveryHandler(&capture);
 
     try std.testing.expectError(error.NotificationPublicationFailed, handler.execute(.too_large));

@@ -1,13 +1,11 @@
 //! Platform adapter for one host-audio worker.
 
 const std = @import("std");
+const AgentSound = @import("telar-core").AgentSound;
 const builtin = @import("builtin");
-const types = @import("types.zig");
+const Windows = @import("Windows.zig");
 
-const Io = std.Io;
-const Kind = types.Kind;
-
-const playback_timeout: Io.Timeout = .{
+const playback_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(3) },
 };
 
@@ -16,7 +14,7 @@ const playback_timeout: Io.Timeout = .{
 /// ```zig
 /// try play(io, .ready);
 /// ```
-pub fn play(io: Io, kind: Kind) !void {
+pub fn play(io: std.Io, kind: AgentSound) !void {
     switch (builtin.os.tag) {
         .macos => if (!commandSucceeded(io, &.{
             "/usr/bin/afplay",
@@ -41,7 +39,7 @@ pub fn play(io: Io, kind: Kind) !void {
     }
 }
 
-fn playLinux(io: Io, kind: Kind) !void {
+fn playLinux(io: std.Io, kind: AgentSound) !void {
     const event = switch (kind) {
         .ready => "complete",
         .needs_input => "dialog-warning",
@@ -77,7 +75,7 @@ fn playLinux(io: Io, kind: Kind) !void {
     return error.SoundUnavailable;
 }
 
-fn commandSucceeded(io: Io, argv: []const []const u8) bool {
+fn commandSucceeded(io: std.Io, argv: []const []const u8) bool {
     const gpa = std.heap.page_allocator;
     const result = std.process.run(gpa, io, .{
         .argv = argv,
@@ -93,10 +91,6 @@ fn commandSucceeded(io: Io, argv: []const []const u8) bool {
         else => false,
     };
 }
-
-const Windows = struct {
-    extern "user32" fn MessageBeep(message_type: u32) callconv(.winapi) i32;
-};
 
 test {
     std.testing.refAllDecls(@This());

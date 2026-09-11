@@ -4,155 +4,17 @@
 //! plugin names are resolved while compiling configuration so routing remains
 //! allocation-free and never retains configuration-owned memory.
 
+const CommandTab = @import("CommandTab.zig");
+const Notification = @import("Notification.zig");
+const CallbackRef = @import("CallbackRef.zig");
+const PluginAction = @import("PluginAction.zig");
 const std = @import("std");
-const core = @import("telar-core");
-
-const schema = core.schema;
-
-pub const CallbackRef = struct {
-    generation: u64,
-    id: u32,
-};
-
-pub const PluginAction = struct {
-    plugin: u64,
-    action: u64,
-};
 
 pub const SplitDirection = enum(u8) { horizontal, vertical };
 pub const Direction = enum(u8) { left, right, up, down };
 pub const SidebarDirection = enum(u8) { left, right };
 pub const TabMove = enum(u8) { previous, next };
 pub const ScrollDirection = enum(u8) { up, down };
-
-pub const Notification = struct {
-    pub const Input = struct {
-        level: schema.NotificationLevel = .info,
-        duration_ms: u32 = schema.default_notification_duration_ms,
-        target: schema.NotificationTarget = .none,
-        title: []const u8,
-        message: []const u8,
-    };
-
-    level: schema.NotificationLevel = .info,
-    duration_ms: u32 = schema.default_notification_duration_ms,
-    target: schema.NotificationTarget = .none,
-    title_bytes: [schema.max_notification_title_bytes]u8 = @splat(0),
-    title_len: u8,
-    message_bytes: [schema.max_notification_message_bytes]u8 = @splat(0),
-    message_len: u8,
-
-    /// Copies a validated notification into bounded inline storage.
-    /// For example: `const notification = try Notification.init(.{ .title = "Ready", .message = "Open result" });`.
-    pub fn init(input: Input) !Notification {
-        // Reuse the wire validator so Lua and plugins cannot construct a value
-        // that the runtime will reject after the effect batch is committed.
-        var validation_buffer: [
-            1 + 8 + 1 + 4 + 1 + 8 + 2 +
-                schema.max_notification_title_bytes + 2 +
-                schema.max_notification_message_bytes
-        ]u8 = undefined;
-        _ = try schema.encodeShowNotification(&validation_buffer, .{
-            .request_id = @enumFromInt(1),
-            .notification = .{
-                .level = input.level,
-                .duration_ms = input.duration_ms,
-                .target = input.target,
-                .title = input.title,
-                .message = input.message,
-            },
-        });
-        var value: Notification = .{
-            .level = input.level,
-            .duration_ms = input.duration_ms,
-            .target = input.target,
-            .title_len = @intCast(input.title.len),
-            .message_len = @intCast(input.message.len),
-        };
-        @memcpy(value.title_bytes[0..input.title.len], input.title);
-        @memcpy(value.message_bytes[0..input.message.len], input.message);
-        return value;
-    }
-
-    pub fn title(value: *const Notification) []const u8 {
-        return value.title_bytes[0..value.title_len];
-    }
-
-    pub fn message(value: *const Notification) []const u8 {
-        return value.message_bytes[0..value.message_len];
-    }
-};
-
-/// A command opened in its own transient tab. The tab closes when the
-/// command exits, like a popup that borrows tab machinery instead of
-/// floating chrome.
-pub const CommandTab = struct {
-    pub const max_arguments = 8;
-    pub const max_command_bytes = 224;
-    pub const max_label_bytes = 32;
-
-    argument_storage: [max_command_bytes]u8 = undefined,
-    argument_lens: [max_arguments]u8 = undefined,
-    argument_count: u8 = 0,
-    label_storage: [max_label_bytes]u8 = undefined,
-    label_len: u8 = 0,
-
-    /// Copies a bounded argv and optional label into inline storage. The
-    /// caps keep the Action union small enough for by-value keymaps. An
-    /// empty label derives from the command's basename at render time.
-    ///
-    /// ```zig
-    /// const command = try CommandTab.init(&.{"lazygit"}, "git");
-    /// ```
-    pub fn init(arguments: []const []const u8, tab_label: []const u8) !CommandTab {
-        if (arguments.len == 0 or arguments.len > max_arguments) {
-            return error.InvalidCommand;
-        }
-        if (tab_label.len > max_label_bytes) {
-            return error.InvalidTabLabel;
-        }
-
-        var command: CommandTab = .{ .argument_count = @intCast(arguments.len) };
-        var offset: usize = 0;
-        for (arguments, 0..) |item, index| {
-            if (item.len == 0 or offset + item.len > max_command_bytes) {
-                return error.InvalidCommand;
-            }
-            if (std.mem.indexOfScalar(u8, item, 0) != null) {
-                return error.InvalidCommand;
-            }
-            @memcpy(command.argument_storage[offset .. offset + item.len], item);
-            command.argument_lens[index] = @intCast(item.len);
-            offset += item.len;
-        }
-
-        @memcpy(command.label_storage[0..tab_label.len], tab_label);
-        command.label_len = @intCast(tab_label.len);
-        return command;
-    }
-
-    pub fn argument(command: *const CommandTab, index: usize) []const u8 {
-        var offset: usize = 0;
-        for (0..index) |prior| {
-            offset += command.argument_lens[prior];
-        }
-
-        return command.argument_storage[offset .. offset + command.argument_lens[index]];
-    }
-
-    /// The configured label, or the command basename.
-    ///
-    /// ```zig
-    /// const label = command.label();
-    /// ```
-    pub fn label(command: *const CommandTab) []const u8 {
-        if (command.label_len != 0) {
-            return command.label_storage[0..command.label_len];
-        }
-
-        return std.fs.path.basename(command.argument(0));
-    }
-};
 
 pub const Action = union(enum) {
     toggle_agent_mode,

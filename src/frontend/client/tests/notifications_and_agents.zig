@@ -1,91 +1,50 @@
 //! Client integration tests for notifications and agents.
 
-const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("telar-client").agents;
-const attachments = @import("../../attachments/root.zig");
-const graphics = @import("../../graphics/root.zig");
-const input_capability = @import("../../input/root.zig");
-const lua_config = @import("../../config/root.zig");
-const notifications = @import("telar-client").notifications;
-const platform = @import("../../platform/root.zig");
-const plugin_broker = @import("../../plugins/root.zig");
-const presentation = @import("../../presentation/root.zig");
-const sound_capability = @import("../../sound/root.zig");
-const workspace_capability = @import("../../workspace/root.zig");
-const keybind = input_capability.keybind;
-const kitty = graphics.kitty;
-
-const Io = std.Io;
-const File = Io.File;
-const schema = core.schema;
-const term = presentation.screen;
-
-const Client = @import("../client.zig");
-const InputHandler = @import("../resources/input_handler.zig");
-const active_pane_resources = @import("../controllers/panes/active_pane_resources.zig");
-const client_actions = @import("../controllers/input/actions.zig");
-const agent_navigation = @import("../controllers/agents/agent_navigation.zig");
-const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
-const session_application = @import("telar-client").application.session;
-const client_events = @import("../entrypoints/events.zig");
-const client_startup = @import("../controllers/session/client_startup.zig");
-const client_outbox = @import("telar-client").connection.outbox;
-const client_model = @import("telar-client").model;
-const client_telemetry = @import("../resources/telemetry.zig");
-const clipboard_images = @import("../controllers/host/clipboard_images.zig");
-const client_clock = @import("telar-client").resources.clock;
-const config_reload_worker = @import("../resources/config_reload.zig");
-const config_reloads = @import("../controllers/configuration/config_reloads.zig");
-const host_capabilities = @import("../controllers/host/host_capabilities.zig");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
-const host_resizes = @import("../controllers/host/host_resizes.zig");
-const name_prompts = @import("../controllers/input/name_prompts.zig");
-const notification_flow = @import("../controllers/notifications/notifications.zig");
-const pane_clipboards = @import("../controllers/panes/pane_clipboards.zig");
-const pane_closures = @import("../controllers/panes/pane_closures.zig");
-const pane_focus = @import("../controllers/panes/pane_focus.zig");
-const pane_focus_reports = @import("../controllers/panes/pane_focus_reports.zig");
-const pane_geometry = @import("../controllers/panes/pane_geometry.zig");
-const pane_openings = @import("../controllers/panes/pane_openings.zig");
-const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const plugin_actions = @import("../controllers/configuration/plugin_actions.zig");
-const request_lifecycle = @import("../connection/request_lifecycle.zig");
-const resync_requirements = @import("../controllers/session/resync_requirements.zig");
-const runtime_transport = @import("../entrypoints/runtime_io.zig");
+const TestHarness = @import("TestHarness.zig");
+const encodeRequestFailed_module = @import("telar-core").encodeRequestFailed;
 const server_messages = @import("../entrypoints/runtime_messages.zig");
-const sidebar_animations = @import("../controllers/notifications/sidebar_animations.zig");
-const sidebar_projection = @import("../controllers/notifications/sidebar_projection.zig");
-const tab_attachments = @import("../controllers/tabs/tab_attachments.zig");
-const tab_closures = @import("../controllers/tabs/tab_closures.zig");
-const tab_creations = @import("../controllers/tabs/tab_creations.zig");
-const tab_moves = @import("../controllers/tabs/tab_moves.zig");
-const tab_renames = @import("../controllers/tabs/tab_renames.zig");
-const tab_snapshots = @import("../controllers/tabs/tab_snapshots.zig");
-const workspace_handoffs = @import("../controllers/workspaces/workspace_handoffs.zig");
-const workspace_snapshots = @import("../controllers/workspaces/workspace_snapshots.zig");
-const InputChunk = Client.InputChunk;
-const initial_request_id = request_lifecycle.initial_request_id;
-
+const decodeServer_module = @import("telar-core").decodeServer;
+const std = @import("std");
+const NotificationsRootTarget = @import("telar-client").NotificationTarget;
+const RequestIdType = @import("telar-core").RequestId;
+const encodeNotification_module = @import("telar-core").encodeNotification;
+const notification_flow = @import("../controllers/notifications/notifications.zig");
+const LevelType = @import("telar-client").Level;
+const transition_duration_ns_module = @import("telar-client").transition_duration_ns;
+const runtime_transport = @import("../entrypoints/runtime_io.zig");
+const NotificationType = @import("telar-client").Notification;
+const ControlType = @import("telar-client").Control;
+const client_actions = @import("../controllers/input/actions.zig");
+const request_lifecycle = @import("../connection/request_lifecycle.zig");
+const NotificationLevelType = @import("telar-core").NotificationLevel;
+const NotificationTargetType = @import("telar-core").NotificationTarget;
+const default_notification_duration_ms_module = @import("telar-core").default_notification_duration_ms;
+const monotonic_module = @import("telar-client").monotonic;
+const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
+const NotificationShownType = @import("telar-core").NotificationShown;
+const DeliveryOutcomeType = @import("telar-client").DeliveryOutcome;
+const encodeNotificationShown_module = @import("telar-core").encodeNotificationShown;
+const PaneIdType = @import("telar-core").PaneId;
+const term = @import("../../presentation/screen_support.zig");
+const InputHandler = @import("../resources/InputHandler.zig");
+const encodeProxyStatus_module = @import("telar-core").encodeProxyStatus;
+const encodeSystemMetrics_module = @import("telar-core").encodeSystemMetrics;
+const SystemMetricsType = @import("telar-client").SystemMetrics;
+const ScreenType = @import("../../presentation/Screen.zig");
+const RectType = @import("telar-core").Rect;
+const encodeWorkspaceList_module = @import("telar-core").encodeWorkspaceList;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const PaneTargetType = @import("telar-core").PaneTarget;
+const encodeAgentSnapshot_module = @import("telar-core").encodeAgentSnapshot;
+const VersionType = @import("telar-client").Version;
 const support = @import("support.zig");
-
-const clientEventResourcesForTest = support.clientEventResourcesForTest;
-const reportedPaneId = support.reportedPaneId;
-const expectNonPromptVersionEqual = support.expectNonPromptVersionEqual;
-const expectNonCopyVersionEqual = support.expectNonCopyVersionEqual;
-const expectNonCopyOrViewportVersionEqual = support.expectNonCopyOrViewportVersionEqual;
-const expectNonViewportVersionEqual = support.expectNonViewportVersionEqual;
-const expectOnlyNotificationVersionChanged = support.expectOnlyNotificationVersionChanged;
-const TestHarness = support.TestHarness;
-const encodeTestingAgentSnapshot = support.encodeTestingAgentSnapshot;
-const testingConfigAdoption = support.testingConfigAdoption;
-const testingConfigAdoptionSource = support.testingConfigAdoptionSource;
-const installTestingLuaBinding = support.installTestingLuaBinding;
-const TestingPlugin = support.TestingPlugin;
-const testing_plugin_context = support.testing_plugin_context;
-const installTestingPlugin = support.installTestingPlugin;
-const installTestingAttachmentTarget = support.installTestingAttachmentTarget;
-const testingClipboardCapture = support.testingClipboardCapture;
+const sidebar_animations = @import("../controllers/notifications/sidebar_animations.zig");
+const encodeAgentSound_module = @import("telar-core").encodeAgentSound;
+const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
+const ApplicationAgentsAgentSoundOutcome = @import("telar-client").ApplicationAgentsAgentSoundOutcome;
+const AgentSoundType = @import("telar-core").AgentSound;
+const playback_support = @import("../../sound/playback_support.zig");
+const SnapshotType = @import("../../sound/Snapshot.zig");
 
 test "a failed request surfaces as a notification" {
     var harness: TestHarness = undefined;
@@ -99,12 +58,12 @@ test "a failed request surfaces as a notification" {
         .location = TestHarness.bootstrap_location,
     } });
     var payload: [256]u8 = undefined;
-    const failed = try schema.encodeRequestFailed(&payload, .{
+    const failed = try encodeRequestFailed_module(&payload, .{
         .request_id = @enumFromInt(4),
         .code = .pane_not_found,
         .message = "no such pane",
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(failed));
     try harness.settle();
     const notification = client.model.notificationSnapshot().itemAt(0).?;
 
@@ -112,18 +71,18 @@ test "a failed request surfaces as a notification" {
     try std.testing.expectEqualStrings("Could not close pane", notification.title());
     try std.testing.expectEqualStrings("no such pane", notification.message());
     try std.testing.expectEqualDeep(
-        notifications.Target{ .select_tab = TestHarness.bootstrap_location.tab_id },
+        NotificationsRootTarget{ .select_tab = TestHarness.bootstrap_location.tab_id },
         notification.target,
     );
 
-    const unknown = try schema.encodeRequestFailed(&payload, .{
+    const unknown = try encodeRequestFailed_module(&payload, .{
         .request_id = @enumFromInt(99),
         .code = .pane_not_found,
         .message = "no such request",
     });
     try std.testing.expectError(
         error.UnexpectedRequestFailure,
-        server_messages.handleServerMessage(client, try schema.decodeServer(unknown)),
+        server_messages.handleServerMessage(client, try decodeServer_module(unknown)),
     );
 }
 
@@ -132,13 +91,13 @@ test "a failed snapshot request is fatal after consuming its continuation" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    const request_id: schema.RequestId = @enumFromInt(4);
+    const request_id: RequestIdType = @enumFromInt(4);
     try client.request_lifecycle.tracker.add(request_id, .{
         .workspace_snapshot = TestHarness.bootstrap_location.workspace,
     });
 
     var payload: [256]u8 = undefined;
-    const failed = try schema.encodeRequestFailed(&payload, .{
+    const failed = try encodeRequestFailed_module(&payload, .{
         .request_id = request_id,
         .code = .workspace_not_found,
         .message = "workspace disappeared",
@@ -146,7 +105,7 @@ test "a failed snapshot request is fatal after consuming its continuation" {
 
     try std.testing.expectError(
         error.RuntimeRequestFailed,
-        server_messages.handleServerMessage(client, try schema.decodeServer(failed)),
+        server_messages.handleServerMessage(client, try decodeServer_module(failed)),
     );
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
@@ -160,7 +119,7 @@ test "a runtime notification translates and owns its wire payload" {
     const version_before = client.model.version();
     const pending_updates_before = client.presenter.pending_updates;
     var payload: [512]u8 = undefined;
-    const encoded = try schema.encodeNotification(&payload, .{
+    const encoded = try encodeNotification_module(&payload, .{
         .level = .warning,
         .duration_ms = 2500,
         .target = .{ .tab = @enumFromInt(3) },
@@ -170,22 +129,22 @@ test "a runtime notification translates and owns its wire payload" {
 
     const publication = try notification_flow.applyRuntime(
         client,
-        (try schema.decodeServer(encoded)).notification,
+        (try decodeServer_module(encoded)).notification,
     );
     @memset(&payload, 'x');
 
     const item = client.model.notificationSnapshot().itemAt(0).?;
     try std.testing.expectEqual(item.id, publication.id);
     try std.testing.expectEqual(version_before.notifications + 1, publication.notifications_revision);
-    try std.testing.expectEqual(notifications.Level.warning, item.level);
+    try std.testing.expectEqual(LevelType.warning, item.level);
     try std.testing.expectEqual(
-        notifications.Target{ .select_tab = @enumFromInt(3) },
+        NotificationsRootTarget{ .select_tab = @enumFromInt(3) },
         item.target,
     );
     try std.testing.expectEqualStrings("Agent waiting", item.title());
     try std.testing.expectEqualStrings("Review its question", item.message());
     try std.testing.expectEqual(
-        notifications.transition_duration_ns + 2500 * std.time.ns_per_ms,
+        transition_duration_ns_module + 2500 * std.time.ns_per_ms,
         item.expires_at_ns - item.transition_updated_ns,
     );
     try std.testing.expectEqual(version_before.notifications + 1, client.model.version().notifications);
@@ -198,13 +157,13 @@ test "notification action delivers one correlated runtime request without model 
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    const request_id: schema.RequestId = @enumFromInt(client.request_lifecycle.next_request_id);
+    const request_id: RequestIdType = @enumFromInt(client.request_lifecycle.next_request_id);
     const version_before = client.model.version();
     const pending_updates_before = client.presenter.pending_updates;
     try runtime_transport.enqueue(client, .{
         .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane },
     });
-    var notification = try input_capability.action.Notification.init(.{
+    var notification = try NotificationType.init(.{
         .level = .warning,
         .duration_ms = 2500,
         .target = .{ .tab = @enumFromInt(3) },
@@ -213,7 +172,7 @@ test "notification action delivers one correlated runtime request without model 
     });
 
     try std.testing.expectEqual(
-        keybind.Control.continue_routing,
+        ControlType.continue_routing,
         try client_actions.apply(client, .{ .notification = notification }),
     );
 
@@ -230,10 +189,10 @@ test "notification action delivers one correlated runtime request without model 
     const message = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(message == .show_notification);
     try std.testing.expectEqual(request_id, message.show_notification.request_id);
-    try std.testing.expectEqual(schema.NotificationLevel.warning, message.show_notification.notification.level);
+    try std.testing.expectEqual(NotificationLevelType.warning, message.show_notification.notification.level);
     try std.testing.expectEqual(@as(u32, 2500), message.show_notification.notification.duration_ms);
     try std.testing.expectEqualDeep(
-        schema.NotificationTarget{ .tab = @enumFromInt(3) },
+        NotificationTargetType{ .tab = @enumFromInt(3) },
         message.show_notification.notification.target,
     );
     try std.testing.expectEqualStrings("Agent waiting", message.show_notification.notification.title);
@@ -255,9 +214,9 @@ test "notification request rolls correlation back when transport is full" {
     const next_request_id = client.request_lifecycle.next_request_id;
     const version_before = client.model.version();
     const pending_updates_before = client.presenter.pending_updates;
-    const notification = try input_capability.action.Notification.init(.{
+    const notification = try NotificationType.init(.{
         .level = .info,
-        .duration_ms = schema.default_notification_duration_ms,
+        .duration_ms = default_notification_duration_ms_module,
         .target = .none,
         .title = "Build complete",
         .message = "Review the output",
@@ -279,7 +238,7 @@ test "notification timer commits lifecycle state before presenter observation" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    const now_ns = client_clock.monotonic(client.io);
+    const now_ns = monotonic_module(client.io);
     _ = try notification_flow.publish(client, now_ns, .{
         .title = "Building",
         .message = "Lifecycle tick",
@@ -315,7 +274,7 @@ test "an unexpected notification delivery report is rejected without effects" {
     defer harness.deinit();
     const client = harness.client;
     const version_before = client.model.version();
-    const shown: schema.NotificationShown = .{
+    const shown: NotificationShownType = .{
         .request_id = @enumFromInt(99),
         .delivered_clients = 1,
     };
@@ -336,9 +295,9 @@ test "notification delivery consumes an incompatible continuation before rejecti
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    const request_id: schema.RequestId = @enumFromInt(90);
+    const request_id: RequestIdType = @enumFromInt(90);
     try client.request_lifecycle.tracker.add(request_id, .{ .move_tab = TestHarness.bootstrap_location });
-    const shown: schema.NotificationShown = .{
+    const shown: NotificationShownType = .{
         .request_id = request_id,
         .delivered_clients = 1,
     };
@@ -361,12 +320,12 @@ test "a delivered notification report consumes correlation without model effects
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    const request_id: schema.RequestId = @enumFromInt(90);
+    const request_id: RequestIdType = @enumFromInt(90);
     const version_before = client.model.version();
     try client.request_lifecycle.tracker.add(request_id, .notification);
 
     try std.testing.expectEqual(
-        notification_flow.DeliveryOutcome.delivered,
+        DeliveryOutcomeType.delivered,
         try notification_flow.applyDeliveryReport(client, .{
             .request_id = request_id,
             .delivered_clients = 2,
@@ -386,17 +345,17 @@ test "runtime notifications and delivery failures reach the toasts" {
     const client = harness.client;
 
     var payload: [256]u8 = undefined;
-    const notification = try schema.encodeNotification(&payload, .{ .title = "hello" });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(notification));
+    const notification = try encodeNotification_module(&payload, .{ .title = "hello" });
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(notification));
     try std.testing.expect(client.notification_scheduler.pending);
     const version_after_runtime = client.model.version();
 
     try client.request_lifecycle.tracker.add(@enumFromInt(2), .notification);
-    const shown = try schema.encodeNotificationShown(&payload, .{
+    const shown = try encodeNotificationShown_module(&payload, .{
         .request_id = @enumFromInt(2),
         .delivered_clients = 0,
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(shown));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(shown));
     const snapshot = client.model.notificationSnapshot();
 
     try std.testing.expectEqual(version_after_runtime.notifications + 1, client.model.version().notifications);
@@ -408,13 +367,13 @@ test "runtime notifications and delivery failures reach the toasts" {
     );
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
 
-    const unexpected = try schema.encodeNotificationShown(&payload, .{
+    const unexpected = try encodeNotificationShown_module(&payload, .{
         .request_id = @enumFromInt(9),
         .delivered_clients = 1,
     });
     try std.testing.expectError(
         error.UnexpectedNotificationReply,
-        server_messages.handleServerMessage(client, try schema.decodeServer(unexpected)),
+        server_messages.handleServerMessage(client, try decodeServer_module(unexpected)),
     );
     try harness.settle();
 }
@@ -426,7 +385,7 @@ test "toast activation commits by id before following its navigation target" {
     try harness.bootstrap();
     const client = harness.client;
     const active = &client.model.workspace.active().?.model;
-    const second_pane: schema.PaneId = @enumFromInt(11);
+    const second_pane: PaneIdType = @enumFromInt(11);
     try active.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = second_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
     try std.testing.expect(active.focusPane(TestHarness.bootstrap_pane));
 
@@ -437,7 +396,7 @@ test "toast activation commits by id before following its navigation target" {
     });
     const item = client.model.notificationSnapshot().itemAt(0).?;
     const notification_id = item.id;
-    const visible_at_ns = item.transition_updated_ns + notifications.transition_duration_ns;
+    const visible_at_ns = item.transition_updated_ns + transition_duration_ns_module;
     _ = client.model.advanceNotifications(visible_at_ns);
 
     const composed = try client.presenter.compositor.render(.{
@@ -499,8 +458,8 @@ test "proxy status commits before announcement and presenter-owned projection" {
     const pending_updates_before = client.presenter.pending_updates;
 
     var payload: [64]u8 = undefined;
-    const enabled = try schema.encodeProxyStatus(&payload, .{ .active = true, .scope = .wildcard, .system_trusted = false });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(enabled));
+    const enabled = try encodeProxyStatus_module(&payload, .{ .active = true, .scope = .wildcard, .system_trusted = false });
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(enabled));
 
     try std.testing.expect(client.model.proxyTlsActive());
     try std.testing.expectEqual(version_before.proxy_status + 1, client.model.version().proxy_status);
@@ -513,7 +472,7 @@ test "proxy status commits before announcement and presenter-owned projection" {
         client.model.notificationSnapshot().itemAt(0).?.title(),
     );
 
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(enabled));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(enabled));
 
     try std.testing.expectEqual(version_before.proxy_status + 1, client.model.version().proxy_status);
     try std.testing.expectEqual(version_before.notifications + 1, client.model.version().notifications);
@@ -539,8 +498,8 @@ test "proxy status commits before announcement and presenter-owned projection" {
 
     const pending_updates_after_enabled = client.presenter.pending_updates;
     const version_before_disabled = client.model.version();
-    const disabled = try schema.encodeProxyStatus(&payload, .{ .active = false, .scope = .exact, .system_trusted = false });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(disabled));
+    const disabled = try encodeProxyStatus_module(&payload, .{ .active = false, .scope = .exact, .system_trusted = false });
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(disabled));
 
     try std.testing.expect(!client.model.proxyTlsActive());
     try std.testing.expectEqual(version_before_disabled.proxy_status + 1, client.model.version().proxy_status);
@@ -574,16 +533,16 @@ test "system metrics commit before presenter-owned projection" {
     const pending_updates_before = client.presenter.pending_updates;
 
     var payload: [64]u8 = undefined;
-    const metrics = try schema.encodeSystemMetrics(&payload, .{
+    const metrics = try encodeSystemMetrics_module(&payload, .{
         .revision = 7,
         .cpu_percent = 50,
         .memory_used_decigib = 10,
         .has_battery = true,
         .battery_percent = 80,
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(metrics));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(metrics));
 
-    try std.testing.expectEqualDeep(client_model.SystemMetrics{
+    try std.testing.expectEqualDeep(SystemMetricsType{
         .runtime_revision = 7,
         .cpu_percent = 50,
         .memory_used_decigib = 10,
@@ -593,7 +552,7 @@ test "system metrics commit before presenter-owned projection" {
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
     try std.testing.expect(!client.view.dirty);
 
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(metrics));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(metrics));
     try std.testing.expectEqual(version_before.system_metrics + 1, client.model.version().system_metrics);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 
@@ -625,7 +584,7 @@ test "system metrics commit before presenter-owned projection" {
     try std.testing.expect(std.mem.indexOf(u8, expanded_text, "80%") != null);
 }
 
-fn screenText(screen: *const term.Screen, area: core.ui.Rect, storage: *[512]u8) ![]const u8 {
+fn screenText(screen: *const ScreenType, area: RectType, storage: *[512]u8) ![]const u8 {
     var len: usize = 0;
     for (area.x..area.x + area.w) |x| {
         const cell = screen.front.cells[@as(usize, area.y) * screen.front.w + x];
@@ -651,14 +610,14 @@ test "workspace list snapshots commit before presenter-owned projection" {
     const pending_updates_before = client.presenter.pending_updates;
 
     var payload: [512]u8 = undefined;
-    const list = try schema.encodeWorkspaceList(&payload, .{
+    const list = try encodeWorkspaceList_module(&payload, .{
         .revision = 7,
         .entries = &.{
             .{ .workspace = @enumFromInt(1), .name = "main", .path = "/work/main", .tab_count = 1 },
             .{ .workspace = @enumFromInt(2), .name = "api", .path = "/work/api", .tab_count = 2 },
         },
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(list));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(list));
 
     try std.testing.expect(client.model.knowsWorkspace(@enumFromInt(1)));
     try std.testing.expect(client.model.knowsWorkspace(@enumFromInt(2)));
@@ -667,7 +626,7 @@ test "workspace list snapshots commit before presenter-owned projection" {
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
     try std.testing.expect(!client.view.dirty);
 
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(list));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(list));
     try std.testing.expectEqual(version_before.workspace_list + 1, client.model.version().workspace_list);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 
@@ -679,7 +638,7 @@ test "workspace list snapshots commit before presenter-owned projection" {
     var found_second = false;
     for (0..client.presenter.screen.front.w) |x| {
         const action = client.view.hits.at(@intCast(x), 0) orelse continue;
-        if (action == .select_workspace and action.select_workspace == @as(schema.WorkspaceId, @enumFromInt(2))) {
+        if (action == .select_workspace and action.select_workspace == @as(WorkspaceIdType, @enumFromInt(2))) {
             found_second = true;
             break;
         }
@@ -696,14 +655,14 @@ test "workspace position navigation resolves the committed client model" {
     client.request_lifecycle.tracker = .{};
 
     var payload: [512]u8 = undefined;
-    const list = try schema.encodeWorkspaceList(&payload, .{
+    const list = try encodeWorkspaceList_module(&payload, .{
         .revision = 1,
         .entries = &.{
             .{ .workspace = @enumFromInt(1), .name = "main", .path = "/work/main", .tab_count = 1 },
             .{ .workspace = @enumFromInt(2), .name = "api", .path = "/work/api", .tab_count = 1 },
         },
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(list));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(list));
     const pending_updates_before = client.presenter.pending_updates;
     const handler: InputHandler = .{ .client = client };
 
@@ -714,7 +673,7 @@ test "workspace position navigation resolves the committed client model" {
     try harness.settle();
 
     var message_buffer: [256]u8 = undefined;
-    var target: ?schema.PaneTarget = null;
+    var target: ?PaneTargetType = null;
     while (target == null) {
         switch (try harness.nextClientMessage(&message_buffer)) {
             .detach_pane => {},
@@ -724,7 +683,7 @@ test "workspace position navigation resolves the committed client model" {
     }
 
     try std.testing.expectEqualDeep(
-        schema.PaneTarget{ .workspace = @enumFromInt(2) },
+        PaneTargetType{ .workspace = @enumFromInt(2) },
         target.?,
     );
 }
@@ -735,7 +694,7 @@ test "an agent snapshot replaces the sidebar replica" {
     defer harness.deinit();
 
     var payload: [512]u8 = undefined;
-    const snapshot = try schema.encodeAgentSnapshot(&payload, .{
+    const snapshot = try encodeAgentSnapshot_module(&payload, .{
         .revision = 1,
         .entries = &.{.{
             .pane_id = TestHarness.bootstrap_pane,
@@ -763,7 +722,7 @@ test "an agent snapshot replaces the sidebar replica" {
     });
     const pending_updates = harness.client.presenter.pending_updates;
     harness.client.view.sidebar.scroll = 7;
-    _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(snapshot));
+    _ = try server_messages.handleServerMessage(harness.client, try decodeServer_module(snapshot));
     const agent = harness.client.model.agentSnapshot().find(.{
         .pane_id = TestHarness.bootstrap_pane,
         .pane_generation = 1,
@@ -772,7 +731,7 @@ test "an agent snapshot replaces the sidebar replica" {
     try std.testing.expectEqualStrings("test-2", agent.tabLabel());
     try std.testing.expectEqualStrings("Improve agent sidebar", agent.sessionTitle());
     try std.testing.expectEqualStrings("~/sandbox/telar", agent.cwdLabel());
-    try std.testing.expectEqual(client_model.Version{ .agents = 1 }, harness.client.model.version());
+    try std.testing.expectEqual(VersionType{ .agents = 1 }, harness.client.model.version());
     try std.testing.expectEqual(pending_updates, harness.client.presenter.pending_updates);
 
     try presentation_lifecycle.observe(harness.client);
@@ -791,8 +750,8 @@ test "sidebar animation commits model state before the presenter observes it" {
     defer harness.deinit();
     const client = harness.client;
     var payload: [512]u8 = undefined;
-    const snapshot = try encodeTestingAgentSnapshot(&payload, 1, .working);
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
+    const snapshot = try support.encodeTestingAgentSnapshot(&payload, 1, .working);
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(snapshot));
     const pending_updates = client.presenter.pending_updates;
 
     try std.testing.expect(client.sidebar_animation_scheduler.pending);
@@ -808,7 +767,7 @@ test "sidebar animation commits model state before the presenter observes it" {
     }
 
     try std.testing.expect(client.sidebar_animation_scheduler.pending);
-    try std.testing.expectEqual(client_model.Version{
+    try std.testing.expectEqual(VersionType{
         .agents = 1,
         .sidebar_animation = 1,
     }, client.model.version());
@@ -828,30 +787,30 @@ test "agent snapshot transitions raise bounded presentation alerts only once" {
     const client = harness.client;
     var payload: [512]u8 = undefined;
 
-    const initial = try encodeTestingAgentSnapshot(&payload, 1, .ready);
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(initial));
+    const initial = try support.encodeTestingAgentSnapshot(&payload, 1, .ready);
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(initial));
 
     try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
-    try std.testing.expectEqual(client_model.Version{ .agents = 1 }, client.model.version());
+    try std.testing.expectEqual(VersionType{ .agents = 1 }, client.model.version());
 
-    const changed = try encodeTestingAgentSnapshot(&payload, 2, .blocked);
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(changed));
+    const changed = try support.encodeTestingAgentSnapshot(&payload, 2, .blocked);
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(changed));
     const notification = client.model.notificationSnapshot().itemAt(0).?;
 
-    try std.testing.expectEqual(client_model.Version{ .agents = 2, .notifications = 1 }, client.model.version());
+    try std.testing.expectEqual(VersionType{ .agents = 2, .notifications = 1 }, client.model.version());
     try std.testing.expectEqual(@as(u8, 1), client.model.notificationSnapshot().count);
-    try std.testing.expectEqual(notifications.Level.warning, notification.level);
+    try std.testing.expectEqual(LevelType.warning, notification.level);
     try std.testing.expectEqualStrings("Agent needs input", notification.title());
     try std.testing.expectEqualStrings("Claude in pane 3 is waiting for input", notification.message());
     try std.testing.expectEqualDeep(
-        notifications.Target{ .focus_pane = TestHarness.bootstrap_pane },
+        NotificationsRootTarget{ .focus_pane = TestHarness.bootstrap_pane },
         notification.target,
     );
 
-    const stale = try encodeTestingAgentSnapshot(&payload, 1, .failed);
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(stale));
+    const stale = try support.encodeTestingAgentSnapshot(&payload, 1, .failed);
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(stale));
 
-    try std.testing.expectEqual(client_model.Version{ .agents = 2, .notifications = 1 }, client.model.version());
+    try std.testing.expectEqual(VersionType{ .agents = 2, .notifications = 1 }, client.model.version());
     try std.testing.expectEqual(@as(u8, 1), client.model.notificationSnapshot().count);
 }
 
@@ -861,40 +820,40 @@ test "agent sounds validate exact identity against the client model" {
     defer harness.deinit();
     const client = harness.client;
     var payload: [512]u8 = undefined;
-    const snapshot = try encodeTestingAgentSnapshot(&payload, 1, .ready);
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
+    const snapshot = try support.encodeTestingAgentSnapshot(&payload, 1, .ready);
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(snapshot));
     const version_before_sound = client.model.version();
     const pending_updates = client.presenter.pending_updates;
 
-    const unknown = try schema.encodeAgentSound(&payload, .{
+    const unknown = try encodeAgentSound_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .pane_generation = 2,
         .sound = .ready,
     });
-    const stale = try agent_sounds.apply(client, (try schema.decodeServer(unknown)).agent_sound);
+    const stale = try agent_sounds.apply(client, (try decodeServer_module(unknown)).agent_sound);
 
-    try std.testing.expectEqual(agent_sounds.Outcome.stale, stale);
+    try std.testing.expectEqual(ApplicationAgentsAgentSoundOutcome.stale, stale);
     try std.testing.expect(!client.sound_playback.snapshot().active);
 
-    const known = try schema.encodeAgentSound(&payload, .{
+    const known = try encodeAgentSound_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .pane_generation = 1,
         .sound = .ready,
     });
-    const accepted = try agent_sounds.apply(client, (try schema.decodeServer(known)).agent_sound);
+    const accepted = try agent_sounds.apply(client, (try decodeServer_module(known)).agent_sound);
 
-    try std.testing.expectEqual(agent_sounds.Outcome.accepted, accepted);
+    try std.testing.expectEqual(ApplicationAgentsAgentSoundOutcome.accepted, accepted);
     try std.testing.expect(client.sound_playback.snapshot().active);
 
-    const urgent = try schema.encodeAgentSound(&payload, .{
+    const urgent = try encodeAgentSound_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .pane_generation = 1,
         .sound = .needs_input,
     });
-    const queued = try agent_sounds.apply(client, (try schema.decodeServer(urgent)).agent_sound);
+    const queued = try agent_sounds.apply(client, (try decodeServer_module(urgent)).agent_sound);
 
-    try std.testing.expectEqual(agent_sounds.Outcome.accepted, queued);
-    try std.testing.expectEqual(schema.AgentSound.needs_input, client.sound_playback.snapshot().queued.?);
+    try std.testing.expectEqual(ApplicationAgentsAgentSoundOutcome.accepted, queued);
+    try std.testing.expectEqual(AgentSoundType.needs_input, client.sound_playback.snapshot().queued.?);
     try std.testing.expectEqualDeep(version_before_sound, client.model.version());
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 }
@@ -908,14 +867,14 @@ test "agent sound completion releases a failed worker before scheduling its succ
     const pending_updates = client.presenter.pending_updates;
 
     try std.testing.expectEqualDeep(
-        sound_capability.RequestOutcome{ .start = .ready },
+        playback_support.RequestOutcome{ .start = .ready },
         client.sound_playback.request(.ready),
     );
     try std.testing.expect(client.sound_playback.request(.needs_input) == .queued);
 
     try agent_sounds.handlePlayed(client, error.SoundUnavailable);
 
-    try std.testing.expectEqual(sound_capability.Snapshot{
+    try std.testing.expectEqual(SnapshotType{
         .configuration = .{},
         .active = true,
         .queued = null,

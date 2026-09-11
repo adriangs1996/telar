@@ -166,23 +166,23 @@ presentation state, never semantic authority inside `multiplexer.Pane`.
 
 ## Proof
 
-- `src/frontend/input/copy_mode.zig` proves fixed-state motions, selection and
+- `src/client/input/copy_mode.zig` proves fixed-state motions, selection and
   frame reconciliation.
-- `src/frontend/client/model.zig` proves entry authority, independent
+- `src/client/model/Model.zig` proves entry authority, independent
   revisions, no-ops, stale-plan rejection, frame reconciliation and exact pane
   release.
-- `src/frontend/client/application/copy_mode.zig` proves copy-before-exit and
+- `src/client/application/input/copy_mode.zig` proves copy-before-exit and
   viewport-after-commit ordering, including both failure policies.
-- `src/frontend/client/application/copy_mode_pointer.zig` proves exclusive
+- `src/client/application/input/copy_mode_pointer.zig` proves exclusive
   pointer ownership, bounded wheel movement and selected-effect failures.
-- `src/frontend/client/application/native_action.zig` proves source-independent
+- `src/client/application/input/native_action.zig` proves source-independent
   copy-mode preflight, the entry exception and partial failures.
-- `src/frontend/client/copy_modes.zig` owns the selection outbox adapter.
-- `src/frontend/presentation/screen.zig` proves exact OSC 52 encoding,
+- `src/frontend/client/controllers/input/copy_modes.zig` owns the selection outbox adapter.
+- `src/frontend/presentation/screen_support.zig` proves exact OSC 52 encoding,
   multi-chunk payloads and the terminal-side size bound.
-- `src/frontend/client/pane_viewports.zig` owns graphics visibility and
+- `src/frontend/client/controllers/panes/pane_viewports.zig` owns graphics visibility and
   runtime viewport synchronization for both normal input and copy mode.
-- `src/frontend/client/client_test.zig` proves key and pointer routing,
+- `src/frontend/client/tests/` proves key and pointer routing,
   outside-wheel consumption, missing-target exit, backpressure, clipboard
   delivery and presenter-only projection through the real client boundary.
 - `src/frontend/workspace/multiplexer.zig` proves that copy deltas belong to

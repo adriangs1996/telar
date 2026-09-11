@@ -1,19 +1,19 @@
 //! Adapts model-owned pane focus reporting and canonical retirement.
 
-const panes_application = @import("telar-client").application.panes;
-
-const Client = @import("../../client.zig");
-const pane_focus_reporting = panes_application.pane_focus_reporting;
+const Client = @import("../../Client.zig");
+const ApplicationPanesPaneFocusReportingOutcome = @import("telar-client").ApplicationPanesPaneFocusReportingOutcome;
+const RetireReportedPaneFocusHandlerType = @import("telar-client").RetireReportedPaneFocusHandler;
+const PaneFocusReportingHandlerType = @import("telar-client").PaneFocusReportingHandler;
+const PaneFocusReportingEffects = @import("telar-client").PaneFocusReportingEffects;
+const DeliveryType = @import("telar-client").PaneFocusDelivery;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
-
-pub const Outcome = pane_focus_reporting.Outcome;
 
 /// Synchronizes the active focused pane with child focus reporting.
 ///
 /// ```zig
 /// _ = try sync(client);
 /// ```
-pub fn sync(client: *Client) !Outcome {
+pub fn sync(client: *Client) !ApplicationPanesPaneFocusReportingOutcome {
     var use_case = handler(client);
 
     return use_case.execute(.sync);
@@ -24,7 +24,7 @@ pub fn sync(client: *Client) !Outcome {
 /// ```zig
 /// _ = try clear(client);
 /// ```
-pub fn clear(client: *Client) !Outcome {
+pub fn clear(client: *Client) !ApplicationPanesPaneFocusReportingOutcome {
     var use_case = handler(client);
 
     return use_case.execute(.clear);
@@ -36,15 +36,15 @@ pub fn clear(client: *Client) !Outcome {
 /// ```zig
 /// _ = retire(client);
 /// ```
-pub fn retire(client: *Client) Outcome {
-    var use_case: pane_focus_reporting.RetireReportedPaneFocusHandler = .{
+pub fn retire(client: *Client) ApplicationPanesPaneFocusReportingOutcome {
+    var use_case: RetireReportedPaneFocusHandlerType = .{
         .model = &client.model,
     };
 
     return use_case.execute();
 }
 
-fn handler(client: *Client) pane_focus_reporting.PaneFocusReportingHandler {
+fn handler(client: *Client) PaneFocusReportingHandlerType {
     return .{
         .model = &client.model,
         .effects = effects(client),
@@ -56,14 +56,14 @@ fn handler(client: *Client) pane_focus_reporting.PaneFocusReportingHandler {
 /// ```zig
 /// const focus_effects = effects(client);
 /// ```
-pub fn effects(client: *Client) pane_focus_reporting.Effects {
+pub fn effects(client: *Client) PaneFocusReportingEffects {
     return .{
         .context = client,
         .deliver = deliver,
     };
 }
 
-fn deliver(raw_context: *anyopaque, delivery: pane_focus_reporting.Delivery) !void {
+fn deliver(raw_context: *anyopaque, delivery: DeliveryType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     const bytes = switch (delivery.direction) {
         .focus_out => "\x1b[O",

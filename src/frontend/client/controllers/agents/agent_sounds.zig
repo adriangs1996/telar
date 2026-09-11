@@ -1,22 +1,19 @@
 //! Adapts runtime agent-sound messages to client application policy.
 
-const core = @import("telar-core");
-const sound_capability = @import("../../../sound/root.zig");
-const agents_application = @import("telar-client").application.agents;
-
-const Client = @import("../../client.zig");
-const agent_sound = agents_application.agent_sound;
-const schema = core.schema;
-
-pub const Outcome = agent_sound.Outcome;
+const Client = @import("../../Client.zig");
+const AgentSoundNotificationType = @import("telar-core").AgentSoundNotification;
+const ApplicationAgentsAgentSoundOutcome = @import("telar-client").ApplicationAgentsAgentSoundOutcome;
+const HandleAgentSoundHandlerType = @import("telar-client").HandleAgentSoundHandler;
+const AgentSoundType = @import("telar-core").AgentSound;
+const worker = @import("../../../sound/worker.zig");
 
 /// Translates one runtime sound and applies it to an exact current agent.
 ///
 /// ```zig
 /// const outcome = try apply(client, notification);
 /// ```
-pub fn apply(client: *Client, notification: schema.AgentSoundNotification) !Outcome {
-    var use_case: agent_sound.HandleAgentSoundHandler = .{
+pub fn apply(client: *Client, notification: AgentSoundNotificationType) !ApplicationAgentsAgentSoundOutcome {
+    var use_case: HandleAgentSoundHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = client,
@@ -46,7 +43,7 @@ pub fn handlePlayed(client: *Client, result: anyerror!void) !void {
     try start(client, next);
 }
 
-fn schedule(context: *anyopaque, sound: schema.AgentSound) !void {
+fn schedule(context: *anyopaque, sound: AgentSoundType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     switch (client.sound_playback.request(sound)) {
@@ -55,8 +52,8 @@ fn schedule(context: *anyopaque, sound: schema.AgentSound) !void {
     }
 }
 
-fn start(client: *Client, kind: schema.AgentSound) !void {
-    client.select.concurrent(.sound_played, sound_capability.play, .{ client.io, kind }) catch |err| {
+fn start(client: *Client, kind: AgentSoundType) !void {
+    client.select.concurrent(.sound_played, worker.play, .{ client.io, kind }) catch |err| {
         client.sound_playback.schedulingFailed();
         return err;
     };

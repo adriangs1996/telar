@@ -8,17 +8,10 @@
 //! manifest table. Each scan is one function tagged with the agent it reads;
 //! a configured agent has none and relies on its manifest phrases.
 
-const std = @import("std");
+const Scan = @import("Scan.zig");
 const vt = @import("ghostty-vt");
-const core = @import("telar-core");
-
-const Signal = core.agent_manifest.Signal;
-
-const Scan = struct {
-    provider: core.schema.AgentProvider,
-    confidence: u8,
-    ready: *const fn (terminal: *const vt.Terminal) bool,
-};
+const Signal = @import("telar-core").Signal;
+const std = @import("std");
 
 const scans = [_]Scan{
     .{ .provider = .claude, .confidence = 96, .ready = claudeReadyPrompt },

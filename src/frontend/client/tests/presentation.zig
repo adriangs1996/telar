@@ -1,91 +1,27 @@
 //! Client integration tests for presentation.
 
-const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("telar-client").agents;
-const attachments = @import("../../attachments/root.zig");
-const graphics = @import("../../graphics/root.zig");
-const input_capability = @import("../../input/root.zig");
-const lua_config = @import("../../config/root.zig");
-const notifications = @import("telar-client").notifications;
-const platform = @import("../../platform/root.zig");
-const plugin_broker = @import("../../plugins/root.zig");
-const presentation = @import("../../presentation/root.zig");
-const sound_capability = @import("../../sound/root.zig");
-const workspace_capability = @import("../../workspace/root.zig");
-const keybind = input_capability.keybind;
-const kitty = graphics.kitty;
-
-const Io = std.Io;
-const File = Io.File;
-const schema = core.schema;
-const term = presentation.screen;
-
-const Client = @import("../client.zig");
-const InputHandler = @import("../resources/input_handler.zig");
-const active_pane_resources = @import("../controllers/panes/active_pane_resources.zig");
-const client_actions = @import("../controllers/input/actions.zig");
-const agent_navigation = @import("../controllers/agents/agent_navigation.zig");
-const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
-const session_application = @import("telar-client").application.session;
-const client_events = @import("../entrypoints/events.zig");
-const client_startup = @import("../controllers/session/client_startup.zig");
-const client_outbox = @import("telar-client").connection.outbox;
-const client_model = @import("telar-client").model;
-const client_telemetry = @import("../resources/telemetry.zig");
-const clipboard_images = @import("../controllers/host/clipboard_images.zig");
-const client_clock = @import("telar-client").resources.clock;
-const config_reload_worker = @import("../resources/config_reload.zig");
-const config_reloads = @import("../controllers/configuration/config_reloads.zig");
-const host_capabilities = @import("../controllers/host/host_capabilities.zig");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
-const host_resizes = @import("../controllers/host/host_resizes.zig");
-const name_prompts = @import("../controllers/input/name_prompts.zig");
-const notification_flow = @import("../controllers/notifications/notifications.zig");
-const pane_clipboards = @import("../controllers/panes/pane_clipboards.zig");
-const pane_closures = @import("../controllers/panes/pane_closures.zig");
-const pane_focus = @import("../controllers/panes/pane_focus.zig");
-const pane_focus_reports = @import("../controllers/panes/pane_focus_reports.zig");
-const pane_geometry = @import("../controllers/panes/pane_geometry.zig");
-const pane_openings = @import("../controllers/panes/pane_openings.zig");
+const TestHarness = @import("TestHarness.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const plugin_actions = @import("../controllers/configuration/plugin_actions.zig");
-const request_lifecycle = @import("../connection/request_lifecycle.zig");
-const resync_requirements = @import("../controllers/session/resync_requirements.zig");
-const runtime_transport = @import("../entrypoints/runtime_io.zig");
+const std = @import("std");
+const encodeKey_module = @import("telar-client").encodeKey;
+const Chunk = @import("../controllers/input/Chunk.zig");
+const host_inputs = @import("../controllers/input/host_inputs.zig");
+const InputHandler = @import("../resources/InputHandler.zig");
+const PointerShapeType = @import("telar-core").PointerShape;
+const CellType = @import("telar-core").Cell;
+const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
 const server_messages = @import("../entrypoints/runtime_messages.zig");
-const sidebar_animations = @import("../controllers/notifications/sidebar_animations.zig");
-const sidebar_projection = @import("../controllers/notifications/sidebar_projection.zig");
-const tab_attachments = @import("../controllers/tabs/tab_attachments.zig");
-const tab_closures = @import("../controllers/tabs/tab_closures.zig");
-const tab_creations = @import("../controllers/tabs/tab_creations.zig");
-const tab_moves = @import("../controllers/tabs/tab_moves.zig");
-const tab_renames = @import("../controllers/tabs/tab_renames.zig");
-const tab_snapshots = @import("../controllers/tabs/tab_snapshots.zig");
-const workspace_handoffs = @import("../controllers/workspaces/workspace_handoffs.zig");
-const workspace_snapshots = @import("../controllers/workspaces/workspace_snapshots.zig");
-const InputChunk = Client.InputChunk;
-const initial_request_id = request_lifecycle.initial_request_id;
-
-const support = @import("support.zig");
-
-const clientEventResourcesForTest = support.clientEventResourcesForTest;
-const reportedPaneId = support.reportedPaneId;
-const expectNonPromptVersionEqual = support.expectNonPromptVersionEqual;
-const expectNonCopyVersionEqual = support.expectNonCopyVersionEqual;
-const expectNonCopyOrViewportVersionEqual = support.expectNonCopyOrViewportVersionEqual;
-const expectNonViewportVersionEqual = support.expectNonViewportVersionEqual;
-const expectOnlyNotificationVersionChanged = support.expectOnlyNotificationVersionChanged;
-const TestHarness = support.TestHarness;
-const encodeTestingAgentSnapshot = support.encodeTestingAgentSnapshot;
-const testingConfigAdoption = support.testingConfigAdoption;
-const testingConfigAdoptionSource = support.testingConfigAdoptionSource;
-const installTestingLuaBinding = support.installTestingLuaBinding;
-const TestingPlugin = support.TestingPlugin;
-const testing_plugin_context = support.testing_plugin_context;
-const installTestingPlugin = support.installTestingPlugin;
-const installTestingAttachmentTarget = support.installTestingAttachmentTarget;
-const testingClipboardCapture = support.testingClipboardCapture;
+const decodeServer_module = @import("telar-core").decodeServer;
+const client_actions = @import("../controllers/input/actions.zig");
+const runtime_transport = @import("../entrypoints/runtime_io.zig");
+const supportsSharedMemory_module = @import("telar-client").supportsSharedMemory;
+const host_resizes = @import("../controllers/host/host_resizes.zig");
+const ShmNameType = @import("telar-core").ShmName;
+const ImageType = @import("telar-core").Image;
+const encodeGraphicsSharedImage_module = @import("telar-core").encodeGraphicsSharedImage;
+const encodeGraphicsPlacement_module = @import("telar-core").encodeGraphicsPlacement;
+const enabled_module = @import("telar-core").enabled;
+const OutputType = @import("../resources/Output.zig");
 
 test "presentation folds repeated observations into one draw task" {
     var harness: TestHarness = undefined;
@@ -147,12 +83,12 @@ test "host input presentation state schedules only through observation" {
     const input_revision = client.host_input.presentationVersion();
     const pending_updates = client.presenter.pending_updates;
     var encoded: [32]u8 = undefined;
-    const prefix_bytes = try input_capability.encoding.encodeKey(
+    const prefix_bytes = try encodeKey_module(
         &encoded,
         client.host_input.router.prefix.?,
         .{},
     );
-    var prefix: InputChunk = .{};
+    var prefix: Chunk = .{};
     @memcpy(prefix.bytes[0..prefix_bytes.len], prefix_bytes);
     prefix.len = @intCast(prefix_bytes.len);
 
@@ -182,7 +118,7 @@ test "host pointer shape follows semantic hover through paced presentation" {
     var handler: InputHandler = .{ .client = client };
 
     try std.testing.expectEqual(
-        presentation.pointer.Shape.default,
+        PointerShapeType.default,
         client.presenter.screen.presented_mouse_pointer.?,
     );
 
@@ -194,7 +130,7 @@ test "host pointer shape follows semantic hover through paced presentation" {
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(
-        presentation.pointer.Shape.pointer,
+        PointerShapeType.pointer,
         client.presenter.screen.presented_mouse_pointer.?,
     );
 
@@ -206,7 +142,7 @@ test "host pointer shape follows semantic hover through paced presentation" {
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(
-        presentation.pointer.Shape.ew_resize,
+        PointerShapeType.ew_resize,
         client.presenter.screen.presented_mouse_pointer.?,
     );
 
@@ -218,14 +154,14 @@ test "host pointer shape follows semantic hover through paced presentation" {
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(
-        presentation.pointer.Shape.default,
+        PointerShapeType.default,
         client.presenter.screen.presented_mouse_pointer.?,
     );
 
     var payload: [128]u8 = undefined;
-    const cells = [_]core.ui.Cell{.{}};
-    for ([_]schema.frame.PointerShape{ .text, .wait, .zoom_in }, 0..) |shape, index| {
-        const encoded = try schema.encodePaneFrame(&payload, .{
+    const cells = [_]CellType{.{}};
+    for ([_]PointerShapeType{ .text, .wait, .zoom_in }, 0..) |shape, index| {
+        const encoded = try encodePaneFrame_module(&payload, .{
             .pane_id = TestHarness.bootstrap_pane,
             .frame_id = index + 1,
             .base_frame_id = index,
@@ -235,7 +171,7 @@ test "host pointer shape follows semantic hover through paced presentation" {
             .scroll = .{ .total_rows = 1, .offset = 0 },
             .spans = if (index == 0) &.{.{ .start = 0, .cells = &cells }} else &.{},
         });
-        _ = try server_messages.handleServerMessage(client, try schema.decodeServer(encoded));
+        _ = try server_messages.handleServerMessage(client, try decodeServer_module(encoded));
         try presentation_lifecycle.observe(client);
         try harness.settleModelPresentation();
         try std.testing.expectEqual(shape, client.presenter.screen.presented_mouse_pointer.?);
@@ -244,7 +180,7 @@ test "host pointer shape follows semantic hover through paced presentation" {
     try handler.mouse(.{ .x = client.view.regions.top.x, .y = client.view.regions.top.y, .kind = .move });
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(presentation.pointer.Shape.pointer, client.presenter.screen.presented_mouse_pointer.?);
+    try std.testing.expectEqual(PointerShapeType.pointer, client.presenter.screen.presented_mouse_pointer.?);
 
     _ = try client_actions.apply(client, .enter_copy_mode);
     try presentation_lifecycle.observe(client);
@@ -254,12 +190,12 @@ test "host pointer shape follows semantic hover through paced presentation" {
     try std.testing.expect(!client.model.copyModeActive());
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(presentation.pointer.Shape.default, client.presenter.screen.presented_mouse_pointer.?);
+    try std.testing.expectEqual(PointerShapeType.default, client.presenter.screen.presented_mouse_pointer.?);
 
     try handler.mouse(.{ .x = client.view.regions.workbench.x, .y = client.view.regions.workbench.y, .kind = .move });
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(presentation.pointer.Shape.zoom_in, client.presenter.screen.presented_mouse_pointer.?);
+    try std.testing.expectEqual(PointerShapeType.zoom_in, client.presenter.screen.presented_mouse_pointer.?);
 }
 
 test "presentation flushes an explicit empty model before bootstrap" {
@@ -335,7 +271,7 @@ fn createSharedObject(name: [:0]const u8, pixels: []const u8) !void {
 }
 
 test "shared pane graphics reach the host inside the cell frame" {
-    if (comptime !kitty.supportsSharedMemory()) {
+    if (comptime !supportsSharedMemory_module()) {
         return error.SkipZigTest;
     }
 
@@ -350,12 +286,12 @@ test "shared pane graphics reach the host inside the cell frame" {
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
 
-    var capture: Io.Writer.Allocating = .init(std.testing.allocator);
+    var capture: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer capture.deinit();
     client.writer = &capture.writer;
 
     var name_buffer: [64]u8 = undefined;
-    const name = try core.graphics.ShmName.init(try std.fmt.bufPrint(
+    const name = try ShmNameType.init(try std.fmt.bufPrint(
         &name_buffer,
         "/tlrtest-frame-{d}",
         .{std.c.getpid()},
@@ -365,26 +301,26 @@ test "shared pane graphics reach the host inside the cell frame" {
     defer _ = std.c.shm_unlink(name.sliceZ());
 
     var payload: [256]u8 = undefined;
-    const image: core.graphics.Image = .{
+    const image: ImageType = .{
         .key = .{ .image_id = 1, .generation = 1 },
         .format = .rgba,
         .width = 1,
         .height = 1,
         .byte_len = 4,
     };
-    const shared = try schema.encodeGraphicsSharedImage(&payload, .{
+    const shared = try encodeGraphicsSharedImage_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 1,
         .image = image,
         .name = name,
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(shared));
-    const placement = try schema.encodeGraphicsPlacement(&payload, .{
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(shared));
+    const placement = try encodeGraphicsPlacement_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 1,
         .placement = .{ .key = image.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(placement));
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(placement));
     try presentation_lifecycle.observe(client);
     try std.testing.expect(client.presenter.draw_pending);
     try harness.settleModelPresentation();
@@ -398,7 +334,7 @@ test "shared pane graphics reach the host inside the cell frame" {
         return error.FrameNotSynchronized;
     try std.testing.expect(std.mem.indexOf(u8, host_bytes[begin..place], "\x1b[?2026l") == null);
     try std.testing.expect(std.mem.indexOf(u8, host_bytes[place..], "\x1b[?2026l") != null);
-    if (comptime core.diagnostics.enabled) {
+    if (comptime enabled_module) {
         try std.testing.expectEqual(@as(u64, 1), client.telemetry.metrics.pane_shared_images);
     }
 
@@ -437,7 +373,7 @@ test "presentation worker failures release their scheduling tokens" {
 }
 
 test "the TUI write boundary alone completes the shared presentation token" {
-    const Output = @import("../resources/root.zig").host_output.Output;
+    const Output = OutputType;
     for ([_]bool{ false, true }) |fail| {
         var harness: TestHarness = undefined;
         try harness.init();

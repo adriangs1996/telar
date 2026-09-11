@@ -1,0 +1,234 @@
+[
+  {
+    "case": "baseline-echo-0",
+    "logs": [
+      {
+        "role": "runtime",
+        "lines": 4,
+        "sha256": "23da02cd5f877a964efaaca55f9e7d87beb05416d754da1ff40cf6c9ab5dfc9e",
+        "artifact": "baseline-echo-0-runtime.log.gz"
+      },
+      {
+        "role": "client",
+        "lines": 4,
+        "sha256": "1c4a845ba4618318899ed609e35cdf64ebe48315a86253be1a86d9a8622413b8",
+        "artifact": "baseline-echo-0-client.log.gz"
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 59.0842500096187,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        81464
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "case": "baseline-graphics-0",
+    "logs": [
+      {
+        "role": "runtime",
+        "lines": 4,
+        "sha256": "c4d0680dd027da3aebd3b385211bf69441485c11e60e4af752d96c03e9e24e3a",
+        "artifact": "baseline-graphics-0-runtime.log.gz"
+      },
+      {
+        "role": "client",
+        "lines": 4,
+        "sha256": "50fe900ff0d8822114ed51bade53c22769d698bb56e8f4a07d444bb938c839b3",
+        "artifact": "baseline-graphics-0-client.log.gz"
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 68.28716699965298,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        82953
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "case": "baseline-load-0",
+    "logs": [
+      {
+        "role": "runtime",
+        "lines": 9,
+        "sha256": "69c50b4e1c23b2a3573f84773558f677b4b961a816987e17c518f3f2fab9022c",
+        "artifact": "baseline-load-0-runtime.log.gz"
+      },
+      {
+        "role": "client",
+        "lines": 9,
+        "sha256": "d2c47333feba2987732bf8c1a5d7467aa8339ae3a5341443bd7932d9487482b4",
+        "artifact": "baseline-load-0-client.log.gz"
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 60.16529200132936,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        81603
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "case": "baseline-slow-host-0",
+    "logs": [
+      {
+        "role": "runtime",
+        "lines": 20,
+        "sha256": "7f4c6a1846e95cd16928984ce28f2e8d5f8951124c524dc5bd35b85f61568cda",
+        "artifact": "baseline-slow-host-0-runtime.log.gz"
+      },
+      {
+        "role": "client",
+        "lines": 14,
+        "sha256": "07802e3e7c0aa82ceef0acbe1ea5e85b33fd73fcfe662b750a6b1045e42e0844",
+        "artifact": "baseline-slow-host-0-client.log.gz"
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 55.00870803371072,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        82026
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "case": "candidate-echo-0",
+    "logs": [
+      {
+        "role": "runtime",
+        "lines": 4,
+        "sha256": "b85f29f0c2fb1b37826af50ca2efb7811201881f13f10d190d98230d8adf5c44",
+        "artifact": "candidate-echo-0-runtime.log.gz"
+      },
+      {
+        "role": "client",
+        "lines": 4,
+        "sha256": "b05cd947b96c7a080d27ffba9d55bed5d222932f4942d15ba74829d0b7f334ea",
+        "artifact": "candidate-echo-0-client.log.gz"
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 58.888542000204325,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        81581
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "case": "candidate-graphics-0",
+    "logs": [
+      {
+        "role": "runtime",
+        "lines": 4,
+        "sha256": "33a4bb5093295e999a705f7f042e63c3095c2a61ae9135bca386243a3638945f",
+        "artifact": "candidate-graphics-0-runtime.log.gz"
+      },
+      {
+        "role": "client",
+        "lines": 4,
+        "sha256": "498f48076ff88571fb389201f5bc888198c625ad298642493ae8a7857a066682",
+        "artifact": "candidate-graphics-0-client.log.gz"
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 58.057792019099,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        83073
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "case": "candidate-load-0",
+    "logs": [
+      {
+        "role": "runtime",
+        "lines": 9,
+        "sha256": "b2c6ba99f4485b7b1dce3ddbabeaf735752d5565212af1dde45029a3a3b2ab57",
+        "artifact": "candidate-load-0-runtime.log.gz"
+      },
+      {
+        "role": "client",
+        "lines": 9,
+        "sha256": "e558ee1b751d8de650bd11d5bd908f8808e53c6544adc40d2c702b769910c24e",
+        "artifact": "candidate-load-0-client.log.gz"
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 62.37183406483382,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        81816
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "case": "candidate-slow-host-0",
+    "logs": [
+      {
+        "role": "runtime",
+        "lines": 14,
+        "sha256": "609578a71e5b36fe738611cc041ce7d41a0353b994382166613dd92d517cf2d8",
+        "artifact": "candidate-slow-host-0-runtime.log.gz"
+      },
+      {
+        "role": "client",
+        "lines": 14,
+        "sha256": "8c2798194d53757e49427bfb94f7c7ce9f8fb1b33f929daa1b643ffb0e5ea575",
+        "artifact": "candidate-slow-host-0-client.log.gz"
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 63.93549998756498,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        82662
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  }
+]

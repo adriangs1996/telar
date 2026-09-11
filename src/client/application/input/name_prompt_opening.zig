@@ -1,190 +1,42 @@
 //! Application policy for opening one bounded name prompt from current client
 //! authority and canonical model state.
 
+const TabIdType = @import("telar-core").TabId;
+const copy_mode = @import("../../input/copy_mode.zig");
+const name_prompt = @import("../../model/name_prompt.zig");
+const ModelType = @import("../../model/Model.zig");
+const NamePromptOpeningTestingModel = @import("NamePromptOpeningTestingModel.zig");
+const GateCapture = @import("GateCapture.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-const name_prompt = @import("../../root.zig").model.name_prompt;
-
-const schema = core.schema;
 
 pub const Intent = union(enum) {
     create_workspace,
     rename_workspace,
     rename_active_tab,
-    rename_tab: schema.TabId,
+    rename_tab: TabIdType,
     /// Copy-mode search input; the only prompt allowed while copy mode is
     /// active, and meaningless outside it.
-    copy_search: name_prompt.Direction,
+    copy_search: copy_mode.Direction,
     goto_picker,
     history_palette,
     suggest_palette,
 };
 
-pub const WorkspaceCreationGate = struct {
-    context: *anyopaque,
-    pending: *const fn (*anyopaque) bool,
-};
-
-pub const OpenNamePromptHandler = struct {
-    model: *client_model.Model,
-    workspace_creation: WorkspaceCreationGate,
-
-    /// Opens one prompt only when input is unowned and its canonical target
-    /// exists. Workspace creation additionally requires an actionable launch
-    /// source and no request already in flight.
-    ///
-    /// ```zig
-    /// if (!handler.execute(.rename_active_tab)) return;
-    /// ```
-    pub fn execute(handler: *OpenNamePromptHandler, intent: Intent) bool {
-        if (handler.model.panePasteActive()) {
-            return false;
-        }
-        if (intent == .copy_search) {
-            if (!handler.model.copyModeActive()) {
-                return false;
-            }
-
-            handler.model.name_prompt.begin(.{ .copy_search = intent.copy_search });
-            return true;
-        }
-        if (handler.model.copyModeActive()) {
-            return false;
-        }
-
-        const command: name_prompt.Begin = switch (intent) {
-            .create_workspace => create: {
-                if (handler.workspace_creation.pending(handler.workspace_creation.context)) {
-                    return false;
-                }
-                if (handler.model.planWorkspaceCreation() == null) {
-                    return false;
-                }
-
-                break :create .create_workspace;
-            },
-            .rename_workspace => rename: {
-                const workspace = handler.model.workspaceLocation() orelse return false;
-                break :rename .{ .rename_workspace = .{
-                    .workspace = workspace,
-                    .name = handler.model.workspace.workspaceName(),
-                } };
-            },
-            .rename_active_tab => rename: {
-                const active = handler.model.workspace.activeConst() orelse return false;
-                break :rename renameTab(active.location.tab_id, active.labelSlice());
-            },
-            .rename_tab => |tab_id| rename: {
-                const tab = handler.model.workspace.find(tab_id) orelse return false;
-                break :rename renameTab(tab_id, tab.labelSlice());
-            },
-            .goto_picker => .goto_picker,
-            .history_palette => .history_palette,
-            .suggest_palette => .suggest_palette,
-            .copy_search => unreachable,
-        };
-
-        handler.model.name_prompt.begin(command);
-        return true;
-    }
-};
-
-fn renameTab(tab_id: schema.TabId, label: []const u8) name_prompt.Begin {
+pub fn renameTab(tab_id: TabIdType, label: []const u8) name_prompt.Begin {
     return .{ .rename_tab = .{
         .tab_id = tab_id,
         .label = label,
     } };
 }
 
-const TestingModel = struct {
-    model: *client_model.Model,
-    workspace: schema.WorkspaceLocation,
-    first: schema.TabLocation,
-    second: schema.TabLocation,
-    first_pane: schema.PaneId,
-
-    fn init() !TestingModel {
-        const model = try std.testing.allocator.create(client_model.Model);
-        errdefer std.testing.allocator.destroy(model);
-        model.* = client_model.Model.init(std.testing.allocator, true);
-        errdefer model.deinit();
-
-        const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-        const first: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(1),
-        };
-        const second: schema.TabLocation = .{
-            .workspace = workspace,
-            .tab_id = @enumFromInt(2),
-        };
-        const first_pane: schema.PaneId = @enumFromInt(1);
-        try model.workspace.bootstrap(.{ .pane_id = first_pane, .location = first, .size = .{ .cols = 40, .rows = 10 } });
-        _ = try model.workspace.addCreated(.{
-            .location = second,
-            .position = 1,
-            .label = "logs",
-            .root_pane_id = @enumFromInt(2),
-        }, .{ .cols = 40, .rows = 10 });
-        if (!model.workspace.select(first.tab_id)) {
-            return error.ActiveTabNotRestored;
-        }
-
-        _ = try model.reconcileWorkspace(.{
-            .workspace = workspace,
-            .name = "project",
-            .tabs = &.{
-                .{ .tab_id = first.tab_id, .pane_count = 1, .label = "main" },
-                .{ .tab_id = second.tab_id, .pane_count = 1, .label = "logs" },
-            },
-        });
-
-        return .{
-            .model = model,
-            .workspace = workspace,
-            .first = first,
-            .second = second,
-            .first_pane = first_pane,
-        };
-    }
-
-    fn deinit(testing: *TestingModel) void {
-        testing.model.deinit();
-        std.testing.allocator.destroy(testing.model);
-    }
-};
-
-const GateCapture = struct {
-    blocked: bool = false,
-    calls: usize = 0,
-
-    fn handler(capture: *GateCapture, model: *client_model.Model) OpenNamePromptHandler {
-        return .{
-            .model = model,
-            .workspace_creation = .{
-                .context = capture,
-                .pending = pending,
-            },
-        };
-    }
-
-    fn pending(context: *anyopaque) bool {
-        const capture: *GateCapture = @ptrCast(@alignCast(context));
-        capture.calls += 1;
-
-        return capture.blocked;
-    }
-};
-
-fn cancelPrompt(model: *client_model.Model) !void {
+fn cancelPrompt(model: *ModelType) !void {
     if (model.name_prompt.apply(.cancel) != .cancelled) {
         return error.PromptNotCancelled;
     }
 }
 
 test "OpenNamePromptHandler copies every canonical opening target" {
-    var testing = try TestingModel.init();
+    var testing = try NamePromptOpeningTestingModel.init();
     defer testing.deinit();
     var capture: GateCapture = .{};
     var handler = capture.handler(testing.model);
@@ -230,7 +82,7 @@ test "OpenNamePromptHandler rejects copy and pane-paste input authority" {
         .suggest_palette,
     };
 
-    var copy = try TestingModel.init();
+    var copy = try NamePromptOpeningTestingModel.init();
     defer copy.deinit();
     try std.testing.expect(copy.model.enterCopyMode());
     const copy_version = copy.model.version();
@@ -243,7 +95,7 @@ test "OpenNamePromptHandler rejects copy and pane-paste input authority" {
     try std.testing.expectEqualDeep(copy_version, copy.model.version());
     try std.testing.expectEqual(@as(usize, 0), copy_capture.calls);
 
-    var paste = try TestingModel.init();
+    var paste = try NamePromptOpeningTestingModel.init();
     defer paste.deinit();
     _ = paste.model.beginPanePaste().?;
     const paste_version = paste.model.version();
@@ -258,7 +110,7 @@ test "OpenNamePromptHandler rejects copy and pane-paste input authority" {
 }
 
 test "OpenNamePromptHandler gates only workspace creation availability" {
-    var testing = try TestingModel.init();
+    var testing = try NamePromptOpeningTestingModel.init();
     defer testing.deinit();
     var capture: GateCapture = .{ .blocked = true };
     var handler = capture.handler(testing.model);
@@ -278,7 +130,7 @@ test "OpenNamePromptHandler gates only workspace creation availability" {
 }
 
 test "OpenNamePromptHandler rejects missing rename targets without mutation" {
-    var testing = try TestingModel.init();
+    var testing = try NamePromptOpeningTestingModel.init();
     defer testing.deinit();
     var capture: GateCapture = .{};
     var handler = capture.handler(testing.model);
@@ -298,7 +150,7 @@ test "OpenNamePromptHandler rejects missing rename targets without mutation" {
 }
 
 test "OpenNamePromptHandler opens the goto picker without extra gates" {
-    var testing = try TestingModel.init();
+    var testing = try NamePromptOpeningTestingModel.init();
     defer testing.deinit();
     var capture: GateCapture = .{ .blocked = true };
     var handler = capture.handler(testing.model);

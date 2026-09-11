@@ -169,24 +169,24 @@ new notifications after reconciliation.
 
 ## Proof
 
-- `src/frontend/notifications/root.zig` proves bounds, owned text, duplicate
+- `src/frontend/notifications/` proves bounds, owned text, duplicate
   refresh, replacement, elapsed-time transitions, stale interaction and UTF-8
   handling.
-- `src/frontend/client/model.zig` proves isolated notification versioning and
+- `src/client/model/Model.zig` proves isolated notification versioning and
   immutable snapshot access.
-- `src/frontend/client/application/notifications.zig` proves commit-before-
+- `src/client/application/notifications/notifications.zig` proves commit-before-
   timer-before-navigation ordering, delivery policy, stale interaction
   behavior and retained commits after effect failures.
-- `src/frontend/client/notifications.zig` owns local timestamp acquisition,
+- `src/frontend/client/controllers/notifications/notifications.zig` owns local timestamp acquisition,
   diagnostic publication, outbound action translation, delivery correlation
   and timer event ordering.
-- `src/frontend/client/notification_timers.zig` maps model deadlines to the
+- `src/frontend/client/resources/notification_timers.zig` maps model deadlines to the
   shared scheduler and notification events.
-- `src/frontend/client/deadline_timer.zig` proves deadline replacement,
+- `src/client/resources/deadline_timer.zig` proves deadline replacement,
   removal, parking and pending-token release after successful and failed
   completions.
-- `src/frontend/client/view.zig` proves immutable rendering, ID-only intents
+- `src/frontend/client/presentation/view.zig` proves immutable rendering, ID-only intents
   and cell restoration after an exit.
-- `src/frontend/client/client_test.zig` proves outbound delivery and rollback,
+- `src/frontend/client/tests/` proves outbound delivery and rollback,
   wire and local producers, diagnostic ownership and duration, a real lifecycle
   tick, presenter-owned projection and bounded agent alerts.

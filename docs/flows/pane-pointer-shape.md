@@ -88,12 +88,12 @@ the selected shape without affecting input or cell output.
 
 ## Proof
 
-- `pane/root.zig`: every canonical shape, every OSC byte split, the VT default,
+- `src/backend/pane/pane_namespace.zig`: every canonical shape, every OSC byte split, the VT default,
   an alias, an invalid name and explicit default reset, with further allocation
   and resizing disabled after VT creation.
 - `schema_contract_test.zig`: updated golden bytes and fingerprint, all 256
   possible pointer bytes, accepted enum values and rejection of unknown values.
-- `runtime/attachment/root.zig`: pointer-only frames, unchanged-state no-op,
+- `src/backend/runtime/attachment/attachment_namespace.zig`: pointer-only frames, unchanged-state no-op,
   independent clients, slow acknowledgement, latest-wins updates, recovery
   snapshots and fresh attachments.
 - `transport_integration_test.zig`: a real PTY child emits OSC 22, both clients

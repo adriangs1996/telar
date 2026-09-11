@@ -176,9 +176,9 @@ recomposes the affected projection. No use case requests a draw directly.
 - `src/frontend/workspace/multiplexer.zig` proves focused button ownership,
   pointer-local wheel targeting, focus-only scroll targeting, empty-target
   rejection and value-copy planning.
-- `src/frontend/client/application/pointer_routing.zig` proves exclusive owner
+- `src/client/application/input/pointer_routing.zig` proves exclusive owner
   order, workbench gating and selected-effect failure boundaries.
-- `src/frontend/client/application/pane_mouse.zig` proves tracked-event,
+- `src/client/application/input/pane_mouse.zig` proves tracked-event,
   viewport and alternate-scroll selection, the live-bottom gate, ignored
   events and effect failure propagation.
 - `src/frontend/client/controllers/input/pane_mouse_inputs.zig` proves exact
@@ -188,9 +188,9 @@ recomposes the affected projection. No use case requests a draw directly.
   alternate-screen keys, viewport no-ops, return to live output and copy-mode
   retirement. Physical hold tests cover both viewport directions, bounded
   repetition, endpoint no-ops and cancellation on focus or copy-mode changes.
-- `src/frontend/client/client_test.zig` proves prompt rejection after host
+- `src/frontend/client/tests/` proves prompt rejection after host
   telemetry, focus-before-press delivery, scrollback preservation, exact
   host-pixel delivery and pointer-local alternate-screen scrolling through the
   complete input entrypoint.
-- `src/frontend/input/mouse_protocol.zig`, `pane-input.md` and
+- `src/client/input/mouse_protocol.zig`, `pane-input.md` and
   `pane-viewport.md` cover protocol encoding and the two downstream effects.

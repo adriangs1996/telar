@@ -1,13 +1,14 @@
 //! Adapts pane-graphics reconciliation to the physical Kitty store and IPC.
 
-const core = @import("telar-core");
-const panes_application = @import("telar-client").application.panes;
-
-const Client = @import("../../client.zig");
-const diagnostics = core.diagnostics;
-const pane_graphics = panes_application.pane_graphics;
+const Client = @import("../../Client.zig");
+const ApplicationPanesPaneGraphicsCommand = @import("telar-client").ApplicationPanesPaneGraphicsCommand;
+const ApplicationPanesPaneGraphicsOutcome = @import("telar-client").ApplicationPanesPaneGraphicsOutcome;
+const enabled_module = @import("telar-core").enabled;
+const SyncPaneGraphicsFallbacksHandlerType = @import("telar-client").SyncPaneGraphicsFallbacksHandler;
+const ReconcilePaneGraphicsHandlerType = @import("telar-client").ReconcilePaneGraphicsHandler;
+const PaneIdType = @import("telar-core").PaneId;
+const ResourceResultType = @import("telar-client").ResourceResult;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
-const schema = core.schema;
 
 /// Reconciles one decoded runtime graphics command through the application
 /// boundary. Presentation observes model and store revisions afterwards.
@@ -15,8 +16,8 @@ const schema = core.schema;
 /// ```zig
 /// _ = try apply(client, command);
 /// ```
-pub fn apply(client: *Client, command: pane_graphics.Command) !pane_graphics.Outcome {
-    if (comptime diagnostics.enabled) {
+pub fn apply(client: *Client, command: ApplicationPanesPaneGraphicsCommand) !ApplicationPanesPaneGraphicsOutcome {
+    if (comptime enabled_module) {
         switch (command) {
             .image, .shared_image => client.telemetry.metrics.graphics_images += 1,
             else => {},
@@ -35,7 +36,7 @@ pub fn apply(client: *Client, command: pane_graphics.Command) !pane_graphics.Out
 /// syncFallbacks(client);
 /// ```
 pub fn syncFallbacks(client: *Client) void {
-    var use_case: pane_graphics.SyncPaneGraphicsFallbacksHandler = .{
+    var use_case: SyncPaneGraphicsFallbacksHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = client,
@@ -46,7 +47,7 @@ pub fn syncFallbacks(client: *Client) void {
     use_case.execute();
 }
 
-fn reconciliationHandler(client: *Client) pane_graphics.ReconcilePaneGraphicsHandler {
+fn reconciliationHandler(client: *Client) ReconcilePaneGraphicsHandlerType {
     return .{
         .model = &client.model,
         .effects = .{
@@ -58,13 +59,13 @@ fn reconciliationHandler(client: *Client) pane_graphics.ReconcilePaneGraphicsHan
     };
 }
 
-fn hasGraphics(context: *anyopaque, pane_id: schema.PaneId) bool {
+fn hasGraphics(context: *anyopaque, pane_id: PaneIdType) bool {
     const client: *Client = @ptrCast(@alignCast(context));
 
     return client.graphics_store.hasPaneGraphics(pane_id);
 }
 
-fn applyResources(context: *anyopaque, command: pane_graphics.Command) !pane_graphics.ResourceResult {
+fn applyResources(context: *anyopaque, command: ApplicationPanesPaneGraphicsCommand) !ResourceResultType {
     const client: *Client = @ptrCast(@alignCast(context));
     const before = client.graphics_store.ingressVersion();
     const applied = switch (command) {
@@ -93,7 +94,7 @@ fn applyResources(context: *anyopaque, command: pane_graphics.Command) !pane_gra
     } };
 }
 
-fn requestSnapshot(context: *anyopaque, pane_id: schema.PaneId) !void {
+fn requestSnapshot(context: *anyopaque, pane_id: PaneIdType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try runtime_transport.enqueue(client, .{ .request_graphics_snapshot = .{ .pane_id = pane_id } });

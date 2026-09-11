@@ -1,15 +1,14 @@
-const std = @import("std");
-const builtin = @import("builtin");
-const Io = std.Io;
-const File = Io.File;
+const PosixFastWriter = @import("PosixFastWriter.zig");
+const PosixTty = @import("PosixTty.zig");
 
-const Size = @import("types.zig").Size;
-const LocalTime = @import("types.zig").LocalTime;
-const leave_sequence = @import("sequences.zig").leave;
+const LocalTime = @import("LocalTime.zig");
+const std = @import("std");
+const sequences = @import("sequences.zig");
+
 const time = @cImport({
     @cInclude("time.h");
 });
-const unistd = @cImport({
+pub const unistd = @cImport({
     @cInclude("unistd.h");
 });
 
@@ -41,140 +40,11 @@ fn fallbackLocalTime() LocalTime {
 
 // Unix: termios for the mode, an ioctl for the size, SIGWINCH for the change.
 
-pub const FastWriter = struct {
-    fd: std.c.fd_t,
+pub const FastWriter = @import("PosixFastWriter.zig");
 
-    /// Opens an independent nonblocking description of the controlling tty.
-    /// Example: `var fast = FastWriter.open() orelse return;`.
-    pub fn open() ?FastWriter {
-        const fd = std.posix.openat(std.posix.AT.FDCWD, "/dev/tty", .{
-            .ACCMODE = .WRONLY,
-            .NONBLOCK = true,
-            .NOCTTY = true,
-            .CLOEXEC = true,
-        }, 0) catch return null;
-        return .{ .fd = fd };
-    }
+pub const Tty = @import("PosixTty.zig");
 
-    /// Attempts one bounded write. A full tty queue falls back to the actor.
-    /// Example: `const count = try FastWriter.writeOpaque(&fast, bytes);`.
-    pub fn writeOpaque(context: *anyopaque, bytes: []const u8) !usize {
-        const fast: *FastWriter = @ptrCast(@alignCast(context));
-        const result = std.c.write(fast.fd, bytes.ptr, @min(bytes.len, 4096));
-        if (result >= 0) {
-            return @intCast(result);
-        }
-
-        return switch (std.posix.errno(result)) {
-            .AGAIN, .INTR => 0,
-            else => error.WriteFailed,
-        };
-    }
-
-    /// Closes after the client has joined its host-output actor.
-    /// Example: `fast.deinit();`.
-    pub fn deinit(fast: *FastWriter) void {
-        _ = std.c.close(fast.fd);
-    }
-};
-
-pub const Tty = struct {
-    fd: std.c.fd_t,
-    original: std.posix.termios,
-
-    /// Opens the controlling terminal directly rather than using stdin.
-    ///
-    /// stdin may be a pipe - the program could have been started from a script
-    /// or with its input redirected - and putting a pipe into raw mode fails
-    /// while telling you nothing about the terminal the user is looking at.
-    /// `/dev/tty` is the session's terminal whatever the descriptors point at.
-    pub fn open() !Tty {
-        const fd = try std.posix.openat(std.posix.AT.FDCWD, "/dev/tty", .{
-            .ACCMODE = .RDWR,
-            .NOCTTY = true,
-            .CLOEXEC = true,
-        }, 0);
-        errdefer _ = std.c.close(fd);
-
-        const original = try std.posix.tcgetattr(fd);
-        var raw = original;
-
-        // Canonical mode buffers until a newline, echo prints what is typed,
-        // and signal generation turns Ctrl+C into a signal instead of a byte.
-        // A full screen application wants all three off and every byte itself.
-        raw.lflag.ICANON = false;
-        raw.lflag.ECHO = false;
-        raw.lflag.ISIG = false;
-        raw.lflag.IEXTEN = false;
-        raw.iflag.IXON = false;
-        raw.iflag.ICRNL = false;
-        raw.oflag.OPOST = false;
-        raw.cc[@intFromEnum(std.posix.V.MIN)] = 1;
-        raw.cc[@intFromEnum(std.posix.V.TIME)] = 0;
-
-        try std.posix.tcsetattr(fd, .FLUSH, raw);
-        return .{ .fd = fd, .original = original };
-    }
-
-    pub fn deinit(t: *Tty) void {
-        // Disarmed before the descriptor closes, so a crash after shutdown
-        // cannot write escape sequences into a recycled file descriptor.
-        crash_restore.fd = -1;
-        std.posix.tcsetattr(t.fd, .FLUSH, t.original) catch {};
-        _ = std.c.close(t.fd);
-    }
-
-    pub fn size(t: *const Tty) Size {
-        var ws: std.posix.winsize = undefined;
-        const TIOCGWINSZ: c_int = switch (builtin.os.tag) {
-            .macos, .ios, .tvos, .watchos => 0x40087468,
-            .linux => 0x5413,
-            .freebsd, .netbsd, .openbsd, .dragonfly => 0x40087468,
-            else => @compileError("no TIOCGWINSZ for this target"),
-        };
-        // A terminal that will not answer is not a reason to abort. Eighty by
-        // twenty-four is what every terminal since 1978 has defaulted to, and
-        // a wrong size draws a wrong frame where a crash draws nothing.
-        if (std.c.ioctl(t.fd, TIOCGWINSZ, &ws) != 0) {
-            return .{ .cols = 80, .rows = 24 };
-        }
-        return .{
-            .cols = ws.col,
-            .rows = ws.row,
-            .width_px = ws.xpixel,
-            .height_px = ws.ypixel,
-        };
-    }
-
-    pub fn writeHandle(t: *const Tty) File {
-        return .{ .handle = t.fd, .flags = .{ .nonblocking = false } };
-    }
-
-    pub fn readHandle(t: *const Tty) File {
-        return .{ .handle = t.fd, .flags = .{ .nonblocking = false } };
-    }
-
-    /// Hashes the controlling terminal device into a reconnect-stable key.
-    ///
-    /// ```zig
-    /// const identity = try tty.identity();
-    /// ```
-    pub fn identity(t: *const Tty) !u64 {
-        var path: [std.fs.max_path_bytes]u8 = undefined;
-        if (unistd.ttyname_r(t.fd, &path, path.len) != 0) {
-            return error.TerminalIdentityUnavailable;
-        }
-
-        const name = std.mem.sliceTo(&path, 0);
-        if (name.len == 0) {
-            return error.TerminalIdentityUnavailable;
-        }
-
-        return nonzeroHash(name);
-    }
-};
-
-fn nonzeroHash(bytes: []const u8) u64 {
+pub fn nonzeroHash(bytes: []const u8) u64 {
     return std.hash.Wyhash.hash(0x74656c61722d7474, bytes) | 1;
 }
 
@@ -183,7 +53,7 @@ fn nonzeroHash(bytes: []const u8) u64 {
 /// so without this every crash leaves the terminal raw, on the alternate
 /// screen, with mouse reporting on, and the panic message itself lands
 /// somewhere the user cannot read it.
-var crash_restore: struct {
+pub var crash_restore: struct {
     fd: std.c.fd_t = -1,
     original: std.posix.termios = undefined,
     leave: []const u8 = "",
@@ -193,11 +63,11 @@ var crash_restore: struct {
 /// `abort`, so catching SIGABRT (plus the hardware faults) covers panics as
 /// well as genuine crashes. The handler defers to the default disposition
 /// afterwards, so exit status and core dumps are unchanged.
-pub fn installCrashRestore(t: *const Tty) void {
+pub fn installCrashRestore(t: *const PosixTty) void {
     crash_restore = .{
         .fd = t.fd,
         .original = t.original,
-        .leave = leave_sequence,
+        .leave = sequences.leave,
     };
     var action: std.posix.Sigaction = .{
         .handler = .{ .handler = onFatalSignal },
@@ -235,14 +105,14 @@ test "fast output attempts at most 4 KiB and yields on a full descriptor" {
     var fds: [2]std.c.fd_t = undefined;
     try std.testing.expect(std.c.pipe(&fds) == 0);
     defer _ = std.c.close(fds[0]);
-    var fast: FastWriter = .{ .fd = fds[1] };
+    var fast: PosixFastWriter = .{ .fd = fds[1] };
     defer fast.deinit();
     const flags = std.posix.O{ .NONBLOCK = true };
     try std.testing.expect(std.c.fcntl(fast.fd, std.posix.F.SETFL, @as(c_int, @bitCast(flags))) == 0);
     const bytes = [_]u8{0x34} ** 8192;
-    try std.testing.expectEqual(@as(usize, 4096), try FastWriter.writeOpaque(&fast, &bytes));
+    try std.testing.expectEqual(@as(usize, 4096), try PosixFastWriter.writeOpaque(&fast, &bytes));
     for (0..1024) |_| {
-        if (try FastWriter.writeOpaque(&fast, &bytes) == 0) {
+        if (try PosixFastWriter.writeOpaque(&fast, &bytes) == 0) {
             return;
         }
     }
@@ -260,7 +130,7 @@ test "emergency restore is armed, idempotent, and disarmable" {
     crash_restore = .{
         .fd = fds[1],
         .original = std.mem.zeroes(std.posix.termios),
-        .leave = leave_sequence,
+        .leave = sequences.leave,
     };
     // Twice: the crash path cannot be choosy about who already ran it, and
     // the tcsetattr on a pipe failing must stay silent.
@@ -269,11 +139,11 @@ test "emergency restore is armed, idempotent, and disarmable" {
     crash_restore.fd = -1;
     _ = std.c.close(fds[1]);
 
-    var buffer: [4 * leave_sequence.len]u8 = undefined;
+    var buffer: [4 * sequences.leave.len]u8 = undefined;
     const got = std.c.read(fds[0], &buffer, buffer.len);
-    try std.testing.expectEqual(@as(isize, 2 * leave_sequence.len), got);
+    try std.testing.expectEqual(@as(isize, 2 * sequences.leave.len), got);
     try std.testing.expectEqualStrings(
-        leave_sequence ++ leave_sequence,
+        sequences.leave ++ sequences.leave,
         buffer[0..@intCast(got)],
     );
 
@@ -287,56 +157,12 @@ test "emergency restore is armed, idempotent, and disarmable" {
 /// not a queue - so it does the one thing that is defined: write a byte to a
 /// descriptor. That turns an asynchronous signal into an ordinary readable
 /// file, which the rest of the program already knows how to wait on.
-var wake: [2]std.c.fd_t = .{ -1, -1 };
+pub var wake: [2]std.c.fd_t = .{ -1, -1 };
 
-fn onWinch(_: std.posix.SIG) callconv(.c) void {
+pub fn onWinch(_: std.posix.SIG) callconv(.c) void {
     if (wake[1] >= 0) {
         _ = std.c.write(wake[1], "!", 1);
     }
 }
 
-pub const ResizeWatcher = struct {
-    read_end: File,
-
-    pub fn init(_: *Tty) !ResizeWatcher {
-        if (std.c.pipe(&wake) != 0) {
-            return error.PipeFailed;
-        }
-        var action: std.posix.Sigaction = .{
-            .handler = .{ .handler = onWinch },
-            .mask = std.posix.sigemptyset(),
-            // Without RESTART every blocking read in the program returns EINTR
-            // on every resize, and each caller has to remember to retry.
-            .flags = std.posix.SA.RESTART,
-        };
-        std.posix.sigaction(.WINCH, &action, null);
-        return .{ .read_end = .{ .handle = wake[0], .flags = .{ .nonblocking = false } } };
-    }
-
-    pub fn deinit(w: *ResizeWatcher) void {
-        // Disarmed before the descriptors close, so a signal arriving during
-        // shutdown cannot write into a number that has already been recycled
-        // by whatever opened next.
-        const write_end = wake[1];
-        wake[1] = -1;
-        _ = std.c.close(write_end);
-        _ = std.c.close(w.read_end.handle);
-    }
-
-    /// Blocks until a resize arrives.
-    ///
-    /// `File.readStreaming` and not `std.c.read`, and the difference is the
-    /// whole shutdown path: cancelling a task interrupts an `Io` operation and
-    /// a raw syscall is not one. An actor blocked in libc's `read` never
-    /// notices it was cancelled, so the group waits for it forever and the
-    /// process hangs with the terminal still in raw mode.
-    pub fn wait(w: *ResizeWatcher, io: Io) Io.Cancelable!void {
-        var drain: [64]u8 = undefined;
-        _ = w.read_end.readStreaming(io, &.{&drain}) catch |err| switch (err) {
-            error.Canceled => |e| return e,
-            // The pipe is ours and nothing else writes to it, so any other
-            // failure means shutdown. Returning leaves the caller's loop.
-            else => return,
-        };
-    }
-};
+pub const ResizeWatcher = @import("PosixResizeWatcher.zig");

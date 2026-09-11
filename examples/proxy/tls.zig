@@ -1,9 +1,9 @@
-const std = @import("std");
-const Io = std.Io;
-const net = std.Io.net;
-
+const InterceptResources = @import("InterceptResources.zig");
+const InterceptConnection = @import("InterceptConnection.zig");
+const Session = @import("Session.zig");
 const tlsz = @import("tls");
-const ca = @import("ca.zig");
+const std = @import("std");
+const Cursor = @import("Cursor.zig");
 
 // TLS termination, both ends.
 //
@@ -44,134 +44,6 @@ pub const Error = error{
 const alpn_offer = [_][]const u8{ "h2", "http/1.1" };
 const alpn_h2_only = [_][]const u8{"h2"};
 const alpn_http11_only = [_][]const u8{"http/1.1"};
-
-/// The trust store used to verify real origins, loaded once per process.
-///
-/// Rescanning the platform roots costs a few milliseconds and an allocation per
-/// connection, and every connection wants the same answer.
-pub const Roots = struct {
-    bundle: tlsz.config.cert.Bundle,
-
-    pub fn load(io: Io, gpa: std.mem.Allocator) !Roots {
-        return .{ .bundle = try tlsz.config.cert.fromSystem(gpa, io) };
-    }
-
-    pub fn deinit(self: *Roots, gpa: std.mem.Allocator) void {
-        self.bundle.deinit(gpa);
-    }
-};
-
-/// One terminated connection: a TLS server towards the child and a TLS client
-/// towards the real host.
-///
-/// Heap allocated and initialised in place. `tlsz.Connection` holds pointers
-/// into the reader and writer next to it, which hold pointers into the buffers
-/// next to those, so a Session must never be copied or moved after `intercept`.
-pub const Session = struct {
-    io: Io,
-    gpa: std.mem.Allocator,
-    rng_source: std.Random.IoSource,
-    auth: tlsz.config.CertKeyPair,
-    child: End,
-    origin: End,
-
-    const End = struct {
-        stream: net.Stream,
-        in_buf: [tlsz.input_buffer_len]u8 = undefined,
-        out_buf: [tlsz.output_buffer_len]u8 = undefined,
-        reader: net.Stream.Reader = undefined,
-        writer: net.Stream.Writer = undefined,
-        conn: tlsz.Connection = undefined,
-
-        fn wire(self: *End, io: Io) void {
-            self.reader = self.stream.reader(io, &self.in_buf);
-            self.writer = self.stream.writer(io, &self.out_buf);
-        }
-
-        /// `Io.Reader`/`Io.Writer` collapse every transport failure into one
-        /// error and stash the real one on the side. A handshake that died
-        /// because the peer reset the socket and one that died because we sent
-        /// something wrong are very different findings, so dig the real error
-        /// back out before reporting.
-        fn concrete(self: *End, err: anyerror) anyerror {
-            if (err == error.WriteFailed) {
-                return self.writer.err orelse err;
-            }
-            if (err == error.ReadFailed) {
-                return self.reader.err orelse err;
-            }
-            return err;
-        }
-    };
-
-    pub const Side = enum { child, origin };
-    pub const Protocol = enum { http11, h2 };
-
-    pub fn deinit(self: *Session) void {
-        // Best effort close_notify; a peer that has already gone away makes
-        // this fail, which is not worth reporting.
-        self.child.conn.close() catch {};
-        self.origin.conn.close() catch {};
-        self.auth.deinit(self.gpa);
-        self.gpa.destroy(self);
-    }
-
-    /// Reads cleartext into `buf`. Null on end of stream or error, which the
-    /// relays treat identically: the conversation is over either way.
-    pub fn read(self: *Session, side: Side, buf: []u8) ?usize {
-        const n = self.end(side).conn.read(buf) catch return null;
-        if (n == 0) {
-            return null;
-        }
-        return n;
-    }
-
-    /// Encrypts and sends `bytes`. Each record is flushed as it is produced, so
-    /// a streaming response (SSE, chunked) still arrives token by token.
-    pub fn writeAll(self: *Session, side: Side, bytes: []const u8) bool {
-        self.end(side).conn.writeAll(bytes) catch return false;
-        return true;
-    }
-
-    /// Half-closes one side so a peer blocked reading it gives up.
-    ///
-    /// Without this a full-duplex relay outlives the conversation: the client
-    /// goes away, but the origin holds a keep-alive connection open and the
-    /// direction reading it blocks until a timeout that may never come.
-    pub fn halfClose(self: *Session, side: Side) void {
-        self.end(side).stream.shutdown(self.io, .both) catch {};
-    }
-
-    /// Which protocol the two ends settled on. Both agree by construction: the
-    /// origin is offered exactly what the child negotiated.
-    pub fn negotiated(self: *Session) Protocol {
-        const selected = self.child.conn.alpn_protocol orelse return .http11;
-        return if (std.mem.eql(u8, selected, "h2")) .h2 else .http11;
-    }
-
-    fn end(self: *Session, side: Side) *End {
-        return switch (side) {
-            .child => &self.child,
-            .origin => &self.origin,
-        };
-    }
-};
-
-/// Handshakes both ends. `host` is the CONNECT target, used both to mint the
-/// certificate the child will check and to verify the real server. `cause`
-/// receives the underlying failure, which the returned `Error` only categorises.
-pub const InterceptResources = struct {
-    io: Io,
-    allocator: std.mem.Allocator,
-    authority: ca.Authority,
-    roots: Roots,
-};
-
-pub const InterceptConnection = struct {
-    host: []const u8,
-    child: net.Stream,
-    origin: net.Stream,
-};
 
 pub fn intercept(resources: InterceptResources, connection: InterceptConnection, cause: *anyerror) Error!*Session {
     const io = resources.io;
@@ -217,7 +89,7 @@ pub fn intercept(resources: InterceptResources, connection: InterceptConnection,
         .{
             .host = host,
             .root_ca = roots.bundle,
-            .now = Io.Clock.real.now(io),
+            .now = std.Io.Clock.real.now(io),
             .rng = self.rng_source.interface(),
             .alpn_protocols = offer,
         },
@@ -234,7 +106,7 @@ pub fn intercept(resources: InterceptResources, connection: InterceptConnection,
         &self.child.writer.interface,
         .{
             .auth = &self.auth,
-            .now = Io.Clock.real.now(io),
+            .now = std.Io.Clock.real.now(io),
             .rng = self.rng_source.interface(),
             .alpn_protocols = mirroredAlpn(self.origin.conn.alpn_protocol),
             // The child does not get to pick the version the way it picks the
@@ -279,11 +151,11 @@ pub fn explain(cause: anyerror) ?[]const u8 {
 /// handshake that runs afterwards still sees the record untouched. Anything
 /// unparseable falls back to offering both, which is what this did before it
 /// looked at all.
-fn peekAlpnOffer(reader: *Io.Reader) []const []const u8 {
+fn peekAlpnOffer(reader: *std.Io.Reader) []const []const u8 {
     return parseAlpnOffer(reader) catch &alpn_offer;
 }
 
-fn parseAlpnOffer(reader: *Io.Reader) !([]const []const u8) {
+fn parseAlpnOffer(reader: *std.Io.Reader) !([]const []const u8) {
     const header = try reader.peek(tls_record_header_len);
     if (header[0] != handshake_record) {
         return error.NotAHandshake;
@@ -356,33 +228,6 @@ const handshake_record: u8 = 0x16;
 const client_hello: u8 = 0x01;
 const alpn_extension: u16 = 16;
 
-/// Bounds-checked forward reader over a byte slice. Every length in a
-/// ClientHello arrives from the wire, so every step has to be able to fail.
-const Cursor = struct {
-    bytes: []const u8,
-    idx: usize = 0,
-
-    fn left(self: Cursor) usize {
-        return self.bytes.len - self.idx;
-    }
-
-    fn take(self: *Cursor, n: usize) ![]const u8 {
-        if (self.left() < n) {
-            return error.Truncated;
-        }
-        defer self.idx += n;
-        return self.bytes[self.idx..][0..n];
-    }
-
-    fn byte(self: *Cursor) !u8 {
-        return (try self.take(1))[0];
-    }
-
-    fn big16(self: *Cursor) !u16 {
-        return std.mem.readInt(u16, (try self.take(2))[0..2], .big);
-    }
-};
-
 /// Mints a leaf for `host` and turns it into something a Zig TLS stack accepts.
 ///
 /// The chain is leaf then CA: a client that pinned only the root still needs the
@@ -425,8 +270,6 @@ fn mintAuth(resources: InterceptResources, host: []const u8, cause: *anyerror) E
 // attacker controls. These cover what it must extract and, more importantly,
 // that malformed input falls back rather than reading past the buffer.
 // ---------------------------------------------------------------------------
-
-const testing = std.testing;
 
 /// Builds a ClientHello carrying `protocols` as its ALPN list, or no ALPN
 /// extension at all when the list is empty.
@@ -483,30 +326,30 @@ test "the child's ALPN list is read out of its ClientHello" {
     var buf: [512]u8 = undefined;
 
     const both = offerOf(fakeClientHello(&buf, &.{ "h2", "http/1.1" }));
-    try testing.expectEqual(@as(usize, 2), both.len);
-    try testing.expectEqualStrings("h2", both[0]);
-    try testing.expectEqualStrings("http/1.1", both[1]);
+    try std.testing.expectEqual(@as(usize, 2), both.len);
+    try std.testing.expectEqualStrings("h2", both[0]);
+    try std.testing.expectEqualStrings("http/1.1", both[1]);
 
     const h2 = offerOf(fakeClientHello(&buf, &.{"h2"}));
-    try testing.expectEqual(@as(usize, 1), h2.len);
-    try testing.expectEqualStrings("h2", h2[0]);
+    try std.testing.expectEqual(@as(usize, 1), h2.len);
+    try std.testing.expectEqualStrings("h2", h2[0]);
 
     const http11 = offerOf(fakeClientHello(&buf, &.{"http/1.1"}));
-    try testing.expectEqual(@as(usize, 1), http11.len);
-    try testing.expectEqualStrings("http/1.1", http11[0]);
+    try std.testing.expectEqual(@as(usize, 1), http11.len);
+    try std.testing.expectEqualStrings("http/1.1", http11[0]);
 }
 
 test "a client that sent no ALPN is not given one" {
     // Inventing an offer here would make the origin pick a protocol the child
     // never asked for, and the child would then be told about it.
     var buf: [512]u8 = undefined;
-    try testing.expectEqual(@as(usize, 0), offerOf(fakeClientHello(&buf, &.{})).len);
+    try std.testing.expectEqual(@as(usize, 0), offerOf(fakeClientHello(&buf, &.{})).len);
 }
 
 test "protocols this relay cannot read are not forwarded" {
     var buf: [512]u8 = undefined;
     const hello = fakeClientHello(&buf, &.{ "h3", "spdy/3.1" });
-    try testing.expectEqual(@as(usize, 0), offerOf(hello).len);
+    try std.testing.expectEqual(@as(usize, 0), offerOf(hello).len);
 }
 
 test "the ordering the child asked for does not leak through" {
@@ -515,7 +358,7 @@ test "the ordering the child asked for does not leak through" {
     // the origin supports it.
     var buf: [512]u8 = undefined;
     const reversed = offerOf(fakeClientHello(&buf, &.{ "http/1.1", "h2" }));
-    try testing.expectEqualStrings("h2", reversed[0]);
+    try std.testing.expectEqualStrings("h2", reversed[0]);
 }
 
 test "malformed input falls back instead of reading past the buffer" {
@@ -526,17 +369,17 @@ test "malformed input falls back instead of reading past the buffer" {
     var cut: usize = 5;
     while (cut < hello.len) : (cut += 1) {
         const offer = offerOf(hello[0..cut]);
-        try testing.expect(offer.len == 2); // the both-protocols fallback
+        try std.testing.expect(offer.len == 2); // the both-protocols fallback
     }
 
     // Not a handshake record at all.
-    try testing.expectEqual(@as(usize, 2), offerOf("GET / HTTP/1.1\r\n\r\n").len);
+    try std.testing.expectEqual(@as(usize, 2), offerOf("GET / HTTP/1.1\r\n\r\n").len);
 
     // A length field claiming far more than the record holds.
     var lying: [512]u8 = undefined;
     @memcpy(lying[0..hello.len], hello);
     std.mem.writeInt(u16, lying[3..5], 0xffff, .big);
-    try testing.expectEqual(@as(usize, 2), offerOf(lying[0..hello.len]).len);
+    try std.testing.expectEqual(@as(usize, 2), offerOf(lying[0..hello.len]).len);
 }
 
 test "peeking leaves the ClientHello for the handshake to read" {
@@ -549,6 +392,6 @@ test "peeking leaves the ClientHello for the handshake to read" {
     _ = peekAlpnOffer(&reader);
 
     const rest = reader.buffered();
-    try testing.expectEqual(hello.len, rest.len);
-    try testing.expectEqual(handshake_record, rest[0]);
+    try std.testing.expectEqual(hello.len, rest.len);
+    try std.testing.expectEqual(handshake_record, rest[0]);
 }

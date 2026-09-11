@@ -81,11 +81,11 @@ soft-wrapped rows. Clipboard delivery still depends on host OSC 52 permission.
 
 - `src/core/select.zig`: word boundaries, whitespace, wide glyph continuations
   and saturated click counts.
-- `src/frontend/input/copy_mode.zig`: reverse word drags, clipping, wide glyph
+- `src/client/input/copy_mode.zig`: reverse word drags, clipping, wide glyph
   endpoints, bare clicks and retained-history reconciliation.
-- `src/frontend/client/application/input/copy_mode.zig`: double/triple click
+- `src/client/application/input/copy_mode.zig`: double/triple click
   copying, single delivery, unchanged viewport and failed-copy capture release.
-- `src/frontend/client/application/input/copy_mode_pointer.zig`: matching-button
+- `src/client/application/input/copy_mode_pointer.zig`: matching-button
   ownership and cancellation when geometry disappears.
 - `src/frontend/client/tests/mouse_selection.zig`: real input, focus-before-press,
   cross-border capture, mid-gesture child mode changes, Shift over links,

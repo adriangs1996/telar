@@ -6,20 +6,9 @@
 //! damage row and one run walker keep those three from drifting apart - the
 //! previous copies disagreed even about what an *empty* row looked like.
 
+const RowSync = @import("RowSync.zig");
+const CellType = @import("telar-core").Cell;
 const std = @import("std");
-const ui = @import("telar-core").ui;
-
-const damage = @import("telar-client").panes.damage;
-pub const DamageRow = damage.DamageRow;
-pub const CellSpan = damage.CellSpan;
-pub const markRows = damage.markRows;
-
-pub const RowSync = struct {
-    source: []const ui.Cell,
-    reference: []const ui.Cell,
-    start: u16,
-    end: u16,
-};
 
 /// Walks [start, end) of one row, finds each run where `source` and
 /// `reference` disagree, and hands it to `sink.copyRun(run_start, count)`.
@@ -51,11 +40,9 @@ pub fn syncRow(sync: RowSync, sink: anytype) !usize {
 // Tests
 // ---------------------------------------------------------------------------
 
-const testing = std.testing;
-
 test "run diffing copies exactly the disagreeing runs" {
-    var source = [_]ui.Cell{.{}} ** 8;
-    var reference = [_]ui.Cell{.{}} ** 8;
+    var source = [_]CellType{.{}} ** 8;
+    var reference = [_]CellType{.{}} ** 8;
     source[1].bytes[0] = 'a';
     source[2].bytes[0] = 'b';
     source[5].bytes[0] = 'c';
@@ -70,8 +57,8 @@ test "run diffing copies exactly the disagreeing runs" {
     };
     var sink: Sink = .{};
     const copied = try syncRow(.{ .source = &source, .reference = &reference, .start = 0, .end = 8 }, &sink);
-    try testing.expectEqual(@as(usize, 3), copied);
-    try testing.expectEqual(@as(usize, 2), sink.count);
-    try testing.expectEqual([2]u16{ 1, 2 }, sink.runs[0]);
-    try testing.expectEqual([2]u16{ 5, 1 }, sink.runs[1]);
+    try std.testing.expectEqual(@as(usize, 3), copied);
+    try std.testing.expectEqual(@as(usize, 2), sink.count);
+    try std.testing.expectEqual([2]u16{ 1, 2 }, sink.runs[0]);
+    try std.testing.expectEqual([2]u16{ 5, 1 }, sink.runs[1]);
 }

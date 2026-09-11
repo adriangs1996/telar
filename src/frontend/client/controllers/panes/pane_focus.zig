@@ -1,15 +1,10 @@
 //! Wires semantic pane focus to active-pane resource delivery.
 
-const core = @import("telar-core");
-const panes_application = @import("telar-client").application.panes;
-const client_model = @import("telar-client").model;
+const Client = @import("../../Client.zig");
+const FocusPaneHandlerType = @import("telar-client").FocusPaneHandler;
+const PaneFocusType = @import("telar-client").PaneFocus;
+const RectType = @import("telar-core").Rect;
 const active_pane_resources = @import("active_pane_resources.zig");
-
-const Client = @import("../../client.zig");
-const focus_pane = panes_application.focus_pane;
-const ui = core.ui;
-
-pub const Target = focus_pane.Target;
 
 /// Wires pane focus to the shared active-pane resource use case.
 ///
@@ -17,7 +12,7 @@ pub const Target = focus_pane.Target;
 /// var use_case = handler(client);
 /// _ = try use_case.execute(.{ .target = .{ .direction = .left }, .area = area });
 /// ```
-pub fn handler(client: *Client) focus_pane.FocusPaneHandler {
+pub fn handler(client: *Client) FocusPaneHandlerType {
     return .{
         .model = &client.model,
         .effects = .{
@@ -27,7 +22,7 @@ pub fn handler(client: *Client) focus_pane.FocusPaneHandler {
     };
 }
 
-fn deliverFocus(context: *anyopaque, focus: client_model.PaneFocus, area: ui.Rect) !void {
+fn deliverFocus(context: *anyopaque, focus: PaneFocusType, area: RectType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try active_pane_resources.deliverFocus(client, focus, area);

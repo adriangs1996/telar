@@ -1,20 +1,20 @@
 //! Wires streamed host paste ownership to prompt and pane paste use cases.
 
-const input_application = @import("telar-client").application.input;
+const Client = @import("../../Client.zig");
+const ApplicationInputPasteRoutingOutcome = @import("telar-client").ApplicationInputPasteRoutingOutcome;
+const ApplicationInputPasteRoutingCommand = @import("telar-client").ApplicationInputPasteRoutingCommand;
+const PasteRoutingHandlerType = @import("telar-client").PasteRoutingHandler;
+const PasteRoutingAuthority = @import("telar-client").PasteRoutingAuthority;
+const RouteType = @import("telar-client").Route;
 const name_prompts = @import("name_prompts.zig");
 const pane_pastes = @import("pane_pastes.zig");
-
-const Client = @import("../../client.zig");
-const paste_routing = input_application.paste_routing;
-
-pub const Outcome = paste_routing.Outcome;
 
 /// Routes one opening boundary using the current client authority.
 ///
 /// ```zig
 /// _ = try start(client);
 /// ```
-pub fn start(client: *Client) !Outcome {
+pub fn start(client: *Client) !ApplicationInputPasteRoutingOutcome {
     return dispatch(client, .start);
 }
 
@@ -23,7 +23,7 @@ pub fn start(client: *Client) !Outcome {
 /// ```zig
 /// _ = try content(client, bytes);
 /// ```
-pub fn content(client: *Client, text: []const u8) !Outcome {
+pub fn content(client: *Client, text: []const u8) !ApplicationInputPasteRoutingOutcome {
     return dispatch(client, .{ .content = text });
 }
 
@@ -32,12 +32,12 @@ pub fn content(client: *Client, text: []const u8) !Outcome {
 /// ```zig
 /// _ = try finish(client);
 /// ```
-pub fn finish(client: *Client) !Outcome {
+pub fn finish(client: *Client) !ApplicationInputPasteRoutingOutcome {
     return dispatch(client, .finish);
 }
 
-fn dispatch(client: *Client, command: paste_routing.Command) !Outcome {
-    var use_case: paste_routing.PasteRoutingHandler = .{
+fn dispatch(client: *Client, command: ApplicationInputPasteRoutingCommand) !ApplicationInputPasteRoutingOutcome {
+    var use_case: PasteRoutingHandlerType = .{
         .effects = .{
             .context = client,
             .route = route,
@@ -47,7 +47,7 @@ fn dispatch(client: *Client, command: paste_routing.Command) !Outcome {
     return use_case.execute(snapshot(client), command);
 }
 
-fn snapshot(client: *const Client) paste_routing.Authority {
+fn snapshot(client: *const Client) PasteRoutingAuthority {
     const prompt = client.model.name_prompt.currentConst();
 
     return .{
@@ -59,7 +59,7 @@ fn snapshot(client: *const Client) paste_routing.Authority {
     };
 }
 
-fn route(raw_context: *anyopaque, value: paste_routing.Route) !void {
+fn route(raw_context: *anyopaque, value: RouteType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     switch (value.owner) {

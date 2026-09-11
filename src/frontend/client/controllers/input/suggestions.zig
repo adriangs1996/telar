@@ -3,16 +3,15 @@
 //! once, only the awaited reply lands, and Enter on a landed suggestion
 //! pastes it into the focused pane without running it.
 
-const core = @import("telar-core");
-const suggestion = @import("telar-client").model.suggestion;
+const Client = @import("../../Client.zig");
 const name_prompts = @import("name_prompts.zig");
-const pane_inputs = @import("pane_inputs.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-const connection_outbox = @import("telar-client").connection.outbox;
+const OwnedSuggestionType = @import("telar-client").OwnedSuggestion;
+const raw_module = @import("telar-core").raw;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
-
-const Client = @import("../../client.zig");
-const schema = core.schema;
+const CommandSuggestionType = @import("telar-core").CommandSuggestion;
+const pane_inputs = @import("pane_inputs.zig");
+const PaneIdType = @import("telar-core").PaneId;
 
 /// Opens the palette with an empty request and no suggestion.
 ///
@@ -43,14 +42,14 @@ pub fn request(client: *Client, text: []const u8) !void {
     };
 
     const request_id = try request_lifecycle.nextId(client);
-    var owned: connection_outbox.OwnedSuggestion = .{
+    var owned: OwnedSuggestionType = .{
         .request_id = request_id,
         .pane_id = pane_id,
-        .text_len = @intCast(@min(text.len, connection_outbox.OwnedSuggestion.max_text_bytes)),
+        .text_len = @intCast(@min(text.len, OwnedSuggestionType.max_text_bytes)),
     };
     @memcpy(owned.text[0..owned.text_len], text[0..owned.text_len]);
 
-    client.model.suggestion.expect(schema.id.raw(request_id));
+    client.model.suggestion.expect(raw_module(request_id));
     try runtime_transport.enqueue(client, .{ .suggest_command = owned });
 }
 
@@ -60,7 +59,7 @@ pub fn request(client: *Client, text: []const u8) !void {
 /// ```zig
 /// _ = try apply(client, message);
 /// ```
-pub fn apply(client: *Client, message: schema.CommandSuggestion) !bool {
+pub fn apply(client: *Client, message: CommandSuggestionType) !bool {
     return client.model.suggestion.apply(message);
 }
 
@@ -80,7 +79,7 @@ pub fn pasteSuggestion(client: *Client) !void {
     _ = try pane_inputs.expressionPaste(client, state.textSlice());
 }
 
-fn focusedPane(client: *Client) ?schema.PaneId {
+fn focusedPane(client: *Client) ?PaneIdType {
     const active = client.model.workspace.activeConst() orelse return null;
     const pane = active.model.focusedPaneConst() orelse return null;
     return pane.id;

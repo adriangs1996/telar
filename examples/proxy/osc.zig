@@ -1,5 +1,5 @@
 const std = @import("std");
-const vt = @import("ghostty-vt");
+const Scanner = @import("Scanner.zig");
 
 // OSC scanner for shell semantic markers.
 //
@@ -30,127 +30,13 @@ pub const Marker = union(enum) {
     title: []const u8,
 };
 
-pub const Scanner = struct {
-    state: State = .ground,
-    parser: vt.osc.Parser,
-    pending: []const u8 = &.{},
-
-    const State = enum { ground, escape, osc, osc_escape };
-
-    /// The parser allocates for payloads that outgrow its inline buffer, so it
-    /// wants a real allocator. Passing null makes it drop those instead.
-    pub fn init(alloc: ?std.mem.Allocator) Scanner {
-        return .{ .parser = .init(alloc) };
-    }
-
-    pub fn deinit(s: *Scanner) void {
-        s.parser.deinit();
-    }
-
-    /// Hands a chunk to the scanner. Drain it with `next` before feeding again.
-    pub fn feed(s: *Scanner, bytes: []const u8) void {
-        s.pending = bytes;
-    }
-
-    /// How much of the chunk passed to `feed` has been consumed. Lets a caller
-    /// slice the stream at marker boundaries — which is what output capture
-    /// needs, so a command's text starts at its `C` and ends at its `D`.
-    pub fn offsetIn(s: *const Scanner, chunk: []const u8) usize {
-        return chunk.len - s.pending.len;
-    }
-
-    /// Next marker in the current chunk, or null once it is exhausted. Parser
-    /// state survives across chunks, so a sequence split by a read boundary is
-    /// reported when its terminator finally arrives.
-    pub fn next(s: *Scanner) ?Marker {
-        while (s.pending.len > 0) {
-            const byte = s.pending[0];
-            s.pending = s.pending[1..];
-
-            switch (s.state) {
-                .ground => if (byte == esc) {
-                    s.state = .escape;
-                },
-
-                .escape => switch (byte) {
-                    ']' => {
-                        s.state = .osc;
-                        s.parser.reset();
-                    },
-                    // A second ESC restarts; anything else introduces some
-                    // other sequence this scanner does not care about.
-                    esc => {},
-                    else => s.state = .ground,
-                },
-
-                .osc => switch (byte) {
-                    bel => {
-                        s.state = .ground;
-                        if (s.finish(bel)) |marker| {
-                            return marker;
-                        }
-                    },
-                    esc => s.state = .osc_escape,
-                    else => s.parser.next(byte),
-                },
-
-                .osc_escape => switch (byte) {
-                    // ESC \ is ST, the other legal OSC terminator.
-                    '\\' => {
-                        s.state = .ground;
-                        if (s.finish(st)) |marker| {
-                            return marker;
-                        }
-                    },
-                    // ESC ESC: abandon this one, the second ESC starts anew.
-                    esc => {
-                        s.parser.reset();
-                        s.state = .escape;
-                    },
-                    // A bare ESC aborts the sequence without terminating it.
-                    else => {
-                        s.parser.reset();
-                        s.state = .ground;
-                    },
-                },
-            }
-        }
-        return null;
-    }
-
-    fn finish(s: *Scanner, terminator: u8) ?Marker {
-        const command = s.parser.end(terminator) orelse return null;
-        return switch (command.*) {
-            .change_window_title => |title| .{ .title = title },
-            .semantic_prompt => |prompt| switch (prompt.action) {
-                .fresh_line_new_prompt, .prompt_start => .prompt_start,
-                .end_prompt_start_input, .end_prompt_start_input_terminate_eol => .command_start,
-                .end_input_start_output => .output_start,
-                .end_command => .{
-                    // The library reports the status as i32 because the option
-                    // is free text; anything outside a POSIX status is treated
-                    // as no status at all.
-                    .command_end = if (prompt.readOption(.exit_code)) |code|
-                        std.math.cast(u8, code)
-                    else
-                        null,
-                },
-                else => null,
-            },
-            else => null,
-        };
-    }
-};
-
-const esc = 0x1B;
-const bel = 0x07;
-const st = '\\';
+pub const esc = 0x1B;
+pub const bel = 0x07;
+pub const st = '\\';
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
-const testing = std.testing;
 
 /// Drains every marker a scanner finds across the given chunks, so a test can
 /// state the chunk boundaries it wants to exercise.
@@ -172,7 +58,7 @@ fn collect(chunks: []const []const u8, out: *std.ArrayList(Marker), gpa: std.mem
 }
 
 fn expectMarkers(chunks: []const []const u8, expected: []const Marker) !void {
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
     var found: std.ArrayList(Marker) = .empty;
     defer {
         for (found.items) |m| if (m == .title) gpa.free(m.title);
@@ -180,11 +66,11 @@ fn expectMarkers(chunks: []const []const u8, expected: []const Marker) !void {
     }
     try collect(chunks, &found, gpa);
 
-    try testing.expectEqual(expected.len, found.items.len);
+    try std.testing.expectEqual(expected.len, found.items.len);
     for (expected, found.items) |want, got| {
         switch (want) {
-            .title => |t| try testing.expectEqualStrings(t, got.title),
-            else => try testing.expectEqual(want, got),
+            .title => |t| try std.testing.expectEqualStrings(t, got.title),
+            else => try std.testing.expectEqual(want, got),
         }
     }
 }
@@ -255,7 +141,7 @@ test "an oversized payload does not break recovery" {
     // Rewritten from the hand-rolled version, which asserted the payload was
     // dropped at a private capacity constant. The contract is recovery, not the
     // capacity, so this asserts only that the next sequence still parses.
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
     var chunk: std.ArrayList(u8) = .empty;
     defer chunk.deinit(gpa);
     try chunk.appendSlice(gpa, "\x1b]2;");
@@ -270,6 +156,6 @@ test "an oversized payload does not break recovery" {
     }
     try collect(&.{chunk.items}, &found, gpa);
 
-    try testing.expect(found.items.len >= 1);
-    try testing.expectEqual(Marker.prompt_start, found.items[found.items.len - 1]);
+    try std.testing.expect(found.items.len >= 1);
+    try std.testing.expectEqual(Marker.prompt_start, found.items[found.items.len - 1]);
 }

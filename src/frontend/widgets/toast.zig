@@ -1,26 +1,25 @@
 //! Toast overlay rendering for the client notification center.
 
-const notifications = @import("telar-client").notifications;
-const widget = @import("context.zig");
-const ui = @import("../ui/root.zig");
+const RectType = @import("telar-core").Rect;
+const max_items_module = @import("telar-client").max_items;
+const ContextType = @import("Context.zig");
+const CenterType = @import("telar-client").Center;
+const RenderMode = @import("RenderMode.zig");
+const CardInput = @import("CardInput.zig");
+const widget = @import("context_support.zig");
+const StyleType = @import("telar-core").Style;
+const LevelType = @import("telar-client").Level;
+const ColorType = @import("telar-core").Color;
+const std_module = @import("std");
+const theme_support = @import("../ui/theme_support.zig");
+const BufferType = @import("telar-core").Buffer;
+const transition_duration_ns_module = @import("telar-client").transition_duration_ns;
 
 pub const card_height: u16 = 4;
 pub const card_gap: u16 = 1;
 pub const max_width: u16 = 48;
 
-const RenderMode = struct {
-    area: ui.Rect,
-    center: *const notifications.Center,
-    paint: bool,
-};
-
-const CardInput = struct {
-    area: ui.Rect,
-    item: *const notifications.Item,
-    paint: bool,
-};
-
-pub fn overlayArea(workbench: ui.Rect) ui.Rect {
+pub fn overlayArea(workbench: RectType) RectType {
     if (workbench.w < 12 or workbench.h < card_height) {
         return .{};
     }
@@ -30,7 +29,7 @@ pub fn overlayArea(workbench: ui.Rect) ui.Rect {
     const available_height = workbench.h -| vertical_margin;
     const height = @min(
         available_height,
-        @as(u16, notifications.max_items) * (card_height + card_gap) - card_gap,
+        @as(u16, max_items_module) * (card_height + card_gap) - card_gap,
     );
     const width = @min(max_width, available_width);
     return .{
@@ -43,17 +42,17 @@ pub fn overlayArea(workbench: ui.Rect) ui.Rect {
 
 /// Renders visible notification cards and their semantic targets.
 /// For example: `render(context, area, center);`.
-pub fn render(context: *widget.Context, area: ui.Rect, center: *const notifications.Center) void {
+pub fn render(context: *ContextType, area: RectType, center: *const CenterType) void {
     renderMode(context, .{ .area = area, .center = center, .paint = true });
 }
 
 /// Keeps the cell-aligned semantic targets when KGP owns the pixels.
 /// For example: `registerHits(context, area, center);`.
-pub fn registerHits(context: *widget.Context, area: ui.Rect, center: *const notifications.Center) void {
+pub fn registerHits(context: *ContextType, area: RectType, center: *const CenterType) void {
     renderMode(context, .{ .area = area, .center = center, .paint = false });
 }
 
-fn renderMode(context: *widget.Context, mode: RenderMode) void {
+fn renderMode(context: *ContextType, mode: RenderMode) void {
     const area = mode.area;
     const center = mode.center;
 
@@ -70,7 +69,7 @@ fn renderMode(context: *widget.Context, mode: RenderMode) void {
     for (0..visible_count) |index| {
         const item = center.itemAt(index).?;
         const visible_width = item.animatedWidth(area.w);
-        const card: ui.Rect = .{
+        const card: RectType = .{
             .x = area.x + area.w - visible_width,
             .y = area.y + @as(u16, @intCast(index)) * (card_height + card_gap),
             .w = visible_width,
@@ -80,7 +79,7 @@ fn renderMode(context: *widget.Context, mode: RenderMode) void {
     }
 }
 
-fn drawCard(context: *widget.Context, input: CardInput) void {
+fn drawCard(context: *ContextType, input: CardInput) void {
     const card = input.area;
     const item = input.item;
 
@@ -106,8 +105,8 @@ fn drawCard(context: *widget.Context, input: CardInput) void {
     const accent = levelColor(context, item.level);
     const hovered = context.isHovered(activate);
     const background = if (hovered) context.palette.surface1 else context.palette.surface0;
-    const body_style: ui.Style = .{ .fg = context.palette.text, .bg = background };
-    const border_style: ui.Style = .{
+    const body_style: StyleType = .{ .fg = context.palette.text, .bg = background };
+    const border_style: StyleType = .{
         .fg = accent,
         .bg = background,
         .flags = .{ .bold = true },
@@ -118,7 +117,7 @@ fn drawCard(context: *widget.Context, input: CardInput) void {
     if (card.w < 8) {
         return;
     }
-    const content: ui.Rect = .{
+    const content: RectType = .{
         .x = card.x + 2,
         .y = card.y + 1,
         .w = card.w -| 4,
@@ -134,7 +133,7 @@ fn drawCard(context: *widget.Context, input: CardInput) void {
 
     if (card.w >= 12) {
         const dismiss: widget.Action = .{ .notification_dismiss = item.id };
-        const close: ui.Rect = .{
+        const close: RectType = .{
             .x = card.x + card.w - 3,
             .y = card.y,
             .w = 2,
@@ -153,7 +152,7 @@ fn drawCard(context: *widget.Context, input: CardInput) void {
     }
 }
 
-fn levelColor(context: *const widget.Context, level: notifications.Level) ui.Color {
+fn levelColor(context: *const ContextType, level: LevelType) ColorType {
     return switch (level) {
         .info => context.palette.blue,
         .success => context.palette.green,
@@ -163,19 +162,19 @@ fn levelColor(context: *const widget.Context, level: notifications.Level) ui.Col
 }
 
 test "toast cards register activation and a separate close target" {
-    const std = @import("std");
-    const theme = ui.theme;
-    var buffer = try ui.Buffer.init(std.testing.allocator, 80, 24);
+    const std = std_module;
+    const theme = theme_support;
+    var buffer = try BufferType.init(std.testing.allocator, 80, 24);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var center: notifications.Center = .{};
+    var center: CenterType = .{};
     const id = center.push(0, .{
         .title = "Build complete",
         .message = "Open the result",
         .target = .{ .select_tab = @enumFromInt(7) },
     });
-    _ = center.advance(notifications.transition_duration_ns);
-    var context: widget.Context = .{
+    _ = center.advance(transition_duration_ns_module);
+    var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &theme.default_theme.palette,

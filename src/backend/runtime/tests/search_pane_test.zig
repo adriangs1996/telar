@@ -1,12 +1,11 @@
 //! Vertical tests for copy-mode search over pane history.
 
+const PaneFixture = @import("PaneFixture.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const search_commands = @import("../application/commands/search_pane.zig");
-const test_support = @import("support.zig");
-
-const schema = core.schema;
-const PaneFixture = test_support.PaneFixture;
+const CursorType = @import("../../pane/Cursor.zig");
+const SearchPaneHandlerType = @import("../application/commands/SearchPaneHandler.zig");
+const SearchMatchType = @import("telar-core").SearchMatch;
+const pane_module = @import("telar-core").pane;
 
 test "search turns are bounded, wait for VT ownership and reject changed history" {
     var fixture: PaneFixture = .{};
@@ -15,7 +14,7 @@ test "search turns are bounded, wait for VT ownership and reject changed history
     for (0..100) |_| {
         _ = try fixture.pane.ingest(std.testing.io, "aaaaab\r\n");
     }
-    const Cursor = @import("../../pane/root.zig").TextSearch;
+    const Cursor = CursorType;
     var cursor = Cursor.init("missing");
     fixture.pane.ingest_pending = true;
     try std.testing.expect(!try cursor.advance(fixture.pane));
@@ -32,7 +31,7 @@ test "linear search preserves non-overlap and wide-cell coordinates" {
     try fixture.init();
     defer fixture.deinit();
     _ = try fixture.pane.ingest(std.testing.io, "aaaaa\r\n界x界x");
-    var handler: search_commands.SearchPaneHandler = .{ .attachments = &fixture.attachments };
+    var handler: SearchPaneHandlerType = .{ .attachments = &fixture.attachments };
     const ascii = handler.execute(.{ .pane_id = fixture.pane.id, .needle = "aa" }).found;
     try std.testing.expectEqual(@as(u8, 2), ascii.count);
     try std.testing.expectEqual(@as(u16, 0), ascii.items[0].x);
@@ -49,18 +48,18 @@ test "search finds matches in document order with absolute rows and folds ASCII 
     defer fixture.deinit();
     _ = try fixture.pane.ingest(std.testing.io, "zero\r\nError one\r\ntwo\r\nthree error four\r\nfive\r\nsix\r\nseven\r\n");
     try fixture.pane.render(false);
-    var handler: search_commands.SearchPaneHandler = .{ .attachments = &fixture.attachments };
+    var handler: SearchPaneHandlerType = .{ .attachments = &fixture.attachments };
 
     const found = handler.execute(.{ .pane_id = fixture.pane.id, .needle = "error" }).found;
 
     try std.testing.expectEqual(@as(u8, 2), found.count);
     try std.testing.expect(!found.truncated);
-    try std.testing.expectEqualDeep(schema.SearchMatch{ .x = 0, .y = 1, .len = 5 }, found.items[0]);
-    try std.testing.expectEqualDeep(schema.SearchMatch{ .x = 6, .y = 3, .len = 5 }, found.items[1]);
+    try std.testing.expectEqualDeep(SearchMatchType{ .x = 0, .y = 1, .len = 5 }, found.items[0]);
+    try std.testing.expectEqualDeep(SearchMatchType{ .x = 6, .y = 3, .len = 5 }, found.items[1]);
 
     const sensitive = handler.execute(.{ .pane_id = fixture.pane.id, .needle = "Error" }).found;
     try std.testing.expectEqual(@as(u8, 1), sensitive.count);
     try std.testing.expectEqual(@as(u32, 1), sensitive.items[0].y);
 
-    try std.testing.expect(handler.execute(.{ .pane_id = try schema.id.pane(99), .needle = "x" }) == .pane_not_attached);
+    try std.testing.expect(handler.execute(.{ .pane_id = try pane_module(99), .needle = "x" }) == .pane_not_attached);
 }

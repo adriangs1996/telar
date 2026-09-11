@@ -1,59 +1,24 @@
 //! macOS and Linux system-call boundary for PTY sessions.
 
-const std = @import("std");
 const builtin = @import("builtin");
-const Exit = @import("exit.zig").Exit;
+const std = @import("std");
+const Pair = @import("Pair.zig");
+const CLD = @import("CLD.zig");
+const exit = @import("exit.zig");
 
 const TIOC = switch (builtin.os.tag) {
-    .macos => struct {
-        const SWINSZ: c_int = @bitCast(@as(u32, 0x80087467));
-        const SCTTY: c_int = 0x20007461;
-        const FLUSH: c_int = @bitCast(@as(u32, 0x80047410));
-    },
-    .linux => struct {
-        const SWINSZ: c_int = 0x5414;
-        const SCTTY: c_int = 0x540E;
-        const FLUSH: c_int = 0x540B;
-    },
+    .macos => @import("native_darwin.zig"),
+    .linux => @import("native_linux.zig"),
     else => @compileError("telar's PTY bootstrap currently supports macOS and Linux"),
 };
 
-const WAITID = switch (builtin.os.tag) {
-    .macos => struct {
-        const P_PID: c_int = 1;
-        const WNOHANG: c_int = 0x00000001;
-        const WEXITED: c_int = 0x00000004;
-        const WSTOPPED: c_int = 0x00000008;
-        const WCONTINUED: c_int = 0x00000010;
-        const WNOWAIT: c_int = 0x00000020;
-    },
-    .linux => struct {
-        const P_PID: c_int = 1;
-        const WNOHANG: c_int = 0x00000001;
-        const WSTOPPED: c_int = 0x00000002;
-        const WCONTINUED: c_int = 0x00000008;
-        const WEXITED: c_int = 0x00000004;
-        const WNOWAIT: c_int = 0x01000000;
-    },
-    else => @compileError("telar's PTY bootstrap currently supports macOS and Linux"),
-};
-
-const CLD = struct {
-    const EXITED: c_int = 1;
-    const KILLED: c_int = 2;
-    const DUMPED: c_int = 3;
-};
+const WAITID = TIOC;
 
 extern "c" fn waitid(idtype: c_int, id: c_uint, infop: *std.c.siginfo_t, options: c_int) c_int;
 extern "c" fn openpty(amaster: *std.c.fd_t, aslave: *std.c.fd_t, name: ?[*]u8, termp: ?*const std.posix.termios, winp: ?*const std.posix.winsize) c_int;
 extern "c" fn _NSGetEnviron() *[*:null]?[*:0]u8;
 extern "c" var environ: [*:null]?[*:0]u8;
 extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
-
-pub const Pair = struct {
-    master: std.c.fd_t,
-    slave: std.c.fd_t,
-};
 
 pub fn openPty(window: *const std.posix.winsize) !Pair {
     var pair: Pair = .{ .master = -1, .slave = -1 };
@@ -152,7 +117,7 @@ pub fn waitObserve(pid: std.c.pid_t) !void {
     }
 }
 
-pub fn waitPid(pid: std.c.pid_t) !Exit {
+pub fn waitPid(pid: std.c.pid_t) !exit.Exit {
     var child_status: c_int = undefined;
     while (true) {
         const result = std.c.waitpid(pid, &child_status, 0);

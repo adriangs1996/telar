@@ -1,10 +1,15 @@
 //! Shared validators, composite-value codecs, and the derived fixed-layout
 //! serializer used by the files under `messages/`.
 
-const std = @import("std");
-const wire = @import("wire.zig");
 const id = @import("id.zig");
+const std = @import("std");
+const EnvironmentEntryType = @import("EnvironmentEntry.zig");
 const types = @import("types.zig");
+const EncoderType = @import("Encoder.zig");
+const TerminalSizeType = @import("TerminalSize.zig");
+const DecoderType = @import("Decoder.zig");
+const TabLocationType = @import("TabLocation.zig");
+const GenericDerived = @import("GenericDerived.zig").Type;
 
 // -- validators -------------------------------------------------------------
 
@@ -29,7 +34,7 @@ pub fn validateBytes(bytes: []const u8, maximum: usize, empty_allowed: bool) !vo
     }
 }
 
-pub fn validateEnvironmentEntry(entry: types.EnvironmentEntry) !void {
+pub fn validateEnvironmentEntry(entry: EnvironmentEntryType) !void {
     try validateBytes(entry.name, std.math.maxInt(u16), false);
     try validateBytes(entry.value, std.math.maxInt(u32), true);
     if (std.mem.findScalar(u8, entry.name, '=') != null) {
@@ -56,15 +61,15 @@ pub fn validateTabLabel(label: []const u8, empty_allowed: bool) !void {
 
 // -- composite values -------------------------------------------------------
 
-pub fn encodeSize(encoder: *wire.Encoder, size: types.TerminalSize) !void {
+pub fn encodeSize(encoder: *EncoderType, size: TerminalSizeType) !void {
     try encoder.writeInt(u16, size.cols);
     try encoder.writeInt(u16, size.rows);
     try encoder.writeInt(u16, size.cell_width_px);
     try encoder.writeInt(u16, size.cell_height_px);
 }
 
-pub fn decodeSize(decoder: *wire.Decoder) !types.TerminalSize {
-    const size = types.TerminalSize{
+pub fn decodeSize(decoder: *DecoderType) !TerminalSizeType {
+    const size = TerminalSizeType{
         .cols = try decoder.readInt(u16),
         .rows = try decoder.readInt(u16),
         .cell_width_px = try decoder.readInt(u16),
@@ -74,7 +79,7 @@ pub fn decodeSize(decoder: *wire.Decoder) !types.TerminalSize {
     return size;
 }
 
-pub fn encodeTabLocation(encoder: *wire.Encoder, location: types.TabLocation) !void {
+pub fn encodeTabLocation(encoder: *EncoderType, location: TabLocationType) !void {
     try encodeWorkspaceLocation(encoder, location.workspace);
     if (location.tab_id == .invalid) {
         return error.InvalidTabId;
@@ -82,7 +87,7 @@ pub fn encodeTabLocation(encoder: *wire.Encoder, location: types.TabLocation) !v
     try encoder.writeInt(u64, id.raw(location.tab_id));
 }
 
-pub fn encodeWorkspaceLocation(encoder: *wire.Encoder, location: types.WorkspaceLocation) !void {
+pub fn encodeWorkspaceLocation(encoder: *EncoderType, location: types.WorkspaceLocation) !void {
     switch (location) {
         .workspace => |workspace_id| {
             if (workspace_id == .invalid) {
@@ -101,14 +106,14 @@ pub fn encodeWorkspaceLocation(encoder: *wire.Encoder, location: types.Workspace
     }
 }
 
-pub fn decodeTabLocation(decoder: *wire.Decoder) !types.TabLocation {
+pub fn decodeTabLocation(decoder: *DecoderType) !TabLocationType {
     return .{
         .workspace = try decodeWorkspaceLocation(decoder),
         .tab_id = try id.tab(try decoder.readInt(u64)),
     };
 }
 
-pub fn decodeWorkspaceLocation(decoder: *wire.Decoder) !types.WorkspaceLocation {
+pub fn decodeWorkspaceLocation(decoder: *DecoderType) !types.WorkspaceLocation {
     return switch (try decoder.readByte()) {
         0 => .{ .workspace = try id.workspace(try decoder.readInt(u64)) },
         1 => .{ .worktree = try id.worktree(try decoder.readInt(u64)) },
@@ -155,104 +160,9 @@ pub fn decodeFailureCode(value: u16) error{UnknownFailureCode}!types.FailureCode
 // and `pub fn validateWire(message) !void` for rules beyond field types.
 // Variable-length messages (views, iterators, raw tails) stay hand-written.
 
-pub fn Derived(comptime T: type) type {
-    const allow_zero_request_id =
-        @hasDecl(T, "wire_allow_zero_request_id") and T.wire_allow_zero_request_id;
-    return struct {
-        pub fn encode(encoder: *wire.Encoder, message: T) !void {
-            if (@hasDecl(T, "validateWire")) {
-                try message.validateWire();
-            }
-            inline for (@typeInfo(T).@"struct".fields) |field| {
-                try encodeField(field.type, encoder, @field(message, field.name));
-            }
-        }
-
-        pub fn decode(decoder: *wire.Decoder) !T {
-            var message: T = undefined;
-            inline for (@typeInfo(T).@"struct".fields) |field| {
-                @field(message, field.name) = try decodeField(field.type, decoder);
-            }
-            if (@hasDecl(T, "validateWire")) {
-                try message.validateWire();
-            }
-            return message;
-        }
-
-        fn encodeField(comptime F: type, encoder: *wire.Encoder, value: F) !void {
-            switch (F) {
-                id.RequestId => {
-                    if (!allow_zero_request_id) {
-                        try validateRequestId(value);
-                    }
-                    try encoder.writeInt(u64, id.raw(value));
-                },
-                id.PaneId => {
-                    try validatePaneId(value);
-                    try encoder.writeInt(u64, id.raw(value));
-                },
-                ?id.WorkspaceId => {
-                    try encoder.writeByte(@intFromBool(value != null));
-                    if (value) |workspace_id| {
-                        if (workspace_id == .invalid) {
-                            return error.InvalidWorkspaceId;
-                        }
-                        try encoder.writeInt(u64, id.raw(workspace_id));
-                    }
-                },
-                types.TabLocation => try encodeTabLocation(encoder, value),
-                types.WorkspaceLocation => try encodeWorkspaceLocation(encoder, value),
-                types.TerminalSize => {
-                    try value.validate();
-                    try encodeSize(encoder, value);
-                },
-                bool => try encoder.writeByte(@intFromBool(value)),
-                u8 => try encoder.writeByte(value),
-                u16, u32, u64, i32, i64 => try encoder.writeInt(F, value),
-                types.ExitKind, types.TabMoveDirection, types.PaneTextSource, types.PaneTextMode, types.ProxyScope => {
-                    try encoder.writeByte(@intFromEnum(value));
-                },
-                else => @compileError("underivable field type " ++ @typeName(F)),
-            }
-        }
-
-        fn decodeField(comptime F: type, decoder: *wire.Decoder) !F {
-            return switch (F) {
-                id.RequestId => if (allow_zero_request_id)
-                    @enumFromInt(try decoder.readInt(u64))
-                else
-                    try id.request(try decoder.readInt(u64)),
-                id.PaneId => try id.pane(try decoder.readInt(u64)),
-                ?id.WorkspaceId => if (try decoder.readBool())
-                    try id.workspace(try decoder.readInt(u64))
-                else
-                    null,
-                types.TabLocation => try decodeTabLocation(decoder),
-                types.WorkspaceLocation => try decodeWorkspaceLocation(decoder),
-                types.TerminalSize => try decodeSize(decoder),
-                bool => try decoder.readBool(),
-                u8 => try decoder.readByte(),
-                u16, u32, u64, i32, i64 => try decoder.readInt(F),
-                types.ExitKind => try decodeExitKind(try decoder.readByte()),
-                types.TabMoveDirection => switch (try decoder.readByte()) {
-                    0 => .previous,
-                    1 => .next,
-                    else => return error.InvalidTabMoveDirection,
-                },
-                types.PaneTextSource => std.enums.fromInt(types.PaneTextSource, try decoder.readByte()) orelse
-                    return error.InvalidPaneTextSource,
-                types.PaneTextMode => std.enums.fromInt(types.PaneTextMode, try decoder.readByte()) orelse
-                    return error.InvalidPaneTextMode,
-                types.ProxyScope => try decodeProxyScope(try decoder.readByte()),
-                else => @compileError("underivable field type " ++ @typeName(F)),
-            };
-        }
-    };
-}
-
 pub fn encodeDerived(comptime tag: u8, buffer: []u8, message: anytype) ![]const u8 {
-    var encoder = wire.Encoder.init(buffer);
+    var encoder = EncoderType.init(buffer);
     try encoder.writeByte(tag);
-    try Derived(@TypeOf(message)).encode(&encoder, message);
+    try GenericDerived(@TypeOf(message)).encode(&encoder, message);
     return encoder.finish();
 }

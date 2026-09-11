@@ -1,20 +1,19 @@
 //! Client resource reconciliation after canonical tab snapshots.
 
-const std = @import("std");
-const core = @import("telar-core");
-const tabs_application = @import("telar-client").application.tabs;
-const panes_application = @import("telar-client").application.panes;
-const client_model = @import("telar-client").model;
-const active_pane_resources = @import("../panes/active_pane_resources.zig");
-const pane_geometry = @import("../panes/pane_geometry.zig");
+const Client = @import("../../Client.zig");
+const TabSnapshotViewType = @import("telar-core").TabSnapshotView;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-
-const Client = @import("../../client.zig");
-const pane_attachment_requests = panes_application.pane_attachment_requests;
-const schema = core.schema;
-const tab_snapshot = tabs_application.tab_snapshot;
-const tab_snapshot_delivery = tabs_application.tab_snapshot_delivery;
-const ui = core.ui;
+const std = @import("std");
+const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
+const PaneIdType = @import("telar-core").PaneId;
+const RectType = @import("telar-core").Rect;
+const RequestActivePaneAttachmentsHandlerType = @import("telar-client").RequestActivePaneAttachmentsHandler;
+const ApplyTabSnapshotHandlerType = @import("telar-client").ApplyTabSnapshotHandler;
+const TabReconciliationType = @import("telar-client").TabReconciliation;
+const DeliverTabSnapshotHandlerType = @import("telar-client").DeliverTabSnapshotHandler;
+const pane_geometry = @import("../panes/pane_geometry.zig");
+const active_pane_resources = @import("../panes/active_pane_resources.zig");
+const PaneAttachmentRequestType = @import("telar-client").PaneAttachmentRequest;
 
 pub const Outcome = enum {
     applied,
@@ -26,7 +25,7 @@ pub const Outcome = enum {
 /// ```zig
 /// _ = try apply(client, snapshot);
 /// ```
-pub fn apply(client: *Client, snapshot: schema.TabSnapshotView) !Outcome {
+pub fn apply(client: *Client, snapshot: TabSnapshotViewType) !Outcome {
     const continuation = request_lifecycle.consume(client, snapshot.request_id) orelse
         return error.UnexpectedTabSnapshot;
     const expected_location = switch (continuation) {
@@ -38,7 +37,7 @@ pub fn apply(client: *Client, snapshot: schema.TabSnapshotView) !Outcome {
         return error.UnexpectedTabSnapshot;
     }
 
-    var pane_ids: [schema.max_panes_per_tab]schema.PaneId = undefined;
+    var pane_ids: [max_panes_per_tab_module]PaneIdType = undefined;
     var pane_count: usize = 0;
     var panes = snapshot.panes();
     while (try panes.next()) |pane| {
@@ -66,8 +65,8 @@ pub fn apply(client: *Client, snapshot: schema.TabSnapshotView) !Outcome {
 /// ```zig
 /// try attachActive(client, client.geometry().area);
 /// ```
-pub fn attachActive(client: *Client, area: ui.Rect) !void {
-    var use_case: pane_attachment_requests.RequestActivePaneAttachmentsHandler = .{
+pub fn attachActive(client: *Client, area: RectType) !void {
+    var use_case: RequestActivePaneAttachmentsHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = client,
@@ -79,7 +78,7 @@ pub fn attachActive(client: *Client, area: ui.Rect) !void {
     _ = try use_case.execute(area);
 }
 
-fn reconciliationHandler(client: *Client) tab_snapshot.ApplyTabSnapshotHandler {
+fn reconciliationHandler(client: *Client) ApplyTabSnapshotHandlerType {
     return .{
         .model = &client.model,
         .area = client.geometry().area,
@@ -90,9 +89,9 @@ fn reconciliationHandler(client: *Client) tab_snapshot.ApplyTabSnapshotHandler {
     };
 }
 
-fn deliverReconciliation(context: *anyopaque, reconciliation: *const client_model.TabReconciliation) !void {
+fn deliverReconciliation(context: *anyopaque, reconciliation: *const TabReconciliationType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    var use_case: tab_snapshot_delivery.DeliverTabSnapshotHandler = .{
+    var use_case: DeliverTabSnapshotHandlerType = .{
         .model = &client.model,
         .geometry_effects = pane_geometry.offerEffects(client),
         .effects = .{
@@ -108,13 +107,13 @@ fn deliverReconciliation(context: *anyopaque, reconciliation: *const client_mode
     try use_case.execute(reconciliation);
 }
 
-fn ignorePaneRequests(context: *anyopaque, pane_id: schema.PaneId) void {
+fn ignorePaneRequests(context: *anyopaque, pane_id: PaneIdType) void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     request_lifecycle.ignorePane(client, pane_id);
 }
 
-fn clearPaneGraphics(context: *anyopaque, pane_id: schema.PaneId) void {
+fn clearPaneGraphics(context: *anyopaque, pane_id: PaneIdType) void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     client.graphics_store.clearPane(pane_id);
@@ -126,13 +125,13 @@ fn synchronizeActiveResources(context: *anyopaque) !void {
     try active_pane_resources.synchronize(client);
 }
 
-fn attachmentPending(context: *anyopaque, pane_id: schema.PaneId) bool {
+fn attachmentPending(context: *anyopaque, pane_id: PaneIdType) bool {
     const client: *Client = @ptrCast(@alignCast(context));
 
     return request_lifecycle.hasPane(client, .attachment, pane_id);
 }
 
-fn requestAttachment(context: *anyopaque, request: tab_snapshot_delivery.PaneAttachmentRequest) !void {
+fn requestAttachment(context: *anyopaque, request: PaneAttachmentRequestType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try request_lifecycle.nextId(client);
     try request_lifecycle.deliver(client, .{

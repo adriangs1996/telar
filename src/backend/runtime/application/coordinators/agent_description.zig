@@ -1,38 +1,21 @@
 //! Single-flight scheduling and completion for generated agent titles.
 
+const GenericAgentDescriptionRuntimePort = @import("GenericAgentDescriptionRuntimePort.zig").Type;
+const AgentDescriptionCapture = @import("AgentDescriptionCapture.zig");
+const GenericAgentDescriptionCoordinator = @import("GenericAgentDescriptionCoordinator.zig").Type;
+const CommandType = @import("../../../agent/Command.zig");
+const TrackerType = @import("../../../agent/Tracker.zig");
+const IdentityType = @import("../../../agent/Identity.zig");
+const pane_module = @import("telar-core").pane;
 const std = @import("std");
-const core = @import("telar-core");
-const agent_mod = @import("../../../agent/root.zig");
-const pane_mod = @import("../../../pane/root.zig");
-
-const description = agent_mod.description;
-const schema = core.schema;
-
-pub const State = struct {
-    pending: bool = false,
-
-    /// Reports whether a generator actor still owns the global description
-    /// slot, even if its agent aggregate has already been retired.
-    ///
-    /// ```zig
-    /// if (state.isPending()) {
-    ///     return;
-    /// }
-    /// ```
-    pub fn isPending(state: *const State) bool {
-        return state.pending;
-    }
-
-    fn begin(state: *State) void {
-        std.debug.assert(!state.pending);
-        state.pending = true;
-    }
-
-    fn complete(state: *State) void {
-        std.debug.assert(state.pending);
-        state.pending = false;
-    }
-};
+const Started = @import("Started.zig");
+const description = @import("../../../agent/description.zig");
+const ResultType = @import("../../../agent/Result.zig");
+const Fixture = @import("Fixture.zig");
+const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
+const AgentTitleStateType = @import("telar-core").AgentTitleState;
+const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
+const AgentSnapshotEntryType = @import("telar-core").AgentSnapshotEntry;
 
 pub const ScheduleResult = enum {
     no_work,
@@ -40,190 +23,28 @@ pub const ScheduleResult = enum {
     failed,
 };
 
-pub const Resources = struct {
-    agents: *agent_mod.Tracker,
-    state: *State,
-    command: ?description.Command,
-};
-
-/// Defines generator startup, durable title projection, and client delivery
-/// bound by the runtime instance.
-///
-/// ```zig
-/// const port: RuntimePort(Context) = .{ ... };
-/// ```
-pub fn RuntimePort(comptime Context: type) type {
-    return struct {
-        start: *const fn (*Context, description.Command, description.Job) anyerror!void,
-        persist: *const fn (*Context, agent_mod.DescriptionFinished) void,
-        pump_clients: *const fn (*Context) void,
-    };
-}
-
-/// Creates a statically dispatched agent-description coordinator.
-///
-/// ```zig
-/// const AgentDescriptionCoordinator = Coordinator(Context, port);
-/// ```
-pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) type {
-    return struct {
-        const Self = @This();
-
-        context: *Context,
-        resources: Resources,
-
-        /// Binds one runtime's agent tracker, generator configuration, and
-        /// single-flight actor state.
-        ///
-        /// ```zig
-        /// var coordinator = AgentDescriptionCoordinator.init(&context, resources);
-        /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
-            return .{ .context = context, .resources = resources };
-        }
-
-        /// Starts at most one configured generator job. Scheduler failure is
-        /// committed as a failed aggregate result; the caller remains
-        /// responsible for the delivery opportunity surrounding this call.
-        ///
-        /// ```zig
-        /// _ = coordinator.schedule();
-        /// ```
-        pub fn schedule(coordinator: *Self) ScheduleResult {
-            const command = coordinator.resources.command orelse return .no_work;
-            if (coordinator.resources.state.isPending()) {
-                return .no_work;
-            }
-
-            var job = coordinator.resources.agents.nextDescriptionJob() orelse return .no_work;
-            defer std.crypto.secureZero(u8, &job.query);
-
-            port.start(coordinator.context, command, job) catch {
-                _ = coordinator.commit(.{
-                    .pane = job.pane,
-                    .session_id = job.session_id,
-                    .status = .failed,
-                });
-                return .failed;
-            };
-
-            coordinator.resources.state.begin();
-            return .started;
-        }
-
-        /// Releases the completed actor slot, applies only an exact aggregate
-        /// result, persists the validated domain event, starts the next queued
-        /// job, then gives clients one delivery opportunity.
-        ///
-        /// ```zig
-        /// coordinator.handle(result);
-        /// ```
-        pub fn handle(coordinator: *Self, result: description.Result) void {
-            coordinator.resources.state.complete();
-            _ = coordinator.commit(result);
-            _ = coordinator.schedule();
-            port.pump_clients(coordinator.context);
-        }
-
-        fn commit(coordinator: *Self, result: description.Result) bool {
-            const finished = coordinator.resources.agents.finishDescription(&result) orelse return false;
-            port.persist(coordinator.context, finished);
-            return true;
-        }
-    };
-}
-
-const Step = enum {
+pub const Step = enum {
     start,
     persist,
     pump_clients,
 };
 
-const Started = struct {
-    pane: pane_mod.PaneKey = undefined,
-    session_id: [16]u8 = undefined,
-    query_matches: bool = false,
+const test_port: GenericAgentDescriptionRuntimePort(AgentDescriptionCapture) = .{
+    .start = AgentDescriptionCapture.start,
+    .persist = AgentDescriptionCapture.persist,
+    .pump_clients = AgentDescriptionCapture.pumpClients,
 };
 
-const Capture = struct {
-    steps: [8]Step = undefined,
-    len: usize = 0,
-    start_failure: bool = false,
-    expected_query: []const u8 = "",
-    state: ?*const State = null,
-    starts: [2]Started = undefined,
-    start_count: usize = 0,
-    start_saw_idle: bool = false,
-    persisted: [2]agent_mod.DescriptionFinished = undefined,
-    persisted_count: usize = 0,
-    persist_saw_idle: bool = false,
-
-    fn record(capture: *Capture, step: Step) void {
-        std.debug.assert(capture.len < capture.steps.len);
-        capture.steps[capture.len] = step;
-        capture.len += 1;
-    }
-
-    fn start(capture: *Capture, _: description.Command, job: description.Job) !void {
-        capture.record(.start);
-        capture.start_saw_idle = !capture.state.?.isPending();
-        std.debug.assert(capture.start_count < capture.starts.len);
-        capture.starts[capture.start_count] = .{
-            .pane = job.pane,
-            .session_id = job.session_id,
-            .query_matches = std.mem.eql(u8, capture.expected_query, job.querySlice()),
-        };
-        capture.start_count += 1;
-
-        if (capture.start_failure) {
-            return error.SchedulerUnavailable;
-        }
-    }
-
-    fn persist(capture: *Capture, finished: agent_mod.DescriptionFinished) void {
-        capture.record(.persist);
-        capture.persist_saw_idle = !capture.state.?.isPending();
-        std.debug.assert(capture.persisted_count < capture.persisted.len);
-        capture.persisted[capture.persisted_count] = finished;
-        capture.persisted_count += 1;
-    }
-
-    fn pumpClients(capture: *Capture) void {
-        capture.record(.pump_clients);
-    }
-};
-
-const test_port: RuntimePort(Capture) = .{
-    .start = Capture.start,
-    .persist = Capture.persist,
-    .pump_clients = Capture.pumpClients,
-};
-
-const TestCoordinator = Coordinator(Capture, test_port);
+pub const TestCoordinator = GenericAgentDescriptionCoordinator(AgentDescriptionCapture, test_port);
 const generator_arguments = [_][]const u8{"generator"};
-const test_command: description.Command = .{
+const test_command: CommandType = .{
     .arguments = &generator_arguments,
     .timeout_ms = 1_000,
 };
 
-const Fixture = struct {
-    agents: agent_mod.Tracker = .{},
-    state: State = .{},
-    capture: Capture = .{},
-
-    fn coordinator(fixture: *Fixture, command: ?description.Command) TestCoordinator {
-        fixture.capture.state = &fixture.state;
-        return TestCoordinator.init(&fixture.capture, .{
-            .agents = &fixture.agents,
-            .state = &fixture.state,
-            .command = command,
-        });
-    }
-};
-
-fn seedDescription(agents: *agent_mod.Tracker, raw: u64, submitted_input: []const u8) !agent_mod.Identity {
-    const identity: agent_mod.Identity = .{
-        .key = .{ .id = try schema.id.pane(raw), .generation = raw },
+fn seedDescription(agents: *TrackerType, raw: u64, submitted_input: []const u8) !IdentityType {
+    const identity: IdentityType = .{
+        .key = .{ .id = try pane_module(raw), .generation = raw },
         .process_id = @intCast(raw + 10),
         .session_id = @splat(@intCast(raw)),
     };
@@ -248,8 +69,8 @@ fn seedDescription(agents: *agent_mod.Tracker, raw: u64, submitted_input: []cons
     return identity;
 }
 
-fn resultFor(started: Started, status: description.ResultStatus, title: []const u8) description.Result {
-    var result: description.Result = .{
+fn resultFor(started: Started, status: description.ResultStatus, title: []const u8) ResultType {
+    var result: ResultType = .{
         .pane = started.pane,
         .session_id = started.session_id,
         .status = status,
@@ -259,7 +80,7 @@ fn resultFor(started: Started, status: description.ResultStatus, title: []const 
     return result;
 }
 
-fn expectSteps(capture: *const Capture, expected: []const Step) !void {
+fn expectSteps(capture: *const AgentDescriptionCapture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
 }
 
@@ -307,8 +128,8 @@ test "startup failure commits an owned failed title without claiming the slot" {
     try std.testing.expect(fixture.capture.persist_saw_idle);
     const persisted = fixture.capture.persisted[0];
     try std.testing.expectEqualStrings("", persisted.titleSlice());
-    try std.testing.expectEqual(schema.AgentTitleSource.telar, persisted.source);
-    try std.testing.expectEqual(schema.AgentTitleState.failed, persisted.state);
+    try std.testing.expectEqual(AgentTitleSourceType.telar, persisted.source);
+    try std.testing.expectEqual(AgentTitleStateType.failed, persisted.state);
 }
 
 test "successful completion persists the aggregate event before pumping" {
@@ -325,8 +146,8 @@ test "successful completion persists the aggregate event before pumping" {
     try std.testing.expect(fixture.capture.persist_saw_idle);
     const persisted = fixture.capture.persisted[0];
     try std.testing.expectEqualStrings("Refactor proxy", persisted.titleSlice());
-    try std.testing.expectEqual(schema.AgentTitleSource.generated, persisted.source);
-    try std.testing.expectEqual(schema.AgentTitleState.ready, persisted.state);
+    try std.testing.expectEqual(AgentTitleSourceType.generated, persisted.source);
+    try std.testing.expectEqual(AgentTitleStateType.ready, persisted.state);
 }
 
 test "invalid successful output persists the aggregate's failed projection" {
@@ -340,8 +161,8 @@ test "invalid successful output persists the aggregate's failed projection" {
     try expectSteps(&fixture.capture, &.{ .start, .persist, .pump_clients });
     const persisted = fixture.capture.persisted[0];
     try std.testing.expectEqualStrings("", persisted.titleSlice());
-    try std.testing.expectEqual(schema.AgentTitleSource.telar, persisted.source);
-    try std.testing.expectEqual(schema.AgentTitleState.failed, persisted.state);
+    try std.testing.expectEqual(AgentTitleSourceType.telar, persisted.source);
+    try std.testing.expectEqual(AgentTitleStateType.failed, persisted.state);
 }
 
 test "every unsuccessful generator result persists one failed projection" {
@@ -363,8 +184,8 @@ test "every unsuccessful generator result persists one failed projection" {
         try expectSteps(&fixture.capture, &.{ .start, .persist, .pump_clients });
         const persisted = fixture.capture.persisted[0];
         try std.testing.expectEqualStrings("", persisted.titleSlice());
-        try std.testing.expectEqual(schema.AgentTitleSource.telar, persisted.source);
-        try std.testing.expectEqual(schema.AgentTitleState.failed, persisted.state);
+        try std.testing.expectEqual(AgentTitleSourceType.telar, persisted.source);
+        try std.testing.expectEqual(AgentTitleStateType.failed, persisted.state);
         try std.testing.expect(!fixture.state.isPending());
     }
 }
@@ -381,7 +202,7 @@ test "a stale generated result cannot overwrite or persist a manual title" {
     try expectSteps(&fixture.capture, &.{ .start, .pump_clients });
     try std.testing.expectEqual(@as(usize, 0), fixture.capture.persisted_count);
     try std.testing.expect(!fixture.state.isPending());
-    var entries: [agent_mod.max_records]schema.AgentSnapshotEntry = undefined;
+    var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
     try std.testing.expectEqualStrings("Manual title", fixture.agents.snapshot(&entries)[0].session_title);
 }
 

@@ -1,37 +1,19 @@
 //! Bounded extraction of terminal selections in absolute scrollback coordinates.
 
+const max_clipboard_bytes_module = @import("telar-core").max_clipboard_bytes;
+const Pane = @import("../../pane/Pane.zig");
+const Range = @import("Range.zig");
 const std = @import("std");
 const vt = @import("ghostty-vt");
-const core = @import("telar-core");
-const pane_mod = @import("../../pane/root.zig");
+const Endpoints = @import("Endpoints.zig");
+const Point = @import("Point.zig");
 
-const schema = core.schema;
-const Pane = pane_mod.Pane;
-
-pub const scratch_bytes = 2 * schema.max_clipboard_bytes + 1;
-
-pub const Range = struct {
-    start_x: u16,
-    start_y: u32,
-    end_x: u16,
-    end_y: u32,
-    linewise: bool,
-};
+pub const scratch_bytes = 2 * max_clipboard_bytes_module + 1;
 
 pub const Result = union(enum) {
     copied: []const u8,
     unavailable,
     too_large,
-};
-
-const Point = struct {
-    x: u16,
-    y: u32,
-};
-
-const Endpoints = struct {
-    start: Point,
-    end: Point,
 };
 
 /// Extracts one inclusive range into caller-owned fixed storage. Returned bytes
@@ -60,7 +42,7 @@ pub fn extract(pane: *Pane, range: Range, scratch: []u8) Result {
         .sel = vt.Selection.init(start, finish, false),
     }) catch return .too_large;
 
-    if (selected.len > schema.max_clipboard_bytes) {
+    if (selected.len > max_clipboard_bytes_module) {
         return .too_large;
     }
 
