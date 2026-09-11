@@ -1,168 +1,128 @@
 # Client presentation lifecycle
 
-This flow starts after a client event commits semantic or physical display
-state. It ends when the latest state reaches the host terminal, its frame
-acknowledgements enter runtime transport, and any remaining graphics work has
-one media task scheduled.
+A client event commits semantic or physical display state. Presentation observes
+that state, prepares bounded work and reports delivery. Only then can the
+application retire exact frame damage and enqueue acknowledgements.
 
 ## Boundary
 
-`Presenter` owns the host screen buffers, pane compositor, observed and
-presented revisions, frame pacing, draw and media scheduling tokens and the
-last presented timestamp. It decides whether a revision needs a frame. Client
-use cases never schedule a frame; visible changes reach the presenter through
-the observation boundary.
-
-`presentation_lifecycle` is the asynchronous adapter. `client_events`
-delegates `.draw` and `.media_tick` events to it and publishes one observation
-after every non-terminal event. The adapter releases task tokens, asks the
-presenter for a delivery and supplies concrete effects to
-`DeliverPresentationHandler`. The handler owns the irreversible post-flush
-policy. Neither component decides which parts of the screen changed.
+The common `telar-client.presentation` capability owns the borrowed projection,
+observations, pane-coordinate geometry and single-flight completion identity.
+Each client has its own lifecycle. The TUI `Presenter` owns `Screen`, compositor,
+pacing, draw/media deadlines and physical caches. Handlers never request draws.
 
 ```text
 committed client event
         |
 presentation_lifecycle.observe
         |
-model Version + graphics/attachment ingress + PresentationIngress
+model version + resource/input/geometry revisions
         |
-Presenter.observe -> one paced draw task
+common lifecycle.observe -> TUI pacing
         |
-ClientEvent.draw -> presentation_lifecycle.handleDraw
+shared capture + TUI resources -> Presenter.presentDue
         |
-presentation_projection -> Presenter.presentDue -> cell flush
+compose and encode -> lifecycle.begin -> owned token
+        |
+sealed output bytes -> host write completion
+        |
+lifecycle.complete(token, delivered)
         |
 DeliverPresentationHandler
         |
-PresentationCommit -> graphics credits -> frame_ack messages -> optional media task
+filter attachment generations + exact damage commit
         |
-ClientEvent.media_tick -> presentation_lifecycle.handleMediaTick
-        |
-bounded graphics flush
+graphics credits -> frame_ack -> optional media task
 ```
 
-## Observation and frame choice
+The headless adapter uses the same projection, lifecycle and delivery handler.
+It copies cells into bounded storage instead of encoding a terminal diff. Its
+caller controls when preparation and delivery fail or finish.
 
-The dispatcher publishes one complete `Presenter.Observation` after every
-non-terminal event. It contains the semantic `ClientModel.Version` and the
-ingress versions of pane graphics, client attachments, view interactions and
-visible input routing. `Presenter` compares it with both the last observation
-and the last successful presentation.
+## Observation and preparation
 
-An identical observation does nothing while a draw is pending. A newer
-observation increments the saturating `pending_updates` count but retains the
-same draw task. Once no draw task is pending, an observation newer than the
-last successful presentation either presents inline or schedules one task.
+`Observation` contains `ClientModel.Version`, graphics and attachment ingress,
+visible input/view interaction revisions and the host-region revision. The
+lifecycle keeps observed, prepared and delivered values separately. Observing
+unchanged prepared work adds no frame, including while its write is pending.
+A newer observation replaces the desired version; there is no frame queue.
 
-The pacer holds burst credit: `pace.default_burst` frames accrue while the UI
-is quiet, one per `1 / 60` second. A frame that finds credit presents
-synchronously through the scheduler's `draw_now` port, on the event-loop
-thread, before the dispatcher returns; it never pays a timer task or a
-wakeup. Only a frame that finds no credit arms the paced `.draw` task for the
-next cadence slot. One interaction is usually two or three frames, because the
-runtime folds output that arrives while a frame is unacknowledged into the
-next frame, and the credit exists so none of them wait an interval.
+TUI scheduling retains burst credit, input grace and the existing paced draw
+deadline. An event may prepare immediately or coalesce onto that deadline.
+`presentation_projection` supplies host context to the shared `capture` builder.
+Rendering borrows model data synchronously and receives TUI resources separately.
+No worker borrows the model or the projection.
 
-Credit runs out while other panes flood. `Presenter.noteInput` therefore also
-opens `pace.default_input_grace` after every host read: inside that window up
-to `pace.default_input_frames` frames present immediately with no credit,
-even while a paced draw task is already armed; that task keeps its token and
-finds nothing pending when it fires. The keystroke's echo can sit behind one
-in-flight frame per busy pane, because the runtime serves attachments in
-turn, so the frame bound covers a full tab of panes while an Enter that starts
-a flood pays a handful of unthrottled frames instead of a whole window of
-them.
+The compositor keeps last-painted cells, its layout snapshot and copy projection.
+It reads the shared workspace and returns its bounded `PresentationCommit`,
+including fullscreen-hidden panes. An empty active model composes an explicit
+empty screen. Preparation advances prepared revisions, not delivered revisions
+or pane acknowledgement state.
 
-The `presentation_projection` adapter captures one bounded immutable projection
-from the concrete client aggregate. It includes the model version, immutable
-semantic snapshots, active tab model and copy-mode value. It separately exposes
-the mutable view, graphics store and host writer that presentation owns.
-`Presenter` imports neither `Client` nor its event union; an opaque scheduling
-port arms the client-owned draw and media tasks.
+## Output and completion
 
-`PresentationIngress` keeps disposable hover, sidebar scroll, attachment-modal
-and prefix-router state out of `ClientModel`. Their owners expose only monotonic
-revisions. Input adapters do not return redraw commands or call
-`Presenter.requestDraw`; the event-loop observation is the scheduling boundary.
+`host_output.Output` keeps one sealed byte slice in flight. Sideband bytes may
+accumulate in its other bounded buffer. When output is occupied, the lifecycle
+records deferred draw/media work without composing another diff or discarding
+the partly written one. The actor returns after the complete write and flush.
+A zero-byte diff may complete inline because the host already has those cells.
 
-`ClientModel.activeTabModelConst` returns null during bootstrap and workspace
-handoff. A due draw then flushes an explicit empty screen instead of unwrapping
-a missing tab.
+The common lifecycle consumes the matching token once. A duplicate or replaced
+token cannot complete a newer flight. A valid completion for an older model
+version still identifies only that version's captured pane frames.
 
-## Cell and media passes
+`ClientModel.commitPresentation` rejects retired attachment generations, even
+when a reconstructed pane reuses the same wire frame number. Exact pending-frame
+matching prevents an old delivery from clearing newer damage. The handler
+derives ACKs from the accepted commit rather than accepting an unrelated array.
+It orders model commit, released graphics credit, ACKs and optional media work.
 
-The draw adapter releases `draw_pending` before checking the worker result.
-`Presenter.presentDue` compares changed model revisions, projects disposable
-view state, asks its `multiplexer.Compositor` to compose the immutable active
-tab, composes chrome and flushes the terminal cell diff. The compositor owns
-the last-painted cells, layout snapshot and copy projection. Copy selection
-changes patch only their affected visible ranges.
+`Geometry` owns region, tab, layout, host size and pane-shape identities. A new
+TUI pointer gesture cannot use changed pane geometry during an in-flight
+presentation. Captured gestures retain their existing owner. Widget hit maps
+remain adapter-owned; the contract does not prescribe native widget layout.
 
-Only a successful flush advances the presented revisions and clears
-`pending_updates`. The returned `PresentationCommit` describes the exact pane
-damage and pending frame identifiers safe to retire after that flush, including
-panes intentionally hidden by fullscreen layout. `DeliverPresentationHandler`
-applies it to `ClientModel` before invoking any external effect. Exact frame
-matching prevents an obsolete commit from consuming newer pane work.
+## Media and host services
 
-The presenter returns a fixed array of at most `multiplexer.max_panes` frame
-acknowledgements. `DeliverPresentationHandler` rejects an unbounded command
-before mutation, then flushes graphics flow-control credits and acknowledges
-each frame in presenter order. It requests media only after every
-acknowledgement succeeds. The lifecycle adapter contains only the concrete
-transport, telemetry and presenter callbacks. The runtime therefore learns
-about a frame only after the host terminal accepted it.
+Media retains its existing independent deadline, quotas and byte budget. Cell
+output takes priority. Image and attachment consumers acquire explicit leases
+when bytes outlive a synchronous call. Obsolete allocations stay charged until
+the last consumer releases them; completing cells alone cannot return that
+storage's credit.
 
-Media uses its own task token and `ClientEvent.media_tick`. A pending cell frame
-always defers media. Each pass uses the fixed 256 KiB baseline KGP budget and
-keeps incomplete transfers scheduled without blocking cell output. Input
-activity can delay graphical toasts, but it does not delay pane cells.
+Window-title formatting and change suppression use a shared synchronous title
+port. The TUI supplies hostname lookup and OSC encoding. Clipboard, links,
+notifications, sound and other host effects continue through their application
+ports. No common handler receives a terminal writer or a GPU device.
 
-## Failure and lifetime
+## Failure and teardown
 
-Draw and media completion release their tokens before propagating a worker
-error. A failed cell composition or flush leaves semantic damage and pending
-frame identifiers uncommitted, and leaves the observed version newer than the
-presented version. After a successful host flush, the handler commits the
-presentation before attempting transport. A later credit, acknowledgement or
-media scheduling failure preserves every earlier effect and skips the remaining
-ones. The current event loop treats either class of error as fatal and destroys
-the disposable client. The runtime remains canonical and a new client rebuilds
-its projection.
+Failed preparation cannot create a delivery. Failed or cancelled completion
+keeps model damage pending and permits a fresh preparation. Cancellation means
+that consumers have stopped borrowing, not that their storage may be reused
+while they are still running.
 
-Client destruction cancels the select tasks before deinitializing the
-presenter and its screen buffers. `Presenter` owns no work queue. It retains
-one draw task, one media task and the latest revisions.
+The TUI never cancels a partial diff to replace it. Write failure ends that
+client. The driver cancels and joins actors before freeing output, graphics and
+model storage; a new connection rebuilds runtime snapshots. Runtime PTYs and
+history remain valid after client death.
+
+After successful delivery, a credit, ACK or media-scheduling error does not
+undo earlier effects. The existing event loop closes that client and snapshot
+reconciliation recovers it. Completion does not claim physical input-to-photon
+or monitor presentation timing.
 
 ## Proof
 
-- `src/frontend/client/presentation_projection.zig` is the concrete-client to
-  immutable-presentation boundary.
-- `src/frontend/client/presenter.zig` owns comparison, pacing, composition,
-  fixed frame acknowledgements and independent media scheduling without a
-  `Client` dependency.
-- `src/frontend/client/presentation_lifecycle.zig` proves the event entrypoints
-  and adapts concrete transport, telemetry and presenter effects.
-- `src/frontend/client/application/presentation_delivery.zig` owns and proves
-  bounded post-flush model-commit, credit, acknowledgement and media ordering,
-  including partial failure semantics.
-- `composition damage retires only after its presentation commits`, `stale
-  presentation commits preserve newer pane work` and `fullscreen presentation
-  commits include hidden panes` prove bounded commit semantics.
-- `presentation folds repeated observations into one draw task` proves that an
-  identical observation adds no work and newer revisions share one task. The
-  client test harness zeroes pacer burst so every frame takes the scheduled
-  path; `an observation with pacer credit presents inline without a draw task`
-  proves the synchronous path.
-- `host input presentation state schedules only through observation` proves
-  that prefix state cannot schedule a frame before the presenter observes it.
-- `attachment modal captures semantic keys until escape closes it` proves that
-  a no-op modal key advances no revision and Escape reaches presentation only
-  through observation.
-- `presentation flushes an explicit empty model before bootstrap` proves the
-  no-tab lifecycle.
-- `presentation worker failures release their scheduling tokens` injects both
-  worker failures and proves token release.
-- Pane-frame and pane-graphics integration tests prove acknowledgement order,
-  resource observation, cell priority and bounded media continuation.
+- `src/client/presentation/lifecycle.zig` tests coalescing, busy admission,
+  failure, cancellation and exact-token completion.
+- `src/client/presentation/headless_tests.zig` exercises shared entrypoints,
+  handlers, resource lifetime and outbox without a terminal.
+- `src/client/application/presentation/presentation_delivery.zig` tests bounded
+  commits, effect ordering and failures after commit.
+- `src/frontend/client/tests/presentation.zig` tests TUI pacing, observations,
+  media priority and the successful/failed host-write boundary.
+- `src/frontend/client/resources/host_output.zig` tests immutable sealed bytes,
+  nonblocking prefixes, exact-once writes and token release.
+- `src/frontend/workspace/multiplexer.zig` keeps full/incremental composition,
+  hidden-pane and stale-damage tests against the common pane model.

@@ -13,3 +13,5 @@ test {
     @import("std").testing.refAllDecls(@This());
     _ = @import("headless_tests.zig");
 }
+
+pub const window_title = @import("window_title.zig");

@@ -108,8 +108,8 @@ pub fn build(b: *std.Build) void {
     });
     coverage.instrumentModule(kitty_protocol);
 
-    // These module edges are the process boundary in code before IPC exists.
-    // Both sides may import core. They cannot import each other.
+    // Runtime and client share values through core. The TUI additionally
+    // imports client behavior; neither common package imports an adapter.
     const core = b.addModule("telar-core", .{
         .root_source_file = b.path("src/core/root.zig"),
         .target = target,
@@ -409,6 +409,12 @@ pub fn build(b: *std.Build) void {
     const client_tests = b.addTest(.{ .root_module = client });
     coverage.instrumentTest(client_tests);
     const run_client_tests = b.addRunArtifact(client_tests);
+    const client_boundaries = b.addSystemCommand(&.{ "python3", b.pathFromRoot("tools/check_client_boundaries.py"), "--root", b.pathFromRoot("src/client") });
+    const boundary_tests = b.addSystemCommand(&.{ "python3", b.pathFromRoot("tools/test_client_boundaries.py") });
+    boundary_tests.setEnvironmentVariable("PYTHONDONTWRITEBYTECODE", "1");
+    client_boundaries.step.dependOn(&boundary_tests.step);
+    run_client_tests.step.dependOn(&client_boundaries.step);
+    b.step("check-client-boundaries", "Check shared-client module and capability boundaries").dependOn(&client_boundaries.step);
     b.step("test-client", "Run renderer-independent client tests").dependOn(&run_client_tests.step);
     test_step.dependOn(&run_client_tests.step);
     // zls auto-enables build-on-save when a step named "check" exists, giving
@@ -418,6 +424,24 @@ pub fn build(b: *std.Build) void {
     const check_step = b.step("check", "Semantic-analyze the test suites without running them");
     const client_check = b.addTest(.{ .root_module = client });
     check_step.dependOn(&client_check.step);
+    check_step.dependOn(&client_boundaries.step);
+    const check_client = b.step("check-client", "Semantic-analyze only the shared client");
+    check_client.dependOn(&client_check.step);
+    check_client.dependOn(&client_boundaries.step);
+    std.debug.assert(client.import_table.count() == 1 and client.import_table.get("telar-core").? == core);
+
+    for (core.import_table.values()) |dependency| {
+        std.debug.assert(dependency != client and dependency != frontend and dependency != backend);
+    }
+
+    for (backend.import_table.values()) |dependency| {
+        std.debug.assert(dependency != client and dependency != frontend);
+    }
+
+    for (frontend.import_table.values()) |dependency| {
+        std.debug.assert(dependency != backend);
+    }
+
     const codestyle_exe = b.addExecutable(.{
         .name = "codestyle",
         .root_module = b.createModule(.{

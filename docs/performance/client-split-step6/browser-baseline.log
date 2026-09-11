@@ -1,0 +1,141 @@
+telar runtime is stopping
+no daemon running
+{
+  "source": "browser",
+  "transport": "browser-chosen",
+  "terminal_browser_revision": "cce10b6131d15bf46a3e4b8dc827e0544ff7fc65",
+  "ghostty_version": "Ghostty 1.3.1",
+  "checks": {
+    "pinned_revision": true,
+    "page_loaded": true,
+    "page_completed": true,
+    "keyboard_reached_chromium": true,
+    "mouse_reached_chromium": false,
+    "hybrid_sidebar_emitted": false,
+    "exterior_kgp_supported": true,
+    "pane_graphics_emitted": true,
+    "runtime_forwarded_graphics": true,
+    "no_pty_response_drops": true,
+    "no_response_queue_drops": true,
+    "no_client_resyncs": true,
+    "no_media_resets": true,
+    "no_media_drops": true,
+    "history_isolated": true
+  },
+  "browser_events": [
+    {
+      "event": "page-loaded"
+    },
+    {
+      "event": "key",
+      "key": "a"
+    },
+    {
+      "event": "text-input",
+      "data": "a"
+    },
+    {
+      "event": "input",
+      "value": "a",
+      "input_type": "insertText"
+    },
+    {
+      "event": "completed",
+      "keyboard_value": "a"
+    }
+  ],
+  "run_directory": "/var/folders/cz/lh322p4d1gg9njv51jb3c_k40000gn/T/telar-terminal-browser-run-9efv0nux",
+  "frames": {
+    "forwarded_per_second": 119.96,
+    "published_per_second": 119.96,
+    "presented_per_second": 119.99,
+    "forwarded_series": [
+      100.6,
+      119.9,
+      119.8,
+      120.9,
+      120.0,
+      118.9,
+      120.6,
+      119.5,
+      120.3,
+      119.6,
+      120.9,
+      119.6,
+      118.5,
+      120.9,
+      119.6,
+      119.6,
+      119.9,
+      120.8,
+      119.9,
+      119.9,
+      12.0
+    ],
+    "published_series": [
+      100.6,
+      119.9,
+      119.8,
+      120.9,
+      120.0,
+      118.9,
+      120.6,
+      119.5,
+      120.3,
+      119.6,
+      120.9,
+      119.6,
+      118.5,
+      120.9,
+      119.6,
+      119.6,
+      119.9,
+      120.8,
+      119.9,
+      119.9,
+      12.0
+    ],
+    "presented_series": [
+      100.8,
+      119.6,
+      120.6,
+      119.8,
+      120.0,
+      120.4,
+      119.8,
+      119.9,
+      120.4,
+      119.5,
+      120.6,
+      119.9,
+      118.5,
+      120.6,
+      119.4,
+      120.4,
+      119.6,
+      120.0,
+      120.4,
+      119.5
+    ],
+    "frame_bytes": 0,
+    "media_discarded_frames": 0,
+    "media_unavailable_frames": 0,
+    "media_ingest_avg_us": 1013,
+    "media_ingest_max_us": 12654,
+    "graphics_freeze_avg_us": 0,
+    "graphics_freeze_max_us": 0,
+    "graphics_stage_blocked": 0,
+    "graphics_stage_deferred": 6,
+    "media_direct_frames": 2398,
+    "media_file_frames": 2398,
+    "graphics_transfers_prepared": 0,
+    "graphics_transfers_adopted": 2398,
+    "media_deferrals": 2,
+    "pane_present_interval_avg_us": 8487,
+    "pane_present_interval_max_us": 207210,
+    "shared_retire_latency_avg_us": 8546,
+    "shared_retire_latency_max_us": 207519,
+    "shared_expiries": 0
+  }
+}
+verification artifacts kept at /var/folders/cz/lh322p4d1gg9njv51jb3c_k40000gn/T/telar-terminal-browser-run-9efv0nux

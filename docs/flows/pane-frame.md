@@ -84,23 +84,30 @@ Frame application records only semantic pane damage in the multiplexer. The
 presenter-owned compositor decides whether the immutable projection needs full
 or incremental composition.
 
-`Presenter.presentDue` composes the active model and flushes the terminal cell
-diff. Only after that flush succeeds does it consume each attached pane's
-pending frame id and enqueue `frame_ack`. A frame therefore cannot release the
-runtime's next dependent patch before the corresponding client state has
-reached the host terminal.
+`Presenter.presentDue` composes the active model and prepares the terminal cell
+diff. The common presentation lifecycle seals one owned commit and returns its
+token. Only successful host-write completion releases that commit to the shared
+application handler. It filters attachment generations, retires exact pending
+frame IDs and derives `frame_ack` messages. A frame cannot release the runtime's
+next dependent patch merely because composition finished.
+
+The model allocates attachment generations across detach, reattach and workspace
+reconstruction. An old completion cannot ACK a new attachment with an equal
+wire frame ID. Receiving frame N+1 while N is being delivered leaves N+1's damage
+pending. The headless adapter proves these rules through the same handlers and
+outbox without terminal resources.
 
 ## Proof
 
-- `src/frontend/client/model.zig` proves atomic screen and copy-state commit,
+- `src/client/model/root.zig` and `src/client/model/tests/` proves atomic screen and copy-state commit,
   exact revisions, stale detach handling, base recovery and failed-apply
   behavior.
-- `src/frontend/client/application/pane_frame.zig` proves effect selection,
+- `src/client/application/panes/pane_frame.zig` proves effect selection,
   commit-before-effect ordering and failure policy.
-- `src/frontend/client/application/pane_frame_delivery.zig` proves exact
+- `src/client/application/panes/pane_frame_delivery.zig` proves exact
   post-commit validation, graphics idempotence, resource ordering and partial
   failure semantics.
-- `src/frontend/client/client_test.zig` proves recovery IPC, resource
+- `src/frontend/client/tests/pane_updates.zig` and `src/client/presentation/headless_tests.zig` proves recovery IPC, resource
   synchronization, presenter-owned scheduling and acknowledgement after
   presentation.
 - `src/client/panes/tests.zig` proves owned cells, child modes, base and identity
@@ -108,5 +115,5 @@ reached the host terminal.
   same-size patches and allocation-failure cleanup without a terminal.
 - `src/frontend/workspace/multiplexer.zig` retains composition and integration
   tests against that shared pane capability.
-- `src/backend/runtime/encoder.zig` and runtime attachment tests prove diff
-  publication against acknowledged bases.
+- `src/backend/runtime/attachment/cell.zig` and transport integration tests prove
+  diff publication against acknowledged bases.

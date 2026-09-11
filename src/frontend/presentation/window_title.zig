@@ -6,28 +6,18 @@ const std = @import("std");
 
 const Io = std.Io;
 
-pub const max_title_bytes = 256;
+pub const max_title_bytes = @import("telar-client").presentation.window_title.max_title_bytes;
 pub const max_hostname_bytes = 64;
 
-pub const Tokens = struct {
-    workspace: []const u8 = "",
-    tab: []const u8 = "",
-    pane_title: []const u8 = "",
-    hostname: []const u8 = "",
-};
+pub const Tokens = @import("telar-client").presentation.window_title.Tokens;
 
-pub const SyncInput = struct {
-    template: []const u8,
-    tokens: Tokens,
-};
+pub const SyncInput = @import("telar-client").presentation.window_title.SyncInput;
 
 pub const State = struct {
     hostname: [max_hostname_bytes]u8 = undefined,
     hostname_len: u8 = 0,
     hostname_loaded: bool = false,
-    sent: [max_title_bytes]u8 = undefined,
-    sent_len: u16 = 0,
-    ever_sent: bool = false,
+    title: @import("telar-client").presentation.window_title.State = .{},
 
     /// Caches the host name on first use; the host terminal does not need it
     /// fresh and the lookup never repeats.
@@ -63,23 +53,19 @@ pub const State = struct {
             return;
         }
 
-        var buffer: [max_title_bytes]u8 = undefined;
         var complete = input.tokens;
         if (complete.hostname.len == 0) {
             state.ensureHostname();
             complete.hostname = state.hostnameSlice();
         }
-        const title = render(&buffer, input.template, complete);
-        if (state.ever_sent and std.mem.eql(u8, state.sent[0..state.sent_len], title)) {
-            return;
-        }
+        try state.title.sync(.{ .context = writer, .set = setTitle }, .{ .template = input.template, .tokens = complete });
+    }
 
+    fn setTitle(context: *anyopaque, title: []const u8) !void {
+        const writer: *Io.Writer = @ptrCast(@alignCast(context));
         try writer.writeAll("\x1b]0;");
         try writer.writeAll(title);
         try writer.writeAll("\x07");
-        @memcpy(state.sent[0..title.len], title);
-        state.sent_len = @intCast(title.len);
-        state.ever_sent = true;
     }
 };
 
@@ -89,55 +75,7 @@ pub const State = struct {
 /// ```zig
 /// const title = render(&buffer, "{hostname}: {workspace}", tokens);
 /// ```
-pub fn render(buffer: *[max_title_bytes]u8, template: []const u8, tokens: Tokens) []const u8 {
-    var len: usize = 0;
-    var index: usize = 0;
-    while (index < template.len) {
-        if (template[index] == '{') {
-            if (std.mem.indexOfScalarPos(u8, template, index, '}')) |close| {
-                const name = template[index + 1 .. close];
-                if (tokenValue(name, tokens)) |value| {
-                    len = append(buffer, len, value);
-                    index = close + 1;
-                    continue;
-                }
-            }
-        }
-
-        len = append(buffer, len, template[index .. index + 1]);
-        index += 1;
-    }
-
-    while (len > 0 and (buffer[len - 1] & 0xc0) == 0x80) : (len -= 1) {}
-    if (len > 0 and buffer[len - 1] >= 0xc0 and !std.unicode.utf8ValidateSlice(buffer[0..len])) {
-        len -= 1;
-    }
-
-    return buffer[0..len];
-}
-
-fn tokenValue(name: []const u8, tokens: Tokens) ?[]const u8 {
-    if (std.mem.eql(u8, name, "workspace")) {
-        return tokens.workspace;
-    }
-    if (std.mem.eql(u8, name, "tab")) {
-        return tokens.tab;
-    }
-    if (std.mem.eql(u8, name, "pane_title")) {
-        return tokens.pane_title;
-    }
-    if (std.mem.eql(u8, name, "hostname")) {
-        return tokens.hostname;
-    }
-    return null;
-}
-
-fn append(buffer: *[max_title_bytes]u8, len: usize, value: []const u8) usize {
-    const room = buffer.len - len;
-    const count = @min(room, value.len);
-    @memcpy(buffer[len .. len + count], value[0..count]);
-    return len + count;
-}
+pub const render = @import("telar-client").presentation.window_title.render;
 
 test "render substitutes known tokens and keeps unknown braces" {
     var buffer: [max_title_bytes]u8 = undefined;

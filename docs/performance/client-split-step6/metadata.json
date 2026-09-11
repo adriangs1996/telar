@@ -1,0 +1,12 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "zig": "0.16.0",
+  "repetitions": 5,
+  "samples": 20,
+  "sample_ms": 40,
+  "binary_sha256": {
+    "baseline": "0e649afca986fd21b93cf01aa0bc03e33956aa437500a1789ee55f00c315ebfd",
+    "candidate": "5560e8c08bc6515c5101ffa417bb50e4c4efc1209d64eac79fbaed95ff3a7641"
+  }
+}

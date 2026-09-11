@@ -6,8 +6,8 @@ const core = @import("telar-core");
 const workspace_capability = @import("../../workspace/root.zig");
 const client_model = @import("../../root.zig").model;
 const close_tab = @import("close_tab.zig");
-const pane_focus_reporting = @import("../panes/pane_focus_reporting.zig");
-const pane_resource_release = @import("../panes/pane_resource_release.zig");
+const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
+const pane_resource_release = @import("../panes/root.zig").pane_resource_release;
 
 const schema = core.schema;
 const tabs_mod = workspace_capability.tabs;

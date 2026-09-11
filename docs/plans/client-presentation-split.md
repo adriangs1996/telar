@@ -18,7 +18,16 @@ No incorpora Native SDK ni el fork de Ghostty.
   `../performance/client-split-step4/README.md`.
 - [x] 5. Presentación intercambiable. Contratos y pruebas en
   `../performance/client-split-step5/README.md`.
-- [ ] 6. Dependencias y equivalencia.
+- [ ] 6. Dependencias y equivalencia: implementación y pruebas funcionales
+  registradas en [client-split-step6](../performance/client-split-step6/README.md).
+  - [x] Grafo/imports comprobados; análisis del cliente para Linux sin frontend.
+  - [x] Suite completa: 3696 aprobados, 2 omitidos; cliente Debug: 776 aprobados.
+  - [x] Documentación y [ADR 0012](../adr/0012-share-client-behavior-across-presentation-adapters.md).
+  - [x] Pruebas locales emparejadas y gráficos sintéticos 4K con `shm` y `file`.
+  - [ ] Aceptación de rendimiento: dos series repetidas dieron `no verdict`
+    por ruido; faltan los gates nativos de Ubuntu.
+  - [ ] Gate exterior Chromium: ratón y sidebar fallan también en la referencia.
+    Causa pendiente; no se considera aprobado.
 
 ## Resultado buscado
 
@@ -36,7 +45,7 @@ No basta con abstraer `draw()`: la entrada, la geometría física y los servicio
 del host también necesitan límites explícitos. Tampoco basta con mover archivos
 mientras los handlers siguen conociendo `Screen`, `View` o `kitty.Store`.
 
-## Evidencia en el código actual
+## Evidencia al comenzar el refactor (`beab209f`)
 
 | Archivo | Separación existente o acoplamiento que hay que resolver |
 | --- | --- |

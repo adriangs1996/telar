@@ -29,7 +29,7 @@ pane_inputs when child-owned                  native / Lua / plugin action
       |                                                      |
 PaneInputHandler                                      consumed by Telar
       |
-ClientModel.planPaneInput -> input.host.encodeKey
+ClientModel.planPaneInput -> input.encoding.encodeKey
       |
 SetPaneViewportHandler(.bottom)
       |
@@ -86,9 +86,10 @@ and `PresentationIngress`. The latter contains the disposable view-interaction
 and visible input-routing revisions. The presenter schedules a paced draw when
 any observed value changed.
 
-The router is in `src/frontend/input/keybind.zig`. `Router.feed` buffers split
-terminal sequences, `term.parse` produces semantic events, and `routeKey`
-classifies a key press against the compiled keymap. A fixed physical-key lease
+The routing implementation is in `src/client/input/keybind.zig`. The TUI adapter
+in `src/frontend/input/keybind.zig` supplies `term.parse`; `Router.feed` buffers
+split terminal sequences. Decoder-free adapters call `routeEvent` with semantic
+keys. Both paths use the same compiled keymap. A fixed physical-key lease
 keeps repeat and release with the press's binding or application owner. The
 configured prefix enters a
 persistent router state and therefore schedules no binding deadline. Escape
@@ -112,7 +113,7 @@ waits for the old configuration's deadline.
 
 A complete configured sequence returns `.action` from `Router.routeKey`.
 `Router.drain` calls `InputHandler.action` in
-`src/frontend/client/input_handler.zig`; it does not forward the matched bytes.
+`src/frontend/client/resources/input_handler.zig`; it does not forward the matched bytes.
 
 `InputHandler.action` delegates the matched value to `action_routing`. The
 adapter snapshots prompt and copy-mode authority, then
@@ -173,9 +174,10 @@ application owner for the physical lifecycle; pane ownership stores the exact
 failure and `Ctrl+V` follow-up policy.
 
 `PaneInputHandler` resolves an attached target through
-`ClientModel.planPaneInput` and calls `input.host.encodeKey` from
-`src/frontend/input/host.zig` for semantic keys. Encoding uses the pane's last
-acknowledged cursor/application, modify-key and bracketed-paste modes. Replayed
+`ClientModel.planPaneInput` and calls `input.encoding.encodeKey` from
+`src/client/input/encoding.zig` for semantic keys. Encoding uses the pane's most
+recently applied cursor/application, modify-key and bracketed-paste modes, even
+while an older presentation is still in flight. Replayed
 byte slices have already passed parser and binding classification before they
 enter the bounded pane-input bytes path.
 
@@ -454,7 +456,7 @@ captures an immutable `presentation_projection` and calls
 
 ## Proof
 
-- `src/frontend/client/resources/deadline_timer.zig` proves replacement, removal,
+- `src/client/resources/deadline_timer.zig` proves replacement, removal,
   parking, wakeup and token release for successful and failed workers.
 - `src/frontend/client/controllers/input/host_inputs.zig` proves owned timeout configuration,
   router replacement without duplicate workers and prefix-status projection.
@@ -463,10 +465,10 @@ captures an immutable `presentation_projection` and calls
   socket completion and one resumed TTY read token.
 - `a configured sequence runs once and does not reach the pane` in
   `src/frontend/input/keybind.zig` proves the Telar-action split.
-- `src/frontend/client/application/input/action_routing.zig` proves prompt
+- `src/frontend/client/controllers/input/action_routing.zig` proves prompt
   suppression, source selection, Lua router control, input reinjection and
   selected-effect failure ordering.
-- `src/frontend/client/application/input/pointer_routing.zig` proves copy, view and
+- `src/frontend/client/controllers/input/pointer_routing.zig` proves copy, view and
   pane owner ordering before any pointer effect reaches a child.
 - `mouse pointer distinguishes clickable chrome panes and sidebar resizing` in
   `src/frontend/client/presentation/view.zig` proves the semantic hover mapping.
@@ -489,7 +491,7 @@ captures an immutable `presentation_projection` and calls
   binding/application ownership, prefix release, configuration replacement and
   fail-closed saturation.
 - `cursor keys follow the focused child's mode` in
-  `src/frontend/input/host.zig` proves semantic child encoding.
+  `src/client/input/encoding_tests.zig` proves semantic child encoding.
 - The modified-Enter parser and router tests cover both host encodings,
   malformed reports and every byte boundary. The encoder tests cover modifier
   combinations, physical lifecycles, alternate key codes, legacy release

@@ -1050,11 +1050,14 @@ fn runGraphicsTransmission(context: *GraphicsContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |_| {
         var images = context.store.images.iterator();
-        while (images.next()) |entry| entry.value_ptr.transmitted = false;
+        while (images.next()) |entry| {
+            entry.value_ptr.delivery.transmitted = false;
+        }
+
         var placements = context.store.placements.iterator();
         while (placements.next()) |entry| {
-            entry.value_ptr.emitted_image_id = null;
-            entry.value_ptr.dirty = true;
+            entry.value_ptr.delivery.emitted_image_id = null;
+            entry.value_ptr.delivery.dirty = true;
         }
         context.store.damage = true;
         var output = Io.Writer.fixed(context.output);
@@ -1091,7 +1094,7 @@ const TransmitContext = struct {
     fn init(gpa: std.mem.Allocator, zlib: bool) !TransmitContext {
         var store = frontend.kitty.Store.init(gpa);
         errdefer store.deinit();
-        store.host_zlib = zlib;
+        store.delivery.host_zlib = zlib;
         var model = frontend.multiplexer.Model.init(gpa);
         errdefer model.deinit();
         const pane_id: schema.PaneId = @enumFromInt(1);
@@ -1163,13 +1166,14 @@ const TransmitContext = struct {
     fn deliver(context: *TransmitContext) !u64 {
         var images = context.store.images.iterator();
         while (images.next()) |entry| {
-            entry.value_ptr.transmitted = false;
-            entry.value_ptr.incompressible = false;
+            entry.value_ptr.delivery.transmitted = false;
+            entry.value_ptr.delivery.incompressible = false;
         }
+
         var placements = context.store.placements.iterator();
         while (placements.next()) |entry| {
-            entry.value_ptr.emitted_image_id = null;
-            entry.value_ptr.dirty = true;
+            entry.value_ptr.delivery.emitted_image_id = null;
+            entry.value_ptr.delivery.dirty = true;
         }
         context.store.damage = true;
         var written: u64 = 0;

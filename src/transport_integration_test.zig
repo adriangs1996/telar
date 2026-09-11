@@ -2627,7 +2627,7 @@ test "two clients observe one pane with independent frame acknowledgement" {
     const arguments = [_][]const u8{
         "/bin/sh",
         "-c",
-        "stty raw -echo; while IFS= read -r line; do printf '\\033]22;crosshair\\033\\\\%s\\r\\n' \"$line\"; done",
+        "sleep 0.1; stty raw -echo; printf 'OBSERVER_READY\\r\\n'; while IFS= read -r line; do printf '\\033]22;crosshair\\033\\\\%s\\r\\n' \"$line\"; done",
     };
     try first.send(io, try schema.encodeOpenPane(&first_send, .{
         .request_id = @enumFromInt(1),
@@ -2640,12 +2640,16 @@ test "two clients observe one pane with independent frame acknowledgement" {
     var first_cells: [40 * 8]core.ui.Cell = @splat(.{});
     var pane_id: schema.PaneId = .invalid;
     var first_snapshot = false;
-    while (pane_id == .invalid or !first_snapshot) {
+    var child_ready = false;
+    // A snapshot can precede stty. Wait for the child or PTY echo can expose
+    // the input marker before the child has emitted its pointer-shape change.
+    while (pane_id == .invalid or !first_snapshot or !child_ready) {
         switch (try schema.decodeServer(try first.receive(io, first_receive))) {
             .pane_opened => |opened| pane_id = opened.pane_id,
             .pane_frame => |frame| {
                 try applyFrameCells(&first_cells, frame);
-                first_snapshot = frame.base_frame_id == 0;
+                first_snapshot = first_snapshot or frame.base_frame_id == 0;
+                child_ready = rowContains(&first_cells, "OBSERVER_READY");
                 try first.send(io, try schema.encodeFrameAck(&first_send, .{
                     .pane_id = frame.pane_id,
                     .frame_id = frame.frame_id,

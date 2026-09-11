@@ -4,7 +4,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
-const tab_attachment_retirement = @import("../tabs/tab_attachment_retirement.zig");
+const tab_attachment_retirement = @import("../tabs/root.zig").tab_attachment_retirement;
 
 const schema = core.schema;
 

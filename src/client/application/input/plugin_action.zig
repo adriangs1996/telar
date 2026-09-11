@@ -3,7 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const config = @import("../../config/root.zig");
-const client_diagnostic = @import("../configuration/client_diagnostic.zig");
+const client_diagnostic = @import("../configuration/root.zig").client_diagnostic;
 const client_model = @import("../../root.zig").model;
 
 const plugin = core.plugin;

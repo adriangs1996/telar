@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const input_capability = @import("../../input/root.zig");
 const client_model = @import("../../root.zig").model;
 const link_capability = @import("../../links/root.zig");
-const set_pane_viewport = @import("../panes/set_pane_viewport.zig");
+const set_pane_viewport = @import("../panes/root.zig").set_pane_viewport;
 
 const keybind = input_capability.keybind;
 const schema = core.schema;

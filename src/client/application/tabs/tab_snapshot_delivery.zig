@@ -5,9 +5,9 @@ const std = @import("std");
 const core = @import("telar-core");
 const workspace_capability = @import("../../workspace/root.zig");
 const client_model = @import("../../root.zig").model;
-const pane_attachment_requests = @import("../panes/pane_attachment_requests.zig");
-const pane_geometry_delivery = @import("../panes/pane_geometry_delivery.zig");
-const pane_resource_release = @import("../panes/pane_resource_release.zig");
+const pane_attachment_requests = @import("../panes/root.zig").pane_attachment_requests;
+const pane_geometry_delivery = @import("../panes/root.zig").pane_geometry_delivery;
+const pane_resource_release = @import("../panes/root.zig").pane_resource_release;
 
 const schema = core.schema;
 const tabs_mod = workspace_capability.tabs;

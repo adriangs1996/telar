@@ -37,6 +37,26 @@ interaction and navigation choices with bounded projections of authoritative
 runtime state needed to present and control its session.
 _Avoid_: AppState, Client runtime, UI state
 
+**Client application**:
+The use cases and operational policy of one disposable client, independent of
+how its host supplies input or presents its model.
+_Avoid_: TUI logic, Second client, Shared client instance
+
+**Prepared presentation**:
+One client projection consumed by its presentation adapter but not yet confirmed
+as delivered. It does not discharge the client's frame acknowledgement obligation.
+_Avoid_: Presented frame, Received frame
+
+**Presentation delivery**:
+A client's confirmed delivery of one prepared presentation. It permits exact
+frame acknowledgements but does not claim that pixels reached the user's eyes.
+_Avoid_: Frame receipt, Composition, Client delivery
+
+**Attachment generation**:
+One lifetime of a client's attachment to a pane, distinct from the pane's own
+lifetime. Reattachment begins a new generation even when frame numbers repeat.
+_Avoid_: Pane generation, Frame ID
+
 **Runtime checkpoint**:
 A durable data-only representation of the restorable parts of a runtime model.
 It excludes live resources and does not promise child-process or PTY continuity.
@@ -111,7 +131,8 @@ retires.
 _Avoid_: Proxy token, proxy authentication
 
 **Host input**:
-User input received from the host terminal before Telar classifies its intent.
+User input received from a client's host before Telar classifies its intent.
+The host may be a terminal or a native window.
 _Avoid_: Raw input, keyboard input
 
 **Input routing**:

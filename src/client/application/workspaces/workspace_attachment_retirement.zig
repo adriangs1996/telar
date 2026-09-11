@@ -4,9 +4,9 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
-const pane_focus_reporting = @import("../panes/pane_focus_reporting.zig");
-const pane_paste = @import("../input/pane_paste.zig");
-const tab_attachment_retirement = @import("../tabs/tab_attachment_retirement.zig");
+const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
+const pane_paste = @import("../input/root.zig").pane_paste;
+const tab_attachment_retirement = @import("../tabs/root.zig").tab_attachment_retirement;
 
 const schema = core.schema;
 

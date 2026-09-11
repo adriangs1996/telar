@@ -11,7 +11,7 @@ const pane_inputs = @import("pane_inputs.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 
 const Client = @import("../../client.zig");
-const host_input = input_capability.host;
+const host_input = input_capability.encoding;
 const key_routing = input_application.key_routing;
 const schema = core.schema;
 

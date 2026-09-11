@@ -53,20 +53,25 @@ client, it proved the frontend can render core data.
 
 ### Code packages
 
-The source tree enforces the process split before IPC exists. Both sides may
-import `telar-core`. Backend and frontend never import each other. `src/main.zig`
-is the temporary in-process bootstrap that composes them.
+Both processes import `telar-core`. The TUI imports `telar-client` for shared
+client behavior; neither common package imports a host adapter. Backend and
+frontend never import each other. `src/main.zig` selects a CLI entrypoint.
 
-| Package          | Owns                                                              |
-| ---------------- | ----------------------------------------------------------------- |
-| `telar-core`     | cells, buffers, geometry, hit testing, focus, selection values    |
-| `telar-backend`  | child processes, PTYs, terminal emulation, VT-to-cell translation |
-| `telar-frontend` | host terminal, cell diff, input, pacing, editing, client platform |
+| Package | Owns |
+| --- | --- |
+| `telar-core` | cells, buffers, geometry and wire values shared across processes |
+| `telar-backend` | children, PTYs, terminal emulation, history and runtime authority |
+| `telar-client` | disposable model, handlers, input policy, resource retention and presentation contracts |
+| `telar-frontend` | TUI assembly, host terminal, decoder, compositor, diff, pacing and Kitty delivery |
 
-The module roots are `src/core/root.zig`, `src/backend/root.zig` and
-`src/frontend/root.zig`. Put a type in core only when both processes need its
-data or operations. Ownership of a value still follows the runtime/client rule
-above; sharing its type does not make its state shared.
+Each package exposes `src/{core,backend,client,frontend}/root.zig`. Put a type in
+core only when both processes need it. Each connection owns independent client
+state. A future native adapter reuses client behavior, not another connection's
+focus or navigation.
+
+Before changing client presentation, input adapters or retained-resource delivery,
+read [`src/client/presentation/README.md`](src/client/presentation/README.md).
+Run `zig build check-client-boundaries` when changing common-client imports.
 
 ### One pane, end to end
 

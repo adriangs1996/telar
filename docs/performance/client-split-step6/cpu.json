@@ -1,0 +1,522 @@
+[
+  {
+    "seconds": 10.374338374938816,
+    "runtime": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 29081600
+    },
+    "client": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 28508160
+    },
+    "version": "baseline",
+    "case": "idle",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 63.7287920108065,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        70256
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.3300950829871,
+    "runtime": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 29245440
+    },
+    "client": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 29261824
+    },
+    "version": "candidate",
+    "case": "idle",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 66.7760840151459,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        70503
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.459524666075595,
+    "runtime": {
+      "cpu_percent": 173.33483670441365,
+      "sampled_peak_rss_bytes": 70746112
+    },
+    "client": {
+      "cpu_percent": 1.5297062257422058,
+      "sampled_peak_rss_bytes": 29818880
+    },
+    "version": "baseline",
+    "case": "load",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 83.67645798716694,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        70750
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.501801832928322,
+    "runtime": {
+      "cpu_percent": 170.1612759818867,
+      "sampled_peak_rss_bytes": 62439424
+    },
+    "client": {
+      "cpu_percent": 1.5235480781814141,
+      "sampled_peak_rss_bytes": 16007168
+    },
+    "version": "candidate",
+    "case": "load",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 81.21312502771616,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        71435
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.370351542020217,
+    "runtime": {
+      "cpu_percent": 0.0964287465037268,
+      "sampled_peak_rss_bytes": 29310976
+    },
+    "client": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 29687808
+    },
+    "version": "candidate",
+    "case": "idle",
+    "run": 1,
+    "shutdown": {
+      "elapsed_ms": 67.23716598935425,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        72109
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.351863832911476,
+    "runtime": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 20955136
+    },
+    "client": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 21839872
+    },
+    "version": "baseline",
+    "case": "idle",
+    "run": 1,
+    "shutdown": {
+      "elapsed_ms": 78.80558294709772,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        72355
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.47591583407484,
+    "runtime": {
+      "cpu_percent": 172.39542858159032,
+      "sampled_peak_rss_bytes": 59981824
+    },
+    "client": {
+      "cpu_percent": 1.5273127670572781,
+      "sampled_peak_rss_bytes": 16678912
+    },
+    "version": "candidate",
+    "case": "load",
+    "run": 1,
+    "shutdown": {
+      "elapsed_ms": 84.30037496145815,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        72601
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.518404540955089,
+    "runtime": {
+      "cpu_percent": 174.1709013821265,
+      "sampled_peak_rss_bytes": 71303168
+    },
+    "client": {
+      "cpu_percent": 1.5211432435120218,
+      "sampled_peak_rss_bytes": 29229056
+    },
+    "version": "baseline",
+    "case": "load",
+    "run": 1,
+    "shutdown": {
+      "elapsed_ms": 68.3983329217881,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        73274
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.374211125075817,
+    "runtime": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 29065216
+    },
+    "client": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 28508160
+    },
+    "version": "baseline",
+    "case": "idle",
+    "run": 2,
+    "shutdown": {
+      "elapsed_ms": 81.14854106679559,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        73961
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.339256458100863,
+    "runtime": {
+      "cpu_percent": 0.09671875381488332,
+      "sampled_peak_rss_bytes": 29360128
+    },
+    "client": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 29671424
+    },
+    "version": "candidate",
+    "case": "idle",
+    "run": 2,
+    "shutdown": {
+      "elapsed_ms": 78.01850000396371,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        74298
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.485240916954353,
+    "runtime": {
+      "cpu_percent": 171.765247385764,
+      "sampled_peak_rss_bytes": 70402048
+    },
+    "client": {
+      "cpu_percent": 1.5259544465142834,
+      "sampled_peak_rss_bytes": 29818880
+    },
+    "version": "baseline",
+    "case": "load",
+    "run": 2,
+    "shutdown": {
+      "elapsed_ms": 83.32237496506423,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        74451
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.52109891595319,
+    "runtime": {
+      "cpu_percent": 169.08880091436973,
+      "sampled_peak_rss_bytes": 69599232
+    },
+    "client": {
+      "cpu_percent": 1.5207536900674061,
+      "sampled_peak_rss_bytes": 29376512
+    },
+    "version": "candidate",
+    "case": "load",
+    "run": 2,
+    "shutdown": {
+      "elapsed_ms": 83.60041701234877,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        75156
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.373196584056132,
+    "runtime": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 29163520
+    },
+    "client": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 29704192
+    },
+    "version": "candidate",
+    "case": "idle",
+    "run": 3,
+    "shutdown": {
+      "elapsed_ms": 94.96279200538993,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        75918
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.35209149995353,
+    "runtime": {
+      "cpu_percent": 0.09659883705669417,
+      "sampled_peak_rss_bytes": 29360128
+    },
+    "client": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 29474816
+    },
+    "version": "baseline",
+    "case": "idle",
+    "run": 3,
+    "shutdown": {
+      "elapsed_ms": 79.09858401399106,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        76074
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.494641958968714,
+    "runtime": {
+      "cpu_percent": 171.99252790681896,
+      "sampled_peak_rss_bytes": 69976064
+    },
+    "client": {
+      "cpu_percent": 1.524587504991193,
+      "sampled_peak_rss_bytes": 29409280
+    },
+    "version": "candidate",
+    "case": "load",
+    "run": 3,
+    "shutdown": {
+      "elapsed_ms": 76.94804202765226,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        76320
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.487210541032255,
+    "runtime": {
+      "cpu_percent": 171.3515708461329,
+      "sampled_peak_rss_bytes": 70107136
+    },
+    "client": {
+      "cpu_percent": 1.5256678539444217,
+      "sampled_peak_rss_bytes": 29786112
+    },
+    "version": "baseline",
+    "case": "load",
+    "run": 3,
+    "shutdown": {
+      "elapsed_ms": 81.30529092159122,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        77090
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.337825917056762,
+    "runtime": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 29081600
+    },
+    "client": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 28966912
+    },
+    "version": "baseline",
+    "case": "idle",
+    "run": 4,
+    "shutdown": {
+      "elapsed_ms": 77.43262499570847,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        77681
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.352417959016748,
+    "runtime": {
+      "cpu_percent": 0.09659579085377054,
+      "sampled_peak_rss_bytes": 29032448
+    },
+    "client": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 29638656
+    },
+    "version": "candidate",
+    "case": "idle",
+    "run": 4,
+    "shutdown": {
+      "elapsed_ms": 99.84454198274761,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        78020
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.477962083998136,
+    "runtime": {
+      "cpu_percent": 172.9343917713992,
+      "sampled_peak_rss_bytes": 64520192
+    },
+    "client": {
+      "cpu_percent": 1.622452902932553,
+      "sampled_peak_rss_bytes": 19955712
+    },
+    "version": "baseline",
+    "case": "load",
+    "run": 4,
+    "shutdown": {
+      "elapsed_ms": 80.80279198475182,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        78265
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.51610179094132,
+    "runtime": {
+      "cpu_percent": 169.45442669022407,
+      "sampled_peak_rss_bytes": 65011712
+    },
+    "client": {
+      "cpu_percent": 1.521476333918959,
+      "sampled_peak_rss_bytes": 18907136
+    },
+    "version": "candidate",
+    "case": "load",
+    "run": 4,
+    "shutdown": {
+      "elapsed_ms": 83.57337501365691,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        78857
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  }
+]

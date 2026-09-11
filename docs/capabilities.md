@@ -91,16 +91,38 @@ High fan-out is restricted to composition, actor binding and request dispatch.
 It is a defect in a leaf capability unless an indivisible invariant requires
 it.
 
-## Client capabilities
+## Shared client capabilities
+
+`telar-client` shares implementation across independent client connections. It
+owns neither runtime truth nor a common instance of navigation or focus.
 
 | Capability | Root | Owns |
 | --- | --- | --- |
-| Client | `src/frontend/client/root.zig` | Client event loop, disposable semantic state, observability lifecycle and cross-capability orchestration |
-| Agents | `src/frontend/agents/root.zig` | Agent identities and the bounded client replica of runtime agent state |
+| Client model | `src/client/model/root.zig` | Disposable semantic state and aggregate transitions |
+| Application | `src/client/application/root.zig` | Existing command handlers and narrow effect ports |
+| Entrypoints | `src/client/entrypoints/root.zig` | Synchronous decoded-message dispatch to adapters |
+| Panes | `src/client/panes/root.zig` | Cells, damage, child modes and attachment-aware commits |
+| Workspace | `src/client/workspace/root.zig` | Tabs, split topology, navigation and explicit geometry |
+| Input | `src/client/input/root.zig` | Semantic values, bindings, leases, editing and child encoding |
+| Connection | `src/client/connection/root.zig` | Bounded outbox, correlation and transport state |
+| Resources | `src/client/resources/root.zig` | Shared clock and deadline resources |
+| Presentation | `src/client/presentation/root.zig` | Borrowed projections, revisions, completion, geometry and title port |
+| Graphics | `src/client/graphics/root.zig` | Validated image retention, generations, quotas and credits |
+| Attachments | `src/client/attachments/root.zig` | Semantic catalog, markers and sensitive-byte lifetime |
+| Agents | `src/client/agents/root.zig` | Bounded projection of runtime agent state |
+| Notifications and bars | `src/client/notifications/root.zig`, `src/client/bars/root.zig` | Semantic control state |
+| Links | `src/client/links/root.zig` | Targets, URI rules and pointer ownership |
+| Configuration | `src/client/config/root.zig` | Common typed configuration and bounded callback values |
+
+## TUI capabilities
+
+| Capability | Root | Owns |
+| --- | --- | --- |
+| Client adapter | `src/frontend/client/root.zig` | TUI assembly, existing event driver, controllers and workers |
 | Sound | `src/frontend/sound/root.zig` | Bounded host-audio playback policy, queue and platform worker |
-| Input | `src/frontend/input/root.zig` | Host input parsing, key routing, semantic actions and editing |
-| Workspace | `src/frontend/workspace/root.zig` | Disposable tabs, pane layout and immutable pane composition primitives |
-| Presentation | `src/frontend/presentation/root.zig` | Host screen diff, frame application and pacing |
+| Input | `src/frontend/input/root.zig` | Terminal decoder integration with the shared router |
+| Workspace | `src/frontend/workspace/root.zig` | Cell compositor over the shared workspace model |
+| Presentation | `src/frontend/presentation/root.zig` | Host screen diff, terminal output and pacing |
 | Graphics | `src/frontend/graphics/root.zig` | Host graphics transfer state, renderer policy and overlays |
 | UI | `src/frontend/ui/root.zig` | Client-only focus, hits and theme values |
 | Widgets | `src/frontend/widgets/root.zig` | Chrome and interaction surfaces |
@@ -109,36 +131,38 @@ it.
 | Platform | `src/frontend/platform/root.zig` | Host TTY and resize adapters |
 | Transport | `src/frontend/transport/root.zig` | Client side of local connection and handshake |
 
-The client root is an orchestrator. Capability code must not import it to get
-at client state.
-
-The client-internal `presentation_projection` adapter is the only concrete
-`Client` to `Presenter` boundary. `Presenter` receives immutable semantic
-inputs and explicit presentation resources; its compositor owns every
-last-painted cache.
+The TUI client root assembles capabilities. Shared handlers receive the model
+and their named ports, never that concrete aggregate. The internal
+`presentation_projection` adapter supplies host context to the shared projection
+builder and exposes TUI resources separately. `Presenter` owns every
+last-painted cache; the common lifecycle owns observed, prepared and delivered
+revisions. `host_output` retains sealed bytes and a completion token.
 
 ## Dependency direction
 
 ```text
-external event
-      |
-      v
-client/root.zig                    backend/runtime/root.zig
-      |                                      |
-      v                                      v
-frontend capability roots          backend capability roots
-      |                                      |
-      +---------------+  +-------------------+
-                      v  v
-                  telar-core
+telar-frontend -> telar-client -> telar-core <- telar-backend
+       |                             ^
+       +-----------------------------+
 ```
+
+A future native adapter imports `telar-client`. The common client has only one
+named project dependency, `telar-core`. Core's Unicode provider uses Ghostty
+Unicode data; this does not construct a client VT. Guarded retained-media code
+uses POSIX shared memory. The common test binary links no FreeType, AppKit or
+GPU framework.
+
+`zig build check-client-boundaries` checks module names, relative imports and
+public capability roots. `test-client` and `check` include it. `build.zig` also
+asserts process-module direction.
 
 The important current edges are:
 
 ```text
-frontend/client       -> agents, sound, input, workspace, presentation,
+frontend/client       -> telar-client, sound, input, workspace, presentation,
                          graphics, ui, widgets, config, plugins, platform,
                          transport
+client/application    -> shared model and narrow effect ports
 frontend/input        -> presentation
 frontend/workspace    -> input, presentation, ui
 frontend/widgets      -> agents, workspace, attachments, ui
@@ -176,6 +200,7 @@ entrypoints below.
 | Runtime socket read | [`runtime_transport.handleRead`](flows/runtime-transport.md) |
 | Completed socket write | [`runtime_transport.handleSent`](flows/runtime-transport.md) |
 | Scheduled draw | [`presentation_lifecycle.handleDraw`](flows/presentation-lifecycle.md) |
+| Completed host write | [`presentation_lifecycle.handleWritten`](flows/presentation-lifecycle.md) |
 | Scheduled media pass | [`presentation_lifecycle.handleMediaTick`](flows/presentation-lifecycle.md) |
 | Sidebar animation tick | [`sidebar_animations.handleTick`](flows/sidebar-animation.md) |
 | Notification tick | [`notifications.handleTick`](flows/notifications.md) |

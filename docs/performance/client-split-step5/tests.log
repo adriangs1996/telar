@@ -88,4 +88,3 @@ test-frontend success
       +- WriteFile props.zig (+2 more reused dependencies)
       +- WriteFile props.zig (+2 more reused dependencies)
       +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
-

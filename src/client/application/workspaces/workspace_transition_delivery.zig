@@ -4,8 +4,8 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../../root.zig").model;
-const pane_resource_release = @import("../panes/pane_resource_release.zig");
-const pane_focus_reporting = @import("../panes/pane_focus_reporting.zig");
+const pane_resource_release = @import("../panes/root.zig").pane_resource_release;
+const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
 
 const schema = core.schema;
 

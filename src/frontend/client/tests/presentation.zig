@@ -147,7 +147,7 @@ test "host input presentation state schedules only through observation" {
     const input_revision = client.host_input.presentationVersion();
     const pending_updates = client.presenter.pending_updates;
     var encoded: [32]u8 = undefined;
-    const prefix_bytes = try input_capability.host.encodeKey(
+    const prefix_bytes = try input_capability.encoding.encodeKey(
         &encoded,
         client.host_input.router.prefix.?,
         .{},
