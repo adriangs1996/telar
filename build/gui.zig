@@ -1,6 +1,6 @@
 const std = @import("std");
 const Application = @import("Application.zig");
-const c_flags = @import("c_flags.zig");
+const macos_gui = @import("macos_gui.zig");
 const linux_gui = @import("linux_gui.zig");
 
 /// Attach the native adapter and its checks: `gui.add(b, app)`.
@@ -22,13 +22,7 @@ pub fn add(b: *std.Build, app: Application) ?*std.Build.Module {
         gui.addImport("telar-client", app.modules.client);
         gui.addImport("telar-core", app.modules.core);
         if (app.modules.target.result.os.tag == .macos) {
-            gui.addCSourceFile(.{
-                .file = b.path("src/gui/macos/window.m"),
-                .flags = c_flags.forCoverage(b, &.{ "-fobjc-arc", "-std=c23" }, app.coverage.enabled),
-            });
-            gui.linkFramework("AppKit", .{});
-            gui.linkFramework("Metal", .{});
-            gui.linkFramework("QuartzCore", .{});
+            macos_gui.add(b, gui, app.coverage.enabled);
         } else {
             linux_gui.add(b, gui, app.coverage.enabled);
         }
@@ -47,12 +41,10 @@ pub fn add(b: *std.Build, app: Application) ?*std.Build.Module {
             const window_test_module = b.createModule(.{ .target = app.modules.target, .optimize = app.modules.optimize, .link_libc = true });
             window_test_module.addIncludePath(b.path("src/gui/native"));
             window_test_module.addCSourceFiles(.{
-                .files = &.{ "src/gui/tests/macos_window.m", "src/gui/macos/window.m", "src/gui/native/wake.c" },
+                .files = &.{ "src/gui/tests/macos_window.m", "src/gui/native/wake.c" },
                 .flags = &.{ "-fobjc-arc", "-std=c23" },
             });
-            window_test_module.linkFramework("AppKit", .{});
-            window_test_module.linkFramework("Metal", .{});
-            window_test_module.linkFramework("QuartzCore", .{});
+            macos_gui.add(b, window_test_module, false);
             const window_test = b.addExecutable(.{ .name = "gui-window-test", .root_module = window_test_module });
             b.step("test-gui-window", "Exercise a real macOS window, Metal completion and native keyboard translation").dependOn(&b.addRunArtifact(window_test).step);
         }

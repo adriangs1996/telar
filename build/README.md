@@ -10,7 +10,8 @@ root through `b.path`, even from these support files.
 | Shipped module graph, dependencies, build options, default install and `run` | [Application.zig](Application.zig) |
 | Shared resolved modules and consistent test-suite imports | [Modules.zig](Modules.zig) |
 | Optimized benchmark graph, `bench`, `echo-probe`, browser verification | [Benchmarks.zig](Benchmarks.zig) |
-| Native GUI modules, macOS frameworks, `gui`, GUI tests | [gui.zig](gui.zig) |
+| Native GUI modules, `gui`, GUI tests | [gui.zig](gui.zig) |
+| macOS adapter sources, Objective-C flags and frameworks shared by app and window test | [macos_gui.zig](macos_gui.zig) |
 | Wayland protocol generation, Vulkan libraries, embedded SPIR-V | [linux_gui.zig](linux_gui.zig) |
 | macOS bundle/DMG and Linux desktop/archive packaging | [packaging.zig](packaging.zig) |
 | Test-suite list, `check`, code style, boundaries and release gates | [tests.zig](tests.zig) |

@@ -5,8 +5,23 @@ The application bundle declares the OS minimum; the CLI GUI entrypoint checks
 it before creating the view. Unsupported systems fail explicitly. The TUI and
 runtime do not use this rendering API.
 
-`src/gui/macos/window.m` owns the display link and one reusable GPU submission
-slot. Shared client behavior, terminal geometry and shaping remain in their
+The native adapter is split by ownership:
+
+| File in `src/gui/macos/` | Responsibility |
+| --- | --- |
+| [window.m](../../src/gui/macos/window.m) | C entrypoint, application and window creation |
+| [TelarView.m](../../src/gui/macos/TelarView.m) | Drawable sizing, display-link pacing, wake source, Zig callbacks and close ordering |
+| [TelarMetalRenderer.m](../../src/gui/macos/TelarMetalRenderer.m) | Metal 4 compiler, pipeline, atlas, buffers, reusable submission slot and GPU completion |
+| [TelarTextInputView.m](../../src/gui/macos/TelarTextInputView.m) | Native text/control input, paste, IME state and clipboard export |
+
+`TelarView` inherits text handling from `TelarTextInputView` and owns a
+`TelarMetalRenderer`. Input uses a synchronous handler because text bytes are
+borrowed. Rendering copies borrowed scene data into GPU resources before
+returning. The renderer reports completion on the main thread; it knows neither
+the window nor the Zig context. `shutdown` cancels delivery and waits for submitted
+GPU work. A rejected submission leaves failure delivery to the view.
+
+Shared client behavior, terminal geometry and shaping remain in their
 existing packages. The temporary socket driver is independent of this slot;
 the step 9 inbox/outbox migration can replace it without replacing GPU resources.
 
@@ -21,7 +36,8 @@ the step 9 inbox/outbox migration can replace it without replacing GPU resources
    the view obtains a drawable from `CAMetalLayer`, pauses notifications and
    submits the scene. There is no separate dispatch timer.
 3. `drawWithDrawable:` uses the actual drawable texture dimensions, prepares
-   the scene, uploads changed atlas pixels and updates the vertex data.
+   the scene and passes it to `TelarMetalRenderer.renderFrame:drawable:`, which
+   uploads changed atlas pixels and updates the vertex data.
 4. The allocator resets only after the previous GPU submission has completed.
    The command buffer begins encoding, the render encoder binds the pipeline
    and argument table, and one instanced draw paints the scene.
@@ -62,7 +78,7 @@ still pacing continuous output against the view's display. See
 | Active drawable | Keep the render destination alive through GPU work | Released on delivery |
 
 Metal 4 command buffers do not retain the resources they reference. Strong
-view ivars own those resources; residency declares GPU accessibility and is
+renderer ivars own those resources; residency declares GPU accessibility and is
 not a substitute for lifetime ownership. One frame in flight prevents CPU writes
 from racing with GPU reads. There is one render pass and no GPU-produced input
 for a later pass, so the production renderer needs no inter-pass barrier.
@@ -76,7 +92,8 @@ second. The multi-frame native test covers this behavior.
 Closing invalidates the display link and cancels the socket wake source. It
 waits for submitted GPU work before releasing resources. The feedback queue
 releases this wait without requiring the main queue to run. A queued delivery
-checks `closed` and cannot call a detached Zig context. The runtime owns the
+checks the renderer's `stopped` flag; the view completion also checks `closed`.
+Neither can call a detached Zig context. The runtime owns the
 shell and remains alive after this window closes.
 
 ## Objective-C reading notes
@@ -89,16 +106,17 @@ setter; it is not direct public-field access.
 
 The build enables ARC. `CADisplayLink` retains its target; closing calls
 `invalidate` to release that reference and remove it from the run loop. The
-feedback block captures a weak view to avoid a
-view/block ownership cycle, then resolves it to a strong local reference on
-the main queue. `view->in_flight` accesses an ivar directly. The dispatch group
-is captured strongly so completion can release a close wait independently of
-the view's weak reference.
+feedback block captures a weak renderer; the renderer's completion block
+captures a weak view. Each resolves its owner to a strong local reference on
+the main queue, avoiding ownership cycles. `renderer->in_flight` accesses an
+ivar directly. The dispatch group is captured strongly so completion can
+release a close wait independently of the renderer's weak reference.
 
 The MSL source lives in `src/gui/shaders/quad.metal`, next to the Vulkan
-shaders. Objective-C embeds its bytes with C23 `#embed`; both the application
-and native window test enable that language standard. The executable therefore
-needs no shader file at runtime. `buildPipeline` compiles the embedded source during initialization using
+shaders. `TelarMetalRenderer.m` embeds its bytes with C23 `#embed`; both the
+application and native window test enable that language standard through
+`build/macos_gui.zig`. The executable therefore needs no shader file at runtime.
+`buildPipeline` compiles the embedded source during initialization using
 `MTL4Compiler` and `MTL4LibraryDescriptor`, explicitly selecting MSL 4.0.
 
 Pipeline construction uses the Metal 4 compiler API throughout:
