@@ -67,7 +67,8 @@ See [docs/configuration.md](docs/configuration.md) and
 [docs/plugins.md](docs/plugins.md). The opt-in TLS interception proxy, its
 agent-state contract, and its bounded semantic transformation boundary are
 documented in [docs/proxy-tls.md](docs/proxy-tls.md). A complete configuration
-and plugin package live under [`examples/`](examples/).
+and plugin package live under [`examples/`](examples/): `config.lua` and
+`plugins/`.
 
 The [Neovim adapter](integrations/nvim/README.md) integrates Telar's
 navigation-aware `ctrl+h/j/k/l` action with `smart-splits.nvim`.
@@ -166,9 +167,7 @@ ZIG_COV_BIN=/path/to/zig-cov just coverage
 The coverage build forces LLVM and libc only for native test executables. It
 instruments Telar's Zig-only shared modules and suite roots, while leaving
 C-family dependencies and cross-target compile checks alone. Generated
-packages, caches, and vendored sources are excluded from the report. The
-historical proxy example under `examples/proxy` is outside the default test
-step and therefore outside this report.
+packages, caches, and vendored sources are excluded from the report.
 
 Feed the result into `zig-crap` to join line coverage with per-function
 complexity:
@@ -364,10 +363,8 @@ Run-to-run noise on a quiet laptop is about 0.1 ms at p50 and 0.3 ms at p99;
 treat smaller differences as no verdict, as `docs/performance-gates.md`
 already requires for the microbenchmarks.
 
-The runtime observation proxy and the independent historical example use
-separate gates:
+The runtime observation proxy has its own gate:
 
 ```sh
 zig build test-backend-proxy
-zig build test-proxy-example
 ```

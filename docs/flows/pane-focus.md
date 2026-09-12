@@ -144,7 +144,7 @@ running.
 - `src/client/application/panes/pane_focus_reporting.zig` proves reporting
   commit order, focus-out before focus-in, effect failure and silent,
   idempotent canonical retirement.
-- `src/frontend/client/controllers/panes/active_pane_resources.zig` implements view, transport,
+- `src/client/controllers/panes/active_pane_resources.zig` implements view, transport,
   graphics and geometry ports without selecting their order.
 - `src/frontend/client/tests/` proves protocol order, mode opt-in,
   exact tab ownership, silent retirement, capacity reservation, mouse ordering

@@ -108,7 +108,7 @@ snapshots.
 
 ## Proof
 
-- `src/frontend/client/connection/request_lifecycle.zig` proves identity bounds, recovery
+- `src/client/connection/request_lifecycle.zig` proves identity bounds, recovery
   preflight and refusal before tracker overflow.
 - `src/client/connection/requests.zig` proves single consumption, group and pane
   lookup, exact close completion and stale-retirement exceptions.

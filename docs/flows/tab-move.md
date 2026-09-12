@@ -95,7 +95,7 @@ never has to replay a move.
 
 ## Proof
 
-- `src/frontend/client/controllers/tabs/tab_moves.zig` proves one-time response correlation,
+- `src/client/controllers/tabs/tab_moves.zig` proves one-time response correlation,
   exact identity validation, wire translation and protocol error mapping.
 - `src/client/application/tabs/move_tab.zig` proves request gating, absence
   of provisional mutation, delivery failure and canonical confirmation.

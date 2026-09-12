@@ -143,5 +143,5 @@ presenter compare versions and schedule at most the required paced frame.
   presenter observation, stale-result suppression, capability denial, worker
   failure, unmatched identities, and busy and rejected start behavior on a
   real client.
-- `src/frontend/plugins/plugins.zig` proves digest-bound capability checks and
+- `src/client/plugins/plugins.zig` proves digest-bound capability checks and
   rejects invalid or recursive effect batches.

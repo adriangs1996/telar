@@ -28,13 +28,13 @@ key_routing adapter                 paste_routing adapter
         |                                  |
 KeyRoutingHandler -> prompt    PasteRoutingHandler -> prompt owner
         |                                  |
-name_prompts.handleInput                    |
+key or replayed bytes -> term.parse       paste_start / paste_text / paste_end
         |                                  |
         +----------------+-----------------+
                          |
-                     term.parse
-        |
-semantic Command
+             name_prompts.handleInput(Input)
+                         |
+                  semantic Command
         |
 NamePromptHandler.execute -> name_prompt.State.apply
 ```
@@ -111,7 +111,7 @@ latest model state.
   prompt retention after blocked or failed submissions.
 - `src/client/application/input/name_prompt_opening.zig` proves input
   authority, workspace-creation gating, target resolution and canonical text.
-- `src/frontend/client/controllers/input/name_prompts.zig` proves terminal parsing, bracketed
+- `src/client/controllers/input/name_prompts.zig` proves terminal parsing, bracketed
   paste handling and the zero-length incomplete-sequence regression.
 - `src/client/application/input/paste_routing.zig` proves exclusive prompt
   or pane ownership and ignored unowned phases.

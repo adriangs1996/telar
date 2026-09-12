@@ -2,9 +2,9 @@ const std = @import("std");
 const Coverage = @import("build/Coverage.zig");
 const Suite = @import("build/Suite.zig");
 const SuiteModules = @import("build/SuiteModules.zig");
-const ProxyModuleConfig = @import("build/ProxyModuleConfig.zig");
 const FreeTypeConfig = @import("build/FreeTypeConfig.zig");
 const LuaConfig = @import("build/LuaConfig.zig");
+const LuaModules = @import("build/LuaModules.zig");
 
 const source_roots: []const []const u8 = &.{ "build.zig", "build", "src", "examples", "benchmarks", "test", "linters" };
 
@@ -100,7 +100,7 @@ pub fn build(b: *std.Build) void {
     });
     core.addImport("unicode", unicode);
     coverage.instrumentModule(core);
-    const client = addClientModule(b, core);
+    const client = addClientModule(b, core, .{ .api = lua_api, .telar = telar_lua });
     coverage.instrumentModule(client);
 
     const backend = b.addModule("telar-backend", .{
@@ -137,6 +137,8 @@ pub fn build(b: *std.Build) void {
     frontend.addImport("telar-lua", telar_lua);
     frontend.addImport("lua-api", lua_api);
     frontend.addImport("freetype", freetype);
+    const assets = addAssets(b, target, optimize);
+    frontend.addImport("assets", assets);
     if (target.result.os.tag == .macos) {
         frontend.addCSourceFile(.{
             .file = b.path("src/frontend/attachments/darwin.m"),
@@ -240,7 +242,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = bench_optimize,
     });
-    const bench_client = addClientModule(b, bench_core);
+    const bench_client = addClientModule(b, bench_core, .{ .api = bench_lua_api, .telar = bench_lua });
     const bench_frontend = b.createModule(.{
         .root_source_file = b.path("src/frontend/frontend.zig"),
         .target = target,
@@ -254,6 +256,7 @@ pub fn build(b: *std.Build) void {
     bench_frontend.addImport("lua-api", bench_lua_api);
     bench_frontend.addImport("telar-lua", bench_lua);
     bench_frontend.addImport("freetype", bench_freetype);
+    bench_frontend.addImport("assets", addAssets(b, target, bench_optimize));
 
     const benchmarks = b.addExecutable(.{
         .name = "telar-benchmarks",
@@ -304,7 +307,7 @@ pub fn build(b: *std.Build) void {
     ).dependOn(&verify_terminal_browser.step);
 
     // ---------------------------------------------------------------------
-    // The example
+    // The experiment
     // ---------------------------------------------------------------------
 
     const experiment_module = b.createModule(.{
@@ -314,96 +317,67 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     experiment_module.addImport("telar-frontend", frontend);
+    experiment_module.addImport("telar-core", core);
     const experiment = b.addExecutable(.{ .name = "exper", .root_module = experiment_module });
     const run_experiment = b.addRunArtifact(experiment);
     b.step("exper", "Run the frontend execution experiment").dependOn(&run_experiment.step);
+    if (target.result.os.tag == .macos) {
+        const native_module = b.createModule(.{
+            .root_source_file = b.path("exper_native.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        });
+        native_module.addImport("telar-frontend", frontend);
+        native_module.addImport("telar-core", core);
+        native_module.addCSourceFile(.{ .file = b.path("exper/native.m"), .flags = &.{"-fobjc-arc"} });
+        native_module.linkFramework("AppKit", .{});
+        const native = b.addExecutable(.{ .name = "exper-native", .root_module = native_module });
+        b.step("build-exper-native", "Build the macOS frontend experiment").dependOn(&native.step);
+        b.step("exper-native", "Run the macOS frontend experiment").dependOn(&b.addRunArtifact(native).step);
+    }
     const experiment_tests = b.addTest(.{ .root_module = experiment_module });
     b.step("test-exper", "Test the frontend execution experiment").dependOn(&b.addRunArtifact(experiment_tests).step);
 
-    const sidebar = b.addExecutable(.{
-        .name = "sidebar",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("examples/sidebar.zig"),
+    // ---------------------------------------------------------------------
+    // The native client
+    // ---------------------------------------------------------------------
+
+    // GPU chrome over the same client behavior as the TUI. It never imports
+    // `telar-frontend`; the window and Metal backend are Objective-C compiled
+    // by Zig, so the toolchain stays a Zig compiler and the macOS SDK.
+    if (target.result.os.tag == .macos) {
+        const gui = b.createModule(.{
+            .root_source_file = b.path("src/gui/gui.zig"),
             .target = target,
             .optimize = optimize,
             .link_libc = true,
-        }),
-    });
-    sidebar.root_module.addImport("telar-frontend", frontend);
-    sidebar.root_module.addImport("telar-client", client);
-    sidebar.root_module.addImport("telar-core", core);
-
-    const run_sidebar = b.addRunArtifact(sidebar);
-    b.step("sidebar", "Run the example").dependOn(&run_sidebar.step);
-
-    const history_preview = b.addExecutable(.{
-        .name = "history-preview",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("examples/history_browser.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-        }),
-    });
-    history_preview.root_module.addImport("telar-frontend", frontend);
-    history_preview.root_module.addImport("telar-core", core);
-    const run_history_preview = b.addRunArtifact(history_preview);
-    if (b.args) |args| {
-        run_history_preview.addArgs(args);
+        });
+        gui.addImport("freetype", freetype);
+        gui.addImport("assets", assets);
+        gui.addCSourceFile(.{
+            .file = b.path("src/gui/macos/window.m"),
+            .flags = cFlags(b, &.{"-fobjc-arc"}, coverage.enabled),
+        });
+        gui.linkFramework("AppKit", .{});
+        gui.linkFramework("Metal", .{});
+        gui.linkFramework("QuartzCore", .{});
+        const gui_exe = b.addExecutable(.{
+            .name = "telar-gui",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/gui/main.zig"),
+                .target = target,
+                .optimize = optimize,
+                .link_libc = true,
+            }),
+        });
+        gui_exe.root_module.addImport("telar-gui", gui);
+        b.step("build-gui", "Build the native client").dependOn(&b.addInstallArtifact(gui_exe, .{}).step);
+        b.step("gui", "Run the native client").dependOn(&b.addRunArtifact(gui_exe).step);
+        const gui_tests = b.addTest(.{ .root_module = gui });
+        coverage.instrumentTest(gui_tests);
+        b.step("test-gui", "Run the native client tests").dependOn(&b.addRunArtifact(gui_tests).step);
     }
-
-    b.step("history-preview", "Render the real history widget as SVG for visual review").dependOn(&run_history_preview.step);
-
-    const terminal_browser_pane = b.addExecutable(.{
-        .name = "terminal-browser-pane",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("examples/terminal_browser_pane.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-        }),
-    });
-    terminal_browser_pane.root_module.addImport("telar-core", core);
-    terminal_browser_pane.root_module.addImport("telar-backend", backend);
-    terminal_browser_pane.root_module.addImport("telar-frontend", frontend);
-    terminal_browser_pane.root_module.addImport("telar-client", client);
-    terminal_browser_pane.root_module.addImport("ghostty-vt", ghostty_vt);
-
-    // A deterministic terminal-browser stand-in: publishes shared-memory
-    // frames of a chosen size at a chosen rate, so the graphics pipeline can
-    // be measured without Chromium.
-    const frame_source = b.addExecutable(.{
-        .name = "telar-frame-source",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("examples/frame_source.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-        }),
-    });
-    b.step("frame-source", "Install the deterministic terminal-browser frame source").dependOn(&b.addInstallArtifact(frame_source, .{}).step);
-
-    const asteroids = b.addExecutable(.{
-        .name = "asteroids",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("examples/games/asteroids/main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-        }),
-    });
-    asteroids.root_module.addImport("kitty_protocol", kitty_protocol);
-    const run_asteroids = b.addRunArtifact(asteroids);
-    b.step("asteroids", "Run the Asteroids example").dependOn(&run_asteroids.step);
-
-    const run_terminal_browser_pane = b.addRunArtifact(terminal_browser_pane);
-    if (b.args) |args| {
-        run_terminal_browser_pane.addArgs(args);
-    }
-    b.step(
-        "terminal-browser-pane",
-        "Run terminal-browser inside a centered half-size pane",
-    ).dependOn(&run_terminal_browser_pane.step);
 
     // ---------------------------------------------------------------------
     // Tests
@@ -434,7 +408,10 @@ pub fn build(b: *std.Build) void {
     const check_client = b.step("check-client", "Semantic-analyze only the shared client");
     check_client.dependOn(&client_check.step);
     check_client.dependOn(&client_boundaries.step);
-    std.debug.assert(client.import_table.count() == 1 and client.import_table.get("telar-core").? == core);
+    // The shared client depends on core and the Lua modules only; the checker
+    // in tools/ enforces the same set at source level.
+    std.debug.assert(client.import_table.count() == 3 and client.import_table.get("telar-core").? == core);
+    std.debug.assert(client.import_table.get("telar-lua").? == telar_lua and client.import_table.get("lua-api").? == lua_api);
 
     for (core.import_table.values()) |dependency| {
         std.debug.assert(dependency != client and dependency != frontend and dependency != backend);
@@ -459,7 +436,10 @@ pub fn build(b: *std.Build) void {
     const run_codestyle = b.addRunArtifact(codestyle_exe);
     if (b.args) |args| {
         run_codestyle.addArgs(args);
-    } else {
+    }
+
+    // Flags such as `-- --fix` refine the run; only explicit paths replace the roots.
+    if (!argsNamePaths(b.args)) {
         run_codestyle.addArgs(source_roots);
     }
     b.step("codestyle", "Check or fix deterministic Zig code style rules").dependOn(&run_codestyle.step);
@@ -514,7 +494,6 @@ pub fn build(b: *std.Build) void {
 
     const suites = [_]Suite{
         .{ .path = "src/kitty_protocol/kitty_protocol.zig" },
-        .{ .path = "examples/games/asteroids/main.zig", .libc = true },
         .{ .path = "src/core/ui/ui_tests.zig" },
         .{ .path = "src/core/select.zig" },
         // Only referenced through non-pub imports elsewhere, so their tests
@@ -530,7 +509,7 @@ pub fn build(b: *std.Build) void {
         // Capability roots can import sibling capabilities, so the package
         // root collects their tests without narrowing Zig's module path.
         .{ .path = "src/frontend/frontend.zig", .libc = true, .frontend = true },
-        .{ .path = "src/frontend/transport/local.zig", .libc = true, .transport = true },
+        .{ .path = "src/client/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/backend/history/escape.zig" },
         .{ .path = "src/backend/runtime/observability/system_metrics.zig" },
         .{ .path = "src/client/workspace/workspace_list.zig" },
@@ -542,8 +521,6 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/backend/backend.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/main.zig", .vt = true, .libc = true },
-        .{ .path = "examples/sidebar.zig", .vt = true, .libc = true },
-        .{ .path = "examples/terminal_browser_pane.zig", .vt = true, .libc = true },
         .{
             .path = "src/transport_integration_test.zig",
             .vt = true,
@@ -564,6 +541,7 @@ pub fn build(b: *std.Build) void {
         .telar_lua = telar_lua,
         .tls = tls,
         .freetype = freetype,
+        .assets = assets,
         .ghostty_vt = ghostty_vt,
         .wuffs = wuffs,
         .nghttp2_prefix = nghttp2_prefix,
@@ -632,81 +610,8 @@ pub fn build(b: *std.Build) void {
     coverage.instrumentTest(substitution);
     parallel_test_prerequisites.dependOn(&b.addRunArtifact(substitution).step);
 
-    // ---------------------------------------------------------------------
-    // The proxy example
-    // ---------------------------------------------------------------------
-
-    // Deliberately outside the default build and outside `test`. It needs
-    // sqlite3 and libnghttp2 from the system, and telar's whole point is that
-    // the core builds anywhere with nothing but a Zig compiler. Someone who
-    // wants the proxy asks for it.
-    const proxyModule = struct {
-        fn make(bb: *std.Build, path: []const u8, config: ProxyModuleConfig) *std.Build.Module {
-            const mod = bb.createModule(.{
-                .root_source_file = bb.path(path),
-                .target = config.target,
-                .optimize = config.optimize,
-                .link_libc = true,
-            });
-            mod.addImport("tls", config.tls);
-            mod.addImport("ghostty-vt", config.vt);
-            mod.linkSystemLibrary("sqlite3", .{});
-            // HPACK only. Decoding a header block is the one part of HTTP/2
-            // that cannot be skipped by relaying frames untouched.
-            mod.addIncludePath(.{ .cwd_relative = bb.pathJoin(&.{ config.prefixes.nghttp2, "include" }) });
-            mod.addLibraryPath(.{ .cwd_relative = bb.pathJoin(&.{ config.prefixes.nghttp2, "lib" }) });
-            mod.linkSystemLibrary("nghttp2", .{});
-            mod.addIncludePath(.{ .cwd_relative = bb.pathJoin(&.{ config.prefixes.brotli, "include" }) });
-            mod.addLibraryPath(.{ .cwd_relative = bb.pathJoin(&.{ config.prefixes.brotli, "lib" }) });
-            mod.linkSystemLibrary("brotlidec", .{});
-            return mod;
-        }
-    }.make;
-
-    const proxy = b.addExecutable(.{
-        .name = "proxy",
-        .root_module = proxyModule(b, "examples/proxy/main.zig", .{
-            .target = target,
-            .optimize = optimize,
-            .tls = tls,
-            .vt = ghostty_vt,
-            .prefixes = .{
-                .nghttp2 = nghttp2_prefix,
-                .brotli = brotli_prefix,
-            },
-        }),
-    });
-    const proxy_step = b.step("proxy", "Build the pty and TLS proxy example");
-    proxy_step.dependOn(&b.addInstallArtifact(proxy, .{}).step);
-
-    const proxy_test_step = b.step("test-proxy-example", "Run the proxy example's tests");
-    for ([_][]const u8{
-        "examples/proxy/ca.zig",
-        "examples/proxy/tls.zig",
-        "examples/proxy/http.zig",
-        "examples/proxy/proxy.zig",
-        "examples/proxy/db.zig",
-        "examples/proxy/h2.zig",
-        "examples/proxy/osc.zig",
-    }) |path| {
-        const tests = b.addTest(.{
-            .root_module = proxyModule(b, path, .{
-                .target = target,
-                .optimize = optimize,
-                .tls = tls,
-                .vt = ghostty_vt,
-                .prefixes = .{
-                    .nghttp2 = nghttp2_prefix,
-                    .brotli = brotli_prefix,
-                },
-            }),
-        });
-        coverage.instrumentTest(tests);
-        proxy_test_step.dependOn(&b.addRunArtifact(tests).step);
-    }
-
     const check_programs = b.step("check-programs", "Analyze every first-party executable entrypoint");
-    for ([_]*std.Build.Step.Compile{ exe, benchmarks, echo_probe, sidebar, history_preview, terminal_browser_pane, frame_source, asteroids, proxy }) |program| {
+    for ([_]*std.Build.Step.Compile{ exe, benchmarks, echo_probe }) |program| {
         const analyzed = b.addExecutable(.{ .name = program.name, .root_module = program.root_module });
         check_programs.dependOn(&analyzed.step);
     }
@@ -739,6 +644,22 @@ pub fn build(b: *std.Build) void {
             .optimize = .Debug,
         });
         cross_core.addImport("unicode", cross_unicode);
+        // Platform code publishes shared client values such as `LocalTime`, and
+        // sound policy is shared configuration, so both checks need the client
+        // module and, through it, the vendored Lua for that target.
+        const cross_lua_api = addLua(b, .{
+            .target = cross_target,
+            .optimize = .Debug,
+            .name = b.fmt("lua-{s}-{s}", .{ @tagName(query.os_tag.?), @tagName(query.cpu_arch.?) }),
+        });
+        const cross_telar_lua = b.createModule(.{
+            .root_source_file = b.path("src/lua/lua.zig"),
+            .target = cross_target,
+            .optimize = .Debug,
+            .link_libc = true,
+        });
+        cross_telar_lua.addImport("lua-api", cross_lua_api);
+        const cross_client = addClientModule(b, cross_core, .{ .api = cross_lua_api, .telar = cross_telar_lua });
         const check = b.addObject(.{
             .name = b.fmt("platform-{s}-{s}", .{ @tagName(query.os_tag.?), @tagName(query.cpu_arch.?) }),
             .root_module = b.createModule(.{
@@ -747,6 +668,7 @@ pub fn build(b: *std.Build) void {
                 .optimize = .Debug,
             }),
         });
+        check.root_module.addImport("telar-client", cross_client);
         cross_step.dependOn(&check.step);
         const raster_check = b.addLibrary(.{
             .name = b.fmt("text-rasterizer-{s}-{s}", .{ @tagName(query.os_tag.?), @tagName(query.cpu_arch.?) }),
@@ -762,6 +684,7 @@ pub fn build(b: *std.Build) void {
             "freetype",
             addFreeType(b, .{ .target = cross_target, .optimize = .Debug, .disable_coverage = false }),
         );
+        raster_check.root_module.addImport("assets", addAssets(b, cross_target, .Debug));
         cross_step.dependOn(&raster_check.step);
         const sound_check = b.addTest(.{
             .root_module = b.createModule(.{
@@ -772,6 +695,7 @@ pub fn build(b: *std.Build) void {
             }),
         });
         sound_check.root_module.addImport("telar-core", cross_core);
+        sound_check.root_module.addImport("telar-client", cross_client);
         if (query.os_tag.? == .windows) {
             sound_check.root_module.linkSystemLibrary("user32", .{});
         }
@@ -795,14 +719,19 @@ pub fn build(b: *std.Build) void {
     parallel_test_prerequisites.dependOn(cross_step);
 }
 
-fn addClientModule(b: *std.Build, core: *std.Build.Module) *std.Build.Module {
+// Configuration and plugins are shared client behavior, so the common client
+// owns the Lua modules; adapters never load configuration themselves.
+fn addClientModule(b: *std.Build, core: *std.Build.Module, lua: LuaModules) *std.Build.Module {
     const client = b.createModule(.{
         .root_source_file = b.path("src/client/client.zig"),
         .target = core.resolved_target,
         .optimize = core.optimize,
+        .link_libc = true,
     });
 
     client.addImport("telar-core", core);
+    client.addImport("telar-lua", lua.telar);
+    client.addImport("lua-api", lua.api);
     return client;
 }
 
@@ -1014,7 +943,7 @@ fn addLua(b: *std.Build, config: LuaConfig) *std.Build.Module {
     }
 
     const api = b.createModule(.{
-        .root_source_file = b.path("src/frontend/config/lua_api.zig"),
+        .root_source_file = b.path("src/lua/lua_api.zig"),
         .target = target,
         .optimize = config.optimize,
         .link_libc = true,
@@ -1022,4 +951,22 @@ fn addLua(b: *std.Build, config: LuaConfig) *std.Build.Module {
     api.addIncludePath(source_root);
     api.linkLibrary(lua);
     return api;
+}
+
+fn argsNamePaths(args: ?[]const []const u8) bool {
+    for (args orelse return false) |arg| {
+        if (!std.mem.startsWith(u8, arg, "-")) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+fn addAssets(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
+    return b.createModule(.{
+        .root_source_file = b.path("src/assets/assets.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
 }

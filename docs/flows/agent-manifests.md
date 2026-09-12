@@ -128,5 +128,5 @@ table.
   implied agent per dialect.
 - `src/backend/history/agent_detection.zig` and `src/backend/process/process.zig`
   prove screen and process detection against the built-in table.
-- `src/frontend/config/generation_support.zig` proves manifest parsing and its
+- `src/client/config/generation_support.zig` proves manifest parsing and its
   diagnostics, including the presentation fields.

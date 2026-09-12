@@ -78,7 +78,7 @@ needed.
 - `src/client/application/notifications/sidebar_animation.zig` proves inactive
   no-ops, synchronization without mutation, commit-before-rearm ordering and
   retained commits after effect failure.
-- `src/frontend/client/controllers/notifications/sidebar_animations.zig` owns the single pending timer
+- `src/client/controllers/notifications/sidebar_animations.zig` owns the single pending timer
   and releases it before handling completion.
 - `src/frontend/client/presentation/Presenter.zig` observes the dedicated revision and
   supplies the model frame to the view.

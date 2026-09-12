@@ -1,3 +1,4 @@
+const PaneSurfaceType = @import("telar-core").PaneSurface;
 const model_namespace = @import("model_namespace.zig");
 const TabsModel = @import("../workspace/TabsModel.zig");
 const LayoutsType = @import("../workspace/Layouts.zig");
@@ -117,7 +118,6 @@ const RemovedPanesType = @import("RemovedPanes.zig");
 const TabSelectionType = @import("TabSelection.zig");
 const Model = @This();
 
-mode: model_namespace.PresentationMode = .normal,
 workspace: TabsModel,
 saved_layouts: LayoutsType = .{},
 clipboard: ClipboardCaptureState = .{},
@@ -238,13 +238,26 @@ pub fn restoreClientLayouts(model: *Model, layouts: LayoutsType) void {
     model.saved_layouts = layouts;
 }
 
-pub fn toggleAgentMode(self: *Model) void {
-    self.mode = switch (self.mode) {
-        .normal => .agent,
-        .agent => .normal,
+/// Flips the focused pane between its terminal cells and its thread view and
+/// reports the surface now shown. Absent or empty layouts leave every version
+/// intact.
+///
+/// ```zig
+/// const surface = model.togglePaneSurface() orelse return;
+/// ```
+pub fn togglePaneSurface(model: *Model) ?PaneSurfaceType {
+    const active = model.workspace.active() orelse return null;
+    const focused = active.model.layout.focused() orelse return null;
+    const next: PaneSurfaceType = switch (active.model.layout.surface(focused)) {
+        .terminal => .thread,
+        .thread => .terminal,
     };
+    if (!active.model.setSurface(focused, next)) {
+        return null;
+    }
 
-    self.chrome_revision +%= 1;
+    model.panes_revision +%= 1;
+    return next;
 }
 
 /// Returns the version that presenters use to observe committed changes.

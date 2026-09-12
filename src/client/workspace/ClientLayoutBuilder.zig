@@ -16,8 +16,8 @@ pub fn build(builder: *ClientLayoutBuilder, parent: ?layout_support.NodeIndex) !
     const index: layout_support.NodeIndex = @intCast(builder.next_index);
     builder.next_index += 1;
     switch (encoded) {
-        .pane => |pane_id| {
-            builder.layout.nodes[index] = .{ .parent = parent, .node = .{ .leaf = pane_id } };
+        .pane => |pane| {
+            builder.layout.nodes[index] = .{ .parent = parent, .node = .{ .leaf = pane.id }, .surface = pane.surface };
             builder.layout.pane_count += 1;
         },
         .split => |split| {

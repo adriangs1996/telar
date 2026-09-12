@@ -127,7 +127,7 @@ active tab.
 - `src/client/application/tabs/tab_creation_delivery.zig` proves exact
   revision, identity, root and layout validation, attachment-before-resource
   order, ABA rejection and partial failure semantics.
-- `src/frontend/client/controllers/tabs/tab_creations.zig` owns response correlation and
+- `src/client/controllers/tabs/tab_creations.zig` owns response correlation and
   wire-to-command translation plus physical port wiring.
 - `src/client/model/Model.zig` proves attached-source planning,
   transactional insertion, identity checks and exact version changes.

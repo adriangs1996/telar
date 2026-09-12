@@ -49,7 +49,7 @@ pub fn tabIsCurrent(tab: ClientTabLayoutViewType, sources: Sources) bool {
     var nodes = tab.nodes();
     while (nodes.next() catch return false) |node| {
         if (node == .pane) {
-            pane_ids[pane_count] = node.pane;
+            pane_ids[pane_count] = node.pane.id;
             pane_count += 1;
         }
     }
@@ -62,7 +62,7 @@ pub fn typedTabIsCurrent(tab: ClientTabLayoutType, sources: Sources) bool {
     var pane_count: usize = 0;
     for (tab.nodes) |node| {
         if (node == .pane) {
-            pane_ids[pane_count] = node.pane;
+            pane_ids[pane_count] = node.pane.id;
             pane_count += 1;
         }
     }

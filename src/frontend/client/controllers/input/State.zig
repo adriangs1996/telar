@@ -2,9 +2,8 @@ const std = @import("std");
 const host_inputs = @import("host_inputs.zig");
 const Chunk = @import("Chunk.zig");
 const SchedulerType = @import("telar-client").Scheduler;
-const LeasesType = @import("telar-client").Leases;
 const StartupInputState = @import("../../resources/StartupInputState.zig");
-const Config = @import("Config.zig");
+const Config = @import("telar-client").RouterConfig;
 const ModeType = @import("telar-client").Mode;
 const ActionType = @import("telar-client").Action;
 const HintsType = @import("telar-client").Hints;
@@ -20,7 +19,6 @@ read_pending: bool = false,
 presentation_revision: u64 = 0,
 input_timeout: SchedulerType = .{},
 binding_timeout: SchedulerType = .{},
-application_leases: LeasesType = .{},
 startup_input: StartupInputState = .{},
 
 /// Creates the host input state around the client-owned TTY handle.

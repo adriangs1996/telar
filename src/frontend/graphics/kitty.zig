@@ -86,13 +86,6 @@ test "capability query and probe identities are exact" {
     try std.testing.expectEqual(@as(u32, 32), capability_mod.zlib_query_image_id);
 }
 
-test "automatic sidebar renderer falls back while capability is absent" {
-    try std.testing.expectEqual(capability_mod.ResolvedSidebarRendering.cells, try capability_mod.SidebarRendering.automatic.resolve(.unknown));
-    try std.testing.expectEqual(capability_mod.ResolvedSidebarRendering.cells, try capability_mod.SidebarRendering.automatic.resolve(.unsupported));
-    try std.testing.expectEqual(capability_mod.ResolvedSidebarRendering.kitty_hybrid, try capability_mod.SidebarRendering.automatic.resolve(.supported));
-    try std.testing.expectError(error.KittyGraphicsUnsupported, capability_mod.SidebarRendering.kitty_hybrid.resolve(.unsupported));
-}
-
 test "direct transmission chunks payload without changing pixels" {
     var pixels: [3073]u8 = undefined;
     for (&pixels, 0..) |*byte, index| byte.* = @truncate(index);

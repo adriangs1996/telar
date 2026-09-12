@@ -58,7 +58,7 @@ selection. See [Client layout persistence](client-layout-persistence.md).
   remote plans without exposing the agent replica.
 - `src/client/application/agents/agent_navigation.zig` proves selection
   before focus, stale and pending suppression, and effect failure ordering.
-- `src/frontend/client/controllers/agents/agent_navigation.zig` wires the plan
+- `src/client/controllers/agents/agent_navigation.zig` wires the plan
   to tab, focus and handoff adapters.
 - `src/frontend/client/tests/synchronization.zig` proves local fullscreen focus,
   direct pane handoff and a workspace round trip into a previously inactive

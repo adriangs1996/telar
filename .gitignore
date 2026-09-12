@@ -14,3 +14,4 @@ state/
 /coverage.lcov
 /*.zcov
 /test/fuzz/afl-out/
+__pycache__/

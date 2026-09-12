@@ -132,7 +132,7 @@ authority.
 - `src/client/application/input/action_routing.zig` proves source
   classification, router control, semantic-key reinjection and copy-mode paste
   suppression without VM knowledge.
-- `src/frontend/config/` proves immutable context, callback quotas,
+- `src/client/config/` proves immutable context, callback quotas,
   bounded result parsing and semantic input construction.
 - `src/frontend/client/tests/` proves real VM evaluation, complete
   plugin prevalidation, semantic key and bracketed-paste delivery, copy-mode

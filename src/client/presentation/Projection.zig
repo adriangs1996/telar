@@ -16,6 +16,8 @@ const hints_support = @import("../input/hints_support.zig");
 const CopyProjectionType = @import("../workspace/CopyProjection.zig");
 const HostCapabilitiesType = @import("../model/HostCapabilities.zig");
 const TerminalSizeType = @import("telar-core").TerminalSize;
+const ThreadViewType = @import("ThreadView.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const Projection = @This();
 
 version: VersionType,
@@ -45,3 +47,14 @@ host_capabilities: HostCapabilitiesType,
 host_size: TerminalSizeType,
 /// Configured host window title template; empty leaves the host alone.
 window_title_template: []const u8 = "",
+
+/// Borrows the thread view for one pane of the active model.
+///
+/// ```zig
+/// const thread = projection.threadView(pane_id) orelse return;
+/// ```
+pub fn threadView(projection: *const Projection, pane_id: PaneIdType) ?ThreadViewType {
+    const model = projection.model orelse return null;
+
+    return ThreadViewType.capture(model, projection.agents, pane_id);
+}

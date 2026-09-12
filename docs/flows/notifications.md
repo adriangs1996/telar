@@ -177,10 +177,10 @@ new notifications after reconciliation.
 - `src/client/application/notifications/notifications.zig` proves commit-before-
   timer-before-navigation ordering, delivery policy, stale interaction
   behavior and retained commits after effect failures.
-- `src/frontend/client/controllers/notifications/notifications.zig` owns local timestamp acquisition,
+- `src/client/controllers/notifications/notifications.zig` owns local timestamp acquisition,
   diagnostic publication, outbound action translation, delivery correlation
   and timer event ordering.
-- `src/frontend/client/resources/notification_timers.zig` maps model deadlines to the
+- `src/client/resources/notification_timers.zig` maps model deadlines to the
   shared scheduler and notification events.
 - `src/client/resources/deadline_timer.zig` proves deadline replacement,
   removal, parking and pending-token release after successful and failed

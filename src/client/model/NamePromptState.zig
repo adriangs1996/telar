@@ -291,7 +291,7 @@ fn editField(state: *State, command: name_prompt.Command) name_prompt.Transition
     const prompt = state.mutable() orelse return .unchanged;
     const before: FieldPosition = .capture(&prompt.field);
     switch (command) {
-        .insert => |bytes| prompt.field.insert(bytes),
+        .insert => |bytes| if (prompt.pasting) insertPasted(&prompt.field, bytes) else prompt.field.insert(bytes),
         .backspace => prompt.field.backspace(),
         .delete => prompt.field.delete(),
         .move_left => |extend| prompt.field.moveLeft(extend),
@@ -309,4 +309,37 @@ fn editField(state: *State, command: name_prompt.Command) name_prompt.Transition
     }
     state.revision +%= 1;
     return .changed;
+}
+
+/// Pasted line breaks are text, not submissions: each CR, LF or CRLF becomes
+/// one space. Typed input never reaches this path.
+fn insertPasted(field: *name_prompt.Field, bytes: []const u8) void {
+    var start: usize = 0;
+    var index: usize = 0;
+    while (index < bytes.len) : (index += 1) {
+        const byte = bytes[index];
+        if (byte != '\r' and byte != '\n') {
+            continue;
+        }
+
+        field.insert(bytes[start..index]);
+        field.insert(" ");
+        if (byte == '\r' and index + 1 < bytes.len and bytes[index + 1] == '\n') {
+            index += 1;
+        }
+
+        start = index + 1;
+    }
+
+    field.insert(bytes[start..]);
+}
+
+test "pasted line breaks become spaces while typed text is inserted verbatim" {
+    var state: State = .{};
+    state.begin(.create_workspace);
+
+    try std.testing.expectEqual(name_prompt.Transition.routing_changed, state.apply(.paste_start));
+    try std.testing.expectEqual(name_prompt.Transition.changed, state.apply(.{ .insert = "one\r\ntwo\nthree\r" }));
+    try std.testing.expectEqual(name_prompt.Transition.routing_changed, state.apply(.paste_end));
+    try std.testing.expectEqualStrings("one two three ", state.currentConst().?.field.text());
 }

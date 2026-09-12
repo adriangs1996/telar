@@ -2,14 +2,16 @@
 //! decides when and what to paint. This adapter releases async tokens and
 //! supplies concrete effects to the application delivery policy.
 
-const Client = @import("../Client.zig");
+const TerminalClient = @import("../TerminalClient.zig");
+const host = TerminalClient.of;
+const Client = @import("telar-client").AttachedClient;
 const presentation_projection = @import("presentation_projection.zig");
 const mark_module = @import("telar-core").mark;
 const TokenType = @import("telar-client").Token;
 const DeliverPresentationHandlerType = @import("telar-client").DeliverPresentationHandler;
 const OutputType = @import("../resources/Output.zig");
 const EffectsType = @import("telar-client").PresentationEffects;
-const runtime_transport = @import("../entrypoints/runtime_io.zig");
+const runtime_transport = @import("telar-client").runtime_io;
 const FrameAckType = @import("telar-core").FrameAck;
 const now_module = @import("telar-core").now;
 const enabled_module = @import("telar-core").enabled;
@@ -21,7 +23,7 @@ const elapsed_module = @import("telar-core").elapsed;
 /// try presentation_lifecycle.observe(client);
 /// ```
 pub fn observe(client: *Client) !void {
-    try client.presenter.observe(presentation_projection.observation(client));
+    try host(client).presenter.observe(presentation_projection.observation(client));
 }
 
 /// Completes one paced draw, then delivers credits and frame acknowledgements
@@ -31,7 +33,7 @@ pub fn observe(client: *Client) !void {
 /// try presentation_lifecycle.handleDraw(client, result);
 /// ```
 pub fn handleDraw(client: *Client, result: anyerror!void) !void {
-    try client.presenter.completeDraw(result);
+    try host(client).presenter.completeDraw(result);
     try presentNow(client);
 }
 
@@ -44,22 +46,22 @@ pub fn handleDraw(client: *Client, result: anyerror!void) !void {
 /// ```
 pub fn presentNow(client: *Client) !void {
     mark_module(client.io, .compose_start);
-    if (client.output) |*output| {
+    if (host(client).output) |*output| {
         if (output.pending) {
             output.draw_deferred = true;
             return;
         }
 
-        try output.prepareFrame(@as(usize, client.presenter.screen.back.w) * client.presenter.screen.back.h);
+        try output.prepareFrame(@as(usize, host(client).presenter.screen.back.w) * host(client).presenter.screen.back.h);
     }
 
-    const delivery = try client.presenter.presentDue(
+    const delivery = try host(client).presenter.presentDue(
         presentation_projection.projection(client),
         presentation_projection.resources(client),
     ) orelse return;
-    errdefer _ = client.presenter.presentation_state.complete(delivery, .failed);
+    errdefer _ = host(client).presenter.presentation_state.complete(delivery, .failed);
 
-    if (client.output) |*output| {
+    if (host(client).output) |*output| {
         if (output.writer.end != 0) {
             output.delivery = delivery;
             try pumpOutput(client);
@@ -71,7 +73,7 @@ pub fn presentNow(client: *Client) !void {
 }
 
 fn deliver(client: *Client, token: TokenType) !void {
-    const delivery = client.presenter.presentation_state.complete(token, .delivered) orelse return;
+    const delivery = host(client).presenter.presentation_state.complete(token, .delivered) orelse return;
     var use_case: DeliverPresentationHandlerType = .{
         .model = &client.model,
         .effects = deliveryEffects(client),
@@ -88,17 +90,17 @@ fn deliver(client: *Client, token: TokenType) !void {
 /// try presentation_lifecycle.handleMediaTick(client, result);
 /// ```
 pub fn handleMediaTick(client: *Client, result: anyerror!void) !void {
-    try client.presenter.completeMediaTick(result);
-    if (client.output) |*output| {
+    try host(client).presenter.completeMediaTick(result);
+    if (host(client).output) |*output| {
         if (output.pending) {
             output.media_deferred = true;
             return;
         }
 
-        try output.prepareFrame(@as(usize, client.presenter.screen.back.w) * client.presenter.screen.back.h);
+        try output.prepareFrame(@as(usize, host(client).presenter.screen.back.w) * host(client).presenter.screen.back.h);
     }
 
-    try client.presenter.presentMedia(
+    try host(client).presenter.presentMedia(
         presentation_projection.projection(client),
         presentation_projection.resources(client),
     );
@@ -107,7 +109,7 @@ pub fn handleMediaTick(client: *Client, result: anyerror!void) !void {
 /// Starts one host write without lending model or presentation state.
 /// Example: `try pumpOutput(client);`.
 pub fn pumpOutput(client: *Client) anyerror!void {
-    const output = if (client.output) |*output| output else return;
+    const output = if (host(client).output) |*output| output else return;
     const pending = output.begin() orelse return;
     mark_module(client.io, .host_flush_start);
     const work = try output.tryWrite(pending);
@@ -116,18 +118,18 @@ pub fn pumpOutput(client: *Client) anyerror!void {
         return;
     }
 
-    try client.select.concurrent(.host_written, OutputType.write, .{work});
+    try host(client).select.concurrent(.host_written, OutputType.write, .{work});
 }
 
 /// Commits only the presentation whose bytes reached the host, then folds work.
 /// Example: `try handleWritten(client, result);`.
 pub fn handleWritten(client: *Client, result: anyerror!void) !void {
     mark_module(client.io, .host_flush_done);
-    const output = if (client.output) |*output| output else unreachable;
+    const output = if (host(client).output) |*output| output else unreachable;
     const token = output.delivery;
     const completed = output.complete(result) catch |err| {
         if (token) |value| {
-            _ = client.presenter.presentation_state.complete(value, .failed);
+            _ = host(client).presenter.presentation_state.complete(value, .failed);
         }
         return err;
     };
@@ -137,11 +139,11 @@ pub fn handleWritten(client: *Client, result: anyerror!void) !void {
 
     if (output.draw_deferred) {
         output.draw_deferred = false;
-        try client.presenter.requestDraw();
+        try host(client).presenter.requestDraw();
     }
     if (output.media_deferred) {
         output.media_deferred = false;
-        try client.presenter.requestMedia();
+        try host(client).presenter.requestMedia();
     }
 
     try pumpOutput(client);
@@ -175,5 +177,5 @@ fn acknowledgeFrame(context: *anyopaque, ack: FrameAckType) !void {
 
 fn requestMedia(context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    try client.presenter.requestMedia();
+    try host(client).presenter.requestMedia();
 }

@@ -2,12 +2,12 @@
 
 const std = @import("std");
 const Selection = @import("Selection.zig");
-const GenerationType = @import("telar-frontend").Generation;
+const GenerationType = @import("telar-client").Generation;
 const DiagnosticType = @import("telar-client").Diagnostic;
 const ConfigCheckOptionsType = @import("arguments/ConfigCheckOptions.zig");
-const defaultPath_module = @import("telar-frontend").defaultPath;
-const RegistryType = @import("telar-frontend").Registry;
-const validate = @import("telar-frontend").validate;
+const defaultPath_module = @import("telar-client").defaultPath;
+const RegistryType = @import("telar-client").Registry;
+const validate = @import("telar-client").validateDefaultBindings;
 const ResolvedSelection = @import("ResolvedSelection.zig");
 
 /// Loads one config generation or returns null when configuration is disabled

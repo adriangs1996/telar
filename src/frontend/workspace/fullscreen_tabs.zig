@@ -8,7 +8,7 @@ const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
 const Label = @import("Label.zig");
 const RectType = @import("telar-core").Rect;
 const StyleType = @import("telar-core").Style;
-const theme = @import("../ui/theme_support.zig");
+const theme = @import("telar-client").theme_support;
 const GraphemeIteratorType = @import("telar-core").GraphemeIterator;
 
 /// Shrinks labels before hiding panes. The active label stays visible and

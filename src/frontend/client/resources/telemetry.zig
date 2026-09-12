@@ -1,25 +1,27 @@
 //! Client observability state and its stable JSON projection.
 
+const TerminalClient = @import("../TerminalClient.zig");
+const host = TerminalClient.of;
 const FormatRequest = @import("FormatRequest.zig");
 const now_module = @import("telar-core").now;
 const std = @import("std");
 const elapsed_module = @import("telar-core").elapsed;
 const raw_module = @import("telar-core").raw;
 const rssBytes_module = @import("telar-core").rssBytes;
-const Client = @import("../Client.zig");
+const Client = @import("telar-client").AttachedClient;
 const Snapshot = @import("telar-core").SnapshotSnapshot;
 const SnapshotType = @import("Snapshot.zig");
-const runtime_transport = @import("../entrypoints/runtime_io.zig");
+const runtime_transport = @import("telar-client").runtime_io;
 const CellType = @import("telar-core").Cell;
 const waitForTick_module = @import("telar-core").waitForTick;
-const TelemetryState = @import("TelemetryState.zig");
+const TelemetryState = @import("telar-client").TelemetryState;
 const SinkType = @import("telar-core").Sink;
 const HostCapabilitiesType = @import("telar-client").HostCapabilities;
 const PacerType = @import("../../presentation/Pacer.zig");
-const Metrics = @import("Metrics.zig");
+const Metrics = @import("telar-client").TelemetryMetrics;
 const enabled_module = @import("telar-core").enabled;
 
-pub const buffer_size = 8192;
+pub const buffer_size = TelemetryState.buffer_size;
 
 /// Projects one immutable client observation into a bounded JSON line.
 ///
@@ -237,7 +239,7 @@ pub fn handleTick(client: *Client, result: anyerror!void, heap: Snapshot) void {
     const line = format(&client.telemetry.buffer, .{
         .io = client.io,
         .metrics = &client.telemetry.metrics,
-        .pacer = &client.presenter.pacer,
+        .pacer = &host(client).presenter.pacer,
         .snapshot = state,
     }) catch return;
 
@@ -245,7 +247,7 @@ pub fn handleTick(client: *Client, result: anyerror!void, heap: Snapshot) void {
         return;
     }
 
-    client.select.concurrent(.telemetry_written, writeDiagnostics, .{
+    host(client).select.concurrent(.telemetry_written, writeDiagnostics, .{
         client.io,
         &client.telemetry.sink,
         line,
@@ -269,39 +271,39 @@ fn capture(client: *Client, heap: Snapshot) ?SnapshotType {
     const focused = active.model.layout.focused() orelse .invalid;
 
     return .{
-        .theme_name = client.view.theme.base.canonicalName(),
-        .icon_theme_name = client.view.icon_theme.canonicalName(),
+        .theme_name = host(client).view.theme.base.canonicalName(),
+        .icon_theme_name = host(client).view.icon_theme.canonicalName(),
         .active_tab = active.location.tab_id,
         .tab_count = client.model.workspace.count,
         .focused_pane = focused,
         .pane_count = active.model.pane_count,
-        .pending_updates = client.presenter.pending_updates,
-        .draw_pending = client.presenter.draw_pending,
-        .media_pending = client.presenter.media_tick_pending,
+        .pending_updates = host(client).presenter.pending_updates,
+        .draw_pending = host(client).presenter.draw_pending,
+        .media_pending = host(client).presenter.media_tick_pending,
         .outbox = runtime_transport.snapshot(client),
         .capabilities = client.model.hostCapabilities(),
-        .zlib_support = client.host_negotiation.zlib_support,
-        .sidebar_rendering = client.view.sidebar_rendering,
+        .zlib_support = host(client).host_negotiation.zlib_support,
+        .sidebar_rendering = host(client).view.sidebar_rendering,
         .lua_used = if (client.lua_generation) |generation| generation.vm.meter.used else 0,
         .lua_limit = if (client.lua_generation) |generation| generation.vm.meter.limit else 0,
-        .kitty_store_bytes = client.graphics_store.total_bytes,
-        .toast_cache_bytes = client.view.kittyToasts().retainedBytes(),
-        .sidebar_cache_bytes = client.view.kittySidebar().retainedBytes(),
-        .icon_cache_bytes = client.view.kittyIcons().retainedBytes(),
-        .modal_cache_bytes = client.view.kittyModal().retainedBytes(),
-        .pill_cache_bytes = client.view.kittyPill().retainedBytes(),
-        .attachment_cache_bytes = client.view.kittyAttachments().retainedBytes(),
-        .screen_bytes = (client.presenter.screen.front.cells.len +
-            client.presenter.screen.back.cells.len) *
+        .kitty_store_bytes = host(client).graphics_store.total_bytes,
+        .toast_cache_bytes = host(client).view.kittyToasts().retainedBytes(),
+        .sidebar_cache_bytes = host(client).view.kittySidebar().retainedBytes(),
+        .icon_cache_bytes = host(client).view.kittyIcons().retainedBytes(),
+        .modal_cache_bytes = host(client).view.kittyModal().retainedBytes(),
+        .pill_cache_bytes = host(client).view.kittyPill().retainedBytes(),
+        .attachment_cache_bytes = host(client).view.kittyAttachments().retainedBytes(),
+        .screen_bytes = (host(client).presenter.screen.front.cells.len +
+            host(client).presenter.screen.back.cells.len) *
             @sizeOf(CellType),
-        .shared_expiries = client.graphics_store.delivery.shared_expiries,
-        .shared_retire_latency = client.graphics_store.delivery.retire_latency,
+        .shared_expiries = host(client).graphics_store.delivery.shared_expiries,
+        .shared_retire_latency = host(client).graphics_store.delivery.retire_latency,
         .heap = heap,
     };
 }
 
 fn scheduleTick(client: *Client) !void {
-    try client.select.concurrent(.telemetry_tick, waitForTick_module, .{client.io});
+    try host(client).select.concurrent(.telemetry_tick, waitForTick_module, .{client.io});
 }
 
 fn finishWrite(state: *TelemetryState, io: std.Io, result: anyerror!void) void {

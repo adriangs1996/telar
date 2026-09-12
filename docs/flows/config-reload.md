@@ -125,7 +125,7 @@ trigger.
 
 ## Proof
 
-- `src/frontend/client/resources/config_reload.zig` proves rejected-load ownership and
+- `src/client/resources/config_reload.zig` proves rejected-load ownership and
   owns asynchronous loading, validation and orphan cleanup.
 - `src/client/model/Model.zig` proves generation ordering, atomic semantic
   settings and isolated versions.
@@ -138,12 +138,12 @@ trigger.
   top-level partial failure boundary.
 - `src/client/application/configuration/client_diagnostic.zig` proves diagnostic
   validation, fallback and idempotent clear policy shared with other producers.
-- `src/frontend/client/controllers/configuration/config_reloads.zig` owns concrete resource transfer,
+- `src/client/controllers/configuration/config_reloads.zig` owns concrete resource transfer,
   physical effect adapters and watcher scheduling, without application
   branching.
 - `src/client/application/notifications/sidebar_layout_delivery.zig` owns exact
   sidebar commit validation and projection order.
-- `src/frontend/client/controllers/notifications/sidebar_projection.zig` wires the shared physical
+- `src/client/controllers/notifications/sidebar_projection.zig` wires the shared physical
   sidebar projection ports.
 - `src/frontend/client/tests/` proves resolved delivery, ownership
   replacement, accepted diagnostic cleanup, stale cleanup, post-commit geometry

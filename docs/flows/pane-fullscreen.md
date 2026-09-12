@@ -163,7 +163,7 @@ telemetry. The client does not roll back an unacknowledged resize.
 - `src/client/application/panes/pane_geometry_delivery.zig` proves shared
   validation, visible-pane selection, delivery order and retained commits on
   failure.
-- `src/frontend/client/controllers/panes/pane_geometry.zig` implements the physical graphics and
+- `src/client/controllers/panes/pane_geometry.zig` implements the physical graphics and
   runtime delivery ports.
 - `src/frontend/client/tests/pane_lifecycle.zig` proves bordered and borderless
   resizes for a single pane, multi-pane tiled exit resizes and presenter-only

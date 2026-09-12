@@ -1,24 +1,26 @@
 //! Client integration tests for synchronization.
 
+const TerminalClient = @import("../TerminalClient.zig");
+const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
-const pane_openings = @import("../controllers/panes/pane_openings.zig");
+const pane_openings = @import("telar-client").controllers.pane_openings;
 const RequestIdType = @import("telar-core").RequestId;
 const PaneOpenedType = @import("telar-core").PaneOpened;
 const ApplicationPanesPaneOpenDeliveryOutcome = @import("telar-client").ApplicationPanesPaneOpenDeliveryOutcome;
 const InputHandler = @import("../resources/InputHandler.zig");
-const client_actions = @import("../controllers/input/actions.zig");
+const client_actions = @import("telar-client").controllers.actions;
 const TerminalSizeType = @import("telar-core").TerminalSize;
 const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const PaneIdType = @import("telar-core").PaneId;
-const workspace_handoffs = @import("../controllers/workspaces/workspace_handoffs.zig");
+const workspace_handoffs = @import("telar-client").controllers.workspace_handoffs;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const PaneTargetType = @import("telar-core").PaneTarget;
 const encodeRequestFailed_module = @import("telar-core").encodeRequestFailed;
-const server_messages = @import("../entrypoints/runtime_messages.zig");
+const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const capacity_module = @import("telar-client").capacity;
-const active_pane_resources = @import("../controllers/panes/active_pane_resources.zig");
+const active_pane_resources = @import("telar-client").controllers.active_pane_resources;
 const AgentInputType = @import("telar-client").AgentInput;
 const LayoutType = @import("telar-client").WorkspaceLayout;
 const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
@@ -27,18 +29,18 @@ const LayoutSnapshot = @import("telar-client").LayoutSnapshot;
 const max_client_layout_nodes_module = @import("telar-core").max_client_layout_nodes;
 const ClientLayoutNodeType = @import("telar-core").ClientLayoutNode;
 const ApplicationAgentsAgentNavigationOutcome = @import("telar-client").ApplicationAgentsAgentNavigationOutcome;
-const agent_navigation = @import("../controllers/agents/agent_navigation.zig");
+const agent_navigation = @import("telar-client").controllers.agent_navigation;
 const TabDescriptorType = @import("telar-core").TabDescriptor;
 const encodeWorkspaceSnapshot_module = @import("telar-core").encodeWorkspaceSnapshot;
 const PaneDescriptorType = @import("telar-core").PaneDescriptor;
 const AgentKeyType = @import("telar-client").AgentKey;
-const tab_snapshots = @import("../controllers/tabs/tab_snapshots.zig");
+const tab_snapshots = @import("telar-client").controllers.tab_snapshots;
 const support = @import("support.zig");
 const VersionType = @import("telar-client").Version;
-const workspace_snapshots = @import("../controllers/workspaces/workspace_snapshots.zig");
+const workspace_snapshots = @import("telar-client").controllers.workspace_snapshots;
 const ResyncRequiredType = @import("telar-core").ResyncRequired;
 const ApplicationSessionResyncRequiredOutcome = @import("telar-client").ApplicationSessionResyncRequiredOutcome;
-const resync_requirements = @import("../controllers/session/resync_requirements.zig");
+const resync_requirements = @import("telar-client").controllers.resync_requirements;
 
 test "pane opening rejects an unknown request without client effects" {
     var harness: TestHarness = undefined;
@@ -46,7 +48,7 @@ test "pane opening rejects an unknown request without client effects" {
     defer harness.deinit();
     const client = harness.client;
     const version_before = client.model.version();
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
 
     try std.testing.expectError(error.UnexpectedRequest, pane_openings.apply(client, .{
         .request_id = @enumFromInt(99),
@@ -58,7 +60,7 @@ test "pane opening rejects an unknown request without client effects" {
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
 }
 
 test "pane opening consumes an incompatible continuation before rejection" {
@@ -74,7 +76,7 @@ test "pane opening consumes an incompatible continuation before rejection" {
         .created = true,
     };
     const version_before = client.model.version();
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
     try client.request_lifecycle.tracker.add(request_id, .notification);
 
     try std.testing.expectError(error.UnexpectedRequest, pane_openings.apply(client, opened));
@@ -82,7 +84,7 @@ test "pane opening consumes an incompatible continuation before rejection" {
     try std.testing.expectError(error.UnexpectedRequest, pane_openings.apply(client, opened));
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
 }
 
 test "pane opening consumes an ignored continuation without client effects" {
@@ -92,7 +94,7 @@ test "pane opening consumes an ignored continuation without client effects" {
     const client = harness.client;
     const request_id: RequestIdType = @enumFromInt(4);
     const version_before = client.model.version();
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
     try client.request_lifecycle.tracker.add(request_id, .ignored);
 
     try std.testing.expectEqual(ApplicationPanesPaneOpenDeliveryOutcome.ignored, try pane_openings.apply(client, .{
@@ -105,7 +107,7 @@ test "pane opening consumes an ignored continuation without client effects" {
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
 }
 
 test "new tab request captures launch source geometry and continuation without mutation" {
@@ -115,7 +117,7 @@ test "new tab request captures launch source geometry and continuation without m
     try harness.bootstrap();
     harness.client.options.arguments = &.{"/bin/sh"};
     const version_before_request = harness.client.model.version();
-    const pending_updates_before_request = harness.client.presenter.pending_updates;
+    const pending_updates_before_request = host(harness.client).presenter.pending_updates;
 
     const handler: InputHandler = .{ .client = harness.client };
     _ = try client_actions.apply(handler.client, .new_tab);
@@ -129,11 +131,11 @@ test "new tab request captures launch source geometry and continuation without m
     try std.testing.expectEqualStrings("", created.label);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, created.launch.cwd_source.?);
     try std.testing.expectEqual(TerminalSizeType{
-        .cols = harness.client.view.workbench().w,
-        .rows = harness.client.view.workbench().h,
+        .cols = host(harness.client).view.workbench().w,
+        .rows = host(harness.client).view.workbench().h,
     }, created.size);
     try std.testing.expectEqualDeep(version_before_request, harness.client.model.version());
-    try std.testing.expectEqual(pending_updates_before_request, harness.client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_request, host(harness.client).presenter.pending_updates);
 
     const continuation = harness.client.request_lifecycle.tracker.take(created.request_id).?;
     try std.testing.expect(continuation == .create_tab);
@@ -196,7 +198,7 @@ test "workspace handoff opens the pane remembered for that workspace" {
         .pane_id = restored_pane,
     });
     const version_before_departure = client.model.version();
-    const pending_updates_before_departure = client.presenter.pending_updates;
+    const pending_updates_before_departure = host(client).presenter.pending_updates;
     _ = try workspace_handoffs.requestWorkspace(client, @enumFromInt(2));
 
     try std.testing.expect(client.model.workspaceLocation() == null);
@@ -205,22 +207,22 @@ test "workspace handoff opens the pane remembered for that workspace" {
     try std.testing.expectEqual(version_before_departure.tabs + 1, client.model.version().tabs);
     try std.testing.expectEqual(version_before_departure.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(version_before_departure.panes + 1, client.model.version().panes);
-    try std.testing.expectEqual(pending_updates_before_departure, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_departure, host(client).presenter.pending_updates);
     try std.testing.expect(client.model.reportedPaneFocus() == null);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_updates_before_departure + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_departure + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
     try harness.settle();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
-    try std.testing.expectEqual(@as(usize, 0), client.presenter.pending_updates);
-    for (client.presenter.screen.front.cells) |cell| {
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
+    try std.testing.expectEqual(@as(usize, 0), host(client).presenter.pending_updates);
+    for (host(client).presenter.screen.front.cells) |cell| {
         try std.testing.expectEqualStrings(" ", cell.text());
         try std.testing.expectEqual(@as(u8, 1), cell.width);
     }
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(@as(usize, 0), client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(usize, 0), host(client).presenter.pending_updates);
 
     var buffer: [256]u8 = undefined;
     var target: ?PaneTargetType = null;
@@ -245,11 +247,11 @@ test "workspace handoff opens the pane remembered for that workspace" {
         .message = "remembered pane closed",
     });
     const version_before_recovery = client.model.version();
-    const pending_updates_before_recovery = client.presenter.pending_updates;
+    const pending_updates_before_recovery = host(client).presenter.pending_updates;
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(failed));
 
     try std.testing.expectEqualDeep(version_before_recovery, client.model.version());
-    try std.testing.expectEqual(pending_updates_before_recovery, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_recovery, host(client).presenter.pending_updates);
     try harness.settle();
     const fallback = (try harness.nextClientMessage(&buffer)).open_pane;
     try std.testing.expectEqualDeep(
@@ -415,7 +417,7 @@ test "clicking a sidebar agent hands off directly to its pane" {
         .agents = &.{agent},
     });
     const model = &client.model.workspace.active().?.model;
-    _ = try client.view.render(&client.presenter.screen, .{
+    _ = try host(client).view.render(&host(client).presenter.screen, .{
         .tabs = &client.model.workspace,
         .model = model,
         .agents = client.model.agentSnapshot(),
@@ -446,21 +448,21 @@ test "clicking a sidebar agent hands off directly to its pane" {
         .created = false,
     });
     const version_before_arrival = client.model.version();
-    const pending_updates_before_arrival = client.presenter.pending_updates;
+    const pending_updates_before_arrival = host(client).presenter.pending_updates;
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
 
     try std.testing.expectEqual(version_before_arrival.workspace + 1, client.model.version().workspace);
     try std.testing.expectEqual(version_before_arrival.tabs + 1, client.model.version().tabs);
     try std.testing.expectEqual(version_before_arrival.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(version_before_arrival.panes + 1, client.model.version().panes);
-    try std.testing.expectEqual(pending_updates_before_arrival, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_arrival, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_updates_before_arrival + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_arrival + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
     try harness.settle();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
     try std.testing.expectEqualDeep(
         @as(?WorkspaceLocationType, agent.location.workspace),
         client.model.workspace.workspace,
@@ -498,8 +500,8 @@ test "clicking a sidebar agent hands off directly to its pane" {
     var actual_tiled = restored.layout;
     try std.testing.expect(saved_layout.toggleFullscreen());
     try std.testing.expect(actual_tiled.toggleFullscreen());
-    saved_layout.snapshot(client.view.workbench(), &expected_geometry);
-    actual_tiled.snapshot(client.view.workbench(), &actual_geometry);
+    saved_layout.snapshot(host(client).view.workbench(), &expected_geometry);
+    actual_tiled.snapshot(host(client).view.workbench(), &actual_geometry);
     for ([_]PaneIdType{ left_pane, agent_pane, bottom_right_pane }) |pane_id|
         try std.testing.expectEqual(
             expected_geometry.find(pane_id).?.outer,
@@ -516,7 +518,7 @@ test "sidebar workspace round trip restores fullscreen in a previously inactive 
     client.request_lifecycle.tracker = .{};
     const first = TestHarness.bootstrap_pane;
     const clicked: PaneIdType = @enumFromInt(21);
-    const area = client.view.workbench();
+    const area = host(client).view.workbench();
     _ = try client.model.reconcileTab(.{ .location = TestHarness.bootstrap_location, .panes = &.{first} }, area);
     const fullscreen_tab = &client.model.workspace.active().?.model;
     try fullscreen_tab.split(.{ .existing_pane = first, .new_pane = clicked, .location = TestHarness.bootstrap_location, .axis = .vertical, .area = area });
@@ -636,7 +638,7 @@ test "local agent navigation selects its tab before focusing its pane" {
         }},
     });
     const version = client.model.version();
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
 
     try std.testing.expectEqual(
         ApplicationAgentsAgentNavigationOutcome.focused,
@@ -647,7 +649,7 @@ test "local agent navigation selects its tab before focusing its pane" {
     try std.testing.expectEqual(agent_pane, client.model.workspace.activeConst().?.model.layout.focused().?);
     try std.testing.expectEqual(version.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(version.panes, client.model.version().panes);
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
@@ -670,7 +672,7 @@ test "local sidebar agent navigation keeps fullscreen when targeting a different
     const clicked: PaneIdType = @enumFromInt(21);
     const location = try harness.addInactiveTab(@enumFromInt(2), first);
     const tab = client.model.workspace.find(location.tab_id).?;
-    const area = client.view.workbench();
+    const area = host(client).view.workbench();
     try tab.model.split(.{ .existing_pane = first, .new_pane = clicked, .location = location, .axis = .vertical, .area = area });
     try std.testing.expect(tab.model.focusPane(first));
     try std.testing.expect(tab.model.toggleFullscreen());
@@ -713,7 +715,7 @@ test "tab snapshots commit pane revisions before attaching and presenting" {
     try harness.bootstrap();
     const client = harness.client;
     const version_before = client.model.version();
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
 
     const discovered: PaneIdType = @enumFromInt(11);
     var payload: [256]u8 = undefined;
@@ -734,7 +736,7 @@ test "tab snapshots commit pane revisions before attaching and presenting" {
     try std.testing.expectEqual(version_before.workspace, client.model.version().workspace);
     try std.testing.expectEqual(version_before.tabs, client.model.version().tabs);
     try std.testing.expectEqual(version_before.active_tab, client.model.version().active_tab);
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
     const committed_version = client.model.version();
     try client.request_lifecycle.tracker.add(@enumFromInt(90), .{ .tab_snapshot = TestHarness.bootstrap_location });
     const repeated = try encodeTabSnapshot_module(&payload, .{
@@ -753,7 +755,7 @@ test "tab snapshots commit pane revisions before attaching and presenting" {
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before + 1, host(client).presenter.pending_updates);
     try harness.settle();
 
     const pane = client.model.workspace.findPane(discovered).?;
@@ -775,7 +777,7 @@ test "tab snapshots commit pane revisions before attaching and presenting" {
     }
 
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
 }
 
 test "an identical tab snapshot repairs resources without scheduling a frame" {
@@ -796,7 +798,7 @@ test "an identical tab snapshot repairs resources without scheduling a frame" {
     try harness.settle();
     try harness.settleModelPresentation();
     const committed_version = client.model.version();
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
     try client.request_lifecycle.tracker.add(@enumFromInt(90), .{ .tab_snapshot = TestHarness.bootstrap_location });
     const unchanged = try encodeTabSnapshot_module(&payload, .{
         .request_id = @enumFromInt(90),
@@ -808,7 +810,7 @@ test "an identical tab snapshot repairs resources without scheduling a frame" {
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(committed_version, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
 }
 
 test "tab reconciliation retires removed pane resources and continuations" {
@@ -828,10 +830,10 @@ test "tab reconciliation retires removed pane resources and continuations" {
 
     const retired: PaneIdType = @enumFromInt(11);
     const model = &client.model.workspace.active().?.model;
-    try model.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = retired, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
+    try model.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = retired, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = host(client).view.workbench() });
     try active_pane_resources.synchronize(client);
     try std.testing.expect(client.model.enterCopyMode());
-    try client.graphics_store.applyImage(.{
+    try host(client).graphics_store.applyImage(.{
         .pane_id = retired,
         .revision = 1,
         .image = .{
@@ -848,7 +850,7 @@ test "tab reconciliation retires removed pane resources and continuations" {
     } });
     try client.request_lifecycle.tracker.add(@enumFromInt(90), .{ .tab_snapshot = TestHarness.bootstrap_location });
     const version_before = client.model.version();
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
     const reconciled = try encodeTabSnapshot_module(&payload, .{
         .request_id = @enumFromInt(90),
         .location = TestHarness.bootstrap_location,
@@ -858,16 +860,16 @@ test "tab reconciliation retires removed pane resources and continuations" {
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(reconciled));
 
     try std.testing.expect(client.model.workspace.findPane(retired) == null);
-    try std.testing.expect(!client.graphics_store.hasPaneGraphics(retired));
+    try std.testing.expect(!host(client).graphics_store.hasPaneGraphics(retired));
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expectEqual(@as(?PaneIdType, TestHarness.bootstrap_pane), support.reportedPaneId(client));
     try std.testing.expect(client.request_lifecycle.tracker.take(@enumFromInt(91)).? == .ignored);
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before + 1, host(client).presenter.pending_updates);
 }
 
 test "an unexpected tab snapshot is rejected instead of adopted" {
@@ -879,7 +881,7 @@ test "an unexpected tab snapshot is rejected instead of adopted" {
     const client = harness.client;
     const version_before = client.model.version();
     const request_count_before = client.request_lifecycle.tracker.count;
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
     var payload: [256]u8 = undefined;
     const snapshot = try encodeTabSnapshot_module(&payload, .{
         .request_id = @enumFromInt(99),
@@ -893,7 +895,7 @@ test "an unexpected tab snapshot is rejected instead of adopted" {
 
     try std.testing.expectEqual(request_count_before, client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
@@ -976,7 +978,7 @@ test "an unexpected workspace snapshot is rejected without effects" {
     const client = harness.client;
     const version_before = client.model.version();
     const request_count_before = client.request_lifecycle.tracker.count;
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
     var payload: [512]u8 = undefined;
     const encoded = try encodeWorkspaceSnapshot_module(&payload, .{
         .request_id = @enumFromInt(99),
@@ -997,7 +999,7 @@ test "an unexpected workspace snapshot is rejected without effects" {
 
     try std.testing.expectEqual(request_count_before, client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
@@ -1098,7 +1100,7 @@ test "workspace snapshots commit semantic revisions before presentation" {
     try harness.bootstrap();
     const client = harness.client;
     const version_before = client.model.version();
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
 
     var payload: [512]u8 = undefined;
     const snapshot = try encodeWorkspaceSnapshot_module(&payload, .{
@@ -1118,16 +1120,16 @@ test "workspace snapshots commit semantic revisions before presentation" {
     try std.testing.expectEqual(version_before.workspace + 1, client.model.version().workspace);
     try std.testing.expectEqual(version_before.tabs + 1, client.model.version().tabs);
     try std.testing.expectEqual(version_before.active_tab, client.model.version().active_tab);
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
 
     const version_before_noop = client.model.version();
-    const pending_updates_before_noop = client.presenter.pending_updates;
+    const pending_updates_before_noop = host(client).presenter.pending_updates;
     try client.request_lifecycle.tracker.add(@enumFromInt(4), .{
         .workspace_snapshot = TestHarness.bootstrap_location.workspace,
     });
@@ -1144,7 +1146,7 @@ test "workspace snapshots commit semantic revisions before presentation" {
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
-    try std.testing.expectEqual(pending_updates_before_noop, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_noop, host(client).presenter.pending_updates);
 }
 
 test "workspace reconciliation retires removed state and restores the new active tab" {
@@ -1155,7 +1157,7 @@ test "workspace reconciliation retires removed state and restores the new active
     const client = harness.client;
     const second = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
     try client.request_lifecycle.tracker.add(@enumFromInt(90), .{ .rename_tab = TestHarness.bootstrap_location });
-    try client.graphics_store.applyImage(.{
+    try host(client).graphics_store.applyImage(.{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 1,
         .image = .{
@@ -1166,8 +1168,8 @@ test "workspace reconciliation retires removed state and restores the new active
             .byte_len = 3,
         },
     });
-    try std.testing.expect(client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
-    const pending_updates_before = client.presenter.pending_updates;
+    try std.testing.expect(host(client).graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
+    const pending_updates_before = host(client).presenter.pending_updates;
 
     var payload: [512]u8 = undefined;
     const snapshot = try encodeWorkspaceSnapshot_module(&payload, .{
@@ -1181,11 +1183,11 @@ test "workspace reconciliation retires removed state and restores the new active
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(snapshot));
 
     try std.testing.expectEqualDeep(second, client.model.activeTabLocation().?);
-    try std.testing.expect(!client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
-    try std.testing.expect(client.graphics_store.paneVisible(@enumFromInt(20)));
+    try std.testing.expect(!host(client).graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
+    try std.testing.expect(host(client).graphics_store.paneVisible(@enumFromInt(20)));
     try std.testing.expectEqual(@as(?PaneIdType, @enumFromInt(20)), support.reportedPaneId(client));
     const version_before_late_snapshot = client.model.version();
-    const pending_updates_before_late_snapshot = client.presenter.pending_updates;
+    const pending_updates_before_late_snapshot = host(client).presenter.pending_updates;
     const outbox_len_before_late_snapshot = client.runtime_transport.outbox.len;
     const request_count_before_late_snapshot = client.request_lifecycle.tracker.count;
     const late_snapshot = try encodeTabSnapshot_module(&payload, .{
@@ -1200,10 +1202,10 @@ test "workspace reconciliation retires removed state and restores the new active
 
     try std.testing.expectEqual(request_count_before_late_snapshot - 1, client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before_late_snapshot, client.model.version());
-    try std.testing.expectEqual(pending_updates_before_late_snapshot, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_late_snapshot, host(client).presenter.pending_updates);
     try std.testing.expectEqual(outbox_len_before_late_snapshot, client.runtime_transport.outbox.len);
     try std.testing.expect(client.request_lifecycle.tracker.take(@enumFromInt(90)).? == .ignored);
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
@@ -1219,7 +1221,7 @@ test "resync required requests one workspace snapshot and coalesces repeats" {
     const client = harness.client;
     client.model.workspace.workspace = TestHarness.bootstrap_location.workspace;
     const version_before = client.model.version();
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
     const required: ResyncRequiredType = .{
         .workspace = TestHarness.bootstrap_location.workspace,
         .workspace_closed = false,
@@ -1241,7 +1243,7 @@ test "resync required requests one workspace snapshot and coalesces repeats" {
     try std.testing.expect(client.request_lifecycle.tracker.has(.workspace_snapshot));
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
 }
 
 test "resync rejects a workspace other than the current projection" {

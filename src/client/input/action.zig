@@ -17,7 +17,7 @@ pub const TabMove = enum(u8) { previous, next };
 pub const ScrollDirection = enum(u8) { up, down };
 
 pub const Action = union(enum) {
-    toggle_agent_mode,
+    toggle_thread_view,
     split_pane: SplitDirection,
     focus_pane: Direction,
     navigate_pane: Direction,

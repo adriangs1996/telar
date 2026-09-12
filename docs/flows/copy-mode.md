@@ -103,12 +103,13 @@ runtime-selected bytes -> schema.pane_clipboard
                               |
                     pane_clipboards.apply
                               |
-                    screen.writeClipboard
+                 HostClipboard port (client.host_clipboard)
                               |
-                      host writer flush
+            host_ports.setClipboard -> OSC 52 -> host writer flush
 ```
 
-`pane_clipboards.apply` is a terminal adapter, not an application use case.
+`pane_clipboards.apply` binds the shared handler to the client's host
+clipboard port; the TUI implementation in `host_ports.zig` encodes OSC 52.
 The event neither reads nor changes `ClientModel`; the runtime already selected
 the requested text. The schema decoder rejects an invalid pane identity, and
 the adapter keeps the same check for direct callers. It writes the bounded
@@ -177,10 +178,10 @@ presentation state, never semantic authority inside `multiplexer.Pane`.
   pointer ownership, bounded wheel movement and selected-effect failures.
 - `src/client/application/input/native_action.zig` proves source-independent
   copy-mode preflight, the entry exception and partial failures.
-- `src/frontend/client/controllers/input/copy_modes.zig` owns the selection outbox adapter.
+- `src/client/controllers/input/copy_modes.zig` owns the selection outbox adapter.
 - `src/frontend/presentation/screen_support.zig` proves exact OSC 52 encoding,
   multi-chunk payloads and the terminal-side size bound.
-- `src/frontend/client/controllers/panes/pane_viewports.zig` owns graphics visibility and
+- `src/client/controllers/panes/pane_viewports.zig` owns graphics visibility and
   runtime viewport synchronization for both normal input and copy mode.
 - `src/frontend/client/tests/` proves key and pointer routing,
   outside-wheel consumption, missing-target exit, backpressure, clipboard

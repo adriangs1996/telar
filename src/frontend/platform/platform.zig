@@ -18,7 +18,7 @@ const windows_module = @import("windows.zig");
 const posix = @import("posix.zig");
 const Size = @import("Size.zig");
 const std = @import("std");
-const LocalTime = @import("LocalTime.zig");
+const LocalTime = @import("telar-client").LocalTime;
 const sequences = @import("sequences.zig");
 
 const impl = switch (builtin.os.tag) {

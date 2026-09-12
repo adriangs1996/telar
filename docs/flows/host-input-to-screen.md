@@ -466,10 +466,10 @@ captures an immutable `presentation_projection` and calls
   socket completion and one resumed TTY read token.
 - `a configured sequence runs once and does not reach the pane` in
   `src/frontend/input/keybind.zig` proves the Telar-action split.
-- `src/frontend/client/controllers/input/action_routing.zig` proves prompt
+- `src/client/controllers/input/action_routing.zig` proves prompt
   suppression, source selection, Lua router control, input reinjection and
   selected-effect failure ordering.
-- `src/frontend/client/controllers/input/pointer_routing.zig` proves copy, view and
+- `src/client/controllers/input/pointer_routing.zig` proves copy, view and
   pane owner ordering before any pointer effect reaches a child.
 - `mouse pointer distinguishes clickable chrome panes and sidebar resizing` in
   `src/frontend/client/presentation/view.zig` proves the semantic hover mapping.

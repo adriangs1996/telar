@@ -96,7 +96,7 @@ rollback because the `pane_resize` protocol has no acknowledgement.
 - `src/client/application/panes/pane_geometry_delivery.zig` proves exact
   commit validation, active-tab selection, empty-client behavior,
   attached-visible filtering, effect order and partial delivery failure.
-- `src/frontend/client/controllers/panes/pane_geometry.zig` implements placement invalidation and
+- `src/client/controllers/panes/pane_geometry.zig` implements placement invalidation and
   runtime `pane_resize` delivery ports.
 - `src/frontend/client/tests/` proves exact resize messages, detached
   pane filtering, presenter observation and directionless no-ops through a

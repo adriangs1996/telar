@@ -1,7 +1,7 @@
 const ViewType = @import("telar-client").LayoutView;
 const MultiplexerModel = @import("telar-client").MultiplexerModel;
 const PaneProgressStateType = @import("telar-core").PaneProgressState;
-const PaletteType = @import("../ui/Palette.zig");
+const PaletteType = @import("telar-client").Palette;
 const BorderInput = @This();
 
 view: ViewType,

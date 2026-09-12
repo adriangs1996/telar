@@ -1,6 +1,8 @@
 //! Adapts host TTY resize events to one client's application state.
 
-const Client = @import("../../Client.zig");
+const TerminalClient = @import("../../TerminalClient.zig");
+const host = TerminalClient.of;
+const Client = @import("telar-client").AttachedClient;
 const platform = @import("../../../platform/platform.zig");
 const Source = @import("Source.zig");
 const HostCommitType = @import("telar-client").HostCommit;
@@ -11,7 +13,7 @@ const HostUpdateType = @import("telar-client").HostUpdate;
 const ResizeHostHandlerType = @import("telar-client").ResizeHostHandler;
 const TerminalSizeType = @import("telar-core").TerminalSize;
 const HostCapabilitiesType = @import("telar-client").HostCapabilities;
-const host_resources = @import("host_resources.zig");
+const host_resources = @import("telar-client").controllers.host_resources;
 
 /// Registers the next platform resize observation for this client.
 ///
@@ -19,7 +21,7 @@ const host_resources = @import("host_resources.zig");
 /// try schedule(client, watcher);
 /// ```
 pub fn schedule(client: *Client, watcher: *platform.ResizeWatcher) !void {
-    try client.select.concurrent(.resized, wait, .{ client.io, watcher });
+    try host(client).select.concurrent(.resized, wait, .{ client.io, watcher });
 }
 
 /// Handles one completed platform resize event and rearms its watcher.

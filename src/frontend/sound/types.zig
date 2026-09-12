@@ -1,6 +1,6 @@
 //! Semantic host-sound values and local playback policy.
 
-const Config = @import("Config.zig");
+const Config = @import("telar-client").SoundPolicy;
 const std = @import("std");
 
 test "sound configuration can disable each transition independently" {

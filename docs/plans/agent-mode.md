@@ -966,7 +966,7 @@ bumps the fingerprint like every layout extension before it.
   maps; `graphics/composer_raster.zig`: one image per visual line, caret
   and selection as placements, raster keys by line content and width.
 - Second embedded proportional face (OFL) and its attribution in
-  `src/frontend/assets/README.md`.
+  `src/assets/README.md`.
 - `text_area` gains a renderer-independent model API; the cell renderer of
   P1 stays wired as the fallback; transport and KGP capability select the
   renderer per client.

@@ -101,13 +101,13 @@ is replaced.
 
 ## Proof
 
-- `src/frontend/config/` proves the Lua schema, exact tabs ownership,
+- `src/client/config/` proves the Lua schema, exact tabs ownership,
   top-right restriction, immutable callback context and bounded result parser.
 - `src/client/bars/model.zig` proves bounded content, typed presentation
   state, generation checks and equal-value folding.
-- `src/frontend/bars/command.zig` proves direct argv execution and bounded
+- `src/client/bars/command.zig` proves direct argv execution and bounded
   single-line output.
-- `src/frontend/client/controllers/configuration/bar_updates.zig` proves
+- `src/client/controllers/configuration/bar_updates.zig` proves
   immediate deadlines, missed-tick coalescence, single-worker identity and
   queue reset on synchronization.
 - `src/client/application/configuration/bar_update.zig` proves

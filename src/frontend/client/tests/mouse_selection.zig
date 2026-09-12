@@ -1,5 +1,7 @@
 //! Mouse selection through the real client input, outbox and presenter ports.
 
+const TerminalClient = @import("../TerminalClient.zig");
+const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const InputHandler = @import("../resources/InputHandler.zig");
 const std = @import("std");
@@ -19,7 +21,7 @@ test "mouse drag copies pane coordinates and keeps highlighting until typing" {
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "hello world", .style = .{} });
-    const content = model.viewForPane(pane.id, client.view.workbench()).?.content;
+    const content = model.viewForPane(pane.id, host(client).view.workbench()).?.content;
     var handler: InputHandler = .{ .client = client };
     const version = client.model.version();
 
@@ -29,10 +31,10 @@ test "mouse drag copies pane coordinates and keeps highlighting until typing" {
     try std.testing.expect(client.model.copyModeProjection().?.view.anchor == null);
     try handler.mouse(.{ .x = content.x + 4, .y = content.y, .kind = .drag });
     try std.testing.expectEqual(version.copy + 2, client.model.version().copy);
-    try std.testing.expect(client.presenter.compositor.copy == null);
+    try std.testing.expect(host(client).presenter.compositor.copy == null);
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    try std.testing.expect(client.presenter.compositor.copy.?.view.selected(2, 10));
+    try std.testing.expect(host(client).presenter.compositor.copy.?.view.selected(2, 10));
 
     try handler.mouse(.{ .x = content.x + 4, .y = content.y, .kind = .release });
     try std.testing.expect(!client.model.pointerSelection().?.dragging);
@@ -66,14 +68,14 @@ test "selection focuses its pane and owns drags and release outside its borders"
     const first = TestHarness.bootstrap_pane;
     const second: PaneIdType = @enumFromInt(20);
     _ = try client.model.commitPaneSplit(.{
-        .split = .{ .target_pane = first, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() },
+        .split = .{ .target_pane = first, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = host(client).view.workbench() },
         .new_pane = second,
     });
     try std.testing.expect(model.focusPane(first));
     model.find(second).?.buffer.fill(model.find(second).?.buffer.area(), .{ .glyph = " ", .style = .{} });
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    const content = model.viewForPane(second, client.view.workbench()).?.content;
+    const content = model.viewForPane(second, host(client).view.workbench()).?.content;
     var handler: InputHandler = .{ .client = client };
 
     try handler.mouse(.{ .x = content.x + 2, .y = content.y + 1, .kind = .press });
@@ -101,7 +103,7 @@ test "Shift selects child-tracked links instead of opening them or reporting the
     pane.mouse = .{ .tracking = .any, .sgr = true };
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "https://example.com", .style = .{} });
-    const content = model.viewForPane(pane.id, client.view.workbench()).?.content;
+    const content = model.viewForPane(pane.id, host(client).view.workbench()).?.content;
     var handler: InputHandler = .{ .client = client };
 
     try handler.mouse(.{ .x = content.x, .y = content.y, .kind = .press, .button = 4 });
@@ -126,17 +128,17 @@ test "retiring a selected pane consumes its remaining gesture instead of reporti
     const model = client.model.activeTabModel().?;
     const first = TestHarness.bootstrap_pane;
     const second: PaneIdType = @enumFromInt(20);
-    try model.split(.{ .existing_pane = first, .new_pane = second, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
+    try model.split(.{ .existing_pane = first, .new_pane = second, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = host(client).view.workbench() });
     try std.testing.expect(model.focusPane(first));
     model.find(first).?.buffer.fill(model.find(first).?.buffer.area(), .{ .glyph = " ", .style = .{} });
-    const content = model.viewForPane(first, client.view.workbench()).?.content;
+    const content = model.viewForPane(first, host(client).view.workbench()).?.content;
     var handler: InputHandler = .{ .client = client };
     try handler.mouse(.{ .x = content.x, .y = content.y, .kind = .press });
     try std.testing.expect(client.model.releaseCopyMode(first));
     try std.testing.expect(model.removePane(first));
     model.find(second).?.mouse = .{ .tracking = .any, .sgr = true };
     const queued = client.runtime_transport.outbox.len;
-    const remaining = model.viewForPane(second, client.view.workbench()).?.content;
+    const remaining = model.viewForPane(second, host(client).view.workbench()).?.content;
 
     try handler.mouse(.{ .x = remaining.x, .y = remaining.y, .kind = .drag });
     try handler.mouse(.{ .x = remaining.x, .y = remaining.y, .kind = .release });

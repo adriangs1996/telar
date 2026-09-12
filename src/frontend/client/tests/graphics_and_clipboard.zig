@@ -1,8 +1,10 @@
 //! Client integration tests for graphics and clipboard.
 
+const TerminalClient = @import("../TerminalClient.zig");
+const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const encodeGraphicsSnapshot_module = @import("telar-core").encodeGraphicsSnapshot;
-const server_messages = @import("../entrypoints/runtime_messages.zig");
+const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const encodeGraphicsImage_module = @import("telar-core").encodeGraphicsImage;
 const std = @import("std");
@@ -14,7 +16,7 @@ const encodeRuntimeStopping_module = @import("telar-core").encodeRuntimeStopping
 const encodeHistoryResults_module = @import("telar-core").encodeHistoryResults;
 const encodeCommandSuggestion_module = @import("telar-core").encodeCommandSuggestion;
 const encodePaneClipboard_module = @import("telar-core").encodePaneClipboard;
-const pane_clipboards = @import("../controllers/panes/pane_clipboards.zig");
+const pane_clipboards = @import("telar-client").controllers.pane_clipboards;
 
 test "a graphics revision break requests a graphics snapshot" {
     var harness: TestHarness = undefined;
@@ -55,7 +57,7 @@ test "pane graphics commit their cell fallback before presenter observation" {
     const client = harness.client;
     _ = try client.model.observeHostCapability(.{ .images = .unsupported });
     const version_before = client.model.version();
-    const pending_before = client.presenter.pending_updates;
+    const pending_before = host(client).presenter.pending_updates;
 
     var payload: [256]u8 = undefined;
     const encoded = try encodeGraphicsImage_module(&payload, .{
@@ -75,13 +77,13 @@ test "pane graphics commit their cell fallback before presenter observation" {
     committed.pane_graphics += 1;
     try std.testing.expectEqualDeep(committed, client.model.version());
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.graphics_placeholder);
-    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(committed, client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(committed, host(client).presenter.presentation_state.prepared.model);
 }
 
 test "presenter observes physical graphics without a semantic fallback" {
@@ -92,7 +94,7 @@ test "presenter observes physical graphics without a semantic fallback" {
     const client = harness.client;
     _ = try client.model.observeHostCapability(.{ .images = .supported });
     const version_before = client.model.version();
-    const pending_before = client.presenter.pending_updates;
+    const pending_before = host(client).presenter.pending_updates;
 
     var payload: [256]u8 = undefined;
     const encoded = try encodeGraphicsImage_module(&payload, .{
@@ -109,17 +111,17 @@ test "presenter observes physical graphics without a semantic fallback" {
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(encoded));
 
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(@as(u64, 1), client.graphics_store.ingressVersion());
-    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(u64, 1), host(client).graphics_store.ingressVersion());
+    try std.testing.expectEqual(pending_before, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
-    try std.testing.expectEqual(@as(u64, 1), client.presenter.presentation_state.observed.graphics_ingress);
+    try std.testing.expectEqual(pending_before + 1, host(client).presenter.pending_updates);
+    try std.testing.expectEqual(@as(u64, 1), host(client).presenter.presentation_state.observed.graphics_ingress);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(@as(u64, 1), client.presenter.presentation_state.prepared.graphics_ingress);
+    try std.testing.expectEqual(@as(u64, 1), host(client).presenter.presentation_state.prepared.graphics_ingress);
 
-    const pending_after = client.presenter.pending_updates;
+    const pending_after = host(client).presenter.pending_updates;
     const stale = try encodeGraphicsDeleteImage_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 4,
@@ -128,8 +130,8 @@ test "presenter observes physical graphics without a semantic fallback" {
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(stale));
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(@as(u64, 1), client.graphics_store.ingressVersion());
-    try std.testing.expectEqual(pending_after, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(u64, 1), host(client).graphics_store.ingressVersion());
+    try std.testing.expectEqual(pending_after, host(client).presenter.pending_updates);
 }
 
 test "shared graphics mapping failure downgrades before resynchronizing" {
@@ -163,7 +165,7 @@ test "shared graphics mapping failure downgrades before resynchronizing" {
     try std.testing.expect(!downgrade.configure_graphics.shared);
     try std.testing.expect(recovery == .request_graphics_snapshot);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, recovery.request_graphics_snapshot.pane_id);
-    try std.testing.expectEqual(@as(u64, 0), client.graphics_store.ingressVersion());
+    try std.testing.expectEqual(@as(u64, 0), host(client).graphics_store.ingressVersion());
     try std.testing.expectEqualDeep(version_before, client.model.version());
 }
 

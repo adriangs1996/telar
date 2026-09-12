@@ -1,14 +1,15 @@
 const BufferType = @import("telar-core").Buffer;
 const LayoutRegions = @import("../../widgets/LayoutRegions.zig");
 const StateType = @import("telar-client").WorkspaceState;
-const ThemeType = @import("../../ui/Theme.zig");
+const ThemeType = @import("telar-client").ColorTheme;
 const ClientTheme = @import("telar-client").Theme;
 const context_support = @import("../../widgets/context_support.zig");
 const default_width = @import("telar-client").default_width;
 const PointType = @import("telar-core").Point;
 const RectType = @import("telar-core").Rect;
 const WidgetsState = @import("../../widgets/State.zig");
-const capabilities = @import("../../graphics/capabilities.zig");
+const SidebarRenderingType = @import("telar-client").SidebarRendering;
+const ResolvedSidebarRenderingType = @import("telar-client").ResolvedSidebarRendering;
 const KittySidebarRendererType = @import("../../graphics/KittySidebarRenderer.zig");
 const IconsRenderer = @import("../../graphics/IconsRenderer.zig");
 const ToastRenderer = @import("../../graphics/ToastRenderer.zig");
@@ -17,12 +18,12 @@ const PillRenderer = @import("../../graphics/PillRenderer.zig");
 const delivery_module = @import("../../attachments/delivery.zig");
 const GraphicsPlan = @import("GraphicsPlan.zig");
 const std = @import("std");
-const theme_mod = @import("../../ui/theme_support.zig");
+const theme_mod = @import("telar-client").theme_support;
 const Dimensions = @import("Dimensions.zig");
 const Appearance = @import("Appearance.zig");
 const RegionType = @import("telar-client").Region;
-const PaletteType = @import("../../ui/Palette.zig");
-const ConfigurationType = @import("../../graphics/Configuration.zig");
+const PaletteType = @import("telar-client").Palette;
+const ConfigurationType = @import("telar-client").SidebarRendererInput;
 const PaneBottomReservationType = @import("telar-client").PaneBottomReservation;
 const attachment_preview_module = @import("../../widgets/attachment_preview.zig");
 const TargetType = @import("telar-client").AttachmentTarget;
@@ -69,7 +70,7 @@ sidebar: WidgetsState = .{},
 workspace_list_collapsed: bool = false,
 dirty: bool = true,
 interaction_revision: u64 = 0,
-sidebar_rendering: capabilities.ResolvedSidebarRendering = .cells,
+sidebar_rendering: ResolvedSidebarRenderingType = .cells,
 toast_overlay_drawn: bool = false,
 kitty_sidebar: KittySidebarRendererType,
 kitty_icons: IconsRenderer,
@@ -270,7 +271,7 @@ pub fn resetSidebarScroll(state: *State) void {
 /// ```zig
 /// try view.configureSidebar(.automatic, .{ .support = .supported, .cell_width = 8, .cell_height = 16 });
 /// ```
-pub fn configureSidebar(state: *State, requested: capabilities.SidebarRendering, configuration: ConfigurationType) !void {
+pub fn configureSidebar(state: *State, requested: SidebarRenderingType, configuration: ConfigurationType) !void {
     const resolved = try requested.resolve(configuration.support);
     const toast_changed = state.kitty_toasts.configure(configuration);
     const modal_changed = state.kitty_modal.configure(configuration);

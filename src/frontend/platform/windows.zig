@@ -1,7 +1,7 @@
 const WindowsTty = @import("WindowsTty.zig");
 
 const std = @import("std");
-const LocalTime = @import("LocalTime.zig");
+const LocalTime = @import("telar-client").LocalTime;
 
 // Windows: console modes for the state, the screen buffer info for the size,
 // and - the awkward one - polling for the change.

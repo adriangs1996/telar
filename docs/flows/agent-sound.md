@@ -86,7 +86,7 @@ continues independently and later exact sound events may start a new queue.
   build compiles the Linux and Windows paths.
 - `src/client/application/agents/agent_sound.zig` proves exact-identity
   gating, stale suppression and effect-error propagation.
-- `src/frontend/client/controllers/agents/agent_sounds.zig` owns protocol translation, worker
+- `src/client/controllers/agents/agent_sounds.zig` owns protocol translation, worker
   scheduling and the completion entrypoint.
 - `src/frontend/client/tests/` proves wire identity, bounded queuing,
   unchanged model and presentation versions, and configuration adoption.

@@ -110,13 +110,13 @@ client never replays a rename.
 
 ## Proof
 
-- `src/frontend/client/controllers/tabs/tab_renames.zig` proves one-time response correlation,
+- `src/client/controllers/tabs/tab_renames.zig` proves one-time response correlation,
   exact identity validation, wire translation and protocol error mapping.
 - `src/client/application/tabs/rename_tab.zig` proves local validation,
   gating, exact target resolution, delivery failure and canonical confirmation.
 - `src/client/model/name_prompt.zig`,
   `src/client/application/input/name_prompt.zig` and
-  `src/frontend/client/controllers/input/name_prompts.zig` prove editor ownership, submit ordering
+  `src/client/controllers/input/name_prompts.zig` prove editor ownership, submit ordering
   and prompt retention.
 - `src/client/connection/outbox_support.zig` proves bounded storage and ownership of
   queued label bytes.

@@ -42,7 +42,7 @@ caller controls when preparation and delivery fail or finish.
 ## Observation and preparation
 
 `Observation` contains `ClientModel.Version`, graphics and attachment ingress,
-visible input/view interaction revisions and the host-region revision. The
+visible input/view interaction revisions and the workbench-grid revision. The
 lifecycle keeps observed, prepared and delivered values separately. Observing
 unchanged prepared work adds no frame, including while its write is pending.
 A newer observation replaces the desired version; there is no frame queue.

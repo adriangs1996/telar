@@ -42,6 +42,8 @@ foreground_name_len: u8 = 0,
 progress_state: PaneProgressStateType = .remove,
 progress_percent: ?u8 = null,
 title: []u8 = &.{},
+/// What the user is writing for the agent in this pane, owned like the title.
+composer: []u8 = &.{},
 
 pub const Initial = @import("Initial.zig");
 
@@ -71,6 +73,7 @@ pub fn init(gpa: std.mem.Allocator, initial: InitialType) !Pane {
 pub fn deinit(pane: *Pane) void {
     pane.gpa.free(pane.cwd);
     pane.gpa.free(pane.title);
+    pane.gpa.free(pane.composer);
     pane.gpa.free(pane.damage_rows);
     pane.buffer.deinit();
 }
@@ -194,4 +197,25 @@ pub fn setTitle(pane: *Pane, title: []const u8) !bool {
 
 pub fn titleSlice(pane: *const Pane) []const u8 {
     return pane.title;
+}
+
+pub const max_composer_bytes = 2048;
+
+/// Replaces the composer draft the thread surface shows.
+///
+/// ```zig
+/// try pane.setComposer("fix the failing test");
+/// ```
+pub fn setComposer(pane: *Pane, text: []const u8) !void {
+    if (text.len > max_composer_bytes) {
+        return error.ComposerTooLong;
+    }
+
+    const replacement = if (text.len != 0) try pane.gpa.dupe(u8, text) else &[_]u8{};
+    pane.gpa.free(pane.composer);
+    pane.composer = @constCast(replacement);
+}
+
+pub fn composerSlice(pane: *const Pane) []const u8 {
+    return pane.composer;
 }

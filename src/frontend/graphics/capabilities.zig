@@ -1,7 +1,6 @@
-//! Exterior-terminal probe constants and renderer policy.
+//! Exterior-terminal probe constants.
 
 const std = @import("std");
-const Support = @import("telar-client").Support;
 
 pub const query_image_id: u32 = 31;
 /// Second probe: the same 1x1 image with a zlib-deflated payload. A host that
@@ -15,50 +14,6 @@ pub const query =
     "\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\" ++
     "\x1b_Gi=32,s=1,v=1,a=q,t=d,f=24,o=z;eJxjYGAAAAADAAE=\x1b\\" ++
     "\x1b[14t\x1b[16t\x1b[?1016$p\x1b[c";
-
-pub const SidebarRendering = enum {
-    automatic,
-    cells,
-    kitty_hybrid,
-    kitty_full,
-
-    pub fn parse(name: []const u8) !SidebarRendering {
-        if (std.ascii.eqlIgnoreCase(name, "automatic") or std.ascii.eqlIgnoreCase(name, "auto")) {
-            return .automatic;
-        }
-        if (std.ascii.eqlIgnoreCase(name, "cells")) {
-            return .cells;
-        }
-        if (std.ascii.eqlIgnoreCase(name, "kitty-hybrid")) {
-            return .kitty_hybrid;
-        }
-        if (std.ascii.eqlIgnoreCase(name, "kitty-full")) {
-            return .kitty_full;
-        }
-        return error.UnknownSidebarRenderer;
-    }
-
-    pub fn resolve(value: SidebarRendering, support: Support) !ResolvedSidebarRendering {
-        return switch (value) {
-            .automatic => if (support == .supported) .kitty_hybrid else .cells,
-            .cells => .cells,
-            .kitty_hybrid => if (support == .supported)
-                .kitty_hybrid
-            else if (support == .unknown)
-                .cells
-            else
-                error.KittyGraphicsUnsupported,
-            .kitty_full => if (support == .supported)
-                .kitty_full
-            else if (support == .unknown)
-                .cells
-            else
-                error.KittyGraphicsUnsupported,
-        };
-    }
-};
-
-pub const ResolvedSidebarRendering = enum { cells, kitty_hybrid, kitty_full };
 
 test "the zlib probe payload inflates to the probe pixel" {
     const encoded = "eJxjYGAAAAADAAE=";

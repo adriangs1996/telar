@@ -1,9 +1,9 @@
 const std = @import("std");
 const ServerOptionsType = @import("arguments/ServerOptions.zig");
 const RuntimeConnectorType = @import("RuntimeConnector.zig");
-const GenerationType = @import("telar-frontend").Generation;
+const GenerationType = @import("telar-client").Generation;
 const max_intercept_hosts = @import("telar-core").max_intercept_hosts;
-const max_agent_description_command_args_module = @import("telar-frontend").max_agent_description_command_args;
+const max_agent_description_command_args_module = @import("telar-client").max_agent_description_command_args;
 const AgentDescriptionOptionsType = @import("telar-backend").AgentDescriptionOptions;
 const Options = @import("telar-backend").Options;
 const TableType = @import("telar-core").Table;
@@ -19,9 +19,9 @@ const config = @import("config.zig");
 const server = @import("server.zig");
 const proxy_cli = @import("proxy.zig");
 const plugin_cli = @import("plugin.zig");
-const RegistryType = @import("telar-frontend").Registry;
-const installPackage_module = @import("telar-frontend").installPackage;
-const inspectPackage_module = @import("telar-frontend").inspectPackage;
+const RegistryType = @import("telar-client").Registry;
+const installPackage_module = @import("telar-client").installPackage;
+const inspectPackage_module = @import("telar-client").inspectPackage;
 const InitializationType = @import("telar-backend").Initialization;
 const Launch = @This();
 

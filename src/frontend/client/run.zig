@@ -1,13 +1,14 @@
 //! Client process adapter: opens the real terminal, constructs and starts one
 //! client, then lends each completed event to the dispatcher.
 
+const TerminalClient = @import("TerminalClient.zig");
 const std = @import("std");
 const SocketChannelType = @import("telar-core").SocketChannel;
-const Options = @import("Options.zig");
+const Options = @import("telar-client").Options;
 const HeapType = @import("telar-core").Heap;
 const platform = @import("../platform/platform.zig");
 const sequences = @import("../platform/sequences.zig");
-const Client = @import("Client.zig");
+const Client = @import("telar-client").AttachedClient;
 const host_resizes = @import("controllers/host/host_resizes.zig");
 const client_startup = @import("controllers/session/client_startup.zig");
 const client_events = @import("entrypoints/events.zig");
@@ -65,7 +66,7 @@ pub fn run(init: std.process.Init, connection: *SocketChannelType, options: Opti
     };
 
     const host_platform_size = tty.size();
-    const client = try Client.init(.{
+    const terminal = try TerminalClient.init(.{
         .gpa = gpa,
         .io = io,
         .connection = connection,
@@ -83,12 +84,13 @@ pub fn run(init: std.process.Init, connection: *SocketChannelType, options: Opti
     // Registered after `watcher`'s defer on purpose: deinit cancels the
     // select tasks — one of them waits on the watcher — before the watcher
     // itself is torn down.
-    defer client.deinit();
+    defer terminal.deinit();
+    const client = &terminal.app;
 
     try client_startup.start(client, .{ .resize_watcher = &watcher });
 
     while (true) {
-        const event = try client.select.await();
+        const event = try terminal.select.await();
         switch (try client_events.handle(client, event, .{
             .tty = &tty,
             .resize_watcher = &watcher,

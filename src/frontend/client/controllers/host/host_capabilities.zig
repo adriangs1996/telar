@@ -1,6 +1,8 @@
 //! Adapts terminal protocol replies and probe expiry to client host state.
 
-const Client = @import("../../Client.zig");
+const TerminalClient = @import("../../TerminalClient.zig");
+const host = TerminalClient.of;
+const Client = @import("telar-client").AttachedClient;
 const capabilities_module = @import("../../../graphics/capabilities.zig");
 const negotiation = @import("../../resources/host_negotiation.zig");
 const monotonic_module = @import("telar-client").monotonic;
@@ -11,40 +13,40 @@ const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
 const HandlerType = @import("telar-client").HostCapabilitiesHandler;
 const HostCapabilityObservationType = @import("telar-client").HostCapabilityObservation;
 const HostCapabilitySupportType = @import("telar-client").HostCapabilitySupport;
-const host_resources = @import("host_resources.zig");
+const host_resources = @import("telar-client").controllers.host_resources;
 const std = @import("std");
 
 /// Starts the exterior-terminal probes through one owner.
 /// Example: `try begin(client);`.
 pub fn begin(client: *Client) !void {
-    try client.writer.writeAll(capabilities_module.query);
+    try host(client).writer.writeAll(capabilities_module.query);
     try queryColors(client);
-    try client.writer.flush();
+    try host(client).writer.flush();
 }
 
 /// Coalesces overlapping color probes. A resize needs no protocol details.
 /// Example: `try refresh(client);`.
 pub fn refresh(client: *Client) !void {
-    try client.writer.writeAll(negotiation.pixel_query);
+    try host(client).writer.writeAll(negotiation.pixel_query);
     try queryColors(client);
-    try client.writer.flush();
+    try host(client).writer.flush();
 }
 
 fn queryColors(client: *Client) !void {
-    if (!client.host_negotiation.begin(monotonic_module(client.io))) {
+    if (!host(client).host_negotiation.begin(monotonic_module(client.io))) {
         return;
     }
 
-    try client.writer.writeAll(negotiation.color_query);
+    try host(client).writer.writeAll(negotiation.color_query);
     try scheduleExpiry(client);
 }
 
 /// Example: `try scheduleExpiry(client);`.
 pub fn scheduleExpiry(client: *Client) !void {
-    const state = &client.host_negotiation;
+    const state = &host(client).host_negotiation;
     switch (state.timer.update(client.io, state.deadline_ns)) {
         .idle, .retained => {},
-        .schedule => client.select.concurrent(.capability_timeout, wait_module, .{
+        .schedule => host(client).select.concurrent(.capability_timeout, wait_module, .{
             client.io, &state.timer,
         }) catch |err| {
             state.timer.schedulingFailed();
@@ -59,8 +61,8 @@ pub fn scheduleExpiry(client: *Client) !void {
 /// _ = try handleExpiry(client, result);
 /// ```
 pub fn handleExpiry(client: *Client, result: anyerror!void) !?HostCommitType {
-    try client.host_negotiation.timer.complete(result);
-    if (!client.host_negotiation.expire(monotonic_module(client.io))) {
+    try host(client).host_negotiation.timer.complete(result);
+    if (!host(client).host_negotiation.expire(monotonic_module(client.io))) {
         try scheduleExpiry(client);
         return null;
     }
@@ -80,14 +82,14 @@ pub fn observe(client: *Client, response: term.Event.TerminalResponse) !?HostCom
         else => null,
     };
     if (color) |target| {
-        if (!client.host_negotiation.accept(target, monotonic_module(client.io))) {
+        if (!host(client).host_negotiation.accept(target, monotonic_module(client.io))) {
             return null;
         }
     }
 
     if (response == .kitty_graphics and response.kitty_graphics.image_id == capabilities_module.zlib_query_image_id) {
-        client.host_negotiation.zlib_support = if (response.kitty_graphics.supported) .supported else .unsupported;
-        kitty_delivery.setHostZlib(&client.graphics_store, response.kitty_graphics.supported);
+        host(client).host_negotiation.zlib_support = if (response.kitty_graphics.supported) .supported else .unsupported;
+        kitty_delivery.setHostZlib(&host(client).graphics_store, response.kitty_graphics.supported);
         return null;
     }
 
@@ -107,8 +109,8 @@ pub fn expire(client: *Client) !?HostCommitType {
 
     const capabilities = negotiation.settledCapabilities(client.model.hostCapabilities());
 
-    if (client.host_negotiation.zlib_support == .unknown) {
-        client.host_negotiation.zlib_support = .unsupported;
+    if (host(client).host_negotiation.zlib_support == .unknown) {
+        host(client).host_negotiation.zlib_support = .unsupported;
     }
 
     return use_case.reconcile(capabilities);

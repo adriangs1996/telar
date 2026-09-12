@@ -184,7 +184,7 @@ new client rebuilds its disposable model through workspace and tab snapshots.
 
 ## Proof
 
-- `src/frontend/client/controllers/tabs/tab_closures.zig` proves explicit correlation,
+- `src/client/controllers/tabs/tab_closures.zig` proves explicit correlation,
   lifecycle classification, retired-response handling, wire translation and
   physical port wiring.
 - `src/client/application/tabs/close_tab.zig` proves request ordering,

@@ -18,10 +18,6 @@ pub fn execute(self: *ActionRoutingHandler, value: action.Action, authority: act
         .available => |state| state,
     };
 
-    if (available.agent_mode_active and value != .toggle_agent_mode and value != .detach) {
-        return .continue_routing;
-    }
-
     return switch (value) {
         .lua_callback => |reference| self.executeLua(
             .{ .callback = reference },

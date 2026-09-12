@@ -23,11 +23,6 @@ test {
     _ = @import("tests/workspaces.zig");
 }
 
-pub const PresentationMode = enum {
-    normal,
-    agent,
-};
-
 pub fn paneViewportOffset(pane: *const PaneType, target: model_types.PaneViewportTarget) u32 {
     const maximum = pane.scroll.maxOffset(pane.buffer.h);
 

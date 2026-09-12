@@ -14,7 +14,7 @@ const ColorType = @import("telar-core").Color;
 const RectType = @import("telar-core").Rect;
 const std = @import("std");
 const ModalRenderer = @import("ModalRenderer.zig");
-const theme = @import("../ui/theme_support.zig");
+const theme = @import("telar-client").theme_support;
 
 pub const max_cache_bytes: usize = 512 * 1024;
 const first_image_id: u32 = 0x80002000;

@@ -9,7 +9,7 @@ import re
 
 TOKENS = re.compile(r'//[^\n]*|\\\\[^\n]*|"(?:\\.|[^"\\])*"|@(?:import|cInclude)\s*\(')
 LITERAL = re.compile(r'\s*"([^"\\]+)"\s*\)')
-ALLOWED_MODULES = {"std", "builtin", "telar-core"}
+ALLOWED_MODULES = {"std", "builtin", "telar-core", "telar-lua", "lua-api"}
 
 
 def calls(source, name):

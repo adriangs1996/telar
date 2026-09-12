@@ -2,21 +2,21 @@
 
 const HeapType = @import("telar-core").Heap;
 const ResourcesType = @import("../entrypoints/Resources.zig");
-const Client = @import("../Client.zig");
+const Client = @import("telar-client").AttachedClient;
 const PaneIdType = @import("telar-core").PaneId;
 const VersionType = @import("telar-client").Version;
 const std = @import("std");
 const AgentStatusType = @import("telar-core").AgentStatus;
 const encodeAgentSnapshot_module = @import("telar-core").encodeAgentSnapshot;
 const TestHarness = @import("TestHarness.zig");
-const AdoptionType = @import("../resources/Adoption.zig");
+const AdoptionType = @import("telar-client").ConfigAdoption;
 const DiagnosticType = @import("telar-client").Diagnostic;
-const GenerationType = @import("../../config/Generation.zig");
-const RegistryType = @import("../../plugins/Registry.zig");
+const GenerationType = @import("telar-client").Generation;
+const RegistryType = @import("telar-client").Registry;
 const TrustStoreType = @import("telar-core").TrustStore;
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 const ActionType = @import("telar-client").Action;
-const config_reloads = @import("../controllers/configuration/config_reloads.zig");
+const config_reloads = @import("telar-client").controllers.config_reloads;
 const CallbackContextType = @import("telar-client").CallbackContext;
 const TestingPlugin = @import("TestingPlugin.zig");
 const parseManifest_module = @import("telar-core").parseManifest;
@@ -26,7 +26,7 @@ const TargetType = @import("telar-client").AttachmentTarget;
 const AgentProviderType = @import("telar-core").AgentProvider;
 const AgentInputType = @import("telar-client").AgentInput;
 const builtin_table_module = @import("telar-core").builtin_table;
-const active_pane_resources = @import("../controllers/panes/active_pane_resources.zig");
+const active_pane_resources = @import("telar-client").controllers.active_pane_resources;
 const ClipboardCaptureType = @import("telar-client").ClipboardCapture;
 const CaptureType = @import("telar-client").Capture;
 
@@ -225,18 +225,16 @@ pub fn testingConfigAdoptionSource(number: u64, source: []const u8) !AdoptionTyp
     const trust_store = try std.testing.allocator.create(TrustStoreType);
     errdefer std.testing.allocator.destroy(trust_store);
     trust_store.* = .{};
-    const router = try host_inputs.buildRouter(.{
-        .prefix = generation.snapshot.prefix,
-        .bindings = generation.snapshot.bindingSlice(),
-        .escape_timeout_ns = generation.snapshot.input_escape_timeout_ns,
-        .sequence_timeout_ns = generation.snapshot.input_sequence_timeout_ns,
-    });
-
     return .{
         .generation = generation,
         .registry = registry,
         .trust_store = trust_store,
-        .router = router,
+        .input = .{
+            .prefix = generation.snapshot.prefix,
+            .bindings = generation.snapshot.bindingSlice(),
+            .escape_timeout_ns = generation.snapshot.input_escape_timeout_ns,
+            .sequence_timeout_ns = generation.snapshot.input_sequence_timeout_ns,
+        },
         .sidebar_rendering = generation.snapshot.sidebar_rendering,
     };
 }

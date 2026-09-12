@@ -48,21 +48,20 @@ It owns what only makes sense while somebody is looking: layout, which pane is
 focused, hover, scroll position, selection, what a modal is covering. All of it
 is disposable, because the runtime can rebuild everything that matters.
 
-`examples/sidebar.zig` is a mock of this against invented data. It is not the
-client, it proved the frontend can render core data.
-
 ### Code packages
 
 Both processes import `telar-core`. The TUI imports `telar-client` for shared
 client behavior; neither common package imports a host adapter. Backend and
-frontend never import each other. `src/main.zig` selects a CLI entrypoint.
+frontend never import each other, and `telar-gui` never imports
+`telar-frontend`: what both adapters embed lives in the `assets` module. `src/main.zig` selects a CLI entrypoint.
 
 | Package | Owns |
 | --- | --- |
 | `telar-core` | cells, buffers, geometry and wire values shared across processes |
 | `telar-backend` | children, PTYs, terminal emulation, history and runtime authority |
-| `telar-client` | disposable model, handlers, input policy, resource retention and presentation contracts |
+| `telar-client` | disposable model, handlers, input policy, configuration, plugins, local transport, resource retention and presentation contracts |
 | `telar-frontend` | TUI assembly, host terminal, decoder, compositor, diff, pacing and Kitty delivery |
+| `telar-gui` | native chrome: window, GPU quad backend and glyph atlas, macOS first |
 
 Each package has an explicit module entrypoint in `build.zig`. Put a type in
 core only when both processes need it. Each connection owns independent client

@@ -3,7 +3,7 @@ const SocketChannelType = @import("telar-core").SocketChannel;
 const FastWriteType = @import("resources/FastWrite.zig");
 const TerminalSizeType = @import("telar-core").TerminalSize;
 const ClientIdentityType = @import("telar-core").ClientIdentity;
-const Options = @import("Options.zig");
+const Options = @import("telar-client").Options;
 /// The platform resources a client cannot fabricate: everything else it
 /// owns. Substituting these — a pipe for the tty's read handle, a
 /// fixed-buffer writer, a scripted socket peer — is what makes the client

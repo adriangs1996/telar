@@ -2,12 +2,12 @@
 
 const std = @import("std");
 const PluginOptions = @import("arguments/PluginOptions.zig");
-const inspectPackage_module = @import("telar-frontend").inspectPackage;
+const inspectPackage_module = @import("telar-client").inspectPackage;
 const PluginWorkerOptionsType = @import("arguments/PluginWorkerOptions.zig");
-const run_module = @import("telar-frontend").run;
+const run_module = @import("telar-client").runPluginWorker;
 const TrustStoreType = @import("telar-core").TrustStore;
-const Package = @import("telar-frontend").Package;
-const installPackage_module = @import("telar-frontend").installPackage;
+const Package = @import("telar-client").Package;
+const installPackage_module = @import("telar-client").installPackage;
 const CapabilitySetType = @import("telar-core").CapabilitySet;
 const TestEnvironment = @import("TestEnvironment.zig");
 

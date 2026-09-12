@@ -352,7 +352,7 @@ test "client layouts coalesce without mutating an in-flight snapshot" {
         .workspace = .{ .workspace = @enumFromInt(3) },
         .tab_id = @enumFromInt(4),
     };
-    const nodes = [_]ClientLayoutNodeType{.{ .pane = @enumFromInt(5) }};
+    const nodes = [_]ClientLayoutNodeType{.{ .pane = .{ .id = @enumFromInt(5) } }};
     const tabs = [_]ClientTabLayoutType{.{
         .location = location,
         .focused_pane = @enumFromInt(5),
@@ -405,7 +405,7 @@ test "client layout folding never crosses an ordered request" {
         .tab_id = @enumFromInt(4),
     };
     const pane_id: PaneIdType = @enumFromInt(5);
-    const nodes = [_]ClientLayoutNodeType{.{ .pane = pane_id }};
+    const nodes = [_]ClientLayoutNodeType{.{ .pane = .{ .id = pane_id } }};
     const tabs = [_]ClientTabLayoutType{.{
         .location = location,
         .focused_pane = pane_id,

@@ -104,9 +104,9 @@ but schedules no frame.
   branch ordering, no-op policy, stale-commit rejection and partial failures.
 - `src/frontend/client/controllers/host/host_resizes.zig` owns platform measurement, pixel
   refresh requests and watcher rearming.
-- `src/frontend/client/controllers/host/host_resources.zig` implements the physical host effect
+- `src/client/controllers/host/host_resources.zig` implements the physical host effect
   ports shared by resize and capability delivery.
-- `src/frontend/client/controllers/panes/pane_geometry.zig` owns translation and bounded delivery
+- `src/client/controllers/panes/pane_geometry.zig` owns translation and bounded delivery
   of visible attached pane sizes.
 - `src/client/application/panes/pane_attachment_requests.zig` proves
   that a resize attaches only detached panes with content, once each, after a

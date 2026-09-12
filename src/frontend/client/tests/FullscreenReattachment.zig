@@ -1,8 +1,10 @@
+const TerminalClient = @import("../TerminalClient.zig");
+const host = TerminalClient.of;
 const TestHarnessType = @import("TestHarness.zig");
 const PaneDescriptorType = @import("telar-core").PaneDescriptor;
-const client_actions = @import("../controllers/input/actions.zig");
+const client_actions = @import("telar-client").controllers.actions;
 const encodeTabSnapshot_module = @import("telar-core").encodeTabSnapshot;
-const server_messages = @import("../entrypoints/runtime_messages.zig");
+const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
@@ -44,7 +46,7 @@ pub fn confirmAttachment(scenario: FullscreenReattachment, pane_id: PaneIdType) 
     try std.testing.expect(message == .open_pane);
     try std.testing.expectEqualDeep(PaneTargetType{ .pane = pane_id }, message.open_pane.target);
     try std.testing.expectEqualDeep(
-        client.model.workspace.active().?.model.contentSize(pane_id, client.view.workbench()).?,
+        client.model.workspace.active().?.model.contentSize(pane_id, host(client).view.workbench()).?,
         message.open_pane.size,
     );
     const opened = try encodePaneOpened_module(&buffer, .{

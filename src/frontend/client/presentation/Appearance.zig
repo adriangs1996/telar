@@ -1,4 +1,4 @@
-const ThemeType = @import("../../ui/Theme.zig");
+const ThemeType = @import("telar-client").ColorTheme;
 const ClientTheme = @import("telar-client").Theme;
 const Appearance = @This();
 

@@ -120,7 +120,7 @@ usable replica and its local version.
 - `src/client/application/panes/active_pane_resource_delivery.zig` proves
   attachment-only synchronization and conditional geometry delivery.
 - `src/client/application/notifications/sidebar_animation.zig` and
-  `src/frontend/client/controllers/notifications/sidebar_animations.zig` separate active-state policy
+  `src/client/controllers/notifications/sidebar_animations.zig` separate active-state policy
   from the single pending timer.
 - `src/frontend/widgets/sidebar.zig` proves local pane-index projection does
   not mutate the runtime replica.

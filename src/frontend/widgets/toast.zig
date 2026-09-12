@@ -11,7 +11,7 @@ const StyleType = @import("telar-core").Style;
 const LevelType = @import("telar-client").Level;
 const ColorType = @import("telar-core").Color;
 const std_module = @import("std");
-const theme_support = @import("../ui/theme_support.zig");
+const theme_support = @import("telar-client").theme_support;
 const BufferType = @import("telar-core").Buffer;
 const transition_duration_ns_module = @import("telar-client").transition_duration_ns;
 

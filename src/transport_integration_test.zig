@@ -1,10 +1,10 @@
 const std = @import("std");
 const SocketChannelType = @import("telar-core").SocketChannel;
 const LocalListenerType = @import("telar-backend").LocalListener;
-const connect_module = @import("telar-frontend").connect;
+const connect_module = @import("telar-client").connect;
 const HandshakeWorker = @import("HandshakeWorker.zig");
 const schema_id_module = @import("telar-core").schema_id;
-const performSchema_module = @import("telar-frontend").performSchema;
+const performSchema_module = @import("telar-client").performSchema;
 const RejectReasonType = @import("telar-core").RejectReason;
 const root = @import("telar-core").root;
 const serve_module = @import("telar-backend").serve;
@@ -18,7 +18,7 @@ const IngestTestGateType = @import("telar-backend").IngestTestGate;
 const StoreType = @import("telar-frontend").Store;
 const max_input_bytes_module = @import("telar-core").max_input_bytes;
 const RuntimeTestChannel = @import("RuntimeTestChannel.zig");
-const perform_module = @import("telar-frontend").perform;
+const perform_module = @import("telar-client").perform;
 const FrameViewType = @import("telar-core").FrameView;
 
 const test_receive_timeout: std.Io.Timeout = .{
@@ -1610,7 +1610,7 @@ test "runtime retains a terminal layout across client reconnection" {
             else => {},
         };
 
-        const nodes = [_]schema.ClientLayoutNode{.{ .pane = opened.pane_id }};
+        const nodes = [_]schema.ClientLayoutNode{.{ .pane = .{ .id = opened.pane_id } }};
         const tabs = [_]schema.ClientTabLayout{.{
             .location = opened.location,
             .focused_pane = opened.pane_id,
@@ -1664,7 +1664,7 @@ test "runtime retains a terminal layout across client reconnection" {
             var nodes = tab.nodes();
             const node = (try nodes.next()).?;
             try std.testing.expect(node == .pane);
-            try std.testing.expectEqual(opened.pane_id, node.pane);
+            try std.testing.expectEqual(opened.pane_id, node.pane.id);
             try std.testing.expect(try nodes.next() == null);
             try std.testing.expect(try tabs.next() == null);
             break;

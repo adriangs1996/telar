@@ -1,18 +1,20 @@
 //! Client integration tests for input.
 
+const TerminalClient = @import("../TerminalClient.zig");
+const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const support = @import("support.zig");
 const CaptureType = @import("telar-client").Capture;
-const view_interactions = @import("../controllers/input/view_interactions.zig");
+const view_interactions = @import("telar-client").controllers.view_interactions;
 const std = @import("std");
 const InputHandler = @import("../resources/InputHandler.zig");
 const parseKey_module = @import("telar-client").parseKey;
-const clipboard_images = @import("../controllers/host/clipboard_images.zig");
+const clipboard_images = @import("telar-client").controllers.clipboard_images;
 const BufferType = @import("telar-core").Buffer;
 const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
-const server_messages = @import("../entrypoints/runtime_messages.zig");
+const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
-const Client = @import("../Client.zig");
+const Client = @import("telar-client").AttachedClient;
 const TargetType = @import("telar-client").AttachmentTarget;
 const PiFrame = @import("PiFrame.zig");
 const InputModesType = @import("telar-core").InputModes;
@@ -20,17 +22,17 @@ const CellType = @import("telar-core").Cell;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const Chunk = @import("../controllers/input/Chunk.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
-const config_reloads = @import("../controllers/configuration/config_reloads.zig");
+const config_reloads = @import("telar-client").controllers.config_reloads;
 const PaneIdType = @import("telar-core").PaneId;
 const enabled_module = @import("telar-core").enabled;
-const name_prompts = @import("../controllers/input/name_prompts.zig");
+const name_prompts = @import("telar-client").controllers.name_prompts;
 const term = @import("../../presentation/screen_support.zig");
-const model_module = @import("../../config/model.zig");
-const client_actions = @import("../controllers/input/actions.zig");
+const model_module = @import("telar-client").config_model;
+const client_actions = @import("telar-client").controllers.actions;
 const ScrollDirectionType = @import("telar-client").ScrollDirection;
-const active_pane_resources = @import("../controllers/panes/active_pane_resources.zig");
-const pane_focus_reports = @import("../controllers/panes/pane_focus_reports.zig");
-const PresentationModeType = @import("telar-client").PresentationMode;
+const active_pane_resources = @import("telar-client").controllers.active_pane_resources;
+const pane_focus_reports = @import("telar-client").controllers.pane_focus_reports;
+const PaneSurfaceType = @import("telar-core").PaneSurface;
 const ControlType = @import("telar-client").Control;
 
 test "closing a preview deletes its matching atomic image marker" {
@@ -48,7 +50,7 @@ test "closing a preview deletes its matching atomic image marker" {
             .width = 2,
             .height = 2,
         };
-        _ = try client.view.adoptAttachment(capture);
+        _ = try host(client).view.adoptAttachment(capture);
     }
     const pane = client.model.activeTabModel().?.find(target.pane_id).?;
     pane.buffer.clear(.{});
@@ -58,7 +60,7 @@ test "closing a preview deletes its matching atomic image marker" {
         .x = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = prompt, .style = .{} }),
         .y = 0,
     };
-    const first = client.view.kittyAttachments().snapshot().items[0].id;
+    const first = host(client).view.kittyAttachments().snapshot().items[0].id;
     const model = client.model.activeTabModel().?;
 
     _ = try view_interactions.apply(client, model, .{
@@ -66,7 +68,7 @@ test "closing a preview deletes its matching atomic image marker" {
         .consumed = true,
     });
 
-    const remaining = client.view.kittyAttachments().snapshot();
+    const remaining = host(client).view.kittyAttachments().snapshot();
     try std.testing.expectEqual(@as(u8, 1), remaining.len);
     try std.testing.expectEqual(@as(u64, 2), @intFromEnum(remaining.items[0].id));
     try harness.settle();
@@ -93,7 +95,7 @@ test "child marker deletion and prompt submission retire paired previews" {
         .width = 2,
         .height = 2,
     };
-    _ = try client.view.adoptAttachment(capture);
+    _ = try host(client).view.adoptAttachment(capture);
     const pane = client.model.activeTabModel().?.find(target.pane_id).?;
     pane.buffer.clear(.{});
     pane.cursor = .{
@@ -105,7 +107,7 @@ test "child marker deletion and prompt submission retire paired previews" {
 
     try handler.key(try parseKey_module("backspace"));
 
-    try std.testing.expectEqual(@as(u8, 0), client.view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(@as(u8, 0), host(client).view.kittyAttachments().snapshot().len);
     const pending = (try client.model.beginClipboardCapture(target)).?;
     try handler.key(try parseKey_module("enter"));
     try std.testing.expect(client.model.clipboardCapture() == null);
@@ -113,7 +115,7 @@ test "child marker deletion and prompt submission retire paired previews" {
 
     try clipboard_images.complete(client, .{ .execution_id = pending.id, .result = completed });
 
-    try std.testing.expectEqual(@as(u8, 0), client.view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(@as(u8, 0), host(client).view.kittyAttachments().snapshot().len);
     try std.testing.expect(client.clipboard_capture_resources.orphan == null);
 }
 
@@ -131,7 +133,7 @@ test "Claude marker disappearance in a committed frame retires its paired previe
         .width = 2,
         .height = 2,
     };
-    _ = try client.view.adoptAttachment(capture);
+    _ = try host(client).view.adoptAttachment(capture);
     var pane_buffer = try BufferType.init(std.testing.allocator, 40, 3);
     defer pane_buffer.deinit();
     _ = pane_buffer.writeText(pane_buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = "> [Image #7]", .style = .{} });
@@ -148,10 +150,10 @@ test "Claude marker disappearance in a committed frame retires its paired previe
     });
 
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(marker_frame));
-    try std.testing.expectEqual(@as(u8, 1), client.view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(@as(u8, 1), host(client).view.kittyAttachments().snapshot().len);
     var handler: InputHandler = .{ .client = client };
     try handler.key(try parseKey_module("backspace"));
-    try std.testing.expectEqual(@as(u8, 1), client.view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(@as(u8, 1), host(client).view.kittyAttachments().snapshot().len);
 
     pane_buffer.clear(.{});
     const empty_cursor = pane_buffer.writeText(pane_buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = "> ", .style = .{} });
@@ -167,7 +169,7 @@ test "Claude marker disappearance in a committed frame retires its paired previe
     });
 
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(empty_frame));
-    try std.testing.expectEqual(@as(u8, 0), client.view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(@as(u8, 0), host(client).view.kittyAttachments().snapshot().len);
 }
 
 const pi_test_path = "/var/folders/8x/abc/T/pi-clipboard-3f2a9c1e-7b4d-4e8f-9a0b-1c2d3e4f5a6b.png";
@@ -180,7 +182,7 @@ fn adoptPiPreview(client: *Client, target: TargetType) !void {
         .width = 2,
         .height = 2,
     };
-    _ = try client.view.adoptAttachment(capture);
+    _ = try host(client).view.adoptAttachment(capture);
 }
 
 /// Commits one Pi editor frame: hidden hardware cursor, an inverse-video
@@ -214,7 +216,7 @@ test "closing a Pi preview deletes its whole pasted path from the editor" {
     const target = try support.installTestingAttachmentProvider(client, 1, .pi);
     try adoptPiPreview(client, target);
     try commitPiFrame(client, .{ .target = target, .prompt = "> " ++ pi_test_path, .id = 1 });
-    const id = client.view.kittyAttachments().snapshot().items[0].id;
+    const id = host(client).view.kittyAttachments().snapshot().items[0].id;
     const model = client.model.activeTabModel().?;
 
     _ = try view_interactions.apply(client, model, .{
@@ -222,7 +224,7 @@ test "closing a Pi preview deletes its whole pasted path from the editor" {
         .consumed = true,
     });
 
-    try std.testing.expectEqual(@as(u8, 0), client.view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(@as(u8, 0), host(client).view.kittyAttachments().snapshot().len);
     try harness.settle();
     var buffer: [512]u8 = undefined;
     const message = try harness.nextClientMessage(&buffer);
@@ -239,18 +241,18 @@ test "a Pi path removed by a word deletion retires its preview on the next frame
     const target = try support.installTestingAttachmentProvider(client, 1, .pi);
     try adoptPiPreview(client, target);
     try commitPiFrame(client, .{ .target = target, .prompt = "> " ++ pi_test_path, .id = 1 });
-    try std.testing.expectEqual(@as(u8, 1), client.view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(@as(u8, 1), host(client).view.kittyAttachments().snapshot().len);
     var handler: InputHandler = .{ .client = client };
 
     try handler.key(try parseKey_module("ctrl+w"));
-    try std.testing.expectEqual(@as(u8, 1), client.view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(@as(u8, 1), host(client).view.kittyAttachments().snapshot().len);
     try commitPiFrame(client, .{
         .target = target,
         .prompt = "> /var/folders/8x/abc/T/pi-clipboard-3f2a9c1e-7b4d-4e8f-9a0b-1c2d3e4f5a6b.",
         .id = 2,
     });
 
-    try std.testing.expectEqual(@as(u8, 0), client.view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(@as(u8, 0), host(client).view.kittyAttachments().snapshot().len);
 }
 
 test "host keys use the keyboard modes received in a pane frame" {
@@ -345,7 +347,7 @@ test "releasing the physical prefix preserves its logical sequence through clien
     try std.testing.expect(!try host_inputs.handleRead(client, chunk));
 
     try std.testing.expect(client.model.sidebarVisible());
-    try std.testing.expect(!client.host_input.router.prefixPending());
+    try std.testing.expect(!host(client).host_input.router.prefixPending());
 }
 
 test "streamed paste captures target and framing while restoring its live viewport" {
@@ -356,7 +358,7 @@ test "streamed paste captures target and framing while restoring its live viewpo
     const client = harness.client;
     const tab = &client.model.workspace.active().?.model;
     const other_pane: PaneIdType = @enumFromInt(11);
-    try tab.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = other_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
+    try tab.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = other_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = host(client).view.workbench() });
     try std.testing.expect(tab.focusPane(TestHarness.bootstrap_pane));
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     pane.input_modes.bracketed_paste = true;
@@ -365,7 +367,7 @@ test "streamed paste captures target and framing while restoring its live viewpo
         .offset = 0,
     };
     const version = client.model.version();
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
     const input_events = client.telemetry.metrics.input_events;
     const input_bytes = client.telemetry.metrics.input_bytes;
     const timing_count = client.telemetry.metrics.input_enqueue.count;
@@ -383,7 +385,7 @@ test "streamed paste captures target and framing while restoring its live viewpo
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
     try std.testing.expectEqual(version.viewport + 1, client.model.version().viewport);
     try support.expectNonViewportVersionEqual(version, client.model.version());
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
     if (comptime enabled_module) {
         try std.testing.expectEqual(input_events + 3, client.telemetry.metrics.input_events);
         try std.testing.expectEqual(input_bytes + 18, client.telemetry.metrics.input_bytes);
@@ -469,7 +471,7 @@ test "name prompt rejects pointer routing after host telemetry" {
     pane.mouse = .{ .tracking = .normal, .sgr = true };
     const pane_view = client.model.workspace.active().?.model.viewForPane(
         pane.id,
-        client.view.workbench(),
+        host(client).view.workbench(),
     ).?;
     try std.testing.expect(name_prompts.beginActiveTabRename(client));
     const version = client.model.version();
@@ -505,7 +507,7 @@ test "mouse reports preserve scrollback and remain outside user-input telemetry"
     };
     const pane_view = client.model.workspace.active().?.model.viewForPane(
         pane.id,
-        client.view.workbench(),
+        host(client).view.workbench(),
     ).?;
     const version = client.model.version();
     const input_events = client.telemetry.metrics.input_events;
@@ -556,7 +558,7 @@ test "mouse reports preserve exact host pixels relative to pane content" {
     pane.mouse = .{ .tracking = .normal, .sgr = true, .pixels = true };
     const pane_view = client.model.workspace.active().?.model.viewForPane(
         pane.id,
-        client.view.workbench(),
+        host(client).view.workbench(),
     ).?;
     var handler: InputHandler = .{ .client = client };
 
@@ -585,12 +587,12 @@ test "alternate-screen wheel sends cursor keys to the pane under the pointer" {
     const model = &client.model.workspace.active().?.model;
     const focused = TestHarness.bootstrap_pane;
     const hovered: PaneIdType = @enumFromInt(20);
-    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
+    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = host(client).view.workbench() });
     try std.testing.expect(model.focusPane(focused));
     const pane = model.find(hovered).?;
     pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
     pane.scroll = .{ .total_rows = pane.buffer.h, .offset = 0 };
-    const hovered_view = model.viewForPane(hovered, client.view.workbench()).?;
+    const hovered_view = model.viewForPane(hovered, host(client).view.workbench()).?;
     const version = client.model.version();
     var handler: InputHandler = .{ .client = client };
 
@@ -638,13 +640,13 @@ test "focused scroll bindings target focus rather than hover and normal input re
     const model = client.model.activeTabModel().?;
     const focused = TestHarness.bootstrap_pane;
     const hovered: PaneIdType = @enumFromInt(20);
-    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
+    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = host(client).view.workbench() });
     try std.testing.expect(model.focusPane(focused));
     const pane = model.find(focused).?;
     const other = model.find(hovered).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
     other.scroll = .{ .total_rows = @as(u32, other.buffer.h) + 10, .offset = 10 };
-    const hovered_view = model.viewForPane(hovered, client.view.workbench()).?;
+    const hovered_view = model.viewForPane(hovered, host(client).view.workbench()).?;
     var handler: InputHandler = .{ .client = client };
     try handler.mouse(.{ .x = hovered_view.content.x, .y = hovered_view.content.y, .kind = .move });
     const version = client.model.version();
@@ -655,7 +657,7 @@ test "focused scroll bindings target focus rather than hover and normal input re
     try std.testing.expectEqual(@as(u32, 10), other.scroll.offset);
     try std.testing.expectEqual(focused, model.layout.focused().?);
     try std.testing.expect(!client.model.copyModeActive());
-    try std.testing.expect(!client.graphics_store.paneVisible(focused));
+    try std.testing.expect(!host(client).graphics_store.paneVisible(focused));
     try std.testing.expectEqual(version.viewport + 1, client.model.version().viewport);
     try std.testing.expectEqual(@as(usize, 1), client.runtime_transport.outbox.len);
     try harness.settle();
@@ -667,7 +669,7 @@ test "focused scroll bindings target focus rather than hover and normal input re
 
     try handler.key(try parseKey_module("x"));
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
-    try std.testing.expect(client.graphics_store.paneVisible(focused));
+    try std.testing.expect(host(client).graphics_store.paneVisible(focused));
     try harness.settle();
     const restored = try harness.nextClientMessage(&buffer);
     try std.testing.expect(restored == .set_pane_viewport);
@@ -699,32 +701,32 @@ test "held scroll suffixes pace both viewport directions without queued steps" {
         var handler: InputHandler = .{ .client = client };
         const ms = std.time.ns_per_ms;
 
-        _ = try client.host_input.router.feed(.{ .bytes = press, .now_ns = 0 }, &handler);
+        _ = try host(client).host_input.router.feed(.{ .bytes = press, .now_ns = 0 }, &handler);
         try std.testing.expectEqual(@as(u32, if (up) 47 else 53), pane.scroll.offset);
-        _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 99 * ms }, &handler);
+        _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 99 * ms }, &handler);
         try std.testing.expectEqual(@as(u32, if (up) 47 else 53), pane.scroll.offset);
-        _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 100 * ms }, &handler);
+        _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 100 * ms }, &handler);
         try std.testing.expectEqual(@as(u32, if (up) 44 else 56), pane.scroll.offset);
 
         for (0..20) |_| {
-            _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 1000 * ms }, &handler);
+            _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 1000 * ms }, &handler);
         }
 
         try std.testing.expectEqual(@as(u32, if (up) 41 else 59), pane.scroll.offset);
         const version = client.model.version();
         const pending = client.runtime_transport.outbox.len;
-        _ = try client.host_input.router.feed(.{ .bytes = release, .now_ns = 1001 * ms }, &handler);
-        _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 2000 * ms }, &handler);
+        _ = try host(client).host_input.router.feed(.{ .bytes = release, .now_ns = 1001 * ms }, &handler);
+        _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 2000 * ms }, &handler);
         try std.testing.expectEqualDeep(version, client.model.version());
         try std.testing.expectEqual(pending, client.runtime_transport.outbox.len);
-        try std.testing.expect(client.host_input.router.inputDeadline() == null);
-        try std.testing.expect(client.host_input.router.bindingDeadline() == null);
+        try std.testing.expect(host(client).host_input.router.inputDeadline() == null);
+        try std.testing.expect(host(client).host_input.router.bindingDeadline() == null);
 
-        _ = try client.host_input.router.feed(.{ .bytes = press, .now_ns = 2001 * ms }, &handler);
+        _ = try host(client).host_input.router.feed(.{ .bytes = press, .now_ns = 2001 * ms }, &handler);
         try std.testing.expectEqual(@as(u32, if (up) 38 else 62), pane.scroll.offset);
         pane.scroll.offset = if (up) 0 else 100;
         const at_edge = client.model.version();
-        _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 2101 * ms }, &handler);
+        _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 2101 * ms }, &handler);
         try std.testing.expectEqualDeep(at_edge, client.model.version());
     }
 }
@@ -738,25 +740,25 @@ test "a held global scroll cannot move a newly focused pane or resume after retu
     const model = client.model.activeTabModel().?;
     const focused = TestHarness.bootstrap_pane;
     const second: PaneIdType = @enumFromInt(20);
-    try model.split(.{ .existing_pane = focused, .new_pane = second, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
+    try model.split(.{ .existing_pane = focused, .new_pane = second, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = host(client).view.workbench() });
     try std.testing.expect(model.focusPane(focused));
     const pane = model.find(focused).?;
     const other = model.find(second).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 100, .offset = 100 };
     other.scroll = .{ .total_rows = @as(u32, other.buffer.h) + 100, .offset = 100 };
     const binding = try model_module.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up });
-    client.host_input.replaceRouter(client.io, try host_inputs.Router.init(&.{binding}));
+    host(client).host_input.replaceRouter(client.io, try host_inputs.Router.init(&.{binding}));
     var handler: InputHandler = .{ .client = client };
     const repeated = "\x1b[45::45;3:2u";
 
-    _ = try client.host_input.router.feed(.{ .bytes = "\x1b[45::45;3:1u", .now_ns = 0 }, &handler);
-    _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 100 * std.time.ns_per_ms }, &handler);
+    _ = try host(client).host_input.router.feed(.{ .bytes = "\x1b[45::45;3:1u", .now_ns = 0 }, &handler);
+    _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 100 * std.time.ns_per_ms }, &handler);
     try std.testing.expectEqual(@as(u32, 94), pane.scroll.offset);
     try std.testing.expect(model.focusPane(second));
-    _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 200 * std.time.ns_per_ms }, &handler);
+    _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 200 * std.time.ns_per_ms }, &handler);
     try std.testing.expectEqual(@as(u32, 100), other.scroll.offset);
     try std.testing.expect(model.focusPane(focused));
-    _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 300 * std.time.ns_per_ms }, &handler);
+    _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 300 * std.time.ns_per_ms }, &handler);
     try std.testing.expectEqual(@as(u32, 94), pane.scroll.offset);
     try std.testing.expectEqual(@as(u32, 100), other.scroll.offset);
 }
@@ -771,10 +773,10 @@ test "copy mode takes authority away from a held scroll binding" {
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 100, .offset = 100 };
     var handler: InputHandler = .{ .client = client };
 
-    _ = try client.host_input.router.feed(.{ .bytes = "\x02\x1b[45::45;1:1u", .now_ns = 0 }, &handler);
+    _ = try host(client).host_input.router.feed(.{ .bytes = "\x02\x1b[45::45;1:1u", .now_ns = 0 }, &handler);
     _ = try client_actions.apply(client, .enter_copy_mode);
     const version = client.model.version();
-    _ = try client.host_input.router.feed(.{ .bytes = "\x1b[45::45;1:2u", .now_ns = 100 * std.time.ns_per_ms }, &handler);
+    _ = try host(client).host_input.router.feed(.{ .bytes = "\x1b[45::45;1:2u", .now_ns = 100 * std.time.ns_per_ms }, &handler);
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(@as(u32, 97), pane.scroll.offset);
@@ -825,15 +827,15 @@ test "held global scroll paces SGR reports without forwarding the binding chord"
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     pane.mouse = .{ .tracking = .normal, .sgr = true };
     const binding = try model_module.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up });
-    client.host_input.replaceRouter(client.io, try host_inputs.Router.init(&.{binding}));
+    host(client).host_input.replaceRouter(client.io, try host_inputs.Router.init(&.{binding}));
     var handler: InputHandler = .{ .client = client };
     const version = client.model.version();
     const repeated = "\x1b[45::45;3:2u";
 
-    _ = try client.host_input.router.feed(.{ .bytes = "\x1b[45::45;3:1u", .now_ns = 0 }, &handler);
-    _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 99 * std.time.ns_per_ms }, &handler);
-    _ = try client.host_input.router.feed(.{ .bytes = repeated ++ repeated, .now_ns = 100 * std.time.ns_per_ms }, &handler);
-    _ = try client.host_input.router.feed(.{ .bytes = "\x1b[45::45;1:3u" ++ repeated, .now_ns = 200 * std.time.ns_per_ms }, &handler);
+    _ = try host(client).host_input.router.feed(.{ .bytes = "\x1b[45::45;3:1u", .now_ns = 0 }, &handler);
+    _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 99 * std.time.ns_per_ms }, &handler);
+    _ = try host(client).host_input.router.feed(.{ .bytes = repeated ++ repeated, .now_ns = 100 * std.time.ns_per_ms }, &handler);
+    _ = try host(client).host_input.router.feed(.{ .bytes = "\x1b[45::45;1:3u" ++ repeated, .now_ns = 200 * std.time.ns_per_ms }, &handler);
     try std.testing.expectEqualDeep(version, client.model.version());
     try harness.settle();
 
@@ -863,12 +865,12 @@ test "focused scroll sends alternate-screen cursor keys only to the focused pane
     const model = client.model.activeTabModel().?;
     const focused = TestHarness.bootstrap_pane;
     const hovered: PaneIdType = @enumFromInt(20);
-    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
+    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = host(client).view.workbench() });
     try std.testing.expect(model.focusPane(focused));
     const pane = model.find(focused).?;
     pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
     pane.scroll = .{ .total_rows = pane.buffer.h, .offset = 0 };
-    const hovered_view = model.viewForPane(hovered, client.view.workbench()).?;
+    const hovered_view = model.viewForPane(hovered, host(client).view.workbench()).?;
     var handler: InputHandler = .{ .client = client };
     try handler.mouse(.{ .x = hovered_view.content.x, .y = hovered_view.content.y, .kind = .move });
     const version = client.model.version();
@@ -988,7 +990,7 @@ test "canonical reported focus retirement is silent and idempotent" {
     try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
 }
 
-test "native agent mode action toggles the client presentation" {
+test "native thread view action flips the focused pane surface" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
@@ -996,39 +998,16 @@ test "native agent mode action toggles the client presentation" {
 
     const client = harness.client;
     var expected_version = client.model.version();
-    try std.testing.expectEqual(.normal, client.model.mode);
+    const active = client.model.activeTabModelConst().?;
+    const focused = active.layout.focused().?;
+    try std.testing.expectEqual(PaneSurfaceType.terminal, active.layout.surface(focused));
 
-    for ([_]PresentationModeType{ .agent, .normal }) |expected_mode| {
-        const control = try client_actions.apply(client, .toggle_agent_mode);
+    for ([_]PaneSurfaceType{ .thread, .terminal }) |expected_surface| {
+        const control = try client_actions.apply(client, .toggle_thread_view);
 
-        expected_version.chrome +%= 1;
+        expected_version.panes +%= 1;
         try std.testing.expectEqual(ControlType.continue_routing, control);
-        try std.testing.expectEqual(expected_mode, client.model.mode);
+        try std.testing.expectEqual(expected_surface, active.layout.surface(focused));
         try std.testing.expectEqualDeep(expected_version, client.model.version());
     }
-}
-
-test "configured action routing observes the client presentation mode" {
-    var harness: TestHarness = undefined;
-    try harness.init();
-    defer harness.deinit();
-    try harness.bootstrap();
-
-    const client = harness.client;
-    var handler: InputHandler = .{ .client = client };
-
-    _ = try handler.action(.toggle_agent_mode);
-
-    try std.testing.expectEqual(.agent, client.model.mode);
-    const version = client.model.version();
-    const sidebar_visible = client.model.sidebarVisible();
-
-    _ = try handler.action(.toggle_sidebar);
-
-    try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(sidebar_visible, client.model.sidebarVisible());
-
-    _ = try handler.action(.toggle_agent_mode);
-
-    try std.testing.expectEqual(.normal, client.model.mode);
 }

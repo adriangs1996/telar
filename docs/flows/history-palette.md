@@ -117,7 +117,3 @@ keyboard flows and pagination beyond 100 results under new insertions. SQLite
 and schema golden tests cover the cross-process contract. These tests exercise
 specific cases; the correctness argument depends on every mutation respecting
 request identity, owned storage and the bounded queue admission policy.
-
-`zig build history-preview` emits an SVG from the real widget's cell buffer.
-Add `-- --inspect` or `-- --inspect --narrow` for its responsive inspector.
-The fixture uses invented history and never connects to a runtime.

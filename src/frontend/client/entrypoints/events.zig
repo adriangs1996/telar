@@ -1,30 +1,32 @@
 //! Routes one completed client event through its owning adapter, then
 //! publishes the resulting presentation observation before the next event.
 
+const TerminalClient = @import("../TerminalClient.zig");
+const host = TerminalClient.of;
 const std = @import("std");
-const Client = @import("../Client.zig");
+const Client = @import("telar-client").AttachedClient;
 const Resources = @import("Resources.zig");
 const enter_module = @import("telar-core").enter;
 const client_startup = @import("../controllers/session/client_startup.zig");
-const client_layouts = @import("../resources/client_layouts.zig");
+const client_layouts = @import("telar-client").client_layouts;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
 const host_resizes = @import("../controllers/host/host_resizes.zig");
-const runtime_transport = @import("runtime_io.zig");
+const runtime_transport = @import("telar-client").runtime_io;
 const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
-const sidebar_animations = @import("../controllers/notifications/sidebar_animations.zig");
-const notifications = @import("../controllers/notifications/notifications.zig");
-const bar_updates = @import("../controllers/configuration/bar_updates.zig");
-const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
+const sidebar_animations = @import("telar-client").controllers.sidebar_animations;
+const notifications = @import("telar-client").controllers.notifications;
+const bar_updates = @import("telar-client").controllers.bar_updates;
+const agent_sounds = @import("telar-client").controllers.agent_sounds;
 const client_telemetry = @import("../resources/telemetry.zig");
-const config_reloads = @import("../controllers/configuration/config_reloads.zig");
-const plugin_actions = @import("../controllers/configuration/plugin_actions.zig");
-const clipboard_images = @import("../controllers/host/clipboard_images.zig");
-const link_openings = @import("../controllers/input/link_openings.zig");
+const config_reloads = @import("telar-client").controllers.config_reloads;
+const plugin_actions = @import("telar-client").controllers.plugin_actions;
+const clipboard_images = @import("telar-client").controllers.clipboard_images;
+const link_openings = @import("telar-client").controllers.link_openings;
 const PathType = @import("telar-core").Path;
 
-const EventTag = std.meta.Tag(Client.ClientEvent);
+const EventTag = std.meta.Tag(TerminalClient.ClientEvent);
 
 pub const Outcome = union(enum) {
     keep_running,
@@ -38,7 +40,7 @@ pub const Outcome = union(enum) {
 /// ```zig
 /// const outcome = try handle(client, event, resources);
 /// ```
-pub fn handle(client: *Client, event: Client.ClientEvent, resources: Resources) !Outcome {
+pub fn handle(client: *Client, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
     const path = enter_module(pathFor(@as(EventTag, event)));
     defer path.restore();
 
@@ -58,7 +60,7 @@ pub fn handle(client: *Client, event: Client.ClientEvent, resources: Resources) 
     return .keep_running;
 }
 
-fn route(client: *Client, event: Client.ClientEvent, resources: Resources) !Outcome {
+fn route(client: *Client, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
     switch (event) {
         .input => |result| {
             if (try host_inputs.handleOwnedRead(client, result)) {
@@ -90,8 +92,8 @@ fn route(client: *Client, event: Client.ClientEvent, resources: Resources) !Outc
         .media_tick => |result| try presentation_lifecycle.handleMediaTick(client, result),
         .host_written => |result| try presentation_lifecycle.handleWritten(client, result),
         .compression_done => |job| {
-            kitty_delivery.completeCompression(&client.graphics_store, job);
-            try client.presenter.requestMedia();
+            kitty_delivery.completeCompression(&host(client).graphics_store, job);
+            try host(client).presenter.requestMedia();
         },
         .sidebar_animation_tick => |result| _ = try sidebar_animations.handleTick(client, result),
         .notification_tick => |result| _ = try notifications.handleTick(client, result),

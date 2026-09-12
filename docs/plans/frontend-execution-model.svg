@@ -1,0 +1,275 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1870" viewBox="0 0 2000 1870" role="img" aria-labelledby="title description" lang="es">
+  <title id="title">telar: productores concurrentes, estado serializado e IPC full-duplex</title>
+  <desc id="description">Modelo de ejecución propuesto. En el cliente, input, temporizadores y recepción IPC publican mensajes en una inbox. ClientLoop es el único consumidor y dueño del modelo. Los handlers admiten comandos en una outbox; un consumidor independiente los escribe por IPC. El runtime recibe comandos y publica respuestas o cambios espontáneos mediante delivery por cliente y otro escritor independiente. La recepción del cliente vuelve a publicar en su inbox. El render lee el modelo en ClientLoop y cede bytes estables a un escritor del terminal. El mecanismo de mensajes y efectos se inspira en Native SDK; la separación en procesos, las outboxes IPC y la persistencia del runtime son decisiones de telar. Se incluye un detalle de presentación y referencias al commit estudiado de Native.</desc>
+  <defs>
+    <style>
+      text { font-family: Inter, "DejaVu Sans", sans-serif; fill: #e8eef8; }
+      .title { font-size: 38px; font-weight: 700; letter-spacing: -1px; }
+      .subtitle { font-size: 20px; fill: #aebcd2; }
+      .section { font-size: 23px; font-weight: 650; }
+      .process { font-size: 26px; font-weight: 650; }
+      .heading { font-size: 22px; font-weight: 650; }
+      .body { font-size: 18px; fill: #bfccde; }
+      .small { font-size: 16px; fill: #aebcd2; }
+      .tiny { font-size: 14px; fill: #aebcd2; }
+      .mono { font-family: "SFMono-Regular", Menlo, "DejaVu Sans Mono", monospace; }
+      .accent { fill: #68dbcb; }
+      .amber { fill: #f6c479; }
+      .violet { fill: #c9b3ff; }
+      .muted { fill: #8e9fb9; }
+      .lane { fill: #111d30; stroke: #2d405a; stroke-width: 1.5; }
+      .node { fill: #1b2a40; stroke: #405571; stroke-width: 1.5; }
+      .queue { fill: #172e37; stroke: #55b6ae; stroke-width: 1.5; }
+      .outbox { fill: #302d2b; stroke: #c89b5a; stroke-width: 1.5; }
+      .owner { fill: #252441; stroke: #ac94e4; stroke-width: 2; }
+      .divider { stroke: #2d405a; stroke-width: 1; }
+      .flow { fill: none; stroke: #68dbcb; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow); }
+      .request { fill: none; stroke: #f6c479; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow-amber); }
+      .control { fill: none; stroke: #98abc6; stroke-width: 2; stroke-dasharray: 5 6; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow-muted); }
+      .local { fill: none; stroke: #c9b3ff; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow-violet); }
+      a text { text-decoration: underline; }
+    </style>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 4 L0 8 Z" fill="#68dbcb"/></marker>
+    <marker id="arrow-amber" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 4 L0 8 Z" fill="#f6c479"/></marker>
+    <marker id="arrow-muted" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 4 L0 8 Z" fill="#98abc6"/></marker>
+    <marker id="arrow-violet" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 4 L0 8 Z" fill="#c9b3ff"/></marker>
+  </defs>
+
+  <rect width="2000" height="1870" fill="#0b1423"/>
+  <text x="40" y="64" class="title">Productores concurrentes. Estado serializado.</text>
+  <text x="40" y="101" class="subtitle">Modelo propuesto para telar, inspirado en el bucle de mensajes y efectos de Native SDK.</text>
+  <rect x="1540" y="35" width="420" height="39" rx="19" fill="#252441" stroke="#635582"/>
+  <text x="1750" y="61" text-anchor="middle" class="small violet">Propuesta para discutir · no implementada</text>
+
+  <g aria-label="Leyenda">
+    <path d="M40 154 H84" class="request"/>
+    <text x="98" y="160" class="small">Comandos al runtime</text>
+    <path d="M338 154 H382" class="flow"/>
+    <text x="396" y="160" class="small">Eventos y datos</text>
+    <path d="M609 154 H653" class="control"/>
+    <text x="667" y="160" class="small">Estado de I/O y control</text>
+    <rect x="958" y="140" width="22" height="22" rx="5" class="owner"/>
+    <text x="993" y="160" class="small">Dueño del estado</text>
+    <text x="1960" y="160" text-anchor="end" class="small muted">Una caja representa una responsabilidad, no un hilo del SO.</text>
+  </g>
+
+  <text x="40" y="207" class="section">01 / Dos procesos, dos direcciones independientes</text>
+  <rect x="40" y="230" width="905" height="785" rx="20" class="lane"/>
+  <rect x="1055" y="230" width="905" height="785" rx="20" class="lane"/>
+  <path d="M1000 292 V984" stroke="#334661" stroke-dasharray="3 9" fill="none"/>
+  <text x="80" y="275" class="process">Cliente</text>
+  <text x="905" y="274" text-anchor="end" class="small">Estado y tareas desechables</text>
+  <text x="1095" y="275" class="process">Runtime</text>
+  <text x="1920" y="274" text-anchor="end" class="small">Sigue vivo sin clientes conectados</text>
+
+  <g aria-label="Conexiones del modelo de ejecución">
+    <path d="M272 395 V450" class="flow"/>
+    <text x="287" y="429" class="small accent">ClientMessage</text>
+    <path d="M272 555 V600" class="flow"/>
+    <text x="287" y="583" class="small">consume</text>
+    <path d="M465 652 H550" class="request"/>
+    <text x="507" y="631" text-anchor="middle" class="tiny amber">admite</text>
+    <path d="M728 600 V555" class="request"/>
+    <path d="M905 494 H1095" class="request"/>
+    <text x="1000" y="462" text-anchor="middle" class="small amber">Comandos</text>
+    <text x="1000" y="526" text-anchor="middle" class="small">IPC →</text>
+    <path d="M1450 494 H1535" class="request"/>
+    <path d="M1727 395 V450" class="flow"/>
+    <path d="M1727 555 V600" class="flow"/>
+    <path d="M1727 790 V855" class="flow"/>
+    <text x="1707" y="819" text-anchor="end" class="small accent">publica</text>
+    <text x="1707" y="841" text-anchor="end" class="small accent">cuando corresponda</text>
+    <path d="M1535 888 H1450" class="flow"/>
+    <text x="1493" y="876" text-anchor="middle" class="tiny accent">frame</text>
+    <path d="M1450 923 H1535" class="control"/>
+    <text x="1493" y="945" text-anchor="middle" class="tiny">done / fail</text>
+    <path d="M1095 903 H905" class="flow"/>
+    <text x="1000" y="867" text-anchor="middle" class="small accent">Respuestas</text>
+    <text x="1000" y="887" text-anchor="middle" class="small accent">y cambios</text>
+    <text x="1000" y="935" text-anchor="middle" class="small">← IPC</text>
+    <path d="M550 903 H61 V504 H80" class="flow"/>
+    <text x="104" y="869" class="small accent">ClientMessage.runtime</text>
+    <text x="104" y="891" class="small">También EOF, error y desconexión</text>
+    <path d="M550 509 H465" class="control"/>
+    <text x="508" y="488" text-anchor="middle" class="tiny">status</text>
+  </g>
+
+  <g id="client-producers" aria-label="Productores locales">
+    <rect x="80" y="310" width="385" height="85" rx="12" class="node"/>
+    <text x="100" y="343" class="heading">Productores locales</text>
+    <text x="100" y="372" class="body">Input · resize · timers · completions</text>
+  </g>
+  <g id="client-inbox" aria-label="Inbox del cliente">
+    <rect x="80" y="450" width="385" height="105" rx="12" class="queue"/>
+    <text x="100" y="483" class="heading">Client inbox</text>
+    <text x="100" y="513" class="body">Mensajes acotados + wake</text>
+    <text x="100" y="538" class="small">Muchos productores, un consumidor</text>
+  </g>
+  <g id="client-loop" aria-label="Dueño exclusivo del modelo del cliente">
+    <rect x="80" y="600" width="385" height="190" rx="12" class="owner"/>
+    <text x="100" y="635" class="heading">ClientLoop</text>
+    <text x="100" y="664" class="body">Entrypoint → controller → handler</text>
+    <line x1="100" y1="684" x2="445" y2="684" stroke="#62537f"/>
+    <text x="100" y="713" class="body violet">Client model</text>
+    <text x="100" y="739" class="small">Layout, foco y proyecciones del runtime</text>
+    <text x="100" y="772" class="small violet">Actualiza y compone · detalle 02</text>
+  </g>
+  <g id="client-outbox" aria-label="Outbox propiedad del cliente">
+    <rect x="550" y="600" width="355" height="105" rx="12" class="outbox"/>
+    <text x="570" y="633" class="heading">Client outbox</text>
+    <text x="570" y="663" class="body mono">requestBackend(msg)</text>
+    <text x="570" y="688" class="small amber">Admisión local, no escritura IPC</text>
+    <text x="550" y="736" class="small">Cola llena → resultado explícito.</text>
+    <text x="550" y="760" class="small">El handler no espera espacio ni socket.</text>
+  </g>
+  <g id="client-tx" aria-label="Consumidor independiente para envío IPC">
+    <rect x="550" y="450" width="355" height="105" rx="12" class="node"/>
+    <text x="570" y="483" class="heading">IPC sender · TX</text>
+    <text x="570" y="513" class="body">Consume la outbox y escribe</text>
+    <text x="570" y="538" class="small">Un escritor por conexión y dirección</text>
+  </g>
+  <g id="client-rx" aria-label="Productor independiente de recepción IPC">
+    <rect x="550" y="855" width="355" height="95" rx="12" class="node"/>
+    <text x="570" y="888" class="heading">IPC receiver · RX</text>
+    <text x="570" y="917" class="body">Lee, valida y publica mensajes</text>
+    <text x="570" y="940" class="small">No aplica cambios al Client model</text>
+  </g>
+
+  <g id="runtime-sources" aria-label="Fuentes autónomas del runtime">
+    <rect x="1535" y="310" width="385" height="85" rx="12" class="node"/>
+    <text x="1555" y="343" class="heading">Fuentes del runtime</text>
+    <text x="1555" y="372" class="body">PTYs · agentes · tareas internas</text>
+  </g>
+  <g id="runtime-rx" aria-label="Recepción del runtime">
+    <rect x="1095" y="450" width="355" height="105" rx="12" class="node"/>
+    <text x="1115" y="483" class="heading">IPC receiver · RX</text>
+    <text x="1115" y="513" class="body">Lee y valida frames de comandos</text>
+    <text x="1115" y="538" class="small">No depende del envío al cliente</text>
+  </g>
+  <g id="runtime-ingress" aria-label="Entradas al runtime existente">
+    <rect x="1535" y="450" width="385" height="105" rx="12" class="node"/>
+    <text x="1555" y="483" class="heading">Runtime ingress</text>
+    <text x="1555" y="513" class="body">Entrypoints de comandos y eventos</text>
+    <text x="1555" y="538" class="small">Despacho a la aplicación existente</text>
+  </g>
+  <g id="runtime-application" aria-label="Autoridad del runtime sin definir su ejecución interna">
+    <rect x="1535" y="600" width="385" height="190" rx="12" class="owner"/>
+    <text x="1555" y="635" class="heading">Runtime application</text>
+    <text x="1555" y="665" class="body">Orquesta cambios del Runtime model</text>
+    <line x1="1555" y1="684" x2="1900" y2="684" stroke="#62537f"/>
+    <text x="1555" y="713" class="body violet">Autoridad del proceso runtime</text>
+    <text x="1555" y="739" class="small">Estado canónico, procesos, PTYs y VT</text>
+    <text x="1555" y="772" class="small">Ejecución interna fuera de este diseño</text>
+  </g>
+  <g id="runtime-delivery" aria-label="Entrega por cliente, no replay de frames">
+    <rect x="1535" y="855" width="385" height="95" rx="12" class="queue"/>
+    <text x="1555" y="888" class="heading">Client delivery / outbox</text>
+    <text x="1555" y="917" class="body">Respuestas + estado visual plegado</text>
+    <text x="1555" y="940" class="small">Prepara frames · aislada por cliente</text>
+  </g>
+  <g id="runtime-tx" aria-label="Escritor independiente de delivery">
+    <rect x="1095" y="855" width="355" height="95" rx="12" class="node"/>
+    <text x="1115" y="888" class="heading">IPC sender · TX</text>
+    <text x="1115" y="917" class="body">Consume frames preparados</text>
+    <text x="1115" y="940" class="small">No consulta el modelo vivo</text>
+  </g>
+  <g aria-label="Independencia de las direcciones IPC">
+    <text x="1095" y="623" class="section accent">No hay un turno global.</text>
+    <text x="1095" y="658" class="body">TX y RX avanzan por separado.</text>
+    <text x="1095" y="687" class="body">El runtime puede publicar sin petición.</text>
+    <text x="1095" y="732" class="small">Un envío lento ocupa su tarea y su frame,</text>
+    <text x="1095" y="757" class="small">no el bucle que posee el estado.</text>
+  </g>
+  <text x="80" y="986" class="small">Media y observación tienen colas y workers propios; aquí solo aparecen sus resultados acotados.</text>
+  <text x="1095" y="986" class="small">Las piezas de conexión se repiten por cliente, no el Runtime model.</text>
+
+  <g id="presentation-detail" aria-label="Detalle de presentación bajo el dueño del modelo">
+    <text x="40" y="1065" class="section">02 / Presentación en el cliente</text>
+    <text x="1960" y="1065" text-anchor="end" class="small">El render no es un worker que lea Model en paralelo.</text>
+    <rect x="40" y="1090" width="1920" height="300" rx="20" class="lane"/>
+    <text x="80" y="1127" class="body">Después de una transición, solo se solicita un frame si hay daño o una animación activa.</text>
+    <path d="M380 1210 H425" class="local"/>
+    <path d="M725 1210 H770" class="flow"/>
+    <path d="M1130 1210 H1190" class="flow"/>
+    <path d="M1510 1210 H1570" class="flow"/>
+    <path d="M1350 1260 V1305 H950 V1260" class="control"/>
+    <text x="1150" y="1291" text-anchor="middle" class="small">host_written / failed → inbox de 01</text>
+    <rect x="80" y="1160" width="300" height="100" rx="12" class="owner"/>
+    <text x="100" y="1192" class="heading">Dirty + pacer</text>
+    <text x="100" y="1222" class="body">Lo decide el dueño del estado</text>
+    <text x="100" y="1246" class="small">Fusiona solicitudes de frame</text>
+    <rect x="425" y="1160" width="300" height="100" rx="12" class="node"/>
+    <text x="445" y="1192" class="heading">Timer → inbox</text>
+    <text x="445" y="1222" class="body">frame_due entra como mensaje</text>
+    <text x="445" y="1246" class="small">Sin deadline pendiente, duerme</text>
+    <rect x="770" y="1160" width="360" height="100" rx="12" class="owner"/>
+    <text x="790" y="1192" class="heading">ClientLoop: compose + diff</text>
+    <text x="790" y="1222" class="body">Lee el modelo en su propio turno</text>
+    <text x="790" y="1246" class="small">Buffer de salida estable, sin I/O lento</text>
+    <rect x="1190" y="1160" width="320" height="100" rx="12" class="node"/>
+    <text x="1210" y="1192" class="heading">Host writer async</text>
+    <text x="1210" y="1222" class="body">Solo escribe los bytes recibidos</text>
+    <text x="1210" y="1246" class="small">Los retiene hasta done / cancel</text>
+    <rect x="1570" y="1160" width="350" height="100" rx="12" class="node"/>
+    <text x="1590" y="1192" class="heading">Terminal del usuario</text>
+    <text x="1590" y="1222" class="body">Presentación de celdas y gráficos</text>
+    <text x="1590" y="1246" class="small">La escritura no confirma negocio</text>
+    <text x="80" y="1349" class="small">Es la misma inbox de 01, no una segunda cola de actualización. El pacing mostrado es una propuesta para telar, no un ticker fijo de 16 ms.</text>
+    <text x="80" y="1373" class="small">Se pliegan frames antes de codificar. Los bytes de un diff en vuelo no se reemplazan ni se descartan arbitrariamente.</text>
+  </g>
+
+  <g id="native-reference" aria-label="Qué se comprobó en Native SDK">
+    <rect x="40" y="1420" width="905" height="335" rx="20" class="lane"/>
+    <text x="80" y="1463" class="section">03 / Lo verificado en Native SDK</text>
+    <text x="80" y="1495" class="small">UiApp + Effects + canales para productores externos</text>
+    <path d="M253 1556 H284" class="flow"/>
+    <path d="M489 1556 H520" class="flow"/>
+    <path d="M705 1556 H736" class="local"/>
+    <rect x="80" y="1525" width="173" height="67" rx="10" class="node"/>
+    <text x="166" y="1553" text-anchor="middle" class="body">Worker / source</text>
+    <text x="166" y="1578" text-anchor="middle" class="tiny mono">post(bytes)</text>
+    <rect x="284" y="1525" width="205" height="67" rx="10" class="queue"/>
+    <text x="386" y="1553" text-anchor="middle" class="body">Staging + wake</text>
+    <text x="386" y="1578" text-anchor="middle" class="tiny">acotado; wake fusionado</text>
+    <rect x="520" y="1525" width="185" height="67" rx="10" class="owner"/>
+    <text x="612" y="1553" text-anchor="middle" class="body">Loop: applyMsg</text>
+    <text x="612" y="1578" text-anchor="middle" class="tiny">drain por pasada</text>
+    <rect x="736" y="1525" width="169" height="67" rx="10" class="owner"/>
+    <text x="820" y="1553" text-anchor="middle" class="body">Rebuild views</text>
+    <text x="820" y="1578" text-anchor="middle" class="tiny">al terminar el lote</text>
+    <text x="80" y="1628" class="body">Los productores no mutan el modelo. Los resultados vuelven como Msg.</text>
+    <text x="80" y="1660" class="small">El input puede llamar dispatch desde el bucle, sin una inbox universal.</text>
+    <text x="80" y="1685" class="small">Los channels distinguen accepted, dropped_full, dropped_oversized y closed.</text>
+    <text x="80" y="1724" class="body violet">La separación cliente/runtime por IPC es la adaptación de telar.</text>
+  </g>
+  <g id="execution-contracts" aria-label="Contratos y decisiones pendientes">
+    <rect x="1055" y="1420" width="905" height="335" rx="20" class="lane"/>
+    <text x="1095" y="1463" class="section">04 / Qué significa aquí «asíncrono»</text>
+    <text x="1095" y="1502" class="body">El dueño del estado no espera al socket ni a capacidad de la outbox.</text>
+    <text x="1095" y="1534" class="body">RX y TX son independientes; los recursos siguen teniendo límites.</text>
+    <text x="1095" y="1566" class="body">Admitido ≠ enviado ≠ ejecutado. Los resultados necesitan su protocolo.</text>
+    <text x="1095" y="1598" class="body">Buffers con propiedad; IDs y generaciones para descartar trabajo obsoleto.</text>
+    <text x="1095" y="1630" class="body">Cierre supervisado: cancelar y esperar antes de liberar recursos prestados.</text>
+    <line x1="1095" y1="1653" x2="1920" y2="1653" class="divider"/>
+    <text x="1095" y="1685" class="small amber">Pendiente: capacidades, admisión por tipo, equidad y presupuesto de drenaje.</text>
+    <text x="1095" y="1715" class="small">El dibujo no fija Queue frente a Select, ni promete entrega exactamente una vez.</text>
+  </g>
+
+  <g aria-label="Fuentes y alcance">
+    <text x="40" y="1797" class="small">Native SDK · revisión estudiada</text>
+    <a href="https://github.com/vercel-labs/native/tree/31663e16b054f212f0377878eb901330bbc94b53">
+      <text x="319" y="1797" class="small mono accent">31663e16b054</text>
+    </a>
+    <a href="https://github.com/vercel-labs/native/blob/31663e16b054f212f0377878eb901330bbc94b53/src/runtime/ui_app.zig#L1745-L1880">
+      <text x="495" y="1797" class="small accent">UiApp.dispatch / drainEffects</text>
+    </a>
+    <a href="https://github.com/vercel-labs/native/blob/31663e16b054f212f0377878eb901330bbc94b53/src/runtime/effects.zig#L1485-L1640">
+      <text x="825" y="1797" class="small accent">ChannelHandle.post</text>
+    </a>
+    <a href="frontend-execution-model.md">
+      <text x="1960" y="1797" text-anchor="end" class="small accent">Estudio, fuentes y decisiones pendientes ↗</text>
+    </a>
+    <text x="40" y="1832" class="small muted">Alcance: modelo de ejecución propuesto. No es un benchmark ni un rediseño de los internos del runtime.</text>
+    <text x="1960" y="1832" text-anchor="end" class="small muted">telar / frontend execution model</text>
+  </g>
+</svg>

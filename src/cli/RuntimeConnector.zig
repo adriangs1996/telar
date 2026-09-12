@@ -2,9 +2,9 @@ const std = @import("std");
 const LocalType = @import("telar-core").Local;
 const runtime_connection = @import("runtime_connection.zig");
 const SocketChannelType = @import("telar-core").SocketChannel;
-const connect_module = @import("telar-frontend").connect;
+const connect_module = @import("telar-client").connect;
 const RuntimeConfigSelection = @import("RuntimeConfigSelection.zig");
-const perform_module = @import("telar-frontend").perform;
+const perform_module = @import("telar-client").perform;
 const RuntimeConnector = @This();
 
 process: std.process.Init,

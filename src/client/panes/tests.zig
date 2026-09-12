@@ -125,3 +125,15 @@ fn exerciseAllocationFailures(gpa: std.mem.Allocator) !void {
 test "pane initialization resize and metadata roll back allocation failures" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, exerciseAllocationFailures, .{});
 }
+
+test "composer draft is owned, bounded and replaced whole" {
+    var pane = try Pane.init(std.testing.allocator, initial);
+    defer pane.deinit();
+
+    try std.testing.expectEqualStrings("", pane.composerSlice());
+    try pane.setComposer("fix the tests");
+    try std.testing.expectEqualStrings("fix the tests", pane.composerSlice());
+    try pane.setComposer("");
+    try std.testing.expectEqualStrings("", pane.composerSlice());
+    try std.testing.expectError(error.ComposerTooLong, pane.setComposer(&[_]u8{'x'} ** (Pane.max_composer_bytes + 1)));
+}

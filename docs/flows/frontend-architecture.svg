@@ -1,0 +1,275 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="2570" viewBox="0 0 1800 2570" role="img" aria-labelledby="title description">
+  <title id="title">Telar. Flujo del frontend después de separar telar-client</title>
+  <desc id="description">Arquitectura comprobada contra el commit 3b801c85. El proceso TUI ensambla un modelo independiente y las capacidades comunes de telar-client. Su driver conserva std.Io.Select y delega eventos en adaptadores y controladores. Los handlers compartidos cambian el modelo mediante sus capacidades y solicitan efectos. La presentación distingue observación, proyección prestada, preparación, escritura y entrega. Solo la entrega correcta permite confirmar los frames capturados. Media usa catálogos comunes, leases y entrega Kitty propia de la TUI. Headless prueba el contrato; un adaptador nativo aún no existe.</desc>
+  <view id="overview" viewBox="0 0 1800 1100"/>
+  <view id="presentation" viewBox="35 1100 1730 630"/>
+  <view id="adapters" viewBox="35 1715 1730 855"/>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#63778a"/></marker>
+    <marker id="blue-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#237ea4"/></marker>
+    <marker id="purple-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8161a5"/></marker>
+    <style>
+      text { font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #203449; }
+      .title { font-size: 40px; font-weight: 730; fill: #fff; letter-spacing: -.8px; }
+      .subtitle { font-size: 19px; fill: #c8d9e6; }
+      .section { font-size: 25px; font-weight: 700; letter-spacing: -.3px; }
+      .number { font-size: 17px; font-weight: 750; fill: #587187; }
+      .heading { font-size: 20px; font-weight: 700; }
+      .body { font-size: 17px; }
+      .small { font-size: 15px; fill: #51667b; }
+      .code { font-family: 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 14px; fill: #426079; }
+      .tag { font-size: 12px; font-weight: 750; letter-spacing: 1px; }
+      .label { font-size: 14px; fill: #526a7d; }
+      .panel { fill: #fff; stroke: #d7e1e9; stroke-width: 1.3; }
+      .common { fill: #ecf8ff; stroke: #79bddb; stroke-width: 1.5; }
+      .tui { fill: #fff7e8; stroke: #dcb876; stroke-width: 1.5; }
+      .external { fill: #f0f4f8; stroke: #b7c6d3; stroke-width: 1.5; }
+      .media { fill: #f5effd; stroke: #b29acb; stroke-width: 1.5; }
+      .future { fill: #fbfcfe; stroke: #8096ac; stroke-width: 1.7; stroke-dasharray: 7 5; }
+      .line { fill: none; stroke: #63778a; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; marker-end: url(#arrow); }
+      .blue-line { fill: none; stroke: #237ea4; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; marker-end: url(#blue-arrow); }
+      .purple-line { fill: none; stroke: #8161a5; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; marker-end: url(#purple-arrow); }
+      .bus { fill: none; stroke: #63778a; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+      .blue-text { fill: #176181; }
+      .amber-text { fill: #865817; }
+      .purple-text { fill: #735291; }
+    </style>
+  </defs>
+
+  <rect width="1800" height="2570" fill="#f2f6fa"/>
+  <rect width="1800" height="126" fill="#142f43"/>
+  <text x="58" y="61" class="title">Cómo queda el frontend</text>
+  <text x="60" y="98" class="subtitle">Dos procesos. telar-client es una biblioteca compartida por adaptadores, no un tercer proceso.</text>
+  <rect x="1380" y="35" width="365" height="39" rx="19" fill="#294b62"/>
+  <text x="1562" y="60" text-anchor="middle" font-size="16" fill="#fff" style="fill:#fff">3b801c85 · arquitectura actual</text>
+
+  <g transform="translate(60 153)">
+    <rect x="0" y="-10" width="17" height="17" rx="4" class="common"/><text x="27" y="4" class="small">Común · telar-client</text>
+    <rect x="253" y="-10" width="17" height="17" rx="4" class="tui"/><text x="280" y="4" class="small">Adaptador · telar-frontend</text>
+    <rect x="580" y="-10" width="17" height="17" rx="4" class="external"/><text x="607" y="4" class="small">Core / exterior / runtime</text>
+    <rect x="910" y="-10" width="17" height="17" rx="4" class="media"/><text x="937" y="4" class="small">Entrega media de la TUI</text>
+    <rect x="1250" y="-10" width="24" height="17" rx="4" class="future"/><text x="1285" y="4" class="small">Pendiente, no implementado</text>
+  </g>
+
+  <g id="assembly">
+    <rect x="48" y="182" width="1704" height="211" rx="18" class="panel"/>
+    <text x="78" y="220" class="number">01</text><text x="118" y="220" class="section">Dependencias y ensamblaje</text>
+    <text x="1315" y="218" class="small">Aquí, A → B significa «A importa B».</text>
+
+    <rect x="80" y="241" width="390" height="82" rx="12" class="tui"/>
+    <text x="100" y="271" class="heading">telar-frontend</text><text x="100" y="299" class="code">src/frontend/root.zig · TUI actual</text>
+    <rect x="515" y="241" width="390" height="82" rx="12" class="common"/>
+    <text x="535" y="271" class="heading">telar-client</text><text x="535" y="299" class="code">src/client/root.zig · comportamiento</text>
+    <rect x="950" y="241" width="390" height="82" rx="12" class="external"/>
+    <text x="970" y="271" class="heading">telar-core</text><text x="970" y="299" class="code">src/core/root.zig · valores y protocolo</text>
+    <rect x="1385" y="241" width="340" height="82" rx="12" class="external"/>
+    <text x="1405" y="271" class="heading">telar-backend</text><text x="1405" y="299" class="code">src/backend/root.zig · runtime</text>
+    <path d="M470 282 H503" class="line"/><path d="M905 282 H938" class="line"/><path d="M1385 282 H1352" class="line"/>
+
+    <text x="82" y="355" class="body"><tspan font-weight="700">Client.init + run.zig</tspan><tspan dx="6">ensamblan modelo común, recursos TUI, transporte y std.Io.Select.</tspan></text>
+    <text x="82" y="378" class="small">La TUI también importa core. Cada conexión tiene su propio modelo, foco, navegación y ciclo de presentación. El backend nunca importa el frontend.</text>
+  </g>
+
+  <g id="semantic-flow">
+    <rect x="48" y="420" width="1704" height="667" rx="18" class="panel"/>
+    <text x="78" y="462" class="number">02</text><text x="118" y="462" class="section">Eventos → controladores → casos de uso → estado y efectos</text>
+    <text x="1300" y="461" class="small">Flujo lógico, no un mapa de threads.</text>
+
+    <rect x="80" y="493" width="505" height="101" rx="12" class="external"/>
+    <text x="100" y="524" class="heading">Runtime, otro proceso</text>
+    <text x="100" y="550" class="body">PTY · VT · procesos · agentes · historial</text>
+    <text x="100" y="575" class="code">IPC: frames, snapshots, gráficos, respuestas</text>
+    <rect x="627" y="493" width="505" height="101" rx="12" class="external"/>
+    <text x="647" y="524" class="heading">Terminal físico</text>
+    <text x="647" y="550" class="body">Teclas · paste · ratón · resize · host replies</text>
+    <text x="647" y="575" class="code">platform.Tty · ResizeWatcher</text>
+    <rect x="1174" y="493" width="551" height="101" rx="12" class="external"/>
+    <text x="1194" y="524" class="heading">Workers y plazos del cliente</text>
+    <text x="1194" y="550" class="body">Media · plugins · barras · servicios · temporizadores</text>
+    <text x="1194" y="575" class="code">Completions propias, no proyecciones prestadas</text>
+    <path d="M332 594 V619 H878 M1449 594 V619 H878 M878 594 V629" class="bus"/>
+    <path d="M878 619 V633" class="line"/>
+
+    <rect x="80" y="637" width="1645" height="77" rx="12" class="tui"/>
+    <text x="100" y="667" class="heading">Driver TUI existente · select.await() → entrypoints/events.handle()</text>
+    <text x="100" y="695" class="body">Clasifica y delega el evento. Después: startup/layouts → presentation_lifecycle.observe() → pumpOutput().</text>
+    <text x="1628" y="667" text-anchor="end" class="tag amber-text">NO SE REESCRIBIÓ EL LOOP</text>
+    <path d="M332 714 V746" class="line"/><path d="M879 714 V746" class="line"/><path d="M1449 714 V746" class="line"/>
+
+    <rect x="80" y="758" width="505" height="111" rx="12" class="tui"/>
+    <text x="100" y="787" class="heading">Entrada IPC</text>
+    <text x="100" y="814" class="body">runtime_io → decodeServer de core</text>
+    <text x="100" y="838" class="body">dispatch común → controladores TUI</text>
+    <text x="100" y="858" class="code">client.entrypoints + frontend/client/controllers</text>
+    <rect x="627" y="758" width="505" height="111" rx="12" class="tui"/>
+    <text x="647" y="787" class="heading">Entrada del host</text>
+    <text x="647" y="814" class="body">term.parse TUI → Router común → controles TUI</text>
+    <text x="647" y="838" class="body">Política de foco/gesto común; hit maps en TUI</text>
+    <text x="647" y="858" class="code">host_inputs · input.keybind · controllers/input</text>
+    <rect x="1174" y="758" width="551" height="111" rx="12" class="tui"/>
+    <text x="1194" y="787" class="heading">Otros eventos y completions</text>
+    <text x="1194" y="814" class="body">Controladores y adaptadores de recursos</text>
+    <text x="1194" y="838" class="body">draw / host_written → 03 · media_tick → 04</text>
+    <text x="1194" y="858" class="code">presentation_lifecycle · controllers/*</text>
+    <path d="M332 869 V894 H330 M879 869 V894 H330 M1449 869 V894 H330" class="bus"/>
+    <path d="M330 894 V917" class="line"/>
+    <rect x="570" y="884" width="614" height="23" fill="#fff"/>
+    <text x="877" y="900" text-anchor="middle" class="label">Cuando hay un caso de uso semántico: traducir → ejecutar → entregar respuesta.</text>
+
+    <rect x="80" y="929" width="500" height="96" rx="12" class="common"/>
+    <text x="100" y="958" class="heading">Application handlers</text>
+    <text x="100" y="984" class="body">Orquestación · orden · recuperación · puertos</text>
+    <text x="100" y="1007" class="code">src/client/application/</text>
+    <rect x="640" y="929" width="575" height="96" rx="12" class="common"/>
+    <text x="660" y="958" class="heading">Model + capacidades semánticas</text>
+    <text x="660" y="984" class="body">Panes · tabs · layout · foco · selección · modos</text>
+    <text x="660" y="1007" class="code">src/client/{model,panes,workspace,input,...}/</text>
+    <path d="M580 977 H628" class="blue-line"/>
+    <text x="642" y="921" class="label">El handler llama a sus APIs; el controlador no muta el modelo.</text>
+    <rect x="1275" y="929" width="450" height="96" rx="12" class="common"/>
+    <text x="1295" y="958" class="heading">Outbox + estado de conexión</text>
+    <text x="1295" y="984" class="body">Mensajes acotados → escritor IPC TUI</text>
+    <text x="1295" y="1007" class="code">client/connection → runtime_io → runtime</text>
+    <path d="M330 1025 V1047 H1500 V1037" class="blue-line"/>
+    <rect x="490" y="1034" width="838" height="24" fill="#fff"/>
+    <text x="909" y="1051" text-anchor="middle" class="label">Efectos del handler: pane_input codificado según modos del hijo · peticiones · créditos · ACK tras entrega</text>
+    <text x="82" y="1074" class="small">El modelo no dibuja ni escribe al socket. El driver observa sus revisiones después del evento; los handlers no solicitan redraw.</text>
+  </g>
+
+  <g id="presentation-flow">
+    <rect x="48" y="1117" width="1704" height="591" rx="18" class="panel"/>
+    <text x="78" y="1160" class="number">03</text><text x="118" y="1160" class="section">Presentación: recibido ≠ preparado ≠ entregado</text>
+    <text x="118" y="1187" class="small">Lee de izquierda a derecha y vuelve por la fila inferior. La flecha de retorno no es una cola de frames.</text>
+
+    <rect x="80" y="1212" width="370" height="133" rx="12" class="tui"/>
+    <text x="100" y="1242" class="heading">1. Observar y planificar</text>
+    <text x="100" y="1270" class="body">Versiones + ingress + geometría</text>
+    <text x="100" y="1295" class="body">lifecycle.observe es común.</text>
+    <text x="100" y="1320" class="body">Presenter TUI decide cuándo.</text>
+    <rect x="505" y="1212" width="370" height="133" rx="12" class="common"/>
+    <text x="525" y="1242" class="heading">2. Proyección prestada</text>
+    <text x="525" y="1270" class="body">capture(model, context)</text>
+    <text x="525" y="1295" class="body">Estado de solo lectura + geometría</text>
+    <text x="525" y="1320" class="body">Válida durante preparación síncrona</text>
+    <rect x="930" y="1212" width="370" height="133" rx="12" class="tui"/>
+    <text x="950" y="1242" class="heading">3. Componer y preparar</text>
+    <text x="950" y="1270" class="body">View + widgets → ui.Buffer</text>
+    <text x="950" y="1295" class="body">Screen diff → bytes de salida</text>
+    <text x="950" y="1320" class="body">Cachés pintadas y chrome en TUI</text>
+    <rect x="1355" y="1212" width="370" height="133" rx="12" class="common"/>
+    <text x="1375" y="1242" class="heading">4. Sellar el envío</text>
+    <text x="1375" y="1270" class="body">lifecycle.begin() → Token</text>
+    <text x="1375" y="1295" class="body">Commit + geometría + observación</text>
+    <text x="1375" y="1320" class="body">Valores propios; sin punteros al modelo</text>
+    <path d="M450 1279 H493" class="line"/><path d="M875 1279 H918" class="line"/><path d="M1300 1279 H1343" class="line"/>
+    <path d="M1540 1345 V1381" class="line"/>
+    <text x="1558" y="1370" class="label">Una presentación en vuelo</text>
+
+    <rect x="1355" y="1393" width="370" height="156" rx="12" class="tui"/>
+    <text x="1375" y="1423" class="heading">5. Escribir al host</text>
+    <text x="1375" y="1451" class="body">host_output: bytes propios + token</text>
+    <text x="1375" y="1476" class="body">FastWriter / worker de escritura</text>
+    <text x="1375" y="1501" class="body">Una escritura; conserva diffs parciales</text>
+    <text x="1375" y="1526" class="code">host_written → handleWritten()</text>
+    <rect x="930" y="1393" width="370" height="156" rx="12" class="common"/>
+    <text x="950" y="1423" class="heading">6. Completar el token</text>
+    <text x="950" y="1451" class="body">lifecycle.complete(token, outcome)</text>
+    <text x="950" y="1476" class="body">Consume una sola vez el envío exacto</text>
+    <text x="950" y="1501" class="body">Solo delivered produce Delivery</text>
+    <text x="950" y="1526" class="code">src/client/presentation/lifecycle.zig</text>
+    <rect x="505" y="1393" width="370" height="156" rx="12" class="common"/>
+    <text x="525" y="1423" class="heading">7. Confirmar lo capturado</text>
+    <text x="525" y="1451" class="body">DeliverPresentationHandler</text>
+    <text x="525" y="1476" class="body">Filtra generación del attachment</text>
+    <text x="525" y="1501" class="body">Commit exacto → créditos → ACK</text>
+    <text x="525" y="1526" class="body">Después solicita media si hace falta</text>
+    <rect x="80" y="1393" width="370" height="156" rx="12" class="external"/>
+    <text x="100" y="1423" class="heading">8. Volver al runtime</text>
+    <text x="100" y="1451" class="body">Outbox → escritor IPC → runtime</text>
+    <text x="100" y="1476" class="body">graphics_credit · frame_ack</text>
+    <text x="100" y="1501" class="body">El ACK permite avanzar el frame</text>
+    <text x="100" y="1526" class="body">de ese cliente, no de los demás</text>
+    <path d="M1355 1471 H1312" class="line"/>
+    <text x="1330" y="1451" text-anchor="middle" class="label">fin</text>
+    <path d="M930 1471 H887" class="blue-line"/><path d="M505 1471 H462" class="blue-line"/>
+    <text x="904" y="1451" text-anchor="middle" class="label">éxito</text>
+
+    <rect x="80" y="1590" width="795" height="79" rx="10" fill="#f1f8fc"/>
+    <text x="100" y="1618" class="body" font-weight="650">Se conserva el daño nuevo.</text>
+    <text x="100" y="1645" class="body">Entregar N no confirma N+1 ni un pane reinsertado con otra generación.</text>
+    <path d="M1115 1549 V1578" class="line"/>
+    <rect x="930" y="1590" width="795" height="79" rx="10" fill="#fff1ef" stroke="#e7aaa2"/>
+    <text x="950" y="1618" class="body" font-weight="650" style="fill:#a13d31">Fallo / cancelación: sin ACK; daño pendiente.</text>
+    <text x="950" y="1645" class="body">En la TUI, fallar al escribir cierra el cliente. No sustituye un diff a medias.</text>
+    <text x="82" y="1693" class="small">Sin bytes nuevos, la entrega puede completarse inline. Sin cambios pendientes, no se añade un repaint periódico. «Entregado» no significa «visible en el monitor».</text>
+  </g>
+
+  <g id="media-flow">
+    <rect x="48" y="1738" width="1704" height="341" rx="18" class="panel"/>
+    <text x="78" y="1780" class="number">04</text><text x="118" y="1780" class="section">Media y servicios del host</text>
+    <text x="875" y="1779" class="small">Trabajo costoso con cuotas y workers propios; no espera en la ruta de entrada/celdas.</text>
+
+    <rect x="80" y="1815" width="460" height="125" rx="12" class="common"/>
+    <text x="100" y="1844" class="heading">Catálogos y retención comunes</text>
+    <text x="100" y="1871" class="body">Imágenes y attachments recibidos o capturados</text>
+    <text x="100" y="1896" class="body">Identidad · generación · cuotas · leases</text>
+    <text x="100" y="1920" class="code">client/graphics/ · client/attachments/</text>
+    <rect x="600" y="1815" width="525" height="125" rx="12" class="media"/>
+    <text x="620" y="1844" class="heading">Entrega Kitty + workers TUI</text>
+    <text x="620" y="1871" class="body">IDs del host · placements · clipping · compresión</text>
+    <text x="620" y="1896" class="body">Transferencia · respuestas del host · expiración</text>
+    <text x="620" y="1920" class="code">frontend/graphics/ · frontend/attachments/</text>
+    <rect x="1185" y="1815" width="540" height="125" rx="12" class="tui"/>
+    <text x="1205" y="1844" class="heading">presentMedia → host_output → terminal</text>
+    <text x="1205" y="1871" class="body">Plazo y presupuesto de bytes propios</text>
+    <text x="1205" y="1896" class="body">Menor prioridad que celdas; mismo escritor final</text>
+    <text x="1205" y="1920" class="code">media_tick · presentMedia() · pumpOutput()</text>
+    <path d="M540 1877 H588" class="purple-line"/><path d="M1125 1877 H1173" class="purple-line"/>
+    <path d="M862 1940 V1965 H310 V1952" class="purple-line"/>
+    <rect x="365" y="1953" width="440" height="24" fill="#fff"/>
+    <text x="585" y="1970" text-anchor="middle" class="label">release del consumidor → liberar retención / crédito</text>
+    <text x="1190" y="1971" class="small">Reemplazar imágenes no libera bytes aún prestados.</text>
+    <line x1="80" y1="1998" x2="1725" y2="1998" stroke="#dbe4ec"/>
+    <text x="82" y="2021" class="body"><tspan font-weight="700">Servicios:</tspan><tspan dx="6">handlers / política común → puertos acotados → implementaciones TUI del host.</tspan></text>
+    <text x="82" y="2046" class="small">Clipboard · título · enlaces · sonido · notificaciones. El host conserva OSC, captura, APIs del sistema y workers. Async conserva datos propios o leases.</text>
+    <text x="82" y="2070" class="small">VM de configuración y broker de plugins: frontend/config y frontend/plugins. Valores de efectos compartidos: client/config.</text>
+  </g>
+
+  <g id="replacement-points">
+    <rect x="48" y="2109" width="1704" height="393" rx="18" class="panel"/>
+    <text x="78" y="2151" class="number">05</text><text x="118" y="2151" class="section">Dónde encaja una pieza nueva</text>
+    <text x="1005" y="2150" class="small">El contrato común no prescribe widgets ni obliga al chrome nativo a usar celdas.</text>
+
+    <rect x="80" y="2185" width="795" height="119" rx="12" class="common"/>
+    <text x="100" y="2215" class="heading">Headless · ya existe</text>
+    <text x="100" y="2242" class="body">Prueba handlers y presentación comunes sin terminal, fuentes ni GPU.</text>
+    <text x="100" y="2267" class="body">Copia hasta 16 384 celdas; controla busy, fallo, demora y cancelación.</text>
+    <text x="100" y="2290" class="code">src/client/presentation/{headless.zig,headless_tests.zig}</text>
+    <rect x="930" y="2185" width="795" height="119" rx="12" class="future"/>
+    <text x="950" y="2215" class="heading">Adaptador nativo · todavía no implementado</text>
+    <text x="950" y="2242" class="body">Aporta driver, entrada, geometría, host, renderer y finalización.</text>
+    <text x="950" y="2267" class="body">Reutiliza modelo, handlers, router, catálogos y contrato de presentación.</text>
+    <text x="950" y="2290" class="code">Futuro telar-native → telar-client · sin otra VT</text>
+
+    <text x="82" y="2340" class="tag blue-text">REGLAS Y ESTADO</text>
+    <text x="82" y="2367" class="body">src/client/</text>
+    <text x="82" y="2392" class="small">Handlers, input, modelo y catálogos</text>
+    <text x="82" y="2416" class="small">No Screen, TTY ni dispositivo GPU</text>
+    <text x="490" y="2340" class="tag amber-text">ASPECTO Y HOST</text>
+    <text x="490" y="2367" class="body">src/frontend/ o adaptador nativo</text>
+    <text x="490" y="2392" class="small">Widgets, render, hit maps, métricas</text>
+    <text x="490" y="2416" class="small">Entrada física y servicios del host</text>
+    <text x="930" y="2340" class="tag amber-text">CONCURRENCIA Y PACING TUI</text>
+    <text x="930" y="2367" class="body">src/frontend/client/</text>
+    <text x="930" y="2392" class="small">run.zig · events.zig · Presenter</text>
+    <text x="930" y="2416" class="small">Recursos y workers del adaptador</text>
+    <text x="1355" y="2340" class="tag">DEBE SOBREVIVIR AL CLIENTE</text>
+    <text x="1355" y="2367" class="body">src/backend/</text>
+    <text x="1355" y="2392" class="small">PTY, VT, procesos, verdad del agente</text>
+    <text x="1355" y="2416" class="small">Historial y autoridad del runtime</text>
+    <text x="82" y="2474" class="small">Headless no es otro CLI completo. Un renderer nuevo requiere ensamblaje de host; compartir código no comparte la instancia ni el foco entre conexiones.</text>
+  </g>
+
+  <text x="60" y="2538" class="small">Fuentes: client/run.zig · entrypoints/events.zig · presentation_lifecycle.zig · telar-client/presentation/ · docs/capabilities.md</text>
+  <text x="1740" y="2538" text-anchor="end" class="small">Sin cambios al código de ejecución.</text>
+</svg>

@@ -11,7 +11,7 @@ const PixelBlend = @import("PixelBlend.zig");
 const Rasterizer = @import("Rasterizer.zig");
 const std = @import("std");
 
-pub const embedded_font: []const u8 = @embedFile("../assets/JetBrainsMono-Regular.ttf");
+pub const embedded_font: []const u8 = @import("assets").jetbrains_mono;
 
 pub fn fixed26_6Round(value: anytype) i32 {
     const signed: i64 = @intCast(value);

@@ -1,4 +1,4 @@
-const GenerationType = @import("telar-frontend").Generation;
+const GenerationType = @import("telar-client").Generation;
 const CallbackRefType = @import("telar-client").InputCallbackRef;
 const DiagnosticType = @import("telar-client").Diagnostic;
 const std = @import("std");

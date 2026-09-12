@@ -85,9 +85,9 @@ new client to rebuild its projection.
 - `src/client/application/session/request_failure.zig` proves classification,
   recovery ordering, stale suppression, notification mapping, exact reporting
   policy and effect failure behavior.
-- `src/frontend/client/controllers/session/request_failures.zig` owns correlation, concrete
+- `src/client/controllers/session/request_failures.zig` owns correlation, concrete
   recovery adapters, the physical reporter and fatal error translation.
-- `src/frontend/client/connection/request_lifecycle.zig` proves bounded identity and
+- `src/client/connection/request_lifecycle.zig` proves bounded identity and
   exactly-once correlation entrypoints.
 - `src/frontend/client/tests/` proves wire correlation, continuation
   consumption, recovery paths, targeted notices and fatal snapshot rejection.

@@ -1,21 +1,23 @@
 //! Client integration tests for notifications and agents.
 
+const TerminalClient = @import("../TerminalClient.zig");
+const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const encodeRequestFailed_module = @import("telar-core").encodeRequestFailed;
-const server_messages = @import("../entrypoints/runtime_messages.zig");
+const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const std = @import("std");
 const NotificationsRootTarget = @import("telar-client").NotificationTarget;
 const RequestIdType = @import("telar-core").RequestId;
 const encodeNotification_module = @import("telar-core").encodeNotification;
-const notification_flow = @import("../controllers/notifications/notifications.zig");
+const notification_flow = @import("telar-client").controllers.notifications;
 const LevelType = @import("telar-client").Level;
 const transition_duration_ns_module = @import("telar-client").transition_duration_ns;
-const runtime_transport = @import("../entrypoints/runtime_io.zig");
+const runtime_transport = @import("telar-client").runtime_io;
 const NotificationType = @import("telar-client").Notification;
 const ControlType = @import("telar-client").Control;
-const client_actions = @import("../controllers/input/actions.zig");
-const request_lifecycle = @import("../connection/request_lifecycle.zig");
+const client_actions = @import("telar-client").controllers.actions;
+const request_lifecycle = @import("telar-client").request_lifecycle;
 const NotificationLevelType = @import("telar-core").NotificationLevel;
 const NotificationTargetType = @import("telar-core").NotificationTarget;
 const default_notification_duration_ms_module = @import("telar-core").default_notification_duration_ms;
@@ -38,13 +40,13 @@ const PaneTargetType = @import("telar-core").PaneTarget;
 const encodeAgentSnapshot_module = @import("telar-core").encodeAgentSnapshot;
 const VersionType = @import("telar-client").Version;
 const support = @import("support.zig");
-const sidebar_animations = @import("../controllers/notifications/sidebar_animations.zig");
+const sidebar_animations = @import("telar-client").controllers.sidebar_animations;
 const encodeAgentSound_module = @import("telar-core").encodeAgentSound;
-const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
+const agent_sounds = @import("telar-client").controllers.agent_sounds;
 const ApplicationAgentsAgentSoundOutcome = @import("telar-client").ApplicationAgentsAgentSoundOutcome;
 const AgentSoundType = @import("telar-core").AgentSound;
-const playback_support = @import("../../sound/playback_support.zig");
-const SnapshotType = @import("../../sound/Snapshot.zig");
+const playback_support = @import("telar-client").sound_playback_support;
+const SnapshotType = @import("telar-client").SoundSnapshot;
 
 test "a failed request surfaces as a notification" {
     var harness: TestHarness = undefined;
@@ -117,7 +119,7 @@ test "a runtime notification translates and owns its wire payload" {
     defer harness.deinit();
     const client = harness.client;
     const version_before = client.model.version();
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
     var payload: [512]u8 = undefined;
     const encoded = try encodeNotification_module(&payload, .{
         .level = .warning,
@@ -148,7 +150,7 @@ test "a runtime notification translates and owns its wire payload" {
         item.expires_at_ns - item.transition_updated_ns,
     );
     try std.testing.expectEqual(version_before.notifications + 1, client.model.version().notifications);
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
     try std.testing.expect(client.notification_scheduler.pending);
 }
 
@@ -159,7 +161,7 @@ test "notification action delivers one correlated runtime request without model 
     const client = harness.client;
     const request_id: RequestIdType = @enumFromInt(client.request_lifecycle.next_request_id);
     const version_before = client.model.version();
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
     try runtime_transport.enqueue(client, .{
         .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane },
     });
@@ -178,7 +180,7 @@ test "notification action delivers one correlated runtime request without model 
 
     try std.testing.expect(request_lifecycle.has(client, .notification));
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
     @memset(&notification.title_bytes, 'x');
     @memset(&notification.message_bytes, 'y');
 
@@ -198,7 +200,7 @@ test "notification action delivers one correlated runtime request without model 
     try std.testing.expectEqualStrings("Agent waiting", message.show_notification.notification.title);
     try std.testing.expectEqualStrings("Review its question", message.show_notification.notification.message);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
 }
 
 test "notification request rolls correlation back when transport is full" {
@@ -213,7 +215,7 @@ test "notification request rolls correlation back when transport is full" {
     }
     const next_request_id = client.request_lifecycle.next_request_id;
     const version_before = client.model.version();
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
     const notification = try NotificationType.init(.{
         .level = .info,
         .duration_ms = default_notification_duration_ms_module,
@@ -230,7 +232,7 @@ test "notification request rolls correlation back when transport is full" {
     try std.testing.expectEqual(next_request_id + 1, client.request_lifecycle.next_request_id);
     try std.testing.expect(client.request_lifecycle.tracker.isEmpty());
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
 }
 
 test "notification timer commits lifecycle state before presenter observation" {
@@ -243,10 +245,10 @@ test "notification timer commits lifecycle state before presenter observation" {
         .title = "Building",
         .message = "Lifecycle tick",
     });
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
 
     try std.testing.expect(client.notification_scheduler.pending);
-    switch (try client.select.await()) {
+    switch (try host(client).select.await()) {
         .notification_tick => |result| {
             const change = (try notification_flow.handleTick(client, result)).?;
 
@@ -260,12 +262,12 @@ test "notification timer commits lifecycle state before presenter observation" {
 
     try std.testing.expect(client.notification_scheduler.pending);
     try std.testing.expectEqual(@as(u64, 2), client.model.version().notifications);
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.observed.model);
+    try std.testing.expectEqual(pending_updates + 1, host(client).presenter.pending_updates);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.observed.model);
 }
 
 test "an unexpected notification delivery report is rejected without effects" {
@@ -386,7 +388,7 @@ test "toast activation commits by id before following its navigation target" {
     const client = harness.client;
     const active = &client.model.workspace.active().?.model;
     const second_pane: PaneIdType = @enumFromInt(11);
-    try active.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = second_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
+    try active.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = second_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = host(client).view.workbench() });
     try std.testing.expect(active.focusPane(TestHarness.bootstrap_pane));
 
     try notification_flow.publishNow(client, .{
@@ -399,23 +401,23 @@ test "toast activation commits by id before following its navigation target" {
     const visible_at_ns = item.transition_updated_ns + transition_duration_ns_module;
     _ = client.model.advanceNotifications(visible_at_ns);
 
-    const composed = try client.presenter.compositor.render(.{
+    const composed = try host(client).presenter.compositor.render(.{
         .model = active,
-        .screen = &client.presenter.screen,
+        .screen = &host(client).presenter.screen,
         .input = .{
-            .area = client.view.workbench(),
-            .palette = client.view.palette(),
+            .area = host(client).view.workbench(),
+            .palette = host(client).view.palette(),
         },
     });
     _ = active.commitPresentation(composed.commit);
-    _ = try client.view.render(&client.presenter.screen, .{
+    _ = try host(client).view.render(&host(client).presenter.screen, .{
         .model = active,
-        .compositor = &client.presenter.compositor,
+        .compositor = &host(client).presenter.compositor,
         .notifications = client.model.notificationSnapshot(),
         .force = true,
     });
     var click: ?term.Event.Mouse = null;
-    for (client.view.hits.registered()) |entry| switch (entry.action) {
+    for (host(client).view.hits.registered()) |entry| switch (entry.action) {
         .notification_activate => |id| {
             if (id != notification_id) {
                 continue;
@@ -455,7 +457,7 @@ test "proxy status commits before announcement and presenter-owned projection" {
     try harness.bootstrap();
     const client = harness.client;
     const version_before = client.model.version();
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
 
     var payload: [64]u8 = undefined;
     const enabled = try encodeProxyStatus_module(&payload, .{ .active = true, .scope = .wildcard, .system_trusted = false });
@@ -464,8 +466,8 @@ test "proxy status commits before announcement and presenter-owned projection" {
     try std.testing.expect(client.model.proxyTlsActive());
     try std.testing.expectEqual(version_before.proxy_status + 1, client.model.version().proxy_status);
     try std.testing.expectEqual(version_before.notifications + 1, client.model.version().notifications);
-    try std.testing.expectEqual(version_before.proxy_status, client.presenter.presentation_state.observed.model.proxy_status);
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(version_before.proxy_status, host(client).presenter.presentation_state.observed.model.proxy_status);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
     try std.testing.expectEqual(@as(u8, 1), client.model.notificationSnapshot().count);
     try std.testing.expectEqualStrings(
         "TLS interception active",
@@ -476,27 +478,27 @@ test "proxy status commits before announcement and presenter-owned projection" {
 
     try std.testing.expectEqual(version_before.proxy_status + 1, client.model.version().proxy_status);
     try std.testing.expectEqual(version_before.notifications + 1, client.model.version().notifications);
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
     try std.testing.expectEqual(@as(u8, 1), client.model.notificationSnapshot().count);
 
     try presentation_lifecycle.observe(client);
     const enabled_version = client.model.version();
 
-    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
     try std.testing.expectEqual(
         enabled_version.proxy_status,
-        client.presenter.presentation_state.prepared.model.proxy_status,
+        host(client).presenter.presentation_state.prepared.model.proxy_status,
     );
-    const badge_index = @as(usize, client.presenter.screen.front.w) - 2;
-    try std.testing.expectEqualStrings("\u{26e8}", client.presenter.screen.front.cells[badge_index].text());
+    const badge_index = @as(usize, host(client).presenter.screen.front.w) - 2;
+    try std.testing.expectEqualStrings("\u{26e8}", host(client).presenter.screen.front.cells[badge_index].text());
     try std.testing.expectEqualDeep(
-        client.view.palette().red,
-        client.presenter.screen.front.cells[badge_index].style.fg,
+        host(client).view.palette().red,
+        host(client).presenter.screen.front.cells[badge_index].style.fg,
     );
 
-    const pending_updates_after_enabled = client.presenter.pending_updates;
+    const pending_updates_after_enabled = host(client).presenter.pending_updates;
     const version_before_disabled = client.model.version();
     const disabled = try encodeProxyStatus_module(&payload, .{ .active = false, .scope = .exact, .system_trusted = false });
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(disabled));
@@ -504,7 +506,7 @@ test "proxy status commits before announcement and presenter-owned projection" {
     try std.testing.expect(!client.model.proxyTlsActive());
     try std.testing.expectEqual(version_before_disabled.proxy_status + 1, client.model.version().proxy_status);
     try std.testing.expectEqual(version_before_disabled.notifications + 1, client.model.version().notifications);
-    try std.testing.expectEqual(pending_updates_after_enabled, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_after_enabled, host(client).presenter.pending_updates);
     try std.testing.expectEqual(@as(u8, 2), client.model.notificationSnapshot().count);
     try std.testing.expectEqualStrings(
         "TLS interception stopped",
@@ -515,12 +517,12 @@ test "proxy status commits before announcement and presenter-owned projection" {
     const disabled_version = client.model.version();
     try harness.settleModelPresentation();
 
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
     try std.testing.expectEqual(
         disabled_version.proxy_status,
-        client.presenter.presentation_state.prepared.model.proxy_status,
+        host(client).presenter.presentation_state.prepared.model.proxy_status,
     );
-    try std.testing.expect(!std.mem.eql(u8, "\u{26e8}", client.presenter.screen.front.cells[badge_index].text()));
+    try std.testing.expect(!std.mem.eql(u8, "\u{26e8}", host(client).presenter.screen.front.cells[badge_index].text()));
 }
 
 test "system metrics commit before presenter-owned projection" {
@@ -530,7 +532,7 @@ test "system metrics commit before presenter-owned projection" {
     try harness.bootstrap();
     const client = harness.client;
     const version_before = client.model.version();
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
 
     var payload: [64]u8 = undefined;
     const metrics = try encodeSystemMetrics_module(&payload, .{
@@ -549,23 +551,23 @@ test "system metrics commit before presenter-owned projection" {
         .battery_percent = 80,
     }, client.model.systemMetrics().?);
     try std.testing.expectEqual(version_before.system_metrics + 1, client.model.version().system_metrics);
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
-    try std.testing.expect(!client.view.dirty);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
+    try std.testing.expect(!host(client).view.dirty);
 
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(metrics));
     try std.testing.expectEqual(version_before.system_metrics + 1, client.model.version().system_metrics);
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
 
     var bottom_text_buffer: [512]u8 = undefined;
-    const sidebar = client.view.regions.sidebar;
-    const contracted_bottom = client.view.regions.bottom;
-    const contracted_text = try screenText(&client.presenter.screen, contracted_bottom, &bottom_text_buffer);
+    const sidebar = host(client).view.regions.sidebar;
+    const contracted_bottom = host(client).view.regions.bottom;
+    const contracted_text = try screenText(&host(client).presenter.screen, contracted_bottom, &bottom_text_buffer);
 
     try std.testing.expectEqual(sidebar.x + sidebar.w, contracted_bottom.x);
     try std.testing.expect(std.mem.indexOf(u8, contracted_text, " 50%") != null);
@@ -574,11 +576,11 @@ test "system metrics commit before presenter-owned projection" {
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
 
-    const expanded_bottom = client.view.regions.bottom;
-    const expanded_text = try screenText(&client.presenter.screen, expanded_bottom, &bottom_text_buffer);
+    const expanded_bottom = host(client).view.regions.bottom;
+    const expanded_text = try screenText(&host(client).presenter.screen, expanded_bottom, &bottom_text_buffer);
 
     try std.testing.expectEqual(@as(u16, 0), expanded_bottom.x);
-    try std.testing.expectEqual(client.presenter.screen.front.w, expanded_bottom.w);
+    try std.testing.expectEqual(host(client).presenter.screen.front.w, expanded_bottom.w);
     try std.testing.expect(std.mem.indexOf(u8, expanded_text, " 50%") != null);
     try std.testing.expect(std.mem.indexOf(u8, expanded_text, " 1.0G") != null);
     try std.testing.expect(std.mem.indexOf(u8, expanded_text, "80%") != null);
@@ -607,7 +609,7 @@ test "workspace list snapshots commit before presenter-owned projection" {
     try harness.bootstrap();
     const client = harness.client;
     const version_before = client.model.version();
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
 
     var payload: [512]u8 = undefined;
     const list = try encodeWorkspaceList_module(&payload, .{
@@ -623,21 +625,21 @@ test "workspace list snapshots commit before presenter-owned projection" {
     try std.testing.expect(client.model.knowsWorkspace(@enumFromInt(2)));
     try std.testing.expectEqualStrings("/work/api", client.model.workspaceListSnapshot().pathAt(1));
     try std.testing.expectEqual(version_before.workspace_list + 1, client.model.version().workspace_list);
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
-    try std.testing.expect(!client.view.dirty);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
+    try std.testing.expect(!host(client).view.dirty);
 
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(list));
     try std.testing.expectEqual(version_before.workspace_list + 1, client.model.version().workspace_list);
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
     var found_second = false;
-    for (0..client.presenter.screen.front.w) |x| {
-        const action = client.view.hits.at(@intCast(x), 0) orelse continue;
+    for (0..host(client).presenter.screen.front.w) |x| {
+        const action = host(client).view.hits.at(@intCast(x), 0) orelse continue;
         if (action == .select_workspace and action.select_workspace == @as(WorkspaceIdType, @enumFromInt(2))) {
             found_second = true;
             break;
@@ -663,13 +665,13 @@ test "workspace position navigation resolves the committed client model" {
         },
     });
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(list));
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
     const handler: InputHandler = .{ .client = client };
 
     _ = try client_actions.apply(handler.client, .{ .select_workspace = 1 });
 
     try std.testing.expect(client.model.workspaceLocation() == null);
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
     try harness.settle();
 
     var message_buffer: [256]u8 = undefined;
@@ -720,8 +722,8 @@ test "an agent snapshot replaces the sidebar replica" {
             .expires_at_ms = 2,
         }},
     });
-    const pending_updates = harness.client.presenter.pending_updates;
-    harness.client.view.sidebar.scroll = 7;
+    const pending_updates = host(harness.client).presenter.pending_updates;
+    host(harness.client).view.sidebar.scroll = 7;
     _ = try server_messages.handleServerMessage(harness.client, try decodeServer_module(snapshot));
     const agent = harness.client.model.agentSnapshot().find(.{
         .pane_id = TestHarness.bootstrap_pane,
@@ -732,15 +734,15 @@ test "an agent snapshot replaces the sidebar replica" {
     try std.testing.expectEqualStrings("Improve agent sidebar", agent.sessionTitle());
     try std.testing.expectEqualStrings("~/sandbox/telar", agent.cwdLabel());
     try std.testing.expectEqual(VersionType{ .agents = 1 }, harness.client.model.version());
-    try std.testing.expectEqual(pending_updates, harness.client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(harness.client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(harness.client);
     try harness.settleModelPresentation();
 
-    try std.testing.expectEqual(@as(u16, 0), harness.client.view.sidebar.scroll);
+    try std.testing.expectEqual(@as(u16, 0), host(harness.client).view.sidebar.scroll);
     try std.testing.expectEqual(
         harness.client.model.version(),
-        harness.client.presenter.presentation_state.prepared.model,
+        host(harness.client).presenter.presentation_state.prepared.model,
     );
 }
 
@@ -752,11 +754,11 @@ test "sidebar animation commits model state before the presenter observes it" {
     var payload: [512]u8 = undefined;
     const snapshot = try support.encodeTestingAgentSnapshot(&payload, 1, .working);
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(snapshot));
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
 
     try std.testing.expect(client.sidebar_animation_scheduler.pending);
     try std.testing.expectEqual(@as(u8, 0), client.model.sidebarAnimationFrame());
-    switch (try client.select.await()) {
+    switch (try host(client).select.await()) {
         .sidebar_animation_tick => |result| {
             const change = (try sidebar_animations.handleTick(client, result)).?;
 
@@ -772,12 +774,12 @@ test "sidebar animation commits model state before the presenter observes it" {
         .sidebar_animation = 1,
     }, client.model.version());
     try std.testing.expectEqual(@as(u8, 1), client.model.sidebarAnimationFrame());
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.observed.model);
+    try std.testing.expectEqual(pending_updates + 1, host(client).presenter.pending_updates);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.observed.model);
 }
 
 test "agent snapshot transitions raise bounded presentation alerts only once" {
@@ -823,7 +825,7 @@ test "agent sounds validate exact identity against the client model" {
     const snapshot = try support.encodeTestingAgentSnapshot(&payload, 1, .ready);
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(snapshot));
     const version_before_sound = client.model.version();
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
 
     const unknown = try encodeAgentSound_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
@@ -855,7 +857,7 @@ test "agent sounds validate exact identity against the client model" {
     try std.testing.expectEqual(ApplicationAgentsAgentSoundOutcome.accepted, queued);
     try std.testing.expectEqual(AgentSoundType.needs_input, client.sound_playback.snapshot().queued.?);
     try std.testing.expectEqualDeep(version_before_sound, client.model.version());
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 }
 
 test "agent sound completion releases a failed worker before scheduling its successor" {
@@ -864,7 +866,7 @@ test "agent sound completion releases a failed worker before scheduling its succ
     defer harness.deinit();
     const client = harness.client;
     const version_before = client.model.version();
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
 
     try std.testing.expectEqualDeep(
         playback_support.RequestOutcome{ .start = .ready },
@@ -880,5 +882,5 @@ test "agent sound completion releases a failed worker before scheduling its succ
         .queued = null,
     }, client.sound_playback.snapshot());
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 }

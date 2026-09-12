@@ -16,16 +16,16 @@ pub fn accept(validation: *ClientLayoutTreeValidation, node: types.ClientLayoutN
 
     validation.pending -= 1;
     switch (node) {
-        .pane => |pane_id| {
-            try codec.validatePaneId(pane_id);
-            if (std.mem.findScalar(id.PaneId, validation.panes[0..validation.pane_count], pane_id) != null) {
+        .pane => |pane| {
+            try codec.validatePaneId(pane.id);
+            if (std.mem.findScalar(id.PaneId, validation.panes[0..validation.pane_count], pane.id) != null) {
                 return error.DuplicatePane;
             }
             if (validation.pane_count == validation.panes.len) {
                 return error.TooManyPanes;
             }
 
-            validation.panes[validation.pane_count] = pane_id;
+            validation.panes[validation.pane_count] = pane.id;
             validation.pane_count += 1;
         },
         .split => |split| {

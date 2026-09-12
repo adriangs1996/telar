@@ -1,21 +1,23 @@
+const TerminalClient = @import("../TerminalClient.zig");
+const host = TerminalClient.of;
 const SocketChannelType = @import("telar-core").SocketChannel;
 const std = @import("std");
-const Client = @import("../Client.zig");
-const runtime_transport = @import("../entrypoints/runtime_io.zig");
+const Client = @import("telar-client").AttachedClient;
+const runtime_transport = @import("telar-client").runtime_io;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const sidebar_animations = @import("../controllers/notifications/sidebar_animations.zig");
-const notification_flow = @import("../controllers/notifications/notifications.zig");
-const bar_updates = @import("../controllers/configuration/bar_updates.zig");
+const sidebar_animations = @import("telar-client").controllers.sidebar_animations;
+const notification_flow = @import("telar-client").controllers.notifications;
+const bar_updates = @import("telar-client").controllers.bar_updates;
 const ClientMessageType = @import("telar-core").ClientMessage;
 const decodeClient_module = @import("telar-core").decodeClient;
 const PaneIdType = @import("telar-core").PaneId;
 const RequestIdType = @import("telar-core").RequestId;
 const encodeTabSnapshot_module = @import("telar-core").encodeTabSnapshot;
-const server_messages = @import("../entrypoints/runtime_messages.zig");
+const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const TabLocationType = @import("telar-core").TabLocation;
 const initial_request_id_module = @import("telar-client").initial_request_id;
-const request_lifecycle = @import("../connection/request_lifecycle.zig");
+const request_lifecycle = @import("telar-client").request_lifecycle;
 const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
 const TabIdType = @import("telar-core").TabId;
 const TabsModel = @import("telar-client").TabsModel;
@@ -53,7 +55,7 @@ pub fn initWithAsyncOutput(harness: *TestHarness, async_output: bool) !void {
     harness.input_read = .{ .handle = pipe_fds[0], .flags = .{ .nonblocking = false } };
     harness.input_write = .{ .handle = pipe_fds[1], .flags = .{ .nonblocking = false } };
     harness.sink = .init(&.{});
-    harness.client = try Client.init(.{
+    const terminal = try TerminalClient.init(.{
         .gpa = std.testing.allocator,
         .io = std.testing.io,
         .connection = &harness.connection,
@@ -63,9 +65,10 @@ pub fn initWithAsyncOutput(harness: *TestHarness, async_output: bool) !void {
         .host_size = .{ .cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0 },
         .options = .{ .arguments = &.{}, .cwd = "/", .endpoint = "" },
     });
+    harness.client = &terminal.app;
     // Every frame goes through the scheduled draw task, so tests observe
     // pending state deterministically. The inline path has its own test.
-    harness.client.presenter.pacer = .{ .burst = 0, .credits = 0, .input_grace = 0 };
+    terminal.presenter.pacer = .{ .burst = 0, .credits = 0, .input_grace = 0 };
 }
 
 pub fn deinit(harness: *TestHarness) void {
@@ -73,7 +76,7 @@ pub fn deinit(harness: *TestHarness) void {
     // EOF unblocks a pending input read so task cancellation never has
     // to wait on the pipe.
     harness.input_write.close(io);
-    harness.client.deinit();
+    host(harness.client).deinit();
     harness.peer.deinit(io);
     harness.connection.deinit(io);
     harness.input_read.close(io);
@@ -83,7 +86,7 @@ pub fn deinit(harness: *TestHarness) void {
 /// observes exactly what the runtime peer would receive.
 pub fn settle(harness: *TestHarness) !void {
     while (harness.client.runtime_transport.outbox.inFlight() or harness.client.runtime_transport.outbox.len != 0) {
-        switch (try harness.client.select.await()) {
+        switch (try host(harness.client).select.await()) {
             .sent => |result| try runtime_transport.handleSent(harness.client, result),
             .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
             .sidebar_animation_tick => |result| {
@@ -109,19 +112,19 @@ pub fn settle(harness: *TestHarness) !void {
 
 pub fn settleModelPresentation(harness: *TestHarness) !void {
     var target = harness.client.model.version();
-    const graphics_target = harness.client.graphics_store.ingressVersion();
-    const attachment_target = harness.client.view.kittyAttachments().ingressVersion();
-    const view_interaction_target = harness.client.view.interactionVersion();
-    const input_routing_target = harness.client.host_input.presentationVersion();
-    while (!std.meta.eql(harness.client.presenter.presentation_state.prepared.model, target) or
-        harness.client.presenter.presentation_state.prepared.graphics_ingress != graphics_target or
-        harness.client.presenter.presentation_state.prepared.attachment_ingress != attachment_target or
-        harness.client.presenter.presentation_state.prepared.presentation_ingress.view_interaction !=
+    const graphics_target = host(harness.client).graphics_store.ingressVersion();
+    const attachment_target = host(harness.client).view.kittyAttachments().ingressVersion();
+    const view_interaction_target = host(harness.client).view.interactionVersion();
+    const input_routing_target = host(harness.client).host_input.presentationVersion();
+    while (!std.meta.eql(host(harness.client).presenter.presentation_state.prepared.model, target) or
+        host(harness.client).presenter.presentation_state.prepared.graphics_ingress != graphics_target or
+        host(harness.client).presenter.presentation_state.prepared.attachment_ingress != attachment_target or
+        host(harness.client).presenter.presentation_state.prepared.presentation_ingress.view_interaction !=
             view_interaction_target or
-        harness.client.presenter.presentation_state.prepared.presentation_ingress.input_routing !=
+        host(harness.client).presenter.presentation_state.prepared.presentation_ingress.input_routing !=
             input_routing_target)
     {
-        switch (try harness.client.select.await()) {
+        switch (try host(harness.client).select.await()) {
             .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
             .sent => |result| try runtime_transport.handleSent(harness.client, result),
             .media_tick => |result| try presentation_lifecycle.handleMediaTick(harness.client, result),
@@ -239,7 +242,7 @@ pub fn addInactiveTab(harness: *TestHarness, tab_id: TabIdType, pane_id: PaneIdT
     const location = try harness.addTab(tab_id, pane_id);
     const tab = harness.client.model.workspace.find(tab_id).?;
     TabsModel.detachAll(tab);
-    try harness.client.graphics_store.setPaneVisible(pane_id, false);
+    try host(harness.client).graphics_store.setPaneVisible(pane_id, false);
     try std.testing.expect(harness.client.model.workspace.select(bootstrap_location.tab_id));
 
     return location;

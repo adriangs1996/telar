@@ -1,8 +1,10 @@
 const PaneIdType = @import("telar-core").PaneId;
 const RectType = @import("telar-core").Rect;
+const PaneSurfaceType = @import("telar-core").PaneSurface;
 const View = @This();
 
 pane_id: PaneIdType,
+surface: PaneSurfaceType = .terminal,
 outer: RectType,
 content: RectType,
 focused: bool,

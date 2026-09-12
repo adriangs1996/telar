@@ -1,5 +1,7 @@
 //! Client integration tests for host interaction.
 
+const TerminalClient = @import("../TerminalClient.zig");
+const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const SizeType = @import("../../platform/Size.zig");
 const host_resizes = @import("../controllers/host/host_resizes.zig");
@@ -11,7 +13,7 @@ const capacity_module = @import("telar-client").capacity;
 const InputHandler = @import("../resources/InputHandler.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 const encodeGraphicsImage_module = @import("telar-core").encodeGraphicsImage;
-const server_messages = @import("../entrypoints/runtime_messages.zig");
+const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const capabilities_module = @import("../../graphics/capabilities.zig");
 const SupportType = @import("telar-client").Support;
@@ -20,10 +22,10 @@ const client_events = @import("../entrypoints/events.zig");
 const support = @import("support.zig");
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
 const parseKey_module = @import("telar-client").parseKey;
-const client_actions = @import("../controllers/input/actions.zig");
+const client_actions = @import("telar-client").controllers.actions;
 const ActionType = @import("telar-client").Action;
 const ControlType = @import("telar-client").Control;
-const name_prompts = @import("../controllers/input/name_prompts.zig");
+const name_prompts = @import("telar-client").controllers.name_prompts;
 
 test "host resize commits before resources and presents by model version" {
     var harness: TestHarness = undefined;
@@ -31,7 +33,7 @@ test "host resize commits before resources and presents by model version" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
     const measurement: SizeType = .{
         .cols = 100,
         .rows = 30,
@@ -57,17 +59,17 @@ test "host resize commits before resources and presents by model version" {
         .active_tab = 1,
         .panes = 1,
     }, client.model.version());
-    try std.testing.expect(client.presenter.screen.sizeMatches(100, 30));
-    try std.testing.expectEqual(@as(u16, 100), client.view.scratch.w);
-    try std.testing.expectEqual(@as(u16, 30), client.view.scratch.h);
+    try std.testing.expect(host(client).presenter.screen.sizeMatches(100, 30));
+    try std.testing.expectEqual(@as(u16, 100), host(client).view.scratch.w);
+    try std.testing.expectEqual(@as(u16, 30), host(client).view.scratch.h);
     const active = client.model.workspace.active().?;
     try std.testing.expectEqual(@as(u16, 10), active.model.cell_width_px);
     try std.testing.expectEqual(@as(u16, 20), active.model.cell_height_px);
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 
     const expected_pane_size = active.model.contentSize(
         TestHarness.bootstrap_pane,
-        client.view.workbench(),
+        host(client).view.workbench(),
     ).?;
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -77,16 +79,16 @@ test "host resize commits before resources and presents by model version" {
     try std.testing.expectEqualDeep(expected_pane_size, message.pane_resize.size);
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
 
     const version = client.model.version();
-    const pending_after = client.presenter.pending_updates;
+    const pending_after = host(client).presenter.pending_updates;
     try std.testing.expect((try host_resizes.apply(client, measurement)) == null);
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
-    try std.testing.expectEqual(pending_after, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_after, host(client).presenter.pending_updates);
 }
 
 test "host resize retains committed geometry after outbox backpressure" {
@@ -98,7 +100,7 @@ test "host resize retains committed geometry after outbox backpressure" {
     while (client.runtime_transport.outbox.hasCapacity()) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
     const measurement: SizeType = .{
         .cols = 90,
         .rows = 28,
@@ -116,11 +118,11 @@ test "host resize retains committed geometry after outbox backpressure" {
     }, client.model.hostSize());
     try std.testing.expectEqual(@as(u64, 1), client.model.version().host);
     try std.testing.expectEqual(@as(u64, 1), client.model.version().host_capabilities);
-    try std.testing.expect(client.presenter.screen.sizeMatches(90, 28));
-    try std.testing.expectEqual(@as(u16, 90), client.view.scratch.w);
-    try std.testing.expectEqual(@as(u16, 28), client.view.scratch.h);
+    try std.testing.expect(host(client).presenter.screen.sizeMatches(90, 28));
+    try std.testing.expectEqual(@as(u16, 90), host(client).view.scratch.w);
+    try std.testing.expectEqual(@as(u16, 28), host(client).view.scratch.h);
     try std.testing.expectEqual(@as(usize, capacity_module), client.runtime_transport.outbox.len);
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 }
 
 test "oversized host measurement changes neither model nor capabilities" {
@@ -150,7 +152,7 @@ test "terminal pixel response keeps model host geometry authoritative" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
     var handler: InputHandler = .{ .client = client };
 
     try handler.terminalResponse(.{ .cell_pixels = .{
@@ -169,10 +171,10 @@ test "terminal pixel response keeps model host geometry authoritative" {
     const active = client.model.workspace.active().?;
     try std.testing.expectEqual(@as(u16, 12), active.model.cell_width_px);
     try std.testing.expectEqual(@as(u16, 24), active.model.cell_height_px);
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates + 1, host(client).presenter.pending_updates);
 }
 
 test "input timer expiries with nothing pending are a no-op" {
@@ -182,22 +184,22 @@ test "input timer expiries with nothing pending are a no-op" {
 
     try std.testing.expect(!try host_inputs.handleInputTimeout(harness.client, {}));
     try std.testing.expect(!try host_inputs.handleBindingTimeout(harness.client, {}));
-    try std.testing.expect(!harness.client.host_input.input_timeout.pending);
-    try std.testing.expect(!harness.client.host_input.binding_timeout.pending);
+    try std.testing.expect(!host(harness.client).host_input.input_timeout.pending);
+    try std.testing.expect(!host(harness.client).host_input.binding_timeout.pending);
 
-    harness.client.host_input.input_timeout.pending = true;
+    host(harness.client).host_input.input_timeout.pending = true;
     try std.testing.expectError(
         error.InputTimerFailed,
         host_inputs.handleInputTimeout(harness.client, error.InputTimerFailed),
     );
-    try std.testing.expect(!harness.client.host_input.input_timeout.pending);
+    try std.testing.expect(!host(harness.client).host_input.input_timeout.pending);
 
-    harness.client.host_input.binding_timeout.pending = true;
+    host(harness.client).host_input.binding_timeout.pending = true;
     try std.testing.expectError(
         error.BindingTimerFailed,
         host_inputs.handleBindingTimeout(harness.client, error.BindingTimerFailed),
     );
-    try std.testing.expect(!harness.client.host_input.binding_timeout.pending);
+    try std.testing.expect(!host(harness.client).host_input.binding_timeout.pending);
 }
 
 test "a Kitty capability response commits before fallback projection and presentation" {
@@ -222,7 +224,7 @@ test "a Kitty capability response commits before fallback projection and present
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(encoded));
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.graphics_placeholder);
     const version = client.model.version();
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
     var handler: InputHandler = .{ .client = client };
 
     try handler.terminalResponse(.{ .kitty_graphics = .{
@@ -234,11 +236,11 @@ test "a Kitty capability response commits before fallback projection and present
     try std.testing.expect(!client.model.workspace.findPane(TestHarness.bootstrap_pane).?.graphics_placeholder);
     try std.testing.expectEqual(version.host_capabilities + 1, client.model.version().host_capabilities);
     try std.testing.expectEqual(version.pane_graphics + 1, client.model.version().pane_graphics);
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates + 1, host(client).presenter.pending_updates);
 }
 
 test "compression negotiation belongs to the TUI and does not revise the semantic model" {
@@ -253,15 +255,15 @@ test "compression negotiation belongs to the TUI and does not revise the semanti
         .image_id = capabilities_module.zlib_query_image_id,
         .supported = true,
     } });
-    try std.testing.expectEqual(SupportType.supported, client.host_negotiation.zlib_support);
-    try std.testing.expect(client.graphics_store.delivery.host_zlib);
+    try std.testing.expectEqual(SupportType.supported, host(client).host_negotiation.zlib_support);
+    try std.testing.expect(host(client).graphics_store.delivery.host_zlib);
     try std.testing.expectEqualDeep(version, client.model.version());
 
     try handler.terminalResponse(.{ .kitty_graphics = .{
         .image_id = capabilities_module.zlib_query_image_id,
         .supported = false,
     } });
-    try std.testing.expect(!client.graphics_store.delivery.host_zlib);
+    try std.testing.expect(!host(client).graphics_store.delivery.host_zlib);
     try std.testing.expectEqualDeep(version, client.model.version());
 }
 
@@ -270,9 +272,9 @@ test "client event dispatch observes a completed capability expiry" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
     var heap = HeapType.init(std.testing.allocator);
-    client.host_negotiation.deadline_ns = 0;
+    host(client).host_negotiation.deadline_ns = 0;
 
     const first = try client_events.handle(
         client,
@@ -283,16 +285,16 @@ test "client event dispatch observes a completed capability expiry" {
     try std.testing.expect(first == .keep_running);
     const capabilities = client.model.hostCapabilities();
     try std.testing.expectEqual(SupportType.unsupported, capabilities.images);
-    try std.testing.expectEqual(SupportType.unsupported, client.host_negotiation.zlib_support);
+    try std.testing.expectEqual(SupportType.unsupported, host(client).host_negotiation.zlib_support);
     try std.testing.expectEqual(SupportType.unsupported, capabilities.pointer_pixels);
     try std.testing.expectEqual(VersionType{
         .host_capabilities = 1,
     }, client.model.version());
-    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
 
     const version = client.model.version();
-    const pending_after = client.presenter.pending_updates;
+    const pending_after = host(client).presenter.pending_updates;
     const repeated = try client_events.handle(
         client,
         .{ .capability_timeout = {} },
@@ -301,7 +303,7 @@ test "client event dispatch observes a completed capability expiry" {
 
     try std.testing.expect(repeated == .keep_running);
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(pending_after, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_after, host(client).presenter.pending_updates);
 }
 
 test "client event dispatch skips observation after terminal input" {
@@ -310,8 +312,8 @@ test "client event dispatch skips observation after terminal input" {
     defer harness.deinit();
     const client = harness.client;
     var heap = HeapType.init(std.testing.allocator);
-    const observed = client.presenter.presentation_state.observed.model;
-    const pending_updates = client.presenter.pending_updates;
+    const observed = host(client).presenter.presentation_state.observed.model;
+    const pending_updates = host(client).presenter.pending_updates;
     _ = try client.model.setDiagnostic("client is stopping", .{});
 
     const outcome = try client_events.handle(
@@ -322,8 +324,8 @@ test "client event dispatch skips observation after terminal input" {
 
     try std.testing.expect(outcome == .exit);
     try std.testing.expectEqual(@as(u8, 0), outcome.exit);
-    try std.testing.expectEqualDeep(observed, client.presenter.presentation_state.observed.model);
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqualDeep(observed, host(client).presenter.presentation_state.observed.model);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
     try std.testing.expect(!std.meta.eql(client.model.version(), observed));
 }
 
@@ -349,9 +351,9 @@ test "capability effect failure retains the committed fallback" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    client.sidebar_rendering = .kitty_hybrid;
-    const pending_updates = client.presenter.pending_updates;
-    client.host_negotiation.deadline_ns = 0;
+    host(client).sidebar_rendering = .kitty_hybrid;
+    const pending_updates = host(client).presenter.pending_updates;
+    host(client).host_negotiation.deadline_ns = 0;
 
     try std.testing.expectError(
         error.KittyGraphicsUnsupported,
@@ -362,7 +364,7 @@ test "capability effect failure retains the committed fallback" {
     try std.testing.expectEqual(VersionType{
         .host_capabilities = 1,
     }, client.model.version());
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 }
 
 test "pane viewport intent commits before IPC and presenter-owned recomposition" {
@@ -379,8 +381,8 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
         .offset = 10,
     };
     const version = client.model.version();
-    const pending_updates = client.presenter.pending_updates;
-    const pane_view = active.model.viewForPane(pane.id, client.view.workbench()).?;
+    const pending_updates = host(client).presenter.pending_updates;
+    const pane_view = active.model.viewForPane(pane.id, host(client).view.workbench()).?;
     var handler: InputHandler = .{ .client = client };
     try handler.mouse(.{
         .x = pane_view.content.x,
@@ -395,16 +397,16 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     });
 
     try std.testing.expectEqual(@as(u32, 7), pane.scroll.offset);
-    try std.testing.expect(!client.graphics_store.paneVisible(pane.id));
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expect(!host(client).graphics_store.paneVisible(pane.id));
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 
     try handler.key(try parseKey_module("x"));
 
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
-    try std.testing.expect(client.graphics_store.paneVisible(pane.id));
+    try std.testing.expect(host(client).graphics_store.paneVisible(pane.id));
     try std.testing.expectEqual(version.viewport + 2, client.model.version().viewport);
     try support.expectNonViewportVersionEqual(version, client.model.version());
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -422,9 +424,9 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     try std.testing.expectEqualStrings("x", input.pane_input.bytes);
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
 }
 
 test "native scroll actions reuse bounded viewport delivery without forwarding input" {
@@ -436,7 +438,7 @@ test "native scroll actions reuse bounded viewport delivery without forwarding i
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
     const version = client.model.version();
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
 
     for (0..4) |_| {
         _ = try client_actions.apply(client, try ActionType.parse("scroll-pane-up"));
@@ -453,7 +455,7 @@ test "native scroll actions reuse bounded viewport delivery without forwarding i
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
     try std.testing.expectEqual(version.viewport + 8, client.model.version().viewport);
     try support.expectNonViewportVersionEqual(version, client.model.version());
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -476,12 +478,12 @@ test "a full outbox preserves the committed pane viewport and rejects input" {
         .total_rows = @as(u32, pane.buffer.h) + 10,
         .offset = 0,
     };
-    try client.graphics_store.setPaneVisible(pane.id, false);
+    try host(client).graphics_store.setPaneVisible(pane.id, false);
     while (client.runtime_transport.outbox.hasCapacity()) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = pane.id } });
     }
     const version = client.model.version();
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
     var handler: InputHandler = .{ .client = client };
 
     try std.testing.expectError(
@@ -490,10 +492,10 @@ test "a full outbox preserves the committed pane viewport and rejects input" {
     );
 
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
-    try std.testing.expect(client.graphics_store.paneVisible(pane.id));
+    try std.testing.expect(host(client).graphics_store.paneVisible(pane.id));
     try std.testing.expectEqual(version.viewport + 1, client.model.version().viewport);
     try support.expectNonViewportVersionEqual(version, client.model.version());
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 }
 
 test "copy mode round trip: enter, select, copy, leave" {
@@ -506,7 +508,7 @@ test "copy mode round trip: enter, select, copy, leave" {
     pane.scroll = .{ .total_rows = 30, .offset = 6 };
     pane.cursor = .{ .visible = true, .x = 0, .y = 0 };
     const version_before = client.model.version();
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
 
     var handler: InputHandler = .{ .client = client };
     try std.testing.expectEqual(
@@ -519,22 +521,22 @@ test "copy mode round trip: enter, select, copy, leave" {
     try std.testing.expect(!client.model.name_prompt.active());
     try support.expectNonCopyVersionEqual(version_before, client.model.version());
     try std.testing.expectEqual(version_before.copy + 1, client.model.version().copy);
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
-    try std.testing.expect(client.presenter.compositor.copy == null);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
+    try std.testing.expect(host(client).presenter.compositor.copy == null);
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expect(client.presenter.compositor.copy != null);
+    try std.testing.expect(host(client).presenter.compositor.copy != null);
     try std.testing.expectEqualDeep(
         client.model.copyModeProjection().?.view,
-        client.presenter.compositor.copy.?.view,
+        host(client).presenter.compositor.copy.?.view,
     );
-    const painted_cursor_y = client.presenter.compositor.copy.?.view.cursor.y;
+    const painted_cursor_y = host(client).presenter.compositor.copy.?.view.cursor.y;
 
     const pane_view = client.model.workspace.active().?.model.viewForPane(
         pane.id,
-        client.view.workbench(),
+        host(client).view.workbench(),
     ).?;
     const mouse_version = client.model.version();
     try handler.mouse(.{
@@ -552,17 +554,17 @@ test "copy mode round trip: enter, select, copy, leave" {
     try std.testing.expectEqual(mouse_version.viewport + 1, client.model.version().viewport);
     try support.expectNonCopyOrViewportVersionEqual(mouse_version, client.model.version());
     try std.testing.expectEqual(painted_cursor_y - 3, client.model.copyModeProjection().?.view.cursor.y);
-    try std.testing.expectEqual(painted_cursor_y, client.presenter.compositor.copy.?.view.cursor.y);
+    try std.testing.expectEqual(painted_cursor_y, host(client).presenter.compositor.copy.?.view.cursor.y);
 
     // While in copy mode, keys route to the selection, not the pane.
     try handler.key(try parseKey_module("v"));
     try handler.key(try parseKey_module("l"));
-    try std.testing.expectEqual(@as(u16, 0), client.presenter.compositor.copy.?.view.cursor.x);
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(u16, 0), host(client).presenter.compositor.copy.?.view.cursor.x);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(@as(u16, 1), client.presenter.compositor.copy.?.view.cursor.x);
-    try std.testing.expect(client.presenter.compositor.copy.?.view.anchor != null);
+    try std.testing.expectEqual(@as(u16, 1), host(client).presenter.compositor.copy.?.view.cursor.x);
+    try std.testing.expect(host(client).presenter.compositor.copy.?.view.anchor != null);
 
     const version_before_copy = client.model.version();
     try handler.key(try parseKey_module("enter"));
@@ -570,11 +572,11 @@ test "copy mode round trip: enter, select, copy, leave" {
     try support.expectNonCopyOrViewportVersionEqual(version_before_copy, client.model.version());
     try std.testing.expectEqual(version_before_copy.copy + 1, client.model.version().copy);
     try std.testing.expectEqual(version_before_copy.viewport + 1, client.model.version().viewport);
-    try std.testing.expect(client.presenter.compositor.copy != null);
+    try std.testing.expect(host(client).presenter.compositor.copy != null);
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    try std.testing.expect(client.presenter.compositor.copy == null);
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expect(host(client).presenter.compositor.copy == null);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
@@ -634,7 +636,7 @@ test "a left click opens a file URI and owns the complete mouse gesture" {
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "file:///tmp/click.txt", .style = .{} });
     const pane_view = client.model.workspace.active().?.model.viewForPane(
         pane.id,
-        client.view.workbench(),
+        host(client).view.workbench(),
     ).?;
 
     var handler: InputHandler = .{ .client = client };

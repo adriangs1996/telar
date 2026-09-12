@@ -1,3 +1,4 @@
+const CreditType = @import("Credit.zig");
 const ImageType = @import("telar-core").Image;
 const SharedPixels = @import("SharedPixels.zig");
 const PlacementType = @import("telar-core").Placement;
@@ -42,7 +43,7 @@ pub fn Type(comptime Delivery: type) type {
             delivery: Delivery.PlacementState = .{},
         };
 
-        pub const Credit = struct { pane_id: PaneIdType, bytes: usize };
+        pub const Credit = CreditType;
         pub const PaneUsage = struct {
             count: usize = 0,
             bytes: usize = 0,

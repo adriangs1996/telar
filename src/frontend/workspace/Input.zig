@@ -1,5 +1,5 @@
 const RectType = @import("telar-core").Rect;
-const PaletteType = @import("../ui/Palette.zig");
+const PaletteType = @import("telar-client").Palette;
 const Input = @This();
 
 area: RectType,

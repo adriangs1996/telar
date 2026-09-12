@@ -179,14 +179,6 @@ def main() -> int:
         "report frames per second at each pipeline stage",
     )
     parser.add_argument(
-        "--source",
-        default="browser",
-        metavar="browser|synthetic:WxH@FPS",
-        help="what draws in the pane: the pinned terminal-browser (default) or "
-        "telar-frame-source publishing WxH RGBA frames at FPS, which needs "
-        "--measure and skips the browser checks",
-    )
-    parser.add_argument(
         "--floor",
         type=float,
         default=0.0,
@@ -194,60 +186,36 @@ def main() -> int:
         help="with --measure, fail unless the client presented at least this "
         "many frames per second in steady state",
     )
-    parser.add_argument(
-        "--transport",
-        default="shm",
-        choices=("shm", "file"),
-        help="how the synthetic source hands frames over: POSIX shared memory "
-        "objects or regular files rewritten in place (terminal-browser's choice)",
-    )
     args = parser.parse_args()
-    synthetic: tuple[int, int, int] | None = None
-    if args.source != "browser":
-        kind, _, geometry = args.source.partition(":")
-        if kind != "synthetic" or args.measure <= 0:
-            raise SystemExit("--source synthetic:WxH@FPS requires --measure SECONDS")
-        size, _, rate = geometry.partition("@")
-        width, _, height = size.partition("x")
-        synthetic = (int(width), int(height), int(rate or 120))
 
     telar_root = Path(__file__).resolve().parents[1]
     owned_checkout: tempfile.TemporaryDirectory[str] | None = None
-    browser_root: Path | None = None
-    revision = "n/a"
-    if synthetic is None:
-        if args.terminal_browser_repo:
-            browser_root = args.terminal_browser_repo.resolve()
-        else:
-            owned_checkout = tempfile.TemporaryDirectory(prefix="telar-terminal-browser-source-")
-            browser_root = Path(owned_checkout.name) / "terminal-browser"
-            run(["git", "clone", "--filter=blob:none", UPSTREAM, str(browser_root)], cwd=telar_root)
-            run(["git", "checkout", "--detach", PINNED_REVISION], cwd=browser_root)
+    if args.terminal_browser_repo:
+        browser_root = args.terminal_browser_repo.resolve()
+    else:
+        owned_checkout = tempfile.TemporaryDirectory(prefix="telar-terminal-browser-source-")
+        browser_root = Path(owned_checkout.name) / "terminal-browser"
+        run(["git", "clone", "--filter=blob:none", UPSTREAM, str(browser_root)], cwd=telar_root)
+        run(["git", "checkout", "--detach", PINNED_REVISION], cwd=browser_root)
 
-        revision = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=browser_root, text=True
-        ).strip()
-        if revision != PINNED_REVISION:
-            raise SystemExit(f"expected terminal-browser {PINNED_REVISION}, found {revision}")
+    revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=browser_root, text=True
+    ).strip()
+    if revision != PINNED_REVISION:
+        raise SystemExit(f"expected terminal-browser {PINNED_REVISION}, found {revision}")
 
     if not args.skip_build:
-        if browser_root is not None:
-            run(["pnpm", "install", "--frozen-lockfile"], cwd=browser_root)
-            run(["pnpm", "build"], cwd=browser_root)
+        run(["pnpm", "install", "--frozen-lockfile"], cwd=browser_root)
+        run(["pnpm", "build"], cwd=browser_root)
         # Measurement wants the shipped optimization level with the telemetry
         # counters still compiled in; the plain check keeps the Debug build.
         zig_build = ["zig", "build"]
-        if browser_root is None:
-            # The synthetic source is an example binary outside the default
-            # install; ask for its step alongside the telar install.
-            zig_build += ["install", "frame-source"]
         if args.measure > 0:
             zig_build += ["-Doptimize=ReleaseFast", "-Ddiagnostics=true"]
         run(zig_build, cwd=telar_root)
 
     telar = telar_root / "zig-out/bin/telar"
-    frame_source = telar_root / "zig-out/bin/telar-frame-source"
-    cli = browser_root / "cli/dist/main.js" if browser_root is not None else frame_source
+    cli = browser_root / "cli/dist/main.js"
     for required in (telar, cli):
         if not required.exists():
             raise SystemExit(f"missing {required}; run without --skip-build")
@@ -272,33 +240,16 @@ def main() -> int:
         }
     )
 
-    if synthetic is None:
-        child = [
-            str(telar),
-            "node",
-            str(cli),
-            "open",
-            str(fixture),
-            f"--preload={preload}",
-            f"--main-script={main_script}",
-            "--app-mode",
-        ]
-    else:
-        width, height, rate = synthetic
-        child = [
-            str(telar),
-            str(frame_source),
-            "--width",
-            str(width),
-            "--height",
-            str(height),
-            "--fps",
-            str(rate),
-            "--seconds",
-            str(int(args.measure) + 2),
-            "--transport",
-            args.transport,
-        ]
+    child = [
+        str(telar),
+        "node",
+        str(cli),
+        "open",
+        str(fixture),
+        f"--preload={preload}",
+        f"--main-script={main_script}",
+        "--app-mode",
+    ]
     wrapper = run_directory / "launch.sh"
     wrapper.write_text(
         "#!/bin/sh\nset -eu\n"
@@ -324,11 +275,7 @@ def main() -> int:
     deadline = time.monotonic() + args.timeout + args.measure
     completed = False
     input_injected = False
-    if synthetic is not None:
-        # The source runs for the measurement window and exits by itself.
-        time.sleep(args.measure + 4)
-        completed = True
-    while synthetic is None and time.monotonic() < deadline:
+    while time.monotonic() < deadline:
         events = read_json_lines(evidence)
         if not input_injected and any(event.get("event") == "page-loaded" for event in events):
             inject_ghostty_input(terminal_id)
@@ -364,7 +311,7 @@ def main() -> int:
         ),
     }
     checks = {
-        **(browser_checks if synthetic is None else {}),
+        **browser_checks,
         "exterior_kgp_supported": any(
             sample.get("kitty_graphics") == "supported" for sample in client_samples
         ),
@@ -391,8 +338,6 @@ def main() -> int:
         "history_isolated": history_commands == 0,
     }
     result: dict[str, object] = {
-        "source": args.source,
-        "transport": args.transport if synthetic is not None else "browser-chosen",
         "terminal_browser_revision": revision,
         "ghostty_version": subprocess.check_output(
             ["ghostty", "+version"], text=True

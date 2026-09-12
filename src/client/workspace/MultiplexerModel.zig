@@ -1,3 +1,4 @@
+const PaneSurfaceType = @import("telar-core").PaneSurface;
 const PaneIteratorType = @import("PaneIterator.zig");
 const PresentationCommitType = @import("../panes/PresentationCommit.zig");
 const std = @import("std");
@@ -308,6 +309,15 @@ pub fn resizeFocused(model: *Model, direction: layout_mod.Direction, area: RectT
         return false;
     }
     return true;
+}
+
+/// Changes how the leaf showing `pane_id` presents it.
+///
+/// ```zig
+/// if (model.setSurface(pane_id, .thread)) recompose();
+/// ```
+pub fn setSurface(model: *Model, pane_id: PaneIdType, surface: PaneSurfaceType) bool {
+    return model.layout.setSurface(pane_id, surface);
 }
 
 pub fn toggleFullscreen(model: *Model) bool {

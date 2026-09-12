@@ -77,7 +77,7 @@ runtime's fresh delivery cursor supplies the current sample.
   encoding rules.
 - `src/client/model/Model.zig` proves ownership, stale handling, validation
   and isolated versioning.
-- `src/frontend/client/controllers/agents/system_metrics.zig` proves the use-case
+- `src/client/controllers/agents/system_metrics.zig` proves the use-case
   boundary and retained state after rejection.
 - `src/frontend/client/tests/` proves protocol adaptation, absence of
   direct draw requests and presenter-owned status-bar projection.

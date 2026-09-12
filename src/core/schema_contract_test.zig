@@ -74,8 +74,8 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     };
     const client_layout_nodes = [_]types.ClientLayoutNode{
         .{ .split = .{ .axis = .horizontal, .ratio = 6000 } },
-        .{ .pane = @enumFromInt(5) },
-        .{ .pane = @enumFromInt(6) },
+        .{ .pane = .{ .id = @enumFromInt(5) } },
+        .{ .pane = .{ .id = @enumFromInt(6), .surface = .thread } },
     };
     const client_layout_tabs = [_]ClientTabLayoutType{.{
         .location = location,
@@ -1886,7 +1886,7 @@ test "client layout schema validates trees focus and chrome-only recovery" {
     var buffer: [types.max_client_layout_wire_bytes]u8 = undefined;
     const incomplete = [_]types.ClientLayoutNode{
         .{ .split = .{ .axis = .horizontal, .ratio = 5000 } },
-        .{ .pane = @enumFromInt(5) },
+        .{ .pane = .{ .id = @enumFromInt(5) } },
     };
     try std.testing.expectError(error.InvalidClientLayoutTree, layout.encodeClientLayoutUpdate(&buffer, .{
         .sidebar_visible = true,
@@ -1904,8 +1904,8 @@ test "client layout schema validates trees focus and chrome-only recovery" {
 
     const duplicate = [_]types.ClientLayoutNode{
         .{ .split = .{ .axis = .vertical, .ratio = 5000 } },
-        .{ .pane = @enumFromInt(5) },
-        .{ .pane = @enumFromInt(5) },
+        .{ .pane = .{ .id = @enumFromInt(5) } },
+        .{ .pane = .{ .id = @enumFromInt(5) } },
     };
     try std.testing.expectError(error.DuplicatePane, layout.encodeClientLayoutUpdate(&buffer, .{
         .sidebar_visible = true,
@@ -1921,7 +1921,7 @@ test "client layout schema validates trees focus and chrome-only recovery" {
         }},
     }));
 
-    const pane = [_]types.ClientLayoutNode{.{ .pane = @enumFromInt(5) }};
+    const pane = [_]types.ClientLayoutNode{.{ .pane = .{ .id = @enumFromInt(5) } }};
     const single_fullscreen = try layout.encodeClientLayoutUpdate(&buffer, .{
         .sidebar_visible = true,
         .sidebar_width = 62,

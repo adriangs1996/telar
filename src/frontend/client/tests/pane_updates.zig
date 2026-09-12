@@ -1,8 +1,10 @@
 //! Client integration tests for pane updates.
 
+const TerminalClient = @import("../TerminalClient.zig");
+const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
-const server_messages = @import("../entrypoints/runtime_messages.zig");
+const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const std = @import("std");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
@@ -12,10 +14,10 @@ const encodePaneCwd_module = @import("telar-core").encodePaneCwd;
 const encodePaneForeground_module = @import("telar-core").encodePaneForeground;
 const PaneIdType = @import("telar-core").PaneId;
 const InputHandler = @import("../resources/InputHandler.zig");
-const client_actions = @import("../controllers/input/actions.zig");
+const client_actions = @import("telar-client").controllers.actions;
 const encodePaneExited_module = @import("telar-core").encodePaneExited;
 const support = @import("support.zig");
-const pane_closures = @import("../controllers/panes/pane_closures.zig");
+const pane_closures = @import("telar-client").controllers.pane_closures;
 
 test "a patch against an unknown base requests a fresh snapshot" {
     var harness: TestHarness = undefined;
@@ -24,7 +26,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
     try harness.bootstrap();
     const client = harness.client;
     const version = client.model.version();
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
     const frames = client.telemetry.metrics.frames;
 
     var payload: [512]u8 = undefined;
@@ -39,9 +41,9 @@ test "a patch against an unknown base requests a fresh snapshot" {
     });
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(patch));
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
     if (comptime enabled_module) {
         try std.testing.expectEqual(frames, client.telemetry.metrics.frames);
     }
@@ -55,7 +57,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
     // A full snapshot must carry exactly one span covering the whole grid.
     const blank: CellType = .{};
     const cells: [4]CellType = @splat(blank);
-    try client.graphics_store.setPaneVisible(TestHarness.bootstrap_pane, false);
+    try host(client).graphics_store.setPaneVisible(TestHarness.bootstrap_pane, false);
     const snapshot = try encodePaneFrame_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .frame_id = 5,
@@ -74,8 +76,8 @@ test "a patch against an unknown base requests a fresh snapshot" {
     );
     try std.testing.expectEqual(@as(u64, 5), pane.pending_frame_id);
     try std.testing.expectEqual(version.frame + 1, client.model.version().frame);
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
-    try std.testing.expect(client.graphics_store.paneVisible(TestHarness.bootstrap_pane));
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
+    try std.testing.expect(host(client).graphics_store.paneVisible(TestHarness.bootstrap_pane));
     if (comptime enabled_module) {
         try std.testing.expectEqual(frames + 1, client.telemetry.metrics.frames);
         try std.testing.expectEqual(@as(u64, 1), client.telemetry.metrics.snapshots);
@@ -84,7 +86,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
     }
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
     try harness.settle();
@@ -104,8 +106,8 @@ test "a frame made stale by detach has no state resources or presentation effect
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     pane.attached = false;
     const version = client.model.version();
-    const pending_updates = client.presenter.pending_updates;
-    const graphics_visible = client.graphics_store.paneVisible(TestHarness.bootstrap_pane);
+    const pending_updates = host(client).presenter.pending_updates;
+    const graphics_visible = host(client).graphics_store.paneVisible(TestHarness.bootstrap_pane);
     const frames = client.telemetry.metrics.frames;
     const cells = [_]CellType{.{}};
     var payload: [256]u8 = undefined;
@@ -124,14 +126,14 @@ test "a frame made stale by detach has no state resources or presentation effect
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(@as(u64, 0), pane.applied_frame_id);
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
-    try std.testing.expectEqual(graphics_visible, client.graphics_store.paneVisible(pane.id));
+    try std.testing.expectEqual(graphics_visible, host(client).graphics_store.paneVisible(pane.id));
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     if (comptime enabled_module) {
         try std.testing.expectEqual(frames, client.telemetry.metrics.frames);
     }
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 }
 
 test "pane cwd commits before presenter-owned metadata projection" {
@@ -141,7 +143,7 @@ test "pane cwd commits before presenter-owned metadata projection" {
     try harness.bootstrap();
     const client = harness.client;
     const version = client.model.version();
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
 
     var payload: [128]u8 = undefined;
     const cwd = try encodePaneCwd_module(&payload, .{
@@ -156,18 +158,18 @@ test "pane cwd commits before presenter-owned metadata projection" {
     );
     try std.testing.expectEqual(version.pane_metadata + 1, client.model.version().pane_metadata);
     try std.testing.expectEqual(version.pane_foreground, client.model.version().pane_foreground);
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
-    try std.testing.expect(!client.view.dirty);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
+    try std.testing.expect(!host(client).view.dirty);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expect(!client.view.dirty);
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expect(!host(client).view.dirty);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
 
     const presented_version = client.model.version();
-    const presented_updates = client.presenter.pending_updates;
+    const presented_updates = host(client).presenter.pending_updates;
     const same_name = try encodePaneCwd_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .cwd = "/other/telar",
@@ -180,7 +182,7 @@ test "pane cwd commits before presenter-owned metadata projection" {
     );
     try std.testing.expectEqualDeep(presented_version, client.model.version());
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(presented_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(presented_updates, host(client).presenter.pending_updates);
 
     const stale = try encodePaneCwd_module(&payload, .{
         .pane_id = @enumFromInt(99),
@@ -198,7 +200,7 @@ test "pane foreground reaches presentation only after version observation" {
     const client = harness.client;
     _ = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
     const version = client.model.version();
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
 
     var payload: [128]u8 = undefined;
     const foreground = try encodePaneForeground_module(&payload, .{
@@ -216,18 +218,18 @@ test "pane foreground reaches presentation only after version observation" {
     );
     try std.testing.expectEqual(version.pane_metadata + 1, client.model.version().pane_metadata);
     try std.testing.expectEqual(version.pane_foreground + 1, client.model.version().pane_foreground);
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
-    try std.testing.expect(!client.view.dirty);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
+    try std.testing.expect(!host(client).view.dirty);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expect(!client.view.dirty);
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expect(!host(client).view.dirty);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
 
     const presented_version = client.model.version();
-    const presented_updates = client.presenter.pending_updates;
+    const presented_updates = host(client).presenter.pending_updates;
     _ = try server_messages.handleServerMessage(
         client,
         try decodeServer_module(foreground),
@@ -235,7 +237,7 @@ test "pane foreground reaches presentation only after version observation" {
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(presented_version, client.model.version());
-    try std.testing.expectEqual(presented_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(presented_updates, host(client).presenter.pending_updates);
 }
 
 test "close pane request waits for the authoritative exit before committing" {
@@ -251,7 +253,7 @@ test "close pane request waits for the authoritative exit before committing" {
             .target_pane = TestHarness.bootstrap_pane,
             .location = TestHarness.bootstrap_location,
             .axis = .horizontal,
-            .area = client.view.workbench(),
+            .area = host(client).view.workbench(),
         },
         .new_pane = closing_pane,
     });
@@ -260,7 +262,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try harness.settleModelPresentation();
     _ = client.model.syncReportedPaneFocus().?;
     try std.testing.expectEqual(closing_pane, client.model.beginPanePaste().?.pane_id);
-    try client.graphics_store.applyImage(.{
+    try host(client).graphics_store.applyImage(.{
         .pane_id = closing_pane,
         .revision = 1,
         .image = .{
@@ -272,14 +274,14 @@ test "close pane request waits for the authoritative exit before committing" {
         },
     });
     const version_before_request = client.model.version();
-    const pending_updates_before_request = client.presenter.pending_updates;
+    const pending_updates_before_request = host(client).presenter.pending_updates;
     const handler: InputHandler = .{ .client = client };
 
     _ = try client_actions.apply(handler.client, .close_pane);
 
     try std.testing.expect(client.model.workspace.findPane(closing_pane) != null);
     try std.testing.expectEqualDeep(version_before_request, client.model.version());
-    try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_request, host(client).presenter.pending_updates);
     try std.testing.expectEqual(@as(usize, 1), client.request_lifecycle.tracker.count);
 
     try harness.settle();
@@ -300,21 +302,21 @@ test "close pane request waits for the authoritative exit before committing" {
 
     try std.testing.expect(client.model.workspace.findPane(closing_pane) == null);
     try std.testing.expectEqual(version_before_request.panes + 1, client.model.version().panes);
-    try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_request, host(client).presenter.pending_updates);
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expectEqual(@as(?PaneIdType, TestHarness.bootstrap_pane), support.reportedPaneId(client));
-    try std.testing.expect(!client.graphics_store.hasPaneGraphics(closing_pane));
+    try std.testing.expect(!host(client).graphics_store.hasPaneGraphics(closing_pane));
     try std.testing.expect(!client.notification_scheduler.pending);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_updates_before_request + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_request + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
     const committed_version = client.model.version();
-    const pending_updates_after_commit = client.presenter.pending_updates;
+    const pending_updates_after_commit = host(client).presenter.pending_updates;
 
     const repeated = try pane_closures.applyExit(client, (try decodeServer_module(exited)).pane_exited);
     try std.testing.expect(repeated == .stale);
@@ -322,7 +324,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(committed_version, client.model.version());
-    try std.testing.expectEqual(pending_updates_after_commit, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_after_commit, host(client).presenter.pending_updates);
 }
 
 test "an unrequested pane exit removes the pane silently" {
@@ -332,7 +334,7 @@ test "an unrequested pane exit removes the pane silently" {
     try harness.bootstrap();
     const client = harness.client;
     try std.testing.expect(client.model.enterCopyMode());
-    try client.graphics_store.applyImage(.{
+    try host(client).graphics_store.applyImage(.{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 1,
         .image = .{
@@ -344,7 +346,7 @@ test "an unrequested pane exit removes the pane silently" {
         },
     });
     const version_before_exit = client.model.version();
-    const pending_updates_before_exit = client.presenter.pending_updates;
+    const pending_updates_before_exit = host(client).presenter.pending_updates;
 
     var payload: [128]u8 = undefined;
     const exited = try encodePaneExited_module(&payload, .{
@@ -361,17 +363,17 @@ test "an unrequested pane exit removes the pane silently" {
 
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
     try std.testing.expectEqual(version_before_exit.panes + 1, client.model.version().panes);
-    try std.testing.expectEqual(pending_updates_before_exit, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_exit, host(client).presenter.pending_updates);
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expectEqual(@as(?PaneIdType, null), support.reportedPaneId(client));
-    try std.testing.expect(!client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
+    try std.testing.expect(!host(client).graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
     try std.testing.expect(!client.notification_scheduler.pending);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_updates_before_exit + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_exit + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
 }
 
 test "an inactive pane exit retires only inactive state" {
@@ -383,7 +385,7 @@ test "an inactive pane exit retires only inactive state" {
     client.request_lifecycle.tracker = .{};
     const inactive_pane: PaneIdType = @enumFromInt(20);
     const inactive = try harness.addInactiveTab(@enumFromInt(2), inactive_pane);
-    try client.graphics_store.applyImage(.{
+    try host(client).graphics_store.applyImage(.{
         .pane_id = inactive_pane,
         .revision = 1,
         .image = .{
@@ -403,7 +405,7 @@ test "an inactive pane exit retires only inactive state" {
         .location = inactive,
     } });
     const version_before_exit = client.model.version();
-    const pending_updates_before_exit = client.presenter.pending_updates;
+    const pending_updates_before_exit = host(client).presenter.pending_updates;
 
     var payload: [128]u8 = undefined;
     const exited = try encodePaneExited_module(&payload, .{
@@ -415,10 +417,10 @@ test "an inactive pane exit retires only inactive state" {
 
     try std.testing.expect(client.model.workspace.findPane(inactive_pane) == null);
     try std.testing.expectEqualDeep(version_before_exit, client.model.version());
-    try std.testing.expectEqual(pending_updates_before_exit, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_exit, host(client).presenter.pending_updates);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqual(@as(?PaneIdType, TestHarness.bootstrap_pane), support.reportedPaneId(client));
-    try std.testing.expect(!client.graphics_store.hasPaneGraphics(inactive_pane));
+    try std.testing.expect(!host(client).graphics_store.hasPaneGraphics(inactive_pane));
     try std.testing.expect(client.request_lifecycle.tracker.take(@enumFromInt(4)) == null);
     try std.testing.expect(client.request_lifecycle.tracker.take(@enumFromInt(5)).? == .ignored);
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
@@ -426,5 +428,5 @@ test "an inactive pane exit retires only inactive state" {
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_updates_before_exit + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_exit + 1, host(client).presenter.pending_updates);
 }

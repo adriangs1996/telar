@@ -1,29 +1,31 @@
 //! Client integration tests for configuration.
 
+const TerminalClient = @import("../TerminalClient.zig");
+const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
 const OutcomeType = @import("telar-client").Outcome;
-const config_reloads = @import("../controllers/configuration/config_reloads.zig");
+const config_reloads = @import("telar-client").controllers.config_reloads;
 const DiagnosticType = @import("telar-client").Diagnostic;
 const support = @import("support.zig");
 const VersionType = @import("telar-client").Version;
-const playback_support = @import("../../sound/playback_support.zig");
+const playback_support = @import("telar-client").sound_playback_support;
 const parseKey_module = @import("telar-client").parseKey;
-const SnapshotType = @import("../../sound/Snapshot.zig");
+const SnapshotType = @import("telar-client").SoundSnapshot;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const capacity_module = @import("telar-client").capacity;
-const bar_updates = @import("../controllers/configuration/bar_updates.zig");
+const bar_updates = @import("telar-client").controllers.bar_updates;
 const EffectBatchType = @import("telar-client").EffectBatch;
-const plugin_actions = @import("../controllers/configuration/plugin_actions.zig");
-const WorkerResultType = @import("../../plugins/WorkerResult.zig");
+const plugin_actions = @import("telar-client").controllers.plugin_actions;
+const WorkerResultType = @import("telar-client").WorkerResult;
 const stableId_module = @import("telar-core").stableId;
-const name_prompts = @import("../controllers/input/name_prompts.zig");
+const name_prompts = @import("telar-client").controllers.name_prompts;
 const InputHandler = @import("../resources/InputHandler.zig");
 const ControlType = @import("telar-client").Control;
-const client_actions = @import("../controllers/input/actions.zig");
+const client_actions = @import("telar-client").controllers.actions;
 const CaptureType = @import("telar-client").Capture;
-const clipboard_images = @import("../controllers/host/clipboard_images.zig");
-const active_pane_resources = @import("../controllers/panes/active_pane_resources.zig");
+const clipboard_images = @import("telar-client").controllers.clipboard_images;
+const active_pane_resources = @import("telar-client").controllers.active_pane_resources;
 
 test "config reload outcomes that carry no new generation" {
     var harness: TestHarness = undefined;
@@ -101,7 +103,7 @@ test "configuration adoption swaps ownership after commit and presents by versio
         client.sound_playback.request(.ready),
     );
     try std.testing.expect(client.sound_playback.request(.ready) == .queued);
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
     const changed = try support.testingConfigAdoption(2, true);
     const changed_generation = changed.generation;
     const second = try config_reloads.apply(client, changed);
@@ -114,28 +116,28 @@ test "configuration adoption swaps ownership after commit and presents by versio
     try std.testing.expectEqual(@as(u64, 2), client.model.configurationGeneration());
     try std.testing.expect(!client.model.sidebarVisible());
     try std.testing.expect(!client.model.paneGaps());
-    try std.testing.expect(!client.view.sidebar_requested);
-    try std.testing.expectEqualDeep(try parseKey_module("ctrl+s"), client.host_input.router.prefix.?);
+    try std.testing.expect(!host(client).view.sidebar_requested);
+    try std.testing.expectEqualDeep(try parseKey_module("ctrl+s"), host(client).host_input.router.prefix.?);
     try std.testing.expectEqual(
         @as(u64, 40 * std.time.ns_per_ms),
-        client.host_input.router.escape_timeout_ns,
+        host(client).host_input.router.escape_timeout_ns,
     );
     try std.testing.expectEqual(
         @as(u64, 750 * std.time.ns_per_ms),
-        client.host_input.router.sequence_timeout_ns,
+        host(client).host_input.router.sequence_timeout_ns,
     );
     try std.testing.expectEqual(SnapshotType{
         .configuration = .{ .enabled = false },
         .active = true,
         .queued = null,
     }, client.sound_playback.snapshot());
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
 
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
     try std.testing.expectEqual(VersionType{
         .configuration = 2,
         .diagnostic = 2,
@@ -168,7 +170,7 @@ test "configuration adoption keeps new ownership after geometry failure" {
     try std.testing.expectEqual(@as(u64, 1), client.model.version().configuration);
     try std.testing.expect(!client.model.sidebarVisible());
     try std.testing.expect(!client.model.paneGaps());
-    try std.testing.expect(!client.view.sidebar_requested);
+    try std.testing.expect(!host(client).view.sidebar_requested);
     try std.testing.expectEqual(@as(usize, capacity_module), client.runtime_transport.outbox.len);
 }
 
@@ -177,7 +179,7 @@ test "a configuration version alone schedules presenter observation" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    const pending_updates = client.presenter.pending_updates;
+    const pending_updates = host(client).presenter.pending_updates;
 
     _ = try client.model.applyConfiguration(.{
         .generation = 1,
@@ -186,13 +188,13 @@ test "a configuration version alone schedules presenter observation" {
     });
 
     try std.testing.expectEqual(VersionType{ .configuration = 1 }, client.model.version());
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
 
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
 }
 
 test "dynamic bar ticks commit current Lua content before paced presentation" {
@@ -214,14 +216,14 @@ test "dynamic bar ticks commit current Lua content before paced presentation" {
         \\  },
         \\} } }
     );
-    const pending_before = client.presenter.pending_updates;
+    const pending_before = host(client).presenter.pending_updates;
     const version_before = client.model.version();
 
     const commit = try config_reloads.apply(client, adoption);
 
     try std.testing.expect(commit.bars_changed);
     try std.testing.expect(client.bar_updates.scheduler.pending);
-    const event = try client.select.await();
+    const event = try host(client).select.await();
     switch (event) {
         .bar_tick => |result| try bar_updates.handleTick(client, result),
         else => return error.UnexpectedEvent,
@@ -235,12 +237,12 @@ test "dynamic bar ticks commit current Lua content before paced presentation" {
     expected_version.configuration += 1;
     expected_version.bars += 2;
     try std.testing.expectEqualDeep(expected_version, client.model.version());
-    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(client.model.version().bars, client.presenter.presentation_state.prepared.model.bars);
+    try std.testing.expectEqual(client.model.version().bars, host(client).presenter.presentation_state.prepared.model.bars);
 }
 
 test "command completion from a replaced bar generation is discarded" {
@@ -261,7 +263,7 @@ test "command completion from a replaced bar generation is discarded" {
     );
     _ = try config_reloads.apply(client, running);
 
-    const tick = try client.select.await();
+    const tick = try host(client).select.await();
     switch (tick) {
         .bar_tick => |result| try bar_updates.handleTick(client, result),
         else => return error.UnexpectedEvent,
@@ -278,7 +280,7 @@ test "command completion from a replaced bar generation is discarded" {
     _ = try config_reloads.apply(client, replacement);
     const version_after_reload = client.model.version();
 
-    const completed = try client.select.await();
+    const completed = try host(client).select.await();
     switch (completed) {
         .bar_command => |value| try bar_updates.completeCommand(client, value),
         else => return error.UnexpectedEvent,
@@ -303,7 +305,7 @@ test "plugin completion applies one authorized batch through model observation" 
     batch.items[0] = .toggle_workspace_list;
     batch.len = 1;
     const version_before = client.model.version();
-    const pending_before = client.presenter.pending_updates;
+    const pending_before = host(client).presenter.pending_updates;
 
     const exit = try plugin_actions.complete(client, .{
         .execution_id = execution.id,
@@ -319,14 +321,14 @@ test "plugin completion applies one authorized batch through model observation" 
     try std.testing.expect(client.model.pluginExecution() == null);
     try std.testing.expect(client.model.workspaceListCollapsed());
     try std.testing.expectEqual(version_before.chrome + 1, client.model.version().chrome);
-    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
-    try std.testing.expect(!client.view.workspace_list_collapsed);
+    try std.testing.expectEqual(pending_before, host(client).presenter.pending_updates);
+    try std.testing.expect(!host(client).view.workspace_list_collapsed);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expect(client.view.workspace_list_collapsed);
+    try std.testing.expect(host(client).view.workspace_list_collapsed);
 }
 
 test "plugin completion from an old configuration is consumed without effects" {
@@ -346,7 +348,7 @@ test "plugin completion from an old configuration is consumed without effects" {
         .pane_gaps = true,
     });
     const version_after_reload = client.model.version();
-    const pending_before = client.presenter.pending_updates;
+    const pending_before = host(client).presenter.pending_updates;
 
     const exit = try plugin_actions.complete(client, .{
         .execution_id = execution.id,
@@ -363,7 +365,7 @@ test "plugin completion from an old configuration is consumed without effects" {
     try std.testing.expect(!client.model.workspaceListCollapsed());
     try std.testing.expectEqualDeep(version_after_reload, client.model.version());
     try std.testing.expect(client.model.diagnostic() == null);
-    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before, host(client).presenter.pending_updates);
 }
 
 test "plugin authorization denial consumes the run before publishing failure" {
@@ -378,7 +380,7 @@ test "plugin authorization denial consumes the run before publishing failure" {
     batch.items[0] = .close_pane;
     batch.len = 1;
     const version_before = client.model.version();
-    const pending_before = client.presenter.pending_updates;
+    const pending_before = host(client).presenter.pending_updates;
 
     const exit = try plugin_actions.complete(client, .{
         .execution_id = execution.id,
@@ -401,10 +403,10 @@ test "plugin authorization denial consumes the run before publishing failure" {
         "CapabilityNotGranted",
     ) != null);
     try std.testing.expect(client.notification_scheduler.pending);
-    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before + 1, host(client).presenter.pending_updates);
 }
 
 test "plugin worker failure and unmatched completion preserve lifecycle identity" {
@@ -509,7 +511,7 @@ test "Lua callback applies a validated batch through model observation" {
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const version_before = client.model.version();
-    const pending_before = client.presenter.pending_updates;
+    const pending_before = host(client).presenter.pending_updates;
     var handler: InputHandler = .{ .client = client };
 
     const control = try handler.action(configured);
@@ -521,13 +523,13 @@ test "Lua callback applies a validated batch through model observation" {
     expected.chrome += 1;
     expected.diagnostic += 1;
     try std.testing.expectEqualDeep(expected, client.model.version());
-    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expect(client.view.workspace_list_collapsed);
-    try std.testing.expectEqual(expected.diagnostic, client.presenter.presentation_state.prepared.model.diagnostic);
+    try std.testing.expect(host(client).view.workspace_list_collapsed);
+    try std.testing.expectEqual(expected.diagnostic, host(client).presenter.presentation_state.prepared.model.diagnostic);
 }
 
 test "Lua callback validates every plugin reference before native effects" {
@@ -553,7 +555,7 @@ test "Lua callback validates every plugin reference before native effects" {
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const version_before = client.model.version();
-    const pending_before = client.presenter.pending_updates;
+    const pending_before = host(client).presenter.pending_updates;
     var handler: InputHandler = .{ .client = client };
 
     const control = try handler.action(configured);
@@ -568,12 +570,12 @@ test "Lua callback validates every plugin reference before native effects" {
     var expected = version_before;
     expected.diagnostic += 1;
     try std.testing.expectEqualDeep(expected, client.model.version());
-    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expect(client.view.sidebar_requested);
+    try std.testing.expect(host(client).view.sidebar_requested);
 }
 
 test "Lua expression emits semantic keys through pane input" {
@@ -596,14 +598,14 @@ test "Lua expression emits semantic keys through pane input" {
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const version_before = client.model.version();
-    const pending_before = client.presenter.pending_updates;
+    const pending_before = host(client).presenter.pending_updates;
     var handler: InputHandler = .{ .client = client };
 
     const control = try handler.action(configured);
 
     try std.testing.expect(control == .continue_routing);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before, host(client).presenter.pending_updates);
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const left = try harness.nextClientMessage(&buffer);
@@ -676,7 +678,7 @@ test "Lua callback failure commits one diagnostic without direct presentation" {
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const version_before = client.model.version();
-    const pending_before = client.presenter.pending_updates;
+    const pending_before = host(client).presenter.pending_updates;
     var handler: InputHandler = .{ .client = client };
 
     const control = try handler.action(configured);
@@ -690,12 +692,12 @@ test "Lua callback failure commits one diagnostic without direct presentation" {
     var expected = version_before;
     expected.diagnostic += 1;
     try std.testing.expectEqualDeep(expected, client.model.version());
-    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(expected.diagnostic, client.presenter.presentation_state.prepared.model.diagnostic);
+    try std.testing.expectEqual(expected.diagnostic, host(client).presenter.presentation_state.prepared.model.diagnostic);
 }
 
 test "attachment modal captures semantic keys until escape closes it" {
@@ -716,40 +718,40 @@ test "attachment modal captures semantic keys until escape closes it" {
     errdefer if (capture_owned) {
         capture.deinit(client.gpa);
     };
-    _ = try client.view.adoptAttachment(capture);
+    _ = try host(client).view.adoptAttachment(capture);
     capture_owned = false;
-    const snapshot = client.view.kittyAttachments().snapshot();
+    const snapshot = host(client).view.kittyAttachments().snapshot();
     try std.testing.expectEqual(@as(u8, 1), snapshot.len);
-    try std.testing.expect(client.view.kittyAttachments().openModal(snapshot.items[0].id));
+    try std.testing.expect(host(client).view.kittyAttachments().openModal(snapshot.items[0].id));
     const version = client.model.version();
-    const interaction_revision = client.view.interactionVersion();
-    const pending_updates = client.presenter.pending_updates;
+    const interaction_revision = host(client).view.interactionVersion();
+    const pending_updates = host(client).presenter.pending_updates;
     var handler: InputHandler = .{ .client = client };
 
     try std.testing.expect(handler.capturesKeys());
     try handler.key(try parseKey_module("x"));
 
-    try std.testing.expect(client.view.hasAttachmentModal());
-    try std.testing.expectEqual(interaction_revision, client.view.interactionVersion());
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expect(host(client).view.hasAttachmentModal());
+    try std.testing.expectEqual(interaction_revision, host(client).view.interactionVersion());
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     try handler.key(try parseKey_module("escape"));
 
-    try std.testing.expect(!client.view.hasAttachmentModal());
+    try std.testing.expect(!host(client).view.hasAttachmentModal());
     try std.testing.expect(!handler.capturesKeys());
-    try std.testing.expectEqual(interaction_revision + 1, client.view.interactionVersion());
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expectEqual(interaction_revision + 1, host(client).view.interactionVersion());
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(
-        client.view.interactionVersion(),
-        client.presenter.presentation_state.prepared.presentation_ingress.view_interaction,
+        host(client).view.interactionVersion(),
+        host(client).presenter.presentation_state.prepared.presentation_ingress.view_interaction,
     );
 }
 
@@ -784,7 +786,7 @@ test "clipboard image completion publishes resource ingress before presentation"
     const execution = (try client.model.beginClipboardCapture(target)).?;
     const completed = try support.testingClipboardCapture(client, execution, "png");
     const version_before = client.model.version();
-    const pending_before = client.presenter.pending_updates;
+    const pending_before = host(client).presenter.pending_updates;
 
     try clipboard_images.complete(client, .{
         .execution_id = execution.id,
@@ -794,17 +796,17 @@ test "clipboard image completion publishes resource ingress before presentation"
     try std.testing.expect(client.model.clipboardCapture() == null);
     try std.testing.expect(client.clipboard_capture_resources.orphan == null);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(@as(u64, 1), client.view.kittyAttachments().ingressVersion());
-    try std.testing.expectEqual(@as(u8, 1), client.view.kittyAttachments().snapshot().len);
-    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
-    try std.testing.expectEqual(@as(u64, 0), client.presenter.presentation_state.observed.attachment_ingress);
+    try std.testing.expectEqual(@as(u64, 1), host(client).view.kittyAttachments().ingressVersion());
+    try std.testing.expectEqual(@as(u8, 1), host(client).view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(pending_before, host(client).presenter.pending_updates);
+    try std.testing.expectEqual(@as(u64, 0), host(client).presenter.presentation_state.observed.attachment_ingress);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
-    try std.testing.expectEqual(@as(u64, 1), client.presenter.presentation_state.observed.attachment_ingress);
+    try std.testing.expectEqual(pending_before + 1, host(client).presenter.pending_updates);
+    try std.testing.expectEqual(@as(u64, 1), host(client).presenter.presentation_state.observed.attachment_ingress);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(@as(u64, 1), client.presenter.presentation_state.prepared.attachment_ingress);
+    try std.testing.expectEqual(@as(u64, 1), host(client).presenter.presentation_state.prepared.attachment_ingress);
 }
 
 test "clipboard image from a retired agent target is consumed and freed" {
@@ -824,7 +826,7 @@ test "clipboard image from a retired agent target is consumed and freed" {
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const version_before = client.model.version();
-    const pending_before = client.presenter.pending_updates;
+    const pending_before = host(client).presenter.pending_updates;
 
     try clipboard_images.complete(client, .{
         .execution_id = execution.id,
@@ -833,10 +835,10 @@ test "clipboard image from a retired agent target is consumed and freed" {
 
     try std.testing.expect(client.model.clipboardCapture() == null);
     try std.testing.expect(client.clipboard_capture_resources.orphan == null);
-    try std.testing.expectEqual(@as(u64, 0), client.view.kittyAttachments().ingressVersion());
-    try std.testing.expectEqual(@as(u8, 0), client.view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(@as(u64, 0), host(client).view.kittyAttachments().ingressVersion());
+    try std.testing.expectEqual(@as(u8, 0), host(client).view.kittyAttachments().snapshot().len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before, host(client).presenter.pending_updates);
 }
 
 test "clipboard image failures settle lifecycle without direct presentation" {
@@ -848,7 +850,7 @@ test "clipboard image failures settle lifecycle without direct presentation" {
     const target = try support.installTestingAttachmentTarget(client, 1);
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    const pending_before = client.presenter.pending_updates;
+    const pending_before = host(client).presenter.pending_updates;
     const no_image = (try client.model.beginClipboardCapture(target)).?;
     const version_before_empty = client.model.version();
 
@@ -859,7 +861,7 @@ test "clipboard image failures settle lifecycle without direct presentation" {
 
     try std.testing.expect(client.model.clipboardCapture() == null);
     try std.testing.expectEqualDeep(version_before_empty, client.model.version());
-    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before, host(client).presenter.pending_updates);
 
     const too_large = (try client.model.beginClipboardCapture(target)).?;
     const version_before_large = client.model.version();
@@ -871,7 +873,7 @@ test "clipboard image failures settle lifecycle without direct presentation" {
     try std.testing.expect(client.model.clipboardCapture() == null);
     try std.testing.expect(client.model.version().notifications > version_before_large.notifications);
     try std.testing.expect(client.notification_scheduler.pending);
-    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_before, host(client).presenter.pending_updates);
 
     const invalid = (try client.model.beginClipboardCapture(target)).?;
     const completed = try support.testingClipboardCapture(client, invalid, "invalid");
@@ -885,6 +887,6 @@ test "clipboard image failures settle lifecycle without direct presentation" {
     try std.testing.expect(client.model.clipboardCapture() == null);
     try std.testing.expect(client.clipboard_capture_resources.orphan == null);
     try std.testing.expect(client.model.version().notifications > version_before_invalid.notifications);
-    try std.testing.expectEqual(@as(u64, 0), client.view.kittyAttachments().ingressVersion());
-    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(u64, 0), host(client).view.kittyAttachments().ingressVersion());
+    try std.testing.expectEqual(pending_before, host(client).presenter.pending_updates);
 }

@@ -11,7 +11,7 @@ const StyleType = @import("telar-core").Style;
 const std = @import("std");
 const BufferType = @import("telar-core").Buffer;
 const widget = @import("context_support.zig");
-const theme_support = @import("../ui/theme_support.zig");
+const theme_support = @import("telar-client").theme_support;
 
 pub const Field = GenericField(max_tab_label_bytes_module);
 pub const max_rows = 12;

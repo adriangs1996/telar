@@ -39,28 +39,13 @@ fn testingPaneFrame(buffer: []u8, input: TestingPaneFrame) !FrameViewType {
     return (try decodeServer_module(encoded)).pane_frame;
 }
 
-test "client presentation mode toggles independently and invalidates chrome" {
+test "pane surface toggling needs a focused pane and advances the pane version" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    var other = ModelType.init(std.testing.allocator, true);
-    defer other.deinit();
-
-    try std.testing.expectEqual(.normal, model.mode);
-    var expected_version = model.version();
-
-    model.toggleAgentMode();
-
-    expected_version.chrome +%= 1;
-    try std.testing.expectEqual(.agent, model.mode);
-    try std.testing.expectEqualDeep(expected_version, model.version());
-    try std.testing.expectEqual(.normal, other.mode);
-
-    model.toggleAgentMode();
-
-    expected_version.chrome +%= 1;
-    try std.testing.expectEqual(.normal, model.mode);
-    try std.testing.expectEqualDeep(expected_version, model.version());
+    const version = model.version();
+    try std.testing.expect(model.togglePaneSurface() == null);
+    try std.testing.expectEqualDeep(version, model.version());
 }
 
 test "pane input planning resolves one attached active target without mutation" {

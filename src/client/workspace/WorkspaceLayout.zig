@@ -19,6 +19,7 @@ const ProspectiveSplit = @import("ProspectiveSplit.zig");
 const View = @import("LayoutView.zig");
 const Split = @import("Split.zig");
 const RatioCandidate = @import("RatioCandidate.zig");
+const PaneSurfaceType = @import("telar-core").PaneSurface;
 const Layout = @This();
 
 nodes: [layout_support.max_nodes]Slot = [_]Slot{.{}} ** layout_support.max_nodes,
@@ -78,10 +79,10 @@ pub fn clientLayoutNodes(layout: *const Layout, output: *[max_client_layout_node
     stack[0] = root;
     while (stack_len != 0) {
         stack_len -= 1;
-        const node = layout.nodes[stack[stack_len]].node;
-        output[output_len] = switch (node) {
+        const slot = layout.nodes[stack[stack_len]];
+        output[output_len] = switch (slot.node) {
             .empty => unreachable,
-            .leaf => |pane_id| .{ .pane = pane_id },
+            .leaf => |pane_id| .{ .pane = .{ .id = pane_id, .surface = slot.surface } },
             .split => |branch| encoded: {
                 stack[stack_len] = branch.second;
                 stack_len += 1;
@@ -454,6 +455,35 @@ pub fn resizeFocused(layout: *Layout, direction: layout_support.Direction, area:
     return true;
 }
 
+/// Returns how the leaf showing `pane_id` presents it. Unknown panes are
+/// terminals.
+///
+/// ```zig
+/// if (layout.surface(pane_id) == .thread) paintThread();
+/// ```
+pub fn surface(layout: *const Layout, pane_id: PaneIdType) PaneSurfaceType {
+    const index = layout.findLeaf(pane_id) orelse return .terminal;
+
+    return layout.nodes[index].surface;
+}
+
+/// Changes how one leaf shows its pane. An unknown leaf or an unchanged
+/// surface leaves the revision intact.
+///
+/// ```zig
+/// if (layout.setSurface(pane_id, .thread)) recompose();
+/// ```
+pub fn setSurface(layout: *Layout, pane_id: PaneIdType, value: PaneSurfaceType) bool {
+    const index = layout.findLeaf(pane_id) orelse return false;
+    if (layout.nodes[index].surface == value) {
+        return false;
+    }
+
+    layout.nodes[index].surface = value;
+    layout.changed();
+    return true;
+}
+
 pub fn toggleFullscreen(layout: *Layout) bool {
     if (layout.pane_count == 0) {
         return false;
@@ -498,6 +528,7 @@ pub fn snapshot(layout: *const Layout, area: RectType, output: *LayoutSnapshot) 
     const pane_id = layout.focused() orelse return;
     output.append(.{
         .pane_id = pane_id,
+        .surface = layout.surface(pane_id),
         .outer = area,
         .content = area.inner(layout.metrics.border),
         .focused = true,
@@ -522,6 +553,7 @@ fn snapshotTiled(layout: *const Layout, area: RectType, output: *LayoutSnapshot)
                 display_index += 1;
                 output.append(.{
                     .pane_id = pane_id,
+                    .surface = layout.nodes[pending.node].surface,
                     .outer = pending.area,
                     .content = if (layout.hasBorders())
                         pending.area.inner(layout.metrics.border)
@@ -667,4 +699,32 @@ fn changed(layout: *Layout) void {
     if (layout.revision == 0) {
         layout.revision = 1;
     }
+}
+
+test "surface changes advance the revision and reach the wire and the snapshot" {
+    var layout: Layout = .{};
+    try layout.addRoot(@enumFromInt(1));
+    try layout.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .axis = .horizontal });
+    const before = layout.currentRevision();
+
+    try std.testing.expect(!layout.setSurface(@enumFromInt(3), .thread));
+    try std.testing.expectEqual(before, layout.currentRevision());
+    try std.testing.expect(layout.setSurface(@enumFromInt(2), .thread));
+    try std.testing.expect(!layout.setSurface(@enumFromInt(2), .thread));
+    try std.testing.expect(layout.currentRevision() != before);
+    try std.testing.expectEqual(PaneSurfaceType.thread, layout.surface(@enumFromInt(2)));
+    try std.testing.expectEqual(PaneSurfaceType.terminal, layout.surface(@enumFromInt(1)));
+
+    var nodes: [max_client_layout_nodes_module]ClientLayoutNodeType = undefined;
+    const encoded = layout.clientLayoutNodes(&nodes);
+    try std.testing.expectEqual(@as(usize, 3), encoded.len);
+    try std.testing.expectEqual(PaneSurfaceType.terminal, encoded[1].pane.surface);
+    try std.testing.expectEqual(PaneSurfaceType.thread, encoded[2].pane.surface);
+
+    var geometry: LayoutSnapshot = .{};
+    layout.snapshot(.{ .w = 40, .h = 10 }, &geometry);
+    try std.testing.expectEqual(PaneSurfaceType.thread, geometry.find(@enumFromInt(2)).?.surface);
+    try std.testing.expect(layout.toggleFullscreen());
+    layout.snapshot(.{ .w = 40, .h = 10 }, &geometry);
+    try std.testing.expectEqual(PaneSurfaceType.thread, geometry.views()[0].surface);
 }

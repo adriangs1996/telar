@@ -29,7 +29,7 @@ fields private or transfer mutation authority.
 | Schema | `src/core/schema/` | Bounded runtime-client messages and their encoding |
 | UI values | `src/core/ui/` | Cells, buffers, geometry and shared text values |
 | Transport | `src/core/transport/` | Framed byte streams and local endpoint values |
-| Lua runtime | `src/lua/lua.zig` | Metered VM and restricted standard-library sandbox |
+| Lua runtime | `src/lua/` | Vendored C API, metered VM and restricted standard-library sandbox |
 
 Core owns no live runtime or client state and imports neither process package.
 
@@ -96,6 +96,8 @@ neither runtime truth nor a common instance of navigation or focus.
 
 | Capability | Location | Owns |
 | --- | --- | --- |
+| Attached client | `src/client/AttachedClient.zig` | Shared aggregate: model, transport, configuration, plugins, host ports |
+| Controllers | `src/client/controllers/` | Slice adapters wiring handlers to the model and host ports |
 | Model | `src/client/model/Model.zig` | Disposable semantic state and transitions |
 | Application | `src/client/application/` | Command handlers and narrow effect ports |
 | Entrypoints | `src/client/entrypoints/runtime_messages.zig` | Synchronous decoded-message dispatch |
@@ -103,31 +105,31 @@ neither runtime truth nor a common instance of navigation or focus.
 | Workspace | `src/client/workspace/` | Tabs, splits, navigation and explicit geometry |
 | Input | `src/client/input/` | Semantic values, bindings, leases, editing and child encoding |
 | Connection | `src/client/connection/` | Bounded outbox, correlation and transport state |
-| Resources | `src/client/resources/` | Clock and deadline values |
+| Resources | `src/client/resources/` | Clock, timers, configuration reload, layout persistence and telemetry state |
 | Presentation | `src/client/presentation/` | Projections, preparation, completion, geometry and title port |
 | Graphics | `src/client/graphics/` | Image retention, generations, quotas and credits |
 | Attachments | `src/client/attachments/` | Catalog, markers and sensitive-byte lifetime |
 | Agents | `src/client/agents/` | Bounded projection of runtime agent state |
 | Notifications and bars | `src/client/notifications/`, `src/client/bars/` | Semantic control state |
 | Links | `src/client/links/` | Targets, URI rules and pointer ownership |
-| Configuration | `src/client/config/` | Typed configuration and bounded callback values |
+| Configuration | `src/client/config/` | Typed configuration, client-owned Lua generation and bounded callback values |
+| Appearance | `src/client/appearance/` | Named color themes, palette roles and overrides |
+| Plugins | `src/client/plugins/` | Registry, protocol and isolated workers |
+| Transport | `src/client/transport/` | Client-side local connection and handshake |
 
 ## TUI capabilities
 
 | Capability | Location | Owns |
 | --- | --- | --- |
-| Client adapter | `src/frontend/client/Client.zig` | Assembly, event driver, controllers and workers |
-| Sound | `src/frontend/sound/` | Host-audio policy, queue and platform worker |
+| Terminal client | `src/frontend/client/TerminalClient.zig` | Embeds `AttachedClient`, owns terminal resources, binds host ports, runs the select driver |
+| Sound | `src/frontend/sound/` | Host-audio queue and platform worker |
 | Input | `src/frontend/input/` | Terminal decoder integration with shared routing |
 | Workspace | `src/frontend/workspace/` | Cell compositor over the shared workspace model |
 | Presentation | `src/frontend/presentation/` | Screen diff, terminal output and pacing |
-| Graphics | `src/frontend/graphics/` | Host transfer state, renderer policy and overlays |
-| UI | `src/frontend/ui/` | Client-only focus, hits and theme values |
+| Graphics | `src/frontend/graphics/` | Host transfer state, probes and overlays |
+| UI | `src/frontend/ui/` | Client-only focus, hits and icons |
 | Widgets | `src/frontend/widgets/` | Chrome and interaction surfaces |
-| Config | `src/frontend/config/` | Typed configuration and client-owned Lua generation |
-| Plugins | `src/frontend/plugins/` | Registry, protocol and isolated workers |
 | Platform | `src/frontend/platform/` | Host TTY and resize adapters |
-| Transport | `src/frontend/transport/` | Client-side local connection and handshake |
 
 Shared handlers receive their model and named ports, never the concrete TUI
 aggregate. `presentation_projection` supplies host context and exposes physical
@@ -166,8 +168,9 @@ frontend/input     -> presentation
 frontend/workspace -> input, presentation, ui
 frontend/widgets   -> agents, workspace, attachments, ui
 frontend/graphics  -> workspace, presentation, ui, widgets
-frontend/config    -> sound, input, graphics, ui
-frontend/plugins   -> input, config
+client/config      -> appearance, bars, environment, input, layout,
+                      notifications
+client/plugins     -> config, input
 backend/runtime    -> pane, pty, media, process, agent, history, proxy,
                       plugins, transport
 backend/pane       -> pty, media, process, history

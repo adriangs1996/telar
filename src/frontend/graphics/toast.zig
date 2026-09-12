@@ -7,7 +7,7 @@
 //! renderer fully functional.
 
 const std = @import("std");
-const PaletteType = @import("../ui/Palette.zig");
+const PaletteType = @import("telar-client").Palette;
 const Colors = @import("Colors.zig");
 const ColorType = @import("telar-core").Color;
 const GraphicsColor = @import("Color.zig");
@@ -17,7 +17,7 @@ const PixelRectangle = @import("PixelRectangle.zig");
 const OutputPlacementType = @import("kitty_protocol").OutputPlacement;
 const ToastRenderer = @import("ToastRenderer.zig");
 const CenterType = @import("telar-client").Center;
-const theme = @import("../ui/theme_support.zig");
+const theme = @import("telar-client").theme_support;
 const transition_duration_ns_module = @import("telar-client").transition_duration_ns;
 const ThemeType = @import("telar-client").Theme;
 const RectType = @import("telar-core").Rect;

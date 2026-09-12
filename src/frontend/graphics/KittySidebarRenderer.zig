@@ -23,7 +23,7 @@ pub const provider_count = 3;
 pub const provider_source_size = 256;
 pub const provider_source_width = provider_count * provider_source_size;
 const provider_raster_size = 64;
-pub const provider_source_pixels: []const u8 = @embedFile("../assets/provider-marks-768x256.rgba");
+pub const provider_source_pixels: []const u8 = @import("assets").provider_marks_rgba;
 // A flat rounded card needs little source resolution. This keeps its RGBA
 // payload plus the provider atlas comfortably inside one media pass even
 // after base64 expansion.

@@ -1,8 +1,14 @@
 ---
-status: accepted
+status: superseded by ADR-0014
 ---
 
 # Agent mode is a client projection of one runtime
+
+Superseded on 2026-09-11: there is no second composition. A thread is shown
+as the surface of its own pane inside the workbench, see
+[ADR 0014](0014-native-chrome-is-a-second-presentation-adapter.md). The
+invariant that a live thread is always a pane, and that provider knowledge
+lives in manifests and readers, stands.
 
 Supervising many agents needs a view organized by project and attention,
 not by workspace, tab and pane. The obvious way to build it is a second

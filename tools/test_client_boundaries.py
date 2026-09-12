@@ -50,7 +50,7 @@ class BoundariesTest(unittest.TestCase):
         self.assertIn("declared public capability file", violations(self.root)[0])
 
     def test_reverse_module_dependency_is_rejected(self):
-        for module in ("telar-frontend", "telar-backend", "ghostty-vt", "lua-api", "freetype"):
+        for module in ("telar-frontend", "telar-backend", "ghostty-vt", "kitty_protocol", "freetype"):
             self.write("client.zig", f'const forbidden = @import("{module}");')
             self.assertIn("forbidden module", violations(self.root)[0])
 

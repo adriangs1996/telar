@@ -52,6 +52,24 @@ A client's confirmed delivery of one prepared presentation. It permits exact
 frame acknowledgements but does not claim that pixels reached the user's eyes.
 _Avoid_: Frame receipt, Composition, Client delivery
 
+**Presentation adapter**:
+The implementation that shows one client's projection on a host and turns host
+events into host input. The TUI, the native GUI and the headless test adapter
+are presentation adapters; each owns its chrome, hit testing and metrics.
+_Avoid_: Renderer, frontend, view layer
+
+**Client chrome**:
+Everything a presentation adapter shows that is not the content of a pane:
+sidebar, bars, modals, pickers and Telar views. Its look belongs to the
+adapter; the state it shows belongs to the client model.
+_Avoid_: UI, widgets, decorations
+
+**Telar view**:
+Content Telar composes from client and runtime projections instead of from a
+PTY, such as a thread view, a composer or a history browser. The layout may
+place it beside terminal panes; its state never lives in the adapter.
+_Avoid_: GUI pane, virtual pane, widget pane
+
 **Attachment generation**:
 One lifetime of a client's attachment to a pane, distinct from the pane's own
 lifetime. Reattachment begins a new generation even when frame numbers repeat.
@@ -232,7 +250,7 @@ _Avoid_: Running agent, busy process
 An open agent waiting for user input with no current work in progress.
 _Avoid_: Idle process
 
-## Threads and agent mode
+## Threads
 
 **Project**:
 A git repository identified by its common directory, so every worktree of
@@ -262,28 +280,19 @@ What a blocked agent is asking for, as an official hook reported it. Screen
 evidence never provides one.
 _Avoid_: Permission text, prompt text
 
-**Multiplexer mode**:
-The client projection organized by workspace, tab and pane.
-_Avoid_: Trama mode, normal mode
+**Pane surface**:
+How a layout leaf shows its pane: the terminal cells, or the thread surface of
+the agent running in it. Toggling the surface never moves or refocuses the pane.
+_Avoid_: View mode, agent view, pane kind
 
-**Agent mode**:
-The client projection organized by project, thread and attention, with a
-thread view and a composer. It never owns runtime state.
-_Avoid_: Hilos mode, dashboard, thread mode
-
-**Browse focus**:
-The agent-mode input owner where host input drives the thread list, the
-projects and the views.
-_Avoid_: Navigate mode, list mode
-
-**Interact focus**:
-The agent-mode input owner where host input reaches the selected thread's
-pane, as it does in multiplexer mode.
-_Avoid_: Terminal mode, attached
+**Thread surface**:
+The Telar view of a pane's agent: its header, its transcript items and its
+composer. The TUI paints it with cells and the GUI natively from one projection.
+_Avoid_: Chat pane, conversation panel, GUI pane
 
 **Composer**:
-The client widget where the user writes a prompt for a thread, chooses the
-provider of a new thread and configures that provider's options.
+The client widget inside a thread surface where the user writes a prompt for
+the agent in that pane and, later, chooses the provider options of a new thread.
 _Avoid_: Prompt box, chat input, editor
 
 **Provider option**:

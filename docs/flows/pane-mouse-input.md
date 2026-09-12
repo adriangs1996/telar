@@ -181,7 +181,7 @@ recomposes the affected projection. No use case requests a draw directly.
 - `src/client/application/input/pane_mouse.zig` proves tracked-event,
   viewport and alternate-scroll selection, the live-bottom gate, ignored
   events and effect failure propagation.
-- `src/frontend/client/controllers/input/pane_mouse_inputs.zig` proves exact
+- `src/client/controllers/input/pane_mouse_inputs.zig` proves exact
   raw-pixel and cell-center SGR encoding.
 - `src/frontend/client/tests/input.zig` proves default scroll bindings through
   host byte routing, focus rather than hover, synthetic SGR cell/pixel reports,

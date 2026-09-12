@@ -8,7 +8,7 @@ const LabelType = @import("../presentation/Label.zig");
 const std = @import("std");
 const measure_module = @import("telar-core").measure;
 const PillRenderer = @import("PillRenderer.zig");
-const theme = @import("../ui/theme_support.zig");
+const theme = @import("telar-client").theme_support;
 const kitty_codec = @import("kitty_codec.zig");
 
 pub const max_cache_bytes = 1024 * 1024;

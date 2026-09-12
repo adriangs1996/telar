@@ -2,7 +2,7 @@
 
 const SlotStateType = @import("SlotState.zig");
 const GenericCatalog = @import("telar-client").GenericCatalog;
-const ConfigurationType = @import("../graphics/Configuration.zig");
+const ConfigurationType = @import("telar-client").SidebarRendererInput;
 const Plan = @import("telar-client").Plan;
 const std = @import("std");
 const writeTransmissionAbort_module = @import("kitty_protocol").writeTransmissionAbort;

@@ -10,7 +10,7 @@ const modal = @import("modal.zig");
 const ModalInput = @import("ModalInput.zig");
 const BufferType = @import("telar-core").Buffer;
 const std = @import("std");
-const theme_support = @import("../ui/theme_support.zig");
+const theme_support = @import("telar-client").theme_support;
 const AttachmentsTypesId = @import("telar-client").AttachmentId;
 const ColorType = @import("telar-core").Color;
 

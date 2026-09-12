@@ -30,7 +30,8 @@ from the accepted commit; adapters cannot supply an unrelated ACK batch.
   asynchronous consumers use adapter-owned storage or explicit resource leases.
 - Lifecycle operations allocate nothing. Commit and geometry storage are bounded
   by `schema.max_panes_per_tab`; there is one flight and no frame queue.
-- Geometry owns the region revision, tab, layout revision, host size and pane
+- Geometry owns the workbench-grid revision, tab, layout revision, grid
+  metrics (columns, rows and cell pixels, whichever host supplies them) and pane
   shapes. `Geometry.matches` checks new pane-coordinate gestures. Existing
   gestures retain their owner. Widget hit maps remain adapter-owned.
 - Graphics and attachment leases belong to their consumers, not the commit.

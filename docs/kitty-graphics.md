@@ -259,10 +259,6 @@ Telar as `-Doptimize=ReleaseFast -Ddiagnostics=true` so the counters exist
 without Debug overhead, and adds a `frames` block: frames per second forwarded
 by the media actor, published by the runtime and presented by the client, with
 the ingest, freeze, deferral and retire-latency figures behind them.
-`--source synthetic:3840x2160@120` replaces the browser with
-`telar-frame-source`, which publishes shared-memory frames of that size at
-that rate exactly as terminal-browser does, so the pipeline can be measured at
-4K without Chromium or its dependence on the machine's memory pressure.
 
 It writes its machine-readable result to
 `zig-out/terminal-browser-verification.json`. On 2026-08-23 it passed against:

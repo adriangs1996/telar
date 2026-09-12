@@ -1,14 +1,16 @@
 //! Owns one client's host-TTY read, native router and replaceable deadlines.
 
+const TerminalClient = @import("../../TerminalClient.zig");
+const host = TerminalClient.of;
 const GenericRouter = @import("../../../input/GenericRouter.zig").Type;
 const Action = @import("telar-client").Action;
-const model = @import("../../../config/model.zig");
+const model = @import("telar-client").config_model;
 const std = @import("std");
 const max_encoded_bytes = @import("telar-client").max_encoded_bytes;
-const Config = @import("Config.zig");
-const default_bindings = @import("../../../config/default_bindings.zig");
-const Client = @import("../../Client.zig");
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
+const Config = @import("telar-client").RouterConfig;
+const default_bindings = @import("telar-client").default_bindings;
+const Client = @import("telar-client").AttachedClient;
+const runtime_transport = @import("telar-client").runtime_io;
 const mark_module = @import("telar-core").mark;
 const Chunk = @import("Chunk.zig");
 const InputHandler = @import("../../resources/InputHandler.zig");
@@ -60,13 +62,13 @@ const Expiry = enum {
 /// try host_inputs.scheduleRead(client);
 /// ```
 pub fn scheduleRead(client: *Client) !void {
-    const state = &client.host_input;
+    const state = &host(client).host_input;
     if (state.read_pending or runtime_transport.availableCapacity(client) == 0) {
         return;
     }
 
     state.read_pending = true;
-    client.select.concurrent(.input, read, .{ client.io, state.file, &state.chunk }) catch |err| {
+    host(client).select.concurrent(.input, read, .{ client.io, state.file, &state.chunk }) catch |err| {
         state.read_pending = false;
 
         return err;
@@ -81,7 +83,7 @@ pub fn scheduleRead(client: *Client) !void {
 /// ```
 pub fn handleOwnedRead(client: *Client, result: anyerror!u16) !bool {
     mark_module(client.io, .client_input);
-    const state = &client.host_input;
+    const state = &host(client).host_input;
     state.read_pending = false;
     state.chunk.len = try result;
     return routeChunk(client);
@@ -93,14 +95,14 @@ pub fn handleOwnedRead(client: *Client, result: anyerror!u16) !bool {
 /// if (try host_inputs.handleRead(client, chunk)) return 0;
 /// ```
 pub fn handleRead(client: *Client, result: anyerror!Chunk) !bool {
-    const state = &client.host_input;
+    const state = &host(client).host_input;
     state.read_pending = false;
     state.chunk = try result;
     return routeChunk(client);
 }
 
 fn routeChunk(client: *Client) !bool {
-    const state = &client.host_input;
+    const state = &host(client).host_input;
     const chunk = &state.chunk;
     if (chunk.len == 0) {
         return true;
@@ -124,7 +126,7 @@ fn routeChunk(client: *Client) !bool {
 /// Replays early input only after the runtime has supplied the active pane.
 /// Example: `if (try replayStartup(client)) detachClient();`.
 pub fn replayStartup(client: *Client) !bool {
-    const bytes = try client.host_input.startup_input.finish();
+    const bytes = try host(client).host_input.startup_input.finish();
     var offset: usize = 0;
     while (offset < bytes.len) {
         const end = @min(offset + chunk_size, bytes.len);
@@ -139,8 +141,8 @@ pub fn replayStartup(client: *Client) !bool {
 }
 
 fn routeBytes(client: *Client, bytes: []const u8) !bool {
-    const state = &client.host_input;
-    client.presenter.noteInput(monotonic_module(client.io));
+    const state = &host(client).host_input;
+    client.presentation.noteInput(monotonic_module(client.io));
     var handler: InputHandler = .{ .client = client };
     const prefix_was_pending = state.router.prefixPending();
     const lease_overflows_before = state.router.leaseOverflowCount();
@@ -164,7 +166,7 @@ fn routeBytes(client: *Client, bytes: []const u8) !bool {
 /// if (try host_inputs.handleInputTimeout(client, result)) return 0;
 /// ```
 pub fn handleInputTimeout(client: *Client, result: anyerror!void) !bool {
-    try client.host_input.input_timeout.complete(result);
+    try host(client).host_input.input_timeout.complete(result);
 
     return expire(client, .input);
 }
@@ -175,13 +177,13 @@ pub fn handleInputTimeout(client: *Client, result: anyerror!void) !bool {
 /// if (try host_inputs.handleBindingTimeout(client, result)) return 0;
 /// ```
 pub fn handleBindingTimeout(client: *Client, result: anyerror!void) !bool {
-    try client.host_input.binding_timeout.complete(result);
+    try host(client).host_input.binding_timeout.complete(result);
 
     return expire(client, .binding);
 }
 
 fn expire(client: *Client, expiry: Expiry) !bool {
-    const state = &client.host_input;
+    const state = &host(client).host_input;
     var handler: InputHandler = .{ .client = client };
     const prefix_was_pending = state.router.prefixPending();
     const control = switch (expiry) {
@@ -203,11 +205,11 @@ fn finishRouting(client: *Client, prefix_was_pending: bool) !void {
 }
 
 fn syncPrefixStatus(client: *Client, prefix_was_pending: bool) void {
-    if (prefix_was_pending == client.host_input.router.prefixPending()) {
+    if (prefix_was_pending == host(client).host_input.router.prefixPending()) {
         return;
     }
 
-    client.host_input.presentation_revision +%= 1;
+    host(client).host_input.presentation_revision +%= 1;
 }
 
 fn synchronizeTimers(client: *Client) !void {
@@ -216,13 +218,10 @@ fn synchronizeTimers(client: *Client) !void {
 }
 
 fn synchronizeInputTimeout(client: *Client) !void {
-    const scheduler = &client.host_input.input_timeout;
-    switch (scheduler.update(client.io, client.host_input.router.inputDeadline())) {
+    const scheduler = &host(client).host_input.input_timeout;
+    switch (scheduler.update(client.io, host(client).host_input.router.inputDeadline())) {
         .idle, .retained => {},
-        .schedule => client.select.concurrent(.input_timeout, wait_module, .{
-            client.io,
-            scheduler,
-        }) catch |err| {
+        .schedule => client.timers.arm(.input, scheduler) catch |err| {
             scheduler.schedulingFailed();
 
             return err;
@@ -231,13 +230,10 @@ fn synchronizeInputTimeout(client: *Client) !void {
 }
 
 fn synchronizeBindingTimeout(client: *Client) !void {
-    const scheduler = &client.host_input.binding_timeout;
-    switch (scheduler.update(client.io, client.host_input.router.bindingDeadline())) {
+    const scheduler = &host(client).host_input.binding_timeout;
+    switch (scheduler.update(client.io, host(client).host_input.router.bindingDeadline())) {
         .idle, .retained => {},
-        .schedule => client.select.concurrent(.binding_timeout, wait_module, .{
-            client.io,
-            scheduler,
-        }) catch |err| {
+        .schedule => client.timers.arm(.binding, scheduler) catch |err| {
             scheduler.schedulingFailed();
 
             return err;

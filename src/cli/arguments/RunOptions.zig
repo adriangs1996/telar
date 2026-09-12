@@ -1,9 +1,9 @@
 const CommandType = @import("telar-backend").Command;
-const ThemeType = @import("telar-frontend").Theme;
-const default_theme_module = @import("telar-frontend").default_theme;
-const SidebarRenderingType = @import("telar-frontend").SidebarRendering;
+const ThemeType = @import("telar-client").ColorTheme;
+const default_theme_module = @import("telar-client").theme_support.default_theme;
+const SidebarRenderingType = @import("telar-client").SidebarRendering;
 const std = @import("std");
-const fromName_module = @import("telar-frontend").fromName;
+const fromName_module = @import("telar-client").theme_support.fromName;
 const run = @import("run.zig");
 const RunOptions = @This();
 

@@ -1,17 +1,19 @@
 //! Client integration tests for workspace lifecycle.
 
+const TerminalClient = @import("../TerminalClient.zig");
+const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
 const LayoutSnapshot = @import("telar-client").LayoutSnapshot;
 const TabLocationType = @import("telar-core").TabLocation;
 const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
-const server_messages = @import("../entrypoints/runtime_messages.zig");
+const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const support = @import("support.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const workspace_handoffs = @import("../controllers/workspaces/workspace_handoffs.zig");
+const workspace_handoffs = @import("telar-client").controllers.workspace_handoffs;
 const PaneTargetType = @import("telar-core").PaneTarget;
 const RequestIdType = @import("telar-core").RequestId;
 const encodeTabSnapshot_module = @import("telar-core").encodeTabSnapshot;
@@ -28,7 +30,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
     const left = TestHarness.bootstrap_pane;
     const top_right: PaneIdType = @enumFromInt(11);
     const bottom_right: PaneIdType = @enumFromInt(12);
-    const workbench = client.view.workbench();
+    const workbench = host(client).view.workbench();
     const prior_model = &client.model.workspace.active().?.model;
     try prior_model.split(.{ .existing_pane = left, .new_pane = top_right, .location = prior_location, .axis = .horizontal, .area = workbench });
     try prior_model.split(.{ .existing_pane = top_right, .new_pane = bottom_right, .location = prior_location, .axis = .vertical, .area = workbench });
@@ -44,7 +46,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
         .tab_id = @enumFromInt(5),
     };
     const version_before_creation = client.model.version();
-    const pending_updates_before_creation = client.presenter.pending_updates;
+    const pending_updates_before_creation = host(client).presenter.pending_updates;
     try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .create_workspace = .{ .cols = 80, .rows = 20 } });
     var payload: [128]u8 = undefined;
     const opened = try encodePaneOpened_module(&payload, .{
@@ -68,7 +70,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
     try std.testing.expectEqual(version_before_creation.tabs + 1, client.model.version().tabs);
     try std.testing.expectEqual(version_before_creation.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(version_before_creation.panes + 1, client.model.version().panes);
-    try std.testing.expectEqual(pending_updates_before_creation, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_creation, host(client).presenter.pending_updates);
     try std.testing.expectEqual(@as(?PaneIdType, @enumFromInt(30)), support.reportedPaneId(client));
 
     const bookmark = client.navigation_history.find(prior_location.workspace).?;
@@ -84,7 +86,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
         );
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates_before_creation + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_creation + 1, host(client).presenter.pending_updates);
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
     const workspace_snapshot = try harness.nextClientMessage(&message_buffer);
@@ -94,7 +96,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
     try std.testing.expect(tab_snapshot == .request_tab_snapshot);
     try std.testing.expectEqualDeep(new_location, tab_snapshot.request_tab_snapshot.location);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
 
     // Return through the same runtime handoff used by workspace selection.
     client.request_lifecycle.tracker = .{};

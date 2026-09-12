@@ -21,11 +21,11 @@ const BitmapType = @import("Bitmap.zig");
 const bitmap = @import("bitmap_support.zig");
 const IconsRenderer = @import("IconsRenderer.zig");
 
-pub const embedded_font: []const u8 = @embedFile("../assets/TelarNerdIcons-Regular.ttf");
+pub const embedded_font: []const u8 = @import("assets").nerd_icons;
 
 /// The telar mark is artwork rather than a font glyph, checked in at the
 /// largest size a cell slot can use.
-const mark_source: []const u8 = @embedFile("../assets/telar-mark-64.rgba");
+const mark_source: []const u8 = @import("assets").telar_mark_64_rgba;
 const mark_source_side: u32 = 64;
 
 comptime {

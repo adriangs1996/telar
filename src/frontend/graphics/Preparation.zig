@@ -1,6 +1,6 @@
 const RectType = @import("telar-core").Rect;
 const CenterType = @import("telar-client").Center;
-const PaletteType = @import("../ui/Palette.zig");
+const PaletteType = @import("telar-client").Palette;
 const ThemeType = @import("telar-client").Theme;
 const Preparation = @This();
 

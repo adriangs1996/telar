@@ -17,7 +17,7 @@ const Detail = @import("Detail.zig");
 const GraphemeIteratorType = @import("telar-core").GraphemeIterator;
 const BufferType = @import("telar-core").Buffer;
 const widget = @import("context_support.zig");
-const theme_support = @import("../ui/theme_support.zig");
+const theme_support = @import("telar-client").theme_support;
 const picker = @import("goto_picker.zig");
 
 /// Computes the same compact rectangle for cell composition and graphical overlays.

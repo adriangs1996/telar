@@ -20,7 +20,7 @@ const KeyType = @import("telar-client").Key;
 const ColorType = @import("telar-core").Color;
 const BufferType = @import("telar-core").Buffer;
 const widget = @import("context_support.zig");
-const theme_support = @import("../ui/theme_support.zig");
+const theme_support = @import("telar-client").theme_support;
 const parseKey_module = @import("telar-client").parseKey;
 
 pub fn render(context: *ContextType, area: RectType, metrics: ?Metrics) void {

@@ -3,7 +3,7 @@ const PaneIdType = @import("telar-core").PaneId;
 const SnapshotType = @import("telar-client").OutboxSnapshot;
 const HostCapabilitiesType = @import("telar-client").HostCapabilities;
 const SupportType = @import("telar-client").Support;
-const capabilities_module = @import("../../graphics/capabilities.zig");
+const ResolvedSidebarRenderingType = @import("telar-client").ResolvedSidebarRendering;
 const TimingType = @import("telar-core").Timing;
 const CoreSnapshotSnapshot = @import("telar-core").SnapshotSnapshot;
 const Snapshot = @This();
@@ -20,7 +20,7 @@ media_pending: bool,
 outbox: SnapshotType,
 capabilities: HostCapabilitiesType,
 zlib_support: SupportType = .unknown,
-sidebar_rendering: capabilities_module.ResolvedSidebarRendering,
+sidebar_rendering: ResolvedSidebarRenderingType,
 lua_used: usize,
 lua_limit: usize,
 kitty_store_bytes: usize,

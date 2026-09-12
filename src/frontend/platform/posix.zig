@@ -1,7 +1,7 @@
 const PosixFastWriter = @import("PosixFastWriter.zig");
 const PosixTty = @import("PosixTty.zig");
 
-const LocalTime = @import("LocalTime.zig");
+const LocalTime = @import("telar-client").LocalTime;
 const std = @import("std");
 const sequences = @import("sequences.zig");
 

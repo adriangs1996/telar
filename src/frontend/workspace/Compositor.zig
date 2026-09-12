@@ -17,6 +17,8 @@ const IncrementalComposition = @import("IncrementalComposition.zig");
 const CompositionInput = @import("CompositionInput.zig");
 const CopyChangeComposition = @import("CopyChangeComposition.zig");
 const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const ThreadViewType = @import("telar-client").ThreadView;
+const thread_surface = @import("thread_surface.zig");
 /// Presentation-owned cache for one active tab. It borrows an immutable
 /// multiplexer model during composition and returns the exact model work that
 /// may be committed only after the host flush succeeds.
@@ -35,6 +37,8 @@ fullscreen_labels: PlanType = .{},
 panes: [max_panes_per_tab]PaneProjection = undefined,
 pane_count: u8 = 0,
 progress_animation_frame: u8 = 0,
+agents_revision: u64 = 0,
+thread_surfaces: bool = false,
 invalidated: bool = true,
 
 /// Creates an empty composition cache. Buffer allocation is deferred
@@ -120,6 +124,10 @@ pub fn render(compositor: *Compositor, composition: Composition) !CompositionRes
     if (compositor.paneProjectionChanged(model)) {
         compositor.invalidated = true;
     }
+    if (compositor.thread_surfaces and compositor.agents_revision != options.agents_revision) {
+        compositor.invalidated = true;
+    }
+    compositor.agents_revision = options.agents_revision;
     const target = &compositor.composed.?;
     const commit = model.presentationCommit();
     const stats = if (compositor.invalidated) full: {
@@ -144,6 +152,12 @@ pub fn render(compositor: *Compositor, composition: Composition) !CompositionRes
 
             target.pushClip(view.content);
             defer target.popClip();
+            if (view.surface == .thread) {
+                if (ThreadViewType.capture(model, options.agents, pane.id)) |thread| {
+                    thread_surface.paint(target, view.content, .{ .view = thread, .palette = options.palette });
+                }
+                continue;
+            }
             const rows = @min(view.content.h, pane.buffer.h);
             const cols = @min(view.content.w, pane.buffer.w);
             var y: u16 = 0;
@@ -265,6 +279,9 @@ fn composeIncremental(compositor: *Compositor, context: *IncrementalComposition)
     for (compositor.layout_snapshot.views()) |view| {
         const pane = context.model.findConst(view.pane_id) orelse continue;
         stats.panes += 1;
+        if (view.surface == .thread) {
+            continue;
+        }
         const rows = @min(view.content.h, pane.buffer.h);
         const cols = @min(view.content.w, pane.buffer.w);
         if (context.copy_changed) {
@@ -387,6 +404,7 @@ fn paneProjectionChanged(compositor: *Compositor, model: *const MultiplexerModel
         const pane = model.findConst(view.pane_id) orelse continue;
         next[next_count] = .{
             .pane_id = pane.id,
+            .surface = view.surface,
             .cols = pane.buffer.w,
             .rows = pane.buffer.h,
             .scroll_offset = multiplexer.highlightedScrollOffset(compositor.copy, pane),
@@ -408,5 +426,11 @@ fn paneProjectionChanged(compositor: *Compositor, model: *const MultiplexerModel
     }
     @memcpy(compositor.panes[0..next_count], next[0..next_count]);
     compositor.pane_count = next_count;
+    compositor.thread_surfaces = false;
+    for (next[0..next_count]) |projection| {
+        if (projection.surface == .thread) {
+            compositor.thread_surfaces = true;
+        }
+    }
     return changed;
 }

@@ -1,16 +1,18 @@
 //! Client integration tests for renaming and telemetry.
 
+const TerminalClient = @import("../TerminalClient.zig");
+const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
-const name_prompts = @import("../controllers/input/name_prompts.zig");
+const name_prompts = @import("telar-client").controllers.name_prompts;
 const support = @import("support.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const InputHandler = @import("../resources/InputHandler.zig");
 const encodeWorkspaceSnapshot_module = @import("telar-core").encodeWorkspaceSnapshot;
-const server_messages = @import("../entrypoints/runtime_messages.zig");
+const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const TabRenamedType = @import("telar-core").TabRenamed;
-const tab_renames = @import("../controllers/tabs/tab_renames.zig");
+const tab_renames = @import("telar-client").controllers.tab_renames;
 const RequestIdType = @import("telar-core").RequestId;
 const TabLocationType = @import("telar-core").TabLocation;
 const encodeTabRenamed_module = @import("telar-core").encodeTabRenamed;
@@ -26,22 +28,22 @@ test "workspace rename separates prompt submission canonical commit and presenta
     try harness.bootstrap();
     const client = harness.client;
     const version_before_prompt = client.model.version();
-    const pending_updates_before_prompt = client.presenter.pending_updates;
+    const pending_updates_before_prompt = host(client).presenter.pending_updates;
 
     try std.testing.expect(name_prompts.beginWorkspaceRename(client));
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqualStrings("", client.model.name_prompt.currentConst().?.field.text());
     try support.expectNonPromptVersionEqual(version_before_prompt, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_prompt.prompt);
-    try std.testing.expectEqual(pending_updates_before_prompt, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_prompt, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates_before_prompt + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_prompt + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
 
     const version_before_request = client.model.version();
-    const pending_updates_before_request = client.presenter.pending_updates;
+    const pending_updates_before_request = host(client).presenter.pending_updates;
     var handler: InputHandler = .{ .client = client };
     try handler.forward("mainx\r");
 
@@ -50,7 +52,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
     try std.testing.expectEqualStrings("", client.model.workspace.workspaceName());
     try support.expectNonPromptVersionEqual(version_before_request, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
-    try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_request, host(client).presenter.pending_updates);
     const version_after_request = client.model.version();
     try harness.settle();
 
@@ -76,16 +78,16 @@ test "workspace rename separates prompt submission canonical commit and presenta
     try std.testing.expectEqual(version_before_request.tabs, client.model.version().tabs);
     try std.testing.expectEqual(version_before_request.active_tab, client.model.version().active_tab);
     try std.testing.expectEqual(version_after_request.prompt, client.model.version().prompt);
-    try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_request, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_updates_before_request + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_request + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
 
     const version_before_noop = client.model.version();
-    const pending_updates_before_noop = client.presenter.pending_updates;
+    const pending_updates_before_noop = host(client).presenter.pending_updates;
     try client.request_lifecycle.tracker.add(@enumFromInt(90), .{
         .rename_workspace = TestHarness.bootstrap_location.workspace,
     });
@@ -101,7 +103,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
-    try std.testing.expectEqual(pending_updates_before_noop, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_noop, host(client).presenter.pending_updates);
 }
 
 test "pending workspace operation keeps the rename prompt without sending" {
@@ -140,7 +142,7 @@ test "an unexpected tab rename is rejected without effects" {
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
     const version_before = client.model.version();
-    const pending_updates_before = client.presenter.pending_updates;
+    const pending_updates_before = host(client).presenter.pending_updates;
     const renamed: TabRenamedType = .{
         .request_id = @enumFromInt(99),
         .location = TestHarness.bootstrap_location,
@@ -151,7 +153,7 @@ test "an unexpected tab rename is rejected without effects" {
 
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
     try std.testing.expectEqualStrings("main", client.model.workspace.activeConst().?.labelSlice());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
@@ -239,7 +241,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
     const version_before_request = client.model.version();
-    const pending_updates_before_request = client.presenter.pending_updates;
+    const pending_updates_before_request = host(client).presenter.pending_updates;
 
     try std.testing.expect(name_prompts.beginTabRename(client, TestHarness.bootstrap_location.tab_id));
     var handler: InputHandler = .{ .client = client };
@@ -252,7 +254,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
     try std.testing.expectEqualStrings("main", client.model.workspace.activeConst().?.labelSlice());
     try support.expectNonPromptVersionEqual(version_before_request, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
-    try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_request, host(client).presenter.pending_updates);
     const version_after_request = client.model.version();
     try harness.settle();
 
@@ -279,16 +281,16 @@ test "tab rename separates prompt submission canonical commit and presentation" 
     try std.testing.expectEqual(version_before_request.tabs + 1, client.model.version().tabs);
     try std.testing.expectEqual(version_before_request.active_tab, client.model.version().active_tab);
     try std.testing.expectEqual(version_after_request.prompt, client.model.version().prompt);
-    try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_request, host(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_updates_before_request + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_request + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
 
     const version_before_noop = client.model.version();
-    const pending_updates_before_noop = client.presenter.pending_updates;
+    const pending_updates_before_noop = host(client).presenter.pending_updates;
     try client.request_lifecycle.tracker.add(@enumFromInt(90), .{ .rename_tab = TestHarness.bootstrap_location });
     const unchanged = try encodeTabRenamed_module(&payload, .{
         .request_id = @enumFromInt(90),
@@ -299,7 +301,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
-    try std.testing.expectEqual(pending_updates_before_noop, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_noop, host(client).presenter.pending_updates);
 }
 
 test "tab rename response must match the requested identity" {
@@ -451,7 +453,7 @@ test "client telemetry writes one snapshot without mutating semantic state" {
     try harness.bootstrap();
     const client = harness.client;
     const model_version = client.model.version();
-    const presented_version = client.presenter.presentation_state.prepared.model;
+    const presented_version = host(client).presenter.presentation_state.prepared.model;
     const file = try temp.dir.createFile(io, "client.log", .{});
     client.telemetry.sink.deinit(io);
     client.telemetry.sink = .{ .file = file };
@@ -467,7 +469,7 @@ test "client telemetry writes one snapshot without mutating semantic state" {
     try std.testing.expect(std.mem.indexOf(u8, line, "\"active_tab\":1") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"observation_allocs\":7") != null);
 
-    switch (try client.select.await()) {
+    switch (try host(client).select.await()) {
         .telemetry_written => |result| client_telemetry.handleWritten(client, result),
         else => return error.UnexpectedEvent,
     }
@@ -475,7 +477,7 @@ test "client telemetry writes one snapshot without mutating semantic state" {
     try std.testing.expect(client.telemetry.enabled);
     try std.testing.expect(client.telemetry.sink.available());
     try std.testing.expectEqualDeep(model_version, client.model.version());
-    try std.testing.expectEqualDeep(presented_version, client.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(presented_version, host(client).presenter.presentation_state.prepared.model);
 
     client_telemetry.handleTick(client, error.TickFailed, .{});
     try std.testing.expect(!client.telemetry.enabled);

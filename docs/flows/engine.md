@@ -80,4 +80,4 @@ working, and a Pi that renames one of these four degrades to a timeout.
   shutdown.
 - `src/backend/runtime/resources/engine.zig` and `worker_lifecycle.zig` prove
   ownership rollback and teardown order.
-- `src/frontend/config/` proves parsing and bounds.
+- `src/client/config/` proves parsing and bounds.

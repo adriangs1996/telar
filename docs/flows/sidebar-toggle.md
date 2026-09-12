@@ -83,7 +83,7 @@ roll back the client preference.
 - `src/client/application/notifications/sidebar_layout_delivery.zig` proves
   exact commit validation, complete effect order, empty-workspace behavior and
   partial geometry failures.
-- `src/frontend/client/controllers/notifications/sidebar_projection.zig` wires the physical ports shared
+- `src/client/controllers/notifications/sidebar_projection.zig` wires the physical ports shared
   with configuration reload.
 - `src/frontend/client/presentation/view.zig` proves toggle and separator-drag
   intents without mutating semantic state.

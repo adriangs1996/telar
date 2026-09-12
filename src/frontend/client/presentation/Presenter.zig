@@ -9,7 +9,7 @@ const ProjectionType = @import("telar-client").Projection;
 const ResourcesType = @import("Resources.zig");
 const SchedulerType = @import("Scheduler.zig");
 const std = @import("std");
-const MetricsType = @import("../resources/Metrics.zig");
+const MetricsType = @import("telar-client").TelemetryMetrics;
 const ScreenType = @import("../../presentation/Screen.zig");
 const CompositorType = @import("../../workspace/Compositor.zig");
 const PacerType = @import("../../presentation/Pacer.zig");
@@ -480,6 +480,8 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
             .bottom_reservation = input.resources.view.attachmentReservation(),
             .progress_animation_frame = input.projection.sidebar_animation_frame,
             .force = input.force,
+            .agents = input.projection.agents,
+            .agents_revision = input.projection.version.agents,
         },
     });
     var prompt = input.projection.prompt;

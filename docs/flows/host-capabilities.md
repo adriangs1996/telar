@@ -134,7 +134,7 @@ fallback, so a failed timer changes no capability state.
   fallback decisions, bounded traversal and repeated-value suppression.
 - `src/frontend/client/controllers/host/host_capabilities.zig` owns terminal reply translation
   and probe expiry.
-- `src/frontend/client/controllers/host/host_resources.zig` implements the physical host effect
+- `src/client/controllers/host/host_resources.zig` implements the physical host effect
   ports shared with resize delivery.
 - `src/frontend/client/tests/` proves fallback reconciliation,
   presenter-owned scheduling, timeout idempotence and retained state after a

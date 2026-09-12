@@ -1,6 +1,6 @@
 const BufferType = @import("telar-core").Buffer;
 const context_support = @import("context_support.zig");
-const PaletteType = @import("../ui/Palette.zig");
+const PaletteType = @import("telar-client").Palette;
 const ThemeType = @import("telar-client").Theme;
 const PlanType = @import("../ui/Plan.zig");
 const std = @import("std");

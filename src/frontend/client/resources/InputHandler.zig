@@ -1,19 +1,22 @@
 //! Host input dispatch for one attached client. Constructed per event by the
 //! client's entrypoints.
 
-const Client = @import("../Client.zig");
-const key_routing = @import("../controllers/input/key_routing.zig");
+const TerminalClient = @import("../TerminalClient.zig");
+const host = TerminalClient.of;
+const Client = @import("telar-client").AttachedClient;
+const key_routing = @import("telar-client").controllers.key_routing;
 const KeyType = @import("telar-client").Key;
-const paste_routing = @import("../controllers/input/paste_routing.zig");
+const paste_routing = @import("telar-client").controllers.paste_routing;
 const term = @import("../../presentation/screen_support.zig");
-const pointer_routing = @import("../controllers/input/pointer_routing.zig");
+const MouseType = @import("telar-client").Mouse;
+const pointer_routing = @import("telar-client").controllers.pointer_routing;
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
 const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
-const runtime_transport = @import("../entrypoints/runtime_io.zig");
+const runtime_transport = @import("telar-client").runtime_io;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const Action = @import("telar-client").Action;
 const RepeatPolicyType = @import("telar-client").RepeatPolicy;
-const action_routing = @import("../controllers/input/action_routing.zig");
+const action_routing = @import("telar-client").controllers.action_routing;
 const ControlType = @import("telar-client").Control;
 
 const InputHandler = @This();
@@ -59,7 +62,7 @@ pub fn pasteEnd(handler: *InputHandler) !void {
     _ = try paste_routing.finish(handler.client);
 }
 
-pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
+pub fn mouse(handler: *InputHandler, event: MouseType) !void {
     _ = try pointer_routing.apply(handler.client, event);
 }
 
@@ -74,7 +77,7 @@ pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalRes
     _ = try host_capabilities.observe(handler.client, response);
     switch (response) {
         .kitty_graphics => |reply| {
-            if (!kitty_delivery.noteHostReply(&handler.client.graphics_store, reply.image_id, reply.supported)) {
+            if (!kitty_delivery.noteHostReply(&host(handler.client).graphics_store, reply.image_id, reply.supported)) {
                 return;
             }
             try runtime_transport.flushGraphicsCredits(handler.client);
