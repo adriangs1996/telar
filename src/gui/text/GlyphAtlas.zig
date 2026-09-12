@@ -12,6 +12,7 @@ const GlyphSlot = @import("GlyphSlot.zig");
 const ShapedRun = @import("ShapedRun.zig");
 const TextRun = @import("TextRun.zig");
 const GlyphAtlas = @This();
+const ShapingCache = @import("ShapingCache.zig");
 
 extern fn FT_GlyphSlot_Embolden(freetype.c.FT_GlyphSlot) void;
 extern fn FT_GlyphSlot_Oblique(freetype.c.FT_GlyphSlot) void;
@@ -36,6 +37,8 @@ face: freetype.c.FT_Face,
 shaping_font: *freetype.c.hb_font_t,
 shaping_buffer: *freetype.c.hb_buffer_t,
 pixel_height: u16 = 0,
+shaping_cache: ShapingCache,
+shape_calls: usize = 0,
 glyphs: std.AutoHashMapUnmanaged(u64, GlyphSlot) = .empty,
 
 /// `options.font` must outlive the atlas: FreeType borrows memory faces.
@@ -71,6 +74,8 @@ pub fn init(allocator: std.mem.Allocator, options: AtlasOptions) !GlyphAtlas {
     const shaping_buffer = freetype.c.hb_buffer_create() orelse return error.ShapingBufferInitFailed;
     errdefer freetype.c.hb_buffer_destroy(shaping_buffer);
 
+    var shaping_cache = try ShapingCache.init(allocator);
+    errdefer shaping_cache.deinit(allocator);
     var atlas: GlyphAtlas = .{
         .allocator = allocator,
         .pixels = pixels,
@@ -78,6 +83,7 @@ pub fn init(allocator: std.mem.Allocator, options: AtlasOptions) !GlyphAtlas {
         .face = face,
         .shaping_font = shaping_font,
         .shaping_buffer = shaping_buffer,
+        .shaping_cache = shaping_cache,
     };
     try atlas.select(options.pixel_height);
     return atlas;
@@ -100,9 +106,11 @@ pub fn select(atlas: *GlyphAtlas, pixel_height: u16) !void {
 
     freetype.c.hb_ft_font_changed(atlas.shaping_font);
     atlas.pixel_height = pixel_height;
+    atlas.shaping_cache.clear();
 }
 
 pub fn deinit(atlas: *GlyphAtlas) void {
+    atlas.shaping_cache.deinit(atlas.allocator);
     atlas.glyphs.deinit(atlas.allocator);
     freetype.c.hb_buffer_destroy(atlas.shaping_buffer);
     freetype.c.hb_font_destroy(atlas.shaping_font);
@@ -254,6 +262,10 @@ fn pack(atlas: *GlyphAtlas, extent: [2]u32) ![2]u32 {
 }
 
 fn shape(atlas: *GlyphAtlas, text: []const u8) !ShapedRun {
+    if (atlas.shaping_cache.find(text)) |cached| {
+        return cached;
+    }
+
     if (!std.unicode.utf8ValidateSlice(text)) {
         return error.InvalidUtf8;
     }
@@ -265,6 +277,7 @@ fn shape(atlas: *GlyphAtlas, text: []const u8) !ShapedRun {
     }
 
     freetype.c.hb_buffer_guess_segment_properties(atlas.shaping_buffer);
+    atlas.shape_calls += 1;
     freetype.c.hb_shape(atlas.shaping_font, atlas.shaping_buffer, null, 0);
     var glyph_count: c_uint = 0;
     const glyphs = freetype.c.hb_buffer_get_glyph_infos(atlas.shaping_buffer, &glyph_count) orelse return error.ShapingFailed;
@@ -274,7 +287,9 @@ fn shape(atlas: *GlyphAtlas, text: []const u8) !ShapedRun {
         return error.ShapingFailed;
     }
 
-    return .{ .glyphs = glyphs[0..glyph_count], .positions = positions[0..glyph_count] };
+    const shaped: ShapedRun = .{ .glyphs = glyphs[0..glyph_count], .positions = positions[0..glyph_count] };
+    atlas.shaping_cache.remember(text, shaped);
+    return shaped;
 }
 
 fn round26(value: anytype) i32 {
@@ -352,4 +367,55 @@ test "a full terminal atlas uses its prepared replacement instead of losing the 
     defer list.deinit();
     _ = try atlas.place(.{ .text = "new", .x = 0, .y = 16, .color = .white, .pixel_height = 16, .bold = true }, &list);
     try std.testing.expect(list.items().len > 0);
+}
+
+test "shaping reuse preserves Unicode positions and stays independent of paint styling" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    defer atlas.deinit();
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    const run: TextRun = .{ .text = "e\u{301}", .x = 0, .y = 16, .color = .white, .pixel_height = 16 };
+    const advance = try atlas.place(run, &list);
+    const first = list.items()[0];
+    const calls = atlas.shape_calls;
+    list.clear();
+    var moved = run;
+    moved.x = 20;
+    moved.y = 40;
+    moved.color = .black;
+    try std.testing.expectEqual(advance, try atlas.place(moved, &list));
+    try std.testing.expectEqual(calls, atlas.shape_calls);
+    try std.testing.expectEqual(first.x + 20, list.items()[0].x);
+    try std.testing.expectEqual(first.y + 24, list.items()[0].y);
+    try std.testing.expectEqual(first.u0, list.items()[0].u0);
+    try std.testing.expectEqual(@as(f32, 0), list.items()[0].r);
+    moved.bold = true;
+    moved.italic = true;
+    _ = try atlas.place(moved, &list);
+    try std.testing.expectEqual(calls, atlas.shape_calls);
+    moved.pixel_height = 32;
+    _ = try atlas.place(moved, &list);
+    try std.testing.expectEqual(calls + 1, atlas.shape_calls);
+}
+
+test "shaping cache eviction and size changes match uncached geometry" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    defer atlas.deinit();
+    var reference = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    defer reference.deinit();
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    for (0..600) |index| {
+        var bytes: [8]u8 = undefined;
+        const text = try std.fmt.bufPrint(&bytes, "{d}", .{index});
+        const run: TextRun = .{ .text = text, .x = 5, .y = 20, .color = .white, .pixel_height = 16 };
+        list.clear();
+        const advance = try atlas.place(run, &list);
+        const expected = try std.testing.allocator.dupe(quad.Quad, list.items());
+        defer std.testing.allocator.free(expected);
+        list.clear();
+        reference.shaping_cache.clear();
+        try std.testing.expectEqual(advance, try reference.place(run, &list));
+        try std.testing.expectEqualSlices(quad.Quad, expected, list.items());
+    }
 }

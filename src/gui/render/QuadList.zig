@@ -73,7 +73,7 @@ test "clear keeps capacity and drops quads" {
 
 /// Reserves a bounded frame at geometry changes. Example: `try list.reserve(4096);`
 pub fn reserve(list: *QuadList, count: usize) !void {
-    try list.quads.ensureTotalCapacity(list.allocator, count);
+    try list.quads.ensureTotalCapacityPrecise(list.allocator, count);
     list.limit = count;
 }
 

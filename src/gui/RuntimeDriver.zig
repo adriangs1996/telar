@@ -1,6 +1,7 @@
 //! Temporary native-loop bridge. Step 9 replaces this driver with the shared
 //! inbox/outbox execution model. Only the window thread consumes completions.
 const std = @import("std");
+const core = @import("telar-core");
 const client = @import("telar-client");
 const native = @import("native/native.zig");
 const Driver = @This();
@@ -51,12 +52,15 @@ pub const Send = @import("RuntimeSend.zig");
 
 fn read(driver: *Driver, state: *client.RuntimeTransportState) void {
     driver.read_result = state.read(driver.io);
+    core.mark(driver.io, .client_read);
     driver.read_ready.store(true, .release);
     native.telar_gui_wake(driver.fds[1]);
 }
 
 fn send(driver: *Driver, request: Send) void {
+    core.mark(driver.io, .client_send_start);
     driver.write_result = request.state.send(driver.io, request.bytes);
+    core.mark(driver.io, .client_send_done);
     driver.write_ready.store(true, .release);
     native.telar_gui_wake(driver.fds[1]);
 }

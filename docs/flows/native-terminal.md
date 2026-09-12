@@ -51,6 +51,9 @@ it with the inbox/outbox execution model. It contains no general scheduler.
 - At most 65,536 visible grid cells, with capacity for 24 quads per cell, one
   1,024-square alpha atlas and one native GPU submission. Steady drawing reuses
   quad storage; font changes replace the atlas after the prior consumer ends.
+  Retained cell meshes additionally reserve at most 24 quads plus their visual
+  key per grid position. Capacity grows only at geometry changes and is bounded
+  by the same cell limit. Shrinking a window retains its previous capacity.
 - The atlas caches bold and italic variants. Unknown glyphs use the font's
   replacement glyph. A full page uses replacement glyphs reserved at setup.
 - Native input holds at most 1,024 items. Clipboard transfers are limited to
@@ -71,6 +74,46 @@ it with the inbox/outbox execution model. It contains no general scheduler.
 - Transport or unrecoverable GPU errors end this client. The runtime remains
   authoritative and the next attachment requests snapshots. No runtime or IPC
   schema changes are required.
+
+## Retained preparation and shaping
+
+`text/ShapingCache` owns 256 entries for the atlas's current font and size.
+Entries copy at most 64 UTF-8 bytes and 32 HarfBuzz glyphs/positions. Hash
+collisions replace entries; longer runs bypass the cache. Font-size changes
+invalidate it, and font replacement creates a new cache. Location and color
+are applied after shaping; bold/italic still select separate rasterized atlas
+slots. Warm hits allocate nothing. The cache belongs to the text renderer,
+not the runtime driver or a window callback.
+
+`render/RetainedCells` owns each grid position's visual key and `CellMesh`.
+The key includes the complete cell (text, width, colors and flags) and its
+resolved pixel rectangle. Preparation compares the latest projection with
+these owned values and recompiles only mismatches. It does not consume or
+clear `Pane.damage_rows`, which remain governed by successful delivery.
+Comparing final visual values also handles skipped revisions, geometry ABA,
+reattachment, failed delivery, and changes that are reverted before preparation.
+A newly received frame still contributes its presentation commit even when its
+visual contents match the cache.
+
+Default backgrounds use the native render-pass clear. Nondefault backgrounds
+precede all glyphs in each pane, including wide-cell continuations. Spaces skip
+shaping but retain backgrounds and decorations. The cursor is composed
+separately, so cursor movement does not recompile cell geometry. Theme changes,
+font replacement and grid resizing invalidate the affected retained state.
+New selection/search styling must resolve into the visual key before lookup;
+changes to global font/rendering policy must invalidate retained meshes.
+
+Preparation costs O(visible cells + emitted quads), with shaping and mesh
+compilation restricted to changed cells and cache misses. This is CPU damage
+tracking, not a retained GPU framebuffer: both native backends still submit a
+complete sealed scene. Their swapchain drawables need no preserved contents,
+and failed presentation can retry the same prepared geometry. Neither cache
+stores a presentation token, model pointer or transport state.
+
+Step 9 can replace the temporary driver while keeping these caches, projection
+preparation and the existing sealed-frame/completion contract. If preparation
+later moves to a worker, its owner must transfer/copy visual input and retain
+the cache there; the worker must never borrow the mutable client model.
 
 ## Reproducible checks
 
@@ -98,3 +141,19 @@ stops only that test window and its isolated runtime.
 Also run `zig build test`, `zig build codestyle` and
 `zig build check-client-boundaries`. No implementation changes belong to
 `src/client` for this increment.
+
+On macOS, measure key dispatch through matching terminal geometry and successful
+Metal completion with an isolated runtime:
+
+```sh
+zig build -Decho-trace=true -Decho-trace-cpu=true --prefix /tmp/telar-profile
+python3 tools/gui_latency.py /tmp/telar-profile/bin/telar /tmp/telar-echo-empty
+python3 tools/gui_latency.py /tmp/telar-profile/bin/telar /tmp/telar-echo-dense --dense
+```
+
+Use new result directories. The test-only injected library sends alternating
+`x` and erase to `cat`, and waits for the expected glyph count's GPU token
+before sending another key. It retains individual samples, viewport dimensions,
+summary statistics and optional phase traces. It requires a graphical login
+session. Completion is not physical display scanout, and a TUI host-write timing
+is not the same measurement endpoint.

@@ -106,7 +106,9 @@ pub fn main(init: std.process.Init) !void {
                 try login_shell_module.relaunch(init, args[2..]);
             }
 
-            std.process.exit(try client_module.runNative(init, options.run));
+            const status = try client_module.runNative(init, options.run);
+            dumpEchoTrace(init);
+            std.process.exit(status);
         },
         .cli => |options| try cli_install_module.run(init, options),
     }

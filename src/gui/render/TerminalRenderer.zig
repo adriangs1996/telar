@@ -11,10 +11,16 @@ const colors = @import("cell_colors.zig");
 const Metrics = @import("../TerminalMetrics.zig");
 const native = @import("../native/native.zig");
 const Renderer = @This();
+const RetainedCells = @import("RetainedCells.zig");
+const CellPaint = @import("CellPaint.zig");
+const CellMesh = @import("CellMesh.zig");
 
 allocator: std.mem.Allocator,
 atlas: ?GlyphAtlas = null,
 quads: QuadList,
+cell_quads: QuadList,
+retained: RetainedCells,
+repainted_cells: usize = 0,
 metrics: Metrics = .{ .cell_width = 1, .cell_height = 1, .baseline = 0, .pixel_height = 15 },
 scale: f32 = 0,
 atlas_version: u32 = 0,
@@ -23,7 +29,7 @@ background: Color = .black,
 foreground: Color = .white,
 
 pub fn init(allocator: std.mem.Allocator) Renderer {
-    return .{ .allocator = allocator, .quads = .init(allocator) };
+    return .{ .allocator = allocator, .quads = .init(allocator), .cell_quads = .init(allocator), .retained = .init(allocator) };
 }
 
 pub fn deinit(renderer: *Renderer) void {
@@ -32,6 +38,8 @@ pub fn deinit(renderer: *Renderer) void {
     }
 
     renderer.quads.deinit();
+    renderer.cell_quads.deinit();
+    renderer.retained.deinit();
 }
 
 /// Resolves physical font metrics before the shared client is constructed.
@@ -56,6 +64,7 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
             atlas.deinit();
         }
 
+        renderer.retained.invalidate();
         renderer.atlas = replacement;
         renderer.scale = viewport.scale;
         renderer.last_page_version = 0;
@@ -63,11 +72,13 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
 
     const size = try renderer.metrics.measure(viewport);
     const cells = @as(usize, size.cols) * size.rows;
-    if (cells > 65536) {
+    if (cells > RetainedCells.max_cells) {
         return error.NativeCellBudgetExceeded;
     }
 
-    try renderer.quads.reserve(cells * 24);
+    try renderer.quads.reserve(cells * CellMesh.capacity + core.max_panes_per_tab);
+    try renderer.cell_quads.reserve(CellMesh.capacity);
+    try renderer.retained.resize(.{ size.cols, size.rows });
     return size;
 }
 
@@ -75,8 +86,15 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
 /// Example: `const commit = try renderer.prepare(projection, theme);`
 pub fn prepare(renderer: *Renderer, projection: client.Projection, theme: client.ColorTheme) !client.PresentationCommit {
     renderer.quads.clear();
-    renderer.background = colors.resolve(theme.palette.panel_bg, .black);
-    renderer.foreground = colors.resolve(theme.palette.text, .white);
+    renderer.repainted_cells = 0;
+    const background = colors.resolve(theme.palette.panel_bg, .black);
+    const foreground = colors.resolve(theme.palette.text, .white);
+    if (!std.meta.eql(background, renderer.background) or !std.meta.eql(foreground, renderer.foreground)) {
+        renderer.retained.invalidate();
+    }
+
+    renderer.background = background;
+    renderer.foreground = foreground;
     const model = projection.model orelse return .{};
     var layout: client.LayoutSnapshot = .{};
     model.layout.snapshot(projection.geometry.area, &layout);
@@ -109,39 +127,29 @@ fn paintPane(renderer: *Renderer, paint: PanePaint) !void {
     const cols = @min(area.w, pane.buffer.w);
     for (0..rows) |row| {
         for (0..cols) |col| {
-            const cell = &pane.buffer.cells[row * pane.buffer.w + col];
-            const background = colors.resolve(if (cell.style.flags.inverse) cell.style.fg else cell.style.bg, if (cell.style.flags.inverse) renderer.foreground else renderer.background);
-            try renderer.quads.pushRect(renderer.cellRect(.{ .x = area.x + @as(u16, @intCast(col)), .y = area.y + @as(u16, @intCast(row)), .w = 1, .h = 1 }), background);
+            const cell = pane.buffer.cells[row * pane.buffer.w + col];
+            const position: [2]u16 = .{ area.x + @as(u16, @intCast(col)), area.y + @as(u16, @intCast(row)) };
+            const key: CellPaint = .{ .cell = cell, .rect = renderer.cellRect(.{ .x = position[0], .y = position[1], .w = @intCast(@min(@max(1, cell.width), cols - col)), .h = 1 }) };
+            const mesh = renderer.retained.at(position);
+            if (!mesh.matches(key)) {
+                try renderer.paintCell(key);
+                mesh.replace(key, renderer.cell_quads.items());
+                renderer.repainted_cells += 1;
+            }
+
+            const background = mesh.items()[0];
+            if (background.r != renderer.background.r or background.g != renderer.background.g or background.b != renderer.background.b) {
+                try renderer.quads.push(background);
+            }
         }
     }
 
+    // Backgrounds precede ink so a wide glyph's trailing cell cannot erase it.
     for (0..rows) |row| {
         for (0..cols) |col| {
-            const cell = &pane.buffer.cells[row * pane.buffer.w + col];
-            if (cell.width == 0 or cell.style.flags.invisible) {
-                continue;
-            }
-
-            const rect = renderer.cellRect(.{
-                .x = area.x + @as(u16, @intCast(col)),
-                .y = area.y + @as(u16, @intCast(row)),
-                .w = @intCast(@min(cell.width, cols - col)),
-                .h = 1,
-            });
-            var ink = colors.resolve(if (cell.style.flags.inverse) cell.style.bg else cell.style.fg, if (cell.style.flags.inverse) renderer.background else renderer.foreground);
-            if (cell.style.flags.faint) {
-                ink.a *= 0.5;
-            }
-
-            const first = renderer.quads.items().len;
-            _ = try renderer.atlas.?.place(.{ .text = cell.text(), .x = rect.x, .y = rect.y + renderer.metrics.baseline, .color = ink, .pixel_height = renderer.metrics.pixel_height, .bold = cell.style.flags.bold, .italic = cell.style.flags.italic }, &renderer.quads);
-            renderer.quads.clipFrom(first, rect);
-            if (cell.style.flags.underline != .none) {
-                try renderer.quads.pushRect(.{ .x = rect.x, .y = rect.y + rect.height - 2, .width = rect.width, .height = 1 }, colors.resolve(cell.style.underline_color, ink));
-            }
-
-            if (cell.style.flags.strikethrough) {
-                try renderer.quads.pushRect(.{ .x = rect.x, .y = rect.y + rect.height * 0.5, .width = rect.width, .height = 1 }, ink);
+            const mesh = renderer.retained.at(.{ area.x + @as(u16, @intCast(col)), area.y + @as(u16, @intCast(row)) });
+            for (mesh.items()[1..]) |item| {
+                try renderer.quads.push(item);
             }
         }
     }
@@ -151,6 +159,39 @@ fn paintPane(renderer: *Renderer, paint: PanePaint) !void {
         cursor.y += cursor.height - 2;
         cursor.height = 2;
         try renderer.quads.pushRect(cursor, renderer.foreground);
+    }
+}
+
+fn paintCell(renderer: *Renderer, paint: CellPaint) !void {
+    const cell = paint.cell;
+    const rect = paint.rect;
+    const list = &renderer.cell_quads;
+    list.clear();
+    const background = colors.resolve(if (cell.style.flags.inverse) cell.style.fg else cell.style.bg, if (cell.style.flags.inverse) renderer.foreground else renderer.background);
+    var background_rect = rect;
+    background_rect.width = @floatFromInt(renderer.metrics.cell_width);
+    try list.pushRect(background_rect, background);
+    if (cell.width == 0 or cell.style.flags.invisible) {
+        return;
+    }
+
+    var ink = colors.resolve(if (cell.style.flags.inverse) cell.style.bg else cell.style.fg, if (cell.style.flags.inverse) renderer.background else renderer.foreground);
+    if (cell.style.flags.faint) {
+        ink.a *= 0.5;
+    }
+
+    if (!std.mem.eql(u8, cell.text(), " ")) {
+        const first = list.items().len;
+        _ = try renderer.atlas.?.place(.{ .text = cell.text(), .x = rect.x, .y = rect.y + renderer.metrics.baseline, .color = ink, .pixel_height = renderer.metrics.pixel_height, .bold = cell.style.flags.bold, .italic = cell.style.flags.italic }, list);
+        list.clipFrom(first, rect);
+    }
+
+    if (cell.style.flags.underline != .none) {
+        try list.pushRect(.{ .x = rect.x, .y = rect.y + rect.height - 2, .width = rect.width, .height = 1 }, colors.resolve(cell.style.underline_color, ink));
+    }
+
+    if (cell.style.flags.strikethrough) {
+        try list.pushRect(.{ .x = rect.x, .y = rect.y + rect.height * 0.5, .width = rect.width, .height = 1 }, ink);
     }
 }
 

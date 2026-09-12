@@ -64,6 +64,8 @@ fn from(context: ?*anyopaque) *Application {
 
 fn render(context: ?*anyopaque, viewport: native.Viewport, out: *native.Frame) callconv(.c) void {
     const app = from(context);
+    core.mark(app.params.io, .compose_start);
+    defer core.mark(app.params.io, .host_flush_start);
     const token = app.prepare(viewport) catch |err| {
         app.fail(err);
         out.* = app.renderer.frame(0);
@@ -123,6 +125,7 @@ fn pump(context: ?*anyopaque) callconv(.c) c_int {
 
 fn complete(context: ?*anyopaque, token: u64, delivered: c_int) callconv(.c) void {
     const app = from(context);
+    core.mark(app.params.io, .host_flush_done);
     if (app.gui) |gui| {
         gui.complete(token, delivered != 0) catch |err| app.fail(err);
     }
@@ -130,6 +133,7 @@ fn complete(context: ?*anyopaque, token: u64, delivered: c_int) callconv(.c) voi
 
 fn input(context: ?*anyopaque, event: native.InputEvent) callconv(.c) c_int {
     const app = from(context);
+    core.mark(app.params.io, .client_input);
     const gui = app.gui orelse return 0;
     gui.input.accept(event) catch return 0;
     gui.input.drain(&gui.app) catch |err| {
