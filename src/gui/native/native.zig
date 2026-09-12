@@ -1,4 +1,5 @@
-//! The C contract with `window.m`. Every layout here mirrors a struct there.
+//! The C contract with the native backends, `macos/window.m` and
+//! `linux/window.c`. Every layout here mirrors a struct in `telar_gui.h`.
 pub const Frame = @import("Frame.zig").Frame;
 pub const Viewport = @import("Viewport.zig").Viewport;
 

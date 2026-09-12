@@ -1,6 +1,7 @@
 //! Rasterizes glyphs on demand into one alpha page the GPU samples, and
-//! turns shaped text into quads. Texel (0, 0) stays opaque white so solid
-//! rectangles are quads too. Shaping mirrors the TUI rasterizer; sharing one
+//! turns shaped text into quads. One page serves every size the client
+//! paints at, so a frame samples one texture. Texel (0, 0) stays opaque white
+//! so solid rectangles are quads too. Shaping mirrors the TUI rasterizer; sharing one
 //! face between adapters is a later step.
 const std = @import("std");
 const freetype = @import("freetype");
@@ -31,7 +32,8 @@ library: freetype.c.FT_Library,
 face: freetype.c.FT_Face,
 shaping_font: *freetype.c.hb_font_t,
 shaping_buffer: *freetype.c.hb_buffer_t,
-glyphs: std.AutoHashMapUnmanaged(u32, GlyphSlot) = .empty,
+pixel_height: u16 = 0,
+glyphs: std.AutoHashMapUnmanaged(u64, GlyphSlot) = .empty,
 
 /// `options.font` must outlive the atlas: FreeType borrows memory faces.
 /// Example: `var atlas = try GlyphAtlas.init(allocator, .{ .font = face_bytes, .pixel_height = 28 });`
@@ -61,16 +63,12 @@ pub fn init(allocator: std.mem.Allocator, options: AtlasOptions) !GlyphAtlas {
     if (freetype.c.FT_Select_Charmap(face, freetype.c.FT_ENCODING_UNICODE) != 0) {
         return error.UnicodeCharmapUnavailable;
     }
-    if (freetype.c.FT_Set_Pixel_Sizes(face, 0, options.pixel_height) != 0) {
-        return error.FontSizeFailed;
-    }
-
     const shaping_font = freetype.c.hb_ft_font_create_referenced(face) orelse return error.ShapingFontInitFailed;
     errdefer freetype.c.hb_font_destroy(shaping_font);
     const shaping_buffer = freetype.c.hb_buffer_create() orelse return error.ShapingBufferInitFailed;
     errdefer freetype.c.hb_buffer_destroy(shaping_buffer);
 
-    return .{
+    var atlas: GlyphAtlas = .{
         .allocator = allocator,
         .pixels = pixels,
         .library = library,
@@ -78,6 +76,27 @@ pub fn init(allocator: std.mem.Allocator, options: AtlasOptions) !GlyphAtlas {
         .shaping_font = shaping_font,
         .shaping_buffer = shaping_buffer,
     };
+    try atlas.select(options.pixel_height);
+    return atlas;
+}
+
+/// Makes `pixel_height` the size `ascender`, `lineHeight` and shaping use.
+/// Cheap when it is already selected. Example: `try atlas.select(28);`
+pub fn select(atlas: *GlyphAtlas, pixel_height: u16) !void {
+    if (pixel_height == 0) {
+        return error.InvalidPixelHeight;
+    }
+
+    if (atlas.pixel_height == pixel_height) {
+        return;
+    }
+
+    if (freetype.c.FT_Set_Pixel_Sizes(atlas.face, 0, pixel_height) != 0) {
+        return error.FontSizeFailed;
+    }
+
+    freetype.c.hb_ft_font_changed(atlas.shaping_font);
+    atlas.pixel_height = pixel_height;
 }
 
 pub fn deinit(atlas: *GlyphAtlas) void {
@@ -90,7 +109,8 @@ pub fn deinit(atlas: *GlyphAtlas) void {
     atlas.* = undefined;
 }
 
-/// Distance from the baseline up to the top of the tallest glyph, in pixels.
+/// Distance from the baseline up to the top of the tallest glyph at the
+/// selected size, in pixels.
 pub fn ascender(atlas: *const GlyphAtlas) i32 {
     return round26(atlas.face.*.size.*.metrics.ascender);
 }
@@ -107,6 +127,7 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
         return 0;
     }
 
+    try atlas.select(run.pixel_height);
     const shaped = try atlas.shape(run.text);
     const origin: i64 = @intFromFloat(@round(run.x * 64));
     var pen_x = origin;
@@ -142,7 +163,8 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
 }
 
 fn slot(atlas: *GlyphAtlas, index: u32) !GlyphSlot {
-    if (atlas.glyphs.get(index)) |cached| {
+    const key = (@as(u64, index) << 16) | atlas.pixel_height;
+    if (atlas.glyphs.get(key)) |cached| {
         return cached;
     }
 
@@ -183,7 +205,7 @@ fn slot(atlas: *GlyphAtlas, index: u32) !GlyphSlot {
         .left = glyph.*.bitmap_left,
         .top = glyph.*.bitmap_top,
     };
-    try atlas.glyphs.put(atlas.allocator, index, placed);
+    try atlas.glyphs.put(atlas.allocator, key, placed);
     return placed;
 }
 
@@ -260,7 +282,7 @@ test "placing text emits one quad per visible glyph and paints the page once per
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
 
-    const advance = try atlas.place(.{ .text = "Te la", .x = 0, .y = 16, .color = .white }, &list);
+    const advance = try atlas.place(.{ .text = "Te la", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
     try std.testing.expectEqual(@as(usize, 4), list.items().len);
     try std.testing.expect(advance > 0);
     try std.testing.expectEqual(@as(u32, 5), atlas.version);
@@ -270,8 +292,23 @@ test "placing text emits one quad per visible glyph and paints the page once per
     try std.testing.expect(first.y < 16 and first.y + first.height <= 20);
 
     list.clear();
-    _ = try atlas.place(.{ .text = "Te la", .x = 0, .y = 16, .color = .white }, &list);
+    _ = try atlas.place(.{ .text = "Te la", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
     try std.testing.expectEqual(@as(u32, 5), atlas.version);
+}
+
+test "the same glyph at another size is rasterized again on the same page" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    defer atlas.deinit();
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+
+    _ = try atlas.place(.{ .text = "T", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    _ = try atlas.place(.{ .text = "T", .x = 0, .y = 32, .color = .white, .pixel_height = 32 }, &list);
+
+    try std.testing.expectEqual(@as(u32, 3), atlas.version);
+    try std.testing.expectEqual(@as(u32, 2), atlas.glyphs.count());
+    try std.testing.expect(list.items()[1].height > list.items()[0].height);
+    try std.testing.expectEqual(@as(u16, 32), atlas.pixel_height);
 }
 
 test "a page that cannot hold another glyph fails instead of wrapping" {

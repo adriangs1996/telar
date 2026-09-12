@@ -1,7 +1,10 @@
 //! Composition of the interactive Telar client process.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const RunOptions = @import("arguments/RunOptions.zig");
+const OptionsType = @import("telar-client").Options;
+const SocketChannelType = @import("telar-core").SocketChannel;
 const ForwardType = @import("Forward.zig");
 const remote = @import("remote.zig");
 const RuntimeConnector = @import("RuntimeConnector.zig");
@@ -16,6 +19,29 @@ const TestEnvironment = @import("TestEnvironment.zig");
 /// const exit_code = try client.run(process_init, options);
 /// ```
 pub fn run(init: std.process.Init, options: RunOptions) !u8 {
+    return launch(init, options, ClientRunRun);
+}
+
+/// The same runtime connection and configuration as `run`, presented by the
+/// native window instead of the host terminal.
+///
+/// ```zig
+/// const exit_code = try client.runNative(process_init, options);
+/// ```
+pub fn runNative(init: std.process.Init, options: RunOptions) !u8 {
+    if (builtin.os.tag != .macos and builtin.os.tag != .linux) {
+        std.debug.print("telar gui: the native client is only built on macOS and Linux\n", .{});
+        return error.UnsupportedPlatform;
+    }
+
+    return launch(init, options, @import("telar-gui").run);
+}
+
+/// One presentation adapter's entrypoint: it adopts the resources `Options`
+/// carries and runs until the user leaves.
+pub const Adapter = *const fn (std.process.Init, *SocketChannelType, OptionsType) anyerror!u8;
+
+fn launch(init: std.process.Init, options: RunOptions, adapter: Adapter) !u8 {
     var forward: ?ForwardType = null;
     defer if (forward) |*owned| owned.stop(init.io);
     if (options.remote) |destination| {
@@ -34,18 +60,18 @@ pub fn run(init: std.process.Init, options: RunOptions) !u8 {
         });
     defer connection.deinit(init.io);
 
-    var launch: ClientLaunch = undefined;
-    try launch.prepare(.{
+    var prepared: ClientLaunch = undefined;
+    try prepared.prepare(.{
         .process = init,
         .options = &options,
         .endpoint = connector.endpointPath(),
         .remote_defaults = if (forward) |*owned| owned.discovery.launchDefaults() else null,
     });
-    defer launch.deinit();
+    defer prepared.deinit();
 
-    const frontend_options = launch.frontendOptions();
-    launch.transferResources();
-    return ClientRunRun(init, &connection, frontend_options);
+    const frontend_options = prepared.frontendOptions();
+    prepared.transferResources();
+    return adapter(init, &connection, frontend_options);
 }
 
 pub fn supportsHostSharedMemory(environ: std.process.Environ) bool {
@@ -65,23 +91,23 @@ test "remote launch uses remote home and shell rather than client paths" {
     var environment = try TestEnvironment.init(&.{.{ .name = "SHELL", .value = "/opt/homebrew/bin/local-shell" }});
     defer environment.deinit();
     const options = try RunOptions.parse(&.{ "--remote", "box" }, .{ .block = environment.block });
-    var launch: ClientLaunch = .{ .process = undefined, .options = &options, .endpoint = "/forward.sock" };
-    try launch.prepareChild(.{ .cwd = "/home/remote-user", .shell = "/bin/remote-shell" });
+    var prepared: ClientLaunch = .{ .process = undefined, .options = &options, .endpoint = "/forward.sock" };
+    try prepared.prepareChild(.{ .cwd = "/home/remote-user", .shell = "/bin/remote-shell" });
 
-    try std.testing.expectEqualStrings("/home/remote-user", launch.cwd_buffer[0..launch.cwd_len]);
-    try std.testing.expectEqual(@as(usize, 1), launch.argument_count);
-    try std.testing.expectEqualStrings("/bin/remote-shell", launch.argument_storage[0]);
+    try std.testing.expectEqualStrings("/home/remote-user", prepared.cwd_buffer[0..prepared.cwd_len]);
+    try std.testing.expectEqual(@as(usize, 1), prepared.argument_count);
+    try std.testing.expectEqualStrings("/bin/remote-shell", prepared.argument_storage[0]);
 }
 
 test "remote launch preserves explicit commands while keeping the remote home" {
     const options = try RunOptions.parse(&.{ "--remote", "box", "/bin/bash", "-l" }, .empty);
-    var launch: ClientLaunch = .{ .process = undefined, .options = &options, .endpoint = "/forward.sock" };
-    try launch.prepareChild(.{ .cwd = "/home/remote-user", .shell = "/bin/remote-shell" });
+    var prepared: ClientLaunch = .{ .process = undefined, .options = &options, .endpoint = "/forward.sock" };
+    try prepared.prepareChild(.{ .cwd = "/home/remote-user", .shell = "/bin/remote-shell" });
 
-    try std.testing.expectEqualStrings("/home/remote-user", launch.cwd_buffer[0..launch.cwd_len]);
-    try std.testing.expectEqual(@as(usize, 2), launch.argument_count);
-    try std.testing.expectEqualStrings("/bin/bash", launch.argument_storage[0]);
-    try std.testing.expectEqualStrings("-l", launch.argument_storage[1]);
+    try std.testing.expectEqualStrings("/home/remote-user", prepared.cwd_buffer[0..prepared.cwd_len]);
+    try std.testing.expectEqual(@as(usize, 2), prepared.argument_count);
+    try std.testing.expectEqualStrings("/bin/bash", prepared.argument_storage[0]);
+    try std.testing.expectEqualStrings("-l", prepared.argument_storage[1]);
 }
 
 test "local Ghostty clients may use host shared memory" {

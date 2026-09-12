@@ -2,33 +2,9 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 
-#include <stdint.h>
 #include <string.h>
 
-// The whole contract with Zig: a frame is a quad buffer plus one alpha page.
-// These mirror `render/Quad.zig` and `macos/native.zig` field for field.
-typedef struct {
-    float x, y, width, height;
-    float u0, v0, u1, v1;
-    float r, g, b, a;
-} telar_gui_quad;
-
-typedef struct {
-    uint32_t width;
-    uint32_t height;
-    float scale;
-} telar_gui_viewport;
-
-typedef struct {
-    const telar_gui_quad *quads;
-    uint32_t quad_count;
-    const uint8_t *atlas;
-    uint32_t atlas_side;
-    uint32_t atlas_version;
-    float background[4];
-} telar_gui_frame;
-
-typedef void (*telar_gui_render_fn)(void *context, telar_gui_viewport viewport, telar_gui_frame *frame);
+#include "../native/telar_gui.h"
 
 // One instanced draw: six vertices per quad, quads read from buffer 0.
 static NSString *const shader_source = @""

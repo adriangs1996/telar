@@ -19,6 +19,8 @@ const integration_support = @import("cli/integration_support.zig");
 const proxy_module = @import("cli/proxy.zig");
 const skill_module = @import("cli/skill.zig");
 const client_module = @import("cli/client.zig");
+const login_shell_module = @import("cli/login_shell.zig");
+const cli_install_module = @import("cli/cli_install.zig");
 
 const version = "0.0.0";
 
@@ -99,6 +101,14 @@ pub fn main(init: std.process.Init) !void {
             dumpEchoTrace(init);
             std.process.exit(status);
         },
+        .gui => |options| {
+            if (options.login_shell) {
+                try login_shell_module.relaunch(init, args[2..]);
+            }
+
+            std.process.exit(try client_module.runNative(init, options.run));
+        },
+        .cli => |options| try cli_install_module.run(init, options),
     }
 }
 
@@ -109,7 +119,9 @@ test {
     _ = @import("cli/api.zig");
     _ = @import("cli/arguments/AgentOptions.zig");
     _ = @import("cli/arguments/ApiOptions.zig");
+    _ = @import("cli/arguments/CliOptions.zig");
     _ = @import("cli/arguments/ConfigCheckOptions.zig");
+    _ = @import("cli/arguments/GuiOptions.zig");
     _ = @import("cli/arguments/HistoryOptions.zig");
     _ = @import("cli/arguments/HookOptions.zig");
     _ = @import("cli/arguments/IntegrationOptions.zig");
@@ -135,6 +147,7 @@ test {
     _ = @import("cli/history.zig");
     _ = @import("cli/hook.zig");
     _ = @import("cli/integration_support.zig");
+    _ = @import("cli/login_shell.zig");
     _ = @import("cli/notification.zig");
     _ = @import("cli/pane.zig");
     _ = @import("cli/parser.zig");

@@ -343,10 +343,52 @@ pub fn build(b: *std.Build) void {
     // The native client
     // ---------------------------------------------------------------------
 
+    // Application packaging. The shipped binary is the same `telar`; a bundle
+    // adds a launcher that runs `telar gui --login-shell`, and a desktop file
+    // does the same on Linux. See docs/packaging.md.
+    if (target.result.os.tag == .macos) {
+        const launcher = b.addExecutable(.{
+            .name = "Telar",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/launcher/main.zig"),
+                .target = target,
+                .optimize = optimize,
+            }),
+        });
+        const bundle_step = b.step("bundle", "Assemble zig-out/Telar.app");
+        const contents = "Telar.app/Contents";
+        // Case-folding file systems cannot hold `Telar` and `telar` side by side.
+        bundle_step.dependOn(&b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .{ .custom = contents ++ "/Resources/bin" } } }).step);
+        bundle_step.dependOn(&b.addInstallArtifact(launcher, .{ .dest_dir = .{ .override = .{ .custom = contents ++ "/MacOS" } } }).step);
+        bundle_step.dependOn(&b.addInstallFile(b.path("packaging/macos/Info.plist"), contents ++ "/Info.plist").step);
+        bundle_step.dependOn(&b.addInstallFile(b.path("packaging/macos/telar.icns"), contents ++ "/Resources/telar.icns").step);
+
+        const dmg = b.addSystemCommand(&.{
+            "hdiutil",    "create",
+            "-volname",   "Telar",
+            "-srcfolder", b.getInstallPath(.prefix, "Telar.app"),
+            "-ov",        "-format",
+            "UDZO",       b.getInstallPath(.prefix, "Telar.dmg"),
+        });
+        dmg.step.dependOn(bundle_step);
+        b.step("dmg", "Build zig-out/Telar.dmg from the bundle").dependOn(&dmg.step);
+    } else if (target.result.os.tag == .linux) {
+        const desktop = b.addInstallFile(b.path("packaging/linux/telar.desktop"), "share/applications/telar.desktop");
+        const icon = b.addInstallFile(b.path("packaging/linux/telar.png"), "share/icons/hicolor/512x512/apps/telar.png");
+        b.getInstallStep().dependOn(&desktop.step);
+        b.getInstallStep().dependOn(&icon.step);
+
+        const archive_name = b.fmt("telar-{s}-linux.tar.gz", .{@tagName(target.result.cpu.arch)});
+        const archive = b.addSystemCommand(&.{ "tar", "-czf", b.getInstallPath(.prefix, archive_name), "-C", b.install_path, "bin", "share" });
+        archive.step.dependOn(b.getInstallStep());
+        b.step("package-linux", "Build zig-out/telar-<arch>-linux.tar.gz with the binary, desktop entry and icon").dependOn(&archive.step);
+    }
+
     // GPU chrome over the same client behavior as the TUI. It never imports
     // `telar-frontend`; the window and Metal backend are Objective-C compiled
     // by Zig, so the toolchain stays a Zig compiler and the macOS SDK.
-    if (target.result.os.tag == .macos) {
+    var gui_module: ?*std.Build.Module = null;
+    if (target.result.os.tag == .macos or target.result.os.tag == .linux) {
         const gui = b.createModule(.{
             .root_source_file = b.path("src/gui/gui.zig"),
             .target = target,
@@ -355,25 +397,27 @@ pub fn build(b: *std.Build) void {
         });
         gui.addImport("freetype", freetype);
         gui.addImport("assets", assets);
-        gui.addCSourceFile(.{
-            .file = b.path("src/gui/macos/window.m"),
-            .flags = cFlags(b, &.{"-fobjc-arc"}, coverage.enabled),
-        });
-        gui.linkFramework("AppKit", .{});
-        gui.linkFramework("Metal", .{});
-        gui.linkFramework("QuartzCore", .{});
-        const gui_exe = b.addExecutable(.{
-            .name = "telar-gui",
-            .root_module = b.createModule(.{
-                .root_source_file = b.path("src/gui/main.zig"),
-                .target = target,
-                .optimize = optimize,
-                .link_libc = true,
-            }),
-        });
-        gui_exe.root_module.addImport("telar-gui", gui);
-        b.step("build-gui", "Build the native client").dependOn(&b.addInstallArtifact(gui_exe, .{}).step);
-        b.step("gui", "Run the native client").dependOn(&b.addRunArtifact(gui_exe).step);
+        gui.addImport("telar-client", client);
+        gui.addImport("telar-core", core);
+        if (target.result.os.tag == .macos) {
+            gui.addCSourceFile(.{
+                .file = b.path("src/gui/macos/window.m"),
+                .flags = cFlags(b, &.{"-fobjc-arc"}, coverage.enabled),
+            });
+            gui.linkFramework("AppKit", .{});
+            gui.linkFramework("Metal", .{});
+            gui.linkFramework("QuartzCore", .{});
+        } else {
+            addLinuxGuiBackend(b, gui, coverage.enabled);
+        }
+        exe.root_module.addImport("telar-gui", gui);
+        const run_gui = b.addRunArtifact(exe);
+        run_gui.addArg("gui");
+        if (b.args) |args| {
+            run_gui.addArgs(args);
+        }
+        b.step("gui", "Run the native client through `telar gui`").dependOn(&run_gui.step);
+        gui_module = gui;
         const gui_tests = b.addTest(.{ .root_module = gui });
         coverage.instrumentTest(gui_tests);
         b.step("test-gui", "Run the native client tests").dependOn(&b.addRunArtifact(gui_tests).step);
@@ -542,6 +586,7 @@ pub fn build(b: *std.Build) void {
         .tls = tls,
         .freetype = freetype,
         .assets = assets,
+        .gui = gui_module,
         .ghostty_vt = ghostty_vt,
         .wuffs = wuffs,
         .nghttp2_prefix = nghttp2_prefix,
@@ -969,4 +1014,45 @@ fn addAssets(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.buil
         .target = target,
         .optimize = optimize,
     });
+}
+
+/// Wayland through xdg-shell and Vulkan through the system loader. The
+/// xdg-shell client code is generated from the protocol the distribution
+/// installs, so the machine building Telar needs `wayland-scanner`,
+/// `wayland-protocols` and the Vulkan headers.
+fn addLinuxGuiBackend(b: *std.Build, gui: *std.Build.Module, disable_coverage: bool) void {
+    const protocol = "/usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml";
+    const header = b.addSystemCommand(&.{ "wayland-scanner", "client-header", protocol });
+    const header_file = header.addOutputFileArg("xdg-shell-client-protocol.h");
+    const code = b.addSystemCommand(&.{ "wayland-scanner", "private-code", protocol });
+    const code_file = code.addOutputFileArg("xdg-shell-protocol.c");
+    const flags = cFlags(b, &.{"-std=c11"}, disable_coverage);
+    gui.addIncludePath(header_file.dirname());
+    gui.addCSourceFile(.{ .file = code_file, .flags = flags });
+    gui.addCSourceFile(.{ .file = b.path("src/gui/linux/window.c"), .flags = flags });
+    gui.addCSourceFile(.{ .file = b.path("src/gui/linux/renderer.c"), .flags = flags });
+    gui.addCSourceFile(.{ .file = spirvSource(b, "quad.vert", "telar_gui_quad_vert_spv"), .flags = flags });
+    gui.addCSourceFile(.{ .file = spirvSource(b, "quad.frag", "telar_gui_quad_frag_spv"), .flags = flags });
+    gui.linkSystemLibrary("wayland-client", .{});
+    gui.linkSystemLibrary("vulkan", .{});
+}
+
+/// Embeds a compiled shader as a C array so every binary that links the
+/// Linux backend carries it. Regenerate the `.spv` with `glslc` after editing
+/// the GLSL next to it.
+fn spirvSource(b: *std.Build, shader: []const u8, symbol: []const u8) std.Build.LazyPath {
+    const spv_path = b.fmt("src/gui/shaders/{s}.spv", .{shader});
+    const bytes = std.Io.Dir.cwd().readFileAlloc(b.graph.io, b.pathFromRoot(spv_path), b.allocator, .limited(1 << 20)) catch |err| {
+        std.debug.panic("cannot read {s}: {s}", .{ spv_path, @errorName(err) });
+    };
+    std.debug.assert(bytes.len % 4 == 0);
+    var source: std.Io.Writer.Allocating = .init(b.allocator);
+    const writer = &source.writer;
+    writer.print("#include <stdint.h>\nconst uint32_t {s}_bytes = {d};\nconst uint32_t {s}[] = {{", .{ symbol, bytes.len, symbol }) catch @panic("OOM");
+    var index: usize = 0;
+    while (index < bytes.len) : (index += 4) {
+        writer.print("{s}0x{x:0>8}", .{ if (index == 0) "" else ",", std.mem.readInt(u32, bytes[index..][0..4], .little) }) catch @panic("OOM");
+    }
+    writer.writeAll("};\n") catch @panic("OOM");
+    return b.addWriteFiles().add(b.fmt("{s}.c", .{symbol}), source.written());
 }

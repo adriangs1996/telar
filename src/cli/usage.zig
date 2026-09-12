@@ -4,6 +4,8 @@ const std = @import("std");
 
 pub const text =
     \\Usage: telar [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--sidebar-renderer MODE] [--fresh] [command [args...]]
+    \\       telar gui [--login-shell] [--config PATH | --no-config] [--profile NAME] [--theme NAME] [command [args...]]
+    \\       telar cli install|uninstall|status [--dir DIR]
     \\       telar server [--fresh]
     \\       telar server stop
     \\       telar server endpoint
@@ -34,6 +36,8 @@ pub const text =
     \\The local runtime starts automatically when needed.
     \\
     \\Commands:
+    \\  gui              Open the native client window; --login-shell adopts the login shell's environment
+    \\  cli              Link this executable as `telar` into DIR (default /usr/local/bin)
     \\  server           Run the local runtime in the foreground
     \\  server stop      Stop the local runtime
     \\  history list     Show recent command history

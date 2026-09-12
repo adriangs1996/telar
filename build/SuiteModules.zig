@@ -13,6 +13,7 @@ telar_lua: *std.Build.Module,
 tls: *std.Build.Module,
 freetype: *std.Build.Module,
 assets: *std.Build.Module,
+gui: ?*std.Build.Module = null,
 ghostty_vt: *std.Build.Module,
 wuffs: *std.Build.Module,
 nghttp2_prefix: []const u8,
@@ -46,6 +47,9 @@ pub fn addSuiteTest(modules: SuiteModules, b: *std.Build, suite: Suite) *std.Bui
     tests.root_module.addImport("tls", modules.tls);
     tests.root_module.addImport("freetype", modules.freetype);
     tests.root_module.addImport("assets", modules.assets);
+    if (modules.gui) |gui| {
+        tests.root_module.addImport("telar-gui", gui);
+    }
     tests.root_module.addImport("wuffs", modules.wuffs);
     tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ modules.nghttp2_prefix, "include" }) });
     tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ modules.nghttp2_prefix, "lib" }) });

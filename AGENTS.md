@@ -61,7 +61,7 @@ frontend never import each other, and `telar-gui` never imports
 | `telar-backend` | children, PTYs, terminal emulation, history and runtime authority |
 | `telar-client` | disposable model, handlers, input policy, configuration, plugins, local transport, resource retention and presentation contracts |
 | `telar-frontend` | TUI assembly, host terminal, decoder, compositor, diff, pacing and Kitty delivery |
-| `telar-gui` | native chrome: window, GPU quad backend and glyph atlas, macOS first |
+| `telar-gui` | native chrome: glyph atlas and quad frames drawn by a Metal backend on macOS and a Wayland/Vulkan backend on Linux |
 
 Each package has an explicit module entrypoint in `build.zig`. Put a type in
 core only when both processes need it. Each connection owns independent client

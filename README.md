@@ -64,7 +64,9 @@ runtime settings. Plugins are content-addressed packages executed in isolated
 workers with digest-bound capability grants.
 
 See [docs/configuration.md](docs/configuration.md) and
-[docs/plugins.md](docs/plugins.md). The opt-in TLS interception proxy, its
+[docs/plugins.md](docs/plugins.md). Application bundles, the Linux desktop
+entry and the `telar cli` PATH link are described in
+[docs/packaging.md](docs/packaging.md). The opt-in TLS interception proxy, its
 agent-state contract, and its bounded semantic transformation boundary are
 documented in [docs/proxy-tls.md](docs/proxy-tls.md). A complete configuration
 and plugin package live under [`examples/`](examples/): `config.lua` and

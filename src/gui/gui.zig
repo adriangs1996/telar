@@ -8,9 +8,13 @@ pub const GlyphAtlas = @import("text/GlyphAtlas.zig");
 pub const QuadList = @import("render/QuadList.zig");
 pub const Rect = @import("render/Rect.zig");
 pub const TextRun = @import("text/TextRun.zig");
+pub const cell_colors = @import("render/cell_colors.zig");
+pub const run = @import("run.zig").run;
 pub const quad = @import("render/Quad.zig");
 
 test {
+    _ = Application;
     _ = GlyphAtlas;
     _ = QuadList;
+    _ = cell_colors;
 }

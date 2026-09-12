@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Telar
+Comment=Terminal multiplexer for the era of agents
+Exec=telar gui --login-shell
+Icon=telar
+Terminal=false
+Categories=Development;TerminalEmulator;
+StartupWMClass=telar

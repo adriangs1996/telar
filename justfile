@@ -16,6 +16,10 @@ release:
 stop:
     TELAR_SOCKET="{{ dev_runtime_dir }}/runtime.sock" zig build run -- server stop
 
+app:
+    mkdir -p -m 700 "{{ dev_runtime_dir }}"
+    TELAR_SOCKET="{{ dev_runtime_dir }}/runtime.sock" TELAR_HISTORY="{{ dev_runtime_dir }}/history.db" zig build run -- gui
+
 # Build and run an isolated development runtime. Extra arguments are passed to Telar.
 run *args:
     mkdir -p -m 700 "{{ dev_runtime_dir }}"

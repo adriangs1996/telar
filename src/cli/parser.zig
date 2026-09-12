@@ -15,6 +15,8 @@ const HookOptions = @import("arguments/HookOptions.zig");
 const IntegrationOptions = @import("arguments/IntegrationOptions.zig");
 const ProxyOptions = @import("arguments/ProxyOptions.zig");
 const RunOptions = @import("arguments/RunOptions.zig");
+const GuiOptions = @import("arguments/GuiOptions.zig");
+const CliOptions = @import("arguments/CliOptions.zig");
 const std = @import("std");
 const BuiltinType = @import("telar-client").theme_support.Builtin;
 const SidebarRenderingType = @import("telar-client").SidebarRendering;
@@ -54,6 +56,8 @@ pub const Cli = union(enum) {
     proxy: ProxyOptions,
     skill,
     run: RunOptions,
+    gui: GuiOptions,
+    cli: CliOptions,
 
     /// Parses one complete argv into a validated command without performing
     /// filesystem, transport or process work.
@@ -121,6 +125,12 @@ pub const Cli = union(enum) {
         }
         if (std.mem.eql(u8, first, "plugin")) {
             return .{ .plugin = try PluginOptions.parse(args[2..]) };
+        }
+        if (std.mem.eql(u8, first, "gui")) {
+            return .{ .gui = try GuiOptions.parse(args[2..], environ) };
+        }
+        if (std.mem.eql(u8, first, "cli")) {
+            return .{ .cli = try CliOptions.parse(args[2..]) };
         }
         return .{ .run = try RunOptions.parse(args[1..], environ) };
     }

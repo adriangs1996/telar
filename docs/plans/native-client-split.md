@@ -395,5 +395,60 @@ Verificado en pantalla y con `test-gui`, `just check` y `zig build cross`.
 - Los binarios embebidos pasaron a `src/assets/` como módulo `assets`, para
   que el GUI embeba la fuente sin importar `telar-frontend`.
 
+## Paso 8, segundo corte
+
+`telar gui` es un subcomando del binario y comparte con `telar` la
+preparación entera del cliente: `ClientLaunch` carga la generación Lua, el
+registro de plugins y el almacén de confianza, y `frontendOptions` produce
+el mismo `Options` para ambos adaptadores. `cli/client.zig` recibe el
+adaptador como puntero a función; el TUI pasa `ClientRun` y el GUI
+`telar-gui.run`. El runtime se conecta o arranca igual que con el TUI; el GUI
+todavía no consume la conexión.
+
+La ventana pinta con la paleta del tema resuelto y muestra ruta del config,
+perfil, tema, iconos, prefijo y los recuentos de bindings, callbacks de barra
+y plugins. `render/cell_colors.zig` traduce los colores de celda del cliente
+a colores del shader; `default` cae al color que nombra el llamador, porque
+la ventana es su propio host. Un solo `GlyphAtlas` sirve todos los tamaños,
+con la caché por glifo y tamaño, para que un frame muestree una sola página.
+
+Verificado en pantalla con `dev/config.lua`: el daemon del runtime arranca
+con `cwd` en `/`, así que `--config` necesita una ruta absoluta.
+
+## Paso 8, tercer corte: Linux
+
+El mismo `telar gui` abre una ventana Wayland y pinta por Vulkan. El
+contrato con el backend nativo no cambió: `native/telar_gui.h` es el único
+punto que ambos backends implementan, y `linux/window.c` con
+`linux/renderer.c` consumen el mismo buffer de quads y la misma página alfa
+que `macos/window.m`.
+
+- Ventana: `wl_compositor` y `xdg_wm_base`, un toplevel que pinta en cada
+  `configure`. El código cliente de xdg-shell lo genera `wayland-scanner`
+  durante el build a partir del protocolo instalado en el sistema.
+- Renderer: instancia con la superficie Wayland, un dispositivo con una cola
+  que dibuja y presenta, swapchain FIFO, un render pass, un pipeline con los
+  quads en un storage buffer y el viewport como push constant, un frame en
+  vuelo. La página alfa sube por staging sólo cuando cambia su versión.
+- Shaders: GLSL en `src/gui/shaders`, compilados a SPIR-V con `glslc` y
+  embebidos por `spirv.zig` como palabras `u32`, así que el build no
+  necesita el compilador de shaders.
+- Sin entrada todavía, igual que en macOS. La escala es 1 hasta que el
+  backend lea `wl_output`.
+
+Verificado con `tools/vm/vm.py gui-smoke`, que compila dentro de la máquina
+QEMU de `tools/vm`, abre la ventana sobre sway con Vulkan por software y
+captura la pantalla por QMP.
+
+## Paso 8, empaquetado
+
+Documentado en `docs/packaging.md`: `zig build bundle` y `zig build dmg` en
+macOS, `zig build package-linux` en Linux, `telar gui --login-shell` como
+camino único desde Finder y desde un menú de escritorio, y `telar cli
+install` para el enlace en el `PATH`. Verificado abriendo el bundle con
+`open` desde un entorno vacío: el proceso resultante lleva el `PATH` del
+shell de login y `TELAR_LOGIN_SHELL=1`; y en la máquina Linux con
+`vm.py gui-smoke`, que ahora lanza por `--login-shell` y comprueba la marca.
+
 Siguiente corte: un pane de terminal desde celdas reales del runtime, con
 `AttachedClient` y los puertos implementados sobre esta ventana.
