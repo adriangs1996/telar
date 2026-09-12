@@ -61,8 +61,10 @@ it with the inbox/outbox execution model. It contains no general scheduler.
   Outbox capacity gates input consumption; send completion resumes it.
 - Linux bounds clipboard offers to 16 and keymaps to 4 MiB. Clipboard reads are
   nonblocking. Repeat and drawing use native-loop deadlines, with no idle poll.
-- Rendering is capped at 60 Hz. Metal reports command completion on the window
-  thread. Vulkan uses one worker and waits for its fence before returning a
+- Rendering requests 60 Hz. On macOS, a demand-driven `CADisplayLink`
+  paces the Metal 4 renderer, with immediate drawing after idle. Commit feedback
+  dispatches delivery to the window thread. The GUI requires macOS 26 and a
+  Metal 4-capable GPU. Vulkan uses one worker and waits for its fence before returning a
   token; an out-of-date presentation retries without ACK. Neither GPU consumer
   borrows the shared model.
 - Shared graphics storage retains runtime image messages under existing quotas
@@ -157,3 +159,6 @@ before sending another key. It retains individual samples, viewport dimensions,
 summary statistics and optional phase traces. It requires a graphical login
 session. Completion is not physical display scanout, and a TUI host-write timing
 is not the same measurement endpoint.
+
+The [Metal 4 renderer flow](metal4-renderer.md) describes display-link scheduling,
+argument tables, residency, completion ownership and shutdown.

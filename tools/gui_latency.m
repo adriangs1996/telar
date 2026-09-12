@@ -27,12 +27,12 @@ static void finish(int failed) {
         fprintf(file, "]}\n");
         fclose(file);
     }
-    [NSApp.keyWindow close];
+    [NSApp.windows.firstObject close];
 }
 
 static void send_key(void) {
     if (count == limit) { finish(0); return; }
-    NSWindow *window = NSApp.keyWindow;
+    NSWindow *window = NSApp.windows.firstObject;
     if (window == nil) { finish(1); return; }
     BOOL erase = count & 1;
     NSString *text = erase ? @"\177" : @"x";

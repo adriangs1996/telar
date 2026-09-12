@@ -42,6 +42,8 @@ def measure(mode, directory, setup):
     probe_env = dict(DYLD_INSERT_LIBRARIES=str(library),
                      TELAR_DISPLAY_RESULT=str(directory / 'result.json'),
                      TELAR_DISPLAY_SAMPLES=str(options.samples + WARMUP))
+    if options.viewport and mode == 'gui':
+        probe_env['TELAR_DISPLAY_VIEWPORT'] = ','.join(map(str, options.viewport))
     if mode == 'gui':
         command = args
         launch_env = dict(env, **probe_env)
@@ -97,7 +99,11 @@ def main():
     parser.add_argument('--rounds', type=int, default=3)
     parser.add_argument('--vsync', choices=['true', 'false'], default='true')
     parser.add_argument('--mode', choices=['both', 'gui', 'tui'], default='both')
+    parser.add_argument('--viewport', type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'),
+                        help='fix GUI render-target pixels independently of the window manager')
     options = parser.parse_args()
+    if options.viewport and any(v < 1 or v > 8192 for v in options.viewport):
+        parser.error('viewport dimensions must be 1..8192')
     if not 1 <= options.samples <= 400 or not 1 <= options.rounds <= 10:
         parser.error('samples must be 1..400 and rounds 1..10')
     directory = options.directory.resolve()

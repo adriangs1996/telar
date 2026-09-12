@@ -1,6 +1,6 @@
 const std = @import("std");
 const Suite = @import("Suite.zig");
-const SuiteModules = @This();
+const Modules = @This();
 
 unicode: *std.Build.Module,
 core: *std.Build.Module,
@@ -22,7 +22,7 @@ target: std.Build.ResolvedTarget,
 optimize: std.builtin.OptimizeMode,
 build_options: *std.Build.Step.Options,
 
-pub fn addSuiteTest(modules: SuiteModules, b: *std.Build, suite: Suite) *std.Build.Step.Compile {
+pub fn addSuiteTest(modules: Modules, b: *std.Build, suite: Suite) *std.Build.Step.Compile {
     const tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path(suite.path),

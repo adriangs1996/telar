@@ -1,5 +1,5 @@
 const std = @import("std");
-const build = @import("../build.zig");
+const c_flags = @import("c_flags.zig");
 const Coverage = @This();
 
 enabled: bool,
@@ -38,8 +38,8 @@ pub fn excludeCSourceCoverage(coverage: Coverage, b: *std.Build, module: *std.Bu
         return;
     }
     for (module.link_objects.items) |link_object| switch (link_object) {
-        .c_source_file => |source| source.flags = build.cFlags(b, source.flags, true),
-        .c_source_files => |sources| sources.flags = build.cFlags(b, sources.flags, true),
+        .c_source_file => |source| source.flags = c_flags.forCoverage(b, source.flags, true),
+        .c_source_files => |sources| sources.flags = c_flags.forCoverage(b, sources.flags, true),
         else => {},
     };
 }

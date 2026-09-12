@@ -101,3 +101,7 @@ preparation path, but these GPU latency measurements are macOS-only.
 
 The subsequent [GUI versus TUI-in-Ghostty comparison](gui-vs-tui.md) uses a
 shared pixel-verified GPU endpoint and includes Debug and VSync controls.
+
+The subsequent [Metal 4 migration measurement](metal4.md) records the final
+display-clock scheduler, a repeated baseline, GPU execution durations and
+lifecycle validation.
