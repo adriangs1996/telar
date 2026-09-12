@@ -3,6 +3,7 @@
 const Quad = @import("../render/Quad.zig").Quad;
 
 pub const Frame = extern struct {
+    token: u64 = 0,
     quads: ?[*]const Quad,
     quad_count: u32,
     atlas: ?[*]const u8,

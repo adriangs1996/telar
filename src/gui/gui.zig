@@ -1,6 +1,6 @@
 //! Native chrome adapter: paints the client's semantic projection on a GPU.
-//! This slice only proves the paint contract: quads built in Zig, drawn by a
-//! native backend that knows nothing about terminals.
+//! Shared client controllers own the session; native backends deliver input
+//! and consume sealed cell frames without knowing the terminal protocol.
 
 pub const Application = @import("Application.zig");
 pub const Color = @import("render/Color.zig");
@@ -14,6 +14,9 @@ pub const quad = @import("render/Quad.zig");
 
 test {
     _ = Application;
+    _ = @import("tests/terminal.zig");
+    _ = @import("TerminalMetrics.zig");
+    _ = @import("NativeInput.zig");
     _ = GlyphAtlas;
     _ = QuadList;
     _ = cell_colors;

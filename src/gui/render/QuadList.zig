@@ -9,6 +9,7 @@ const QuadList = @This();
 
 allocator: std.mem.Allocator,
 quads: std.ArrayList(Quad) = .empty,
+limit: ?usize = null,
 
 pub fn init(allocator: std.mem.Allocator) QuadList {
     return .{ .allocator = allocator };
@@ -24,7 +25,15 @@ pub fn clear(list: *QuadList) void {
 }
 
 pub fn push(list: *QuadList, item: Quad) !void {
-    try list.quads.append(list.allocator, item);
+    if (list.limit) |limit| {
+        if (list.quads.items.len >= limit) {
+            return error.NativeQuadBudgetExceeded;
+        }
+
+        list.quads.appendAssumeCapacity(item);
+    } else {
+        try list.quads.append(list.allocator, item);
+    }
 }
 
 /// Appends a solid rectangle through the atlas' white texel.
@@ -60,4 +69,48 @@ test "clear keeps capacity and drops quads" {
 
     list.clear();
     try std.testing.expectEqual(@as(usize, 0), list.items().len);
+}
+
+/// Reserves a bounded frame at geometry changes. Example: `try list.reserve(4096);`
+pub fn reserve(list: *QuadList, count: usize) !void {
+    try list.quads.ensureTotalCapacity(list.allocator, count);
+    list.limit = count;
+}
+
+/// Clips newly appended glyph quads and their texture coordinates together.
+/// Example: `list.clipFrom(first_glyph, cell_rect);`
+pub fn clipFrom(list: *QuadList, start: usize, clip: Rect) void {
+    for (list.quads.items[start..]) |*item| {
+        const left = @max(item.x, clip.x);
+        const top = @max(item.y, clip.y);
+        const right = @max(left, @min(item.x + item.width, clip.x + clip.width));
+        const bottom = @max(top, @min(item.y + item.height, clip.y + clip.height));
+        if (item.width > 0 and item.height > 0) {
+            const du = (item.u1 - item.u0) / item.width;
+            const dv = (item.v1 - item.v0) / item.height;
+            item.u1 = item.u0 + (right - item.x) * du;
+            item.v1 = item.v0 + (bottom - item.y) * dv;
+            item.u0 += (left - item.x) * du;
+            item.v0 += (top - item.y) * dv;
+        }
+
+        item.x = left;
+        item.y = top;
+        item.width = right - left;
+        item.height = bottom - top;
+    }
+}
+
+test "clipping a glyph adjusts texture coordinates without leaking into the next pane" {
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    try list.push(.{ .x = 5, .y = 2, .width = 20, .height = 10, .u0 = 0, .v0 = 0, .u1 = 1, .v1 = 1, .r = 1, .g = 1, .b = 1, .a = 1 });
+    list.clipFrom(0, .{ .x = 10, .y = 0, .width = 10, .height = 7 });
+    const clipped = list.items()[0];
+    try std.testing.expectEqual(@as(f32, 10), clipped.x);
+    try std.testing.expectEqual(@as(f32, 10), clipped.width);
+    try std.testing.expectEqual(@as(f32, 5), clipped.height);
+    try std.testing.expectApproxEqAbs(@as(f32, 0.25), clipped.u0, 0.001);
+    try std.testing.expectApproxEqAbs(@as(f32, 0.75), clipped.u1, 0.001);
+    try std.testing.expectApproxEqAbs(@as(f32, 0.5), clipped.v1, 0.001);
 }

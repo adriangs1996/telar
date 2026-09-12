@@ -395,6 +395,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .link_libc = true,
         });
+        gui.addCSourceFile(.{ .file = b.path("src/gui/native/wake.c"), .flags = &.{} });
         gui.addImport("freetype", freetype);
         gui.addImport("assets", assets);
         gui.addImport("telar-client", client);
@@ -421,6 +422,19 @@ pub fn build(b: *std.Build) void {
         const gui_tests = b.addTest(.{ .root_module = gui });
         coverage.instrumentTest(gui_tests);
         b.step("test-gui", "Run the native client tests").dependOn(&b.addRunArtifact(gui_tests).step);
+        if (target.result.os.tag == .macos) {
+            const window_test_module = b.createModule(.{ .target = target, .optimize = optimize, .link_libc = true });
+            window_test_module.addIncludePath(b.path("src/gui/native"));
+            window_test_module.addCSourceFiles(.{
+                .files = &.{ "src/gui/tests/macos_window.m", "src/gui/macos/window.m", "src/gui/native/wake.c" },
+                .flags = &.{"-fobjc-arc"},
+            });
+            window_test_module.linkFramework("AppKit", .{});
+            window_test_module.linkFramework("Metal", .{});
+            window_test_module.linkFramework("QuartzCore", .{});
+            const window_test = b.addExecutable(.{ .name = "gui-window-test", .root_module = window_test_module });
+            b.step("test-gui-window", "Exercise a real macOS window, Metal completion and native keyboard translation").dependOn(&b.addRunArtifact(window_test).step);
+        }
     }
 
     // ---------------------------------------------------------------------
@@ -1030,6 +1044,9 @@ fn addLinuxGuiBackend(b: *std.Build, gui: *std.Build.Module, disable_coverage: b
     gui.addIncludePath(header_file.dirname());
     gui.addCSourceFile(.{ .file = code_file, .flags = flags });
     gui.addCSourceFile(.{ .file = b.path("src/gui/linux/window.c"), .flags = flags });
+    gui.addCSourceFile(.{ .file = b.path("src/gui/linux/input.c"), .flags = flags });
+    gui.addCSourceFile(.{ .file = b.path("src/gui/linux/frame_worker.c"), .flags = flags });
+    gui.linkSystemLibrary("xkbcommon", .{});
     gui.addCSourceFile(.{ .file = b.path("src/gui/linux/renderer.c"), .flags = flags });
     gui.addCSourceFile(.{ .file = spirvSource(b, "quad.vert", "telar_gui_quad_vert_spv"), .flags = flags });
     gui.addCSourceFile(.{ .file = spirvSource(b, "quad.frag", "telar_gui_quad_frag_spv"), .flags = flags });

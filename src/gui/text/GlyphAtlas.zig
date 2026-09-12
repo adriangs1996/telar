@@ -13,6 +13,9 @@ const ShapedRun = @import("ShapedRun.zig");
 const TextRun = @import("TextRun.zig");
 const GlyphAtlas = @This();
 
+extern fn FT_GlyphSlot_Embolden(freetype.c.FT_GlyphSlot) void;
+extern fn FT_GlyphSlot_Oblique(freetype.c.FT_GlyphSlot) void;
+
 /// One page, square, in texels. `Quad.solid_uv` assumes this side.
 pub const side: u32 = 1024;
 
@@ -115,6 +118,11 @@ pub fn ascender(atlas: *const GlyphAtlas) i32 {
     return round26(atlas.face.*.size.*.metrics.ascender);
 }
 
+/// Measures the monospace grid. Example: `const width = atlas.cellWidth();`
+pub fn cellWidth(atlas: *const GlyphAtlas) u16 {
+    return @intCast(@max(1, round26(atlas.face.*.size.*.metrics.max_advance)));
+}
+
 pub fn lineHeight(atlas: *const GlyphAtlas) u32 {
     return @intCast(@max(1, round26(atlas.face.*.size.*.metrics.height)));
 }
@@ -132,11 +140,10 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
     const origin: i64 = @intFromFloat(@round(run.x * 64));
     var pen_x = origin;
     for (shaped.glyphs, shaped.positions) |info, position| {
-        if (info.codepoint == 0) {
-            return error.MissingGlyph;
-        }
-
-        const placed = try atlas.slot(info.codepoint);
+        const placed = atlas.slot(info.codepoint, run) catch |err| switch (err) {
+            error.AtlasFull => try atlas.slot(0, run),
+            else => return err,
+        };
         if (placed.width > 0 and placed.height > 0) {
             const x = round26(pen_x + position.x_offset) + placed.left;
             const y: i32 = @as(i32, @intFromFloat(@round(run.y))) - round26(position.y_offset) - placed.top;
@@ -162,8 +169,8 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
     return @floatFromInt(round26(pen_x - origin));
 }
 
-fn slot(atlas: *GlyphAtlas, index: u32) !GlyphSlot {
-    const key = (@as(u64, index) << 16) | atlas.pixel_height;
+fn slot(atlas: *GlyphAtlas, index: u32, run: TextRun) !GlyphSlot {
+    const key = (@as(u64, index) << 18) | (@as(u64, atlas.pixel_height) << 2) | @as(u64, @intFromBool(run.bold)) | (@as(u64, @intFromBool(run.italic)) << 1);
     if (atlas.glyphs.get(key)) |cached| {
         return cached;
     }
@@ -173,6 +180,14 @@ fn slot(atlas: *GlyphAtlas, index: u32) !GlyphSlot {
     }
 
     const glyph = atlas.face.*.glyph;
+    if (run.bold) {
+        FT_GlyphSlot_Embolden(glyph);
+    }
+
+    if (run.italic) {
+        FT_GlyphSlot_Oblique(glyph);
+    }
+
     if (freetype.c.FT_Render_Glyph(glyph, freetype.c.FT_RENDER_MODE_NORMAL) != 0) {
         return error.GlyphRenderFailed;
     }
@@ -318,4 +333,23 @@ test "a page that cannot hold another glyph fails instead of wrapping" {
     atlas.shelf_y = side - 4;
     try std.testing.expectError(error.AtlasFull, atlas.pack(.{ 8, 8 }));
     try std.testing.expectError(error.GlyphTooLarge, atlas.pack(.{ side, 8 }));
+}
+
+/// Reserves fallback glyphs before terminal output fills the atlas.
+/// Example: `try atlas.prepareFallbacks();`
+pub fn prepareFallbacks(atlas: *GlyphAtlas) !void {
+    for (0..4) |style| {
+        _ = try atlas.slot(0, .{ .text = "", .x = 0, .y = 0, .color = .white, .pixel_height = atlas.pixel_height, .bold = style & 1 != 0, .italic = style & 2 != 0 });
+    }
+}
+
+test "a full terminal atlas uses its prepared replacement instead of losing the frame" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    defer atlas.deinit();
+    try atlas.prepareFallbacks();
+    atlas.shelf_y = side;
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    _ = try atlas.place(.{ .text = "new", .x = 0, .y = 16, .color = .white, .pixel_height = 16, .bold = true }, &list);
+    try std.testing.expect(list.items().len > 0);
 }

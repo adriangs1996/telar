@@ -14,7 +14,8 @@ typedef struct telar_renderer telar_renderer;
 telar_renderer *telar_renderer_create(struct wl_display *display, struct wl_surface *surface, telar_gui_viewport viewport);
 
 // Draws one frame. A stale swapchain is rebuilt for `viewport` before drawing.
-bool telar_renderer_draw(telar_renderer *renderer, telar_gui_viewport viewport, const telar_gui_frame *frame);
+enum telar_render_result { TELAR_RENDER_FAILED, TELAR_RENDER_DELIVERED, TELAR_RENDER_RETRY };
+enum telar_render_result telar_renderer_draw(telar_renderer *renderer, telar_gui_viewport viewport, const telar_gui_frame *frame);
 
 void telar_renderer_destroy(telar_renderer *renderer);
 

@@ -609,7 +609,7 @@ telar_renderer *telar_renderer_create(struct wl_display *display, struct wl_surf
     return self;
 }
 
-bool telar_renderer_draw(telar_renderer *self, telar_gui_viewport viewport, const telar_gui_frame *frame) {
+enum telar_render_result telar_renderer_draw(telar_renderer *self, telar_gui_viewport viewport, const telar_gui_frame *frame) {
     TRY(vkWaitForFences(self->device, 1, &self->fence, VK_TRUE, UINT64_MAX));
     if (self->extent.width != viewport.width || self->extent.height != viewport.height) {
         TRY(vkDeviceWaitIdle(self->device));
@@ -626,7 +626,6 @@ bool telar_renderer_draw(telar_renderer *self, telar_gui_viewport viewport, cons
         fprintf(stderr, "telar gui: acquire failed: %d\n", (int)acquired);
         return false;
     }
-    TRY(vkResetFences(self->device, 1, &self->fence));
 
     bool has_quads = frame->quad_count > 0 && frame->quads != NULL && frame->atlas != NULL && frame->atlas_side > 0;
     if (has_quads) {
@@ -677,6 +676,7 @@ bool telar_renderer_draw(telar_renderer *self, telar_gui_viewport viewport, cons
         .signalSemaphoreCount = 1,
         .pSignalSemaphores = &self->render_finished,
     };
+    TRY(vkResetFences(self->device, 1, &self->fence));
     TRY(vkQueueSubmit(self->queue, 1, &submit, self->fence));
     VkPresentInfoKHR present = {
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
@@ -691,7 +691,10 @@ bool telar_renderer_draw(telar_renderer *self, telar_gui_viewport viewport, cons
         fprintf(stderr, "telar gui: present failed: %d\n", (int)presented);
         return false;
     }
-    return true;
+    // Completion owns the ACK boundary; no CPU or GPU consumer borrows the
+    // sealed frame after this fence signals. This wait runs on frame_worker.
+    TRY(vkWaitForFences(self->device, 1, &self->fence, VK_TRUE, UINT64_MAX));
+    return presented == VK_ERROR_OUT_OF_DATE_KHR ? TELAR_RENDER_RETRY : TELAR_RENDER_DELIVERED;
 }
 
 void telar_renderer_destroy(telar_renderer *self) {

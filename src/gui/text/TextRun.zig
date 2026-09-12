@@ -8,3 +8,6 @@ y: f32,
 color: Color,
 /// Glyph size in device pixels.
 pixel_height: u16,
+
+bold: bool = false,
+italic: bool = false,

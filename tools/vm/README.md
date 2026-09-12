@@ -81,3 +81,11 @@ the host; the guest reaches it through QEMU's user network. The seed creates
 the `telar` user with the machine's SSH key and passwordless sudo, and enables
 console autologin. `provision.sh` then installs the toolchain and the desktop
 and pins Zig 0.16.0 by checksum. Both are idempotent.
+
+## Native terminal integration
+
+`python tools/vm/gui-terminal-test.py /tmp/telar-gui-validation` builds the
+working tree and verifies native output, keyboard input, Wayland clipboard
+paste, PTY resize and shell survival after closing the window. It uses an
+isolated runtime and captures a screenshot for each cut. Provisioning installs
+`wtype` and `wl-clipboard` for this check.

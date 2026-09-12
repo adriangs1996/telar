@@ -7,6 +7,7 @@ line numbers are intentionally omitted because symbols survive refactors.
 
 | Flow | Trigger | Visible result | Proof |
 | --- | --- | --- | --- |
+| [Native terminal](native-terminal.md) | `telar gui` opens a native window | Runtime cells, keyboard, paste and resize work through shared controllers; closing the window preserves the shell | GUI contract tests, macOS window test and isolated Wayland integration |
 | [Agent snapshot](agent-snapshot.md) | Runtime agent evidence changes | The client commits one bounded replica, emits actionable transitions and the presenter projects the latest revision | Storage, model, effect-order, protocol and presenter tests |
 | [Agent control](agent-control.md) | An agent or script runs `telar agent` or `telar pane` | The runtime answers one bounded query, read or send over the control socket without any attachment | Schema, controller, handler, launcher and parser tests |
 | [Agent hooks](agent-hooks.md) | An agent's lifecycle hook fires inside its pane | The runtime ranks the official report above inferred evidence, stores the session reference and notifies clients | Tracker, controller, mapping and settings-edit tests |
