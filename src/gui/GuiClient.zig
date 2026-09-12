@@ -24,6 +24,9 @@ pub fn init(params: client.ClientInit, driver: *RuntimeDriver) !*GuiClient {
     const gui = try params.gpa.create(GuiClient);
     errdefer params.gpa.destroy(gui);
     try client.AttachedClient.init(&gui.app, params);
+    // The GUI's absent sidebar uses the existing cells adapter regardless of
+    // a shared Lua file's TUI renderer preference, including during reload.
+    gui.app.options.sidebar_renderer_locked = true;
     gui.driver = driver;
     gui.input = .{};
     gui.theme = params.options.theme;
@@ -77,6 +80,7 @@ pub fn start(gui: *GuiClient, colors: core.TerminalColors) !void {
     });
     try client.runtime_io.scheduleRead(&gui.app);
     try client.runtime_io.flushGraphicsCredits(&gui.app);
+    try client.controllers.config_reloads.schedule(&gui.app);
 }
 
 pub fn pump(gui: *GuiClient) !?u8 {
@@ -92,6 +96,22 @@ pub fn pump(gui: *GuiClient) !?u8 {
     return null;
 }
 
+/// Copies the visible cursor identity for the native blink clock.
+/// Example: `clock.observe(gui.cursorTarget(), now_ns);`
+pub fn cursorTarget(gui: *const GuiClient) @import("CursorTarget.zig") {
+    const model = gui.app.model.activeTabModelConst() orelse return .{};
+    const pane = model.focusedPaneConst() orelse return .{};
+    var layout: client.LayoutSnapshot = .{};
+    model.layout.snapshot(gui.region.area, &layout);
+    for (layout.views()) |view| {
+        if (view.pane_id == pane.id and view.surface == .terminal and pane.cursor.x < view.content.w and pane.cursor.y < view.content.h) {
+            return .{ .pane_id = pane.id, .generation = pane.attachment_generation, .cursor = pane.cursor };
+        }
+    }
+
+    return .{};
+}
+
 pub fn resizeRegion(gui: *GuiClient, cols: u16, rows: u16) void {
     if (gui.region.area.w == cols and gui.region.area.h == rows) {
         return;
@@ -101,14 +121,15 @@ pub fn resizeRegion(gui: *GuiClient, cols: u16, rows: u16) void {
 }
 
 /// Publishes exact font metrics and lets shared geometry negotiate the PTY.
-/// Example: `try gui.resize(size);`
-pub fn resize(gui: *GuiClient, size: core.TerminalSize) !void {
+/// Example: `try gui.resize(size, renderer.theme);`
+pub fn resize(gui: *GuiClient, size: core.TerminalSize, theme: client.TerminalTheme) !void {
     var capabilities = gui.app.model.hostCapabilities();
     capabilities.window_width_px = @as(u32, size.cols) * size.cell_width_px;
     capabilities.window_height_px = @as(u32, size.rows) * size.cell_height_px;
     capabilities.cell_width_px = size.cell_width_px;
     capabilities.cell_height_px = size.cell_height_px;
     capabilities.images = .unsupported;
+    capabilities.terminal_colors = .{ .foreground = theme.foreground, .background = theme.background, .palette = theme.palette };
     var handler: client.ResizeHostHandler = .{ .model = &gui.app.model, .effects = .{ .context = gui, .deliver = deliverResize } };
     _ = try handler.execute(.{ .size = size, .capabilities = capabilities });
 }
@@ -162,7 +183,7 @@ pub fn prepare(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.zig"
     const projection = client.capture(&gui.app.model, .{ .geometry = gui.region });
     const observation: client.Observation = .{ .model = projection.version, .geometry_revision = gui.region.revision };
     _ = gui.lifecycle.observe(observation);
-    const commit = try renderer.prepare(projection, gui.theme);
+    const commit = try renderer.prepare(projection);
     const token = try gui.lifecycle.begin(.{ .observation = observation, .commit = commit, .geometry = client.Geometry.capture(projection) });
     return @intFromEnum(token);
 }

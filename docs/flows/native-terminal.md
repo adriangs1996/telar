@@ -18,6 +18,11 @@ nonblocking pipe. The window thread joins the completed operation before calling
 `runtime_io.handleRead` or `runtime_io.handleSent`. A receive buffer remains
 borrowed until synchronous dispatch finishes. No worker accesses the model.
 
+`ConfigurationReload` adds one worker for the shared config watch and native
+font preparation. It publishes through the same pipe; the window thread adopts
+a prepared generation after native consumers finish. See
+[native appearance](native-appearance.md#hot-reload) for the swap and cleanup.
+
 This bridge is provisional. Step 9 of `docs/plans/native-client-split.md` replaces
 it with the inbox/outbox execution model. It contains no general scheduler.
 
@@ -53,7 +58,8 @@ it with the inbox/outbox execution model. It contains no general scheduler.
 ## Bounds and recovery
 
 - At most 65,536 visible grid cells, with capacity for 24 quads per cell, one
-  1,024-square alpha atlas and one native GPU submission. Steady drawing reuses
+  active 1,024-square alpha atlas and one native GPU submission. A font reload
+  can additionally hold one staged or retired renderer. Steady drawing reuses
   quad storage; font changes replace the atlas after the prior consumer ends.
   Retained cell meshes additionally reserve at most 24 quads plus their visual
   key per grid position. Capacity grows only at geometry changes and is bounded
@@ -65,7 +71,9 @@ it with the inbox/outbox execution model. It contains no general scheduler.
   Outbox capacity gates input consumption; send completion resumes it.
 - Linux bounds clipboard offers to 16 and keymaps to 4 MiB. Clipboard reads are
   nonblocking. Repeat uses native-loop deadlines; drawing uses Wayland frame
-  callbacks and a 60 Hz budget, with no periodic timer or idle repaint.
+  callbacks and a 60 Hz budget. A visible blinking cursor adds one deadline
+  per phase; a steady scene has no animation timer or idle repaint. Config
+  watching checks fingerprints once a second off the native thread.
 - On macOS, rendering requests 60 Hz through a demand-driven `CADisplayLink`
   that paces the Metal 4 renderer, with immediate drawing after idle. Commit feedback
   dispatches delivery to the window thread. The GUI requires macOS 26 and a
@@ -76,13 +84,14 @@ it with the inbox/outbox execution model. It contains no general scheduler.
   ownership, shader compilation, compositor pacing and presentation lifetimes.
 - Shared graphics storage retains runtime image messages under existing quotas
   and credit accounting, but this increment does not display images. Native
-  chrome, attachment UI, bars, config watching, plugins and external notification
+  chrome, attachment UI, bars, plugins and external notification
   delivery are not implemented here. Their ports are explicitly bound; absent
   visual surfaces do no work, and unsupported requested external operations
   report unavailability. An unavailable clipboard write leaves the terminal live.
 - Transport or unrecoverable GPU errors end this client. The runtime remains
-  authoritative and the next attachment requests snapshots. No runtime or IPC
-  schema changes are required.
+  authoritative and the next attachment requests snapshots. Cursor appearance
+  and the host's ANSI defaults extend the IPC schema; runtime and client must
+  use matching builds. See [native appearance](native-appearance.md).
 
 ## Retained preparation and shaping
 

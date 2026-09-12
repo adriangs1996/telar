@@ -9,7 +9,7 @@ fi
 
 sudo dnf install -y --setopt=install_weak_deps=False \
     gcc gcc-c++ make git curl xz python3 rsync tar \
-    sqlite-devel libnghttp2-devel brotli-devel pkgconf just ncurses fontconfig dejavu-sans-mono-fonts \
+    sqlite-devel libnghttp2-devel brotli-devel pkgconf just ncurses fontconfig fontconfig-devel dejavu-sans-mono-fonts \
     sway foot mesa-dri-drivers mesa-vulkan-drivers vulkan-loader vulkan-tools \
     wayland-devel wayland-protocols-devel libxkbcommon-devel grim wtype wl-clipboard \
     vulkan-headers vulkan-loader-devel vulkan-validation-layers glslc

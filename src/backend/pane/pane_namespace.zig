@@ -232,6 +232,67 @@ test "pane color defaults answer fragmented OSC queries and preserve overrides" 
     try std.testing.expect(pane.pending_terminal_colors == null);
     try std.testing.expectEqual(@as(u8, 10), pane.terminal.colors.background.get().?.r);
     try std.testing.expect(pane.terminal.colors.foreground.get() == null);
+
+    var palette: [16][3]u8 = .{.{ 1, 2, 3 }} ** 16;
+    palette[1] = .{ 17, 34, 51 };
+    pane.setTerminalColors(.{ .palette = palette });
+    const palette_query = "\x1b]4;1;?\x07";
+    for (0..palette_query.len + 1) |split| {
+        pane.stream.nextSlice(palette_query[0..split]);
+        pane.stream.nextSlice(palette_query[split..]);
+        try std.testing.expectEqualStrings("\x1b]4;1;rgb:1111/2222/3333\x07", pane.pty_responses.peek().?);
+        pane.pty_responses.pop();
+    }
+    pane.stream.nextSlice("\x1b]4;1;#abcdef\x07");
+    palette[1] = .{ 68, 85, 102 };
+    pane.setTerminalColors(.{ .palette = palette });
+    try std.testing.expectEqual(vt.color.RGB{ .r = 0xab, .g = 0xcd, .b = 0xef }, pane.terminal.colors.palette.current[1]);
+    pane.stream.nextSlice("\x1b]104;1\x07");
+    try std.testing.expectEqual(vt.color.RGB{ .r = 68, .g = 85, .b = 102 }, pane.terminal.colors.palette.current[1]);
+}
+
+test "pane frames follow VT cursor style blink and visibility across every read boundary" {
+    const Cursor = @import("telar-core").Cursor;
+    const gpa = std.testing.allocator;
+    var pane: PaneType = undefined;
+    pane.gpa = gpa;
+    pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 4, .rows = 2, .default_cursor_blink = true });
+    defer pane.terminal.deinit(gpa);
+    var stream = pane.terminal.vtStream();
+    defer stream.deinit();
+    pane.render_state = .empty;
+    defer pane.render_state.deinit(gpa);
+    pane.screen = try BufferType.init(gpa, 4, 2);
+    defer pane.screen.deinit();
+    var rows: [2]bool = @splat(false);
+    pane.damaged_rows = &rows;
+    pane.semantic_colors_dirty = false;
+    pane.cell_revision = 0;
+    const shapes = [_]Cursor.Shape{ .default, .block, .block, .underline, .underline, .bar, .bar };
+    for (shapes, 0..) |shape, number| {
+        var bytes: [16]u8 = undefined;
+        const command = try std.fmt.bufPrint(&bytes, "\x1b[{d} q", .{number});
+        for (0..command.len + 1) |split| {
+            stream.nextSlice("\x1b[0 q");
+            stream.nextSlice(command[0..split]);
+            stream.nextSlice(command[split..]);
+            try pane.render(false);
+            try std.testing.expect(pane.cursor.visible);
+            try std.testing.expectEqual(shape, pane.cursor.appearance.shape);
+            try std.testing.expectEqual(number == 0 or number % 2 == 1, pane.cursor.appearance.blink);
+        }
+    }
+    stream.nextSlice("\x1b[?25l");
+    try pane.render(false);
+    try std.testing.expect(!pane.cursor.visible);
+    stream.nextSlice("\x1b[?25h\x1b[0 q\x1b[?12l");
+    try pane.render(false);
+    try std.testing.expect(pane.cursor.visible);
+    try std.testing.expect(!pane.cursor.appearance.blink);
+    stream.nextSlice("\x1bc");
+    try pane.render(false);
+    try std.testing.expectEqual(Cursor.Shape.default, pane.cursor.appearance.shape);
+    try std.testing.expect(pane.cursor.appearance.blink);
 }
 
 test "agent reports capture runtime geometry without accessing the observation terminal" {

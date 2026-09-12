@@ -389,8 +389,9 @@ fn startCapture(_: *anyopaque, _: CaptureRequestType) !void {
     return error.NativeServiceUnavailable;
 }
 
-fn startConfigWatch(_: *anyopaque, _: ConfigWaitArgsType) !void {
-    return error.NativeServiceUnavailable;
+fn startConfigWatch(context: *anyopaque, args: ConfigWaitArgsType) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    try host(client).driver.configuration.schedule(args);
 }
 
 fn startPluginWorker(_: *anyopaque, _: PluginActionsJobType) !void {

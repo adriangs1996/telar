@@ -22,13 +22,13 @@ local telar = require("telar")
 
 return telar.config({
   api_version = 2,
+  theme = telar.theme({
+    base = "vesper",
+    colors = { accent = "#ffc799" },
+  }),
   client = {
     prefix = "ctrl+s",
     icons = "nerd-font",
-    theme = telar.theme({
-      base = "vesper",
-      colors = { accent = "#ffc799" },
-    }),
     sidebar = { visible = true, renderer = "automatic" },
     sound = { enabled = true, ready = true, needs_input = true },
     input = { escape_timeout_ms = 25, sequence_timeout_ms = 1000 },
@@ -155,6 +155,137 @@ to `true`. `ready` applies only to `working -> ready`; `needs_input` applies
 only to `working -> blocked`. Initial snapshots, reconnects, repeated states,
 failures, and transitions from any other state remain silent. Set
 `enabled = false` to disable both sounds for that client or profile.
+
+## Theme
+
+Select a theme once at the root of the configuration:
+
+```lua
+theme = "vesper"
+```
+
+Each preset defines Telar's chrome roles and the native terminal's foreground,
+background, ANSI palette and cursor colors. Built-ins are `vesper`, the default,
+`catppuccin` (Mocha), `tokyo-night`, and `terminal`. The TUI uses the chrome roles
+and keeps the host terminal's palette and defaults. The GUI uses the terminal
+colors too; child truecolor and OSC overrides still apply. The `terminal`
+preset uses host-relative chrome roles and a neutral explicit palette in the
+GUI, which has no exterior terminal to inherit from.
+
+To customize a preset, use the table form. Both sections are optional:
+
+```lua
+theme = telar.theme({
+  base = "vesper",
+  colors = { accent = "#a8c98c" },
+  terminal = { background = "#111c18", cursor_color = "#a8c98c" },
+})
+```
+
+`colors` overrides chrome roles such as `accent`, `panel_bg`, `text` and
+`surface0`. These accept `#RRGGBB` or `"default"`. `terminal` accepts explicit
+RGB values only:
+
+| Setting in `theme.terminal` | Meaning |
+| --- | --- |
+| `foreground` | Default terminal text color. |
+| `background` | Terminal background, including unused edge pixels outside the grid. |
+| `palette` | Exactly 16 `#RRGGBB` strings in ANSI order: Lua indices `1..8` are normal, `9..16` bright. Indices `16..255` retain the xterm color cube and grayscale ramp. |
+| `cursor_color` | Cursor fill or outline. Uses the preset's value, or terminal foreground when unspecified. |
+| `cursor_text_color` | Glyph color inside a filled block cursor. Uses the preset's value, or terminal background when unspecified. |
+
+A name or explicit `base` selects a complete preset and discards inherited
+color overrides. A table without `base` overlays the current theme, so a
+profile can change only its background without copying a palette. `--theme`
+overrides the complete theme and remains locked across reloads; it does not
+lock fonts or cursor behavior.
+
+`client.theme` remains an alias for existing TUI configurations and selects the
+same complete theme. Set either `theme` or `client.theme` at a given root/profile
+level; declaring both is an error. The earlier `gui.theme` table has moved to
+`theme.terminal`. Likewise, `gui.cursor.color` and `gui.cursor.text_color` move
+to `theme.terminal.cursor_color` and `theme.terminal.cursor_text_color`.
+
+The ANSI data comes from the [Vesper terminal port](https://github.com/mbadolato/iTerm2-Color-Schemes/blob/master/ghostty/Vesper),
+[Catppuccin Mocha](https://github.com/catppuccin/ghostty/blob/main/themes/catppuccin-mocha.conf)
+and [Tokyo Night](https://github.com/folke/tokyonight.nvim/blob/main/extras/ghostty/tokyonight_night).
+Telar retains its orange Vesper cursor with background-colored text.
+
+## Graphical application
+
+`gui` configures fonts and cursor behavior in `telar gui`. Colors come from the
+root `theme`. The TUI continues using its host terminal's font and default
+colors. Both clients can load the same Lua file.
+See [`examples/gui.lua`](../examples/gui.lua) for a complete runnable example:
+
+```sh
+telar config check examples/gui.lua
+telar gui --config examples/gui.lua
+telar gui --config examples/gui.lua --profile presentation
+```
+
+```lua
+theme = "vesper"
+gui = {
+  font = {
+    family = "JetBrains Mono",
+    size = 15,
+    line_height = 1.15,
+    letter_spacing = 0,
+  },
+  cursor = { style = "block", blink = true, blink_interval_ms = 600 },
+}
+```
+
+| Setting | Default | Meaning and bounds |
+| --- | --- | --- |
+| `font.family` | bundled JetBrains Mono | Installed family name, at most 256 UTF-8 bytes, without NUL. An empty name or `JetBrains Mono` uses the bundled face. |
+| `font.size` | `15` | Logical pixel size, equivalent to points on macOS; `6..96`, decimals allowed. The display scale is applied once during rasterization. |
+| `font.line_height` | `1.0` | Multiplier of the font's natural line height; `0.75..3`. Extra space is distributed above and below the baseline. |
+| `font.letter_spacing` | `0` | Extra logical pixels per cell; `-5..20`. A combination producing a nonpositive cell width fails at startup or rejects the reload. |
+| `cursor.style` | `block` | `block`, `bar`, `underline`, or `hollow`. |
+| `cursor.blink` | `true` | Whether the default cursor blinks. An explicit application DECSCUSR style overrides this default; DEC mode 12 can suppress blinking. |
+| `cursor.blink_interval_ms` | `600` | Duration of each visible or hidden phase; integer `100..5000`. |
+
+`theme.terminal` requires explicit RGB values; `"default"` has no exterior
+terminal to refer to here. Child truecolor and OSC palette/default-color overrides still
+work. The runtime receives the geometry owner's default foreground, background
+and ANSI palette so OSC 4/10/11 queries agree with that host; OSC 104/110/111
+restores those defaults. Another connection retains its own GUI preferences.
+
+Font resolution uses CoreText on macOS and Fontconfig on Linux at startup and
+when a reload changes font settings. An unavailable explicitly named family is
+an error. `config check` validates the schema without requiring that font on
+the checking machine.
+Bold and italic use the existing synthesized variants; missing glyphs use the
+face's replacement glyph. Separate style families, fallback family lists,
+OpenType feature configuration, color emoji and zoom shortcuts are not part of
+this increment. Chrome can derive proportional sizes from `GuiFont.scaledSize`.
+
+The cursor follows the VT's visibility and DECSCUSR requests, including changes
+an editor emits when entering insert mode. It shows a steady hollow outline
+when the native window loses focus. Input, cursor changes and focus restart the
+visible phase. Cursor colors currently come from Lua; application OSC 12 cursor
+color overrides are not projected to the GUI yet.
+
+The GUI reloads a loaded configuration automatically. Save the Lua file or one
+of its imported modules; the shared watcher checks for changes every second.
+Profiles overlay only the fields they specify, and reload keeps the profile
+selected at launch. Saving by atomic file replacement also works.
+
+Lua validation and font preparation run off the window thread. A complete
+replacement becomes active once the previous GPU frame releases its resources.
+Font changes update the terminal grid and PTY size; theme and cursor changes
+reuse the existing glyph atlas. Input and receipt ACKs continue during loading.
+Invalid Lua, a missing font or invalid metrics leave the previous generation
+active and report a diagnostic on stderr. Correct the file and save again to
+retry. `--no-config` disables watching; a window started without a loaded config
+must be reopened with one before automatic reload is available.
+
+The selected options were informed by [Ghostty's configuration
+reference](https://ghostty.org/docs/config/reference); Telar does not load
+Ghostty configuration files. See [native appearance](flows/native-appearance.md)
+for the code path, resource lifetime and verification.
 
 ## Agents
 
@@ -599,7 +730,8 @@ The client watches the main file, loaded local modules, configured plugin
 trees, and the trust store. A change builds a complete replacement generation.
 Theme, sidebar, keymap, callbacks, plugin registry, and grants swap only after
 all validation succeeds. A failure leaves the previous generation active and
-shows the error in the client. Closure state is intentionally lost on reload.
+shows the error in the TUI; the GUI currently reports it on stderr. Closure
+state is intentionally lost on reload.
 The client model records the accepted generation, sidebar and pane-gap state;
 the presenter observes that version and paints the new appearance on its paced
 frame. The ownership and failure order is mapped in

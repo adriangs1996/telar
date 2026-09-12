@@ -62,10 +62,35 @@ pub fn init(allocator: std.mem.Allocator, options: AtlasOptions) !GlyphAtlas {
     errdefer _ = freetype.c.FT_Done_FreeType(library);
 
     var face: freetype.c.FT_Face = undefined;
-    if (freetype.c.FT_New_Memory_Face(library, @ptrCast(options.font.ptr), @intCast(options.font.len), 0, &face) != 0) {
+    if (freetype.c.FT_New_Memory_Face(library, @ptrCast(options.font.ptr), @intCast(options.font.len), @max(0, options.face_index), &face) != 0) {
         return error.FontInitFailed;
     }
     errdefer _ = freetype.c.FT_Done_Face(face);
+    if (options.face_index < 0 and options.postscript.len != 0) {
+        const count = face.*.num_faces;
+        if (count > 256) {
+            return error.FontCollectionTooLarge;
+        }
+
+        var index: freetype.c.FT_Long = 0;
+        while (true) {
+            const name = freetype.c.FT_Get_Postscript_Name(face);
+            if (name != null and std.mem.eql(u8, std.mem.span(name), options.postscript)) {
+                break;
+            }
+            index += 1;
+            if (index == count) {
+                return error.FontFaceNotFound;
+            }
+
+            var candidate: freetype.c.FT_Face = undefined;
+            if (freetype.c.FT_New_Memory_Face(library, @ptrCast(options.font.ptr), @intCast(options.font.len), index, &candidate) != 0) {
+                return error.FontInitFailed;
+            }
+            _ = freetype.c.FT_Done_Face(face);
+            face = candidate;
+        }
+    }
     if (freetype.c.FT_Select_Charmap(face, freetype.c.FT_ENCODING_UNICODE) != 0) {
         return error.UnicodeCharmapUnavailable;
     }

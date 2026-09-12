@@ -9,7 +9,7 @@ loop. The active objects change only after validation succeeds.
 ```text
 config, local module, plugin or trust-store fingerprint changes
                             |
-              config_reload.waitConfigReload
+                 config_reload.wait
                             |
                   ConfigReload.loaded
                             |
@@ -39,7 +39,8 @@ config, local module, plugin or trust-store fingerprint changes
 ```
 
 `client_startup` asks `config_reloads.schedule` to start the watcher after the
-runtime handshake. `DeliverConfigReloadHandler` rearms it through an adapter
+runtime handshake; the GUI schedules it from `GuiClient.start` after bootstrap.
+`DeliverConfigReloadHandler` rearms it through an adapter
 port after every successfully handled outcome. The worker loads a new Lua VM,
 typed snapshot, plugin registry and trust store without touching the active
 client. `config_reload.resolve` checks the sidebar
@@ -47,6 +48,14 @@ renderer against host capabilities, compiles the input router, clears the
 worker's orphan slots and transfers one `Adoption` to the adapter. Rejection
 frees all three owned objects in one place. The adapter translates that
 physical result into an application resolution without deciding its effects.
+
+The native adapter adds font preparation before delivering the result to
+`config_reloads.handle`. `gui/ConfigurationReload` stages resources off-thread,
+waits for native consumers to release the old frame, then adopts the generation
+and prepared font together. Missing fonts reject the candidate through the
+existing diagnostic flow. An unchanged watch does not request a frame. See
+[native appearance](native-appearance.md#hot-reload) for viewport races,
+resource retirement and shutdown ownership.
 
 ## Model transaction
 
@@ -148,3 +157,6 @@ trigger.
 - `src/frontend/client/tests/` proves resolved delivery, ownership
   replacement, accepted diagnostic cleanup, stale cleanup, post-commit geometry
   failure and presenter-owned drawing.
+- `src/gui/tests/configuration.zig` covers real file watches, font preparation
+  and rejection, profile/module saves, active GPU borrows, continuing input and
+  ACKs, viewport restaging, atlas reuse and cancelled worker cleanup.

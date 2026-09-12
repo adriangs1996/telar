@@ -72,7 +72,8 @@ wlroots draws with pixman and Vulkan comes from Mesa's software driver. That
 is enough to develop and verify the native client's Linux backend; it says
 nothing about frame rate on real hardware. The backend's build needs
 `wayland-scanner`, the `xdg-shell` protocol, the Vulkan headers and loader,
-and `glslc` to compile the GLSL shaders as build dependencies. Provisioning
+Fontconfig headers for installed font lookup, and `glslc` to compile the GLSL
+shaders as build dependencies. Provisioning
 installs them along with the Vulkan validation layer. The native renderer
 requires Vulkan 1.3, dynamic rendering, Synchronization2 and
 `VK_EXT_swapchain_maintenance1`; see
@@ -93,3 +94,9 @@ working tree and verifies native output, keyboard input, Wayland clipboard
 paste, PTY resize and shell survival after closing the window. It uses an
 isolated runtime and captures a screenshot for each cut. Provisioning installs
 `wtype` and `wl-clipboard` for this check.
+Pass `--config examples/gui.lua` to exercise native appearance preferences
+through the same input, resize and reconnect flow.
+Use `--reload` instead to generate a watched config, change the font and PTY
+grid, reject an unavailable font, and recover without replacing the shell.
+The test saves screenshots of the changed and recovered appearance and checks
+Vulkan validation output.

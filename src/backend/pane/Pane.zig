@@ -191,6 +191,7 @@ pub fn create(resources: CreationResourcesType, request: CreationRequestType) !*
         .damaged_rows = undefined,
     };
     pane.terminal = try .init(io, gpa, .{
+        .default_cursor_blink = true,
         .cols = size.cols,
         .rows = size.rows,
         .max_scrollback_bytes = pane_namespace.default_scrollback_bytes,
@@ -1123,15 +1124,24 @@ fn applyTerminalColors(pane: *Pane) void {
     std.debug.assert(!pane.ingest_pending);
     const foreground = terminalRgb(colors.foreground);
     const background = terminalRgb(colors.background);
+    var palette = vt.color.default;
+    if (colors.palette) |configured| {
+        for (configured, 0..) |rgb, index| {
+            palette[index] = terminalRgb(rgb).?;
+        }
+    }
     pane.pending_terminal_colors = null;
     if (std.meta.eql(pane.terminal.colors.foreground.default, foreground) and
-        std.meta.eql(pane.terminal.colors.background.default, background))
+        std.meta.eql(pane.terminal.colors.background.default, background) and
+        std.meta.eql(pane.terminal.colors.palette.original, palette))
     {
         return;
     }
 
     pane.terminal.colors.foreground.default = foreground;
     pane.terminal.colors.background.default = background;
+    pane.terminal.colors.palette.changeDefault(palette);
+    pane.terminal.flags.dirty.palette = true;
     pane.render_pending = true;
     pane.semantic_colors_dirty = true;
     pane.dirty = true;
@@ -1241,7 +1251,20 @@ pub fn render(pane: *Pane, force: bool) !void {
     const cursor = pane.render_state.cursor;
     pane.cursor = if (cursor.visible and cursor.viewport != null and
         cursor.viewport.?.x < pane.screen.w and cursor.viewport.?.y < pane.screen.h)
-        .{ .visible = true, .x = cursor.viewport.?.x, .y = cursor.viewport.?.y }
+        .{
+            .visible = true,
+            .x = cursor.viewport.?.x,
+            .y = cursor.viewport.?.y,
+            .appearance = .{
+                .shape = if (pane.terminal.cursor.is_default) .default else switch (cursor.visual_style) {
+                    .block => .block,
+                    .bar => .bar,
+                    .underline => .underline,
+                    .block_hollow => .hollow,
+                },
+                .blink = cursor.blinking,
+            },
+        }
     else
         .{};
     pane.dirty = true;

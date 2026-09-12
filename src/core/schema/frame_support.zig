@@ -20,7 +20,7 @@ pub const max_span_count = 4096;
 pub const cell_header_size = 1;
 pub const max_style_size = 14;
 pub const max_cell_size = cell_header_size + max_style_size + CellType.max_bytes;
-pub const body_header_size = 55;
+pub const body_header_size = 57;
 pub const span_header_size = 12;
 pub const max_body_size = transport.max_frame_size - 1;
 pub const max_cell_count: u32 = @intCast(
@@ -99,6 +99,8 @@ pub fn encodeBody(encoder: *EncoderType, frame: Frame) !void {
     try encoder.writeInt(u32, frame.scroll.total_rows);
     try encoder.writeInt(u32, frame.scroll.offset);
     try encoder.writeInt(u16, @intCast(frame.spans.len));
+    try encoder.writeByte(@intFromEnum(frame.cursor.appearance.shape));
+    try encoder.writeByte(@intFromBool(frame.cursor.appearance.blink));
 
     for (frame.spans) |span| {
         try encoder.writeInt(u32, span.start);
@@ -160,6 +162,9 @@ pub fn decodeBody(decoder: *DecoderType) !FrameView {
         .offset = try decoder.readInt(u32),
     };
     const span_count = try decoder.readInt(u16);
+    const shape_byte = std.math.cast(u3, try decoder.readByte()) orelse return error.InvalidCursorShape;
+    const cursor_shape = std.enums.fromInt(@import("Cursor.zig").Shape, shape_byte) orelse return error.InvalidCursorShape;
+    const cursor_blink = try decoder.readBool();
 
     try validateHeader(.{
         .pane_id = pane_id,
@@ -167,7 +172,7 @@ pub fn decodeBody(decoder: *DecoderType) !FrameView {
         .base_frame_id = base_frame_id,
         .cols = cols,
         .rows = rows,
-        .cursor = .{ .visible = cursor_visible, .x = cursor_x, .y = cursor_y },
+        .cursor = .{ .visible = cursor_visible, .x = cursor_x, .y = cursor_y, .appearance = .{ .shape = cursor_shape, .blink = cursor_blink } },
         .scroll = scroll,
         .span_count = span_count,
     });
@@ -215,7 +220,7 @@ pub fn decodeBody(decoder: *DecoderType) !FrameView {
         .base_frame_id = base_frame_id,
         .cols = cols,
         .rows = rows,
-        .cursor = .{ .visible = cursor_visible, .x = cursor_x, .y = cursor_y },
+        .cursor = .{ .visible = cursor_visible, .x = cursor_x, .y = cursor_y, .appearance = .{ .shape = cursor_shape, .blink = cursor_blink } },
         .mouse = mouse,
         .input_modes = input_modes,
         .pointer_shape = pointer_shape,

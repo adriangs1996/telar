@@ -7,7 +7,6 @@ const native = @import("native/native.zig");
 const GuiClient = @import("GuiClient.zig");
 const RuntimeDriver = @import("RuntimeDriver.zig");
 const Renderer = @import("render/TerminalRenderer.zig");
-const cell_colors = @import("render/cell_colors.zig");
 const Application = @This();
 
 params: client.ClientInit,
@@ -16,9 +15,12 @@ renderer: Renderer,
 gui: ?*GuiClient = null,
 failure: ?anyerror = null,
 exit_status: ?u8 = null,
+cursor_clock: @import("CursorClock.zig") = .{},
 
 pub fn init(params: client.ClientInit) !Application {
-    return .{ .params = params, .driver = try .init(params.io), .renderer = .init(params.gpa) };
+    var renderer = try Renderer.configured(params.gpa, params.io, .{ .config = params.options.gui, .theme = params.options.theme.terminal });
+    errdefer renderer.deinit();
+    return .{ .params = params, .driver = try .init(params.io), .renderer = renderer, .cursor_clock = .{ .config = params.options.gui.cursor } };
 }
 
 pub fn deinit(app: *Application) void {
@@ -45,7 +47,7 @@ pub fn deinit(app: *Application) void {
 /// Runs the window and returns only after native GPU consumers have stopped.
 /// Example: `const status = try app.run("Telar");`
 pub fn run(app: *Application, title: [*:0]const u8) !u8 {
-    const callbacks: native.Callbacks = .{ .render = render, .pump = pump, .complete = complete, .input = input, .wake_fd = app.driver.fds[0] };
+    const callbacks: native.Callbacks = .{ .render = render, .pump = pump, .complete = complete, .input = input, .wake_fd = app.driver.fds[0], .wakeup_after = wakeupAfter };
     const result = native.telar_gui_run(title, app, &callbacks);
     if (app.failure) |err| {
         return err;
@@ -79,6 +81,14 @@ fn prepare(app: *Application, viewport: native.Viewport) !u64 {
         return 0;
     }
 
+    app.driver.configuration.observe(app.renderer.config, viewport);
+    if (app.gui) |gui| {
+        if (try app.driver.configuration.apply(gui, &app.renderer)) {
+            app.cursor_clock.config = app.renderer.config.cursor;
+            app.cursor_clock.reset(app.now());
+        }
+    }
+
     const size = app.renderer.measure(viewport) catch |err| switch (err) {
         error.InvalidTerminalSize => return 0,
         else => return err,
@@ -89,16 +99,19 @@ fn prepare(app: *Application, viewport: native.Viewport) !u64 {
         params.window_width_px = @as(u32, size.cols) * size.cell_width_px;
         params.window_height_px = @as(u32, size.rows) * size.cell_height_px;
         app.gui = try GuiClient.init(params, &app.driver);
-        const foreground = cell_colors.resolve(params.options.theme.palette.text, .white);
-        const background = cell_colors.resolve(params.options.theme.palette.panel_bg, .black);
         try app.gui.?.start(.{
-            .foreground = .{ @intFromFloat(foreground.r * 255), @intFromFloat(foreground.g * 255), @intFromFloat(foreground.b * 255) },
-            .background = .{ @intFromFloat(background.r * 255), @intFromFloat(background.g * 255), @intFromFloat(background.b * 255) },
+            .foreground = params.options.theme.terminal.foreground,
+            .background = params.options.theme.terminal.background,
+            .palette = params.options.theme.terminal.palette,
         });
     }
 
     const gui = app.gui.?;
-    try gui.resize(size);
+    try gui.resize(size, app.renderer.theme);
+    const now_ns = app.now();
+    app.cursor_clock.observe(gui.cursorTarget(), now_ns);
+    app.renderer.cursor_on = app.cursor_clock.shown(now_ns);
+    app.renderer.focused = app.cursor_clock.focused;
     return gui.prepare(&app.renderer);
 }
 
@@ -116,8 +129,12 @@ fn pump(context: ?*anyopaque) callconv(.c) c_int {
     }
 
     if (app.gui) |gui| {
+        const now_ns = app.now();
+        app.cursor_clock.observe(gui.cursorTarget(), now_ns);
         const version = gui.app.model.version();
-        return @intFromBool(!std.meta.eql(version, gui.lifecycle.prepared.model) or gui.lifecycle.preparation_invalid);
+        return @intFromBool(!std.meta.eql(version, gui.lifecycle.prepared.model) or gui.lifecycle.preparation_invalid or
+            app.driver.configuration.pending or
+            app.renderer.cursor_on != app.cursor_clock.shown(now_ns) or app.renderer.focused != app.cursor_clock.focused);
     }
 
     return 0;
@@ -133,6 +150,13 @@ fn complete(context: ?*anyopaque, token: u64, delivered: c_int) callconv(.c) voi
 
 fn input(context: ?*anyopaque, event: native.InputEvent) callconv(.c) c_int {
     const app = from(context);
+    app.cursor_clock.reset(app.now());
+    if (event.kind == 5) {
+        app.cursor_clock.focused = event.code != 0;
+        native.telar_gui_wake(app.driver.fds[1]);
+        return 1;
+    }
+
     core.mark(app.params.io, .client_input);
     const gui = app.gui orelse return 0;
     gui.input.accept(event) catch return 0;
@@ -140,7 +164,17 @@ fn input(context: ?*anyopaque, event: native.InputEvent) callconv(.c) c_int {
         app.fail(err);
         return 0;
     };
+    native.telar_gui_wake(app.driver.fds[1]);
     return 1;
+}
+
+fn now(app: *const Application) u64 {
+    return @intCast(@max(0, std.Io.Clock.awake.now(app.params.io).toNanoseconds()));
+}
+
+fn wakeupAfter(context: ?*anyopaque) callconv(.c) u32 {
+    const app = from(context);
+    return app.cursor_clock.wakeupAfter(app.now());
 }
 
 fn fail(app: *Application, err: anyerror) void {

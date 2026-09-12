@@ -8,6 +8,7 @@
   void *context;
   telar_gui_callbacks callbacks;
   dispatch_source_t wake_source;
+  dispatch_source_t animation_source;
   BOOL dirty, closed;
   CADisplayLink *display_link;
   CFTimeInterval next_draw;
@@ -45,12 +46,7 @@
           return;
         }
 
-        int result = view->callbacks.pump(view->context);
-        if (result < 0) {
-          [view.window close];
-        } else if (view->dirty || result > 0) {
-          [view requestDraw];
-        }
+        [view pumpEvents];
       }];
 
   if (renderer == nil) {
@@ -129,16 +125,18 @@
     }
 
     telar_gui_drain(view->callbacks.wake_fd);
-    int result = view->callbacks.pump(view->context);
-
-    if (result < 0) {
-      [view.window close];
-    } else if (result > 0) {
-      [view requestDraw];
-    }
+    [view pumpEvents];
   });
 
   dispatch_resume(wake_source);
+
+  animation_source = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
+                                             dispatch_get_main_queue());
+  dispatch_source_set_timer(animation_source, DISPATCH_TIME_FOREVER,
+                            DISPATCH_TIME_FOREVER, 0);
+  dispatch_source_set_event_handler(animation_source, ^{ [weak pumpEvents]; });
+  dispatch_resume(animation_source);
+  [self scheduleWake];
 }
 
 - (void)requestDraw {
@@ -159,6 +157,9 @@
 - (void)drawIfReady {
   if (closed || renderer.isBusy || !dirty || self.window == nil ||
       !(self.window.occlusionState & NSWindowOcclusionStateVisible)) {
+    if (self.window != nil && !(self.window.occlusionState & NSWindowOcclusionStateVisible)) {
+      display_link.paused = YES;
+    }
     return;
   }
 
@@ -214,6 +215,9 @@
 
 - (void)windowWillClose:(NSNotification *)notification {
   closed = YES;
+  if (animation_source != nil) {
+    dispatch_source_cancel(animation_source);
+  }
   [self stopInput];
 
   [display_link invalidate];
@@ -241,6 +245,59 @@
 
 - (void)displayDidRefresh:(CADisplayLink *)link {
   [self drawIfReady];
+}
+
+// One deadline from Zig, e.g. the cursor's next phase. No 60 Hz idle polling.
+- (void)scheduleWake {
+  if (closed || animation_source == nil) {
+    return;
+  }
+  uint32_t delay = 0;
+  if (callbacks.wakeup_after != NULL && self.window != nil &&
+      (self.window.occlusionState & NSWindowOcclusionStateVisible)) {
+    delay = callbacks.wakeup_after(context);
+  }
+  dispatch_source_set_timer(animation_source,
+      delay ? dispatch_time(DISPATCH_TIME_NOW, (int64_t)delay * NSEC_PER_MSEC) : DISPATCH_TIME_FOREVER,
+      DISPATCH_TIME_FOREVER, 0);
+}
+
+- (void)pumpEvents {
+  if (closed) {
+    return;
+  }
+  int result = callbacks.pump(context);
+  if (result < 0) {
+    [self.window close];
+    return;
+  }
+  if (dirty || result > 0) {
+    [self requestDraw];
+  }
+  [self scheduleWake];
+}
+
+- (void)windowDidBecomeKey:(NSNotification *)notification {
+  callbacks.input(context, (telar_gui_input){.kind = 5, .code = 1, .phase = 1});
+  [self requestDraw];
+  [self scheduleWake];
+}
+
+- (void)windowDidResignKey:(NSNotification *)notification {
+  if (!closed) {
+    callbacks.input(context, (telar_gui_input){.kind = 5, .code = 0, .phase = 1});
+    [self requestDraw];
+    [self scheduleWake];
+  }
+}
+
+- (void)windowDidChangeOcclusionState:(NSNotification *)notification {
+  if (!(self.window.occlusionState & NSWindowOcclusionStateVisible)) {
+    display_link.paused = YES;
+  } else {
+    [self requestDraw];
+  }
+  [self scheduleWake];
 }
 
 @end

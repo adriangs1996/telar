@@ -9,10 +9,12 @@ pub fn add(b: *std.Build, module: *std.Build.Module, disable_coverage: bool) voi
             "src/gui/macos/TelarView.m",
             "src/gui/macos/TelarMetalRenderer.m",
             "src/gui/macos/TelarTextInputView.m",
+            "src/gui/macos/font.m",
         },
         .flags = c_flags.forCoverage(b, &.{ "-fobjc-arc", "-std=c23" }, disable_coverage),
     });
     module.linkFramework("AppKit", .{});
+    module.linkFramework("CoreText", .{});
     module.linkFramework("Metal", .{});
     module.linkFramework("QuartzCore", .{});
 }

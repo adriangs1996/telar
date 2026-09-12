@@ -38,7 +38,11 @@ test "the executable preserves diagnostic and trace root contracts" {
 
 // Library warnings cannot be written over a live frame. A later runtime can
 // route them to its log; the bootstrap keeps stderr out of the drawing path.
-pub const std_options: std.Options = .{ .log_level = .err };
+// GUI reload diagnostics have no terminal frame to corrupt and remain visible.
+pub const std_options: std.Options = .{
+    .log_level = .err,
+    .log_scope_levels = &.{.{ .scope = .gui_config, .level = .warn }},
+};
 
 // These names are root-level opt-in contracts read by core through @hasDecl.
 pub const telar_diagnostics = build_options.diagnostics;

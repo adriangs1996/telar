@@ -25,6 +25,13 @@ pub fn encodeConfigureTerminalColors(buffer: []u8, colors: TerminalColorsType) !
         }
     }
 
+    try encoder.writeByte(@intFromBool(colors.palette != null));
+    if (colors.palette) |palette| {
+        for (palette) |rgb| {
+            try encoder.writeBytes(&rgb);
+        }
+    }
+
     return encoder.finish();
 }
 
@@ -35,6 +42,14 @@ pub fn decodeConfigureTerminalColors(decoder: *DecoderType) !TerminalColorsType 
         if (try decoder.readBool()) {
             color.* = (try decoder.readBytes(3))[0..3].*;
         }
+    }
+
+    if (try decoder.readBool()) {
+        var palette: [16][3]u8 = undefined;
+        for (&palette) |*rgb| {
+            rgb.* = (try decoder.readBytes(3))[0..3].*;
+        }
+        colors.palette = palette;
     }
 
     return colors;

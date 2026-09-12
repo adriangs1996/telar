@@ -6,20 +6,21 @@ const Color = @import("Color.zig");
 
 /// Resolves a palette entry. Example: `const bg = cell_colors.resolve(palette.panel_bg, Color.black);`
 pub fn resolve(color: CoreColor, fallback: Color) Color {
+    return withPalette(color, fallback, &ansi);
+}
+
+/// Resolves terminal defaults and the native host's ANSI palette.
+/// Example: `const fg = cell_colors.withPalette(cell.style.fg, foreground, &theme.terminal.palette);`
+pub fn withPalette(color: CoreColor, fallback: Color, palette: *const [16][3]u8) Color {
     return switch (color) {
         .default => fallback,
         .rgb => |rgb| Color.rgb(rgb[0], rgb[1], rgb[2]),
-        .indexed => |index| indexed(index),
+        .indexed => |index| if (index < 16) Color.rgb(palette[index][0], palette[index][1], palette[index][2]) else indexed(index),
     };
 }
 
 /// The xterm 256-color table: 16 named colors, a 6x6x6 cube, then 24 grays.
 fn indexed(index: u8) Color {
-    if (index < 16) {
-        const named = ansi[index];
-        return Color.rgb(named[0], named[1], named[2]);
-    }
-
     if (index < 232) {
         const cube = index - 16;
         return Color.rgb(cubeLevel(cube / 36), cubeLevel((cube / 6) % 6), cubeLevel(cube % 6));
@@ -33,12 +34,7 @@ fn cubeLevel(step: u8) u8 {
     return if (step == 0) 0 else 55 + step * 40;
 }
 
-const ansi = [16][3]u8{
-    .{ 0, 0, 0 },       .{ 205, 49, 49 },   .{ 13, 188, 121 }, .{ 229, 229, 16 },
-    .{ 36, 114, 200 },  .{ 188, 63, 188 },  .{ 17, 168, 205 }, .{ 229, 229, 229 },
-    .{ 102, 102, 102 }, .{ 241, 76, 76 },   .{ 35, 209, 139 }, .{ 245, 245, 67 },
-    .{ 59, 142, 234 },  .{ 214, 112, 214 }, .{ 41, 184, 219 }, .{ 255, 255, 255 },
-};
+const ansi = (@import("telar-client").TerminalTheme{}).palette;
 
 test "default defers to the fallback and rgb passes through" {
     const std = @import("std");

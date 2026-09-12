@@ -5,4 +5,5 @@ pub const Callbacks = extern struct {
     complete: *const fn (?*anyopaque, u64, c_int) callconv(.c) void,
     input: *const fn (?*anyopaque, native.InputEvent) callconv(.c) c_int,
     wake_fd: c_int,
+    wakeup_after: ?*const fn (?*anyopaque) callconv(.c) u32 = null,
 };

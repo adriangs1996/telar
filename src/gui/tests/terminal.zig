@@ -1,6 +1,114 @@
 const std = @import("std");
 const Session = @import("Session.zig");
 
+test "GUI font metrics apply size spacing and display scale once" {
+    const Renderer = @import("../render/TerminalRenderer.zig");
+    var renderer = Renderer.init(std.testing.allocator);
+    defer renderer.deinit();
+    renderer.config.font = .{ .size = 20, .line_height = 1.5, .letter_spacing = 2 };
+    for ([_]f32{ 1, 2 }) |scale| {
+        const size = try renderer.measure(.{ .width = 800, .height = 600, .scale = scale });
+        const atlas = &renderer.atlas.?;
+        try std.testing.expectEqual(@as(u16, @intFromFloat(20 * scale)), atlas.pixel_height);
+        try std.testing.expectEqual(atlas.cellWidth() + @as(u16, @intFromFloat(2 * scale)), size.cell_width_px);
+        try std.testing.expectEqual(@as(u16, @intFromFloat(@round(@as(f32, @floatFromInt(atlas.lineHeight())) * 1.5))), size.cell_height_px);
+        try std.testing.expectEqual(800 / size.cell_width_px, size.cols);
+        try std.testing.expectEqual(600 / size.cell_height_px, size.rows);
+    }
+}
+
+test "native font lookup resolves installed faces and fails explicitly for missing families" {
+    const client = @import("telar-client");
+    const Source = @import("../text/FontSource.zig");
+    const Atlas = @import("../text/GlyphAtlas.zig");
+    var family: client.FontFamily = .{};
+    try family.set("Telar-Test-Missing-Family-98a34b1");
+    try std.testing.expectError(error.FontFamilyNotFound, Source.load(std.testing.allocator, std.testing.io, &family));
+    try family.set(if (@import("builtin").os.tag == .macos) "Menlo" else "DejaVu Sans Mono");
+    var source = try Source.load(std.testing.allocator, std.testing.io, &family);
+    defer source.deinit(std.testing.allocator);
+    try std.testing.expect(source.owned);
+    var atlas = try Atlas.init(std.testing.allocator, .{ .font = source.bytes, .pixel_height = 18, .face_index = source.match.face_index, .postscript = std.mem.sliceTo(&source.match.postscript, 0) });
+    defer atlas.deinit();
+    try atlas.prepareFallbacks();
+    try std.testing.expect(atlas.cellWidth() > 0);
+}
+
+test "cursor shapes focus and blink reuse retained ink without changing the atlas" {
+    const core = @import("telar-core");
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    try session.receiveFrame(1);
+    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    pane.cursor.x = 0;
+    try present(session);
+    const ink = try std.testing.allocator.dupe(@import("../render/Quad.zig").Quad, session.renderer.retained.at(.{ 0, 0 }).items());
+    defer std.testing.allocator.free(ink);
+    const shape_calls = session.renderer.atlas.?.shape_calls;
+    const version = session.renderer.atlas_version;
+    const cell_width: f32 = @floatFromInt(session.renderer.metrics.cell_width);
+    const cell_height: f32 = @floatFromInt(session.renderer.metrics.cell_height);
+    for (std.meta.tags(core.Cursor.Shape)) |shape| {
+        pane.cursor.appearance.shape = shape;
+        try present(session);
+        const quads = session.renderer.quads.items();
+        const count: usize = if (shape == .hollow) 4 else if (shape == .block or shape == .default) ink.len else 1;
+        const first = quads[quads.len - count];
+        try std.testing.expectEqual(if (shape == .bar) @as(f32, 2) else cell_width, first.width);
+        try std.testing.expectEqual(if (shape == .underline or shape == .hollow) @as(f32, 2) else cell_height, first.height);
+        try std.testing.expectEqual(if (shape == .underline) cell_height - 2 else @as(f32, 0), first.y);
+        try std.testing.expectEqual(@as(usize, 0), session.renderer.repainted_cells);
+        session.renderer.cursor_on = false;
+        try present(session);
+        try std.testing.expectEqual(quads.len - count, session.renderer.quads.items().len);
+        session.renderer.cursor_on = true;
+    }
+
+    try std.testing.expectEqualSlices(@import("../render/Quad.zig").Quad, ink, session.renderer.retained.at(.{ 0, 0 }).items());
+    try std.testing.expectEqual(shape_calls, session.renderer.atlas.?.shape_calls);
+    try std.testing.expectEqual(version, session.renderer.atlas_version);
+    pane.cursor.appearance.shape = .bar;
+    session.renderer.focused = false;
+    try present(session);
+    const hollow = session.renderer.quads.items();
+    try std.testing.expectEqual(cell_width, hollow[hollow.len - 4].width);
+    try std.testing.expectEqual(@as(f32, 2), hollow[hollow.len - 4].height);
+    session.renderer.focused = true;
+    session.renderer.config.cursor.style = .underline;
+    pane.cursor.appearance.shape = .default;
+    try present(session);
+    const underline = session.renderer.quads.items();
+    try std.testing.expectEqual(cell_height - 2, underline[underline.len - 1].y);
+}
+
+test "a block cursor recolors wide cell ink and ANSI colors belong to the GUI theme" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    try session.receiveFrame(1);
+    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    pane.buffer.cells[0] = .{ .bytes = .{ 0xe7, 0x95, 0x8c } ++ .{0} ** 13, .len = 3, .width = 2, .style = .{ .fg = .{ .indexed = 1 } } };
+    pane.buffer.cells[1].width = 0;
+    pane.cursor.x = 1;
+    session.renderer.theme.palette[1] = .{ 12, 34, 56 };
+    session.renderer.theme.cursor_color = .{ 255, 0, 0 };
+    session.renderer.theme.cursor_text_color = .{ 0, 255, 0 };
+    try present(session);
+    const mesh = session.renderer.retained.at(.{ 0, 0 });
+    const quads = session.renderer.quads.items();
+    const cursor = quads[quads.len - mesh.len];
+    try std.testing.expectEqual(@as(f32, 0), cursor.x);
+    try std.testing.expectEqual(@as(f32, @floatFromInt(session.renderer.metrics.cell_width * 2)), cursor.width);
+    try std.testing.expectEqual(@as(f32, 1), cursor.r);
+    for (quads[quads.len - mesh.len + 1 ..]) |glyph| {
+        try std.testing.expectEqual(@as(f32, 0), glyph.r);
+        try std.testing.expectEqual(@as(f32, 1), glyph.g);
+    }
+    try std.testing.expectApproxEqAbs(@as(f32, 12.0 / 255.0), mesh.items()[1].r, 0.001);
+    try std.testing.expectApproxEqAbs(@as(f32, 34.0 / 255.0), mesh.items()[1].g, 0.001);
+}
+
 test "native terminal acknowledges received patches while presentation is busy or fails" {
     const session = try Session.init();
     defer session.deinit();
@@ -59,7 +167,7 @@ test "native resize publishes exact grid pixels and preserves runtime-owned pane
     defer session.deinit();
     try session.bootstrap();
     const size = try session.renderer.metrics.measure(.{ .width = 303, .height = 199, .scale = 1 });
-    try session.gui.resize(size);
+    try session.gui.resize(size, session.renderer.theme);
     try session.settle();
     try std.testing.expectEqual(size.cols, session.gui.region.area.w);
     try std.testing.expectEqual(size.rows, session.gui.region.area.h);
@@ -171,13 +279,13 @@ test "retained geometry matches full redraw through erasure wide cells styles an
         try expectFullRedraw(session);
     }
 
-    session.gui.theme.palette.text = .{ .rgb = .{ 12, 100, 200 } };
-    session.gui.theme.palette.panel_bg = .{ .rgb = .{ 20, 40, 60 } };
+    session.renderer.theme.foreground = .{ 12, 100, 200 };
+    session.renderer.theme.background = .{ 20, 40, 60 };
     try present(session);
     try std.testing.expectEqual(pane.buffer.cells.len, session.renderer.repainted_cells);
     try expectFullRedraw(session);
     const size = try session.renderer.measure(.{ .width = 360, .height = 144, .scale = 2 });
-    try session.gui.resize(size);
+    try session.gui.resize(size, session.renderer.theme);
     try present(session);
     try std.testing.expect(session.renderer.repainted_cells > 0);
     try expectFullRedraw(session);
@@ -211,5 +319,12 @@ test "warm retained rendering and repeated glyph edits allocate no adapter stora
         try std.testing.expectEqual(@as(usize, 1), renderer.repainted_cells);
     }
 
+    const shape_calls = renderer.atlas.?.shape_calls;
+    for (0..20) |phase| {
+        renderer.cursor_on = phase % 2 == 0;
+        try present(session);
+        try std.testing.expectEqual(@as(usize, 0), renderer.repainted_cells);
+    }
+    try std.testing.expectEqual(shape_calls, renderer.atlas.?.shape_calls);
     try std.testing.expect(!failing.has_induced_failure);
 }

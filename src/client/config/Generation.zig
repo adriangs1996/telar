@@ -6,6 +6,11 @@ const Callback = @import("Callback.zig");
 const BarCallback = @import("BarCallback.zig");
 const StateType = @import("State.zig");
 const generation_support = @import("generation_support.zig");
+
+test {
+    _ = @import("gui_config_test.zig");
+    _ = @import("theme_test.zig");
+}
 const LoadContext = @import("LoadContext.zig");
 const SourceInput = @import("SourceInput.zig");
 const LimitsType = @import("Limits.zig");
@@ -35,7 +40,7 @@ const proxy_config = @import("proxy.zig");
 const max_image_bytes_per_pane_module = @import("telar-core").max_image_bytes_per_pane;
 const max_image_bytes_global_module = @import("telar-core").max_image_bytes_global;
 const client_history_config = @import("client_history.zig");
-const theme_config = @import("theme.zig");
+const ThemeParser = @import("ThemeParser.zig");
 const ThemeType = @import("../layout/icons.zig").Theme;
 const notifications_config = @import("notifications.zig");
 const SourceType = @import("../bars/model.zig").Source;
@@ -306,7 +311,7 @@ fn parseSnapshot(generation: *Generation, diagnostic: *DiagnosticType) !void {
         diagnostic.set("config.lua must return a table", .{});
         return error.InvalidConfig;
     }
-    try lua_value.ensureOnlyFields(state, .{ .index = -1, .allowed = &.{ "api_version", "client", "runtime", "plugins", "profiles" }, .path = "config" }, diagnostic);
+    try lua_value.ensureOnlyFields(state, .{ .index = -1, .allowed = &.{ "api_version", "theme", "client", "gui", "runtime", "plugins", "profiles" }, .path = "config" }, diagnostic);
 
     _ = lua_api.c.lua_getfield(state, -1, "api_version");
     const version = lua_value.integer(state, -1) orelse {
@@ -329,9 +334,19 @@ fn parseSnapshot(generation: *Generation, diagnostic: *DiagnosticType) !void {
     }
     lua_value.pop(state, 1);
 
+    const theme_parser: ThemeParser = .{ .state = state, .diagnostic = diagnostic };
+    generation.snapshot.theme = try theme_parser.select(generation.snapshot.theme);
+
     _ = lua_api.c.lua_getfield(state, -1, "client");
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
         try generation.parseClient(-1, diagnostic);
+    }
+    lua_value.pop(state, 1);
+
+    _ = lua_api.c.lua_getfield(state, -1, "gui");
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
+        const parser: @import("GuiConfigParser.zig") = .{ .state = state, .diagnostic = diagnostic };
+        generation.snapshot.gui = try parser.parse(generation.snapshot.gui);
     }
     lua_value.pop(state, 1);
 
@@ -360,7 +375,10 @@ fn parseSnapshot(generation: *Generation, diagnostic: *DiagnosticType) !void {
 fn parseProfile(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !void {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
-    try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "client", "runtime", "plugins" }, .path = "profile" }, diagnostic);
+    try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "theme", "client", "gui", "runtime", "plugins" }, .path = "profile" }, diagnostic);
+    const theme_parser: ThemeParser = .{ .state = state, .diagnostic = diagnostic };
+    generation.snapshot.theme = try theme_parser.select(generation.snapshot.theme);
+
     _ = lua_api.c.lua_getfield(state, absolute, "plugins");
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
         try plugins_config.parse(state, &generation.snapshot, diagnostic);
@@ -374,6 +392,13 @@ fn parseProfile(generation: *Generation, index: c_int, diagnostic: *DiagnosticTy
     _ = lua_api.c.lua_getfield(state, absolute, "runtime");
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
         try generation.parseRuntime(-1, diagnostic);
+    }
+    lua_value.pop(state, 1);
+
+    _ = lua_api.c.lua_getfield(state, absolute, "gui");
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
+        const parser: @import("GuiConfigParser.zig") = .{ .state = state, .diagnostic = diagnostic };
+        generation.snapshot.gui = try parser.parse(generation.snapshot.gui);
     }
     lua_value.pop(state, 1);
 }
@@ -523,12 +548,6 @@ fn parseClient(generation: *Generation, index: c_int, diagnostic: *DiagnosticTyp
     }
     lua_value.pop(state, 1);
 
-    _ = lua_api.c.lua_getfield(state, absolute, "theme");
-    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
-        generation.snapshot.theme = try theme_config.parse(state, -1, diagnostic);
-    }
-    lua_value.pop(state, 1);
-
     _ = lua_api.c.lua_getfield(state, absolute, "icons");
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
         const value = lua_value.string(state, -1) orelse {
@@ -596,7 +615,8 @@ fn parseClient(generation: *Generation, index: c_int, diagnostic: *DiagnosticTyp
 
     _ = lua_api.c.lua_getfield(state, absolute, "appearance");
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
-        try theme_config.parseAppearance(state, &generation.snapshot, diagnostic);
+        const parser: ThemeParser = .{ .state = state, .diagnostic = diagnostic };
+        try parser.appearance(&generation.snapshot);
     }
     lua_value.pop(state, 1);
 

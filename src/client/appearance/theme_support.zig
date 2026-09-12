@@ -1,7 +1,5 @@
-//! Client-side color themes.
-//!
-//! Themes color Telar's chrome. Pane contents keep the colors produced by the
-//! child terminal, and workbench gaps keep the host terminal background.
+//! A preset owns chrome roles and native terminal colors. TUI panes and gaps
+//! retain their host's defaults; child truecolor remains application-owned.
 
 const ThemeType = @import("Theme.zig");
 const ColorType = @import("telar-core").Color;
@@ -50,6 +48,7 @@ pub fn fromName(name: []const u8) ?ThemeType {
 pub fn builtin(name: Builtin) ThemeType {
     return .{
         .base = name,
+        .terminal = terminal(name),
         .palette = switch (name) {
             .vesper => .{
                 // .accent = rgb(168, 201, 140),
@@ -126,6 +125,55 @@ pub fn builtin(name: Builtin) ThemeType {
             },
         },
     };
+}
+
+fn terminal(name: Builtin) @import("TerminalTheme.zig") {
+    // Palette sources are recorded in docs/configuration.md. These are ANSI
+    // colors, not a positional conversion of the chrome's semantic roles.
+    return switch (name) {
+        .vesper => .{
+            .foreground = rgb24(0xffffff),
+            .background = rgb24(0x101010),
+            .cursor_color = rgb24(0xffc799),
+            .palette = ansi(.{
+                0x101010, 0xf5a191, 0x90b99f, 0xe6b99d, 0xaca1cf, 0xe29eca, 0xea83a5, 0xa0a0a0,
+                0x7e7e7e, 0xff8080, 0x99ffe4, 0xffc799, 0xb9aeda, 0xecaad6, 0xf591b2, 0xffffff,
+            }),
+        },
+        .catppuccin => .{
+            .foreground = rgb24(0xcdd6f4),
+            .background = rgb24(0x1e1e2e),
+            .cursor_color = rgb24(0xf5e0dc),
+            .cursor_text_color = rgb24(0x11111b),
+            .palette = ansi(.{
+                0x45475a, 0xf38ba8, 0xa6e3a1, 0xf9e2af, 0x89b4fa, 0xf5c2e7, 0x94e2d5, 0xa6adc8,
+                0x585b70, 0xf38ba8, 0xa6e3a1, 0xf9e2af, 0x89b4fa, 0xf5c2e7, 0x94e2d5, 0xbac2de,
+            }),
+        },
+        .tokyo_night => .{
+            .foreground = rgb24(0xc0caf5),
+            .background = rgb24(0x1a1b26),
+            .cursor_color = rgb24(0xc0caf5),
+            .palette = ansi(.{
+                0x15161e, 0xf7768e, 0x9ece6a, 0xe0af68, 0x7aa2f7, 0xbb9af7, 0x7dcfff, 0xa9b1d6,
+                0x414868, 0xff899d, 0x9fe044, 0xfaba4a, 0x8db0ff, 0xc7a9ff, 0xa4daff, 0xc0caf5,
+            }),
+        },
+        .terminal => .{},
+    };
+}
+
+fn ansi(values: [16]u24) [16][3]u8 {
+    var result: [16][3]u8 = undefined;
+    for (&result, values) |*color, hex| {
+        color.* = rgb24(hex);
+    }
+
+    return result;
+}
+
+fn rgb24(value: u24) [3]u8 {
+    return .{ @intCast(value >> 16), @intCast((value >> 8) & 0xff), @intCast(value & 0xff) };
 }
 
 fn rgb(red: u8, green: u8, blue: u8) ColorType {

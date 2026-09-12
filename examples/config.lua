@@ -63,13 +63,14 @@ return telar.config({
     telar.plugin({ path = "plugins/sample" }),
   },
 
+  theme = telar.theme({
+    base = "vesper",
+    colors = { accent = "#ffc799" },
+  }),
+
   client = {
     prefix = "ctrl+s",
     icons = "nerd-font",
-    theme = telar.theme({
-      base = "vesper",
-      colors = { accent = "#ffc799" },
-    }),
     sidebar = { visible = true, renderer = "automatic" },
     sound = { enabled = true, ready = true, needs_input = true },
     input = { escape_timeout_ms = 25, sequence_timeout_ms = 1000 },

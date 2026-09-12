@@ -3,3 +3,5 @@
 
 font: []const u8,
 pixel_height: u16,
+face_index: i32 = 0,
+postscript: []const u8 = "",

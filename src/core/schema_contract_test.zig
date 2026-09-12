@@ -340,6 +340,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         try runtime.encodeConfigureTerminalColors(helper.space(), .{
             .foreground = .{ 255, 255, 255 },
             .background = .{ 16, 16, 16 },
+            .palette = .{.{ 1, 2, 3 }} ** 16,
         }),
     ));
     helper.add(.{ .name = "request_runtime_state", .direction = .client, .golden_hex = golden.request_runtime_state }, helper.commit(
@@ -518,7 +519,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .base_frame_id = 0,
             .cols = 2,
             .rows = 1,
-            .cursor = .{ .visible = true, .x = 1, .y = 0 },
+            .cursor = .{ .visible = true, .x = 1, .y = 0, .appearance = .{ .shape = .bar, .blink = false } },
             .input_modes = .{
                 .focus_events = true,
                 .kitty_keyboard_flags = 5,
@@ -966,6 +967,44 @@ test "terminal color configuration preserves partial unknowns and rejects malfor
     }
 
     try std.testing.expectError(error.InvalidBoolean, root.decodeClient(&.{ 0x2c, 2, 0 }));
+}
+
+test "terminal palette configuration is owned by the decoded value and rejects incomplete colors" {
+    var buffer: [128]u8 = undefined;
+    const colors: TerminalColorsType = .{ .palette = .{.{ 12, 34, 56 }} ** 16 };
+    const encoded = try runtime.encodeConfigureTerminalColors(&buffer, colors);
+    const decoded = (try root.decodeClient(encoded)).configure_terminal_colors;
+    try std.testing.expectEqualDeep(colors, decoded);
+    for (0..encoded.len) |length| {
+        try std.testing.expectError(error.Truncated, root.decodeClient(encoded[0..length]));
+    }
+    @memset(&buffer, 0);
+    try std.testing.expectEqualDeep(colors, decoded);
+    try std.testing.expectError(error.InvalidBoolean, root.decodeClient(&.{ 0x2c, 0, 0, 2 }));
+}
+
+test "pane frames preserve cursor appearance and reject unknown shapes and malformed blink flags" {
+    const Cursor = @import("schema/Cursor.zig");
+    var buffer: [1024]u8 = undefined;
+    const payload = try std.fmt.hexToBytes(&buffer, golden.pane_frame);
+    const shape_offset = frame.body_header_size - 1;
+    const blink_offset = frame.body_header_size;
+    for (std.meta.tags(Cursor.Shape)) |shape| {
+        for ([_]bool{ false, true }) |blink| {
+            buffer[shape_offset] = @intFromEnum(shape);
+            buffer[blink_offset] = @intFromBool(blink);
+            const decoded = (try root.decodeServer(payload)).pane_frame;
+            try std.testing.expectEqual(shape, decoded.cursor.appearance.shape);
+            try std.testing.expectEqual(blink, decoded.cursor.appearance.blink);
+        }
+    }
+    for ([_]u8{ 5, 7, 8, 255 }) |invalid| {
+        buffer[shape_offset] = invalid;
+        try std.testing.expectError(error.InvalidCursorShape, root.decodeServer(payload));
+    }
+    buffer[shape_offset] = 0;
+    buffer[blink_offset] = 2;
+    try std.testing.expectError(error.InvalidBoolean, root.decodeServer(payload));
 }
 
 test "golden corpus bytes are stable" {

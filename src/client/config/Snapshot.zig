@@ -15,6 +15,7 @@ const PluginSpec = @import("PluginSpec.zig");
 const Snapshot = @This();
 
 theme: ThemeType = theme_module.default_theme,
+gui: @import("GuiConfig.zig") = .{},
 icon_theme: ClientTheme = .unicode,
 sidebar_rendering: SidebarRenderingType = .automatic,
 sidebar_visible: bool = true,
@@ -38,6 +39,16 @@ binding_count: u16 = 0,
 runtime: RuntimeSnapshot = .{},
 plugins: [model.max_plugins]PluginSpec = undefined,
 plugin_count: u8 = 0,
+
+/// Resolves a complete theme with identical CLI/appearance precedence for both hosts.
+/// Example: `const theme = snapshot.resolveTheme(.dark, null);`
+pub fn resolveTheme(snapshot: *const Snapshot, appearance: @import("../model/types.zig").HostAppearance, locked: ?ThemeType) ThemeType {
+    return locked orelse (switch (appearance) {
+        .unknown => null,
+        .light => snapshot.theme_light,
+        .dark => snapshot.theme_dark,
+    } orelse snapshot.theme);
+}
 
 pub fn bindingSlice(snapshot: *const Snapshot) []const model.ConfiguredBinding {
     return snapshot.bindings[0..snapshot.binding_count];

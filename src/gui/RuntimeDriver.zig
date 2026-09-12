@@ -8,6 +8,7 @@ const Driver = @This();
 
 io: std.Io,
 fds: [2]c_int,
+configuration: @import("ConfigurationReload.zig"),
 reader: ?std.Io.Future(void) = null,
 writer: ?std.Io.Future(void) = null,
 read_ready: std.atomic.Value(bool) = .init(false),
@@ -21,12 +22,13 @@ pub fn init(io: std.Io) !Driver {
         return error.WakePipeFailed;
     }
 
-    return .{ .io = io, .fds = fds };
+    return .{ .io = io, .fds = fds, .configuration = .{ .io = io, .wake_fd = fds[1] } };
 }
 
 /// Joins I/O before the connection or its borrowed buffers can be freed.
 /// Example: `driver.deinit();`
 pub fn deinit(driver: *Driver) void {
+    driver.configuration.deinit();
     if (driver.reader) |*future| {
         future.cancel(driver.io);
     }
@@ -68,6 +70,7 @@ fn send(driver: *Driver, request: Send) void {
 /// Drains at most one completion per direction, preserving the read borrow
 /// until dispatch finishes. Example: `const status = try driver.drain(app);`
 pub fn drain(driver: *Driver, app: *client.AttachedClient) !?u8 {
+    var status: ?u8 = null;
     if (driver.write_ready.swap(false, .acquire)) {
         driver.writer.?.await(driver.io);
         driver.writer = null;
@@ -77,8 +80,9 @@ pub fn drain(driver: *Driver, app: *client.AttachedClient) !?u8 {
     if (driver.read_ready.swap(false, .acquire)) {
         driver.reader.?.await(driver.io);
         driver.reader = null;
-        return try client.runtime_io.handleRead(app, driver.read_result);
+        status = try client.runtime_io.handleRead(app, driver.read_result);
     }
 
-    return null;
+    try driver.configuration.poll(app);
+    return status;
 }

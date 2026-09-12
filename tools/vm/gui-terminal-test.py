@@ -2,14 +2,22 @@
 """Exercise the three native-terminal increments on the existing Wayland VM."""
 import importlib.util
 from pathlib import Path
-import sys
 import secrets
+import argparse
+import shlex
 
 spec = importlib.util.spec_from_file_location("telar_vm", Path(__file__).with_name("vm.py"))
 vm = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(vm)
 
-output = Path(sys.argv[1] if len(sys.argv) > 1 else ".zig-out/gui-terminal-test").resolve()
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("output", nargs="?", type=Path, default=Path(".zig-out/gui-terminal-test"))
+parser.add_argument("--config", type=Path, help="native appearance configuration to exercise")
+parser.add_argument("--reload", action="store_true", help="exercise hot reload with an isolated generated config")
+args = parser.parse_args()
+if args.reload and args.config:
+    parser.error("--reload supplies its own configuration; omit --config")
+output = args.output.resolve()
 output.mkdir(parents=True, exist_ok=True)
 vm.sync()
 vm.build()
@@ -28,14 +36,18 @@ export TELAR_SOCKET="$state/runtime.sock" TELAR_HISTORY="$state/history.db"
 '''.replace("__SOURCE__", vm.GUEST_SRC).replace("__STATE_FILE__", state_file)
 resume = setup[setup.index("export WAYLAND_DISPLAY"):]
 resume = 'set -euo pipefail\ncd "$HOME/' + vm.GUEST_SRC + '"\nstate=$(cat ' + state_file + ')\n' + resume
+config_args = '--config "$state/config.lua"' if args.config or args.reload else '--no-config'
+if args.config or args.reload:
+    source = args.config.read_text() if args.config else 'return { api_version = 2, gui = { cursor = { blink = false } } }'
+    setup += "printf '%s' " + shlex.quote(source) + ' > "$state/config.lua"\n'
 try:
     vm.guest(setup + r'''
-./zig-out/bin/telar gui --no-config /bin/bash --noprofile --norc -c "echo \$\$ > '$state/shell.pid'; for i in {1..50}; do printf 'frame %s\n' \$i; sleep .03; done; exec /bin/bash --noprofile --norc -i" > "$state/gui.log" 2>&1 &
+./zig-out/bin/telar gui __CONFIG_ARGS__ /bin/bash --noprofile --norc -c "echo \$\$ > '$state/shell.pid'; for i in {1..50}; do printf 'frame %s\n' \$i; sleep .03; done; exec /bin/bash --noprofile --norc -i" > "$state/gui.log" 2>&1 &
 printf '%s' "$!" > "$state/gui.pid"
 sleep 5
 kill -0 "$(cat "$state/gui.pid")"
 cat "$state/gui.log"
-''')
+'''.replace("__CONFIG_ARGS__", config_args))
     vm.screenshot(output / "01-prompt.png")
     vm.guest(resume + r'''
 gui=$(cat "$state/gui.pid")
@@ -51,6 +63,46 @@ sleep 1
 test "$(cat "$state/pasted")" = pasted
 ''')
     vm.screenshot(output / "02-command.png")
+    if args.reload:
+        vm.guest(resume + r'''
+printf '%s' "return { api_version = 2, theme = 'catppuccin', gui = { font = { family = 'DejaVu Sans Mono', size = 22, line_height = 1.2 }, cursor = { style = 'bar', blink = true, blink_interval_ms = 250 } } }" > "$state/save.tmp"
+mv "$state/save.tmp" "$state/config.lua"
+for attempt in {1..40}; do
+    wtype "stty size > '$state/font-size'"
+    wtype -k Return
+    sleep .2
+    if test -s "$state/font-size" && ! cmp -s "$state/before" "$state/font-size"; then break; fi
+done
+! cmp -s "$state/before" "$state/font-size"
+printf 'font before: '; cat "$state/before"
+printf 'font reloaded: '; cat "$state/font-size"
+''')
+        vm.screenshot(output / "02a-reloaded.png")
+        vm.guest(resume + r'''
+printf '%s' "return { api_version = 2, theme = { terminal = { background = '#ff0000' } }, gui = { font = { family = 'Telar-Test-Missing-Family-98a34b1' } } }" > "$state/save.tmp"
+mv "$state/save.tmp" "$state/config.lua"
+for attempt in {1..40}; do
+    if grep -q 'FontFamilyNotFound' "$state/gui.log"; then break; fi
+    sleep .2
+done
+grep -q 'GUI configuration unchanged:.*FontFamilyNotFound' "$state/gui.log"
+wtype "stty size > '$state/invalid-size'; printf survived > '$state/reload-input'"
+wtype -k Return
+sleep .5
+cmp "$state/font-size" "$state/invalid-size"
+test "$(cat "$state/reload-input")" = survived
+printf '%s' "return { api_version = 2, theme = 'tokyo-night', gui = { font = { size = 17 }, cursor = { style = 'block', blink = false } } }" > "$state/save.tmp"
+mv "$state/save.tmp" "$state/config.lua"
+for attempt in {1..40}; do
+    wtype "stty size > '$state/recovered-size'"
+    wtype -k Return
+    sleep .2
+    if test -s "$state/recovered-size" && ! cmp -s "$state/font-size" "$state/recovered-size"; then break; fi
+done
+! cmp -s "$state/font-size" "$state/recovered-size"
+printf 'font recovered: '; cat "$state/recovered-size"
+''')
+        vm.screenshot(output / "02b-recovered.png")
     vm.guest(resume + r'''
 gui=$(cat "$state/gui.pid")
 shell_pid=$(cat "$state/shell.pid")
@@ -68,7 +120,7 @@ swaymsg "[pid=$gui] kill" > /dev/null
 sleep 2
 if test -e "/proc/$gui/stat"; then test "$(awk '{print $3}' "/proc/$gui/stat")" = Z; fi
 kill -0 "$shell_pid"
-./zig-out/bin/telar gui --no-config > "$state/reattach.log" 2>&1 &
+./zig-out/bin/telar gui __CONFIG_ARGS__ > "$state/reattach.log" 2>&1 &
 printf '%s' "$!" > "$state/gui.pid"
 sleep 3
 gui=$(cat "$state/gui.pid")
@@ -81,7 +133,7 @@ test "$shell_pid" = "$(cat "$state/reattached.pid")"
 printf 'reattached shell PID: %s\n' "$shell_pid"
 cat "$state/gui.log" "$state/reattach.log"
 ! grep -E "Validation Error|VUID-" "$state/gui.log" "$state/reattach.log"
-''')
+'''.replace("__CONFIG_ARGS__", config_args))
     vm.screenshot(output / "03-reattach.png")
 finally:
     vm.guest(resume + r'''

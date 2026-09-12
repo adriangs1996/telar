@@ -244,6 +244,12 @@ int telar_gui_run(const char *title, void *context, const telar_gui_callbacks *c
             break;
         }
         int timeout = telar_input_timeout(self.input);
+        if (callbacks->wakeup_after != NULL) {
+            uint32_t delay = callbacks->wakeup_after(context);
+            if (delay > 0 && (timeout < 0 || delay < (uint32_t)timeout)) {
+                timeout = (int)delay;
+            }
+        }
         if (self.dirty && self.configured && !self.in_flight) {
             int draw_timeout = telar_frame_clock_timeout(&self.clock);
             if (draw_timeout >= 0 && (timeout < 0 || draw_timeout < timeout)) {

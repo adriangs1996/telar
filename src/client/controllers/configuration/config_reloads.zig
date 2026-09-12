@@ -128,12 +128,7 @@ fn projectAppearance(raw_context: *anyopaque, apply_theme: bool) void {
     const snapshot = &context.adoption.generation.snapshot;
 
     if (apply_theme) {
-        const appearance_theme: ?@TypeOf(snapshot.theme) = switch (context.client.model.hostCapabilities().appearance) {
-            .unknown => null,
-            .light => snapshot.theme_light,
-            .dark => snapshot.theme_dark,
-        };
-        context.client.chrome.setTheme(appearance_theme orelse snapshot.theme);
+        context.client.chrome.setTheme(snapshot.resolveTheme(context.client.model.hostCapabilities().appearance, null));
     }
     context.client.chrome.setIconTheme(snapshot.icon_theme);
 }

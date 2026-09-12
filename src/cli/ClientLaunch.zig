@@ -119,6 +119,7 @@ pub fn frontendOptions(launch: *const Launch) OptionsType {
         .endpoint = launch.endpoint,
         .prefix = if (snapshot) |value| value.prefix else default_prefix_module,
         .bindings = if (snapshot) |value| value.bindingSlice() else &.{},
+        .gui = if (snapshot) |value| value.gui else .{},
         .theme = if (options.theme_set)
             options.theme
         else if (snapshot) |value|

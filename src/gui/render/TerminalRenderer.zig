@@ -2,7 +2,7 @@
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
-const assets = @import("assets");
+const FontSource = @import("../text/FontSource.zig");
 const GlyphAtlas = @import("../text/GlyphAtlas.zig");
 const QuadList = @import("QuadList.zig");
 const Color = @import("Color.zig");
@@ -16,6 +16,9 @@ const CellPaint = @import("CellPaint.zig");
 const CellMesh = @import("CellMesh.zig");
 
 allocator: std.mem.Allocator,
+config: client.GuiConfig = .{},
+theme: client.TerminalTheme = client.theme_support.default_theme.terminal,
+font: FontSource = .{},
 atlas: ?GlyphAtlas = null,
 quads: QuadList,
 cell_quads: QuadList,
@@ -27,15 +30,32 @@ atlas_version: u32 = 0,
 last_page_version: u32 = 0,
 background: Color = .black,
 foreground: Color = .white,
+last_theme: ?client.TerminalTheme = null,
+cursor_on: bool = true,
+focused: bool = true,
 
 pub fn init(allocator: std.mem.Allocator) Renderer {
     return .{ .allocator = allocator, .quads = .init(allocator), .cell_quads = .init(allocator), .retained = .init(allocator) };
+}
+
+/// Builds a replacement independently; callers swap it only after GPU consumers finish.
+/// Example: `var renderer = try Renderer.configured(gpa, io, .{ .config = config.gui });`
+pub fn configured(allocator: std.mem.Allocator, io: std.Io, options: @import("RendererOptions.zig")) !Renderer {
+    var renderer = Renderer.init(allocator);
+    errdefer renderer.deinit();
+    renderer.config = options.config;
+    renderer.theme = options.theme;
+    renderer.font = try FontSource.load(allocator, io, &options.config.font.family);
+    _ = try renderer.measure(options.viewport);
+    return renderer;
 }
 
 pub fn deinit(renderer: *Renderer) void {
     if (renderer.atlas) |*atlas| {
         atlas.deinit();
     }
+
+    renderer.font.deinit(renderer.allocator);
 
     renderer.quads.deinit();
     renderer.cell_quads.deinit();
@@ -50,14 +70,21 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
     }
 
     if (renderer.atlas == null or renderer.scale != viewport.scale) {
-        const pixel_height: u16 = @intFromFloat(@round(15 * viewport.scale));
-        var replacement = try GlyphAtlas.init(renderer.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = pixel_height });
+        const pixel_height: u16 = @intFromFloat(@round(renderer.config.font.scaledSize(viewport.scale)));
+        var replacement = try GlyphAtlas.init(renderer.allocator, .{ .font = renderer.font.bytes, .pixel_height = pixel_height, .face_index = renderer.font.match.face_index, .postscript = std.mem.sliceTo(&renderer.font.match.postscript, 0) });
         errdefer replacement.deinit();
         try replacement.prepareFallbacks();
+        const natural_height: f32 = @floatFromInt(replacement.lineHeight());
+        const height = @round(natural_height * renderer.config.font.line_height);
+        const width = @round(@as(f32, @floatFromInt(replacement.cellWidth())) + renderer.config.font.letter_spacing * viewport.scale);
+        if (height < 1 or height > 65535 or width < 1 or width > 65535) {
+            return error.InvalidFontSpacing;
+        }
+
         renderer.metrics = .{
-            .cell_width = replacement.cellWidth(),
-            .cell_height = @intCast(replacement.lineHeight()),
-            .baseline = @floatFromInt(replacement.ascender()),
+            .cell_width = @intFromFloat(width),
+            .cell_height = @intFromFloat(height),
+            .baseline = @as(f32, @floatFromInt(replacement.ascender())) + (height - natural_height) / 2,
             .pixel_height = pixel_height,
         };
         if (renderer.atlas) |*atlas| {
@@ -76,23 +103,24 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
         return error.NativeCellBudgetExceeded;
     }
 
-    try renderer.quads.reserve(cells * CellMesh.capacity + core.max_panes_per_tab);
+    try renderer.quads.reserve(cells * CellMesh.capacity + core.max_panes_per_tab * (CellMesh.capacity + 4));
     try renderer.cell_quads.reserve(CellMesh.capacity);
     try renderer.retained.resize(.{ size.cols, size.rows });
     return size;
 }
 
 /// Copies the visible leaves into quads while the projection is borrowed.
-/// Example: `const commit = try renderer.prepare(projection, theme);`
-pub fn prepare(renderer: *Renderer, projection: client.Projection, theme: client.ColorTheme) !client.PresentationCommit {
+/// Example: `const commit = try renderer.prepare(projection);`
+pub fn prepare(renderer: *Renderer, projection: client.Projection) !client.PresentationCommit {
     renderer.quads.clear();
     renderer.repainted_cells = 0;
-    const background = colors.resolve(theme.palette.panel_bg, .black);
-    const foreground = colors.resolve(theme.palette.text, .white);
-    if (!std.meta.eql(background, renderer.background) or !std.meta.eql(foreground, renderer.foreground)) {
+    const background = rgb(renderer.theme.background);
+    const foreground = rgb(renderer.theme.foreground);
+    if (renderer.last_theme == null or !renderer.theme.sameCells(renderer.last_theme.?)) {
         renderer.retained.invalidate();
     }
 
+    renderer.last_theme = renderer.theme;
     renderer.background = background;
     renderer.foreground = foreground;
     const model = projection.model orelse return .{};
@@ -154,11 +182,30 @@ fn paintPane(renderer: *Renderer, paint: PanePaint) !void {
         }
     }
 
-    if (paint.view.focused and pane.cursor.visible and pane.cursor.x < cols and pane.cursor.y < rows) {
-        var cursor = renderer.cellRect(.{ .x = area.x + pane.cursor.x, .y = area.y + pane.cursor.y, .w = 1, .h = 1 });
-        cursor.y += cursor.height - 2;
-        cursor.height = 2;
-        try renderer.quads.pushRect(cursor, renderer.foreground);
+    if (paint.view.focused and pane.cursor.visible and renderer.cursor_on and pane.cursor.x < cols and pane.cursor.y < rows) {
+        var col = pane.cursor.x;
+        const row = pane.cursor.y;
+        if (col > 0 and pane.buffer.cells[@as(usize, row) * pane.buffer.w + col].width == 0) {
+            col -= 1;
+        }
+
+        const cell = pane.buffer.cells[@as(usize, row) * pane.buffer.w + col];
+        const mesh = renderer.retained.at(.{ area.x + col, area.y + row });
+        const cursor: @import("CursorPaint.zig") = .{
+            .rect = renderer.cellRect(.{ .x = area.x + col, .y = area.y + row, .w = @min(@max(1, cell.width), cols - col), .h = 1 }),
+            .style = if (!renderer.focused) .hollow else switch (pane.cursor.appearance.shape) {
+                .default => renderer.config.cursor.style,
+                .block => .block,
+                .bar => .bar,
+                .underline => .underline,
+                .hollow => .hollow,
+            },
+            .color = if (renderer.theme.cursor_color) |c| rgb(c) else renderer.foreground,
+            .text_color = if (renderer.theme.cursor_text_color) |c| rgb(c) else renderer.background,
+            .thickness = @max(1, @round(renderer.scale * 2)),
+            .ink = mesh.items()[1..],
+        };
+        try cursor.paint(&renderer.quads);
     }
 }
 
@@ -167,7 +214,7 @@ fn paintCell(renderer: *Renderer, paint: CellPaint) !void {
     const rect = paint.rect;
     const list = &renderer.cell_quads;
     list.clear();
-    const background = colors.resolve(if (cell.style.flags.inverse) cell.style.fg else cell.style.bg, if (cell.style.flags.inverse) renderer.foreground else renderer.background);
+    const background = renderer.color(if (cell.style.flags.inverse) cell.style.fg else cell.style.bg, if (cell.style.flags.inverse) renderer.foreground else renderer.background);
     var background_rect = rect;
     background_rect.width = @floatFromInt(renderer.metrics.cell_width);
     try list.pushRect(background_rect, background);
@@ -175,7 +222,7 @@ fn paintCell(renderer: *Renderer, paint: CellPaint) !void {
         return;
     }
 
-    var ink = colors.resolve(if (cell.style.flags.inverse) cell.style.bg else cell.style.fg, if (cell.style.flags.inverse) renderer.background else renderer.foreground);
+    var ink = renderer.color(if (cell.style.flags.inverse) cell.style.bg else cell.style.fg, if (cell.style.flags.inverse) renderer.background else renderer.foreground);
     if (cell.style.flags.faint) {
         ink.a *= 0.5;
     }
@@ -187,7 +234,7 @@ fn paintCell(renderer: *Renderer, paint: CellPaint) !void {
     }
 
     if (cell.style.flags.underline != .none) {
-        try list.pushRect(.{ .x = rect.x, .y = rect.y + rect.height - 2, .width = rect.width, .height = 1 }, colors.resolve(cell.style.underline_color, ink));
+        try list.pushRect(.{ .x = rect.x, .y = rect.y + rect.height - 2, .width = rect.width, .height = 1 }, renderer.color(cell.style.underline_color, ink));
     }
 
     if (cell.style.flags.strikethrough) {
@@ -202,6 +249,14 @@ fn cellRect(renderer: *const Renderer, cells: core.Rect) Rect {
         .width = @floatFromInt(@as(u32, cells.w) * renderer.metrics.cell_width),
         .height = @floatFromInt(@as(u32, cells.h) * renderer.metrics.cell_height),
     };
+}
+
+fn color(renderer: *const Renderer, value: core.Color, fallback: Color) Color {
+    return colors.withPalette(value, fallback, &renderer.theme.palette);
+}
+
+fn rgb(value: [3]u8) Color {
+    return Color.rgb(value[0], value[1], value[2]);
 }
 
 pub fn frame(renderer: *const Renderer, token: u64) native.Frame {

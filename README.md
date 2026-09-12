@@ -27,7 +27,8 @@ On Arch Linux or Arch Linux ARM, install the libraries and libc development
 headers before building with Zig 0.16.0:
 
 ```sh
-sudo pacman -Syu --needed base-devel sqlite libnghttp2 brotli
+sudo pacman -Syu --needed base-devel sqlite libnghttp2 brotli \
+  wayland wayland-protocols libxkbcommon vulkan-headers vulkan-icd-loader shaderc fontconfig ttf-dejavu
 zig build
 zig build test
 ```
@@ -81,8 +82,9 @@ keeps a headless Pi alive as Telar's model engine.
 
 ## Themes
 
-Vesper is the default client theme. Catppuccin Mocha, Tokyo Night, and a
-terminal-palette theme are built in:
+Set `theme = "vesper"` once in Lua for Telar's interface and native terminal.
+Vesper is the default. Catppuccin Mocha, Tokyo Night, and a terminal-palette
+theme are also built in:
 
 ```sh
 zig build run -- --theme catppuccin
@@ -90,9 +92,11 @@ zig build run -- --theme tokyo-night
 zig build run -- --theme terminal
 ```
 
-Themes color Telar's bars, sidebar, selections, and pane borders. Applications
-inside panes keep their own terminal colors. `frontend.theme.Overrides` exposes
-the color roles that the user configuration will map onto later.
+Themes color Telar's bars, sidebar, selections, and pane borders. The GUI also
+uses the preset's terminal foreground, background, ANSI palette and cursor
+colors. The TUI retains its host terminal's palette. Customize either part with
+`theme.colors` and `theme.terminal`; [Lua configuration](docs/configuration.md#theme)
+documents overrides, profiles and hot reload.
 
 ## Kitty graphics
 

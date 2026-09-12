@@ -30,7 +30,8 @@ typedef struct {
   float background[4];
 } telar_gui_frame;
 
-// Input kinds: 1 committed UTF-8 text, 2 clipboard paste, 3 semantic key.
+// Input kinds: 1 committed UTF-8 text, 2 clipboard paste, 3 semantic key,
+// 4 Unicode key with modifiers, 5 host focus (code=0 inactive, code=1 active).
 // Key codes: 0 Unicode scalar, then enter, tab, backspace, escape, up,
 // down, left, right, home, end, delete, page-up, page-down.
 // Modifiers: shift=1, alt=2, ctrl=4. Phases: press=1, repeat=2, release=3.
@@ -46,6 +47,8 @@ typedef struct {
   void (*complete)(void *, uint64_t, int);
   int (*input)(void *, telar_gui_input);
   int wake_fd;
+  // Optional one-shot wake deadline in milliseconds. Zero parks the timer.
+  uint32_t (*wakeup_after)(void *);
 } telar_gui_callbacks;
 
 int telar_gui_run(const char *title, void *context,

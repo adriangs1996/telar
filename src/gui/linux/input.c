@@ -140,12 +140,14 @@ static void keymap(void *data, struct wl_keyboard *keyboard, uint32_t format, in
     self->state = state;
 }
 static void keyboard_enter(void *data, struct wl_keyboard *keyboard, uint32_t serial, struct wl_surface *surface, struct wl_array *keys) {
-    (void)data; (void)keyboard; (void)serial; (void)surface; (void)keys;
+    (void)keyboard; (void)serial; (void)surface; (void)keys;
+    emit(data, (telar_gui_input){.kind = 5, .code = 1, .phase = 1});
 }
 static void keyboard_leave(void *data, struct wl_keyboard *keyboard, uint32_t serial, struct wl_surface *surface) {
     (void)keyboard; (void)serial; (void)surface;
     telar_input *self = data;
     self->repeat_at = 0;
+    emit(self, (telar_gui_input){.kind = 5, .code = 0, .phase = 1});
     if (self->compose != NULL) xkb_compose_state_reset(self->compose);
 }
 static void keyboard_key(void *data, struct wl_keyboard *keyboard, uint32_t serial, uint32_t time, uint32_t key, uint32_t state) {

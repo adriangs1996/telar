@@ -15,8 +15,10 @@ pub const quad = @import("render/Quad.zig");
 test {
     _ = Application;
     _ = @import("tests/terminal.zig");
+    _ = @import("tests/configuration.zig");
     _ = @import("TerminalMetrics.zig");
     _ = @import("NativeInput.zig");
+    _ = @import("CursorClock.zig");
     _ = GlyphAtlas;
     _ = QuadList;
     _ = cell_colors;

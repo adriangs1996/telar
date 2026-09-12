@@ -4,10 +4,13 @@
 #include "telar_gui.h"
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 static int paints, delivered, inputs, failed;
 static BOOL injecting, close_in_flight, closed_in_flight;
 static IMP original_draw;
+static CFTimeInterval deadline;
+static int timer_wakes, focus_events;
 
 @interface NSView (TelarTest)
 - (void)requestDraw;
@@ -30,10 +33,27 @@ static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *
                   viewport.height != (uint32_t)layer.drawableSize.height)) failed++;
     *frame = (telar_gui_frame){.token = ++paints, .quads = &quad, .quad_count = 1, .atlas = pixels, .atlas_side = 2, .atlas_version = 1, .background = {0,0,0,1}};
 }
-static int pump(void *context) { (void)context; return 0; }
-static void complete(void *context, uint64_t token, int success) { (void)context; if (token == (uint64_t)delivered + 1 && success) delivered++; else failed++; }
+static int pump(void *context) {
+    (void)context;
+    if (deadline && CACurrentMediaTime() >= deadline) {
+        deadline = 0;
+        timer_wakes++;
+        return 1;
+    }
+    return 0;
+}
+static uint32_t wakeup_after(void *context) {
+    (void)context;
+    return deadline ? (uint32_t)fmax(1, ceil((deadline - CACurrentMediaTime()) * 1000)) : 0;
+}
+static void complete(void *context, uint64_t token, int success) {
+    (void)context;
+    if (token == (uint64_t)delivered + 1 && success) delivered++; else failed++;
+    if (delivered == 1) deadline = CACurrentMediaTime() + 0.15;
+}
 static int input(void *context, telar_gui_input event) {
     (void)context;
+    if (event.kind == 5) { focus_events++; return 1; }
     if (!injecting) return 1;
     if (inputs == 0 && !(event.kind == 1 && event.len == 1 && event.text[0] == 'a')) failed++;
     if (inputs == 1 && !(event.kind == 4 && event.code == 'c' && (event.mods & 4))) failed++;
@@ -48,10 +68,11 @@ int main(void) {
         original_draw = method_setImplementation(method, (IMP)draw);
         int fds[2];
         if (telar_gui_pipe(fds)) return 2;
-        telar_gui_callbacks callbacks = {render,pump,complete,input,fds[0]};
+        telar_gui_callbacks callbacks = {render,pump,complete,input,fds[0],wakeup_after};
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1000000000), dispatch_get_main_queue(), ^{
             NSWindow *window = NSApp.windows.firstObject;
             NSView *view = window.contentView;
+            if (timer_wakes != 1 || delivered < 2 || !focus_events) failed++;
             injecting = YES;
             [view keyDown:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil characters:@"a" charactersIgnoringModifiers:@"a" isARepeat:NO keyCode:0]];
             [view keyDown:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:NSEventModifierFlagControl timestamp:0 windowNumber:window.windowNumber context:nil characters:@"\003" charactersIgnoringModifiers:@"c" isARepeat:NO keyCode:8]];
@@ -75,7 +96,7 @@ int main(void) {
         });
         int status = telar_gui_run("Telar native backend test", NULL, &callbacks);
         telar_gui_close_pipe(fds);
-        fprintf(stdout, "native macOS: status=%d painted=%d delivered=%d inputs=%d failures=%d\n",status,paints,delivered,inputs,failed);
+        fprintf(stdout, "native macOS: status=%d painted=%d delivered=%d inputs=%d timer_wakes=%d failures=%d\n",status,paints,delivered,inputs,timer_wakes,failed);
         return status || !delivered || inputs != 4 || failed || !closed_in_flight || paints != delivered + 1;
     }
 }

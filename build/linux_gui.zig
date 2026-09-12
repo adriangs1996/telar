@@ -4,7 +4,7 @@ const c_flags = @import("c_flags.zig");
 /// Wayland through xdg-shell and Vulkan through the system loader. The
 /// xdg-shell client code is generated from the protocol the distribution
 /// installs, so the machine building Telar needs `wayland-scanner`,
-/// `wayland-protocols`, Vulkan headers and `glslc`. Example: `linux_gui.add(b, gui, false)`.
+/// `wayland-protocols`, Vulkan and Fontconfig headers, and `glslc`. Example: `linux_gui.add(b, gui, false)`.
 pub fn add(b: *std.Build, gui: *std.Build.Module, disable_coverage: bool) void {
     const protocol = "/usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml";
     const header = b.addSystemCommand(&.{ "wayland-scanner", "client-header", protocol });
@@ -18,6 +18,7 @@ pub fn add(b: *std.Build, gui: *std.Build.Module, disable_coverage: bool) void {
         .files = &.{
             "src/gui/linux/window.c",
             "src/gui/linux/input.c",
+            "src/gui/linux/font.c",
             "src/gui/linux/frame_worker.c",
             "src/gui/linux/frame_clock.c",
             "src/gui/linux/renderer.c",
@@ -32,6 +33,7 @@ pub fn add(b: *std.Build, gui: *std.Build.Module, disable_coverage: bool) void {
     compileShader(b, gui, "quad.vert");
     compileShader(b, gui, "quad.frag");
     gui.linkSystemLibrary("xkbcommon", .{});
+    gui.linkSystemLibrary("fontconfig", .{});
     gui.linkSystemLibrary("wayland-client", .{});
     gui.linkSystemLibrary("vulkan", .{});
 }

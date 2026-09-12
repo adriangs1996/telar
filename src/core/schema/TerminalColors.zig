@@ -4,3 +4,4 @@ const TerminalColors = @This();
 
 foreground: ?[3]u8 = null,
 background: ?[3]u8 = null,
+palette: ?[16][3]u8 = null,

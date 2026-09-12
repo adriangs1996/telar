@@ -6,6 +6,7 @@ const Theme = @This();
 
 base: theme_support.Builtin,
 palette: Palette,
+terminal: @import("TerminalTheme.zig") = .{},
 
 pub fn withOverrides(value: Theme, overrides: Overrides) Theme {
     var result = value;

@@ -706,3 +706,9 @@ test {
     _ = @import("workspace/tabs.zig");
     _ = @import("workspace/workspace_list.zig");
 }
+
+pub const GuiConfig = @import("config/GuiConfig.zig");
+pub const GuiFont = @import("config/GuiFont.zig");
+pub const TerminalTheme = @import("appearance/TerminalTheme.zig");
+pub const GuiCursor = @import("config/GuiCursor.zig");
+pub const FontFamily = @import("config/FontFamily.zig");
