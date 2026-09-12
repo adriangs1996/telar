@@ -323,7 +323,7 @@ pub fn activeTabModelConst(model: *const Model) ?*const MultiplexerModel {
 /// successful host presentation without advancing semantic versions.
 ///
 /// ```zig
-/// const acknowledged = model.commitPresentation(commit);
+/// const accepted = model.commitPresentation(commit);
 /// ```
 pub fn commitPresentation(model: *Model, commit: PresentationCommitType) PresentationCommitType {
     const location = commit.location orelse return .{};

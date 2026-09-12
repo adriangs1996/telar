@@ -47,6 +47,27 @@ pub fn add(b: *std.Build, app: Application) ?*std.Build.Module {
             macos_gui.add(b, window_test_module, false);
             const window_test = b.addExecutable(.{ .name = "gui-window-test", .root_module = window_test_module });
             b.step("test-gui-window", "Exercise a real macOS window, Metal completion and native keyboard translation").dependOn(&b.addRunArtifact(window_test).step);
+        } else {
+            const window_test_module = b.createModule(.{ .target = app.modules.target, .optimize = app.modules.optimize, .link_libc = true });
+            window_test_module.addCSourceFiles(.{
+                .files = &.{ "src/gui/tests/linux_window.c", "src/gui/native/wake.c" },
+                .flags = &.{ "-std=c11", "-D_POSIX_C_SOURCE=200809L" },
+            });
+            linux_gui.add(b, window_test_module, false);
+            window_test_module.linkSystemLibrary("dl", .{});
+            const window_test = b.addExecutable(.{ .name = "gui-window-test", .root_module = window_test_module });
+            const window_run = b.addRunArtifact(window_test);
+            const failure_run = b.addRunArtifact(window_test);
+            failure_run.addArg("--invalid-frame");
+            failure_run.step.dependOn(&window_run.step);
+            b.step("test-gui-window", "Exercise a real Wayland window, Vulkan completion, retries and idle stability").dependOn(&failure_run.step);
+            const worker_module = b.createModule(.{ .target = app.modules.target, .optimize = app.modules.optimize, .link_libc = true });
+            worker_module.addCSourceFiles(.{
+                .files = &.{ "src/gui/tests/linux_worker.c", "src/gui/linux/frame_worker.c", "src/gui/native/wake.c" },
+                .flags = &.{ "-std=c11", "-D_POSIX_C_SOURCE=200809L" },
+            });
+            const worker_test = b.addExecutable(.{ .name = "gui-worker-test", .root_module = worker_module });
+            b.step("test-gui-worker", "Verify joining a consumer before releasing its borrowed frame").dependOn(&b.addRunArtifact(worker_test).step);
         }
     }
 

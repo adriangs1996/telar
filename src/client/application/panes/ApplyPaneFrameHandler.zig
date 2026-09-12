@@ -7,7 +7,7 @@ const ApplyPaneFrameHandler = @This();
 model: *ModelType,
 effects: PaneFrameEffects,
 
-/// Commits a valid attached frame before updating client resources. A
+/// Acknowledges owned, validated cells before updating client resources. A
 /// broken patch base requests a snapshot without mutation, while a frame
 /// made stale by detach has no effects.
 ///
@@ -19,7 +19,10 @@ pub fn execute(handler: *ApplyPaneFrameHandler, frame: FrameViewType) !types.Pan
     switch (outcome) {
         .detached => {},
         .resync => |recovery| try handler.effects.recover(handler.effects.context, recovery),
-        .applied => |commit| try handler.effects.deliver(handler.effects.context, commit),
+        .applied => |commit| {
+            try handler.effects.acknowledge(handler.effects.context, .{ .pane_id = commit.pane_id, .frame_id = commit.frame_id });
+            try handler.effects.deliver(handler.effects.context, commit);
+        },
     }
 
     return outcome;

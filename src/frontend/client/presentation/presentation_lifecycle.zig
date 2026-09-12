@@ -12,10 +12,6 @@ const DeliverPresentationHandlerType = @import("telar-client").DeliverPresentati
 const OutputType = @import("../resources/Output.zig");
 const EffectsType = @import("telar-client").PresentationEffects;
 const runtime_transport = @import("telar-client").runtime_io;
-const FrameAckType = @import("telar-core").FrameAck;
-const now_module = @import("telar-core").now;
-const enabled_module = @import("telar-core").enabled;
-const elapsed_module = @import("telar-core").elapsed;
 
 /// Publishes every revision the presenter uses after one client event commits.
 ///
@@ -26,8 +22,8 @@ pub fn observe(client: *Client) !void {
     try host(client).presenter.observe(presentation_projection.observation(client));
 }
 
-/// Completes one paced draw, then delivers credits and frame acknowledgements
-/// only after the host terminal flush succeeds.
+/// Completes one paced draw. Damage is retired only after the host terminal
+/// flush succeeds; cell acknowledgements already followed frame application.
 ///
 /// ```zig
 /// try presentation_lifecycle.handleDraw(client, result);
@@ -153,7 +149,6 @@ fn deliveryEffects(client: *Client) EffectsType {
     return .{
         .context = client,
         .flush_graphics_credits = flushGraphicsCredits,
-        .acknowledge_frame = acknowledgeFrame,
         .request_media = requestMedia,
     };
 }
@@ -161,18 +156,6 @@ fn deliveryEffects(client: *Client) EffectsType {
 fn flushGraphicsCredits(context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     try runtime_transport.flushGraphicsCredits(client);
-}
-
-fn acknowledgeFrame(context: *anyopaque, ack: FrameAckType) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    const ack_started = now_module(client.io);
-    try runtime_transport.enqueue(client, .{ .frame_ack = ack });
-
-    if (comptime enabled_module) {
-        client.telemetry.metrics.ack_enqueue.observe(
-            elapsed_module(ack_started, now_module(client.io)),
-        );
-    }
 }
 
 fn requestMedia(context: *anyopaque) !void {

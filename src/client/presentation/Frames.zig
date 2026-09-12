@@ -7,7 +7,7 @@ const Frames = @This();
 pub fn apply(fixture: *Fixture, frame: FrameViewType) !types.PaneFrameOutcome {
     var handler: ApplyPaneFrameHandlerType = .{
         .model = &fixture.model,
-        .effects = .{ .context = fixture, .recover = Fixture.recover, .deliver = Fixture.frameResources },
+        .effects = .{ .context = fixture, .recover = Fixture.recover, .acknowledge = Fixture.acknowledge, .deliver = Fixture.frameResources },
     };
     return handler.execute(frame);
 }

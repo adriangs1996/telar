@@ -2,6 +2,7 @@
 
 const Client = @import("../../AttachedClient.zig");
 const FrameViewType = @import("telar-core").FrameView;
+const FrameAckType = @import("telar-core").FrameAck;
 const PaneFrameOutcomeType = @import("../../model/types.zig").PaneFrameOutcome;
 const now_module = @import("telar-core").now;
 const enabled_module = @import("telar-core").enabled;
@@ -50,9 +51,20 @@ fn handler(client: *Client) ApplyPaneFrameHandlerType {
         .effects = .{
             .context = client,
             .recover = requestSnapshot,
+            .acknowledge = acknowledgeFrame,
             .deliver = deliverResources,
         },
     };
+}
+
+fn acknowledgeFrame(context: *anyopaque, ack: FrameAckType) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    const started = now_module(client.io);
+    try runtime_transport.enqueue(client, .{ .frame_ack = ack });
+
+    if (comptime enabled_module) {
+        client.telemetry.metrics.ack_enqueue.observe(elapsed_module(started, now_module(client.io)));
+    }
 }
 
 fn requestSnapshot(context: *anyopaque, recovery: PaneFrameRecoveryType) !void {

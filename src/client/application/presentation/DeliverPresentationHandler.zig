@@ -8,7 +8,7 @@ model: *ModelType,
 effects: Effects,
 
 /// Commits one successful host presentation before delivering transport
-/// effects in credits, frame and media order.
+/// effects in credits and media order. Cell ACKs belong to frame application.
 ///
 /// ```zig
 /// try handler.execute(command);
@@ -18,16 +18,8 @@ pub fn execute(handler: *DeliverPresentationHandler, command: Command) !void {
         return error.InvalidPresentationCommit;
     }
 
-    const accepted = handler.model.commitPresentation(command.commit);
+    _ = handler.model.commitPresentation(command.commit);
     try handler.effects.flush_graphics_credits(handler.effects.context);
-
-    for (accepted.slice()) |pane| {
-        if (!pane.attached or pane.frame_id == 0) {
-            continue;
-        }
-
-        try handler.effects.acknowledge_frame(handler.effects.context, .{ .pane_id = pane.pane_id, .frame_id = pane.frame_id });
-    }
 
     if (command.media_pending) {
         try handler.effects.request_media(handler.effects.context);

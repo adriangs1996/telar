@@ -432,7 +432,7 @@ pub fn setGraphicsPlaceholder(model: *Model, pane_id: PaneIdType, visible: bool)
 /// host presentation. A stale commit cannot consume newer pane work.
 ///
 /// ```zig
-/// const acknowledged = model.commitPresentation(commit);
+/// const accepted = model.commitPresentation(commit);
 /// ```
 pub fn commitPresentation(model: *Model, commit: PresentationCommitType) PresentationCommitType {
     var accepted: PresentationCommitType = .{ .location = commit.location };

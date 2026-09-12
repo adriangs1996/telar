@@ -374,7 +374,7 @@ test "presentation worker failures release their scheduling tokens" {
     try std.testing.expect(!host(client).presenter.media_tick_pending);
 }
 
-test "the TUI write boundary alone completes the shared presentation token" {
+test "TUI frame ACKs advance while a sealed host write retains its presentation token" {
     const Output = OutputType;
     for ([_]bool{ false, true }) |fail| {
         var harness: TestHarness = undefined;
@@ -384,7 +384,10 @@ test "the TUI write boundary alone completes the shared presentation token" {
         try harness.settleModelPresentation();
         const client = harness.client;
         const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
-        pane.pending_frame_id = 7;
+        try receiveCellFrame(&harness, 1);
+        var wire: [1024]u8 = undefined;
+        try std.testing.expectEqual(@as(u64, 1), (try harness.nextClientMessage(&wire)).frame_ack.frame_id);
+        try harness.settle();
         const before = host(client).presenter.presentation_state.delivered;
         const token = try host(client).presenter.presentation_state.begin(.{
             .observation = host(client).presenter.presentation_state.observed,
@@ -395,20 +398,42 @@ test "the TUI write boundary alone completes the shared presentation token" {
         output.delivery = token;
         try output.writer.writeAll("frame");
         const work = output.begin().?;
-        try std.testing.expectEqual(@as(u64, 7), pane.pending_frame_id);
+        try std.testing.expectEqual(@as(u64, 1), pane.pending_frame_id);
         try std.testing.expectEqualDeep(before, host(client).presenter.presentation_state.delivered);
+        try receiveCellFrame(&harness, 2);
+        try std.testing.expectEqual(@as(u64, 2), (try harness.nextClientMessage(&wire)).frame_ack.frame_id);
+        try harness.settle();
+        try std.testing.expect(output.pending);
+        try std.testing.expectEqualStrings("frame", work.bytes);
+        try std.testing.expectEqualStrings("B", pane.buffer.cells[0].text());
         if (fail) {
             try std.testing.expectError(error.WriteFailed, presentation_lifecycle.handleWritten(client, error.WriteFailed));
-            try std.testing.expectEqual(@as(u64, 7), pane.pending_frame_id);
             try std.testing.expect(host(client).presenter.presentation_state.preparation_invalid);
         } else {
             try Output.write(work);
             try presentation_lifecycle.handleWritten(client, {});
-            try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
-            var wire: [1024]u8 = undefined;
-            try std.testing.expectEqual(@as(u64, 7), (try harness.nextClientMessage(&wire)).frame_ack.frame_id);
         }
+
+        try std.testing.expectEqual(@as(u64, 2), pane.pending_frame_id);
+        try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
         try std.testing.expect(host(client).presenter.presentation_state.active == null);
         try std.testing.expect(!output.pending);
     }
+}
+
+fn receiveCellFrame(harness: *TestHarness, frame_id: u64) !void {
+    var cells: [4]CellType = @splat(.{});
+    cells[0].bytes[0] = if (frame_id == 1) 'A' else 'B';
+    var wire: [1024]u8 = undefined;
+    const payload = try encodePaneFrame_module(&wire, .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .frame_id = frame_id,
+        .base_frame_id = frame_id - 1,
+        .cols = 2,
+        .rows = 2,
+        .scroll = .{ .total_rows = 2, .offset = 0 },
+        .spans = &.{.{ .start = 0, .cells = if (frame_id == 1) &cells else cells[0..1] }},
+    });
+    _ = try server_messages.handleServerMessage(harness.client, try decodeServer_module(payload));
+    @memset(&wire, 0xff);
 }

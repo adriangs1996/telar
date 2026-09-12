@@ -60,7 +60,7 @@ test "a completed write releases its exact completion token" {
     try std.testing.expectError(error.HostFrameTooLarge, output.prepareFrame(1_000_000));
 }
 
-test "a failed write cannot deliver a frame acknowledgement" {
+test "a failed write cannot complete a successful presentation" {
     var output = try Output.init(std.testing.allocator, undefined);
     defer output.deinit();
     try output.writer.writeAll("frame");

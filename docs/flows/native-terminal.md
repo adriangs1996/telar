@@ -29,9 +29,13 @@ it with the inbox/outbox execution model. It contains no general scheduler.
    `pane_opened`, membership snapshots and `pane_frame`. `TerminalRenderer`
    borrows the projection, resolves the shared layout and draws each terminal
    leaf's cells and cursor. A presentation token captures only rendered panes.
-   GPU completion consumes that token through `DeliverPresentationHandler`, which
-   flushes graphics credits before `frame_ack`. Failure and cancellation do not
-   ACK. A stale completion cannot retire a newer flight.
+   `ApplyPaneFrameHandler` acknowledges validated, owned cells immediately.
+   Additional patches update that model while the GPU owns an older submission.
+   GPU completion consumes the presentation token through
+   `DeliverPresentationHandler`, which retires captured damage and flushes
+   released graphics credits. Failure preserves damage for another preparation;
+   it does not undo application ACKs. A stale completion cannot retire a newer
+   flight, and the next draw captures the latest accumulated state.
 2. Input: AppKit text input or Wayland/XKB produces owned semantic keys and
    committed UTF-8 text. `NativeInput` admits bounded input and forwards keys via
    `pane_inputs.send`. Paste uses `pane_pastes.start/content/finish`, whose
@@ -60,13 +64,16 @@ it with the inbox/outbox execution model. It contains no general scheduler.
   64 KiB and a whole paste is admitted or rejected before its first marker.
   Outbox capacity gates input consumption; send completion resumes it.
 - Linux bounds clipboard offers to 16 and keymaps to 4 MiB. Clipboard reads are
-  nonblocking. Repeat and drawing use native-loop deadlines, with no idle poll.
-- Rendering requests 60 Hz. On macOS, a demand-driven `CADisplayLink`
-  paces the Metal 4 renderer, with immediate drawing after idle. Commit feedback
+  nonblocking. Repeat uses native-loop deadlines; drawing uses Wayland frame
+  callbacks and a 60 Hz budget, with no periodic timer or idle repaint.
+- On macOS, rendering requests 60 Hz through a demand-driven `CADisplayLink`
+  that paces the Metal 4 renderer, with immediate drawing after idle. Commit feedback
   dispatches delivery to the window thread. The GUI requires macOS 26 and a
-  Metal 4-capable GPU. Vulkan uses one worker and waits for its fence before returning a
-  token; an out-of-date presentation retries without ACK. Neither GPU consumer
-  borrows the shared model.
+  Metal 4-capable GPU. Linux uses Vulkan 1.3, dynamic rendering, Synchronization2
+  and swapchain maintenance1. One worker waits for its render fence before returning a
+  token; an out-of-date presentation retries without retiring damage. Neither GPU consumer
+  borrows the shared model. See [Vulkan rendering](vulkan-renderer.md) for
+  ownership, shader compilation, compositor pacing and presentation lifetimes.
 - Shared graphics storage retains runtime image messages under existing quotas
   and credit accounting, but this increment does not display images. Native
   chrome, attachment UI, bars, config watching, plugins and external notification

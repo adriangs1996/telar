@@ -4,6 +4,7 @@
 Resigns a private copy of Ghostty; never modifies the installed application.
 The probe copies one marker pixel into 256 bytes within the rendering command
 buffer. This adds the same readback operation to both measured paths.
+The optional GUI text endpoint starts at committed text instead of keyDown.
 """
 import argparse
 import hashlib
@@ -41,7 +42,8 @@ def measure(mode, directory, setup):
              str(directory / 'size.json')]
     probe_env = dict(DYLD_INSERT_LIBRARIES=str(library),
                      TELAR_DISPLAY_RESULT=str(directory / 'result.json'),
-                     TELAR_DISPLAY_SAMPLES=str(options.samples + WARMUP))
+                     TELAR_DISPLAY_SAMPLES=str(options.samples + WARMUP),
+                     TELAR_DISPLAY_INPUT_METHOD=options.input_method)
     if options.viewport and mode == 'gui':
         probe_env['TELAR_DISPLAY_VIEWPORT'] = ','.join(map(str, options.viewport))
     if mode == 'gui':
@@ -99,9 +101,13 @@ def main():
     parser.add_argument('--rounds', type=int, default=3)
     parser.add_argument('--vsync', choices=['true', 'false'], default='true')
     parser.add_argument('--mode', choices=['both', 'gui', 'tui'], default='both')
+    parser.add_argument('--input-method', choices=['key', 'text'], default='key',
+                        help='keyDown event, or GUI committed text bypassing synthetic IME dispatch')
     parser.add_argument('--viewport', type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'),
                         help='fix GUI render-target pixels independently of the window manager')
     options = parser.parse_args()
+    if options.input_method == 'text' and options.mode != 'gui':
+        parser.error('--input-method text requires --mode gui')
     if options.viewport and any(v < 1 or v > 8192 for v in options.viewport):
         parser.error('viewport dimensions must be 1..8192')
     if not 1 <= options.samples <= 400 or not 1 <= options.rounds <= 10:
@@ -132,7 +138,8 @@ def main():
     manifest = dict(binary=str(binary), sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
                     ghostty_version=subprocess.check_output(
                         [str(options.ghostty_app / 'Contents/MacOS/ghostty'), '+version'], text=True),
-                    vsync=options.vsync, warmup=WARMUP, rounds=options.rounds)
+                    vsync=options.vsync, warmup=WARMUP, rounds=options.rounds,
+                    input_method=options.input_method)
     (directory / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     results = []
     setup = binary, app, library, config, options

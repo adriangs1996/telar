@@ -21,6 +21,8 @@ cd "$HOME/__SOURCE__"
 state=$(mktemp -d /tmp/telar-native-terminal.XXXXXX)
 printf '%s' "$state" > __STATE_FILE__
 export WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation
+export VK_LAYER_VALIDATE_SYNC=1
 export SWAYSOCK=$(find "$XDG_RUNTIME_DIR" -name 'sway-ipc*.sock' -print -quit)
 export TELAR_SOCKET="$state/runtime.sock" TELAR_HISTORY="$state/history.db"
 '''.replace("__SOURCE__", vm.GUEST_SRC).replace("__STATE_FILE__", state_file)
@@ -78,6 +80,7 @@ sleep 1
 test "$shell_pid" = "$(cat "$state/reattached.pid")"
 printf 'reattached shell PID: %s\n' "$shell_pid"
 cat "$state/gui.log" "$state/reattach.log"
+! grep -E "Validation Error|VUID-" "$state/gui.log" "$state/reattach.log"
 ''')
     vm.screenshot(output / "03-reattach.png")
 finally:

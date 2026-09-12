@@ -118,7 +118,7 @@ fn deliverResize(context: *anyopaque, commit: client.HostCommit) !void {
     try client.controllers.host_resources.deliver(&gui.app, commit);
 }
 
-/// ACKs exactly the captured attachment generations after successful GPU delivery.
+/// Retires captured damage after GPU delivery, preserving newer received state.
 /// Example: `try gui.complete(token, true);`
 pub fn complete(gui: *GuiClient, token: u64, delivered: bool) !void {
     if (token == 0) {
@@ -128,7 +128,7 @@ pub fn complete(gui: *GuiClient, token: u64, delivered: bool) !void {
     const delivery = gui.lifecycle.complete(@enumFromInt(token), if (delivered) .delivered else .failed) orelse return;
     var handler: client.DeliverPresentationHandler = .{
         .model = &gui.app.model,
-        .effects = .{ .context = gui, .flush_graphics_credits = flushCredits, .acknowledge_frame = acknowledge, .request_media = noMedia },
+        .effects = .{ .context = gui, .flush_graphics_credits = flushCredits, .request_media = noMedia },
     };
     try handler.execute(.{ .commit = delivery.commit, .media_pending = delivery.media_pending });
 }
@@ -136,11 +136,6 @@ pub fn complete(gui: *GuiClient, token: u64, delivered: bool) !void {
 fn flushCredits(context: *anyopaque) !void {
     const gui: *GuiClient = @ptrCast(@alignCast(context));
     try client.runtime_io.flushGraphicsCredits(&gui.app);
-}
-
-fn acknowledge(context: *anyopaque, frame: core.FrameAck) !void {
-    const gui: *GuiClient = @ptrCast(@alignCast(context));
-    try client.runtime_io.enqueue(&gui.app, .{ .frame_ack = frame });
 }
 
 fn noMedia(_: *anyopaque) !void {}

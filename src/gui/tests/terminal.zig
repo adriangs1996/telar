@@ -1,33 +1,40 @@
 const std = @import("std");
 const Session = @import("Session.zig");
 
-test "native terminal paints runtime cells and ACKs only successful captured frames" {
+test "native terminal acknowledges received patches while presentation is busy or fails" {
     const session = try Session.init();
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
+    try session.settle();
     const first = try session.gui.prepare(&session.renderer);
     try std.testing.expect(session.renderer.quads.items().len > 1);
-    try std.testing.expectEqual(@as(usize, 0), session.ack_count);
+    try std.testing.expectEqual(@as(usize, 1), session.ack_count);
     try std.testing.expectError(error.PresentationBusy, session.gui.prepare(&session.renderer));
     try session.gui.complete(first, false);
     try session.settle();
-    try std.testing.expectEqual(@as(usize, 0), session.ack_count);
+    try std.testing.expectEqual(@as(usize, 1), session.ack_count);
     const retry = try session.gui.prepare(&session.renderer);
-    try session.receiveFrame(2);
+    const Quad = @import("../render/Quad.zig").Quad;
+    const frozen = try std.testing.allocator.dupe(Quad, session.renderer.quads.items());
+    defer std.testing.allocator.free(frozen);
+    for (2..34) |frame| {
+        try session.receiveFrame(frame);
+        try session.settle();
+        try std.testing.expectEqual(frame, session.ack_count);
+        try std.testing.expectEqual(frame, session.acknowledgements[frame - 1].frame_id);
+    }
+
+    try std.testing.expectEqualSlices(Quad, frozen, session.renderer.quads.items());
+    try std.testing.expectEqualStrings("H", session.gui.app.model.workspace.findPane(Session.pane_id).?.buffer.cells[0].text());
     try session.gui.complete(first, true);
     try std.testing.expectEqual(retry, @intFromEnum(session.gui.lifecycle.active.?.token));
     try session.gui.complete(retry, true);
     try session.settle();
     try std.testing.expectEqual(@as(u64, 1), session.acknowledgements[0].frame_id);
-    try std.testing.expectEqual(@as(u64, 2), session.gui.app.model.workspace.findPane(Session.pane_id).?.pending_frame_id);
-    for (2..34) |frame| {
-        try session.receiveFrame(frame);
-        const token = try session.gui.prepare(&session.renderer);
-        try session.gui.complete(token, true);
-        try session.settle();
-    }
-
+    try std.testing.expectEqual(@as(u64, 33), session.gui.app.model.workspace.findPane(Session.pane_id).?.pending_frame_id);
+    try present(session);
+    try std.testing.expectEqual(@as(u64, 0), session.gui.app.model.workspace.findPane(Session.pane_id).?.pending_frame_id);
     try std.testing.expectEqual(@as(usize, 33), session.ack_count);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }

@@ -2,7 +2,6 @@ const ModelType = @import("../../model/Model.zig");
 const PaneIdType = @import("telar-core").PaneId;
 const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
 const presentation_delivery = @import("presentation_delivery.zig");
-const FrameAckType = @import("telar-core").FrameAck;
 const Effects = @import("PresentationEffects.zig");
 const EffectCapture = @This();
 
@@ -10,8 +9,6 @@ model: *ModelType,
 pane_id: PaneIdType,
 events: [max_panes_per_tab + 2]presentation_delivery.Event = undefined,
 event_count: usize = 0,
-acknowledgements: [max_panes_per_tab]FrameAckType = undefined,
-acknowledgement_count: usize = 0,
 commit_observed: bool = true,
 failure: presentation_delivery.Failure = .none,
 
@@ -19,7 +16,6 @@ pub fn effects(capture: *EffectCapture) Effects {
     return .{
         .context = capture,
         .flush_graphics_credits = flushGraphicsCredits,
-        .acknowledge_frame = acknowledgeFrame,
         .request_media = requestMedia,
     };
 }
@@ -31,18 +27,6 @@ fn flushGraphicsCredits(context: *anyopaque) !void {
 
     if (capture.failure == .credits) {
         return error.CreditFailure;
-    }
-}
-
-fn acknowledgeFrame(context: *anyopaque, ack: FrameAckType) !void {
-    const capture: *EffectCapture = @ptrCast(@alignCast(context));
-    capture.observeCommit();
-    capture.append(.acknowledgement);
-    capture.acknowledgements[capture.acknowledgement_count] = ack;
-    capture.acknowledgement_count += 1;
-
-    if (capture.failure == .second_acknowledgement and capture.acknowledgement_count == 2) {
-        return error.AcknowledgementFailure;
     }
 }
 
@@ -72,8 +56,4 @@ fn append(capture: *EffectCapture, event: presentation_delivery.Event) void {
 
 pub fn eventSlice(capture: *const EffectCapture) []const presentation_delivery.Event {
     return capture.events[0..capture.event_count];
-}
-
-pub fn acknowledgementSlice(capture: *const EffectCapture) []const FrameAckType {
-    return capture.acknowledgements[0..capture.acknowledgement_count];
 }

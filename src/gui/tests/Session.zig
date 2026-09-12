@@ -124,18 +124,18 @@ pub fn receiveFrame(session: *Session, frame_id: u64) !void {
         return error.TestScreenTooLarge;
     }
 
-    cells[0].bytes[0] = '$';
+    cells[0].bytes[0] = if (frame_id == 1) '$' else 'A' + @as(u8, @intCast(frame_id % 26));
     var wire: [8192]u8 = undefined;
     const encoded = try core.encodePaneFrame(&wire, .{
         .pane_id = pane_id,
         .frame_id = frame_id,
-        .base_frame_id = 0,
+        .base_frame_id = frame_id - 1,
         .cols = pane.buffer.w,
         .rows = pane.buffer.h,
         .cursor = .{ .visible = true, .x = 1, .y = 0 },
         .scroll = .{ .total_rows = pane.buffer.h, .offset = 0 },
         .input_modes = .{ .bracketed_paste = true },
-        .spans = &.{.{ .start = 0, .cells = cells[0..count] }},
+        .spans = &.{.{ .start = 0, .cells = if (frame_id == 1) cells[0..count] else cells[0..1] }},
     });
     _ = try client.server_messages.handleServerMessage(&session.gui.app, try core.decodeServer(encoded));
     @memset(&wire, 0xff);

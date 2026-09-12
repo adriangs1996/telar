@@ -24,9 +24,7 @@ const Pacer = @import("Pacer.zig");
 
 pub const ns_per_ms: u64 = 1_000_000;
 
-/// The frame budget. One frame at 60Hz, which is the fastest a terminal
-/// emulator will present anyway, so drawing more often puts bytes on a pipe
-/// that nothing downstream will show.
+/// The sustained frame budget. Idle and input bursts may present earlier.
 pub const default_interval: u64 = std.time.ns_per_s / 60;
 
 /// Frames an idle UI may present back to back before the interval applies.
@@ -44,9 +42,9 @@ pub const default_burst: u32 = 4;
 ///
 /// Under a flood from other panes the burst credit is always spent, and the
 /// keystroke's echo would wait a whole interval behind the flood's frames.
-/// The echo needs at most two immediate presentations: the frame already in
-/// flight, whose acknowledgement releases the focused pane's frame, and that
-/// frame itself. A window of a few tens of milliseconds covers both and costs
+/// A frame already in flight may not contain the echo. Applied cell updates
+/// continue independently, and their next presentation should be eligible
+/// immediately. A window of a few tens of milliseconds covers both and costs
 /// extra frames only while the user is actually typing.
 pub const default_input_grace: u64 = 30 * ns_per_ms;
 

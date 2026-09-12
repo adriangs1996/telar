@@ -11,11 +11,14 @@ typedef struct telar_renderer telar_renderer;
 
 // Creates the instance, device, swapchain and pipeline for `surface`.
 // Returns NULL after printing the failing step to stderr.
-telar_renderer *telar_renderer_create(struct wl_display *display, struct wl_surface *surface, telar_gui_viewport viewport);
+telar_renderer *telar_renderer_create(struct wl_display *display, struct wl_surface *surface,
+                                      telar_gui_viewport viewport);
 
-// Draws one frame. A stale swapchain is rebuilt for `viewport` before drawing.
+// Runs on the single consumer worker. Returns after GPU consumption; never
+// calls the client or Wayland event handlers. A stale swapchain is rebuilt.
 enum telar_render_result { TELAR_RENDER_FAILED, TELAR_RENDER_DELIVERED, TELAR_RENDER_RETRY };
-enum telar_render_result telar_renderer_draw(telar_renderer *renderer, telar_gui_viewport viewport, const telar_gui_frame *frame);
+enum telar_render_result telar_renderer_draw(telar_renderer *renderer, telar_gui_viewport viewport,
+                                             const telar_gui_frame *frame);
 
 void telar_renderer_destroy(telar_renderer *renderer);
 

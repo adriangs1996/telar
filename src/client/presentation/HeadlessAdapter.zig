@@ -83,7 +83,7 @@ pub fn prepare(adapter: *Adapter, projection: ProjectionType) !?lifecycle_module
 }
 
 /// Reports completion only after all consumers stop borrowing frame storage.
-/// Failed and cancelled work releases its slot without a delivery or ACK.
+/// Failed and cancelled work releases its slot without retiring model damage.
 /// Example: `const delivery = adapter.complete(token, .delivered) orelse return;`.
 pub fn complete(adapter: *Adapter, token: lifecycle_module.Token, outcome: lifecycle_module.Outcome) ?DeliveryType {
     return adapter.state.complete(token, outcome);

@@ -72,7 +72,11 @@ wlroots draws with pixman and Vulkan comes from Mesa's software driver. That
 is enough to develop and verify the native client's Linux backend; it says
 nothing about frame rate on real hardware. The backend's build needs
 `wayland-scanner`, the `xdg-shell` protocol, the Vulkan headers and loader,
-and `glslc` to regenerate the shaders; provisioning installs them.
+and `glslc` to compile the GLSL shaders as build dependencies. Provisioning
+installs them along with the Vulkan validation layer. The native renderer
+requires Vulkan 1.3, dynamic rendering, Synchronization2 and
+`VK_EXT_swapchain_maintenance1`; see
+[the renderer guide](../../docs/flows/vulkan-renderer.md).
 
 ## First boot
 

@@ -17,10 +17,12 @@
                       context:(void *)render_context
                     callbacks:(const telar_gui_callbacks *)callback_table {
   int (*input)(void *, telar_gui_input) = callback_table->input;
+
   self = [super initWithFrame:frame
                  inputHandler:^BOOL(telar_gui_input event) {
                    return input(render_context, event) != 0;
                  }];
+
   if (self == nil) {
     return nil;
   }
@@ -28,6 +30,7 @@
   context = render_context;
   callbacks = *callback_table;
   __weak TelarView *weak = self;
+
   renderer = [[TelarMetalRenderer alloc]
       initWithCompletion:^(uint64_t token, BOOL success) {
         TelarView *view = weak;
@@ -49,6 +52,7 @@
           [view requestDraw];
         }
       }];
+
   if (renderer == nil) {
     return nil;
   }

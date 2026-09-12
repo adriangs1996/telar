@@ -33,10 +33,11 @@ fn testingFrame(buffer: []u8, input: TestingFrame) !FrameViewType {
 
 pub const EffectEvent = enum {
     recover,
+    acknowledge,
     deliver,
 };
 
-test "ApplyPaneFrameHandler commits before delivering client resources" {
+test "ApplyPaneFrameHandler acknowledges applied cells before delivering client resources" {
     var testing = try PaneFrameTestingModel.init();
     defer testing.deinit();
     var capture: PaneFrameEffectsCapture = .{ .model = testing.model };
@@ -54,7 +55,9 @@ test "ApplyPaneFrameHandler commits before delivering client resources" {
     }));
 
     try std.testing.expect(outcome == .applied);
-    try std.testing.expectEqualSlices(EffectEvent, &.{.deliver}, capture.events[0..capture.event_count]);
+    try std.testing.expectEqualSlices(EffectEvent, &.{ .acknowledge, .deliver }, capture.events[0..capture.event_count]);
+    try std.testing.expect(capture.ack_observed_commit);
+    try std.testing.expectEqual(@as(u64, 7), capture.ack.?.frame_id);
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqualDeep(outcome.applied, capture.commit.?);
 }
@@ -122,6 +125,7 @@ test "ApplyPaneFrameHandler preserves commits after resource delivery failure" {
 
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqual(VersionType{ .frame = 1 }, testing.model.version());
+    try std.testing.expect(capture.ack_observed_commit);
     try std.testing.expectEqual(@as(u64, 7), testing.model.workspace.findPane(testing.pane_id).?.applied_frame_id);
 }
 
@@ -144,4 +148,48 @@ test "ApplyPaneFrameHandler propagates recovery failure without model mutation" 
 
     try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
     try std.testing.expectEqual(@as(u64, 3), testing.model.workspace.findPane(testing.pane_id).?.applied_frame_id);
+}
+
+test "ApplyPaneFrameHandler preserves owned cells and pending damage when ACK delivery fails" {
+    var testing = try PaneFrameTestingModel.init();
+    defer testing.deinit();
+    var capture: PaneFrameEffectsCapture = .{ .model = testing.model, .fail_ack = true };
+    var handler: ApplyPaneFrameHandler = .{ .model = testing.model, .effects = capture.port() };
+    var cells: [4]CellType = @splat(.{});
+    cells[0].bytes[0] = 'X';
+    var encoded: [512]u8 = undefined;
+
+    try std.testing.expectError(error.AcknowledgementFailure, handler.execute(try testingFrame(&encoded, .{
+        .pane_id = testing.pane_id,
+        .frame_id = 7,
+        .cells = &cells,
+    })));
+    @memset(&encoded, 0xff);
+    const pane = testing.model.workspace.findPane(testing.pane_id).?;
+    try std.testing.expectEqualSlices(EffectEvent, &.{.acknowledge}, capture.events[0..capture.event_count]);
+    try std.testing.expect(capture.ack_observed_commit);
+    try std.testing.expectEqual(@as(u64, 7), pane.pending_frame_id);
+    try std.testing.expectEqualStrings("X", pane.buffer.cells[0].text());
+}
+
+test "ApplyPaneFrameHandler never acknowledges a frame that fails application" {
+    var testing = try PaneFrameTestingModel.init();
+    defer testing.deinit();
+    var capture: PaneFrameEffectsCapture = .{ .model = testing.model };
+    var handler: ApplyPaneFrameHandler = .{ .model = testing.model, .effects = capture.port() };
+    testing.model.workspace.findPane(testing.pane_id).?.applied_frame_id = 1;
+    var encoded: [512]u8 = undefined;
+    const payload = try encodePaneFrame_module(&encoded, .{
+        .pane_id = testing.pane_id,
+        .frame_id = 2,
+        .base_frame_id = 1,
+        .cols = 3,
+        .rows = 2,
+        .scroll = .{ .total_rows = 2, .offset = 0 },
+        .spans = &.{},
+    });
+
+    try std.testing.expectError(error.PatchSizeMismatch, handler.execute((try decodeServer_module(payload)).pane_frame));
+    try std.testing.expectEqual(@as(usize, 0), capture.event_count);
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }

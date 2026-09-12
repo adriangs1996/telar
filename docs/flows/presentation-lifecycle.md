@@ -2,7 +2,8 @@
 
 A client event commits semantic or physical display state. Presentation observes
 that state, prepares bounded work and reports delivery. Only then can the
-application retire exact frame damage and enqueue acknowledgements.
+application retire exact frame damage. Cell ACKs follow validated model
+application independently of presentation.
 
 ## Boundary
 
@@ -32,7 +33,7 @@ DeliverPresentationHandler
         |
 filter attachment generations + exact damage commit
         |
-graphics credits -> frame_ack -> optional media task
+graphics credits -> optional media task
 ```
 
 The headless adapter uses the same projection, lifecycle and delivery handler.
@@ -74,8 +75,10 @@ version still identifies only that version's captured pane frames.
 `ClientModel.commitPresentation` rejects retired attachment generations, even
 when a reconstructed pane reuses the same wire frame number. Exact pending-frame
 matching prevents an old delivery from clearing newer damage. The handler
-derives ACKs from the accepted commit rather than accepting an unrelated array.
-It orders model commit, released graphics credit, ACKs and optional media work.
+orders model commit, released graphics credit and optional media work. It
+sends no cell ACK. `ApplyPaneFrameHandler` acknowledges owned cells before
+resource delivery, so new patches can update the model while the sealed output
+is still in flight. The next preparation captures the latest state.
 
 `Geometry` owns region, tab, layout, host size and pane-shape identities. A new
 TUI pointer gesture cannot use changed pane geometry during an in-flight
@@ -107,7 +110,7 @@ client. The driver cancels and joins actors before freeing output, graphics and
 model storage; a new connection rebuilds runtime snapshots. Runtime PTYs and
 history remain valid after client death.
 
-After successful delivery, a credit, ACK or media-scheduling error does not
+After successful delivery, a credit or media-scheduling error does not
 undo earlier effects. The existing event loop closes that client and snapshot
 reconciliation recovers it. Completion does not claim physical input-to-photon
 or monitor presentation timing.

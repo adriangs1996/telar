@@ -18,7 +18,7 @@ static id<MTLCommandQueue> probe_queue;
 static atomic_uint epoch;
 static atomic_bool located;
 static atomic_ulong marker_x, marker_y, pixel_width, pixel_height;
-static BOOL pending, finished;
+static BOOL pending, finished, text_input;
 static int count, limit;
 static double began, gpu_samples[512], gpu_work_samples[512];
 static NSString *input_class;
@@ -39,7 +39,7 @@ static void finish(int failed) {
         for(int i=0;i<count;i++)fprintf(f,"%s%.6f",i?",":"",gpu_samples[i]);
         fprintf(f,"],\"gpu_work_ms\":[");
         for(int i=0;i<count;i++)fprintf(f,"%s%.6f",i?",":"",gpu_work_samples[i]);
-        fprintf(f,"],\"input_class\":\"%s\"}\n",input_class.UTF8String ?: "");fclose(f);
+        fprintf(f,"],\"input_class\":\"%s\",\"input_method\":\"%s\"}\n",input_class.UTF8String ?: "",text_input ? "text" : "key");fclose(f);
     }
     if ([NSApp.windows.firstObject.contentView respondsToSelector:@selector(keyDown:)]) [NSApp.windows.firstObject close];
     // Ghostty can keep its app process alive after closing the only test window.
@@ -51,12 +51,17 @@ static void send_key(void) {
     if(count==limit){finish(0);return;}
     NSWindow *w=NSApp.windows.firstObject;
     if(!w){finish(2);return;}
-    NSResponder *target=w.firstResponder;
+    NSResponder *target=text_input ? w.contentView : w.firstResponder;
+    if(text_input && ![target respondsToSelector:@selector(insertText:replacementRange:)]){finish(7);return;}
     if(!count)input_class=NSStringFromClass(target.class);
     pending=YES;
     atomic_store(&epoch,(unsigned)count+1);
     began=CACurrentMediaTime();
-    [target keyDown:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:w.windowNumber context:nil characters:@"x" charactersIgnoringModifiers:@"x" isARepeat:NO keyCode:7]];
+    if(text_input){
+        [(id<NSTextInputClient>)target insertText:@"x" replacementRange:NSMakeRange(NSNotFound,0)];
+    }else{
+        [target keyDown:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:w.windowNumber context:nil characters:@"x" charactersIgnoringModifiers:@"x" isARepeat:NO keyCode:7]];
+    }
 }
 
 static void accept_frame(ProbeFrame *frame) {
@@ -220,6 +225,9 @@ __attribute__((constructor)) static void install(void){
     // Runtime and fixture subprocesses inherit the environment; only GUI hosts instrument Metal.
     NSString *name=NSProcessInfo.processInfo.processName;
     if(![name isEqualToString:@"ghostty"] && ![NSProcessInfo.processInfo.arguments containsObject:@"gui"])return;
+    const char *input_method=getenv("TELAR_DISPLAY_INPUT_METHOD");
+    text_input=input_method && !strcmp(input_method,"text");
+    if(text_input && ![NSProcessInfo.processInfo.arguments containsObject:@"gui"])abort();
     probe_log=fopen([[NSString stringWithUTF8String:getenv("TELAR_DISPLAY_RESULT")] stringByAppendingString:@".log"].UTF8String,"w");
     setbuf(probe_log,NULL);
     limit=atoi(getenv("TELAR_DISPLAY_SAMPLES"));if(limit<1 || limit>512)abort();

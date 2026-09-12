@@ -12,7 +12,7 @@ root through `b.path`, even from these support files.
 | Optimized benchmark graph, `bench`, `echo-probe`, browser verification | [Benchmarks.zig](Benchmarks.zig) |
 | Native GUI modules, `gui`, GUI tests | [gui.zig](gui.zig) |
 | macOS adapter sources, Objective-C flags and frameworks shared by app and window test | [macos_gui.zig](macos_gui.zig) |
-| Wayland protocol generation, Vulkan libraries, embedded SPIR-V | [linux_gui.zig](linux_gui.zig) |
+| Wayland protocol generation, Vulkan sources/libraries, GLSL compilation and embedded SPIR-V | [linux_gui.zig](linux_gui.zig) |
 | macOS bundle/DMG and Linux desktop/archive packaging | [packaging.zig](packaging.zig) |
 | Test-suite list, `check`, code style, boundaries and release gates | [tests.zig](tests.zig) |
 | Windows and Linux portability checks | [cross.zig](cross.zig) |

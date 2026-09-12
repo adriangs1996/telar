@@ -1,3 +1,5 @@
+//! Confirms that validated cells are owned by the client model. Presentation
+//! completion and graphics-resource credits have independent lifetimes.
 const id = @import("../id.zig");
 const FrameAck = @This();
 

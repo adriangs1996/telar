@@ -83,7 +83,7 @@ pub fn complete(fixture: *Fixture, token: lifecycle_module.Token, outcome: lifec
     const delivery = fixture.adapter.complete(token, outcome) orelse return;
     var handler: DeliverPresentationHandlerType = .{
         .model = &fixture.model,
-        .effects = .{ .context = fixture, .flush_graphics_credits = credits, .acknowledge_frame = acknowledge, .request_media = media },
+        .effects = .{ .context = fixture, .flush_graphics_credits = credits, .request_media = media },
     };
     try handler.execute(.{ .commit = delivery.commit, .media_pending = delivery.media_pending });
 }
@@ -129,7 +129,8 @@ fn credits(context: *anyopaque) !void {
     }
 }
 
-fn acknowledge(context: *anyopaque, ack: FrameAckType) !void {
+/// Queues an applied-cell ACK independently of presentation. Example: `try Fixture.acknowledge(fixture, ack);`.
+pub fn acknowledge(context: *anyopaque, ack: FrameAckType) !void {
     const fixture: *Fixture = @ptrCast(@alignCast(context));
     try fixture.outbox.push(.{ .frame_ack = ack });
 }

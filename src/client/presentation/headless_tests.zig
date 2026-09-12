@@ -40,15 +40,22 @@ fn sendFrame(fixture: *Fixture, input: FrameInput) !void {
     @memset(&wire, 0xff);
 }
 
-test "shared entrypoint and handlers continue input while headless delivery owns an older frame" {
+test "applied patches are acknowledged and coalesced while headless delivery owns an older frame" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     try sendFrame(fixture, .{});
+    try fixture.expectAck(1);
     const first = try fixture.prepare();
     try std.testing.expectEqual(@as(usize, 1), fixture.activations);
     try std.testing.expect(fixture.outbox.peek() == null);
     try std.testing.expectEqual(@as(u64, 0), fixture.adapter.state.delivered.model.frame);
     try sendFrame(fixture, .{ .frame_id = 2, .base = 1, .text = 'B', .cursor_keys = false });
+    try fixture.expectAck(2);
+    for (3..66) |id| {
+        try sendFrame(fixture, .{ .frame_id = id, .base = id - 1, .text = 'Z', .cursor_keys = false });
+        try fixture.expectAck(id);
+    }
+
     try std.testing.expectError(error.PresentationBusy, fixture.prepare());
     try std.testing.expectEqualStrings("A", fixture.adapter.frame.cells[0].text());
     try std.testing.expect(fixture.adapter.frame.panes[0].input_modes.cursor_keys);
@@ -58,20 +65,21 @@ test "shared entrypoint and handlers continue input while headless delivery owns
     try std.testing.expectEqualStrings("\x1b[A", (try decodeClient_module(sent)).pane_input.bytes);
     try fixture.outbox.finishSend({});
     try fixture.complete(first, .delivered);
-    try fixture.expectAck(1);
-    try std.testing.expectEqual(@as(u64, 2), fixture.model.workspace.findPane(pane_id).?.pending_frame_id);
+    try std.testing.expect(fixture.outbox.peek() == null);
+    try std.testing.expectEqual(@as(u64, 65), fixture.model.workspace.findPane(pane_id).?.pending_frame_id);
     const second = try fixture.prepare();
-    try std.testing.expectEqualStrings("B", fixture.adapter.frame.cells[0].text());
+    try std.testing.expectEqualStrings("Z", fixture.adapter.frame.cells[0].text());
     try fixture.complete(second, .delivered);
-    try fixture.expectAck(2);
+    try std.testing.expect(fixture.outbox.peek() == null);
     try std.testing.expectEqual(@as(u64, 0), fixture.model.workspace.findPane(pane_id).?.pending_frame_id);
     try std.testing.expect((try fixture.adapter.prepare(fixture.projection())) == null);
 }
 
-test "busy preparation failure delivery failure cancellation and stale completion never acknowledge early" {
+test "presentation failure cancellation and stale completion preserve acknowledged model damage" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     try sendFrame(fixture, .{});
+    try fixture.expectAck(1);
     fixture.adapter.busy = true;
     try std.testing.expectError(error.PresentationBusy, fixture.prepare());
     fixture.adapter.busy = false;
@@ -89,7 +97,7 @@ test "busy preparation failure delivery failure cancellation and stale completio
     try std.testing.expect(fixture.outbox.peek() == null);
     try std.testing.expectEqual(@as(u64, 1), fixture.model.workspace.findPane(pane_id).?.pending_frame_id);
     try fixture.complete(current, .delivered);
-    try fixture.expectAck(1);
+    try std.testing.expect(fixture.outbox.peek() == null);
     try fixture.complete(current, .delivered);
     try std.testing.expect(fixture.outbox.peek() == null);
 }
@@ -98,6 +106,7 @@ test "broken bases request recovery and geometry ABA does not authorize a new ge
     const fixture = try Fixture.init();
     defer fixture.deinit();
     try sendFrame(fixture, .{});
+    try fixture.expectAck(1);
     const token = try fixture.prepare();
     try sendFrame(fixture, .{ .frame_id = 3, .base = 2 });
     try std.testing.expectEqual(@as(u64, 1), fixture.outbox.peek().?.request_snapshot.known_frame_id);
@@ -106,7 +115,7 @@ test "broken bases request recovery and geometry ABA does not authorize a new ge
     fixture.geometry.update(.{ .w = 20, .h = 10 });
     fixture.geometry.update(old_area);
     try fixture.complete(token, .delivered);
-    try fixture.expectAck(1);
+    try std.testing.expect(fixture.outbox.peek() == null);
     const current_geometry = GeometryType.capture(fixture.projection());
     try std.testing.expect(!fixture.adapter.state.delivered_geometry.?.matches(&current_geometry));
     const replacement = try fixture.prepare();
@@ -118,25 +127,28 @@ test "a reconstructed attachment cannot inherit a completed old frame with the s
     const fixture = try Fixture.init();
     defer fixture.deinit();
     try sendFrame(fixture, .{});
+    try fixture.expectAck(1);
     const old = try fixture.prepare();
     const generation = fixture.model.workspace.findPane(pane_id).?.attachment_generation;
     _ = fixture.model.departWorkspace();
     try std.testing.expectEqualStrings("A", fixture.adapter.frame.cells[0].text());
     try fixture.arrive();
     try sendFrame(fixture, .{ .text = 'B' });
+    try fixture.expectAck(1);
     try std.testing.expect(fixture.model.workspace.findPane(pane_id).?.attachment_generation != generation);
     try fixture.complete(old, .delivered);
     try std.testing.expect(fixture.outbox.peek() == null);
     try std.testing.expectEqual(@as(u64, 1), fixture.model.workspace.findPane(pane_id).?.pending_frame_id);
     const current = try fixture.prepare();
     try fixture.complete(current, .delivered);
-    try fixture.expectAck(1);
+    try std.testing.expect(fixture.outbox.peek() == null);
 }
 
-test "retained graphics return credit on release before the delivered cell acknowledgement" {
+test "cell acknowledgement does not return credits for graphics still leased by a presentation" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     try sendFrame(fixture, .{});
+    try fixture.expectAck(1);
     const image: ImageType = .{ .key = .{ .image_id = 1, .generation = 1 }, .format = .rgb, .width = 1, .height = 1, .byte_len = 3 };
     try fixture.graphics.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = image });
     try fixture.graphics.applyChunk(.{ .pane_id = pane_id, .revision = 1, .key = image.key, .offset = 0, .bytes = "rgb" });
@@ -145,18 +157,24 @@ test "retained graphics return credit on release before the delivered cell ackno
     try fixture.graphics.applySnapshot(.{ .pane_id = pane_id, .revision = 2, .phase = .begin });
     try std.testing.expect(fixture.graphics.peekCredit() == null);
     try std.testing.expectEqualStrings("rgb", lease.pixels);
-    retained.release(&fixture.graphics, lease);
     try fixture.complete(token, .delivered);
+    try std.testing.expect(fixture.outbox.peek() == null);
+    try std.testing.expectEqual(@as(usize, 3), fixture.graphics.total_bytes);
+    try sendFrame(fixture, .{ .frame_id = 2, .base = 1 });
+    try fixture.expectAck(2);
+    retained.release(&fixture.graphics, lease);
+    try fixture.complete(try fixture.prepare(), .delivered);
     try std.testing.expectEqual(@as(u64, 3), fixture.outbox.peek().?.graphics_credit.bytes);
     try fixture.sendOne();
-    try fixture.expectAck(1);
+    try std.testing.expect(fixture.outbox.peek() == null);
     try std.testing.expectEqual(@as(usize, 0), fixture.graphics.total_bytes);
 }
 
-test "reattachment invalidates old acknowledgements without replacing the pane buffer" {
+test "reattachment prevents old presentation completion from retiring replacement damage" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     try sendFrame(fixture, .{});
+    try fixture.expectAck(1);
     const old = try fixture.prepare();
     try fixture.model.commitTabDetachment(try fixture.model.planTabDetachment(location));
     var attach: ConfirmPaneAttachmentHandlerType = .{ .model = &fixture.model };
@@ -167,12 +185,13 @@ test "reattachment invalidates old acknowledgements without replacing the pane b
         .created = false,
     }));
     try sendFrame(fixture, .{ .text = 'B' });
+    try fixture.expectAck(1);
     try fixture.complete(old, .delivered);
     try std.testing.expect(fixture.outbox.peek() == null);
     try std.testing.expectEqual(@as(u64, 1), fixture.model.workspace.findPane(pane_id).?.pending_frame_id);
     const current = try fixture.prepare();
     try fixture.complete(current, .delivered);
-    try fixture.expectAck(1);
+    try std.testing.expect(fixture.outbox.peek() == null);
 }
 
 test "headless preparation delivery input and steady-state patches allocate nothing" {
@@ -185,11 +204,12 @@ test "headless preparation delivery input and steady-state patches allocate noth
     try fixture.complete(first, .delivered);
     try fixture.expectAck(1);
     try sendFrame(fixture, .{ .frame_id = 2, .base = 1 });
+    try fixture.expectAck(2);
     try fixture.key(.{ .code = .up });
     try fixture.sendOne();
     const second = try fixture.prepare();
     try fixture.complete(second, .delivered);
-    try fixture.expectAck(2);
+    try std.testing.expect(fixture.outbox.peek() == null);
     try std.testing.expect(!allocator.has_induced_failure);
 }
 
@@ -211,6 +231,8 @@ test "independent client assemblies produce identical semantic state and request
     defer second.deinit();
     try sendFrame(first, .{});
     try sendFrame(second, .{});
+    try first.expectAck(1);
+    try second.expectAck(1);
     try first.key(.{ .code = .up });
     try second.key(.{ .code = .up });
     var first_wire: [1024]u8 = undefined;
@@ -221,7 +243,8 @@ test "independent client assemblies produce identical semantic state and request
     try first.complete(try first.prepare(), .delivered);
     try second.complete(try second.prepare(), .delivered);
     try std.testing.expectEqualDeep(first.model.version(), second.model.version());
-    try std.testing.expectEqualDeep(first.outbox.peek().?.*, second.outbox.peek().?.*);
+    try std.testing.expect(first.outbox.peek() == null);
+    try std.testing.expect(second.outbox.peek() == null);
     _ = first.model.departWorkspace();
     try std.testing.expect(second.model.activeTabModelConst() != null);
     try std.testing.expectEqualStrings("A", second.model.workspace.findPane(pane_id).?.buffer.cells[0].text());

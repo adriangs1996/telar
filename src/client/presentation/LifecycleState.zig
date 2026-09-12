@@ -65,7 +65,7 @@ pub fn begin(state: *State, submission: Submission) !lifecycle.Token {
 }
 
 /// Releases exactly one flight. Old completions cannot consume newer work.
-/// A delivered older model version still ACKs only its captured pane frames.
+/// An older successful delivery leaves subsequently received damage pending.
 /// Example: `const delivery = state.complete(token, .delivered) orelse return;`.
 pub fn complete(state: *State, token: lifecycle.Token, outcome: lifecycle.Outcome) ?DeliveryType {
     const flight = state.active orelse return null;

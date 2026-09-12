@@ -70,7 +70,7 @@ pub fn tryWrite(output: *Output, work: WorkType) !WorkType {
     return .{ .target = work.target, .bytes = work.bytes[written..] };
 }
 
-/// Ends the borrow before propagating failure. Failed writes never ACK.
+/// Ends the borrow before propagating failure. Failed writes never retire damage.
 /// Example: `const delivery = try output.complete(result);`.
 pub fn complete(output: *Output, result: anyerror!void) !?TokenType {
     std.debug.assert(output.pending);

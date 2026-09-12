@@ -8,19 +8,16 @@ const ModelType = @import("../../model/Model.zig");
 const std = @import("std");
 const EffectCapture = @import("EffectCapture.zig");
 const DeliverPresentationHandler = @import("DeliverPresentationHandler.zig");
-const FrameAckType = @import("telar-core").FrameAck;
 const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
 
 pub const Event = enum {
     credits,
-    acknowledgement,
     media,
 };
 
 pub const Failure = enum {
     none,
     credits,
-    second_acknowledgement,
     media,
 };
 
@@ -60,10 +57,6 @@ test "DeliverPresentationHandler commits before ordered delivery" {
         .model = &model,
         .effects = capture.effects(),
     };
-    const acknowledgements = [_]FrameAckType{
-        .{ .pane_id = pane_id, .frame_id = 7 },
-        .{ .pane_id = @enumFromInt(2), .frame_id = 9 },
-    };
 
     try handler.execute(.{
         .commit = presentationCommit(7),
@@ -73,8 +66,7 @@ test "DeliverPresentationHandler commits before ordered delivery" {
 
     try std.testing.expect(capture.commit_observed);
     try std.testing.expectEqual(@as(u64, 0), model.workspace.findPane(pane_id).?.pending_frame_id);
-    try std.testing.expectEqualSlices(Event, &.{ .credits, .acknowledgement, .acknowledgement, .media }, capture.eventSlice());
-    try std.testing.expectEqualSlices(FrameAckType, &acknowledgements, capture.acknowledgementSlice());
+    try std.testing.expectEqualSlices(Event, &.{ .credits, .media }, capture.eventSlice());
 }
 
 test "DeliverPresentationHandler rejects unbounded input before commit" {
@@ -104,26 +96,17 @@ test "DeliverPresentationHandler preserves applied effects across delivery failu
         failure: Failure,
         expected_error: anyerror,
         expected_events: []const Event,
-        expected_acknowledgements: usize,
     };
     const scenarios = [_]Scenario{
         .{
             .failure = .credits,
             .expected_error = error.CreditFailure,
             .expected_events = &.{.credits},
-            .expected_acknowledgements = 0,
-        },
-        .{
-            .failure = .second_acknowledgement,
-            .expected_error = error.AcknowledgementFailure,
-            .expected_events = &.{ .credits, .acknowledgement, .acknowledgement },
-            .expected_acknowledgements = 2,
         },
         .{
             .failure = .media,
             .expected_error = error.MediaFailure,
-            .expected_events = &.{ .credits, .acknowledgement, .acknowledgement, .media },
-            .expected_acknowledgements = 2,
+            .expected_events = &.{ .credits, .media },
         },
     };
     for (scenarios) |scenario| {
@@ -149,7 +132,6 @@ test "DeliverPresentationHandler preserves applied effects across delivery failu
         try std.testing.expect(capture.commit_observed);
         try std.testing.expectEqual(@as(u64, 0), model.workspace.findPane(pane_id).?.pending_frame_id);
         try std.testing.expectEqualSlices(Event, scenario.expected_events, capture.eventSlice());
-        try std.testing.expectEqual(scenario.expected_acknowledgements, capture.acknowledgement_count);
     }
 }
 
@@ -169,5 +151,5 @@ test "DeliverPresentationHandler skips media without pending work" {
         .media_pending = false,
     });
 
-    try std.testing.expectEqualSlices(Event, &.{ .credits, .acknowledgement, .acknowledgement }, capture.eventSlice());
+    try std.testing.expectEqualSlices(Event, &.{.credits}, capture.eventSlice());
 }

@@ -216,6 +216,8 @@ test "closing a Pi preview deletes its whole pasted path from the editor" {
     const target = try support.installTestingAttachmentProvider(client, 1, .pi);
     try adoptPiPreview(client, target);
     try commitPiFrame(client, .{ .target = target, .prompt = "> " ++ pi_test_path, .id = 1 });
+    var ack_wire: [512]u8 = undefined;
+    try std.testing.expectEqual(@as(u64, 1), (try harness.nextClientMessage(&ack_wire)).frame_ack.frame_id);
     const id = host(client).view.kittyAttachments().snapshot().items[0].id;
     const model = client.model.activeTabModel().?;
 

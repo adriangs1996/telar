@@ -27,7 +27,7 @@ test "failed and cancelled frames remain pending; stale completions cannot retir
     try std.testing.expectEqualDeep(observation, state.delivered);
 }
 
-test "delivery acknowledges only captured frames even after receiving newer model state" {
+test "delivery returns only captured frames even after receiving newer model state" {
     var state: LifecycleState = .{};
     const old: ObservationType = .{ .model = .{ .frame = 1 } };
     const newer: ObservationType = .{ .model = .{ .frame = 2 } };

@@ -85,16 +85,17 @@ test "a patch against an unknown base requests a fresh snapshot" {
         try std.testing.expectEqual(@as(u64, 4), client.telemetry.metrics.frame_cells);
     }
 
+    const ack = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(ack == .frame_ack);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, ack.frame_ack.pane_id);
+    try std.testing.expectEqual(@as(u64, 5), ack.frame_ack.frame_id);
+    try std.testing.expectEqual(@as(u64, 5), pane.pending_frame_id);
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
     try harness.settle();
-
-    const ack = try harness.nextClientMessage(&buffer);
-    try std.testing.expect(ack == .frame_ack);
-    try std.testing.expectEqual(TestHarness.bootstrap_pane, ack.frame_ack.pane_id);
-    try std.testing.expectEqual(@as(u64, 5), ack.frame_ack.frame_id);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "a frame made stale by detach has no state resources or presentation effects" {

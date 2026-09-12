@@ -413,7 +413,7 @@ resize state, schedules terminal responses and the next PTY read, then calls
 `Application.pump` publishes a pane only after ingestion is complete and only when
 that client's prior frame has been acknowledged. `Delivery.prepare` selects
 the attachment cell lane and calls `Attachment.prepareNextCells`. The internal
-`cell.Sync.prepare` in `src/backend/runtime/attachment/cell.zig` renders the
+`CellSync.prepare` in `src/backend/runtime/attachment/CellSync.zig` renders the
 pending VT state, computes a bounded cell diff against that attachment's
 acknowledged buffer and calls `schema.encodePaneFrame`. `startSessionSend`
 writes the `.pane_frame` message to that client. Intermediate visual states may
@@ -431,10 +431,11 @@ capacity and socket failure policy.
 The `.pane_frame` case delegates through the `pane_frames` adapter and
 `ApplyPaneFrameHandler` to `ClientModel.applyPaneFrame`. The model validates the
 base, applies spans to the disposable workspace, reconciles scroll, input modes
-and copy state, then publishes `ClientModel.Version.frame`. The exact commit
-passes through `DeliverPaneFrameHandler` before the adapter updates graphics
-and active-pane resources. A broken base requests a fresh snapshot without
-changing state.
+and copy state, then publishes `ClientModel.Version.frame`. The handler enqueues
+`.frame_ack` after this owned-state commit. The exact commit then passes through
+`DeliverPaneFrameHandler` before the adapter updates graphics and active-pane
+resources. A broken base requests a fresh snapshot without changing state or
+acknowledging the frame.
 
 After dispatch, `client_events` calls `presentation_lifecycle.observe`.
 `Presenter` detects the new frame revision and schedules the paced draw; the
@@ -452,8 +453,11 @@ captures an immutable `presentation_projection` and calls
 3. `flushScreen` calls `presentation.Screen.flush` in
    `src/frontend/presentation/screen_support.zig`;
 4. the screen emits the minimal terminal diff and flushes the host writer;
-5. the lifecycle commits the exact presented pane damage;
-6. the client enqueues `.frame_ack` only after presentation.
+5. successful host-write completion commits the exact presented pane damage
+   and releases graphics credits independently of cell ACKs.
+
+New patches can be applied and acknowledged while this write is pending.
+They update the same model; the next preparation captures its latest state.
 
 ## Proof
 

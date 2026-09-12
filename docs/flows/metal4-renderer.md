@@ -46,7 +46,8 @@ the step 9 inbox/outbox migration can replace it without replacing GPU resources
    they do not block keyboard processing on the CPU.
 6. Commit feedback reports success or failure. It releases the shutdown wait
    group on Metal's feedback queue, then dispatches delivery to the main queue.
-   Only successful delivery can retire client damage and generate an ACK.
+   Only successful delivery can retire captured client damage. Cell ACKs
+   already followed model application, independently of GPU completion.
    An unrecoverable GPU failure closes this client.
 7. Delivery unsets `in_flight` and schedules another update only if work remains.
    Changes arriving during GPU work coalesce into `dirty`; no frame replay is
