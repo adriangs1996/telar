@@ -56,6 +56,14 @@ static void finish(struct transfer *transfer) {
     atomic_store_explicit(&transfer->active, false, memory_order_release);
 }
 
+static void finish_transfers(telar_clipboard *self) {
+    for (size_t index = 0; index < TELAR_CLIPBOARD_TRANSFERS; index++) {
+        if (atomic_load_explicit(&self->transfers[index].active, memory_order_acquire)) {
+            finish(&self->transfers[index]);
+        }
+    }
+}
+
 static void *run(void *context) {
     telar_clipboard *self = context;
     // A receiver may close its pipe without consuming the clipboard. Keep
@@ -123,11 +131,8 @@ static void *run(void *context) {
         }
     }
 
-    for (size_t index = 0; index < TELAR_CLIPBOARD_TRANSFERS; index++) {
-        if (atomic_load_explicit(&self->transfers[index].active, memory_order_acquire)) {
-            finish(&self->transfers[index]);
-        }
-    }
+    atomic_store_explicit(&self->stopping, true, memory_order_release);
+    finish_transfers(self);
 
     return NULL;
 }
@@ -210,6 +215,9 @@ void telar_clipboard_destroy(telar_clipboard *self) {
     atomic_store_explicit(&self->stopping, true, memory_order_release);
     wake(self);
     pthread_join(self->worker, NULL);
+    // A callback admitted before worker failure may publish after its cleanup.
+    // The window producer has stopped before destroy, so this final pass is sole owner.
+    finish_transfers(self);
     close(self->wake[0]);
     close(self->wake[1]);
     free(self);
