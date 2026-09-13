@@ -1,0 +1,26 @@
+{
+  "before": "103 169",
+  "after": "94 148",
+  "shell_pid": 43657,
+  "shell_survived": true,
+  "input_ok": true,
+  "reload": {
+    "failed": false,
+    "previous_atlas": 18,
+    "window_frame": "{{1930, 6}, {1900, 2144}}",
+    "applied_blur": 0,
+    "decorated_frame": "{{1930, 6}, {1900, 2144}}",
+    "same_atlas": 1,
+    "atlas_version": 22,
+    "blur": 0,
+    "opacity": 0.5,
+    "stage": 24,
+    "appearance_frames": 11,
+    "font_size": "66 104",
+    "window_sizes": {
+      "hidden-titlebar": "95 148",
+      "stronger-blur": "95 148",
+      "restored-titlebar": "94 148"
+    }
+  }
+}

@@ -228,8 +228,9 @@ telar gui --config examples/gui.lua --profile presentation
 theme = "vesper"
 gui = {
   window = {
+    titlebar = true,
     background_opacity = 0.95,
-    background_blur = true,
+    background_blur = 20,
     padding = { x = 8, y = 8 },
   },
   font = {
@@ -246,8 +247,9 @@ gui = {
 
 | Setting | Default | Meaning and bounds |
 | --- | --- | --- |
+| `window.titlebar` | `true` | Show the native titlebar. Set `false` to hide it; Telar's workspace, tab and status bars remain available. On Wayland this is a decoration request which the compositor may override. |
 | `window.background_opacity` | `1` | Background opacity, `0..1`. Text, cursor and cell backgrounds differing from the terminal default retain their own opacity. |
-| `window.background_blur` | `false` | Request compositor blur behind a translucent background. The system controls intensity; this is a boolean, not a pixel radius. Has no visible effect at opacity `1`. |
+| `window.background_blur` | `0` | Integer `0..255`: macOS blur radius, with `0` disabling blur. On Wayland any positive value requests compositor blur; its intensity remains compositor-controlled. Has no visible effect at opacity `1`. Legacy `true` means `20`, and `false` means `0`. |
 | `window.padding.x` | `0` | Logical pixels on each horizontal edge, `0..256`, decimals allowed. |
 | `window.padding.y` | `0` | Logical pixels on each vertical edge, `0..256`, decimals allowed. |
 | `font.family` | bundled JetBrains Mono | Installed family name, at most 256 UTF-8 bytes, without NUL. An empty name or `JetBrains Mono` uses the bundled face. |
@@ -265,13 +267,23 @@ It belongs to the window, outside the terminal grid; PTY pixel sizes contain
 only complete cells. Insets shrink when necessary to leave room for at least
 one cell. Changing padding can change `stty size` without changing the font.
 
-macOS uses an `NSVisualEffectView` behind the Metal view. On Wayland, blur uses
-`ext-background-effect-v1` when the compositor advertises blur capability.
+macOS adjusts the WindowServer blur radius through the same optional private
+API used by Ghostty. If the API is unavailable or rejects the request, Telar
+reports it once and falls back to `NSVisualEffectView` with a system-controlled
+intensity. This effect blurs the content behind the window, keeping terminal
+text sharp. On Wayland, blur uses `ext-background-effect-v1` when the compositor
+advertises blur capability; the protocol exposes no radius setting.
 An unsupported compositor keeps transparency and reports the missing blur
 capability once on stderr. A Vulkan surface without premultiplied-alpha support
-falls back to an opaque background with a diagnostic. System effects and
-accessibility settings determine the final blur appearance; Ghostty's numeric
-blur radius is not imported as an equivalent setting.
+falls back to an opaque background with a diagnostic. See
+[Ghostty's blur reference](https://ghostty.org/docs/config/reference#background-blur)
+for the same platform distinction.
+
+Titlebar changes apply on reload. macOS preserves the outer window rectangle
+and keyboard focus, and measures the terminal again when the content area
+changes. A preference changed during a fullscreen transition takes effect
+after returning to a normal window. Wayland uses `xdg-decoration`; without
+that protocol, Telar does not draw its own titlebar.
 
 `theme.terminal` requires explicit RGB values; `"default"` has no exterior
 terminal to refer to here. Child truecolor and OSC palette/default-color overrides still

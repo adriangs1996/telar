@@ -74,9 +74,11 @@ and propagates them to the PTY.
 
 ## Window effects and padding
 
-`gui.window` owns background opacity, a boolean blur request and symmetric
-horizontal/vertical padding. Opacity is finite in `0..1`; each inset is finite
-in `0..256` logical pixels. These are disposable host preferences, never
+`gui.window` owns background opacity, a blur radius, native titlebar visibility
+and symmetric horizontal/vertical padding. Opacity is finite in `0..1`; blur
+is an integer in `0..255`, with zero disabling it. Legacy booleans map to
+`true = 20` and `false = 0`. The titlebar defaults to visible, and each inset
+is finite in `0..256` logical pixels. These are disposable host preferences, never
 runtime authority or a second theme. They inherit through profiles and use
 the same atomic configuration reload as fonts and colors.
 
@@ -88,19 +90,32 @@ counts border pixels as PTY pixels. Retained mesh keys already include the
 resolved rectangle, so moving the origin invalidates exactly that geometry.
 Opacity and blur changes do not invalidate cell meshes or the glyph atlas.
 
-`native.Frame` carries straight RGBA background and a blur flag. Both GPU
+`native.Frame` carries straight RGBA background, a numeric blur radius and
+titlebar visibility. These values cross only the in-process native ABI; they
+do not change the runtime protocol. Both GPU
 backends clear their target with premultiplied RGB and blend straight-alpha
 quads into that target. A different explicit cell background and ordinary ink
 remain opaque; cells matching the terminal background reuse the clear color.
 No extra Telar render pass or frame queue is introduced.
 
-On macOS, `TelarWindowBackground` owns one effect view behind `TelarView`.
-It changes window/layer opacity and effect visibility only when those flags
-change. Window alpha stays at one. The public
-[NSVisualEffectView](https://developer.apple.com/documentation/appkit/nsvisualeffectview)
-API supplies behind-window blur with the `underWindowBackground` material;
-its intensity is system-managed. Closing the window releases the effect with
-the content hierarchy, after the existing renderer shutdown.
+On macOS, `TelarWindowBackground` owns background effects behind `TelarView`.
+`TelarBackgroundBlur` isolates optional lookup of the private WindowServer
+functions used by Ghostty, including `CGSSetWindowBackgroundBlurRadius`.
+It sets the radius only when the effective setting changes. Window alpha
+stays at one. If the functions are unavailable or reject the radius, one
+diagnostic accompanies a public `NSVisualEffectView` fallback with
+system-managed intensity. Zero blur and an opaque background disable the
+effect. Closing the window releases it with the content hierarchy after the
+existing renderer shutdown.
+
+`TelarWindow` owns titlebar visibility and defers style changes during native
+fullscreen. A hidden titlebar keeps the window's titled style and adds
+`FullSizeContentView`, hiding the title and standard buttons. It preserves the
+outer window frame and keyboard focus. When that change alters the viewport,
+`TelarView` discards the prepared presentation token with `delivered = 0` and
+prepares a frame using the new size. Layout notifications cannot reenter that
+preparation. The ordinary `ResizeHostHandler` updates the terminal grid; no
+old-size frame is submitted to Metal.
 
 On Wayland, `background_effect` owns at most one effect manager and one effect
 surface on the window thread. It negotiates
@@ -116,7 +131,16 @@ premultiplied convention. It keeps that mode when opacity changes, without
 rebuilding the swapchain. An opaque fallback preserves the original background
 color and logs once if transparency was requested. Missing compositor blur
 support logs once and retains ordinary transparency. The platform controls the
-blur algorithm; Telar does not expose an unsupported numeric radius.
+blur algorithm; positive radii map to the same enabled request on Wayland.
+
+`linux/decoration` negotiates `xdg-decoration` before the first surface commit
+and waits for its initial configure before permitting a buffer attachment.
+Visible titlebars request server-side decorations; hidden titlebars request
+client-side decoration with no Telar titlebar. The compositor may override that
+preference. Reload updates an existing object only when the preference changes,
+and fullscreen preserves the requested normal-window mode. Without the protocol
+Telar does not draw a titlebar. Teardown releases decoration objects before the
+toplevel; a manager advertised after mapping cannot create a late decoration.
 
 ## Hot reload
 
@@ -254,9 +278,18 @@ config, font resources, cursor clock and rendering contracts.
   Weight-only reloads preserve PTY geometry; inactive settings preserve the atlas.
 - `zig build test-gui-window`: a real macOS window wakes once for a deadline,
   parks afterwards, coalesces draw requests, toggles transparent/blurred/opaque
-  state and closes with a submission alive. The Linux test checks swapchain
+  state, changes numeric blur and titlebar visibility, enters/exits fullscreen
+  with a pending preference, and closes with a submission alive. Titlebar
+  changes preserve focus and retire frames prepared with the previous viewport.
+  The Linux test checks swapchain
   alpha mode and premultiplied clear colors across Vulkan retries and effect
   toggles, including a compositor without blur support.
+- `zig build test-gui-window-options` on Linux: decoration negotiation and
+  configure ordering, compositor overrides, global removal and destruction,
+  plus idempotent blur and decoration requests across repeated frames.
+
+[Window option validation](../validation/gui-window-options/README.md) records
+native reload results and the compositor limitations observed on 2026-09-13.
 
 Native integration also accepts a Lua configuration. On macOS,
 `python3 tools/gui_lifecycle.py zig-out/bin/telar /tmp/telar-gui-check --config examples/gui.lua --capture`

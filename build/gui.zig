@@ -77,6 +77,7 @@ pub fn add(b: *std.Build, app: Application) ?*std.Build.Module {
             keyboard_module.linkSystemLibrary("xkbcommon", .{});
             linux_gui.addCursor(b, keyboard_module);
             linux_gui.addCursorTests(b, .{ .target = app.modules.target, .optimize = app.modules.optimize, .link_libc = true });
+            linux_gui.addWindowOptionsTests(b, .{ .target = app.modules.target, .optimize = app.modules.optimize, .link_libc = true });
             const keyboard_test = b.addExecutable(.{ .name = "gui-keyboard-test", .root_module = keyboard_module });
             b.step("test-gui-keyboard", "Verify Wayland repeat timing and held key cancellation").dependOn(&b.addRunArtifact(keyboard_test).step);
             const clipboard_module = b.createModule(.{ .target = app.modules.target, .optimize = app.modules.optimize, .link_libc = true });

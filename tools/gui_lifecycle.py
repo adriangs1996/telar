@@ -41,7 +41,11 @@ def main():
         with (directory / 'gui.log').open('w') as log:
             subprocess.run([str(binary), 'gui', *config_args, '/bin/sh'],
                            env=dict(env, DYLD_INSERT_LIBRARIES=str(library)), cwd=directory,
-                           stdout=log, stderr=log, timeout=35 if args.reload else 20, check=True)
+                           stdout=log, stderr=log, timeout=50 if args.reload else 20, check=True)
+        if args.reload:
+            probe = json.loads((directory / 'reload.json').read_text())
+            if probe['failed']:
+                raise RuntimeError(f'hot reload verification failed: {probe}')
         before = (directory / 'before').read_text().strip()
         after = (directory / 'after').read_text().strip()
         pid = int((directory / 'child.pid').read_text())
@@ -51,10 +55,13 @@ def main():
         if before == after or not result['input_ok']:
             raise RuntimeError(f'lifecycle verification failed: {result}')
         if args.reload:
-            result['reload'] = json.loads((directory / 'reload.json').read_text())
+            result['reload'] = probe
             result['reload']['font_size'] = (directory / 'font-size').read_text().strip()
-            if (result['reload']['failed'] or
-                    result['reload']['font_size'] == before or
+            result['reload']['window_sizes'] = {
+                name: (directory / (name + '-size')).read_text().strip()
+                for name in ('hidden-titlebar', 'stronger-blur', 'restored-titlebar')
+            }
+            if (result['reload']['font_size'] == before or
                     (directory / 'invalid-size').read_text().strip() != result['reload']['font_size'] or
                     int((directory / 'after.pid').read_text()) != pid):
                 raise RuntimeError(f'hot reload verification failed: {result}')

@@ -5,8 +5,9 @@ return telar.config({
   theme = "vesper",
   gui = {
     window = {
+      titlebar = true, -- Set false to hide the native titlebar.
       background_opacity = 0.95,
-      background_blur = true,
+      background_blur = 20, -- 0 disables; Wayland controls the positive intensity.
       padding = { x = 8, y = 8 },
     },
     font = {
