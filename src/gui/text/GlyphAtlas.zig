@@ -20,6 +20,10 @@ const Id = @import("font_id.zig").Id;
 const GlyphTransform = @import("GlyphTransform.zig");
 const GlyphFailures = @import("GlyphFailures.zig");
 const Braille = @import("Braille.zig");
+const Box = @import("BoxDrawing.zig");
+const BoxGrid = @import("BoxGrid.zig");
+const BoxCurve = @import("BoxCurve.zig");
+const BoxCache = @import("BoxCache.zig");
 const Rect = @import("../render/Rect.zig");
 
 extern fn FT_GlyphSlot_Embolden(freetype.c.FT_GlyphSlot) void;
@@ -48,6 +52,7 @@ shaping_cache: ShapingCache,
 shape_calls: usize = 0,
 raster_attempts: usize = 0,
 failed_glyphs: GlyphFailures = .{},
+boxes: BoxCache = .{},
 glyphs: std.AutoHashMapUnmanaged(u64, GlyphSlot) = .empty,
 
 /// `options.font` must outlive the atlas: FreeType borrows memory faces.
@@ -85,6 +90,7 @@ pub fn init(allocator: std.mem.Allocator, options: AtlasOptions) !GlyphAtlas {
         .shaping_buffer = shaping_buffer,
         .shaping_cache = shaping_cache,
     };
+    try atlas.initBoxFallback();
     try atlas.select(options.pixel_height);
     return atlas;
 }
@@ -144,6 +150,10 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
         return pattern.paint(current, list);
     }
 
+    if (Box.parse(run.text) != null) {
+        return atlas.paintBox(run, list);
+    }
+
     if (run.pixel_height == atlas.pixel_height) {
         if (atlas.shaping_cache.find(run.text)) |cached| {
             return atlas.paint(.{ .run = run, .shaped = cached }, list);
@@ -161,6 +171,7 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
         current.text = part.text;
         current.x += advance;
         advance += switch (part.source) {
+            .box => try atlas.paintBox(current, list),
             .font => font: {
                 try atlas.select(run.pixel_height);
                 break :font try atlas.paint(.{ .run = current, .shaped = try atlas.shape(part) }, list);
@@ -173,6 +184,92 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
     }
 
     return advance;
+}
+
+fn initBoxFallback(atlas: *GlyphAtlas) !void {
+    const extent = BoxCache.fallback_extent;
+    const grid = try BoxGrid.init(.{ .x = 0, .y = 0, .width = @floatFromInt(extent[0]), .height = @floatFromInt(extent[1]) }, 1);
+    for (&atlas.boxes.fallback, 0..) |*slot_value, curve_index| {
+        slot_value.* = try atlas.rasterBox(grid, @intCast(curve_index));
+    }
+}
+
+fn paintBox(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
+    const box = Box.parse(run.text).?;
+    var current = run;
+    const bounds = try atlas.gridBounds(run);
+    current.cell_bounds = bounds;
+    const face = atlas.fonts.primary.face.*;
+    const thickness: f32 = if (face.units_per_EM == 0 or face.underline_thickness <= 0)
+        @max(1, @ceil(@as(f32, @floatFromInt(run.pixel_height)) / 16))
+    else
+        @max(1, @ceil(@as(f32, @floatFromInt(face.underline_thickness)) * @as(f32, @floatFromInt(run.pixel_height)) / @as(f32, @floatFromInt(face.units_per_EM))));
+    var grid = try BoxGrid.init(bounds, thickness);
+    if (bounds.width == 0 or bounds.height == 0) {
+        return bounds.width;
+    }
+
+    if (box.curve()) |curve_index| {
+        var slot_value = atlas.boxes.fallback[curve_index];
+        if (atlas.boxes.entry(grid, curve_index)) |entry| {
+            if (entry.pending) {
+                entry.pending = false;
+                entry.slot = atlas.rasterBox(grid, curve_index) catch |err| switch (err) {
+                    error.AtlasFull, error.GlyphTooLarge => null,
+                };
+                if (entry.slot != null) {
+                    atlas.boxes.rasterizations += 1;
+                    atlas.version +%= 1;
+                }
+            }
+
+            slot_value = entry.slot orelse slot_value;
+        }
+
+        try list.push(.{
+            .x = run.x + bounds.x,
+            .y = run.y + bounds.y,
+            .width = bounds.width,
+            .height = bounds.height,
+            .u0 = slot_value.u0,
+            .v0 = slot_value.v0,
+            .u1 = slot_value.u1,
+            .v1 = slot_value.v1,
+            .r = run.color.r,
+            .g = run.color.g,
+            .b = run.color.b,
+            .a = run.color.a,
+        });
+    } else {
+        grid.draw(box);
+        const ink = try @import("BoxInk.zig").init(&grid);
+        try ink.paint(current, list);
+    }
+
+    return bounds.width;
+}
+
+fn rasterBox(atlas: *GlyphAtlas, grid: BoxGrid, curve_index: u3) !GlyphSlot {
+    if (grid.width > BoxCache.raster_limit or grid.height > BoxCache.raster_limit) {
+        return error.GlyphTooLarge;
+    }
+
+    const width: u16 = @intFromFloat(@ceil(grid.width));
+    const height: u16 = @intFromFloat(@ceil(grid.height));
+    const origin = try atlas.pack(.{ width, height });
+    const curve = BoxCurve.init(grid, curve_index);
+    curve.rasterize(.{ .pixels = atlas.pixels[origin[1] * side + origin[0] ..], .stride = side, .width = width, .height = height });
+    const scale: f32 = 1.0 / @as(f32, @floatFromInt(side));
+    return .{
+        .u0 = @as(f32, @floatFromInt(origin[0])) * scale,
+        .v0 = @as(f32, @floatFromInt(origin[1])) * scale,
+        .u1 = @as(f32, @floatFromInt(origin[0] + width)) * scale,
+        .v1 = @as(f32, @floatFromInt(origin[1] + height)) * scale,
+        .width = width,
+        .height = height,
+        .left = 0,
+        .top = 0,
+    };
 }
 
 fn gridBounds(atlas: *GlyphAtlas, run: TextRun) !Rect {

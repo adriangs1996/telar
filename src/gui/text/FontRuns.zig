@@ -2,6 +2,7 @@
 const core = @import("telar-core");
 const FontSet = @import("FontSet.zig");
 const FontRun = @import("FontRun.zig");
+const Box = @import("BoxDrawing.zig");
 const Braille = @import("Braille.zig");
 const FontRuns = @This();
 
@@ -17,6 +18,10 @@ pub fn next(runs: *FontRuns) ?FontRun {
         return .{ .text = runs.iterator.bytes[start..runs.iterator.index], .source = .{ .braille = pattern }, .columns = first.width };
     }
 
+    if (Box.parse(first.bytes)) |box| {
+        return .{ .text = runs.iterator.bytes[start..runs.iterator.index], .source = .{ .box = box }, .columns = first.width };
+    }
+
     const id = runs.fonts.source(first.bytes);
     if (id != .primary) {
         return .{ .text = runs.iterator.bytes[start..runs.iterator.index], .source = .{ .font = id }, .columns = first.width };
@@ -26,7 +31,7 @@ pub fn next(runs: *FontRuns) ?FontRun {
     while (true) {
         const previous = runs.iterator.index;
         const cluster = runs.iterator.next() orelse break;
-        if (Braille.parse(cluster.bytes) != null or runs.fonts.source(cluster.bytes) != id) {
+        if (Braille.parse(cluster.bytes) != null or Box.parse(cluster.bytes) != null or runs.fonts.source(cluster.bytes) != id) {
             runs.iterator.index = previous;
             break;
         }
@@ -51,6 +56,20 @@ test "Braille separates font spans without splitting combining graphemes" {
     try std.testing.expectEqual(@as(u32, 1), braille.columns);
     const after = runs.next().?;
     try std.testing.expectEqualStrings("\u{2802}\u{301}ffi", after.text);
+    try std.testing.expectEqual(.font, std.meta.activeTag(after.source));
+    try std.testing.expectEqual(@as(?FontRun, null), runs.next());
+}
+
+test "box drawing keeps contextual text and marked boxes in whole font spans" {
+    const std = @import("std");
+    var atlas = try @import("GlyphAtlas.zig").init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    defer atlas.deinit();
+    var runs: FontRuns = .{ .fonts = &atlas.fonts, .iterator = .{ .bytes = "office\u{301}╭│\u{301}ffi" } };
+    try std.testing.expectEqualStrings("office\u{301}", runs.next().?.text);
+    const box = runs.next().?;
+    try std.testing.expectEqual(@as(u21, 0x256d), box.source.box.codepoint);
+    const after = runs.next().?;
+    try std.testing.expectEqualStrings("│\u{301}ffi", after.text);
     try std.testing.expectEqual(.font, std.meta.activeTag(after.source));
     try std.testing.expectEqual(@as(?FontRun, null), runs.next());
 }
