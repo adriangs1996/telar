@@ -7,7 +7,7 @@ test "native scene captures terminal and thread damage in the same presentation"
     try session.bootstrap();
     try session.receiveFrame(1);
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
-    try std.testing.expectEqual(pane.id, session.gui.cursorTarget().pane_id.?);
+    try std.testing.expectEqual(pane.id, session.gui.cursorTarget().pane_id);
     const layout = &session.gui.app.model.activeTabModel().?.layout;
     try std.testing.expect(layout.setSurface(pane.id, .thread));
     const token = try session.gui.prepare(&session.renderer);
