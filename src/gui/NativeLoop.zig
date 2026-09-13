@@ -18,7 +18,20 @@ pub fn init(io: std.Io) !Loop {
         return error.WakePipeFailed;
     }
 
-    return .{ .io = io, .fds = fds, .inbox = .init(io, .{ .context = @intCast(fds[1]), .notify_fn = wake }), .configuration = .{ .io = io } };
+    return .{
+        .io = io,
+        .fds = fds,
+        .inbox = .init(
+            io,
+            .{
+                .context = @intCast(fds[1]),
+                .notify_fn = wake,
+            },
+        ),
+        .configuration = .{
+            .io = io,
+        },
+    };
 }
 
 fn wake(fd: usize) void {
@@ -39,7 +52,16 @@ pub fn startRead(loop: *Loop, state: *client.RuntimeTransportState) !void {
 }
 
 pub fn startSend(loop: *Loop, request: @import("RuntimeSend.zig")) !void {
-    try loop.inbox.start(.sent, .{ send, .{ loop.io, request } });
+    try loop.inbox.start(
+        .sent,
+        .{
+            send,
+            .{
+                loop.io,
+                request,
+            },
+        },
+    );
 }
 
 fn send(io: std.Io, request: @import("RuntimeSend.zig")) anyerror!void {

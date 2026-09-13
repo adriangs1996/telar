@@ -19,14 +19,29 @@ cursor_clock: @import("CursorClock.zig") = .{},
 input_revision: u64 = 0,
 
 pub fn init(params: client.ClientInit) !Application {
-    var renderer = try Renderer.configured(params.gpa, params.io, .{ .config = params.options.gui, .theme = params.options.theme.terminal });
+    var renderer = try Renderer.configured(
+        params.gpa,
+        params.io,
+        .{
+            .config = params.options.gui,
+            .theme = params.options.theme.terminal,
+        },
+    );
     errdefer renderer.deinit();
-    return .{ .params = params, .driver = try .init(params.io), .renderer = renderer, .cursor_clock = .{ .config = params.options.gui.cursor } };
+    return .{
+        .params = params,
+        .driver = try .init(params.io),
+        .renderer = renderer,
+        .cursor_clock = .{
+            .config = params.options.gui.cursor,
+        },
+    };
 }
 
 pub fn deinit(app: *Application) void {
     app.driver.deinit();
     app.renderer.deinit();
+
     if (app.gui) |gui| {
         gui.deinit();
     } else {
@@ -48,7 +63,15 @@ pub fn deinit(app: *Application) void {
 /// Runs the window and returns only after native GPU consumers have stopped.
 /// Example: `const status = try app.run("Telar");`
 pub fn run(app: *Application, title: [*:0]const u8) !u8 {
-    const callbacks: native.Callbacks = .{ .render = render, .pump = pump, .complete = complete, .input = input, .wake_fd = app.driver.fds[0], .wakeup_after = wakeupAfter, .pointer_shape = pointerShape };
+    const callbacks: native.Callbacks = .{
+        .render = render,
+        .pump = pump,
+        .complete = complete,
+        .input = input,
+        .wake_fd = app.driver.fds[0],
+        .wakeup_after = wakeupAfter,
+        .pointer_shape = pointerShape,
+    };
     const result = native.telar_gui_run(title, app, &callbacks);
     if (app.failure) |err| {
         return err;
