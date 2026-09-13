@@ -222,7 +222,7 @@ test "maximum URI length remains bounded inside a larger row window" {
 }
 
 test "matching retains supported schemes and does not join physical rows" {
-    var buffer = try testBuffer(&.{ "https://example", ".com/path", "mailto:user@example.com", "ssh://example.com", "./src/main.zig" });
+    var buffer = try testBuffer(&.{ "https://example", ".com/path", "javascript:alert(1)", "data:text/plain,hi", "./src/main.zig" });
     defer buffer.deinit();
     const scroll: ScrollType = .{ .total_rows = 5, .offset = 0 };
     const found = match(&buffer, scroll, .{ .x = 8, .y = 0 }).?;

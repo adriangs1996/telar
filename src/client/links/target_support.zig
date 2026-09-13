@@ -9,5 +9,5 @@ test "targets own one classified URI" {
 
     try std.testing.expectEqual(SchemeType.https, target.scheme);
     try std.testing.expectEqualStrings("https://example.com/path", target.uri());
-    try std.testing.expectError(error.InvalidLink, Target.init("ssh://example.com"));
+    try std.testing.expectError(error.InvalidLink, Target.init("javascript:alert(1)"));
 }

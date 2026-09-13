@@ -12,12 +12,24 @@ pub const Scheme = enum {
     file,
     http,
     https,
+    external,
 };
 
 const prefixes = [_]Prefix{
     .{ .text = "https://", .scheme = .https },
     .{ .text = "http://", .scheme = .http },
     .{ .text = "file://", .scheme = .file },
+    .{ .text = "mailto:", .scheme = .external },
+    .{ .text = "ftp://", .scheme = .external },
+    .{ .text = "ssh:", .scheme = .external },
+    .{ .text = "git://", .scheme = .external },
+    .{ .text = "tel:", .scheme = .external },
+    .{ .text = "magnet:", .scheme = .external },
+    .{ .text = "ipfs://", .scheme = .external },
+    .{ .text = "ipns://", .scheme = .external },
+    .{ .text = "gemini://", .scheme = .external },
+    .{ .text = "gopher://", .scheme = .external },
+    .{ .text = "news:", .scheme = .external },
 };
 
 /// Classifies one complete supported URI after validating its structure.
@@ -26,7 +38,7 @@ const prefixes = [_]Prefix{
 /// const scheme = link.classify("https://example.com").?;
 /// ```
 pub fn classify(uri: []const u8) ?Scheme {
-    if (uri.len == 0 or uri.len > max_uri_bytes or containsSeparator(uri)) {
+    if (uri.len == 0 or uri.len > max_uri_bytes or containsSeparator(uri) or !std.unicode.utf8ValidateSlice(uri)) {
         return null;
     }
 
@@ -45,6 +57,15 @@ pub fn classify(uri: []const u8) ?Scheme {
             };
 
             if (path.len == 0 or path[0] != '/') {
+                return null;
+            }
+        },
+        .external => {
+            if (uri.len <= parsed.scheme.len + 1) {
+                return null;
+            }
+
+            if (std.mem.startsWith(u8, uri[parsed.scheme.len + 1 ..], "//") and parsed.host == null) {
                 return null;
             }
         },
@@ -76,6 +97,10 @@ pub fn extractAt(line: []const u8, byte_offset: usize) ?Match {
         }
 
         const raw_end = tokenEnd(line, index);
+        if (raw_end < line.len and !isSeparator(line[raw_end])) {
+            continue;
+        }
+
         const end = trimEnd(line[index..raw_end]) + index;
         if (byte_offset >= end) {
             continue;
@@ -104,6 +129,13 @@ fn supportedScheme(value: []const u8) ?Scheme {
         return .https;
     }
 
+    const external = [_][]const u8{ "mailto", "ftp", "ssh", "git", "tel", "magnet", "ipfs", "ipns", "gemini", "gopher", "news" };
+    for (external) |scheme| {
+        if (std.ascii.eqlIgnoreCase(value, scheme)) {
+            return .external;
+        }
+    }
+
     return null;
 }
 
@@ -129,7 +161,7 @@ fn validStart(line: []const u8, index: usize) bool {
 }
 
 fn tokenEnd(line: []const u8, start: usize) usize {
-    const limit = @min(line.len, start +| max_uri_bytes);
+    const limit = @min(line.len, start +| (max_uri_bytes + 1));
     var end = start;
     while (end < limit and !isSeparator(line[end])) : (end += 1) {}
 
@@ -219,12 +251,35 @@ test "classification accepts supported structured URIs" {
 }
 
 test "classification rejects unsupported and malformed URIs" {
-    try std.testing.expect(classify("ssh://example.com") == null);
+    try std.testing.expect(classify("javascript:alert(1)") == null);
     try std.testing.expect(classify("https://") == null);
     try std.testing.expect(classify("https://example.com/a b") == null);
     try std.testing.expect(classify("file://relative") == null);
     try std.testing.expect(classify("file:relative") == null);
     try std.testing.expect(classify("x" ** (max_uri_bytes + 1)) == null);
+}
+
+test "explicit terminal URL schemes use an allowlisted external handler" {
+    const urls = [_][]const u8{ "mailto:dev@example.com", "ftp://example.com/pub", "ssh://example.com", "git://example.com/repo", "tel:+1234", "magnet:?xt=urn:btih:1234", "ipfs://example", "ipns://example", "gemini://example.com", "gopher://example.com", "news:comp.lang.zig" };
+    for (urls) |uri| {
+        try std.testing.expectEqual(Scheme.external, classify(uri).?);
+        const found = extractAt(uri, uri.len - 1).?;
+        try std.testing.expectEqualStrings(uri, found.text(uri));
+    }
+
+    const rejected = [_][]const u8{ "data:text/plain,hello", "javascript:alert(1)", "command:rm", "mailto:", "ssh://", "https://example.com/\xff" };
+    for (rejected) |uri| {
+        try std.testing.expectEqual(@as(?Scheme, null), classify(uri));
+    }
+}
+
+test "overlong URL tokens never become truncated clickable destinations" {
+    const exact = "https://example.com/" ++ "x" ** (max_uri_bytes - 20);
+    try std.testing.expectEqual(@as(usize, max_uri_bytes), exact.len);
+    try std.testing.expect(extractAt(exact, 15) != null);
+    const longer = exact ++ "suffix";
+    try std.testing.expect(extractAt(longer, 15) == null);
+    try std.testing.expect(extractAt(longer, longer.len - 1) == null);
 }
 
 test "extraction returns the URI under every one of its bytes" {

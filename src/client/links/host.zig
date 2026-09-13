@@ -1,4 +1,4 @@
-//! Operating-system adapter for opening web links with the default handler.
+//! Operating-system adapter for opening allowlisted URLs with the default handler.
 
 const std = @import("std");
 const TargetType = @import("LinkTarget.zig");
@@ -8,14 +8,14 @@ const command_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(5) },
 };
 
-/// Opens one HTTP target through the host's registered URL handler.
+/// Opens one classified external target through the host's registered handler.
 /// Runs only on a client worker.
 ///
 /// ```zig
 /// try open(io, target);
 /// ```
 pub fn open(io: std.Io, target: TargetType) !void {
-    if (target.scheme != .http and target.scheme != .https) {
+    if (target.scheme == .file) {
         return error.UnsupportedLinkScheme;
     }
 

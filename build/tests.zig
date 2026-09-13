@@ -120,6 +120,7 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         .{ .path = "src/kitty_protocol/kitty_protocol.zig" },
         .{ .path = "src/core/ui/ui_tests.zig" },
         .{ .path = "src/core/select.zig" },
+        .{ .path = "src/core/link.zig" },
         // Only referenced through non-pub imports elsewhere, so their tests
         // never run unless they are their own suite roots.
         .{ .path = "src/core/graphics.zig" },

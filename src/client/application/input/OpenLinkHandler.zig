@@ -16,6 +16,6 @@ pub fn execute(handler: *OpenLinkHandler, target: TargetType) !void {
             handler.effects.context,
             try FilePathType.init(&target),
         ),
-        .http, .https => try handler.effects.open_external(handler.effects.context, target),
+        .http, .https, .external => try handler.effects.open_external(handler.effects.context, target),
     }
 }
