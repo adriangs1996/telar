@@ -70,6 +70,12 @@
 - (void)keyDown:(NSEvent *)event {
   text_phase = event.isARepeat ? 2 : 1;
   text_physical = event.keyCode < 256 ? event.keyCode + 1 : 0;
+  [self handleKeyDown:event];
+  text_physical = 0;
+  text_phase = 1;
+}
+
+- (void)handleKeyDown:(NSEvent *)event {
   if ((event.modifierFlags & NSEventModifierFlagCommand) &&
       (event.modifierFlags & NSEventModifierFlagControl) &&
       [[event.charactersIgnoringModifiers lowercaseString] isEqualToString:@"f"]) {
@@ -163,8 +169,6 @@
 
     [self interpretKeyEvents:@[ event ]];
   }
-
-  text_physical = 0;
 }
 
 - (void)keyUp:(NSEvent *)event {

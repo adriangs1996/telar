@@ -13,6 +13,15 @@ splits, pane fullscreen and detach therefore follow the existing application
 handlers and runtime messages. Prefix status is projected from this effective
 router, and a replaceable `.binding` timer expires ordinary partial chords.
 
+macOS disables press-and-hold accents in the process's volatile argument defaults
+before creating `NSApplication`. This lets AppKit deliver key repeats at the user's
+system delay and rate, without writing persistent or global preferences. Each
+`keyDown` scopes the phase and physical identity to its synchronous text commit;
+a later IME commit starts without inheriting that held key. Wayland uses the
+compositor's `repeat_info` delay and rate through the existing input deadline.
+A delayed wake emits one repeat, and key release, focus loss or a zero repeat rate
+cancels the deadline.
+
 Native keycodes retain press ownership through repeats and releases. Binding
 reload inherits those physical leases while cancelling partial chords; releasing
 a held binding cannot send its key to a newly selected pane. Committed IME text
@@ -73,3 +82,10 @@ stale geometry and attachment generations cannot redirect input, hidden panes
 receive their releases, saturation cannot strand a physical lease, and invalid
 or oversized input is rejected without partial admission. `test-gui-window` exercises
 the actual native AppKit entrypoints alongside GPU delivery and window closure.
+
+Held-key regressions exercise AppKit press/repeat/repeat/release callbacks for
+letters, shifted letters, arrows, backspace and Ctrl/Alt keys, plus delayed IME
+commit and focus cancellation. `test-gui-keyboard` tests Wayland listener callbacks
+with an injected clock, including compositor timing and cancellation. The GUI
+navigation tests check the resulting legacy and Kitty bytes and keep repeated
+input on its originally acquired pane when focus changes.

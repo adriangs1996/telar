@@ -352,3 +352,59 @@ fn drainInput(session: *Session) !void {
         try session.settle();
     }
 }
+
+test "native held keys repeat into legacy and Kitty children and stop after release" {
+    const Event = @import("../native/native.zig").InputEvent;
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    try session.receiveFrame(1);
+    const fixtures = .{
+        .{ Event{ .kind = 1, .text = "j".ptr, .len = 1, .physical = 39 }, "jjj", "\x1b[106u\x1b[106;1:2u\x1b[106;1:2u\x1b[106;1:3u" },
+        .{ Event{ .kind = 3, .code = 6, .physical = 126 }, "\x1b[B\x1b[B\x1b[B", "\x1b[B\x1b[1;1:2B\x1b[1;1:2B\x1b[1;1:3B" },
+        .{ Event{ .kind = 3, .code = 3, .physical = 52 }, "\x7f\x7f\x7f", "\x1b[127u\x1b[127;1:2u\x1b[127;1:2u\x1b[127;1:3u" },
+        .{ Event{ .kind = 4, .code = 'j', .mods = 4, .physical = 39 }, "\n\n\n", "\x1b[106;5u\x1b[106;5:2u\x1b[106;5:2u\x1b[106;5:3u" },
+    };
+    inline for (.{ @as(u8, 0), @as(u8, 10) }) |flags| {
+        session.gui.app.model.workspace.findPane(Session.pane_id).?.input_modes.kitty_keyboard_flags = flags;
+        inline for (fixtures) |fixture| {
+            const before = session.input_len;
+            var event = fixture[0];
+            try session.gui.input.accept(event);
+            event.phase = 2;
+            try session.gui.input.accept(event);
+            try session.gui.input.accept(event);
+            event.phase = 3;
+            try session.gui.input.accept(event);
+            event.phase = 2;
+            try session.gui.input.accept(event);
+            try drainInput(session);
+            try std.testing.expectEqualStrings(if (flags == 0) fixture[1] else fixture[2], session.input[before..session.input_len]);
+            try std.testing.expectEqual(@as(usize, 0), session.gui.input.router.leases.count());
+        }
+    }
+}
+
+test "native application repeat keeps its pane when focus changes" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    try session.receiveFrame(1);
+    const app = &session.gui.app;
+    const model = app.model.activeTabModel().?;
+    const second: core.PaneId = @enumFromInt(11);
+    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    _ = model.layout.focusPane(Session.pane_id);
+    try session.gui.input.accept(.{ .kind = 1, .text = "j".ptr, .len = 1, .physical = 39 });
+    try drainInput(session);
+    _ = model.layout.focusPane(second);
+    try session.gui.input.accept(.{ .kind = 1, .text = "j".ptr, .len = 1, .physical = 39, .phase = 2 });
+    try session.gui.input.drain(app);
+    const request = try core.decodeClient(session.pending.?);
+    try std.testing.expectEqual(Session.pane_id, request.pane_input.pane_id);
+    try std.testing.expectEqualStrings("j", request.pane_input.bytes);
+    try session.settle();
+    try session.gui.input.accept(.{ .kind = 4, .code = 'j', .physical = 39, .phase = 3 });
+    try drainInput(session);
+    try std.testing.expectEqual(second, model.layout.focused().?);
+}

@@ -68,6 +68,15 @@ pub fn add(b: *std.Build, app: Application) ?*std.Build.Module {
             });
             const worker_test = b.addExecutable(.{ .name = "gui-worker-test", .root_module = worker_module });
             b.step("test-gui-worker", "Verify joining a consumer before releasing its borrowed frame").dependOn(&b.addRunArtifact(worker_test).step);
+            const keyboard_module = b.createModule(.{ .target = app.modules.target, .optimize = app.modules.optimize, .link_libc = true });
+            keyboard_module.addCSourceFiles(.{
+                .files = &.{ "src/gui/linux/input_test.c", "src/gui/linux/pointer.c", "src/gui/linux/clipboard.c" },
+                .flags = &.{ "-std=c11", "-D_POSIX_C_SOURCE=200809L" },
+            });
+            keyboard_module.linkSystemLibrary("wayland-client", .{});
+            keyboard_module.linkSystemLibrary("xkbcommon", .{});
+            const keyboard_test = b.addExecutable(.{ .name = "gui-keyboard-test", .root_module = keyboard_module });
+            b.step("test-gui-keyboard", "Verify Wayland repeat timing and held key cancellation").dependOn(&b.addRunArtifact(keyboard_test).step);
             const clipboard_module = b.createModule(.{ .target = app.modules.target, .optimize = app.modules.optimize, .link_libc = true });
             clipboard_module.addCSourceFile(.{ .file = b.path("src/gui/linux/clipboard_test.c"), .flags = &.{"-std=c11"} });
             clipboard_module.linkSystemLibrary("wayland-client", .{});

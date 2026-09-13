@@ -3,6 +3,7 @@
 #import <QuartzCore/CAMetalLayer.h>
 #import <objc/runtime.h>
 #include "telar_gui.h"
+#import "../macos/TelarTextInputView.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -16,6 +17,68 @@ static int deferred;
 static unsigned appearance_phase;
 static unsigned appearance_checked;
 static double pointer_x, pointer_y;
+static bool checking_repeat;
+static int repeat_inputs;
+static telar_gui_input expected_repeat;
+
+static NSEvent *key_event(NSView *view, unsigned short key, NSString *text, NSEventModifierFlags mods, uint32_t phase) {
+    return [NSEvent keyEventWithType:phase == 3 ? NSEventTypeKeyUp : NSEventTypeKeyDown
+                           location:NSZeroPoint modifierFlags:mods timestamp:0
+                       windowNumber:view.window.windowNumber context:nil
+                         characters:text charactersIgnoringModifiers:text
+                          isARepeat:phase == 2 keyCode:key];
+}
+
+static void verify_repeat(TelarTextInputView *view, unsigned short key, NSString *text, NSEventModifierFlags mods, telar_gui_input expected) {
+    checking_repeat = true;
+    expected_repeat = expected;
+    expected_repeat.physical = key + 1;
+    const int start = repeat_inputs;
+    for (uint32_t phase = 1; phase <= 3; phase++) {
+        expected_repeat.phase = phase;
+        if (phase == 3) {
+            if (expected_repeat.kind == 1) {
+                expected_repeat.kind = 4;
+                expected_repeat.code = [text characterAtIndex:0];
+                expected_repeat.text = NULL;
+                expected_repeat.len = 0;
+            }
+            [view keyUp:key_event(view, key, text, mods, phase)];
+        } else {
+            [view keyDown:key_event(view, key, text, mods, phase)];
+            if (phase == 2) [view keyDown:key_event(view, key, text, mods, phase)];
+        }
+    }
+    if (repeat_inputs != start + 4) failed++;
+    checking_repeat = false;
+}
+
+static void verify_keyboard(TelarTextInputView *view) {
+    if ([NSUserDefaults.standardUserDefaults boolForKey:@"ApplePressAndHoldEnabled"]) failed++;
+    verify_repeat(view, 38, @"j", 0, (telar_gui_input){.kind = 1, .text = (const uint8_t *)"j", .len = 1});
+    verify_repeat(view, 38, @"J", NSEventModifierFlagShift, (telar_gui_input){.kind = 1, .text = (const uint8_t *)"J", .len = 1});
+    verify_repeat(view, 125, @"\uf701", 0, (telar_gui_input){.kind = 3, .code = 6});
+    verify_repeat(view, 51, @"\177", 0, (telar_gui_input){.kind = 3, .code = 3});
+    verify_repeat(view, 38, @"j", NSEventModifierFlagControl, (telar_gui_input){.kind = 4, .code = 'j', .mods = 4});
+    verify_repeat(view, 38, @"j", NSEventModifierFlagOption, (telar_gui_input){.kind = 4, .code = 'j', .mods = 2});
+
+    // A later IME commit must not inherit the phase or identity of a held key.
+    [view keyDown:key_event(view, 38, @"j", 0, 1)];
+    [view keyDown:key_event(view, 38, @"j", 0, 2)];
+    expected_repeat = (telar_gui_input){.kind = 1, .phase = 1, .text = (const uint8_t *)"caf\xc3\xa9", .len = 5};
+    checking_repeat = true;
+    const int before_commit = repeat_inputs;
+    [view insertText:@"café" replacementRange:NSMakeRange(NSNotFound, 0)];
+    if (repeat_inputs != before_commit + 1) failed++;
+
+    expected_repeat = (telar_gui_input){.kind = 4, .phase = 3, .physical = 39, .code = 'j'};
+    const int before_release = repeat_inputs;
+    [view releasePressedKeys];
+    [view releasePressedKeys];
+    [view keyUp:key_event(view, 38, @"j", 0, 3)];
+    if (repeat_inputs != before_release + 1) failed++;
+    checking_repeat = false;
+}
 
 @interface NSView (TelarTest)
 - (void)requestDraw;
@@ -77,6 +140,14 @@ static void complete(void *context, uint64_t token, int success) {
 static int input(void *context, telar_gui_input event) {
     (void)context;
     if (event.kind == 5) { focus_events++; return 1; }
+    if (checking_repeat) {
+        if (event.kind != expected_repeat.kind || event.phase != expected_repeat.phase ||
+            event.physical != expected_repeat.physical || event.mods != expected_repeat.mods ||
+            event.code != expected_repeat.code || event.len != expected_repeat.len ||
+            (event.len && memcmp(event.text, expected_repeat.text, event.len))) failed++;
+        repeat_inputs++;
+        return 1;
+    }
     if (!injecting) return 1;
     if (inputs == 0 && !(event.kind == 1 && event.len == 1 && event.text[0] == 'a' && event.physical == 1)) failed++;
     if (inputs == 1 && !(event.kind == 4 && event.code == 'c' && (event.mods & 4))) failed++;
@@ -95,6 +166,9 @@ static int input(void *context, telar_gui_input event) {
 }
 int main(void) {
     @autoreleasepool {
+        // Simulate a user's global accent preference without changing disk state.
+        [NSUserDefaults.standardUserDefaults setVolatileDomain:@{@"ApplePressAndHoldEnabled": @YES}
+                                                       forName:NSGlobalDomain];
         Method method = class_getInstanceMethod(objc_getClass("TelarView"), @selector(drawWithDrawable:));
         original_draw = method_setImplementation(method, (IMP)draw);
         int fds[2];
@@ -120,6 +194,8 @@ int main(void) {
             [view mouseDragged:[NSEvent mouseEventWithType:NSEventTypeLeftMouseDragged location:location modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil eventNumber:2 clickCount:1 pressure:1]];
             [view mouseUp:[NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:location modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil eventNumber:3 clickCount:1 pressure:0]];
             injecting = NO;
+            [(TelarTextInputView *)view releasePressedKeys];
+            verify_keyboard((TelarTextInputView *)view);
             appearance_phase = 1;
             view.autoresizingMask = NSViewNotSizable;
             [view setFrameSize:NSMakeSize(640, 360)];
@@ -139,7 +215,7 @@ int main(void) {
         });
         int status = telar_gui_run("Telar native backend test", NULL, &callbacks);
         telar_gui_close_pipe(fds);
-        fprintf(stdout, "native macOS: status=%d painted=%d delivered=%d inputs=%d timer_wakes=%d failures=%d\n",status,paints,delivered,inputs,timer_wakes,failed);
-        return status || !delivered || inputs != 10 || failed || !closed_in_flight || paints != delivered + 1 || appearance_checked != 7;
+        fprintf(stdout, "native macOS: status=%d painted=%d delivered=%d inputs=%d repeats=%d timer_wakes=%d failures=%d\n",status,paints,delivered,inputs,repeat_inputs,timer_wakes,failed);
+        return status || !delivered || inputs != 10 || repeat_inputs != 26 || failed || !closed_in_flight || paints != delivered + 1 || appearance_checked != 7;
     }
 }

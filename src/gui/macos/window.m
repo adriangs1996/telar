@@ -11,6 +11,13 @@ int telar_gui_run(const char *title, void *context,
       return -1;
     }
 
+    // Keep terminal key repeat local to this process, even when macOS enables
+    // press-and-hold accents globally. Do not write the user's preferences.
+    NSUserDefaults *preferences = NSUserDefaults.standardUserDefaults;
+    NSMutableDictionary *arguments = [[preferences volatileDomainForName:NSArgumentDomain] mutableCopy];
+    arguments[@"ApplePressAndHoldEnabled"] = @NO;
+    [preferences setVolatileDomain:arguments forName:NSArgumentDomain];
+
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 
