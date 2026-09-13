@@ -71,7 +71,12 @@ fn linkPointer(context: *anyopaque, event: client.Mouse) bool {
     routing.hover.dirty = true;
     routing.hover.refresh(gui);
     const hit = routing.hover.link orelse return false;
-    routing.link_gesture.begin(hit);
+    if (routing.hover.openable()) {
+        routing.link_gesture.begin(hit, gui.app.model.version());
+    } else {
+        routing.link_gesture.cancel();
+    }
+
     return true;
 }
 

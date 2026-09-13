@@ -64,7 +64,16 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
     }
 
     pointer.hover.observe(event);
+    if (event.code != 6) {
+        pointer.hover.dirty = true;
+    }
+
     pointer.hover.refresh(GuiClient.of(app));
+
+    if (event.code == 6 and pointer.owners[0] == .link) {
+        pointer.link_gesture.validate(pointer.hover.link, app.model.version());
+        return;
+    }
 
     const begins = event.code == 1 or event.code == 4 or event.code == 5;
     if (begins and (value.gesture_revision != pointer.gesture_revision or !geometryMatches(app))) {
@@ -95,7 +104,7 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
                     pointer.owners[button] = .shared;
                     pointer.hover.dirty = true;
                     pointer.hover.refresh(GuiClient.of(app));
-                    const target = if (geometryMatches(app)) pointer.link_gesture.finish(pointer.hover.link) else null;
+                    const target = if (geometryMatches(app) and pointer.hover.openable()) pointer.link_gesture.finish(pointer.hover.link, app.model.version()) else null;
                     pointer.link_gesture.cancel();
                     if (target) |selected| {
                         _ = try client.controllers.link_openings.apply(app, selected);
@@ -116,6 +125,9 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
     }
 
     const outcome = try client.controllers.pointer_routing.apply(app, mouse);
+    if (event.code <= 5) {
+        pointer.hover.dirty = true;
+    }
     if (event.code == 1) {
         pointer.owners[button] = switch (outcome) {
             .view, .copy_mode => .shared,

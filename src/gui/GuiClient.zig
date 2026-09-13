@@ -100,7 +100,7 @@ pub fn start(gui: *GuiClient, colors: core.TerminalColors) !void {
 
 pub fn pump(gui: *GuiClient) !?u8 {
     const status = try gui.driver.drain(gui);
-    gui.input.pointer.hover.refresh(gui);
+    gui.refreshPointer();
     return status;
 }
 
@@ -116,6 +116,7 @@ pub fn receive(gui: *GuiClient, result: anyerror!*const client.RuntimeMessage) !
     }
 
     try gui.resumeInput();
+    gui.refreshPointer();
     return null;
 }
 
@@ -134,6 +135,8 @@ pub fn focus(gui: *GuiClient, focused: bool) !void {
     gui.focused = focused;
     gui.input_revision +%= 1;
     if (!focused) {
+        gui.input.pointer.hover.clear();
+        gui.input.pointer.link_gesture.cancel();
         gui.chrome.cancelPointer();
         gui.overlays.cancelPointer();
         try gui.input.cancelPointer(&gui.app);
@@ -210,7 +213,7 @@ pub fn complete(gui: *GuiClient, token: u64, delivered: bool) !void {
 
     gui.chrome.present(delivered);
     gui.overlays.present(delivered);
-    gui.input.pointer.hover.dirty = true;
+    gui.input.pointer.hover.present(delivered);
     const delivery = gui.lifecycle.complete(@enumFromInt(token), if (delivered) .delivered else .failed) orelse return;
     var handler: client.DeliverPresentationHandler = .{
         .model = &gui.app.model,
@@ -245,13 +248,20 @@ pub fn prepare(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.zig"
         return error.PresentationBusy;
     }
 
+    gui.refreshPointer();
     const projected = gui.projection();
     const observed = gui.observation();
     _ = gui.lifecycle.observe(observed);
     var scene: @import("render/Scene.zig") = .{ .terminal = renderer, .chrome = &gui.chrome, .overlays = &gui.overlays, .theme = gui.theme, .link = if (gui.input.pointer.hover.link) |*hit| hit else null };
     const commit = try scene.prepare(projected);
     const token = try gui.lifecycle.begin(.{ .observation = observed, .commit = commit, .geometry = client.Geometry.capture(projected) });
+    gui.input.pointer.hover.prepared_link = gui.input.pointer.hover.link;
     return @intFromEnum(token);
+}
+
+fn refreshPointer(gui: *GuiClient) void {
+    gui.input.pointer.hover.refresh(gui);
+    gui.input.pointer.link_gesture.validate(gui.input.pointer.hover.link, gui.app.model.version());
 }
 
 /// Captures semantic state plus adapter-owned routing and interaction revisions.

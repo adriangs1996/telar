@@ -244,7 +244,10 @@ pub fn drain(input: *Input, app: *client.AttachedClient) !void {
                 input.recovery.pointer_finished = false;
             },
             .pointer => |event| {
-                input.router.cancelSequence();
+                if (event.event.code <= 5) {
+                    input.router.cancelSequence();
+                }
+
                 try input.pointer.apply(app, event);
             },
         }

@@ -5,14 +5,15 @@ const core = @import("telar-core");
 const GuiClient = @import("../GuiClient.zig");
 const Event = @import("../native/InputEvent.zig").InputEvent;
 const Hit = @import("LinkHit.zig");
+const Stamp = @import("HoverStamp.zig");
 const Hover = @This();
 
 event: ?Event = null,
-cell: ?[2]u16 = null,
-mods: u32 = 0,
-version: ?client.Version = null,
+cached: ?Stamp = null,
 shape: core.PointerShape = .default,
 link: ?Hit = null,
+shown_link: ?Hit = null,
+prepared_link: ?Hit = null,
 revision: u64 = 0,
 dirty: bool = true,
 
@@ -31,26 +32,54 @@ pub fn observe(hover: *Hover, event: Event) void {
 /// Reuses the cached cell until model state or delivered controls change.
 /// Example: `hover.refresh(gui);`
 pub fn refresh(hover: *Hover, gui: *const GuiClient) void {
+    if (!gui.focused) {
+        hover.clear();
+        return;
+    }
+
     const event = hover.event orelse return;
     var moved = event;
     moved.code = 6;
     const mouse = gui.input.pointer.geometry.resolve(moved) orelse {
         hover.assign(null, .default);
-        hover.cell = null;
+        hover.cached = null;
         return;
     };
     const cell: [2]u16 = .{ mouse.x, mouse.y };
-    const version = gui.app.model.version();
-    if (!hover.dirty and std.meta.eql(hover.cell, @as(?[2]u16, cell)) and hover.mods == event.mods and std.meta.eql(hover.version, @as(?client.Version, version))) {
+    const stamp = Stamp.capture(gui, cell, event.mods);
+    if (!hover.dirty and std.meta.eql(hover.cached, @as(?Stamp, stamp))) {
         return;
     }
 
-    hover.cell = cell;
-    hover.mods = event.mods;
-    hover.version = version;
+    hover.cached = stamp;
     hover.dirty = false;
     const target = @import("hover_target.zig").resolve(gui, mouse, event.mods);
     hover.assign(target.link, target.shape);
+    if (target.link) |hit| {
+        const pane = gui.app.model.activeTabModelConst().?.findConst(hit.pane_id).?;
+        if (pane.pending_frame_id == 0) {
+            hover.shown_link = hit;
+        }
+    }
+}
+
+/// An in-flight update may be clicked only when the same target was visible.
+/// Example: `if (hover.openable()) gesture.begin(hover.link.?);`
+pub fn openable(hover: *const Hover) bool {
+    const current = hover.link orelse return false;
+    const shown = hover.shown_link orelse return false;
+    return current.eql(&shown);
+}
+
+/// Presentation publishes only the target captured by that frame's preparation.
+/// Example: `hover.present(delivered);`
+pub fn present(hover: *Hover, delivered: bool) void {
+    if (delivered) {
+        hover.shown_link = hover.prepared_link;
+    }
+
+    hover.prepared_link = null;
+    hover.dirty = true;
 }
 
 fn assign(hover: *Hover, next: ?Hit, shape: core.PointerShape) void {
@@ -67,7 +96,8 @@ fn assign(hover: *Hover, next: ?Hit, shape: core.PointerShape) void {
 /// Example: `hover.clear();`
 pub fn clear(hover: *Hover) void {
     hover.event = null;
-    hover.cell = null;
+    hover.cached = null;
+    hover.shown_link = null;
     hover.dirty = true;
     hover.assign(null, .default);
 }
