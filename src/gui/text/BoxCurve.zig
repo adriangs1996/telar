@@ -74,8 +74,26 @@ pub fn rasterize(curve: *const Curve, raster: Raster) void {
     const scale_x = curve.width / @as(f32, @floatFromInt(raster.width));
     const scale_y = curve.height / @as(f32, @floatFromInt(raster.height));
     const antialias = @max(scale_x, scale_y);
+    var bounds = [4]f32{ curve.width, curve.height, 0, 0 };
+    for (curve.points[0..curve.count]) |point| {
+        bounds[0] = @min(bounds[0], point[0]);
+        bounds[1] = @min(bounds[1], point[1]);
+        bounds[2] = @max(bounds[2], point[0]);
+        bounds[3] = @max(bounds[3], point[1]);
+    }
+
+    const margin = (curve.thickness + antialias) / 2;
+    const left: usize = @intFromFloat(std.math.clamp(@floor((bounds[0] - margin) / scale_x), 0, raster.width));
+    const top: usize = @intFromFloat(std.math.clamp(@floor((bounds[1] - margin) / scale_y), 0, raster.height));
+    const right: usize = @intFromFloat(std.math.clamp(@ceil((bounds[2] + margin) / scale_x), 0, raster.width));
+    const bottom: usize = @intFromFloat(std.math.clamp(@ceil((bounds[3] + margin) / scale_y), 0, raster.height));
     for (0..raster.height) |row| {
-        for (0..raster.width) |column| {
+        @memset(raster.pixels[row * raster.stride ..][0..raster.width], 0);
+        if (row < top or row >= bottom) {
+            continue;
+        }
+
+        for (left..right) |column| {
             const point = [2]f32{ (@as(f32, @floatFromInt(column)) + 0.5) * scale_x, (@as(f32, @floatFromInt(row)) + 0.5) * scale_y };
             const distance = @sqrt(curve.distanceSquared(point));
             const coverage = std.math.clamp((curve.thickness / 2 + antialias / 2 - distance) / antialias, 0, 1);
@@ -150,6 +168,30 @@ test "fractional and tiny box curves never write outside the supplied raster" {
                 try std.testing.expectEqual(@as(u8, 37), storage[8]);
                 try std.testing.expectEqual(@as(u8, 37), storage[12]);
                 try std.testing.expectEqual(@as(u8, 37), storage[16]);
+            }
+        }
+    }
+}
+
+test "curve bounds skip only zero-coverage pixels and preserve the full raster exactly" {
+    var pixels: [72 * 72]u8 = undefined;
+    for ([_][2]f32{ .{ 0.5, 1.75 }, .{ 7.25, 11.5 }, .{ 26, 71 }, .{ 71, 26 } }) |size| {
+        const grid = try Grid.init(.{ .x = 0, .y = 0, .width = size[0], .height = size[1] }, 2);
+        const width: u16 = @intFromFloat(@ceil(size[0]));
+        const height: u16 = @intFromFloat(@ceil(size[1]));
+        const scale_x = size[0] / @as(f32, @floatFromInt(width));
+        const scale_y = size[1] / @as(f32, @floatFromInt(height));
+        const antialias = @max(scale_x, scale_y);
+        for (0..7) |shape| {
+            const curve = init(grid, @intCast(shape));
+            curve.rasterize(.{ .pixels = &pixels, .stride = 72, .width = width, .height = height });
+            for (0..height) |row| {
+                for (0..width) |column| {
+                    const point = [2]f32{ (@as(f32, @floatFromInt(column)) + 0.5) * scale_x, (@as(f32, @floatFromInt(row)) + 0.5) * scale_y };
+                    const coverage = std.math.clamp((curve.thickness / 2 + antialias / 2 - @sqrt(curve.distanceSquared(point))) / antialias, 0, 1);
+                    const expected: u8 = @intFromFloat(@round(255 * coverage));
+                    try std.testing.expectEqual(expected, pixels[row * 72 + column]);
+                }
             }
         }
     }
