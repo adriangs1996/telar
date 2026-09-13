@@ -88,7 +88,7 @@ test "native child drag keeps its pane across focus and ignores replacement atta
     const pane = model.find(Session.pane_id).?;
     pane.mouse = .{ .sgr = true, .tracking = .button };
     const view = model.viewForPane(pane.id, session.gui.region.area).?;
-    const capture = Capture.begin(app, .{ .x = view.content.x, .y = view.content.y, .kind = .press }).?;
+    var capture = Capture.begin(app, .{ .x = view.content.x, .y = view.content.y, .kind = .press }).?;
     _ = model.layout.focusPane(second);
     try capture.deliver(app, .{ .x = session.gui.region.area.w - 1, .y = view.content.y, .raw_x = 999, .raw_y = 999, .kind = .drag, .button = 32 });
     const request = try core.decodeClient(session.pending.?);
@@ -147,7 +147,7 @@ test "native child release crosses a newly opened prompt only with its acquired 
     pane.mouse = .{ .sgr = true, .tracking = .button };
     const view = model.viewForPane(pane.id, session.gui.region.area).?;
     const press: client.Mouse = .{ .x = view.content.x, .y = view.content.y, .kind = .press };
-    const capture = Capture.begin(app, press).?;
+    var capture = Capture.begin(app, press).?;
     try std.testing.expect(client.controllers.name_prompts.beginActiveTabRename(app));
     try std.testing.expect(app.model.planPaneInput(.{ .pane = pane.id }) == null);
     var release = press;
@@ -204,4 +204,151 @@ test "native focus loss releases an acquired child mouse gesture" {
     try session.settle();
     try std.testing.expect(session.gui.input.pointer.owners[0] == .shared);
     try std.testing.expect(std.mem.endsWith(u8, session.input[0..session.input_len], "m"));
+}
+
+test "native mouse release reaches its original tab and a pane hidden by fullscreen" {
+    const session = try Session.init();
+    defer session.deinit();
+    try prepareMouse(session);
+    const app = &session.gui.app;
+    const input = &session.gui.input;
+    const press = pointerPress(session);
+    try input.accept(press);
+    try drainInput(session);
+    const second_tab: core.TabId = @enumFromInt(2);
+    _ = try app.model.workspace.addCreated(.{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_tab }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, app.model.hostSize());
+    var release = press;
+    release.code = 2;
+    try input.accept(release);
+    try input.drain(app);
+    const request = try core.decodeClient(session.pending.?);
+    try std.testing.expectEqual(Session.pane_id, request.pane_input.pane_id);
+    try std.testing.expect(std.mem.endsWith(u8, request.pane_input.bytes, "m"));
+    try session.settle();
+    try std.testing.expectEqual(second_tab, app.model.activeTabLocation().?.tab_id);
+
+    _ = app.model.workspace.select(Session.location.tab_id);
+    const model = app.model.activeTabModel().?;
+    const second_pane: core.PaneId = @enumFromInt(11);
+    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second_pane, .location = Session.location, .axis = .horizontal, .area = app.geometry().area });
+    _ = model.layout.focusPane(Session.pane_id);
+    _ = model.layout.toggleFullscreen();
+    const token = try session.gui.prepare(&session.renderer);
+    try session.gui.complete(token, true);
+    try session.settle();
+    try input.accept(pointerPress(session));
+    try drainInput(session);
+    _ = model.layout.focusPane(second_pane);
+    try std.testing.expect(model.viewForPane(Session.pane_id, app.geometry().area) == null);
+    try input.accept(release);
+    try input.drain(app);
+    const hidden_request = try core.decodeClient(session.pending.?);
+    try std.testing.expectEqual(Session.pane_id, hidden_request.pane_input.pane_id);
+    try std.testing.expect(std.mem.endsWith(u8, hidden_request.pane_input.bytes, "m"));
+    try session.settle();
+    try std.testing.expectEqual(second_pane, model.layout.focused().?);
+    try std.testing.expect(input.pointer.owners[0] == .shared);
+}
+
+test "native saturated mouse release cancels captured owners and admits a fresh gesture" {
+    const session = try Session.init();
+    defer session.deinit();
+    try prepareMouse(session);
+    const gui = session.gui;
+    const input = &gui.input;
+    const press = pointerPress(session);
+    try input.accept(press);
+    try drainInput(session);
+    try std.testing.expect(input.pointer.owners[0] == .child);
+    _ = gui.chrome.pointer(.{ .x = 0, .y = 0, .kind = .press, .button = 2 });
+    gui.app.model.name_prompt.begin(.create_workspace);
+    const token = try gui.prepare(&session.renderer);
+    try gui.complete(token, true);
+    _ = gui.overlays.pointer(.{ .x = 0, .y = 0, .kind = .press, .button = 1 });
+    try std.testing.expect(gui.chrome.gesture_button != null and gui.overlays.gesture != null);
+    try saturate(input);
+    var release = press;
+    release.code = 2;
+    try input.accept(release);
+    try input.accept(release);
+    try std.testing.expectEqual(@as(usize, 1024), input.len);
+    try std.testing.expectError(error.NativeInputFull, input.accept(press));
+    try drainInput(session);
+    try std.testing.expect(input.pointer.owners[0] == .shared);
+    try std.testing.expect(gui.chrome.gesture_button == null and gui.overlays.gesture == null);
+    try std.testing.expect(std.mem.endsWith(u8, session.input[0..session.input_len], "m"));
+
+    _ = gui.app.model.name_prompt.apply(.cancel);
+    const closed = try gui.prepare(&session.renderer);
+    try gui.complete(closed, true);
+    try session.settle();
+    try input.accept(press);
+    try drainInput(session);
+    try std.testing.expect(input.pointer.owners[0] == .child);
+    try input.accept(release);
+    try drainInput(session);
+    try std.testing.expect(input.pointer.owners[0] == .shared);
+}
+
+test "native saturated key releases preserve order and finish before another press" {
+    const session = try Session.init();
+    defer session.deinit();
+    try prepareMouse(session);
+    const input = &session.gui.input;
+    session.gui.app.model.workspace.findPane(Session.pane_id).?.input_modes.kitty_keyboard_flags = 10;
+    try input.accept(.{ .kind = 4, .code = 'k', .physical = 9 });
+    try input.accept(.{ .kind = 4, .code = 'j', .physical = 4 });
+    try drainInput(session);
+    const before = session.input_len;
+    try saturate(input);
+    try input.accept(.{ .kind = 4, .code = 'k', .physical = 9, .phase = 3 });
+    try input.accept(.{ .kind = 4, .code = 'j', .physical = 4, .phase = 3 });
+    try input.accept(.{ .kind = 4, .code = 'j', .physical = 4, .phase = 3 });
+    try std.testing.expectEqual(@as(usize, 1024), input.len);
+    try std.testing.expectEqual(@as(usize, 2), input.recovery.len);
+    try std.testing.expectError(error.NativeInputFull, input.accept(.{ .kind = 4, .code = 'k', .physical = 9 }));
+    try drainInput(session);
+    try std.testing.expectEqualStrings("\x1b[107;1:3u\x1b[106;1:3u", session.input[before..session.input_len]);
+    try std.testing.expectEqual(@as(usize, 0), input.router.leases.count());
+    const recovered = session.input_len;
+    try input.accept(.{ .kind = 4, .code = 'k', .physical = 9 });
+    try input.accept(.{ .kind = 4, .code = 'k', .physical = 9, .phase = 3 });
+    try drainInput(session);
+    try std.testing.expectEqualStrings("\x1b[107u\x1b[107;1:3u", session.input[recovered..session.input_len]);
+    try std.testing.expectEqual(@as(usize, 0), input.router.leases.count());
+}
+
+fn prepareMouse(session: *Session) !void {
+    try session.bootstrap();
+    try session.receiveFrame(1);
+    session.gui.app.model.workspace.findPane(Session.pane_id).?.mouse = .{ .sgr = true, .tracking = .button };
+    const token = try session.gui.prepare(&session.renderer);
+    try session.gui.complete(token, true);
+    try session.settle();
+    session.gui.input.setGeometry(.{ 0, 0 }, session.gui.app.model.hostSize());
+}
+
+fn pointerPress(session: *Session) @import("../native/native.zig").InputEvent {
+    const model = session.gui.app.model.activeTabModel().?;
+    const view = model.viewForPane(Session.pane_id, session.gui.region.area).?;
+    const size = session.gui.app.model.hostSize();
+    return .{ .kind = 6, .code = 1, .x = @as(f64, @floatFromInt(view.content.x)) * size.cell_width_px + 1, .y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + 1 };
+}
+
+fn saturate(input: *NativeInput) !void {
+    for (0..1023) |_| {
+        try input.accept(.{ .kind = 6, .code = 6 });
+    }
+}
+
+fn drainInput(session: *Session) !void {
+    var turns: usize = 0;
+    while (session.gui.input.len != 0) : (turns += 1) {
+        if (turns > 1024) {
+            return error.UnboundedInputRecovery;
+        }
+
+        try session.gui.inputReady();
+        try session.settle();
+    }
 }

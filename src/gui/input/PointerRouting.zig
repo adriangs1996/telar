@@ -43,7 +43,7 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
     const event = value.event;
     const retained = event.code == 2 or event.code == 3;
     const button: usize = event.button;
-    if (event.code == 1) {
+    if (event.code == 1 and pointer.owners[button] == .shared) {
         pointer.owners[button] = .discarded;
     }
 
@@ -62,21 +62,30 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
     }
 
     if (retained) {
-        const owner = pointer.owners[button];
-        if (event.code == 2) {
-            pointer.owners[button] = .shared;
-        }
-
-        switch (owner) {
-            .child => |capture| {
+        switch (pointer.owners[button]) {
+            .child => |*capture| {
                 try capture.deliver(app, mouse);
+                if (event.code == 2) {
+                    pointer.owners[button] = .shared;
+                }
+
                 return;
             },
             .link => {
                 _ = app.link_pointer.handle(.{ .kind = if (event.code == 2) .release else .drag, .left_button = button == 0 }, null);
+                if (event.code == 2) {
+                    pointer.owners[button] = .shared;
+                }
+
                 return;
             },
-            .discarded => return,
+            .discarded => {
+                if (event.code == 2) {
+                    pointer.owners[button] = .shared;
+                }
+
+                return;
+            },
             .shared => {},
         }
     }
@@ -105,9 +114,9 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
 /// to chrome or to a pane that happens to be focused. Example: `try pointer.cancel(app);`
 pub fn cancel(pointer: *Routing, app: *client.AttachedClient) !void {
     defer pointer.owners = @splat(.shared);
-    for (pointer.owners, pointer.last) |owner, last| {
-        switch (owner) {
-            .child => |capture| {
+    for (&pointer.owners, pointer.last) |*owner, last| {
+        switch (owner.*) {
+            .child => |*capture| {
                 var released = last;
                 released.kind = .release;
                 released.button &= 31;

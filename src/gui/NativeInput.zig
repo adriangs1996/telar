@@ -6,6 +6,7 @@ const core = @import("telar-core");
 const routing = @import("input/router.zig");
 const InputHandler = @import("input/InputHandler.zig");
 const PointerRouting = @import("input/PointerRouting.zig");
+const ReleaseRecovery = @import("input/ReleaseRecovery.zig");
 const Input = @This();
 
 pub const max_paste_bytes = 64 * 1024;
@@ -18,7 +19,7 @@ binding_timeout: client.Scheduler = .{},
 pointer: PointerRouting = .{},
 stopped: bool = false,
 presentation_revision: u64 = 0,
-pointer_cancel_pending: bool = false,
+recovery: ReleaseRecovery = .{},
 
 /// Example: `var input = try Input.init(config);`
 pub fn init(config: client.RouterConfig) !Input {
@@ -43,14 +44,7 @@ pub fn setGeometry(input: *Input, origin: [2]u32, size: core.TerminalSize) void 
 /// Reserves one control slot to finish gestures even when ordinary input is
 /// saturated. Example: `try input.cancelPointer(app);`
 pub fn cancelPointer(input: *Input, app: *client.AttachedClient) !void {
-    input.pointer.invalidateGestures();
-    if (input.pointer_cancel_pending) {
-        return;
-    }
-
-    std.debug.assert(input.len < capacity);
-    input.push(.pointer_cancel);
-    input.pointer_cancel_pending = true;
+    input.scheduleRecovery();
     try input.drain(app);
     try app.host_input_source.resumeRead();
 }
@@ -94,7 +88,7 @@ pub fn accept(input: *Input, event: Event) !void {
         return error.InputTooLarge;
     }
 
-    if ((event.len != 0 and event.text == null) or event.mods > 7 or event.phase < 1 or event.phase > 3) {
+    if ((event.len != 0 and event.text == null) or event.mods > 7 or event.phase < 1 or event.phase > 3 or event.physical > ReleaseRecovery.capacity) {
         return error.InvalidNativeInput;
     }
 
@@ -103,7 +97,14 @@ pub fn accept(input: *Input, event: Event) !void {
             return error.InvalidNativePointer;
         }
 
-        try input.reserve(1);
+        input.reserve(1) catch |err| {
+            if (event.code != 2) {
+                return err;
+            }
+
+            input.scheduleRecovery();
+            return;
+        };
         input.push(.{ .pointer = input.pointer.sample(event) });
         return;
     }
@@ -122,7 +123,11 @@ pub fn accept(input: *Input, event: Event) !void {
                 count += 1;
             }
 
-            try input.reserve(count);
+            input.reserve(count) catch |err| {
+                if (count != 1 or event.phase != 3 or event.physical == 0) {
+                    return err;
+                }
+            };
             iterator = view.iterator();
             while (iterator.nextCodepointSlice()) |bytes| {
                 var key: client.Key = .{ .code = .{ .char = .{ .bytes = @splat(0), .len = @intCast(bytes.len) } }, .phase = @enumFromInt(event.phase) };
@@ -131,7 +136,7 @@ pub fn accept(input: *Input, event: Event) !void {
                     key.physical = .{ .value = event.physical };
                 }
 
-                input.push(.{ .key = key });
+                try input.pushKey(key);
             }
         },
         2 => {
@@ -160,7 +165,6 @@ pub fn accept(input: *Input, event: Event) !void {
             input.push(.paste_finish);
         },
         3 => {
-            try input.reserve(1);
             const codes = [_]client.Key.Code{ .enter, .tab, .backspace, .escape, .up, .down, .left, .right, .home, .end, .delete, .page_up, .page_down };
             var key: client.Key = .{
                 .code = if (event.code >= 1 and event.code <= codes.len) codes[event.code - 1] else return error.InvalidNativeKey,
@@ -173,10 +177,9 @@ pub fn accept(input: *Input, event: Event) !void {
             }
 
             key.physical = if (event.physical == 0) null else .{ .value = event.physical };
-            input.push(.{ .key = key });
+            try input.pushKey(key);
         },
         4 => {
-            try input.reserve(1);
             var key: client.Key = .{
                 .code = .{ .char = .{ .bytes = @splat(0), .len = 0 } },
                 .mods = @bitCast(@as(u3, @truncate(event.mods))),
@@ -192,7 +195,7 @@ pub fn accept(input: *Input, event: Event) !void {
                 key.mods.shift = false;
             }
 
-            input.push(.{ .key = key });
+            try input.pushKey(key);
         },
         else => return error.InvalidNativeInput,
     }
@@ -205,7 +208,7 @@ pub fn drain(input: *Input, app: *client.AttachedClient) !void {
         return;
     }
 
-    var budget = client.DrainBudget.begin(app.io, input.len);
+    var budget = client.DrainBudget.begin(app.io, input.len + input.recovery.len);
     var handler: InputHandler = .{ .app = app };
     const pending = input.router.prefixPending();
     while (!input.stopped and input.len != 0 and client.runtime_io.availableCapacity(app) >= 4 and budget.take(app.io)) {
@@ -219,9 +222,26 @@ pub fn drain(input: *Input, app: *client.AttachedClient) !void {
             },
             .paste_text => |*chunk| _ = try client.controllers.paste_routing.content(app, chunk.bytes[0..chunk.len]),
             .paste_finish => _ = try client.controllers.paste_routing.finish(app),
-            .pointer_cancel => {
-                try input.pointer.cancel(app);
-                input.pointer_cancel_pending = false;
+            .release_recovery => {
+                if (!input.recovery.pointer_finished) {
+                    try input.pointer.cancel(app);
+                    handler.cancelPointer();
+                    input.recovery.pointer_finished = true;
+                    if (input.recovery.len != 0) {
+                        continue;
+                    }
+                }
+
+                if (input.recovery.next()) |key| {
+                    input.stopped = try input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = client.monotonic(app.io) }, &handler) == .stop;
+                    input.recovery.finish(key);
+                    if (input.recovery.len != 0) {
+                        continue;
+                    }
+                }
+
+                input.recovery.queued = false;
+                input.recovery.pointer_finished = false;
             },
             .pointer => |event| {
                 input.router.cancelSequence();
@@ -269,9 +289,34 @@ fn defaultRouter() routing.Type {
 }
 
 fn reserve(input: *const Input, count: usize) !void {
-    if (count > (capacity - 1) -| input.len) {
+    if (input.recovery.queued or count > (capacity - 1) -| input.len) {
         return error.NativeInputFull;
     }
+}
+
+fn pushKey(input: *Input, key: client.Key) !void {
+    input.reserve(1) catch |err| {
+        if (key.phase != .release or key.physical == null) {
+            return err;
+        }
+
+        input.recovery.retain(key);
+        input.scheduleRecovery();
+        return;
+    };
+
+    input.push(.{ .key = key });
+}
+
+fn scheduleRecovery(input: *Input) void {
+    input.pointer.invalidateGestures();
+    if (input.recovery.queued) {
+        return;
+    }
+
+    std.debug.assert(input.len < capacity);
+    input.push(.release_recovery);
+    input.recovery.queued = true;
 }
 
 fn push(input: *Input, item: Item) void {

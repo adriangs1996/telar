@@ -28,3 +28,11 @@ pub fn action(handler: *Handler, value: client.Action) !client.Control {
 pub fn repeatPolicy(handler: *const Handler, value: client.Action) ?client.RepeatPolicy {
     return client.controllers.action_routing.repeatPolicy(handler.app, value);
 }
+
+/// Ends native control capture after ordered overflow or focus cancellation.
+/// Example: `handler.cancelPointer();`.
+pub fn cancelPointer(handler: *Handler) void {
+    const gui = @import("../GuiClient.zig").of(handler.app);
+    gui.chrome.cancelPointer();
+    gui.overlays.cancelPointer();
+}
