@@ -1,0 +1,180 @@
+{
+  "date": "2026-09-13",
+  "baseline": "4368e07c",
+  "general_macos": {
+    "command": "zig build -j4 test test-gui test-gui-window codestyle --summary all",
+    "snapshot": "c0eb07b7",
+    "steps_passed": 131,
+    "steps_total": 131,
+    "tests_passed": 3381,
+    "tests_skipped": 2,
+    "client_tests_passed": 862,
+    "frontend_tests_passed": 604,
+    "log": "/tmp/telar-gui-final-tests.log"
+  },
+  "baseline_macos": {
+    "command": "zig build -j4 test --summary all",
+    "steps_passed": 123,
+    "steps_total": 123,
+    "tests_passed": 3289,
+    "tests_skipped": 2,
+    "log": "/tmp/telar-gui-baseline-tests.log"
+  },
+  "general_linux": {
+    "snapshot": "4eb5963c",
+    "tests_passed": 3292,
+    "log": "/tmp/telar-gui-linux-full.log"
+  },
+  "composition": {
+    "source": "src/gui/tests/composition_budget.zig",
+    "host_cells": [
+      160,
+      60
+    ],
+    "panes": 8,
+    "tabs": 4,
+    "workspaces": 3,
+    "agents": 8,
+    "notifications": 4,
+    "variants": [
+      "normal",
+      "goto_picker"
+    ],
+    "warm_redraws_per_variant": 120,
+    "opacity_values": [
+      0,
+      0.5,
+      1
+    ],
+    "adapter_allocations": 0,
+    "adapter_allocated_bytes": 0,
+    "additional_shaping_calls": 0,
+    "additional_raster_attempts": 0,
+    "repainted_cells": 0,
+    "quad_capacity": 352704,
+    "quad_bytes": 48,
+    "quad_reserved_bytes": 16929792,
+    "baseline_quad_capacity": 232192,
+    "baseline_quad_reserved_bytes": 11145216
+  },
+  "not_measured": [
+    "IPC byte totals",
+    "sampled queue occupancy",
+    "whole-process retained memory",
+    "hardware input latency",
+    "display scanout latency",
+    "Linux latency"
+  ],
+  "clipboard_failure_linux": {
+    "snapshot": "e16e70f9",
+    "normal": "passed",
+    "address_sanitizer": "passed",
+    "undefined_behavior_sanitizer": "passed",
+    "leak_detection": true,
+    "cases": [
+      "poll ENOMEM revokes admission",
+      "publication after worker exit closes fd on destroy",
+      "immutable snapshots",
+      "bounded transfer admission",
+      "closed receiver",
+      "shutdown with stalled reader"
+    ],
+    "logs": [
+      "/tmp/telar-gui-linux-clipboard-worker.log",
+      "/tmp/telar-gui-linux-clipboard-sanitized.log"
+    ]
+  },
+  "native_macos": {
+    "snapshot": "f3d6cf53",
+    "command": "zig build -j4 test-gui test-gui-window codestyle check-client-boundaries --summary all",
+    "steps_passed": 28,
+    "steps_total": 28,
+    "tests_passed": 101,
+    "tests_skipped": 0,
+    "window": {
+      "status": 0,
+      "painted": 7,
+      "delivered": 6,
+      "inputs": 10,
+      "timer_wakes": 1,
+      "failures": 0
+    },
+    "log": "/tmp/telar-gui-integrated-native-tests.log"
+  },
+  "macos_host": {
+    "cpu": "Apple M3",
+    "memory_bytes": 17179869184,
+    "os": "macOS 26.6.2",
+    "os_build": "25G83",
+    "zig": "0.16.0",
+    "benchmark_optimization": "ReleaseFast"
+  },
+  "macos_session": {
+    "snapshot": "f3d6cf53",
+    "command": "python3 tools/gui_multiplexer.py /tmp/telar-gui-integration/bin/telar /tmp/telar-gui-final-mac",
+    "result": "macos-session.json",
+    "artifact_directory": "/tmp/telar-gui-final-mac"
+  },
+  "candidate": {
+    "snapshot": "f3d6cf53",
+    "sha256": "b3494b62cea7033473a9ddc9a6e6540742615490f3c098287161ecf69f18b36c",
+    "build_command": "zig build -j4 install -Doptimize=ReleaseFast --prefix /tmp/telar-gui-integration --summary all",
+    "build_steps_passed": 45,
+    "build_steps_total": 45
+  },
+  "integrated_linux": {
+    "snapshot": "f3d6cf53",
+    "steps_passed": 152,
+    "steps_total": 152,
+    "tests_passed": 3393,
+    "tests_skipped": 1,
+    "general_tests_passed": 3293,
+    "gui_tests_passed": 100,
+    "gui_tests_skipped": 1,
+    "log": "/tmp/telar-gui-linux-f3d6cf53-build.log"
+  },
+  "linux_sessions": {
+    "linux-navigation-default.json": {
+      "snapshot": "f3d6cf53",
+      "source": "/tmp/telar-gui-multiplexer-linux-f3d6cf53/default/results.json"
+    },
+    "linux-navigation-configured.json": {
+      "snapshot": "b7232ad5",
+      "source": "/tmp/telar-gui-multiplexer-linux-final/configured/results.json"
+    },
+    "linux-clipboard-default.json": {
+      "snapshot": "f3d6cf53",
+      "source": "/tmp/telar-gui-clipboard-linux-f3d6cf53/default/results.json"
+    },
+    "linux-clipboard-configured.json": {
+      "snapshot": "f3d6cf53",
+      "source": "/tmp/telar-gui-clipboard-linux-f3d6cf53/configured/results.json"
+    }
+  },
+  "latency": {
+    "baseline_snapshot": "4368e07c",
+    "candidate_snapshot": "f3d6cf53",
+    "command": "python3 tools/gui_composition_latency.py /tmp/telar-gui-baseline/bin/telar /tmp/telar-gui-integration/bin/telar /tmp/telar-gui-composition-final --samples 250 --rounds 4 --viewport 1000 700",
+    "result": "final-comparison.json",
+    "samples_per_variant": 1000,
+    "warmup_per_run": 20,
+    "rounds": 4,
+    "failed_samples": 0,
+    "aggregate": {
+      "baseline": {
+        "n": 1000,
+        "p50_ms": 3.075167,
+        "p95_ms": 5.701581249999999,
+        "p99_ms": 8.309262169999997,
+        "max_ms": 30.790917
+      },
+      "candidate": {
+        "n": 1000,
+        "p50_ms": 2.7229375,
+        "p95_ms": 5.28581875,
+        "p99_ms": 9.377335749999993,
+        "max_ms": 29.721583
+      }
+    }
+  }
+}

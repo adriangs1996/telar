@@ -12,13 +12,15 @@ wire clipboard limit. A compositor send callback copies one immutable snapshot
 into a free slot and wakes one worker. Replacing the selection cannot overwrite
 bytes already being pasted into another application.
 
-The worker alone writes and closes the published nonblocking transfer descriptor.
+The live worker alone writes and closes the published nonblocking transfer descriptor.
 A release/acquire flag returns each slot to the window producer after close. Full
 queues reject the requested transfer by closing its descriptor; closed consumers
 and transfers exceeding five seconds retire independently. SIGPIPE is blocked
-only on this worker. Window shutdown revokes admission, wakes and joins the worker,
-then releases its storage and Wayland resources. No transfer waits on the window
-thread or on a frame completion.
+only on this worker. A fatal polling error revokes admission before worker cleanup.
+Window shutdown revokes admission, wakes and joins the worker, then closes any
+descriptor whose publication raced with that cleanup. The window producer has
+stopped before this final pass. Storage and Wayland resources are released last.
+No transfer waits on the window thread or on a frame completion.
 
 Clicking an HTTP(S) link enters the existing shared link controller. Its bounded
 queue schedules `ports/services.zig` as an inbox producer, and `.link_opened`
@@ -30,7 +32,8 @@ commands and failure behavior are unchanged. File links continue to use the
 configured editor in a shared command tab.
 
 `zig build test-gui-clipboard` on Linux verifies snapshot ownership, saturation,
-closed consumers and cancellation of a stalled transfer without a compositor.
+closed consumers, polling failure, late publication and cancellation of a stalled
+transfer without a compositor.
 The native clipboard tests also run under address and undefined-behavior
 sanitizers. Client tests verify unsupported URI schemes cannot spawn a process;
 the existing frontend suite covers the unchanged shared link routing.

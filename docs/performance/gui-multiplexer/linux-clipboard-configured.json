@@ -1,0 +1,42 @@
+{
+  "status": "passed",
+  "error": null,
+  "state": "/tmp/telar-gui-multiplexer-7519a32d6de2ee1c69704232",
+  "steps": [
+    "ascii copy-mode yank publishes exact UTF-8 and plain clipboard bytes",
+    "ascii Ctrl-Shift-V pastes the same bytes into the child",
+    "unicode copy-mode yank publishes exact UTF-8 and plain clipboard bytes",
+    "unicode Ctrl-Shift-V pastes the same bytes into the child",
+    "same shell and PTY geometry survive both clipboard round trips"
+  ],
+  "pointer": null,
+  "records": {
+    "initial": {
+      "pane": 1,
+      "generation": 1,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 208890,
+      "rows": 38,
+      "cols": 86
+    },
+    "after-ascii-copy-paste": {
+      "pane": 1,
+      "generation": 1,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 208890,
+      "rows": 38,
+      "cols": 86
+    },
+    "after-unicode-copy-paste": {
+      "pane": 1,
+      "generation": 1,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 208890,
+      "rows": 38,
+      "cols": 86
+    }
+  }
+}
