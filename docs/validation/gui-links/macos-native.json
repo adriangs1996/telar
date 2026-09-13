@@ -1,0 +1,442 @@
+{
+  "records": {
+    "plain": {
+      "app_active": true,
+      "marker": [
+        8,
+        25,
+        9,
+        19
+      ],
+      "window_key": true,
+      "view_points": [
+        1900,
+        2112
+      ],
+      "frame_token": 22,
+      "quads": 297,
+      "horizontal_rules": [
+        [
+          1448,
+          44,
+          432,
+          1
+        ],
+        [
+          1448,
+          119,
+          432,
+          1
+        ]
+      ],
+      "native_cursor": "text",
+      "viewport": [
+        1900,
+        2112,
+        1
+      ],
+      "desired_pointer": 8
+    },
+    "hover": {
+      "app_active": true,
+      "marker": [
+        8,
+        25,
+        9,
+        19
+      ],
+      "window_key": true,
+      "view_points": [
+        1900,
+        2112
+      ],
+      "frame_token": 24,
+      "quads": 329,
+      "horizontal_rules": [
+        [
+          8,
+          80,
+          261,
+          1
+        ],
+        [
+          1448,
+          44,
+          432,
+          1
+        ],
+        [
+          1448,
+          119,
+          432,
+          1
+        ]
+      ],
+      "native_cursor": "pointer",
+      "viewport": [
+        1900,
+        2112,
+        1
+      ],
+      "desired_pointer": 3
+    },
+    "released-modifier": {
+      "app_active": true,
+      "marker": [
+        8,
+        25,
+        9,
+        19
+      ],
+      "window_key": true,
+      "view_points": [
+        1900,
+        2112
+      ],
+      "frame_token": 25,
+      "quads": 298,
+      "horizontal_rules": [
+        [
+          1448,
+          44,
+          432,
+          1
+        ],
+        [
+          1448,
+          119,
+          432,
+          1
+        ]
+      ],
+      "native_cursor": "text",
+      "viewport": [
+        1900,
+        2112,
+        1
+      ],
+      "desired_pointer": 8
+    },
+    "osc-crosshair": {
+      "app_active": true,
+      "marker": [
+        8,
+        25,
+        9,
+        19
+      ],
+      "window_key": true,
+      "view_points": [
+        1900,
+        2112
+      ],
+      "frame_token": 26,
+      "quads": 298,
+      "horizontal_rules": [
+        [
+          1448,
+          44,
+          432,
+          1
+        ],
+        [
+          1448,
+          119,
+          432,
+          1
+        ]
+      ],
+      "native_cursor": "crosshair",
+      "viewport": [
+        1900,
+        2112,
+        1
+      ],
+      "desired_pointer": 7
+    },
+    "osc-text": {
+      "app_active": true,
+      "marker": [
+        8,
+        25,
+        9,
+        19
+      ],
+      "window_key": true,
+      "view_points": [
+        1900,
+        2112
+      ],
+      "frame_token": 28,
+      "quads": 298,
+      "horizontal_rules": [
+        [
+          1448,
+          44,
+          432,
+          1
+        ],
+        [
+          1448,
+          119,
+          432,
+          1
+        ]
+      ],
+      "native_cursor": "text",
+      "viewport": [
+        1900,
+        2112,
+        1
+      ],
+      "desired_pointer": 8
+    },
+    "file-hover": {
+      "app_active": true,
+      "marker": [
+        8,
+        25,
+        9,
+        19
+      ],
+      "window_key": true,
+      "view_points": [
+        1900,
+        2112
+      ],
+      "frame_token": 38,
+      "quads": 302,
+      "horizontal_rules": [
+        [
+          8,
+          99,
+          594,
+          1
+        ]
+      ],
+      "native_cursor": "pointer",
+      "viewport": [
+        1900,
+        2112,
+        1
+      ],
+      "desired_pointer": 3
+    },
+    "original-tab": {
+      "app_active": true,
+      "marker": [
+        8,
+        25,
+        9,
+        19
+      ],
+      "window_key": true,
+      "view_points": [
+        1900,
+        2112
+      ],
+      "frame_token": 45,
+      "quads": 241,
+      "horizontal_rules": [],
+      "native_cursor": "text",
+      "viewport": [
+        1900,
+        2112,
+        1
+      ],
+      "desired_pointer": 8
+    },
+    "osc8-hover": {
+      "app_active": true,
+      "marker": [
+        8,
+        25,
+        9,
+        19
+      ],
+      "window_key": true,
+      "view_points": [
+        1900,
+        2112
+      ],
+      "frame_token": 46,
+      "quads": 304,
+      "horizontal_rules": [
+        [
+          8,
+          156,
+          171,
+          1
+        ]
+      ],
+      "native_cursor": "pointer",
+      "viewport": [
+        1900,
+        2112,
+        1
+      ],
+      "desired_pointer": 3
+    },
+    "softwrap-hover": {
+      "app_active": true,
+      "marker": [
+        8,
+        25,
+        9,
+        19
+      ],
+      "window_key": true,
+      "view_points": [
+        1900,
+        2112
+      ],
+      "frame_token": 55,
+      "quads": 313,
+      "horizontal_rules": [
+        [
+          1781,
+          194,
+          108,
+          1
+        ],
+        [
+          8,
+          213,
+          171,
+          1
+        ]
+      ],
+      "native_cursor": "pointer",
+      "viewport": [
+        1900,
+        2112,
+        1
+      ],
+      "desired_pointer": 3
+    },
+    "sidebar-resize": {
+      "app_active": true,
+      "marker": [
+        386,
+        25,
+        9,
+        19
+      ],
+      "window_key": true,
+      "view_points": [
+        1900,
+        2112
+      ],
+      "frame_token": 59,
+      "quads": 305,
+      "horizontal_rules": [
+        [
+          377,
+          6,
+          9,
+          1
+        ],
+        [
+          377,
+          2095,
+          9,
+          1
+        ]
+      ],
+      "native_cursor": "col_resize",
+      "viewport": [
+        1900,
+        2112,
+        1
+      ],
+      "desired_pointer": 18
+    },
+    "restored-hover": {
+      "app_active": true,
+      "marker": [
+        8,
+        25,
+        9,
+        19
+      ],
+      "window_key": true,
+      "view_points": [
+        1900,
+        2112
+      ],
+      "frame_token": 64,
+      "quads": 310,
+      "horizontal_rules": [
+        [
+          8,
+          80,
+          261,
+          1
+        ]
+      ],
+      "native_cursor": "pointer",
+      "viewport": [
+        1900,
+        2112,
+        1
+      ],
+      "desired_pointer": 3
+    },
+    "leave": {
+      "app_active": true,
+      "marker": [
+        8,
+        25,
+        9,
+        19
+      ],
+      "window_key": true,
+      "view_points": [
+        1900,
+        2112
+      ],
+      "frame_token": 65,
+      "quads": 279,
+      "horizontal_rules": [],
+      "native_cursor": "default",
+      "viewport": [
+        1900,
+        2112,
+        1
+      ],
+      "desired_pointer": 0
+    }
+  },
+  "editor": {
+    "pid": 5009,
+    "argv": [
+      "/private/tmp/tlr-links-reviewed/editor",
+      "/private/tmp/tlr-links-reviewed/document with space.txt"
+    ]
+  },
+  "osc8_editor": {
+    "pid": 5030,
+    "argv": [
+      "/private/tmp/tlr-links-reviewed/editor",
+      "/private/tmp/tlr-links-reviewed/osc8 destination.txt"
+    ]
+  },
+  "terminal": {
+    "pid": 4879,
+    "rows": 22,
+    "cols": 87,
+    "xpixel": 783,
+    "ypixel": 418,
+    "uri": "file:///private/tmp/tlr-links-reviewed/document%20with%20space.txt"
+  },
+  "wrapped": {
+    "cols": 209,
+    "first_columns": 12,
+    "uri": "https://example.invalid/wrapped"
+  },
+  "file_opened": true,
+  "osc8_destination_opened": true,
+  "softwrap_underlined": true,
+  "children_survived_window_close": true,
+  "external_http_opened": false
+}

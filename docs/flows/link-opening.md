@@ -10,7 +10,9 @@ cancels it. Modifier changes re-evaluate a stationary pointer.
 The GUI recognizes visible URLs across VT-confirmed soft wraps, and OSC 8 links
 whose label differs from their URI. Explicit links take precedence over textual
 recognition. Hover underlines the matching spans and shows the actual destination
-in a clipped pane-local preview. Distinct OSC 8 identities with the same URI remain
+in a clipped pane-local preview. Its delivered rectangle consumes pointer gestures
+until another frame removes it; covered terminal text cannot receive a click.
+Single-row panes keep the underline without a preview that would cover the link. Distinct OSC 8 identities with the same URI remain
 distinct groups. A hard newline never joins text into a URL.
 
 Supported explicit schemes are `http`, `https`, `file`, `mailto`, `ftp`, `ssh`,

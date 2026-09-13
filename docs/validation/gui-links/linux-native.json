@@ -1,0 +1,12 @@
+{
+  "opened": [
+    "https://visible.example/path",
+    "https://actual.example/docs",
+    "https://wrap.example/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ],
+  "release_only": true,
+  "child_input": "xt",
+  "children_survived": true,
+  "cell_width": 10,
+  "cell_height": 19
+}
