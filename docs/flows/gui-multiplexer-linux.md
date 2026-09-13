@@ -56,3 +56,14 @@ window looks plausible. Each marker and process wait has a fixed deadline.
 
 The script is a functional and lifetime regression probe. It does not measure
 latency, prove multi-day stability, or replace the TUI/runtime regression suites.
+
+On 2026-09-13, integration snapshot `b7232ad5` passed both navigation matrices
+on the existing Linux VM. The probes checked 82 shell receipts across 14 stages,
+including sidebar dragging, five surviving shells per detach/reattach, exact
+split geometry restoration and clean Vulkan validation. The native build passed
+all 74 requested build steps, with 89 GUI tests passing and one skipped, plus
+the window, clipboard-transfer, client-boundary and code-style checks.
+
+The companion `gui-clipboard-test.py` also passed both prefix configurations:
+four ASCII/UTF-8 copy-and-paste round trips, each checked through both clipboard
+MIME types and received by the same shell with unchanged PTY dimensions.
