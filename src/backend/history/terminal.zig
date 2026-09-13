@@ -331,3 +331,90 @@ test "an erased anchor row without a repainted prompt captures nothing" {
     try std.testing.expect(!try fixture.tracker.captureSubmitted(&fixture.terminal));
     try std.testing.expectEqual(TerminalTracker.Phase.idle, fixture.tracker.phase);
 }
+
+test "alternate screen input cannot move primary history pins before resize" {
+    const gpa = std.testing.allocator;
+    var fixture: TypeAheadFixture = undefined;
+    try fixture.init(gpa);
+    defer fixture.deinit(gpa);
+    fixture.output("\x1b[?1049h\x1b[24;70Heditor");
+    fixture.typed("j");
+    try fixture.terminal.resize(gpa, .{ .cols = 20, .rows = 4 });
+    fixture.output("\x1b[Hframe");
+    try std.testing.expectEqual(TerminalTracker.Phase.idle, fixture.tracker.phase);
+    fixture.output("\x1b[?1049l\r\n$ ");
+    fixture.typed("echo ok");
+    fixture.output("echo ok");
+    try fixture.submit();
+    try std.testing.expectEqualStrings("echo ok", fixture.command());
+}
+
+test "alternate output cancels an incomplete edit without rebasing to another page list" {
+    const gpa = std.testing.allocator;
+    var fixture: TypeAheadFixture = undefined;
+    try fixture.init(gpa);
+    defer fixture.deinit(gpa);
+    fixture.output("$ ");
+    fixture.typed("x");
+    fixture.output("\x1b[?1049h\x1b[24;70H$ x");
+    try std.testing.expectEqual(TerminalTracker.Phase.idle, fixture.tracker.phase);
+    try fixture.terminal.resize(gpa, .{ .cols = 20, .rows = 4 });
+    fixture.output("\x1b[Hframe");
+    try std.testing.expectEqual(TerminalTracker.Phase.idle, fixture.tracker.phase);
+}
+
+test "history pins belong to primary even when initialized or destroyed in alternate" {
+    const gpa = std.testing.allocator;
+    var terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 40, .rows = 8 });
+    defer terminal.deinit(gpa);
+    var stream = terminal.vtStream();
+    defer stream.deinit();
+    const primary = terminal.screens.get(.primary).?;
+    const before = primary.pages.tracked_pins.count();
+    var tracker = try TerminalTracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
+    stream.nextSlice("\x1b[?1049h");
+    tracker.deinit(&terminal);
+    try std.testing.expectEqual(before, primary.pages.tracked_pins.count());
+    const alternate = terminal.screens.active;
+    const alternate_before = alternate.pages.tracked_pins.count();
+    tracker = try TerminalTracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
+    defer tracker.deinit(&terminal);
+    try std.testing.expectEqual(before + 2, primary.pages.tracked_pins.count());
+    try std.testing.expectEqual(alternate_before, alternate.pages.tracked_pins.count());
+}
+
+test "alternate screen cannot become the end of a submitted shell selection" {
+    const gpa = std.testing.allocator;
+    var fixture: TypeAheadFixture = undefined;
+    try fixture.init(gpa);
+    defer fixture.deinit(gpa);
+    fixture.output("$ ");
+    fixture.typed("x\r");
+    fixture.stream.nextSlice("\x1b[?1049hframe\r\n");
+    try std.testing.expect(!try fixture.tracker.captureSubmitted(&fixture.terminal));
+    try std.testing.expectEqual(TerminalTracker.Phase.idle, fixture.tracker.phase);
+}
+
+test "running shell command survives input and output on alternate screen" {
+    const gpa = std.testing.allocator;
+    var fixture: TypeAheadFixture = undefined;
+    try fixture.init(gpa);
+    defer fixture.deinit(gpa);
+    const capturing = try TerminalTracker.init(gpa, .{ .terminal = &fixture.terminal, .cwd = "/work", .capture_output = true });
+    fixture.tracker.deinit(&fixture.terminal);
+    fixture.tracker = capturing;
+    fixture.output("\x1b]133;A\x07$ \x1b]133;B\x07");
+    fixture.typed("nvim\r");
+    fixture.stream.nextSlice("nvim\r\n");
+    try std.testing.expect(try fixture.tracker.captureSubmitted(&fixture.terminal));
+    fixture.output("\x1b]133;C\x07\x1b[?1049h\x1b[24;70Heditor");
+    fixture.typed("jjj");
+    fixture.output("\x1b[Hnew frame");
+    try std.testing.expectEqual(TerminalTracker.Phase.running, fixture.tracker.phase);
+    try std.testing.expect(std.mem.indexOf(u8, fixture.tracker.output_tail.?[0..fixture.tracker.output_len], "new frame") != null);
+    fixture.output("\x1b]133;D;0\x07");
+    try std.testing.expectEqual(.alternate, fixture.terminal.screens.active_key);
+    try std.testing.expectEqual(TerminalTracker.Phase.idle, fixture.tracker.phase);
+    try std.testing.expectEqualStrings("nvim", fixture.command());
+    try std.testing.expectEqual(@as(?i32, 0), fixture.collected.exit_code);
+}

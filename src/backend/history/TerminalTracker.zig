@@ -21,6 +21,7 @@ aux: OscTracker,
 output_tail: ?[]u8 = null,
 output_len: usize = 0,
 output_observed: u64 = 0,
+/// Both pins belong to the primary page list for the tracker lifetime.
 anchor: *vt.Pin,
 right_prompt: *vt.Pin,
 right_prompt_active: bool = false,
@@ -56,7 +57,7 @@ pub const Config = @import("TerminalTrackerConfig.zig");
 
 pub fn init(gpa: std.mem.Allocator, config: TerminalTrackerConfig) !Tracker {
     const terminal = config.terminal;
-    const screen = terminal.screens.active;
+    const screen = terminal.screens.get(.primary).?;
     const anchor = try screen.pages.trackPin(screen.cursor.page_pin.*);
     errdefer screen.pages.untrackPin(anchor);
     const output_tail: ?[]u8 = if (config.capture_output)
@@ -80,8 +81,8 @@ pub fn deinit(tracker: *Tracker, terminal: *vt.Terminal) void {
     }
     tracker.output_tail = null;
     tracker.freeCommand();
-    terminal.screens.active.pages.untrackPin(tracker.right_prompt);
-    terminal.screens.active.pages.untrackPin(tracker.anchor);
+    terminal.screens.get(.primary).?.pages.untrackPin(tracker.right_prompt);
+    terminal.screens.get(.primary).?.pages.untrackPin(tracker.anchor);
 }
 
 /// Observes one client-to-PTY slice and emits any command whose prior run
@@ -97,7 +98,7 @@ pub fn observeInput(tracker: *Tracker, observation: TerminalInputObservation, si
     const clock = observation.clock;
 
     _ = tracker.aux.input(bytes);
-    if (!shell_foreground or bytes.len == 0) {
+    if (!shell_foreground or bytes.len == 0 or terminal.screens.active_key != .primary) {
         return 0;
     }
 
@@ -172,7 +173,13 @@ pub fn captureSubmitted(tracker: *Tracker, terminal: *vt.Terminal) !bool {
     if (tracker.phase != .awaiting_commit) {
         return false;
     }
-    const screen = terminal.screens.active;
+
+    if (terminal.screens.active_key != .primary) {
+        tracker.reset(.idle);
+        return false;
+    }
+
+    const screen = terminal.screens.get(.primary).?;
     const finish_pin = screen.cursor.page_pin.*;
     // A blank anchor row means the shell erased the echo and painted
     // elsewhere without the edit being re-anchored. Whatever follows the
@@ -246,6 +253,15 @@ pub fn observeOutput(tracker: *Tracker, observation: TerminalOutputObservation, 
     if (bytes.len != 0) {
         tracker.last_output_awake_ns = clock.awake_ns;
     }
+
+    // Full-screen application buffers are not shell edits. Their pins belong
+    // to another page list and cannot replace a tracked primary-screen pin.
+    if (observation.terminal.screens.active_key != .primary and
+        (tracker.phase == .editing or tracker.phase == .awaiting_commit))
+    {
+        tracker.reset(.idle);
+    }
+
     if (tracker.phase == .editing and bytes.len != 0) {
         tracker.rebaseMovedEdit(observation.terminal);
     }
@@ -326,7 +342,7 @@ pub fn updateCwd(tracker: *Tracker, cwd: []const u8) void {
 }
 
 fn beginEdit(tracker: *Tracker, terminal: *vt.Terminal) void {
-    tracker.anchor.* = terminal.screens.active.cursor.page_pin.*;
+    tracker.anchor.* = terminal.screens.get(.primary).?.cursor.page_pin.*;
     tracker.anchor.garbage = false;
     tracker.anchor_erased = false;
     tracker.findRightPrompt();
@@ -376,7 +392,7 @@ fn rebaseMovedEdit(tracker: *Tracker, terminal: *vt.Terminal) void {
 
     // The new prompt has to be on screen first, or the anchor would land
     // before it and the prompt would be captured as command text.
-    const cursor = terminal.screens.active.cursor.page_pin.*;
+    const cursor = terminal.screens.get(.primary).?.cursor.page_pin.*;
     const echo_start = tracker.echoStart(cursor);
     if (echo_start == 0 or terminal_ops.cellsBlank(cursor.cells(.left)[0..echo_start])) {
         return;
