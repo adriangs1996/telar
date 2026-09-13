@@ -81,6 +81,7 @@ pub const PaneInputTarget = union(enum) {
     focused,
     pane: PaneIdType,
     key_lease: PaneIdType,
+    pointer_lease: PaneIdType,
     paste_session: PanePasteSession,
 };
 

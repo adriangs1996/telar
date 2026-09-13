@@ -29,7 +29,11 @@
 }
 
 - (BOOL)sendInput:(telar_gui_input)event {
-  if (input_handler == nil || !input_handler(event)) {
+  if (input_handler == nil) {
+    return NO;
+  }
+
+  if (!input_handler(event)) {
     NSBeep();
     return NO;
   }
@@ -175,7 +179,7 @@
   }
 }
 
-- (BOOL)resignFirstResponder {
+- (void)releasePressedKeys {
   for (NSUInteger index = 0; index < 256; index++) {
     if (held_keys[index].physical != 0) {
       telar_gui_input input = held_keys[index];
@@ -185,6 +189,10 @@
     }
   }
 
+}
+
+- (BOOL)resignFirstResponder {
+  [self releasePressedKeys];
   return [super resignFirstResponder];
 }
 

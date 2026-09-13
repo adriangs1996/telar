@@ -133,3 +133,75 @@ test "native bindings preserve ownership through hot reload and matching release
     try session.settle();
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }
+
+test "native child release crosses a newly opened prompt only with its acquired lease" {
+    const Capture = @import("../input/PointerCapture.zig");
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    try session.receiveFrame(1);
+    try session.settle();
+    const app = &session.gui.app;
+    const model = app.model.activeTabModel().?;
+    const pane = model.find(Session.pane_id).?;
+    pane.mouse = .{ .sgr = true, .tracking = .button };
+    const view = model.viewForPane(pane.id, session.gui.region.area).?;
+    const press: client.Mouse = .{ .x = view.content.x, .y = view.content.y, .kind = .press };
+    const capture = Capture.begin(app, press).?;
+    try std.testing.expect(client.controllers.name_prompts.beginActiveTabRename(app));
+    try std.testing.expect(app.model.planPaneInput(.{ .pane = pane.id }) == null);
+    var release = press;
+    release.kind = .release;
+    try capture.deliver(app, release);
+    const request = try core.decodeClient(session.pending.?);
+    try std.testing.expectEqual(pane.id, request.pane_input.pane_id);
+    try std.testing.expect(std.mem.endsWith(u8, request.pane_input.bytes, "m"));
+    try session.settle();
+}
+
+test "native pointer rejects a newer layout even before a GPU flight starts" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    try session.receiveFrame(1);
+    const token = try session.gui.prepare(&session.renderer);
+    try session.gui.complete(token, true);
+    try session.settle();
+    const app = &session.gui.app;
+    const model = app.model.activeTabModel().?;
+    session.gui.input.setGeometry(.{ 0, 0 }, app.model.hostSize());
+    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(11), .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    try std.testing.expect(!app.presentation.inFlight());
+    try session.gui.input.accept(.{ .kind = 6, .code = 1, .x = 10, .y = 10 });
+    try session.gui.input.accept(.{ .kind = 6, .code = 2, .x = 10, .y = 10 });
+    try session.gui.input.drain(app);
+    try session.settle();
+    try std.testing.expect(app.model.pointerSelection() == null);
+    try std.testing.expectEqual(@as(usize, 0), session.input_len);
+}
+
+test "native focus loss releases an acquired child mouse gesture" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    try session.receiveFrame(1);
+    const app = &session.gui.app;
+    const model = app.model.activeTabModel().?;
+    const pane = model.find(Session.pane_id).?;
+    pane.mouse = .{ .sgr = true, .tracking = .button };
+    const token = try session.gui.prepare(&session.renderer);
+    try session.gui.complete(token, true);
+    try session.settle();
+    session.gui.input.setGeometry(.{ 0, 0 }, app.model.hostSize());
+    const view = model.viewForPane(pane.id, session.gui.region.area).?;
+    const x = @as(f64, @floatFromInt(view.content.x)) * app.model.hostSize().cell_width_px + 1;
+    const y = @as(f64, @floatFromInt(view.content.y)) * app.model.hostSize().cell_height_px + 1;
+    try session.gui.input.accept(.{ .kind = 6, .code = 1, .x = x, .y = y });
+    try session.gui.input.drain(app);
+    try session.settle();
+    try std.testing.expect(session.gui.input.pointer.owners[0] == .child);
+    try session.gui.input.cancelPointer(app);
+    try session.settle();
+    try std.testing.expect(session.gui.input.pointer.owners[0] == .shared);
+    try std.testing.expect(std.mem.endsWith(u8, session.input[0..session.input_len], "m"));
+}

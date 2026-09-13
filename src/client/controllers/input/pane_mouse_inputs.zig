@@ -107,7 +107,7 @@ fn applyEffect(raw_context: *anyopaque, effect: EffectType) !void {
             }
         },
         .report => |report| {
-            try reportRetained(context.client, report);
+            try deliverReport(context.client, report, false);
         },
     }
 }
@@ -116,10 +116,14 @@ fn applyEffect(raw_context: *anyopaque, effect: EffectType) !void {
 /// checked attachment identity and projected its current rectangle.
 /// Example: `try reportRetained(client, report);`
 pub fn reportRetained(client: *Client, report: ReportEffectType) !void {
+    return deliverReport(client, report, true);
+}
+
+fn deliverReport(client: *Client, report: ReportEffectType, retained: bool) !void {
     var encoded: [64]u8 = undefined;
     const bytes = try encodeReport(&encoded, report);
     _ = try pane_inputs.send(client, .{
-        .target = .{ .pane = report.plan.pane_id },
+        .target = if (retained) .{ .pointer_lease = report.plan.pane_id } else .{ .pane = report.plan.pane_id },
         .source = .mouse,
         .payload = .{ .bytes = bytes },
     });

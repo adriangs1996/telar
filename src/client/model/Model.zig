@@ -1430,7 +1430,7 @@ pub fn planPaneInput(model: *const Model, target: model_types.PaneInputTarget) ?
                 return null;
             }
         },
-        .key_lease => {},
+        .key_lease, .pointer_lease => {},
         .paste_session => |expected| {
             const active = model.pane_paste orelse return null;
             if (!std.meta.eql(active, expected)) {
@@ -1448,7 +1448,7 @@ pub fn planPaneInput(model: *const Model, target: model_types.PaneInputTarget) ?
             const active = model.workspace.activeConst() orelse return null;
             break :explicit active.model.findConst(pane_id) orelse return null;
         },
-        .key_lease => |pane_id| leased: {
+        .key_lease, .pointer_lease => |pane_id| leased: {
             const tab = model.workspace.tabForPaneConst(pane_id) orelse return null;
             break :leased tab.model.findConst(pane_id) orelse return null;
         },

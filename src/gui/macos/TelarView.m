@@ -290,6 +290,7 @@
 }
 
 - (void)windowDidResignKey:(NSNotification *)notification {
+  [self releasePressedKeys];
   if (!closed) {
     callbacks.input(context, (telar_gui_input){.kind = 5, .code = 0, .phase = 1});
     [self requestDraw];

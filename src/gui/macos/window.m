@@ -25,6 +25,7 @@ int telar_gui_run(const char *title, void *context,
     window.title = [NSString stringWithUTF8String:title];
     window.minSize = NSMakeSize(320, 200);
     window.releasedWhenClosed = NO;
+    window.collectionBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
 
     TelarView *view = [[TelarView alloc] initWithFrame:window.contentView.bounds
                                                context:context

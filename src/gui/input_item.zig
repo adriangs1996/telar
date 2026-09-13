@@ -1,4 +1,5 @@
 pub const Item = union(enum) {
+    pointer_cancel,
     pointer: @import("input/PointerSample.zig"),
     key: @import("telar-client").Key,
     paste_start,

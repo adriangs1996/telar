@@ -31,7 +31,7 @@ pub fn deliver(capture: Capture, app: *client.AttachedClient, event: client.Mous
 
     const model = app.model.activeTabModel() orelse return;
     const pane = model.find(capture.pane_id) orelse return;
-    if (pane.attachment_generation != capture.generation) {
+    if (!pane.attached or pane.attachment_generation != capture.generation) {
         return;
     }
 
@@ -41,6 +41,10 @@ pub fn deliver(capture: Capture, app: *client.AttachedClient, event: client.Mous
     }
 
     const size = app.model.hostSize();
+    if (size.cell_width_px == 0 or size.cell_height_px == 0) {
+        return;
+    }
+
     var projected = event;
     projected.x = std.math.clamp(event.x, view.content.x, view.content.x + view.content.w - 1);
     projected.y = std.math.clamp(event.y, view.content.y, view.content.y + view.content.h - 1);

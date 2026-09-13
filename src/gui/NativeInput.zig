@@ -18,6 +18,7 @@ binding_timeout: client.Scheduler = .{},
 pointer: PointerRouting = .{},
 stopped: bool = false,
 presentation_revision: u64 = 0,
+pointer_cancel_pending: bool = false,
 
 /// Example: `var input = try Input.init(config);`
 pub fn init(config: client.RouterConfig) !Input {
@@ -37,6 +38,21 @@ pub fn adopt(input: *Input, app: *client.AttachedClient, config: client.RouterCo
 /// Example: `input.setGeometry(renderer.origin, size);`
 pub fn setGeometry(input: *Input, origin: [2]u32, size: core.TerminalSize) void {
     input.pointer.configure(origin, size);
+}
+
+/// Reserves one control slot to finish gestures even when ordinary input is
+/// saturated. Example: `try input.cancelPointer(app);`
+pub fn cancelPointer(input: *Input, app: *client.AttachedClient) !void {
+    input.pointer.invalidateGestures();
+    if (input.pointer_cancel_pending) {
+        return;
+    }
+
+    std.debug.assert(input.len < capacity);
+    input.push(.pointer_cancel);
+    input.pointer_cancel_pending = true;
+    try input.drain(app);
+    try app.host_input_source.resumeRead();
 }
 
 /// Prompt replay contains UTF-8 text, never a terminal escape stream.
@@ -203,6 +219,10 @@ pub fn drain(input: *Input, app: *client.AttachedClient) !void {
             },
             .paste_text => |*chunk| _ = try client.controllers.paste_routing.content(app, chunk.bytes[0..chunk.len]),
             .paste_finish => _ = try client.controllers.paste_routing.finish(app),
+            .pointer_cancel => {
+                try input.pointer.cancel(app);
+                input.pointer_cancel_pending = false;
+            },
             .pointer => |event| {
                 input.router.cancelSequence();
                 try input.pointer.apply(app, event);
@@ -249,7 +269,7 @@ fn defaultRouter() routing.Type {
 }
 
 fn reserve(input: *const Input, count: usize) !void {
-    if (count > capacity - input.len) {
+    if (count > (capacity - 1) -| input.len) {
         return error.NativeInputFull;
     }
 }

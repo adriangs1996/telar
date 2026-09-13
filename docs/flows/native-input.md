@@ -23,8 +23,9 @@ The shared paste router owns delivery to a prompt or the pane selected at start.
 Pointer samples carry physical top-left coordinates and the current grid
 revision. `PointerGeometry` removes padding and preserves subcell coordinates for
 pixel mouse protocols. New gestures queued against replaced geometry are
-rejected. Shared presentation geometry additionally rejects new pane gestures
-whose presented layout differs from the current model.
+rejected. Presentation geometry additionally rejects new pane gestures whose delivered
+layout differs from the current model, including the interval before a new GPU
+flight starts.
 
 Each gesture has one owner. Chrome retains controls and resize handles, shared
 copy mode retains selection, and `PointerRouting` retains child mouse reporting
@@ -33,7 +34,10 @@ it resolves and clips against the current pane rectangle on drag/up. Focus
 changes never redirect those events. Detachment or an attachment replacement
 makes the capture stale, and its remaining events are consumed. The additive
 `pane_mouse_inputs.reportRetained` port uses the existing encoder and input
-controller for delivery to that explicit pane.
+controller with a `pointer_lease` target. A newly opened prompt cannot intercept
+the release of a gesture already acquired by that pane. Focus loss reserves one
+ordered cancellation message even under input saturation, releases live
+gestures and invalidates queued starts.
 
 Window fullscreen belongs to the native host: macOS uses Ctrl-Command-F and its
 window control; Wayland uses F11 and xdg-toplevel requests. This is independent

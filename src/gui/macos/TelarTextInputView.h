@@ -10,6 +10,8 @@ typedef BOOL (^TelarInputHandler)(telar_gui_input event);
                  inputHandler:(TelarInputHandler)handler;
 // Disconnect the borrowed client context, e.g. [view stopInput] on close.
 - (void)stopInput;
+// Release physical leases when the window loses keyboard focus.
+- (void)releasePressedKeys;
 // Subclasses use the same bounded semantic admission, e.g. [self sendInput:event].
 - (BOOL)sendInput:(telar_gui_input)event;
 @end
