@@ -207,6 +207,7 @@
 
   dirty = NO;
   callbacks.render(context, viewport, &frame);
+  [self refreshPointerCursor];
   if (frame.token == 0) {
     dirty = YES;
     return;
@@ -277,20 +278,27 @@
     [self.window close];
     return;
   }
+  [self refreshPointerCursor];
   if (dirty || result > 0) {
     [self requestDraw];
   }
   [self scheduleWake];
 }
 
+- (uint32_t)desiredPointerShape {
+  return !closed && callbacks.pointer_shape != NULL ? callbacks.pointer_shape(context) : 0;
+}
+
 - (void)windowDidBecomeKey:(NSNotification *)notification {
   callbacks.input(context, (telar_gui_input){.kind = 5, .code = 1, .phase = 1});
+  [self restorePointer];
   [self requestDraw];
   [self scheduleWake];
 }
 
 - (void)windowDidResignKey:(NSNotification *)notification {
   [self releasePressedKeys];
+  [self resetPointer];
   if (!closed) {
     callbacks.input(context, (telar_gui_input){.kind = 5, .code = 0, .phase = 1});
     [self requestDraw];

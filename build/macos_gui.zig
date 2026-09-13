@@ -11,6 +11,7 @@ pub fn add(b: *std.Build, module: *std.Build.Module, disable_coverage: bool) voi
             "src/gui/macos/TelarMetalRenderer.m",
             "src/gui/macos/TelarTextInputView.m",
             "src/gui/macos/TelarPointerInputView.m",
+            "src/gui/macos/TelarPointerCursor.m",
             "src/gui/macos/font.m",
             "src/gui/macos/glyph_rasterizer.m",
         },

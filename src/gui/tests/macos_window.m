@@ -4,6 +4,8 @@
 #import <objc/runtime.h>
 #include "telar_gui.h"
 #import "../macos/TelarTextInputView.h"
+#import "../macos/TelarView.h"
+#import "../macos/TelarPointerCursor.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -20,6 +22,10 @@ static double pointer_x, pointer_y;
 static bool checking_repeat;
 static int repeat_inputs;
 static telar_gui_input expected_repeat;
+static BOOL checking_pointer;
+static unsigned pointer_inputs, pointer_queries;
+static uint32_t pointer_shape;
+static telar_gui_input expected_pointer;
 
 static NSEvent *key_event(NSView *view, unsigned short key, NSString *text, NSEventModifierFlags mods, uint32_t phase) {
     return [NSEvent keyEventWithType:phase == 3 ? NSEventTypeKeyUp : NSEventTypeKeyDown
@@ -82,7 +88,88 @@ static void verify_keyboard(TelarTextInputView *view) {
 
 @interface NSView (TelarTest)
 - (void)requestDraw;
+- (void)pumpEvents;
 @end
+
+static NSEvent *pointer_event(NSView *view, NSEventType type, NSEventModifierFlags mods) {
+    NSPoint point = NSMakePoint(13, 17);
+    if (type == NSEventTypeFlagsChanged) {
+        // Modifier events have no useful pointer coordinates.
+        return [NSEvent keyEventWithType:type location:NSZeroPoint modifierFlags:mods timestamp:0
+                           windowNumber:view.window.windowNumber context:nil characters:@""
+             charactersIgnoringModifiers:@"" isARepeat:NO keyCode:55];
+    }
+    if (type == NSEventTypeMouseEntered || type == NSEventTypeMouseExited || type == NSEventTypeCursorUpdate) {
+        return [NSEvent enterExitEventWithType:type location:point modifierFlags:mods timestamp:0
+                                 windowNumber:view.window.windowNumber context:nil eventNumber:1
+                               trackingNumber:0 userData:NULL];
+    }
+    return [NSEvent mouseEventWithType:type location:point modifierFlags:mods timestamp:0
+                         windowNumber:view.window.windowNumber context:nil eventNumber:1
+                           clickCount:0 pressure:0];
+}
+
+static void verify_pointer(TelarView *view) {
+    for (uint32_t shape = 0; shape < 34; shape++) {
+        NSCursor *cursor = telar_pointer_cursor(shape);
+        if (cursor == nil || cursor != telar_pointer_cursor(shape)) failed++;
+    }
+    if (telar_pointer_cursor(2) != NSCursor.arrowCursor ||
+        telar_pointer_cursor(4) != NSCursor.arrowCursor ||
+        telar_pointer_cursor(5) != NSCursor.arrowCursor ||
+        telar_pointer_cursor(UINT32_MAX) != NSCursor.arrowCursor ||
+        telar_pointer_cursor(3) != NSCursor.pointingHandCursor ||
+        telar_pointer_cursor(8) != NSCursor.IBeamCursor ||
+        telar_pointer_cursor(14) != NSCursor.operationNotAllowedCursor ||
+        telar_pointer_cursor(32) != NSCursor.zoomInCursor) failed++;
+
+    checking_pointer = YES;
+    expected_pointer = (telar_gui_input){.kind = 6, .code = 6, .phase = 1, .x = pointer_x, .y = pointer_y};
+    [view mouseEntered:pointer_event(view, NSEventTypeMouseEntered, 0)];
+    if (NSCursor.currentCursor != NSCursor.arrowCursor) failed++;
+
+    // State changes refresh the native pointer before another GPU frame exists.
+    const int before_pump = paints;
+    const unsigned before_queries = pointer_queries;
+    pointer_shape = 3;
+    [view pumpEvents];
+    if (paints != before_pump || pointer_queries <= before_queries ||
+        NSCursor.currentCursor != NSCursor.pointingHandCursor) failed++;
+
+    expected_pointer.mods = 15;
+    [view mouseMoved:pointer_event(view, NSEventTypeMouseMoved,
+        NSEventModifierFlagShift | NSEventModifierFlagOption | NSEventModifierFlagControl | NSEventModifierFlagCommand)];
+    expected_pointer.mods = 8;
+    [view flagsChanged:pointer_event(view, NSEventTypeFlagsChanged, NSEventModifierFlagCommand)];
+    expected_pointer.mods = 0;
+    [view flagsChanged:pointer_event(view, NSEventTypeFlagsChanged, 0)];
+
+    pointer_shape = 8;
+    [view mouseMoved:pointer_event(view, NSEventTypeMouseMoved, 0)];
+    if (NSCursor.currentCursor != NSCursor.IBeamCursor) failed++;
+    [NSCursor.arrowCursor set];
+    [view cursorUpdate:pointer_event(view, NSEventTypeCursorUpdate, 0)];
+    if (NSCursor.currentCursor != NSCursor.IBeamCursor) failed++;
+
+    expected_pointer.code = 7;
+    [view mouseExited:pointer_event(view, NSEventTypeMouseExited, 0)];
+    if (NSCursor.currentCursor != NSCursor.arrowCursor) failed++;
+    const unsigned after_exit = pointer_inputs;
+    [view flagsChanged:pointer_event(view, NSEventTypeFlagsChanged, NSEventModifierFlagCommand)];
+    [view pumpEvents];
+    if (pointer_inputs != after_exit || NSCursor.currentCursor != NSCursor.arrowCursor) failed++;
+
+    expected_pointer.code = 6;
+    [view mouseEntered:pointer_event(view, NSEventTypeMouseEntered, 0)];
+    expected_pointer.code = 7;
+    [view windowDidResignKey:[NSNotification notificationWithName:NSWindowDidResignKeyNotification object:view.window]];
+    if (NSCursor.currentCursor != NSCursor.arrowCursor) failed++;
+    const unsigned after_focus = pointer_inputs;
+    [view flagsChanged:pointer_event(view, NSEventTypeFlagsChanged, 0)];
+    if (pointer_inputs != after_focus || pointer_inputs != 8) failed++;
+    checking_pointer = NO;
+    pointer_shape = 0;
+}
 
 static void draw(id view, SEL selector, id drawable) {
     ((void (*)(id, SEL, id))original_draw)(view, selector, drawable);
@@ -132,6 +219,11 @@ static uint32_t wakeup_after(void *context) {
     (void)context;
     return deadline ? (uint32_t)fmax(1, ceil((deadline - CACurrentMediaTime()) * 1000)) : 0;
 }
+static uint32_t desired_pointer(void *context) {
+    (void)context;
+    pointer_queries++;
+    return pointer_shape;
+}
 static void complete(void *context, uint64_t token, int success) {
     (void)context;
     if (token == (uint64_t)delivered + 1 && success) delivered++; else failed++;
@@ -140,6 +232,14 @@ static void complete(void *context, uint64_t token, int success) {
 static int input(void *context, telar_gui_input event) {
     (void)context;
     if (event.kind == 5) { focus_events++; return 1; }
+    if (checking_pointer) {
+        if (event.kind != expected_pointer.kind || event.code != expected_pointer.code ||
+            event.mods != expected_pointer.mods || event.phase != expected_pointer.phase ||
+            event.button != expected_pointer.button || event.x != expected_pointer.x ||
+            event.y != expected_pointer.y || event.physical != 0) failed++;
+        pointer_inputs++;
+        return 1;
+    }
     if (checking_repeat) {
         if (event.kind != expected_repeat.kind || event.phase != expected_repeat.phase ||
             event.physical != expected_repeat.physical || event.mods != expected_repeat.mods ||
@@ -173,7 +273,7 @@ int main(void) {
         original_draw = method_setImplementation(method, (IMP)draw);
         int fds[2];
         if (telar_gui_pipe(fds)) return 2;
-        telar_gui_callbacks callbacks = {render,pump,complete,input,fds[0],wakeup_after};
+        telar_gui_callbacks callbacks = {render,pump,complete,input,fds[0],wakeup_after,desired_pointer};
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1000000000), dispatch_get_main_queue(), ^{
             NSWindow *window = NSApp.windows.firstObject;
             NSView *view = terminal_view(window.contentView);
@@ -196,6 +296,7 @@ int main(void) {
             injecting = NO;
             [(TelarTextInputView *)view releasePressedKeys];
             verify_keyboard((TelarTextInputView *)view);
+            verify_pointer((TelarView *)view);
             appearance_phase = 1;
             view.autoresizingMask = NSViewNotSizable;
             [view setFrameSize:NSMakeSize(640, 360)];
@@ -215,7 +316,7 @@ int main(void) {
         });
         int status = telar_gui_run("Telar native backend test", NULL, &callbacks);
         telar_gui_close_pipe(fds);
-        fprintf(stdout, "native macOS: status=%d painted=%d delivered=%d inputs=%d repeats=%d timer_wakes=%d failures=%d\n",status,paints,delivered,inputs,repeat_inputs,timer_wakes,failed);
-        return status || !delivered || inputs != 10 || repeat_inputs != 26 || failed || !closed_in_flight || paints != delivered + 1 || appearance_checked != 7;
+        fprintf(stdout, "native macOS: status=%d painted=%d delivered=%d inputs=%d repeats=%d pointer_inputs=%u pointer_queries=%u timer_wakes=%d failures=%d\n",status,paints,delivered,inputs,repeat_inputs,pointer_inputs,pointer_queries,timer_wakes,failed);
+        return status || !delivered || inputs != 10 || repeat_inputs != 26 || pointer_inputs != 8 || failed || !closed_in_flight || paints != delivered + 1 || appearance_checked != 7;
     }
 }
