@@ -15,6 +15,7 @@ static int timer_wakes, focus_events;
 static int deferred;
 static unsigned appearance_phase;
 static unsigned appearance_checked;
+static double pointer_x, pointer_y;
 
 @interface NSView (TelarTest)
 - (void)requestDraw;
@@ -77,10 +78,18 @@ static int input(void *context, telar_gui_input event) {
     (void)context;
     if (event.kind == 5) { focus_events++; return 1; }
     if (!injecting) return 1;
-    if (inputs == 0 && !(event.kind == 1 && event.len == 1 && event.text[0] == 'a')) failed++;
+    if (inputs == 0 && !(event.kind == 1 && event.len == 1 && event.text[0] == 'a' && event.physical == 1)) failed++;
     if (inputs == 1 && !(event.kind == 4 && event.code == 'c' && (event.mods & 4))) failed++;
     if (inputs == 2 && !(event.kind == 3 && event.code == 1)) failed++;
     if (inputs == 3 && !(event.kind == 1 && event.len == 5 && !memcmp(event.text,"caf\xc3\xa9",5))) failed++;
+    if (inputs == 4 && !(event.kind == 4 && event.code == 'a' && event.phase == 3 && event.physical == 1)) failed++;
+    if (inputs == 5 && !(event.kind == 4 && event.code == ' ' && event.mods == 4 && event.physical == 50 && event.phase == 1)) failed++;
+    if (inputs == 6 && !(event.kind == 4 && event.code == ' ' && event.mods == 4 && event.physical == 50 && event.phase == 3)) failed++;
+    if (inputs >= 7 && inputs <= 9) {
+        uint32_t code = inputs == 7 ? 1 : inputs == 8 ? 3 : 2;
+        if (event.kind != 6 || event.code != code || event.button != 0 ||
+            event.x != pointer_x || event.y != pointer_y) failed++;
+    }
     inputs++;
     return 1;
 }
@@ -100,6 +109,16 @@ int main(void) {
             [view keyDown:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:NSEventModifierFlagControl timestamp:0 windowNumber:window.windowNumber context:nil characters:@"\003" charactersIgnoringModifiers:@"c" isARepeat:NO keyCode:8]];
             [view keyDown:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil characters:@"\r" charactersIgnoringModifiers:@"\r" isARepeat:NO keyCode:36]];
             [(id<NSTextInputClient>)view insertText:@"café" replacementRange:NSMakeRange(NSNotFound,0)];
+            [view keyUp:[NSEvent keyEventWithType:NSEventTypeKeyUp location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil characters:@"a" charactersIgnoringModifiers:@"a" isARepeat:NO keyCode:0]];
+            [view keyDown:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:NSEventModifierFlagControl timestamp:0 windowNumber:window.windowNumber context:nil characters:@"\0" charactersIgnoringModifiers:@" " isARepeat:NO keyCode:49]];
+            [view keyUp:[NSEvent keyEventWithType:NSEventTypeKeyUp location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil characters:@" " charactersIgnoringModifiers:@" " isARepeat:NO keyCode:49]];
+            NSPoint location = NSMakePoint(13, 17);
+            NSPoint local = [view convertPoint:location fromView:nil];
+            pointer_x = local.x * window.backingScaleFactor;
+            pointer_y = (view.isFlipped ? local.y : view.bounds.size.height - local.y) * window.backingScaleFactor;
+            [view mouseDown:[NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:location modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil eventNumber:1 clickCount:1 pressure:1]];
+            [view mouseDragged:[NSEvent mouseEventWithType:NSEventTypeLeftMouseDragged location:location modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil eventNumber:2 clickCount:1 pressure:1]];
+            [view mouseUp:[NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:location modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil eventNumber:3 clickCount:1 pressure:0]];
             injecting = NO;
             appearance_phase = 1;
             view.autoresizingMask = NSViewNotSizable;
@@ -121,6 +140,6 @@ int main(void) {
         int status = telar_gui_run("Telar native backend test", NULL, &callbacks);
         telar_gui_close_pipe(fds);
         fprintf(stdout, "native macOS: status=%d painted=%d delivered=%d inputs=%d timer_wakes=%d failures=%d\n",status,paints,delivered,inputs,timer_wakes,failed);
-        return status || !delivered || inputs != 4 || failed || !closed_in_flight || paints != delivered + 1 || appearance_checked != 7;
+        return status || !delivered || inputs != 10 || failed || !closed_in_flight || paints != delivered + 1 || appearance_checked != 7;
     }
 }
