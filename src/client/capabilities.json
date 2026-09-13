@@ -445,6 +445,7 @@
     "layout/icons.zig",
     "layout/sidebar.zig",
     "links/FilePath.zig",
+    "links/LinkMatch.zig",
     "links/LinkOpener.zig",
     "links/LinkTarget.zig",
     "links/Opening.zig",
