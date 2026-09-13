@@ -37,6 +37,7 @@ VKAPI_ATTR void VKAPI_CALL vkCmdBeginRendering(VkCommandBuffer commands, const V
 static struct {
     int wake[2];
     atomic_uint painted, delivered, completed, retries, failures;
+    atomic_uint cursor_shape, cursor_observed, cursor_queries;
     atomic_bool requested, closing;
     uint8_t atlas[4];
     telar_gui_quad quads[2];
@@ -99,7 +100,20 @@ static void *exercise(void *unused) {
     }
     pause_ms(200);
     unsigned settled = atomic_load(&state.painted);
+    atomic_store(&state.cursor_shape, 3);
+    telar_gui_wake(state.wake[1]);
+    for (unsigned i = 0; i < 500 && atomic_load(&state.cursor_observed) != 3; i++) {
+        pause_ms(10);
+    }
+    if (atomic_load(&state.cursor_observed) != 3) {
+        atomic_fetch_add(&state.failures, 1);
+    }
+    pause_ms(100);
+    unsigned cursor_queries = atomic_load(&state.cursor_queries);
     pause_ms(300);
+    if (cursor_queries != atomic_load(&state.cursor_queries)) {
+        atomic_fetch_add(&state.failures, 1);
+    }
     if (settled != atomic_load(&state.painted) || settled > 16) {
         atomic_fetch_add(&state.failures, 1);
     }
@@ -152,6 +166,14 @@ static int pump(void *context) {
     return atomic_exchange(&state.requested, false);
 }
 
+static uint32_t pointer_shape(void *context) {
+    (void)context;
+    atomic_fetch_add(&state.cursor_queries, 1);
+    uint32_t shape = atomic_load(&state.cursor_shape);
+    atomic_store(&state.cursor_observed, shape);
+    return shape;
+}
+
 static void complete(void *context, uint64_t token, int success) {
     (void)context;
     unsigned expected = atomic_fetch_add(&state.completed, 1) + 1;
@@ -190,7 +212,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     telar_gui_callbacks callbacks = {
-        .render = render, .pump = pump, .complete = complete, .input = input, .wake_fd = state.wake[0]};
+        .render = render, .pump = pump, .complete = complete, .input = input, .wake_fd = state.wake[0], .pointer_shape = pointer_shape};
     int status = telar_gui_run("Telar Vulkan integration test", NULL, &callbacks);
     if (invalid_frame_test) {
         telar_gui_close_pipe(state.wake);

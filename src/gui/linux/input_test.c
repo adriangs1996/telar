@@ -77,11 +77,18 @@ int main(void) {
     assert(ctrl < 32);
     modifiers(self, NULL, 0, 1u << ctrl, 0, 0, 0);
     verify_repeat(self, 36, (telar_gui_input){.kind = 4, .code = 'j', .mods = 4});
+    xkb_mod_index_t logo = xkb_keymap_mod_get_index(self->keymap, XKB_MOD_NAME_LOGO);
+    assert(logo < 32);
+    modifiers(self, NULL, 0, (1u << ctrl) | (1u << logo), 0, 0, 0);
+    // Super is exposed to pointer hover without widening the keyboard ABI.
+    verify_repeat(self, 36, (telar_gui_input){.kind = 4, .code = 'j', .mods = 4});
     modifiers(self, NULL, 0, 0, 0, 0, 0);
 
     count = 0;
     keyboard_key(self, NULL, 1, 0, 36, WL_KEYBOARD_KEY_STATE_PRESSED);
+    modifiers(self, NULL, 0, (1u << ctrl) | (1u << logo), 0, 0, 0);
     keyboard_leave(self, NULL, 2, NULL);
+    assert(xkb_state_serialize_mods(self->state, XKB_STATE_MODS_EFFECTIVE) == 0);
     assert(count == 3 && events[1].phase == 3 && events[2].kind == 5 && events[2].code == 0);
     assert(telar_input_timeout(self) == -1);
     test_time_ms += 1000;

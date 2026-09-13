@@ -7,6 +7,7 @@ const c_flags = @import("c_flags.zig");
 /// `wayland-protocols`, Vulkan and Fontconfig headers, and `glslc`. Example: `linux_gui.add(b, gui, false)`.
 pub fn add(b: *std.Build, gui: *std.Build.Module, disable_coverage: bool) void {
     const flags = c_flags.forCoverage(b, &.{"-std=c11"}, disable_coverage);
+    addCursorSources(b, gui, flags);
     addProtocol(b, gui, "stable/xdg-shell/xdg-shell");
     addProtocol(b, gui, "staging/ext-background-effect/ext-background-effect-v1");
     gui.addCSourceFiles(.{
@@ -34,6 +35,36 @@ pub fn add(b: *std.Build, gui: *std.Build.Module, disable_coverage: bool) void {
     gui.linkSystemLibrary("fontconfig", .{});
     gui.linkSystemLibrary("wayland-client", .{});
     gui.linkSystemLibrary("vulkan", .{});
+}
+
+/// Cursor requests and retained fallback images, also used by native input tests.
+/// Example: linux_gui.addCursor(b, keyboard_module).
+pub fn addCursor(b: *std.Build, module: *std.Build.Module) void {
+    addCursorSources(b, module, &.{"-std=c11"});
+}
+
+fn addCursorSources(b: *std.Build, module: *std.Build.Module, flags: []const []const u8) void {
+    addProtocol(b, module, "staging/cursor-shape/cursor-shape-v1");
+    addProtocol(b, module, "unstable/tablet/tablet-unstable-v2");
+    module.addCSourceFiles(.{
+        .files = &.{ "src/gui/linux/cursor.c", "src/gui/linux/cursor_theme.c" },
+        .flags = flags,
+    });
+    module.linkSystemLibrary("wayland-cursor", .{});
+    module.linkSystemLibrary("wayland-client", .{});
+}
+
+/// Runs cursor listeners against bounded protocol doubles, without a compositor.
+/// Example: linux_gui.addCursorTests(b, .{ .target = target, .link_libc = true }).
+pub fn addCursorTests(b: *std.Build, options: std.Build.Module.CreateOptions) void {
+    const module = b.createModule(options);
+    addProtocol(b, module, "staging/cursor-shape/cursor-shape-v1");
+    addProtocol(b, module, "unstable/tablet/tablet-unstable-v2");
+    module.addCSourceFile(.{ .file = b.path("src/gui/linux/cursor_test.c"), .flags = &.{"-std=c11"} });
+    module.linkSystemLibrary("wayland-client", .{});
+    module.linkSystemLibrary("wayland-cursor", .{});
+    const executable = b.addExecutable(.{ .name = "gui-pointer-test", .root_module = module });
+    b.step("test-gui-pointer", "Verify native pointer serials, shapes, focus and retained cursor resources").dependOn(&b.addRunArtifact(executable).step);
 }
 
 fn addProtocol(b: *std.Build, module: *std.Build.Module, name: []const u8) void {

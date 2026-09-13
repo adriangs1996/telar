@@ -25,7 +25,7 @@ struct telar_input {
     struct wl_keyboard *keyboard;
     telar_pointer *pointer;
     telar_clipboard *clipboard;
-    uint32_t selection_serial;
+    uint32_t selection_serial, seat_global, manager_global;
     void *window_context;
     void (*toggle_fullscreen)(void *);
     telar_gui_input held_keys[256];
@@ -195,6 +195,12 @@ static void keyboard_leave(void *data, struct wl_keyboard *keyboard, uint32_t se
         send_key(self, key, 3);
     }
 
+    telar_pointer_modifiers(self->pointer, 0);
+    if (self->state != NULL) {
+        xkb_state_update_mask(self->state, 0, 0, 0, 0, 0, 0);
+    }
+
+    self->selection_serial = 0;
     emit(self, (telar_gui_input){.kind = 5, .code = 0, .phase = 1});
     if (self->compose != NULL) xkb_compose_state_reset(self->compose);
 }
@@ -215,7 +221,8 @@ static void modifiers(void *data, struct wl_keyboard *keyboard, uint32_t serial,
         xkb_state_update_mask(self->state, depressed, latched, locked, 0, 0, group);
         uint32_t mods = (xkb_state_mod_name_is_active(self->state, XKB_MOD_NAME_SHIFT, XKB_STATE_MODS_EFFECTIVE) > 0 ? 1 : 0) |
                         (xkb_state_mod_name_is_active(self->state, XKB_MOD_NAME_ALT, XKB_STATE_MODS_EFFECTIVE) > 0 ? 2 : 0) |
-                        (xkb_state_mod_name_is_active(self->state, XKB_MOD_NAME_CTRL, XKB_STATE_MODS_EFFECTIVE) > 0 ? 4 : 0);
+                        (xkb_state_mod_name_is_active(self->state, XKB_MOD_NAME_CTRL, XKB_STATE_MODS_EFFECTIVE) > 0 ? 4 : 0) |
+                        (xkb_state_mod_name_is_active(self->state, XKB_MOD_NAME_LOGO, XKB_STATE_MODS_EFFECTIVE) > 0 ? 8 : 0);
         telar_pointer_modifiers(self->pointer, mods);
     }
 }
@@ -234,9 +241,14 @@ static void capabilities(void *data, struct wl_seat *seat, uint32_t caps) {
         self->keyboard = wl_seat_get_keyboard(seat);
         wl_keyboard_add_listener(self->keyboard, &keyboard_listener, self);
     } else if (!(caps & WL_SEAT_CAPABILITY_KEYBOARD) && self->keyboard != NULL) {
-        wl_keyboard_destroy(self->keyboard);
+        keyboard_leave(self, self->keyboard, 0, NULL);
+        if (wl_keyboard_get_version(self->keyboard) >= WL_KEYBOARD_RELEASE_SINCE_VERSION) {
+            wl_keyboard_release(self->keyboard);
+        } else {
+            wl_keyboard_destroy(self->keyboard);
+        }
+
         self->keyboard = NULL;
-        self->repeat_at = 0;
     }
 }
 static void seat_name(void *data, struct wl_seat *seat, const char *name) { (void)data; (void)seat; (void)name; }
@@ -335,15 +347,62 @@ void telar_input_fullscreen(telar_input *self, void *context, void (*toggle)(voi
     self->toggle_fullscreen = toggle;
 }
 
-void telar_input_global(telar_input *self, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version) {
-    if (!strcmp(interface, wl_seat_interface.name) && self->seat == NULL) {
-        self->seat = wl_registry_bind(registry, name, &wl_seat_interface, version < 5 ? version : 5);
+void telar_input_global(telar_input *self, const telar_registry_global *global) {
+    telar_pointer_global(self->pointer, global);
+    if (!strcmp(global->interface, wl_seat_interface.name) && self->seat == NULL) {
+        self->seat = wl_registry_bind(global->registry, global->name, &wl_seat_interface, global->version < 5 ? global->version : 5);
+        self->seat_global = global->name;
         wl_seat_add_listener(self->seat, &seat_listener, self);
-    } else if (!strcmp(interface, wl_data_device_manager_interface.name) && self->manager == NULL) {
-        self->manager = wl_registry_bind(registry, name, &wl_data_device_manager_interface, 1);
+    } else if (!strcmp(global->interface, wl_data_device_manager_interface.name) && self->manager == NULL) {
+        self->manager = wl_registry_bind(global->registry, global->name, &wl_data_device_manager_interface, 1);
+        self->manager_global = global->name;
     }
+
     ensure_device(self);
 }
+
+void telar_input_remove(telar_input *self, uint32_t name) {
+    telar_pointer_remove(self->pointer, name);
+    bool seat_removed = self->seat != NULL && self->seat_global == name;
+    bool manager_removed = self->manager != NULL && self->manager_global == name;
+    if (!seat_removed && !manager_removed) {
+        return;
+    }
+
+    if (self->device != NULL) {
+        wl_data_device_destroy(self->device);
+        self->device = NULL;
+    }
+
+    selection(self, NULL, NULL);
+    if (self->paste_fd >= 0) {
+        close(self->paste_fd);
+        self->paste_fd = -1;
+        self->paste_len = 0;
+    }
+
+    if (seat_removed) {
+        capabilities(self, self->seat, 0);
+        self->selection_serial = 0;
+        if (wl_seat_get_version(self->seat) >= WL_SEAT_RELEASE_SINCE_VERSION) {
+            wl_seat_release(self->seat);
+        } else {
+            wl_seat_destroy(self->seat);
+        }
+
+        self->seat = NULL;
+    }
+
+    if (manager_removed) {
+        wl_data_device_manager_destroy(self->manager);
+        self->manager = NULL;
+    }
+}
+
+void telar_input_pointer_update(telar_input *self) {
+    telar_pointer_update(self->pointer);
+}
+
 int telar_input_fd(telar_input *self) { return self->paste_fd; }
 int telar_input_timeout(telar_input *self) {
     if (self->repeat_at == 0) return -1;

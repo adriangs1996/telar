@@ -1,4 +1,5 @@
 #include "pointer.h"
+#include "cursor.h"
 #include <linux/input-event-codes.h>
 #include <math.h>
 #include <stdlib.h>
@@ -7,6 +8,8 @@ struct telar_pointer {
     void *context;
     telar_gui_callbacks callbacks;
     struct wl_pointer *handle;
+    telar_cursor *cursor;
+    bool entered;
     double x, y, axis, remainder;
     int32_t discrete;
     uint32_t mods, buttons;
@@ -19,8 +22,10 @@ static bool emit(telar_pointer *self, uint32_t code, uint32_t button) {
 }
 
 static void enter(void *data, struct wl_pointer *handle, uint32_t serial, struct wl_surface *surface, wl_fixed_t x, wl_fixed_t y) {
-    (void)handle; (void)serial; (void)surface;
+    (void)handle; (void)surface;
     telar_pointer *self = data;
+    self->entered = true;
+    telar_cursor_enter(self->cursor, serial);
     self->x = wl_fixed_to_double(x);
     self->y = wl_fixed_to_double(y);
     emit(self, 6, 0);
@@ -42,6 +47,12 @@ static void leave(void *data, struct wl_pointer *handle, uint32_t serial, struct
     release_buttons(self);
     self->axis = self->remainder = 0;
     self->discrete = 0;
+    if (self->entered) {
+        emit(self, 7, 0);
+    }
+
+    self->entered = false;
+    telar_cursor_leave(self->cursor);
 }
 
 static void motion(void *data, struct wl_pointer *handle, uint32_t time, wl_fixed_t x, wl_fixed_t y) {
@@ -140,6 +151,11 @@ telar_pointer *telar_pointer_create(void *context, const telar_gui_callbacks *ca
     if (self != NULL) {
         self->context = context;
         self->callbacks = *callbacks;
+        self->cursor = telar_cursor_create();
+        if (self->cursor == NULL) {
+            free(self);
+            return NULL;
+        }
     }
 
     return self;
@@ -148,16 +164,45 @@ telar_pointer *telar_pointer_create(void *context, const telar_gui_callbacks *ca
 void telar_pointer_attach(telar_pointer *self, struct wl_seat *seat, bool available) {
     if (available && self->handle == NULL) {
         self->handle = wl_seat_get_pointer(seat);
-        wl_pointer_add_listener(self->handle, &listener, self);
+        if (self->handle != NULL) {
+            telar_cursor_attach(self->cursor, self->handle);
+            wl_pointer_add_listener(self->handle, &listener, self);
+        }
     } else if (!available && self->handle != NULL) {
-        release_buttons(self);
-        wl_pointer_destroy(self->handle);
+        leave(self, self->handle, 0, NULL);
+        telar_cursor_attach(self->cursor, NULL);
+        if (wl_pointer_get_version(self->handle) >= WL_POINTER_RELEASE_SINCE_VERSION) {
+            wl_pointer_release(self->handle);
+        } else {
+            wl_pointer_destroy(self->handle);
+        }
         self->handle = NULL;
     }
 }
 
 void telar_pointer_modifiers(telar_pointer *self, uint32_t mods) {
+    mods &= 15;
+    if (self->mods == mods) {
+        return;
+    }
+
     self->mods = mods;
+    if (self->entered) {
+        emit(self, 6, 0);
+    }
+}
+
+void telar_pointer_global(telar_pointer *self, const telar_registry_global *global) {
+    telar_cursor_global(self->cursor, global);
+}
+
+void telar_pointer_remove(telar_pointer *self, uint32_t name) {
+    telar_cursor_remove(self->cursor, name);
+}
+
+void telar_pointer_update(telar_pointer *self) {
+    uint32_t shape = self->callbacks.pointer_shape != NULL ? self->callbacks.pointer_shape(self->context) : 0;
+    telar_cursor_apply(self->cursor, shape);
 }
 
 void telar_pointer_destroy(telar_pointer *self) {
@@ -165,9 +210,7 @@ void telar_pointer_destroy(telar_pointer *self) {
         return;
     }
 
-    if (self->handle != NULL) {
-        wl_pointer_destroy(self->handle);
-    }
-
+    telar_pointer_attach(self, NULL, false);
+    telar_cursor_destroy(self->cursor);
     free(self);
 }

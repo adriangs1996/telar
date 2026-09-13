@@ -57,7 +57,8 @@ static const struct xdg_wm_base_listener shell_listener = {.ping = shell_ping};
 static void registry_global(void *data, struct wl_registry *registry, uint32_t name, const char *interface,
                             uint32_t version) {
     window *self = data;
-    telar_input_global(self->input, registry, name, interface, version);
+    const telar_registry_global global = {.registry = registry, .name = name, .version = version, .interface = interface};
+    telar_input_global(self->input, &global);
     telar_background_effect_global(&self->background, name, interface);
     if (strcmp(interface, wl_compositor_interface.name) == 0) {
         self->compositor = wl_registry_bind(registry, name, &wl_compositor_interface, version < 4 ? version : 4);
@@ -70,6 +71,7 @@ static void registry_global(void *data, struct wl_registry *registry, uint32_t n
 static void registry_global_remove(void *data, struct wl_registry *registry, uint32_t name) {
     (void)registry;
     window *self = data;
+    telar_input_remove(self->input, name);
     telar_background_effect_remove(&self->background, name);
 }
 
@@ -278,6 +280,21 @@ int telar_gui_run(const char *title, void *context, const telar_gui_callbacks *c
         if (self.closing) {
             break;
         }
+        telar_input_dispatch(self.input);
+        int result = callbacks->pump(context);
+        if (result < 0) {
+            wl_display_cancel_read(self.display);
+            break;
+        }
+        if (result > 0 || self.background.dirty) {
+            self.dirty = true;
+        }
+        draw(&self);
+        telar_input_pointer_update(self.input);
+        if (self.closing) {
+            wl_display_cancel_read(self.display);
+            break;
+        }
         int flushed = wl_display_flush(self.display);
         bool write_blocked = flushed < 0 && errno == EAGAIN;
         if (flushed < 0 && !write_blocked) {
@@ -335,7 +352,6 @@ int telar_gui_run(const char *title, void *context, const telar_gui_callbacks *c
         if (fds[1].revents & POLLIN) {
             telar_gui_drain(callbacks->wake_fd);
         }
-        telar_input_dispatch(self.input);
         if (self.worker != NULL && (fds[3].revents & POLLIN)) {
             uint64_t token;
             enum telar_render_result outcome;
@@ -352,14 +368,6 @@ int telar_gui_run(const char *title, void *context, const telar_gui_callbacks *c
                 }
             }
         }
-        int result = callbacks->pump(context);
-        if (result < 0) {
-            break;
-        }
-        if (result > 0 || self.background.dirty) {
-            self.dirty = true;
-        }
-        draw(&self);
     }
 
     int status = self.failed ? -1 : 0;
