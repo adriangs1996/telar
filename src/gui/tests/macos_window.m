@@ -6,11 +6,13 @@
 #import "../macos/TelarTextInputView.h"
 #import "../macos/TelarView.h"
 #import "../macos/TelarPointerCursor.h"
+#import "../macos/TelarWindow.h"
+#import "../macos/TelarWindowBackground.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
 
-static int paints, delivered, inputs, failed;
+static int paints, delivered, discarded, inputs, failed;
 static BOOL injecting, close_in_flight, closed_in_flight;
 static IMP original_draw;
 static CFTimeInterval deadline;
@@ -26,6 +28,8 @@ static BOOL checking_pointer;
 static unsigned pointer_inputs, pointer_queries;
 static uint32_t pointer_shape;
 static telar_gui_input expected_pointer;
+static BOOL fullscreen_in_progress, fullscreen_exit_scheduled;
+static unsigned fullscreen_checked;
 
 static NSEvent *key_event(NSView *view, unsigned short key, NSString *text, NSEventModifierFlags mods, uint32_t phase) {
     return [NSEvent keyEventWithType:phase == 3 ? NSEventTypeKeyUp : NSEventTypeKeyDown
@@ -172,18 +176,36 @@ static void verify_pointer(TelarView *view) {
 }
 
 static void draw(id view, SEL selector, id drawable) {
+    NSWindow *window = [view window];
+    NSRect outer_frame = window.frame;
+    NSResponder *responder = window.firstResponder;
+    BOOL was_key = window.isKeyWindow;
+    int discarded_before = discarded;
     ((void (*)(id, SEL, id))original_draw)(view, selector, drawable);
     if (paints > 0) {
-        BOOL opaque = appearance_phase == 1;
-        BOOL blurred = appearance_phase == 0;
-        NSWindow *window = [view window];
+        BOOL opaque = appearance_phase == 2;
+        uint32_t radius = appearance_phase == 0 ? 40 : appearance_phase == 1 || appearance_phase == 4 ? 80 : 0;
         NSVisualEffectView *effect = (NSVisualEffectView *)window.contentView.subviews.firstObject;
+        BOOL titlebar = appearance_phase != 1 && appearance_phase != 4;
         if (window.isOpaque != opaque || ((NSView *)view).layer.isOpaque != opaque ||
-            ![effect isKindOfClass:NSVisualEffectView.class] || effect.isHidden == blurred ||
+            ![effect isKindOfClass:NSVisualEffectView.class] || !effect.isHidden ||
+            ((TelarWindowBackground *)window.contentView).appliedBlurRadius != radius ||
+            (!fullscreen_in_progress && (window.titleVisibility != (titlebar ? NSWindowTitleVisible : NSWindowTitleHidden) ||
+            !!(window.styleMask & NSWindowStyleMaskFullSizeContentView) == titlebar ||
+            [window standardWindowButton:NSWindowCloseButton].isHidden == titlebar)) ||
+            !NSEqualRects(outer_frame, window.frame) ||
+            (was_key && (!window.isKeyWindow || window.firstResponder != responder)) ||
             window.alphaValue != 1.0) failed++;
+        if (!titlebar && !fullscreen_in_progress) {
+            NSView *terminal = view;
+            NSPoint top = NSMakePoint(NSMidX(terminal.bounds), terminal.bounds.size.height - 8);
+            NSView *frame_view = window.contentView.superview;
+            NSView *hit = [frame_view hitTest:[terminal convertPoint:top toView:frame_view]];
+            if (hit != terminal && ![hit isDescendantOf:terminal]) failed++;
+        }
         appearance_checked |= 1u << appearance_phase;
     }
-    if (close_in_flight) {
+    if (close_in_flight && discarded_before == discarded) {
         closed_in_flight = YES;
         [[view window] close];
     }
@@ -204,7 +226,7 @@ static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *
     CAMetalLayer *layer = (CAMetalLayer *)terminal_view(NSApp.windows.firstObject.contentView).layer;
     if (layer && (viewport.width != (uint32_t)layer.drawableSize.width ||
                   viewport.height != (uint32_t)layer.drawableSize.height)) failed++;
-    *frame = (telar_gui_frame){.token = ++paints, .quads = &quad, .quad_count = 1, .atlas = pixels, .atlas_side = 2, .atlas_version = 1, .background = {.2f,.3f,.4f,appearance_phase == 1 ? 1 : .5f}, .background_blur = appearance_phase != 2};
+    *frame = (telar_gui_frame){.token = ++paints, .quads = &quad, .quad_count = 1, .atlas = pixels, .atlas_side = 2, .atlas_version = 1, .background = {.2f,.3f,.4f,appearance_phase == 2 ? 1 : .5f}, .background_blur = appearance_phase == 0 ? 40 : appearance_phase == 1 || appearance_phase == 4 ? 80 : 0, .titlebar = appearance_phase != 1 && appearance_phase != 4};
 }
 static int pump(void *context) {
     (void)context;
@@ -226,8 +248,17 @@ static uint32_t desired_pointer(void *context) {
 }
 static void complete(void *context, uint64_t token, int success) {
     (void)context;
-    if (token == (uint64_t)delivered + 1 && success) delivered++; else failed++;
-    if (delivered == 1) deadline = CACurrentMediaTime() + 0.15;
+    if (token != (uint64_t)delivered + discarded + 1) failed++;
+    if (success) delivered++; else discarded++;
+    if (delivered == 1 && success) deadline = CACurrentMediaTime() + 0.15;
+    if (success && appearance_phase == 4 && !fullscreen_exit_scheduled) {
+        fullscreen_exit_scheduled = YES;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 5), dispatch_get_main_queue(), ^{
+            TelarWindow *window = (TelarWindow *)NSApp.windows.firstObject;
+            if (!(window.styleMask & NSWindowStyleMaskFullScreen) || window.titlebarVisible) failed++;
+            [window toggleFullScreen:nil];
+        });
+    }
 }
 static int input(void *context, telar_gui_input event) {
     (void)context;
@@ -274,6 +305,27 @@ int main(void) {
         int fds[2];
         if (telar_gui_pipe(fds)) return 2;
         telar_gui_callbacks callbacks = {render,pump,complete,input,fds[0],wakeup_after,desired_pointer};
+        NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+        id entered = [center addObserverForName:NSWindowDidEnterFullScreenNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) {
+            NSWindow *window = note.object;
+            if (!(window.styleMask & NSWindowStyleMaskFullScreen) || !window.isKeyWindow || window.firstResponder != terminal_view(window.contentView)) failed++;
+            fullscreen_checked |= 1;
+            appearance_phase = 4;
+            [(id)terminal_view(window.contentView) requestDraw];
+        }];
+        id exited = [center addObserverForName:NSWindowDidExitFullScreenNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) {
+            TelarWindow *window = note.object;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                fullscreen_in_progress = NO;
+                if ((window.styleMask & NSWindowStyleMaskFullScreen) || window.titlebarVisible ||
+                    !(window.styleMask & NSWindowStyleMaskFullSizeContentView) ||
+                    !window.isKeyWindow || window.firstResponder != terminal_view(window.contentView)) failed++;
+                fullscreen_checked |= 2;
+                appearance_phase = 3;
+                close_in_flight = YES;
+                [(id)terminal_view(window.contentView) requestDraw];
+            });
+        }];
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1000000000), dispatch_get_main_queue(), ^{
             NSWindow *window = NSApp.windows.firstObject;
             NSView *view = terminal_view(window.contentView);
@@ -298,25 +350,36 @@ int main(void) {
             verify_keyboard((TelarTextInputView *)view);
             verify_pointer((TelarView *)view);
             appearance_phase = 1;
-            view.autoresizingMask = NSViewNotSizable;
-            [view setFrameSize:NSMakeSize(640, 360)];
+            [window setContentSize:NSMakeSize(640, 360)];
             int burst_start = paints;
             for (int i = 0; i < 100; i++) [view requestDraw];
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                if (paints - burst_start > 2) failed++;
+                if (paints - burst_start > 3) failed++;
                 int idle_paints = paints;
-                if (paints != delivered) failed++;
+                if (paints != delivered + discarded) failed++;
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 3), dispatch_get_main_queue(), ^{
                     if (paints != idle_paints) failed++;
                     appearance_phase = 2;
-                    close_in_flight = YES;
                     [view requestDraw];
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 3), dispatch_get_main_queue(), ^{
+                        fullscreen_in_progress = YES;
+                        [window toggleFullScreen:nil];
+                    });
                 });
             });
         });
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 15 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            if (!closed_in_flight) {
+                fprintf(stderr, "Native fullscreen lifecycle timed out\n");
+                failed++;
+                [NSApp.windows.firstObject close];
+            }
+        });
         int status = telar_gui_run("Telar native backend test", NULL, &callbacks);
+        [center removeObserver:entered];
+        [center removeObserver:exited];
         telar_gui_close_pipe(fds);
-        fprintf(stdout, "native macOS: status=%d painted=%d delivered=%d inputs=%d repeats=%d pointer_inputs=%u pointer_queries=%u timer_wakes=%d failures=%d\n",status,paints,delivered,inputs,repeat_inputs,pointer_inputs,pointer_queries,timer_wakes,failed);
-        return status || !delivered || inputs != 10 || repeat_inputs != 26 || pointer_inputs != 8 || failed || !closed_in_flight || paints != delivered + 1 || appearance_checked != 7;
+        fprintf(stdout, "native macOS: status=%d painted=%d delivered=%d discarded=%d inputs=%d repeats=%d pointer_inputs=%u pointer_queries=%u timer_wakes=%d fullscreen=%u failures=%d\n",status,paints,delivered,discarded,inputs,repeat_inputs,pointer_inputs,pointer_queries,timer_wakes,fullscreen_checked,failed);
+        return status || !delivered || inputs != 10 || repeat_inputs != 26 || pointer_inputs != 8 || failed || !closed_in_flight || paints != delivered + discarded + 1 || discarded < 2 || appearance_checked != 31 || fullscreen_checked != 3;
     }
 }

@@ -6,6 +6,8 @@ pub fn add(b: *std.Build, module: *std.Build.Module, disable_coverage: bool) voi
     module.addCSourceFiles(.{
         .files = &.{
             "src/gui/macos/window.m",
+            "src/gui/macos/TelarWindow.m",
+            "src/gui/macos/TelarBackgroundBlur.m",
             "src/gui/macos/TelarView.m",
             "src/gui/macos/TelarWindowBackground.m",
             "src/gui/macos/TelarMetalRenderer.m",

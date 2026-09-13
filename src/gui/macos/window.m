@@ -1,5 +1,6 @@
 #import "TelarView.h"
 #import "TelarWindowBackground.h"
+#import "TelarWindow.h"
 
 int telar_gui_run(const char *title, void *context,
                   const telar_gui_callbacks *callbacks) {
@@ -21,8 +22,8 @@ int telar_gui_run(const char *title, void *context,
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 
-    NSWindow *window =
-        [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 480)
+    TelarWindow *window =
+        [[TelarWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 480)
                                     styleMask:NSWindowStyleMaskTitled |
                                               NSWindowStyleMaskClosable |
                                               NSWindowStyleMaskResizable
@@ -33,6 +34,8 @@ int telar_gui_run(const char *title, void *context,
     window.minSize = NSMakeSize(320, 200);
     window.releasedWhenClosed = NO;
     window.collectionBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
+    window.tabbingMode = NSWindowTabbingModeDisallowed;
+    window.titlebarVisible = YES;
 
     TelarView *view = [[TelarView alloc] initWithFrame:window.contentView.bounds
                                                context:context

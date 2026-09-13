@@ -1,6 +1,7 @@
 #import "TelarView.h"
 #import "TelarMetalRenderer.h"
 #import "TelarWindowBackground.h"
+#import "TelarWindow.h"
 #import <QuartzCore/CADisplayLink.h>
 #include <string.h>
 
@@ -10,7 +11,7 @@
   telar_gui_callbacks callbacks;
   dispatch_source_t wake_source;
   dispatch_source_t animation_source;
-  BOOL dirty, closed;
+  BOOL dirty, closed, preparing;
   CADisplayLink *display_link;
   CFTimeInterval next_draw;
 }
@@ -156,7 +157,7 @@
 // Draw immediately when the frame budget permits, e.g. [self drawIfReady].
 // Otherwise the display clock, not a second timer, wakes the pending work.
 - (void)drawIfReady {
-  if (closed || renderer.isBusy || !dirty || self.window == nil ||
+  if (closed || preparing || renderer.isBusy || !dirty || self.window == nil ||
       !(self.window.occlusionState & NSWindowOcclusionStateVisible)) {
     if (self.window != nil && !(self.window.occlusionState & NSWindowOcclusionStateVisible)) {
       display_link.paused = YES;
@@ -206,13 +207,26 @@
   memset(&frame, 0, sizeof frame);
 
   dirty = NO;
+  preparing = YES;
   callbacks.render(context, viewport, &frame);
   [self refreshPointerCursor];
   if (frame.token == 0) {
     dirty = YES;
+    preparing = NO;
     return;
   }
+  ((TelarWindow *)self.window).titlebarVisible = frame.titlebar != 0;
   [self.backgroundView applyFrame:&frame];
+  if (!CGSizeEqualToSize(size, layer.drawableSize)) {
+    // Decorations changed the viewport after preparation. Retire this token
+    // without publishing its hit geometry, then repaint using the new size.
+    callbacks.complete(context, frame.token, 0);
+    dirty = YES;
+    preparing = NO;
+    [self pumpEvents];
+    return;
+  }
+  preparing = NO;
   if (![renderer renderFrame:&frame drawable:drawable]) {
     callbacks.complete(context, frame.token, 0);
     [self.window close];
@@ -313,6 +327,16 @@
     [self requestDraw];
   }
   [self scheduleWake];
+}
+
+- (void)windowDidFailToEnterFullScreen:(NSWindow *)window {
+  [(TelarWindow *)window finishFullscreenTransition];
+  [self requestDraw];
+}
+
+- (void)windowDidFailToExitFullScreen:(NSWindow *)window {
+  [(TelarWindow *)window finishFullscreenTransition];
+  [self requestDraw];
 }
 
 @end
