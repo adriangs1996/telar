@@ -1,0 +1,277 @@
+const std = @import("std");
+const core = @import("telar-core");
+const client = @import("telar-client");
+const Fixture = @import("ChromeFixture.zig");
+const Session = @import("Session.zig");
+const Regions = @import("../chrome/Regions.zig");
+const HitMap = @import("../chrome/HitMap.zig");
+const bar_regions = @import("../chrome/bar_regions.zig");
+
+test "native chrome geometry preserves a pane row and partitions every host" {
+    for ([_]u16{ 1, 2, 3, 10, 40 }) |height| {
+        for ([_]u16{ 1, 20, 61, 62, 120 }) |width| {
+            const regions = Regions.calculate(width, height, .{ .visible = true, .preferred_width = 73 });
+            try std.testing.expect(regions.workbench.h >= 1);
+            try std.testing.expect(regions.workbench.w >= 1);
+            try std.testing.expectEqual(width, regions.sidebar.w + regions.workbench.w);
+            try std.testing.expectEqual(height, regions.top.h + regions.workbench.h + regions.bottom.h);
+            try std.testing.expect(regions.top.intersect(regions.workbench).isEmpty());
+            try std.testing.expect(regions.sidebar.intersect(regions.workbench).isEmpty());
+        }
+    }
+}
+
+test "native chrome maps tabs workspaces and sidebar controls to stable identities" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    var workspaces: client.WorkspaceListSnapshot = .{};
+    _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
+        .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/telar", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(9), .name = "server", .path = "/server", .tab_count = 1 },
+    } });
+    var projection = fixture.projection();
+    projection.workspaces = &workspaces;
+    try fixture.paint(projection);
+    const tab = fixture.target(.{ .select_tab = Session.location.tab_id }).?;
+    try std.testing.expectEqualDeep(client.Intent{ .select_tab = Session.location.tab_id }, fixture.click(tab, 0).intent);
+    try std.testing.expectEqualDeep(client.Intent{ .rename_tab = Session.location.tab_id }, fixture.click(tab, 2).intent);
+    const workspace = fixture.target(.{ .select_workspace = @enumFromInt(9) }).?;
+    try std.testing.expectEqualDeep(client.Intent{ .select_workspace = @enumFromInt(9) }, fixture.click(workspace, 0).intent);
+    try std.testing.expect(fixture.target(.toggle_sidebar) != null);
+    try std.testing.expectEqual(@as(u64, 1), workspaces.revision);
+}
+
+test "native chrome preserves gesture ownership outside the sidebar and clamps scrolling" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    var projection = fixture.projection();
+    projection.sidebar_visible = true;
+    try fixture.paint(projection);
+    const sidebar = fixture.chrome.regions.sidebar;
+    const press = fixture.chrome.pointer(.{ .x = sidebar.x + sidebar.w - 1, .y = 4, .kind = .press });
+    try std.testing.expect(press.consumed);
+    const drag = fixture.chrome.pointer(.{ .x = 90, .y = 10, .kind = .drag, .button = 32 });
+    try std.testing.expectEqualDeep(client.Intent{ .resize_sidebar = 91 }, drag.intent);
+    try std.testing.expect(drag.consumed);
+    const release = fixture.chrome.pointer(.{ .x = 88, .y = 10, .kind = .release });
+    try std.testing.expectEqualDeep(client.Intent{ .resize_sidebar = 89 }, release.intent);
+    try std.testing.expect(fixture.chrome.gesture_button == null);
+    try std.testing.expect(!fixture.chrome.pointer(.{ .x = 90, .y = 10, .kind = .press }).consumed);
+    _ = fixture.chrome.pointer(.{ .x = 2, .y = 4, .kind = .scroll_down });
+    try std.testing.expectEqual(@as(u16, 0), fixture.chrome.sidebar.scroll);
+}
+
+test "native agent targets retain generation through scroll and snapshot replacement" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    try fixture.resize(120, 8);
+    var agents: client.AgentSnapshot = .{};
+    const entries = [_]client.AgentInput{
+        .{ .key = .{ .pane_id = @enumFromInt(51), .pane_generation = 4 }, .location = Session.location, .pane_index = 1, .provider = .codex, .status = .working, .display_name = "Codex", .session_title = "Implement GUI", .workspace_label = "telar", .cwd_label = "/telar" },
+        .{ .key = .{ .pane_id = @enumFromInt(52), .pane_generation = 8 }, .location = Session.location, .pane_index = 2, .provider = .claude, .status = .blocked, .display_name = "Claude" },
+        .{ .key = .{ .pane_id = @enumFromInt(53), .pane_generation = 9 }, .location = Session.location, .pane_index = 3, .provider = .codex, .status = .done, .display_name = "Codex" },
+    };
+    _ = try agents.replace(.{ .revision = 1, .agents = &entries });
+    var projection = fixture.projection();
+    projection.agents = &agents;
+    projection.sidebar_visible = true;
+    try fixture.paint(projection);
+    const first = fixture.target(.{ .focus_agent = entries[0].key }).?;
+    try std.testing.expectEqualDeep(client.Intent{ .focus_agent = entries[0].key }, fixture.click(first, 0).intent);
+    _ = fixture.chrome.pointer(.{ .x = 4, .y = 4, .kind = .scroll_down });
+    try std.testing.expectEqual(@as(u16, 3), fixture.chrome.sidebar.scroll);
+    try fixture.paint(projection);
+    try std.testing.expect(fixture.target(.{ .focus_agent = entries[2].key }) != null);
+    try std.testing.expectEqual(@as(u64, 1), agents.revision);
+    _ = try agents.replace(.{ .revision = 2, .agents = &.{} });
+    try fixture.paint(projection);
+    try std.testing.expect(fixture.target(.{ .focus_agent = entries[0].key }) == null);
+    try std.testing.expectEqual(@as(u16, 0), fixture.chrome.sidebar.scroll);
+}
+
+test "native tabs always retain the active tab when their row overflows" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    const tabs = &fixture.session.gui.app.model.workspace;
+    const second_id: core.TabId = @enumFromInt(2);
+    _ = try tabs.addCreated(.{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_id }, .position = 1, .label = "long second tab name", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
+    _ = tabs.select(second_id);
+    try fixture.resize(12, 4);
+    try fixture.paint(fixture.projection());
+    try std.testing.expect(fixture.target(.{ .select_tab = second_id }) != null);
+    try std.testing.expect(fixture.target(.{ .select_tab = Session.location.tab_id }) == null);
+}
+
+test "native fullscreen labels keep hidden panes reachable without covering terminal content" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    const model = fixture.session.gui.app.model.activeTabModel().?;
+    const second: core.PaneId = @enumFromInt(20);
+    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
+    _ = model.layout.toggleFullscreen();
+    const projection = fixture.projection();
+    try fixture.paint(projection);
+    const target = fixture.target(.{ .focus_pane = Session.pane_id }).?;
+    try std.testing.expectEqualDeep(client.Intent{ .focus_pane = Session.pane_id }, fixture.click(target, 0).intent);
+    try std.testing.expect(fixture.target(.{ .focus_pane = second }) != null);
+    var layout: client.LayoutSnapshot = .{};
+    model.layout.snapshot(projection.geometry.area, &layout);
+    const content = fixture.session.renderer.metrics.rect(fixture.session.renderer.origin, layout.views()[0].content);
+    for (fixture.session.renderer.quads.items()) |quad| {
+        const overlaps = quad.x < content.x + content.width and quad.x + quad.width > content.x and quad.y < content.y + content.height and quad.y + quad.height > content.y;
+        try std.testing.expect(!overlaps);
+    }
+}
+
+test "native chrome warm repaint reuses glyphs and performs no allocation" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    const projection = fixture.projection();
+    try fixture.paint(projection);
+    const atlas = &fixture.session.renderer.atlas.?;
+    const version = atlas.version;
+    const calls = atlas.shape_calls;
+    var failure = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+    const allocator = atlas.allocator;
+    atlas.allocator = failure.allocator();
+    defer atlas.allocator = allocator;
+    const quad_allocator = fixture.session.renderer.quads.allocator;
+    fixture.session.renderer.quads.allocator = failure.allocator();
+    defer fixture.session.renderer.quads.allocator = quad_allocator;
+    try fixture.paint(projection);
+    try std.testing.expectEqual(version, atlas.version);
+    try std.testing.expectEqual(calls, atlas.shape_calls);
+    try std.testing.expectEqual(@as(usize, 0), failure.allocations);
+}
+
+test "native hit capacity fails explicitly and bar slots never overlap" {
+    var hits: HitMap = .{};
+    for (0..HitMap.capacity) |index| {
+        try hits.add(.{ .area = .{ .x = @intCast(index), .w = 1, .h = 1 }, .action = .{ .intent = .toggle_sidebar } });
+    }
+
+    try std.testing.expectError(error.ChromeHitCapacityExceeded, hits.add(.{ .area = .{ .w = 1, .h = 1 }, .action = .resize_sidebar }));
+    for (0..3) |tab_index| {
+        for (0..80) |width| {
+            const areas = bar_regions.calculate(.{ .x = 4, .y = 3, .w = @intCast(width), .h = 1 }, .{ 40, 30, 50 }, tab_index);
+            try std.testing.expect(areas[0].intersect(areas[1]).isEmpty());
+            try std.testing.expect(areas[1].intersect(areas[2]).isEmpty());
+            try std.testing.expect(areas[0].w + areas[1].w + areas[2].w <= width);
+        }
+    }
+}
+
+test "native pane presses focus before forwarding and chrome cancellation releases capture" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    const projection = fixture.projection();
+    try fixture.paint(projection);
+    const point = projection.geometry.area;
+    const press = fixture.chrome.pointer(.{ .x = point.x + 2, .y = point.y + 2, .kind = .press });
+    try std.testing.expectEqualDeep(client.Intent{ .focus_pane = Session.pane_id }, press.intent);
+    try std.testing.expect(!press.consumed);
+    try std.testing.expect(fixture.chrome.gesture_button == null);
+    const wheel = fixture.chrome.pointer(.{ .x = point.x + 2, .y = point.y + 2, .kind = .scroll_down });
+    try std.testing.expect(!wheel.consumed);
+    try std.testing.expect(wheel.intent == .none);
+    const logo = fixture.target(.toggle_sidebar).?;
+    _ = fixture.chrome.pointer(.{ .x = logo.x, .y = logo.y, .kind = .press });
+    try std.testing.expect(fixture.chrome.gesture_button != null);
+    fixture.chrome.cancelPointer();
+    try std.testing.expect(fixture.chrome.gesture_button == null);
+    try std.testing.expect(fixture.chrome.hovered == null);
+}
+
+test "native workspace collapse exposes its toggle and tiny bars stay within viewport" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    var workspaces: client.WorkspaceListSnapshot = .{};
+    _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
+        .{ .workspace = @enumFromInt(1), .name = "long workspace one", .path = "/one", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(2), .name = "long workspace two", .path = "/two", .tab_count = 1 },
+    } });
+    for ([_]u16{ 1, 2, 3, 6, 16, 120 }) |width| {
+        try fixture.resize(width, 3);
+        var projection = fixture.projection();
+        projection.workspaces = &workspaces;
+        projection.workspace_list_collapsed = true;
+        try fixture.paint(projection);
+        if (width > 4) {
+            try std.testing.expect(fixture.target(.toggle_workspace_list) != null);
+        }
+
+        const renderer = &fixture.session.renderer;
+        const bounds = renderer.metrics.rect(renderer.origin, .{ .w = width, .h = 3 });
+        for (renderer.quads.items()) |quad| {
+            try std.testing.expect(quad.x >= bounds.x and quad.y >= bounds.y);
+            try std.testing.expect(quad.x + quad.width <= bounds.x + bounds.width);
+            try std.testing.expect(quad.y + quad.height <= bounds.y + bounds.height);
+        }
+    }
+}
+
+test "native configured bar segments preserve colors decorations and faint ink" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    var state: client.State = .{};
+    var content: client.Content = .{};
+    try content.append(.{ .text = "Styled", .style = .{
+        .foreground = .{ .value = .{ .rgb = .{ 255, 0, 0 } } },
+        .background = .{ .value = .{ .rgb = .{ 0, 255, 0 } } },
+        .bold = true,
+        .italic = true,
+        .faint = true,
+        .underline = true,
+        .strikethrough = true,
+    } });
+    state.layout.bottom = .{ .{ .content = content }, .empty, .tabs };
+    var projection = fixture.projection();
+    projection.bar_state = &state;
+    try fixture.paint(projection);
+    var background = false;
+    var faint_ink = false;
+    var underline = false;
+    const renderer = &fixture.session.renderer;
+    const bottom = renderer.metrics.rect(renderer.origin, fixture.chrome.regions.bottom);
+    for (renderer.quads.items()) |quad| {
+        background = background or (quad.r == 0 and quad.g == 1 and quad.b == 0 and quad.a == 1);
+        faint_ink = faint_ink or (quad.r == 1 and quad.g == 0 and quad.b == 0 and quad.a == 0.5);
+        underline = underline or (quad.r == 1 and quad.g == 0 and quad.b == 0 and quad.y == bottom.y + bottom.height - 2 and quad.height == 1);
+    }
+
+    try std.testing.expect(background and faint_ink and underline);
+}
+
+test "native progress remains visible with a single borderless pane" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    const pane = fixture.session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    _ = pane.setProgress(.{ .pane_id = Session.pane_id, .state = .set, .percent = 50 });
+    try fixture.paint(fixture.projection());
+    const tab_area = fixture.target(.{ .select_tab = Session.location.tab_id }).?;
+    const renderer = &fixture.session.renderer;
+    const pixels = renderer.metrics.rect(renderer.origin, tab_area);
+    var found = false;
+    for (renderer.quads.items()) |quad| {
+        found = found or (quad.height == 2 and quad.y == pixels.y + pixels.height - 2 and quad.width == pixels.width / 2);
+    }
+
+    try std.testing.expect(found);
+}
+
+test "native mode hints replace tabs without publishing hidden tab controls" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    var projection = fixture.projection();
+    projection.status_mode = .copy;
+    try fixture.paint(projection);
+    try std.testing.expect(fixture.target(.{ .select_tab = Session.location.tab_id }) == null);
+    var hints: client.Hints = .{};
+    hints.append(.{ .key = try client.parseKey("Ctrl+v"), .label = "split vertically" });
+    projection.status_mode = .{ .prefix = hints };
+    try fixture.paint(projection);
+    try std.testing.expect(fixture.target(.{ .select_tab = Session.location.tab_id }) == null);
+    projection.status_mode = .normal;
+    try fixture.paint(projection);
+    try std.testing.expect(fixture.target(.{ .select_tab = Session.location.tab_id }) != null);
+}
