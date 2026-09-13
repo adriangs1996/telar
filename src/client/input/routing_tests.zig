@@ -42,3 +42,22 @@ test "native persistent prefix consumes unmatched keys without forwarding bytes"
     try std.testing.expectEqual(@as(usize, 1), capture.key_count);
     try std.testing.expectEqualDeep(other, capture.keys[0]);
 }
+
+test "semantic paste replays ordinary chords while pointer admission discards them" {
+    const bindings = [_]Binding{try Binding.parse(&.{ "a", "b" }, .next)};
+    const first = try chord.parseKey("a");
+    var router = try Router.init(&bindings);
+    var capture: Capture = .{};
+    _ = try router.routeEvent(.{ .key = first, .raw = "", .now_ns = 1 }, &capture);
+    try router.interrupt(&capture);
+    try std.testing.expectEqual(@as(usize, 1), capture.key_count);
+    try std.testing.expectEqualDeep(first, capture.keys[0]);
+    try std.testing.expect(router.bindingDeadline() == null);
+
+    _ = try router.routeEvent(.{ .key = first, .raw = "", .now_ns = 2 }, &capture);
+    router.cancelSequence();
+    try std.testing.expectEqual(@as(usize, 1), capture.key_count);
+    try std.testing.expect(router.bindingDeadline() == null);
+    _ = try router.routeEvent(.{ .key = try chord.parseKey("b"), .raw = "", .now_ns = 3 }, &capture);
+    try std.testing.expectEqual(@as(usize, 0), capture.action_count);
+}

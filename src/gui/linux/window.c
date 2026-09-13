@@ -34,6 +34,7 @@ typedef struct {
     telar_background_effect background;
     uint32_t width;
     uint32_t height;
+    bool fullscreen;
     bool configured;
     bool closing;
     bool failed;
@@ -131,8 +132,14 @@ static const struct xdg_surface_listener surface_listener = {.configure = surfac
 static void toplevel_configure(void *data, struct xdg_toplevel *toplevel, int32_t width, int32_t height,
                                struct wl_array *states) {
     (void)toplevel;
-    (void)states;
     window *self = data;
+    self->fullscreen = false;
+    uint32_t *state;
+    wl_array_for_each(state, states) {
+        if (*state == XDG_TOPLEVEL_STATE_FULLSCREEN) {
+            self->fullscreen = true;
+        }
+    }
     // Zero means the client picks; keep the last size then.
     if (width > 0 && height > 0) {
         self->width = (uint32_t)width;
@@ -198,6 +205,19 @@ static void destroy(window *self) {
     }
 }
 
+static void toggle_fullscreen(void *context) {
+    window *self = context;
+    if (self->toplevel == NULL) {
+        return;
+    }
+
+    if (self->fullscreen) {
+        xdg_toplevel_unset_fullscreen(self->toplevel);
+    } else {
+        xdg_toplevel_set_fullscreen(self->toplevel, NULL);
+    }
+}
+
 int telar_gui_run(const char *title, void *context, const telar_gui_callbacks *callbacks) {
     window self;
     memset(&self, 0, sizeof self);
@@ -207,6 +227,7 @@ int telar_gui_run(const char *title, void *context, const telar_gui_callbacks *c
     if (self.input == NULL) {
         return -1;
     }
+    telar_input_fullscreen(self.input, &self, toggle_fullscreen);
     self.width = default_width;
     self.height = default_height;
 

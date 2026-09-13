@@ -3,7 +3,8 @@
 @implementation TelarTextInputView {
   TelarInputHandler input_handler;
   NSMutableAttributedString *marked;
-  uint32_t text_phase;
+  uint32_t text_phase, text_physical;
+  telar_gui_input held_keys[256];
 }
 
 - (instancetype)initWithFrame:(NSRect)frame
@@ -27,14 +28,30 @@
   return YES;
 }
 
+- (BOOL)sendInput:(telar_gui_input)event {
+  if (input_handler == nil || !input_handler(event)) {
+    NSBeep();
+    return NO;
+  }
+
+  return YES;
+}
+
 - (void)sendText:(NSString *)text kind:(uint32_t)kind {
   NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];
+  const BOOL scalar = text.length == 1 ||
+      (text.length == 2 && CFStringIsSurrogateHighCharacter([text characterAtIndex:0]) &&
+       CFStringIsSurrogateLowCharacter([text characterAtIndex:1]));
+  uint32_t physical = kind == 1 && scalar ? text_physical : 0;
   telar_gui_input event = {.kind = kind,
                            .phase = kind == 1 ? text_phase : 1,
                            .text = data.bytes,
-                           .len = data.length};
-  if (input_handler != nil && !input_handler(event)) {
-    NSBeep();
+                           .len = data.length,
+                           .physical = physical};
+  if ([self sendInput:event] && physical != 0 && physical <= 256) {
+    uint32_t code = text.length == 1 ? [text characterAtIndex:0] :
+        CFStringGetLongCharacterForSurrogatePair([text characterAtIndex:0], [text characterAtIndex:1]);
+    held_keys[physical - 1] = (telar_gui_input){.kind = 4, .code = code, .physical = physical, .phase = 1};
   }
 }
 
@@ -48,6 +65,16 @@
 
 - (void)keyDown:(NSEvent *)event {
   text_phase = event.isARepeat ? 2 : 1;
+  text_physical = event.keyCode < 256 ? event.keyCode + 1 : 0;
+  if ((event.modifierFlags & NSEventModifierFlagCommand) &&
+      (event.modifierFlags & NSEventModifierFlagControl) &&
+      [[event.charactersIgnoringModifiers lowercaseString] isEqualToString:@"f"]) {
+    if (!event.isARepeat) {
+      [self.window toggleFullScreen:nil];
+    }
+
+    return;
+  }
   if ((event.modifierFlags & NSEventModifierFlagCommand) &&
       [[event.charactersIgnoringModifiers lowercaseString]
           isEqualToString:@"v"]) {
@@ -108,24 +135,57 @@
     telar_gui_input input = {.kind = 3,
                              .code = code,
                              .mods = mods,
-                             .phase = event.isARepeat ? 2 : 1};
-    if (input_handler != nil && !input_handler(input)) {
-      NSBeep();
+                             .phase = event.isARepeat ? 2 : 1,
+                             .physical = text_physical};
+    if ([self sendInput:input] && input.physical != 0) {
+      held_keys[input.physical - 1] = input;
     }
-  } else if (mods & 4) {
+  } else if (mods & (2 | 4)) {
     NSString *characters = event.charactersIgnoringModifiers;
     if (characters.length == 1) {
       telar_gui_input input = {.kind = 4,
                                .code = [characters characterAtIndex:0],
                                .mods = mods,
-                               .phase = event.isARepeat ? 2 : 1};
-      if (input_handler != nil && !input_handler(input)) {
-        NSBeep();
+                               .phase = event.isARepeat ? 2 : 1,
+                             .physical = text_physical};
+      if ([self sendInput:input] && input.physical != 0) {
+        held_keys[input.physical - 1] = input;
       }
     }
   } else {
+    if (marked.length != 0) {
+      text_physical = 0;
+    }
+
     [self interpretKeyEvents:@[ event ]];
   }
+
+  text_physical = 0;
+}
+
+- (void)keyUp:(NSEvent *)event {
+  if (event.keyCode >= 256 || held_keys[event.keyCode].physical == 0) {
+    return;
+  }
+
+  telar_gui_input input = held_keys[event.keyCode];
+  input.phase = 3;
+  if ([self sendInput:input]) {
+    held_keys[event.keyCode] = (telar_gui_input){0};
+  }
+}
+
+- (BOOL)resignFirstResponder {
+  for (NSUInteger index = 0; index < 256; index++) {
+    if (held_keys[index].physical != 0) {
+      telar_gui_input input = held_keys[index];
+      input.phase = 3;
+      [self sendInput:input];
+      held_keys[index] = (telar_gui_input){0};
+    }
+  }
+
+  return [super resignFirstResponder];
 }
 
 - (void)insertText:(id)value replacementRange:(NSRange)range {

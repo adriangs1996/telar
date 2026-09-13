@@ -107,16 +107,22 @@ fn applyEffect(raw_context: *anyopaque, effect: EffectType) !void {
             }
         },
         .report => |report| {
-            var encoded: [64]u8 = undefined;
-            const bytes = try encodeReport(&encoded, report);
-
-            _ = try pane_inputs.send(context.client, .{
-                .target = .{ .pane = report.plan.pane_id },
-                .source = .mouse,
-                .payload = .{ .bytes = bytes },
-            });
+            try reportRetained(context.client, report);
         },
     }
+}
+
+/// Delivers a host-retained gesture to its original pane after the host has
+/// checked attachment identity and projected its current rectangle.
+/// Example: `try reportRetained(client, report);`
+pub fn reportRetained(client: *Client, report: ReportEffectType) !void {
+    var encoded: [64]u8 = undefined;
+    const bytes = try encodeReport(&encoded, report);
+    _ = try pane_inputs.send(client, .{
+        .target = .{ .pane = report.plan.pane_id },
+        .source = .mouse,
+        .payload = .{ .bytes = bytes },
+    });
 }
 
 fn encodeReport(buffer: []u8, report: ReportEffectType) ![]const u8 {

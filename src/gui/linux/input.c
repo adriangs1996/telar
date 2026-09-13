@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "input.h"
+#include "pointer.h"
 #include <xkbcommon/xkbcommon.h>
 #include <xkbcommon/xkbcommon-compose.h>
 #include <errno.h>
@@ -21,6 +22,10 @@ struct telar_input {
     telar_gui_callbacks callbacks;
     struct wl_seat *seat;
     struct wl_keyboard *keyboard;
+    telar_pointer *pointer;
+    void *window_context;
+    void (*toggle_fullscreen)(void *);
+    telar_gui_input held_keys[256];
     struct wl_data_device_manager *manager;
     struct wl_data_device *device;
     struct offer offers[OFFER_LIMIT];
@@ -65,12 +70,39 @@ static void begin_paste(telar_input *self) {
     self->paste_len = 0;
 }
 
+static void emit_key(telar_input *self, uint32_t key, telar_gui_input event) {
+    event.physical = key < 256 ? key + 1 : 0;
+    if (emit(self, event) && event.physical != 0) {
+        self->held_keys[key] = event;
+    }
+}
+
 static void send_key(telar_input *self, uint32_t key, uint32_t phase) {
     if (self->state == NULL) return;
+    if (phase == 3) {
+        if (key < 256 && self->held_keys[key].physical != 0) {
+            telar_gui_input released = self->held_keys[key];
+            released.phase = 3;
+            if (emit(self, released)) {
+                self->held_keys[key] = (telar_gui_input){0};
+            }
+        }
+
+        return;
+    }
+
     xkb_keysym_t sym = xkb_state_key_get_one_sym(self->state, key + 8);
     uint32_t mods = (xkb_state_mod_name_is_active(self->state, XKB_MOD_NAME_SHIFT, XKB_STATE_MODS_EFFECTIVE) > 0 ? 1 : 0) |
                     (xkb_state_mod_name_is_active(self->state, XKB_MOD_NAME_ALT, XKB_STATE_MODS_EFFECTIVE) > 0 ? 2 : 0) |
                     (xkb_state_mod_name_is_active(self->state, XKB_MOD_NAME_CTRL, XKB_STATE_MODS_EFFECTIVE) > 0 ? 4 : 0);
+    if (sym == XKB_KEY_F11 && mods == 0) {
+        if (phase == 1 && self->toggle_fullscreen != NULL) {
+            self->toggle_fullscreen(self->window_context);
+        }
+
+        return;
+    }
+
     if ((mods & 5) == 5 && (sym == XKB_KEY_v || sym == XKB_KEY_V)) {
         if (phase == 1) begin_paste(self);
         return;
@@ -92,22 +124,23 @@ static void send_key(telar_input *self, uint32_t key, uint32_t phase) {
         case XKB_KEY_Page_Down: code = 13; break;
     }
     if (code != 0) {
-        emit(self, (telar_gui_input){.kind = 3, .code = code, .mods = mods, .phase = phase});
+        emit_key(self, key, (telar_gui_input){.kind = 3, .code = code, .mods = mods, .phase = phase});
         return;
     }
     if (mods & (2 | 4)) {
         uint32_t scalar = xkb_keysym_to_utf32(sym);
-        if (scalar >= 32) emit(self, (telar_gui_input){.kind = 4, .code = scalar, .mods = mods, .phase = phase});
+        if (scalar >= 32) emit_key(self, key, (telar_gui_input){.kind = 4, .code = scalar, .mods = mods, .phase = phase});
         return;
     }
-    if (phase == 3) return;
     char text[128];
     int len = 0;
+    bool composed = false;
     if (self->compose != NULL) {
         xkb_compose_state_feed(self->compose, sym);
         switch (xkb_compose_state_get_status(self->compose)) {
             case XKB_COMPOSE_COMPOSING: return;
             case XKB_COMPOSE_COMPOSED:
+                composed = true;
                 len = xkb_compose_state_get_utf8(self->compose, text, sizeof text);
                 xkb_compose_state_reset(self->compose);
                 break;
@@ -116,7 +149,13 @@ static void send_key(telar_input *self, uint32_t key, uint32_t phase) {
         }
     }
     if (len == 0) len = xkb_state_key_get_utf8(self->state, key + 8, text, sizeof text);
-    if (len > 0 && (size_t)len < sizeof text) emit(self, (telar_gui_input){.kind = 1, .phase = phase, .text = (uint8_t *)text, .len = (size_t)len});
+    if (len > 0 && (size_t)len < sizeof text) {
+        telar_gui_input event = {.kind = 1, .phase = phase, .text = (uint8_t *)text, .len = (size_t)len,
+                                .physical = !composed && key < 256 ? key + 1 : 0};
+        if (emit(self, event) && event.physical != 0) {
+            self->held_keys[key] = (telar_gui_input){.kind = 4, .code = xkb_keysym_to_utf32(sym), .physical = key + 1};
+        }
+    }
 }
 
 static void keymap(void *data, struct wl_keyboard *keyboard, uint32_t format, int fd, uint32_t size) {
@@ -147,6 +186,10 @@ static void keyboard_leave(void *data, struct wl_keyboard *keyboard, uint32_t se
     (void)keyboard; (void)serial; (void)surface;
     telar_input *self = data;
     self->repeat_at = 0;
+    for (uint32_t key = 0; key < 256; key++) {
+        send_key(self, key, 3);
+    }
+
     emit(self, (telar_gui_input){.kind = 5, .code = 0, .phase = 1});
     if (self->compose != NULL) xkb_compose_state_reset(self->compose);
 }
@@ -162,7 +205,13 @@ static void keyboard_key(void *data, struct wl_keyboard *keyboard, uint32_t seri
 static void modifiers(void *data, struct wl_keyboard *keyboard, uint32_t serial, uint32_t depressed, uint32_t latched, uint32_t locked, uint32_t group) {
     (void)keyboard; (void)serial;
     telar_input *self = data;
-    if (self->state != NULL) xkb_state_update_mask(self->state, depressed, latched, locked, 0, 0, group);
+    if (self->state != NULL) {
+        xkb_state_update_mask(self->state, depressed, latched, locked, 0, 0, group);
+        uint32_t mods = (xkb_state_mod_name_is_active(self->state, XKB_MOD_NAME_SHIFT, XKB_STATE_MODS_EFFECTIVE) > 0 ? 1 : 0) |
+                        (xkb_state_mod_name_is_active(self->state, XKB_MOD_NAME_ALT, XKB_STATE_MODS_EFFECTIVE) > 0 ? 2 : 0) |
+                        (xkb_state_mod_name_is_active(self->state, XKB_MOD_NAME_CTRL, XKB_STATE_MODS_EFFECTIVE) > 0 ? 4 : 0);
+        telar_pointer_modifiers(self->pointer, mods);
+    }
 }
 static void repeat_info(void *data, struct wl_keyboard *keyboard, int32_t rate, int32_t delay) {
     (void)keyboard;
@@ -174,6 +223,7 @@ static void repeat_info(void *data, struct wl_keyboard *keyboard, int32_t rate, 
 static const struct wl_keyboard_listener keyboard_listener = { keymap, keyboard_enter, keyboard_leave, keyboard_key, modifiers, repeat_info };
 static void capabilities(void *data, struct wl_seat *seat, uint32_t caps) {
     telar_input *self = data;
+    telar_pointer_attach(self->pointer, seat, (caps & WL_SEAT_CAPABILITY_POINTER) != 0);
     if ((caps & WL_SEAT_CAPABILITY_KEYBOARD) && self->keyboard == NULL) {
         self->keyboard = wl_seat_get_keyboard(seat);
         wl_keyboard_add_listener(self->keyboard, &keyboard_listener, self);
@@ -238,8 +288,14 @@ telar_input *telar_input_create(void *context, const telar_gui_callbacks *callba
     self->context = context;
     self->callbacks = *callbacks;
     self->paste_fd = -1;
+    self->pointer = telar_pointer_create(context, callbacks);
+    if (self->pointer == NULL) {
+        free(self);
+        return NULL;
+    }
+
     self->xkb = xkb_context_new(0);
-    if (self->xkb == NULL) { free(self); return NULL; }
+    if (self->xkb == NULL) { telar_pointer_destroy(self->pointer); free(self); return NULL; }
     const char *locale = getenv("LC_ALL");
     if (locale == NULL || !*locale) locale = getenv("LC_CTYPE");
     if (locale == NULL || !*locale) locale = getenv("LANG");
@@ -248,6 +304,11 @@ telar_input *telar_input_create(void *context, const telar_gui_callbacks *callba
     if (self->compose_table != NULL) self->compose = xkb_compose_state_new(self->compose_table, 0);
     return self;
 }
+void telar_input_fullscreen(telar_input *self, void *context, void (*toggle)(void *)) {
+    self->window_context = context;
+    self->toggle_fullscreen = toggle;
+}
+
 void telar_input_global(telar_input *self, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version) {
     if (!strcmp(interface, wl_seat_interface.name) && self->seat == NULL) {
         self->seat = wl_registry_bind(registry, name, &wl_seat_interface, version < 5 ? version : 5);
@@ -292,6 +353,7 @@ void telar_input_destroy(telar_input *self) {
     for (size_t i = 0; i < OFFER_LIMIT; i++) if (self->offers[i].handle != NULL) wl_data_offer_destroy(self->offers[i].handle);
     if (self->device != NULL) wl_data_device_destroy(self->device);
     if (self->manager != NULL) wl_data_device_manager_destroy(self->manager);
+    telar_pointer_destroy(self->pointer);
     if (self->keyboard != NULL) wl_keyboard_destroy(self->keyboard);
     if (self->seat != NULL) wl_seat_destroy(self->seat);
     xkb_compose_state_unref(self->compose);

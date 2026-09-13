@@ -34,7 +34,10 @@ typedef struct {
 } telar_gui_frame;
 
 // Input kinds: 1 committed UTF-8 text, 2 clipboard paste, 3 semantic key,
-// 4 Unicode key with modifiers, 5 host focus (code=0 inactive, code=1 active).
+// 4 Unicode key with modifiers, 5 host focus (code=0 inactive, code=1 active),
+// 6 pointer: code=press1/release2/drag3/up4/down5/move6, button=left0/middle1/right2.
+// Pointer x/y are physical pixels from the content top-left. Zero physical
+// means composed text; otherwise the stable native keycode is stored plus one.
 // Key codes: 0 Unicode scalar, then enter, tab, backspace, escape, up,
 // down, left, right, home, end, delete, page-up, page-down.
 // Modifiers: shift=1, alt=2, ctrl=4. Phases: press=1, repeat=2, release=3.
@@ -42,6 +45,8 @@ typedef struct {
   uint32_t kind, code, mods, phase;
   const uint8_t *text;
   size_t len;
+  uint32_t physical, button;
+  double x, y;
 } telar_gui_input;
 
 typedef struct {

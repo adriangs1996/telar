@@ -1,8 +1,8 @@
 #pragma once
-#import "TelarTextInputView.h"
+#import "TelarPointerInputView.h"
 @class TelarWindowBackground;
 
-@interface TelarView : TelarTextInputView <NSWindowDelegate>
+@interface TelarView : TelarPointerInputView <NSWindowDelegate>
 @property(nonatomic, weak) TelarWindowBackground *backgroundView;
 - (instancetype)initWithFrame:(NSRect)frame
                       context:(void *)render_context

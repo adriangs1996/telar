@@ -583,6 +583,22 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
             return .pending;
         }
 
+        /// Ends a partial chord before a semantic paste or pointer event.
+        /// Example: `try router.interrupt(handler);`
+        pub fn interrupt(router: *Self, handler: anytype) !void {
+            router.repeating = null;
+            try router.replayBinding(handler);
+            try router.flushOutput(handler);
+        }
+
+        /// Drops a partial chord when a semantic pointer action takes ownership.
+        /// Example: `router.cancelSequence();`
+        pub fn cancelSequence(router: *Self) void {
+            router.repeating = null;
+            router.resetMatch();
+            router.binding_since_ns = null;
+        }
+
         fn replayBinding(router: *Self, handler: anytype) !void {
             if (router.depth == 0) {
                 return;

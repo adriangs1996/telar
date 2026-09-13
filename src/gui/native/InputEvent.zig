@@ -5,4 +5,8 @@ pub const InputEvent = extern struct {
     phase: u32 = 1,
     text: ?[*]const u8 = null,
     len: usize = 0,
+    physical: u32 = 0,
+    button: u32 = 0,
+    x: f64 = 0,
+    y: f64 = 0,
 };

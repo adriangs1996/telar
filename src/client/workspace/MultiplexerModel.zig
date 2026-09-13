@@ -486,7 +486,9 @@ fn indexPane(model: *Model, pane_id: PaneIdType, pane_slot: u8) void {
     model.pane_index.put(raw_module(pane_id), pane_slot);
 }
 
-fn paneMousePlan(pane: *const PaneType, content: RectType) PaneMousePlan {
+/// Captures the mouse policy of an already resolved pane.
+/// Example: `const plan = MultiplexerModel.paneMousePlan(pane, view.content);`
+pub fn paneMousePlan(pane: *const PaneType, content: RectType) PaneMousePlan {
     return .{
         .pane_id = pane.id,
         .content = content,
