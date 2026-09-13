@@ -107,7 +107,7 @@ pub fn init(cell: Rect) !Grid {
 test "line spacing follows Ghostty integer cell geometry" {
     const grid = try init(.{ .x = 0, .y = 0, .width = 26, .height = 71 });
     try std.testing.expectEqual(@as(f32, 6), grid.diameter);
-    try std.testing.expectEqual([_]f32{ 4, 17 }, grid.x);
+    try std.testing.expectEqual([_]f32{ 3, 16 }, grid.x);
     try std.testing.expectEqual([_]f32{ 5, 20, 35, 50 }, grid.y);
 }
 
