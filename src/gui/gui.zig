@@ -14,6 +14,7 @@ pub const quad = @import("render/Quad.zig");
 
 test {
     _ = Application;
+    _ = @import("WindowIdentity.zig");
     _ = @import("tests/terminal.zig");
     _ = @import("tests/configuration.zig");
     _ = @import("tests/font_thicken.zig");

@@ -3,6 +3,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Application = @import("Application.zig");
+const WindowIdentity = @import("WindowIdentity.zig");
 
 /// Opens a native terminal session. Example: `const status = try run(init, connection, options);`
 pub fn run(init: std.process.Init, connection: *core.SocketChannel, options: client.Options) !u8 {
@@ -20,14 +21,14 @@ pub fn run(init: std.process.Init, connection: *core.SocketChannel, options: cli
             init.gpa.destroy(store);
         }
     };
-    var identity: u64 = undefined;
-    try init.io.randomSecure(std.mem.asBytes(&identity));
+    var identity = try WindowIdentity.acquire(init.io, options.endpoint);
+    defer identity.deinit(init.io);
     var app = try Application.init(.{
         .gpa = init.gpa,
         .io = init.io,
         .connection = connection,
         .host_size = .{ .cols = 80, .rows = 24 },
-        .client_identity = @enumFromInt(identity | 1),
+        .client_identity = identity.value,
         .options = options,
     });
     adopted = true;
