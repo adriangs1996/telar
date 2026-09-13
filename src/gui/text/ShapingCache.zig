@@ -1,11 +1,13 @@
 //! Bounded, owned shaping results for one font at one size. Collisions replace
-//! entries; long runs bypass the cache. No position, color or GPU state is held.
+//! non-ASCII entries; single-byte ASCII has collision-free slots. Long runs
+//! bypass the cache. No position, color or GPU state is held.
 const std = @import("std");
 const Entry = @import("ShapingEntry.zig");
 const ShapedRun = @import("ShapedRun.zig");
 const Cache = @This();
 
 pub const capacity = 256;
+const ascii_capacity = 128;
 entries: []Entry,
 
 pub fn init(allocator: std.mem.Allocator) !Cache {
@@ -33,7 +35,11 @@ fn entryFor(cache: *Cache, text: []const u8) ?*Entry {
         return null;
     }
 
-    return &cache.entries[std.hash.Wyhash.hash(0, text) % capacity];
+    if (text.len == 1 and text[0] < ascii_capacity) {
+        return &cache.entries[text[0]];
+    }
+
+    return &cache.entries[ascii_capacity + std.hash.Wyhash.hash(0, text) % (capacity - ascii_capacity)];
 }
 
 /// Borrows until the next insertion or clear. Example: `const hit = cache.find(text);`

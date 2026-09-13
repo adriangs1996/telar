@@ -488,3 +488,39 @@ test "shaping cache eviction and size changes match uncached geometry" {
         try std.testing.expectEqualSlices(quad.Quad, expected, list.items());
     }
 }
+
+test "single ASCII glyphs remain cached while Unicode runs replace hashed entries" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    defer atlas.deinit();
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    for (32..127) |codepoint| {
+        const byte = [_]u8{@intCast(codepoint)};
+        list.clear();
+        _ = try atlas.place(.{ .text = &byte, .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    }
+
+    const unicode_run: TextRun = .{ .text = "e\u{301}", .x = 0, .y = 16, .color = .white, .pixel_height = 16 };
+    list.clear();
+    const advance = try atlas.place(unicode_run, &list);
+    const glyphs = try std.testing.allocator.dupe(quad.Quad, list.items());
+    defer std.testing.allocator.free(glyphs);
+    for (0..600) |index| {
+        var bytes: [16]u8 = undefined;
+        const text = try std.fmt.bufPrint(&bytes, "é{d}", .{index});
+        list.clear();
+        _ = try atlas.place(.{ .text = text, .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    }
+
+    const calls = atlas.shape_calls;
+    for (32..127) |codepoint| {
+        const byte = [_]u8{@intCast(codepoint)};
+        list.clear();
+        _ = try atlas.place(.{ .text = &byte, .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    }
+
+    try std.testing.expectEqual(calls, atlas.shape_calls);
+    list.clear();
+    try std.testing.expectEqual(advance, try atlas.place(unicode_run, &list));
+    try std.testing.expectEqualSlices(quad.Quad, glyphs, list.items());
+}
