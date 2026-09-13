@@ -108,7 +108,7 @@ return telar.config({
         deadline = time.monotonic() + 12
         while time.monotonic() < deadline:
             if any(node.get("pid") == self.pid for node in nodes(self.tree())):
-                self.sway(f"[pid={self.pid}] floating enable, border none, resize set width 1280 px height 800 px, focus")
+                self.sway(f"[pid={self.pid}] floating enable, border none, resize set width 1280 px height 760 px, focus")
                 time.sleep(0.25)
                 return
             self.guest('kill -0 "$1"', str(self.pid))
