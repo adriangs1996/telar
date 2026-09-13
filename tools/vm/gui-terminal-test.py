@@ -5,6 +5,7 @@ from pathlib import Path
 import secrets
 import argparse
 import shlex
+import subprocess
 
 spec = importlib.util.spec_from_file_location("telar_vm", Path(__file__).with_name("vm.py"))
 vm = importlib.util.module_from_spec(spec)
@@ -37,17 +38,18 @@ export TELAR_SOCKET="$state/runtime.sock" TELAR_HISTORY="$state/history.db"
 resume = setup[setup.index("export WAYLAND_DISPLAY"):]
 resume = 'set -euo pipefail\ncd "$HOME/' + vm.GUEST_SRC + '"\nstate=$(cat ' + state_file + ')\n' + resume
 config_args = '--config "$state/config.lua"' if args.config or args.reload else '--no-config'
+trace = "WAYLAND_DEBUG=client " if args.reload else ""
 if args.config or args.reload:
     source = args.config.read_text() if args.config else 'return { api_version = 2, gui = { cursor = { blink = false } } }'
     setup += "printf '%s' " + shlex.quote(source) + ' > "$state/config.lua"\n'
 try:
     vm.guest(setup + r'''
-./zig-out/bin/telar gui __CONFIG_ARGS__ /bin/bash --noprofile --norc -c "echo \$\$ > '$state/shell.pid'; for i in {1..50}; do printf 'frame %s\n' \$i; sleep .03; done; exec /bin/bash --noprofile --norc -i" > "$state/gui.log" 2>&1 &
+__TRACE__./zig-out/bin/telar gui __CONFIG_ARGS__ /bin/bash --noprofile --norc -c "echo \$\$ > '$state/shell.pid'; for i in {1..50}; do printf 'frame %s\n' \$i; sleep .03; done; exec /bin/bash --noprofile --norc -i" > "$state/gui.log" 2>&1 &
 printf '%s' "$!" > "$state/gui.pid"
 sleep 5
 kill -0 "$(cat "$state/gui.pid")"
-cat "$state/gui.log"
-'''.replace("__CONFIG_ARGS__", config_args))
+sed '/^\[[[:space:]0-9.]*\]/d' "$state/gui.log"
+'''.replace("__CONFIG_ARGS__", config_args).replace("__TRACE__", trace))
     vm.screenshot(output / "01-prompt.png")
     vm.guest(resume + r'''
 gui=$(cat "$state/gui.pid")
@@ -104,7 +106,7 @@ printf 'font recovered: '; cat "$state/recovered-size"
 ''')
         vm.screenshot(output / "02b-recovered.png")
         vm.guest(resume + r'''
-printf '%s' "return { api_version = 2, theme = 'tokyo-night', gui = { font = { size = 17 }, cursor = { blink = false }, window = { background_opacity = 0.5, background_blur = true, padding = { x = 16, y = 12 } } } }" > "$state/save.tmp"
+printf '%s' "return { api_version = 2, theme = 'tokyo-night', gui = { font = { size = 17 }, cursor = { blink = false }, window = { background_opacity = 0.5, background_blur = 20, titlebar = true, padding = { x = 16, y = 12 } } } }" > "$state/save.tmp"
 mv "$state/save.tmp" "$state/config.lua"
 for attempt in {1..40}; do
     wtype "stty size > '$state/padded-size'"
@@ -116,6 +118,93 @@ done
 printf 'with padding: '; cat "$state/padded-size"
 ''')
         vm.screenshot(output / "02c-transparent-padding.png")
+        vm.guest(resume + r'''
+window_config() {
+    local radius=$1 titlebar=$2 generation=$3
+    cat > "$state/save.tmp" <<EOF
+local telar = require("telar")
+return telar.config({
+    api_version = 2,
+    theme = "tokyo-night",
+    client = { keybindings = {
+        telar.bind_expr_global({ "f12" }, function()
+            return telar.input.paste("printf '%s' '$generation' > '$state/window-generation'")
+        end),
+    } },
+    gui = {
+        font = { size = 17 }, cursor = { blink = false },
+        window = { background_opacity = 0.5, background_blur = $radius,
+                   titlebar = $titlebar, padding = { x = 16, y = 12 } },
+    },
+})
+EOF
+    mv "$state/save.tmp" "$state/config.lua"
+    # A generation-specific binding proves adoption even if the compositor has
+    # no blur protocol. A fixed delay or an unchanged stty size cannot do that.
+    for attempt in {1..40}; do
+        wtype -M ctrl -k u -m ctrl -k F12 -k Return
+        sleep .2
+        if test "$(cat "$state/window-generation" 2>/dev/null || true)" = "$generation"; then break; fi
+    done
+    test "$(cat "$state/window-generation")" = "$generation"
+    wtype "stty size > '$state/$generation-size'"
+    wtype -k Return
+    for attempt in {1..40}; do
+        if test -s "$state/$generation-size"; then break; fi
+        sleep .1
+    done
+    test -s "$state/$generation-size"
+    printf '%s: ' "$generation"; cat "$state/$generation-size"
+}
+window_config 20 true blur-20
+window_config 80 true blur-80
+window_config 0 true blur-off
+cmp "$state/padded-size" "$state/blur-20-size"
+cmp "$state/blur-20-size" "$state/blur-80-size"
+cmp "$state/blur-20-size" "$state/blur-off-size"
+window_config 0 false titlebar-hidden
+window_config 0 true titlebar-visible
+python3 - "$state/gui.log" <<'PY'
+import re
+import sys
+import time
+from pathlib import Path
+
+deadline = time.monotonic() + 5
+while True:
+    trace = Path(sys.argv[1]).read_text()
+    requests = [int(mode) for mode in re.findall(r"zxdg_toplevel_decoration_v1[@#]\d+\.set_mode\((\d+)\)", trace)]
+    if not requests or requests == [2, 1, 2] or time.monotonic() >= deadline:
+        break
+    time.sleep(.05)
+configured = [int(mode) for mode in re.findall(r"zxdg_toplevel_decoration_v1[@#]\d+\.configure\((\d+)\)", trace)]
+if requests:
+    assert requests == [2, 1, 2], requests
+    print("titlebar requests: visible -> hidden -> visible", requests)
+    print("compositor decoration modes:", configured)
+    if 1 not in configured:
+        print("compositor imposed server-side decorations; hidden preference was requested but not granted")
+else:
+    assert '"zxdg_decoration_manager_v1"' not in trace, "advertised decoration protocol was not used"
+    print("compositor has no xdg-decoration; Telar draws no titlebar of its own")
+blur = re.findall(r"ext_background_effect_surface_v1[@#]\d+\.set_blur_region\(([^)]*)\)", trace)
+if blur:
+    assert any(region != "nil" for region in blur), blur
+    assert blur[-1] == "nil", blur
+    print("blur region requests:", blur)
+else:
+    assert "compositor does not advertise background blur" in trace
+    print("compositor has no usable blur capability; numeric reload retained transparency and grid")
+PY
+for attempt in {1..40}; do
+    wtype "stty size > '$state/titlebar-restored-size'"
+    wtype -k Return
+    sleep .2
+    if cmp -s "$state/blur-off-size" "$state/titlebar-restored-size"; then break; fi
+done
+cmp "$state/blur-off-size" "$state/titlebar-restored-size"
+''')
+        vm.screenshot(output / "02d-window-options.png")
         vm.guest(resume + r'''
 printf '%s' "return { api_version = 2, theme = 'tokyo-night', gui = { font = { size = 17 }, cursor = { blink = false } } }" > "$state/save.tmp"
 mv "$state/save.tmp" "$state/config.lua"
@@ -156,11 +245,15 @@ wtype -k Return
 sleep 1
 test "$shell_pid" = "$(cat "$state/reattached.pid")"
 printf 'reattached shell PID: %s\n' "$shell_pid"
-cat "$state/gui.log" "$state/reattach.log"
+sed '/^\[[[:space:]0-9.]*\]/d' "$state/gui.log" "$state/reattach.log"
 ! grep -E "Validation Error|VUID-" "$state/gui.log" "$state/reattach.log"
 '''.replace("__CONFIG_ARGS__", config_args))
     vm.screenshot(output / "03-reattach.png")
 finally:
+    for name in ("gui.log", "reattach.log"):
+        with (output / name).open("wb") as logfile:
+            subprocess.run(vm.ssh_command("bash", "-c", 'state=$(cat ' + state_file + '); cat "$state/' + name + '"'),
+                           stdout=logfile, check=False)
     vm.guest(resume + r'''
 if test -f "$state/gui.pid"; then
     gui=$(cat "$state/gui.pid")
