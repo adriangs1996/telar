@@ -7,12 +7,15 @@ const Capture = @import("PointerCapture.zig");
 const Sample = @import("PointerSample.zig");
 const Event = @import("../native/InputEvent.zig").InputEvent;
 const Routing = @This();
+const GuiClient = @import("../GuiClient.zig");
 
 geometry: Geometry = .{},
 revision: u64 = 0,
 gesture_revision: u64 = 0,
 owners: [3]@import("pointer_owner.zig").Owner = @splat(.shared),
 last: [3]client.Mouse = @splat(.{ .x = 0, .y = 0, .kind = .release }),
+hover: @import("PointerHover.zig") = .{},
+link_gesture: @import("LinkGesture.zig") = .{},
 
 /// Example: `pointer.configure(origin, size);`
 pub fn configure(pointer: *Routing, origin: [2]u32, size: core.TerminalSize) void {
@@ -20,6 +23,8 @@ pub fn configure(pointer: *Routing, origin: [2]u32, size: core.TerminalSize) voi
     if (!std.meta.eql(pointer.geometry, candidate)) {
         pointer.geometry = candidate;
         pointer.revision +%= 1;
+        pointer.hover.dirty = true;
+        pointer.link_gesture.cancel();
     }
 }
 
@@ -41,6 +46,13 @@ pub fn invalidateGestures(pointer: *Routing) void {
 /// Example: `try pointer.apply(app, sample);`
 pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !void {
     const event = value.event;
+    if (event.code == 7) {
+        pointer.hover.clear();
+        pointer.link_gesture.cancel();
+        GuiClient.of(app).chrome.leavePointer();
+        return;
+    }
+
     const retained = event.code == 2 or event.code == 3;
     const button: usize = event.button;
     if (event.code == 1 and pointer.owners[button] == .shared) {
@@ -50,6 +62,9 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
     if (!retained and value.geometry_revision != pointer.revision) {
         return;
     }
+
+    pointer.hover.observe(event);
+    pointer.hover.refresh(GuiClient.of(app));
 
     const begins = event.code == 1 or event.code == 4 or event.code == 5;
     if (begins and (value.gesture_revision != pointer.gesture_revision or !geometryMatches(app))) {
@@ -72,9 +87,19 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
                 return;
             },
             .link => {
-                _ = app.link_pointer.handle(.{ .kind = if (event.code == 2) .release else .drag, .left_button = button == 0 }, null);
+                if (event.code == 3) {
+                    pointer.link_gesture.cancel();
+                }
+
                 if (event.code == 2) {
                     pointer.owners[button] = .shared;
+                    pointer.hover.dirty = true;
+                    pointer.hover.refresh(GuiClient.of(app));
+                    const target = if (geometryMatches(app)) pointer.link_gesture.finish(pointer.hover.link) else null;
+                    pointer.link_gesture.cancel();
+                    if (target) |selected| {
+                        _ = try client.controllers.link_openings.apply(app, selected);
+                    }
                 }
 
                 return;
@@ -113,6 +138,8 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
 /// Closes existing gestures on focus loss, without assigning their releases
 /// to chrome or to a pane that happens to be focused. Example: `try pointer.cancel(app);`
 pub fn cancel(pointer: *Routing, app: *client.AttachedClient) !void {
+    pointer.hover.clear();
+    pointer.link_gesture.cancel();
     defer pointer.owners = @splat(.shared);
     for (&pointer.owners, pointer.last) |*owner, last| {
         switch (owner.*) {
@@ -122,7 +149,7 @@ pub fn cancel(pointer: *Routing, app: *client.AttachedClient) !void {
                 released.button &= 31;
                 try capture.deliver(app, released);
             },
-            .link => _ = app.link_pointer.handle(.{ .kind = .release, .left_button = true }, null),
+            .link => {},
             .shared, .discarded => {},
         }
     }

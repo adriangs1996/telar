@@ -22,6 +22,7 @@ sidebar_renderer_fn: *const fn (*anyopaque) SidebarRenderingType,
 adopt_sidebar_renderer_fn: *const fn (*anyopaque, SidebarRenderingType) void,
 region_fn: *const fn (*anyopaque) RegionType,
 inspection_scroll_limit_fn: *const fn (*anyopaque) ?u32,
+link_pointer_fn: ?*const fn (*anyopaque, MouseType) bool = null,
 
 pub fn setTheme(port: HostChrome, theme: ColorThemeType) void {
     port.set_theme_fn(port.context, theme);
@@ -55,6 +56,13 @@ pub fn setWorkspaceListCollapsed(port: HostChrome, collapsed: bool) void {
 /// Example: `const interaction = client.chrome.pointer(event);`.
 pub fn pointer(port: HostChrome, event: MouseType) ViewInteractionCommandType {
     return port.pointer_fn(port.context, event);
+}
+
+/// Lets an adapter own its native link gesture. Null retains shared routing.
+/// Example: `if (client.chrome.linkPointer(event)) |consumed| return consumed;`
+pub fn linkPointer(port: HostChrome, event: MouseType) ?bool {
+    const callback = port.link_pointer_fn orelse return null;
+    return callback(port.context, event);
 }
 
 /// The renderer the adapter currently requests for its sidebar.

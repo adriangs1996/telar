@@ -10,6 +10,10 @@ size: core.TerminalSize = .{ .cols = 0, .rows = 0 },
 /// Padding lies outside the grid, never over its first cell. Existing drags
 /// clamp there so selection can finish beyond the window. Example: `geometry.resolve(event)`.
 pub fn resolve(geometry: Geometry, event: Event) ?client.Mouse {
+    if (event.code < 1 or event.code > 6) {
+        return null;
+    }
+
     if (geometry.size.cell_width_px == 0 or geometry.size.cell_height_px == 0) {
         return null;
     }
@@ -41,7 +45,7 @@ pub fn resolve(geometry: Geometry, event: Event) ?client.Mouse {
             5 => 65,
             6 => 35,
             else => @intCast(event.button),
-        }) | (@as(u8, @intCast(event.mods)) << 2),
+        }) | (@as(u8, @intCast(event.mods & 7)) << 2),
         .kind = kinds[event.code - 1],
     };
 }

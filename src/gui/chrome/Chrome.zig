@@ -146,3 +146,12 @@ pub fn cancelPointer(chrome: *Chrome) void {
     chrome.hovered = null;
     chrome.invalidate();
 }
+
+/// Leaving the window clears hover while an acquired drag keeps its owner.
+/// Example: `chrome.leavePointer();`
+pub fn leavePointer(chrome: *Chrome) void {
+    if (chrome.hovered != null) {
+        chrome.hovered = null;
+        chrome.invalidate();
+    }
+}

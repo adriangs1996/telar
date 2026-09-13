@@ -14,6 +14,7 @@ pub fn port(app: *client.AttachedClient) client.HostChrome {
         .set_sidebar_layout_fn = sidebarLayout,
         .set_workspace_list_collapsed_fn = workspaceList,
         .pointer_fn = pointer,
+        .link_pointer_fn = linkPointer,
         .sidebar_renderer_fn = sidebarRenderer,
         .adopt_sidebar_renderer_fn = adoptSidebarRenderer,
         .region_fn = region,
@@ -58,6 +59,20 @@ fn pointer(context: *anyopaque, event: client.Mouse) client.ViewInteractionComma
     }
 
     return gui.chrome.pointer(event);
+}
+
+fn linkPointer(context: *anyopaque, event: client.Mouse) bool {
+    if (event.kind != .press or event.button & 3 != 0) {
+        return false;
+    }
+
+    const gui = host(context);
+    const routing = &gui.input.pointer;
+    routing.hover.dirty = true;
+    routing.hover.refresh(gui);
+    const hit = routing.hover.link orelse return false;
+    routing.link_gesture.begin(hit);
+    return true;
 }
 
 fn sidebarRenderer(_: *anyopaque) client.SidebarRendering {

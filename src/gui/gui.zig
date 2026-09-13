@@ -13,6 +13,7 @@ pub const run = @import("run.zig").run;
 pub const quad = @import("render/Quad.zig");
 
 test {
+    _ = @import("tests/links.zig");
     _ = Application;
     _ = @import("WindowIdentity.zig");
     _ = @import("tests/terminal.zig");

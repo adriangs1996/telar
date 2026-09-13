@@ -7,6 +7,7 @@ terminal: *@import("TerminalRenderer.zig"),
 chrome: *@import("../chrome/Chrome.zig"),
 overlays: *@import("../overlays/Overlays.zig"),
 theme: client.ColorTheme,
+link: ?*const @import("../input/LinkHit.zig") = null,
 
 /// Nothing retained by a layer may borrow the projection after this returns.
 /// Example: `const commit = try scene.prepare(projection);`
@@ -29,6 +30,10 @@ pub fn prepare(scene: *Scene, projection: client.Projection) !client.Presentatio
                 }
             }
         }
+    }
+
+    if (scene.link) |hit| {
+        try @import("link_decoration.zig").paint(&canvas, hit);
     }
 
     try scene.chrome.paint(&canvas, projection);

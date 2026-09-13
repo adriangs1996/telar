@@ -45,6 +45,10 @@ pub fn apply(client: *Client, event: MouseType) !ApplicationInputPointerRoutingO
 fn link(raw_context: *anyopaque, command: PointerCommandType) !bool {
     const context: *PointerRoutingContext = @ptrCast(@alignCast(raw_context));
 
+    if (context.client.chrome.linkPointer(command.event)) |consumed| {
+        return consumed;
+    }
+
     return link_openings.pointer(context.client, context.model.?, command.event);
 }
 

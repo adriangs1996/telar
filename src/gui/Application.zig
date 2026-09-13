@@ -48,7 +48,7 @@ pub fn deinit(app: *Application) void {
 /// Runs the window and returns only after native GPU consumers have stopped.
 /// Example: `const status = try app.run("Telar");`
 pub fn run(app: *Application, title: [*:0]const u8) !u8 {
-    const callbacks: native.Callbacks = .{ .render = render, .pump = pump, .complete = complete, .input = input, .wake_fd = app.driver.fds[0], .wakeup_after = wakeupAfter };
+    const callbacks: native.Callbacks = .{ .render = render, .pump = pump, .complete = complete, .input = input, .wake_fd = app.driver.fds[0], .wakeup_after = wakeupAfter, .pointer_shape = pointerShape };
     const result = native.telar_gui_run(title, app, &callbacks);
     if (app.failure) |err| {
         return err;
@@ -194,6 +194,11 @@ fn now(app: *const Application) u64 {
 fn wakeupAfter(context: ?*anyopaque) callconv(.c) u32 {
     const app = from(context);
     return app.cursor_clock.wakeupAfter(app.now());
+}
+
+fn pointerShape(context: ?*anyopaque) callconv(.c) u32 {
+    const gui = from(context).gui orelse return 0;
+    return @intFromEnum(gui.input.pointer.hover.shape);
 }
 
 fn fail(app: *Application, err: anyerror) void {

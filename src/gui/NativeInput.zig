@@ -88,17 +88,17 @@ pub fn accept(input: *Input, event: Event) !void {
         return error.InputTooLarge;
     }
 
-    if ((event.len != 0 and event.text == null) or event.mods > 7 or event.phase < 1 or event.phase > 3 or event.physical > ReleaseRecovery.capacity) {
+    if ((event.len != 0 and event.text == null) or event.mods > (if (event.kind == 6) @as(u32, 15) else 7) or event.phase < 1 or event.phase > 3 or event.physical > ReleaseRecovery.capacity) {
         return error.InvalidNativeInput;
     }
 
     if (event.kind == 6) {
-        if (event.code < 1 or event.code > 6 or event.button > 2 or event.len != 0 or !std.math.isFinite(event.x) or !std.math.isFinite(event.y)) {
+        if (event.code < 1 or event.code > 7 or event.button > 2 or event.len != 0 or !std.math.isFinite(event.x) or !std.math.isFinite(event.y)) {
             return error.InvalidNativePointer;
         }
 
         input.reserve(1) catch |err| {
-            if (event.code != 2) {
+            if (event.code != 2 and event.code != 7) {
                 return err;
             }
 
@@ -355,7 +355,7 @@ test "native key normalization preserves configured Ctrl-Space Alt uppercase and
 test "native input rejects invalid pointer and key payloads atomically" {
     var input: Input = .{};
     try std.testing.expectError(error.InvalidNativePointer, input.accept(.{ .kind = 6, .code = 1, .x = std.math.nan(f64) }));
-    try std.testing.expectError(error.InvalidNativePointer, input.accept(.{ .kind = 6, .code = 7 }));
+    try std.testing.expectError(error.InvalidNativePointer, input.accept(.{ .kind = 6, .code = 8 }));
     try std.testing.expectError(error.InvalidNativePointer, input.accept(.{ .kind = 6, .code = 1, .button = 3 }));
     try std.testing.expectError(error.InvalidNativeInput, input.accept(.{ .kind = 4, .code = 'x', .mods = 8 }));
     try std.testing.expectError(error.InvalidNativeKey, input.accept(.{ .kind = 3, .code = 99 }));

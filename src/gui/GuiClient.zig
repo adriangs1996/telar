@@ -99,7 +99,9 @@ pub fn start(gui: *GuiClient, colors: core.TerminalColors) !void {
 }
 
 pub fn pump(gui: *GuiClient) !?u8 {
-    return gui.driver.drain(gui);
+    const status = try gui.driver.drain(gui);
+    gui.input.pointer.hover.refresh(gui);
+    return status;
 }
 
 /// Applies one validated runtime message before releasing its receive borrow.
@@ -208,6 +210,7 @@ pub fn complete(gui: *GuiClient, token: u64, delivered: bool) !void {
 
     gui.chrome.present(delivered);
     gui.overlays.present(delivered);
+    gui.input.pointer.hover.dirty = true;
     const delivery = gui.lifecycle.complete(@enumFromInt(token), if (delivered) .delivered else .failed) orelse return;
     var handler: client.DeliverPresentationHandler = .{
         .model = &gui.app.model,
@@ -245,7 +248,7 @@ pub fn prepare(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.zig"
     const projected = gui.projection();
     const observed = gui.observation();
     _ = gui.lifecycle.observe(observed);
-    var scene: @import("render/Scene.zig") = .{ .terminal = renderer, .chrome = &gui.chrome, .overlays = &gui.overlays, .theme = gui.theme };
+    var scene: @import("render/Scene.zig") = .{ .terminal = renderer, .chrome = &gui.chrome, .overlays = &gui.overlays, .theme = gui.theme, .link = if (gui.input.pointer.hover.link) |*hit| hit else null };
     const commit = try scene.prepare(projected);
     const token = try gui.lifecycle.begin(.{ .observation = observed, .commit = commit, .geometry = client.Geometry.capture(projected) });
     return @intFromEnum(token);
@@ -263,5 +266,5 @@ pub fn observation(gui: *const GuiClient) client.Observation {
 }
 
 fn ingress(gui: *const GuiClient) client.PresentationIngress {
-    return .{ .input_routing = gui.input.presentation_revision, .view_interaction = gui.chrome.revision };
+    return .{ .input_routing = gui.input.presentation_revision, .view_interaction = gui.chrome.revision +% gui.input.pointer.hover.revision };
 }
