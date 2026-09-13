@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check native repeated keys in Neovim and capture an unpatched font's icons.
+"""Check repeated keys in Neovim and capture font fallback and Braille patterns.
 
 AppKit events carry explicit press/repeat/release phases. This checks the native
 text-input and child path, not generation of hardware key-repeat events.
@@ -37,7 +37,11 @@ def main():
                       'Nerd folders: \uf07b \uf115 \uf07c   file: \uf15b   code: \uf121\n'
                       'Nerd status: \uf017 \uf240 \uf2db   dev: \ue7a8 \ue60b\n'
                       'Supplementary icons: \U000f035b \U000f07c0 \U000f17c8\n'
-                      + ''.join(f'line {index:02d}\n' for index in range(5, 61)))
+                      'Codex dots: \u2801 \u2802 \u2804 \u2808 \u2810 \u2820 \u2840 \u2880\n'
+                      'Braille blank/full: [\u2800] [\u28ff]\n'
+                      + ''.join(f'{row:01X}: ' + ''.join(chr(0x2800 + row * 16 + col) for col in range(16)) + '\n'
+                                for row in range(16))
+                      + ''.join(f'line {index:02d}\n' for index in range(23, 61)))
     init = directory / 'init.vim'
     init.write_text("set nowrap noswapfile\n"
                     "autocmd VimEnter * call writefile(['ready'], '" + str(directory / 'ready') + "')\n")

@@ -14,6 +14,10 @@ saved = termios.tcgetattr(0)
 try:
     tty.setraw(0)
     os.write(1, "\\033[2J\\033[HDejaVu Sans Mono fallback: \\uf07b \\uf115 \\ue7a8 \\U000f035b\\r\\n".encode())
+    os.write(1, "Codex dots: \\u2801 \\u2802 \\u2804 \\u2808 \\u2810 \\u2820 \\u2840 \\u2880\\r\\nBraille blank/full: [\\u2800] [\\u28ff]\\r\\n".encode())
+    for row in range(16):
+        patterns = ''.join(chr(0x2800 + row * 16 + col) for col in range(16))
+        os.write(1, (f'{row:X}: ' + patterns + '\\r\\n').encode())
     with (state / 'keys').open('wb', buffering=0) as output:
         (state / 'ready').touch()
         deadline = time.monotonic() + 20

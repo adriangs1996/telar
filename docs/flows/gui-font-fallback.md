@@ -1,6 +1,8 @@
 # GUI font fallback
 
 A cell or chrome label enters `GlyphAtlas.place` as UTF-8 and paint attributes.
+Complete Braille characters use [procedural drawing](gui-procedural-glyphs.md)
+before consulting fonts. For the remaining text,
 `FontRuns` keeps each grapheme together and chooses the first face that covers
 it: the configured family, embedded JetBrains Mono, then the complete embedded
 Symbols Nerd Font Mono. Font discovery and byte loading happen only while
@@ -49,7 +51,8 @@ python3 tools/gui_text_input.py zig-out/bin/telar /tmp/telar-font-check
 
 It creates an isolated runtime and opens Neovim with DejaVu Sans Mono, size 22,
 line height 1.4 and optical thickening. `icons.png` captures BMP and supplementary
-icons next to primary text; `repeated.png` and `result.json` check repeated `j`
+icons plus all Braille patterns next to primary text; `repeated.png` and
+`result.json` check repeated `j`
 delivery at the child. The probe requires DejaVu and Neovim to be installed.
 Screenshots require visual inspection; the glyph-selection and cache assertions
 live in `test-gui`. The injected AppKit repeats test event delivery, not hardware

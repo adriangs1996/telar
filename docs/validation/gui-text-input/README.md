@@ -1,5 +1,8 @@
 # GUI fonts and held-key validation
 
+The later [procedural Braille validation](braille/README.md) covers the Codex
+input animation fix and preserves before/after captures on both platforms.
+
 Validated on 2026-09-13 at code revision `73a59ee3` on macOS and the isolated
 Linux Wayland/Vulkan VM. The changes are described in
 [font fallback](../../flows/gui-font-fallback.md),
