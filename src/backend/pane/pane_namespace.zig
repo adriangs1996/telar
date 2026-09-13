@@ -260,6 +260,8 @@ test "pane frames follow VT cursor style blink and visibility across every read 
     defer pane.terminal.deinit(gpa);
     var stream = pane.terminal.vtStream();
     defer stream.deinit();
+    pane.text_metadata = try .init(gpa, 2);
+    defer pane.text_metadata.deinit(gpa);
     pane.render_state = .empty;
     defer pane.render_state.deinit(gpa);
     pane.screen = try BufferType.init(gpa, 4, 2);

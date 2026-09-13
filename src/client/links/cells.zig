@@ -11,6 +11,7 @@ const extractAt_module = @import("telar-core").extractAt;
 const std = @import("std");
 
 const row_window_bytes = max_uri_bytes_module * 2 + CellType.max_bytes * 2;
+const max_walk_cells = row_window_bytes * 2;
 
 /// Extracts the textual URI under one absolute pane position without allocating.
 ///
@@ -56,7 +57,13 @@ fn matchGrid(grid: @import("LinkGrid.zig"), position: Position) ?LinkMatch {
     const cursor = grid.cellIndex(position) orelse return null;
     var start = cursor;
     var bytes_before: usize = 0;
+    var visited: usize = 0;
     while (bytes_before <= max_uri_bytes_module) {
+        if (visited == max_walk_cells) {
+            return null;
+        }
+
+        visited += 1;
         start = grid.previous(start) orelse break;
         bytes_before += grid.buffer.cells[start].text().len;
     }
@@ -65,7 +72,13 @@ fn matchGrid(grid: @import("LinkGrid.zig"), position: Position) ?LinkMatch {
     var len: usize = 0;
     var cursor_offset: ?usize = null;
     var index = start;
+    visited = 0;
     while (true) {
+        if (visited == max_walk_cells) {
+            return null;
+        }
+
+        visited += 1;
         if (index == cursor) {
             cursor_offset = len;
         }
@@ -89,11 +102,29 @@ fn matchGrid(grid: @import("LinkGrid.zig"), position: Position) ?LinkMatch {
     const offset = cursor_offset orelse return null;
     const found = extractAt_module(storage[0..len], offset) orelse return null;
     const range = positions(grid, start, .{ found.start, found.end }) orelse return null;
+    if (!completeRange(grid, range)) {
+        return null;
+    }
+
     return .{
         .target = TargetType.init(found.text(storage[0..len])) catch return null,
         .start = range[0],
         .end = range[1],
     };
+}
+
+fn completeRange(grid: @import("LinkGrid.zig"), range: [2]Position) bool {
+    if (grid.rows.len == 0) {
+        return true;
+    }
+
+    if (range[0].y == grid.scroll.offset and range[0].x == 0 and grid.rows[0].continuation) {
+        return false;
+    }
+
+    const last = grid.rows[grid.rows.len - 1];
+    const last_text_column = grid.buffer.w - @intFromBool(last.wide_padding);
+    return !(range[1].y - grid.scroll.offset == grid.rows.len - 1 and range[1].x == last_text_column and last.wrap);
 }
 
 fn positions(grid: @import("LinkGrid.zig"), first: usize, span: [2]usize) ?[2]Position {
@@ -240,4 +271,103 @@ test "matching retains supported schemes and does not join physical rows" {
     for (1..5) |y| {
         try std.testing.expect(match(&buffer, scroll, .{ .x = 3, .y = @intCast(y) }) == null);
     }
+}
+
+fn testPane(size: [2]u16) !@import("../panes/Pane.zig") {
+    var pane = try @import("../panes/Pane.zig").init(std.testing.allocator, .{
+        .spec = .{
+            .pane_id = @enumFromInt(1),
+            .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
+            .size = .{ .cols = size[0], .rows = size[1] },
+        },
+        .attached = true,
+    });
+    pane.buffer.clear(.{});
+    return pane;
+}
+
+test "pane link resolution follows only soft wraps and skips wide padding" {
+    const core = @import("telar-core");
+    var pane = try testPane(.{ 12, 3 });
+    defer pane.deinit();
+    pane.scroll = .{ .offset = 90, .total_rows = 93 };
+    _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "https://e/a", .style = .{} });
+    _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = "界z", .style = .{} });
+    var storage: [core.text_metadata_limits.capacity(3)]u8 = undefined;
+    var builder = core.TextMetadataBuilder.init(&storage, 3);
+    builder.setRow(0, .{ .wrap = true, .wide_padding = true });
+    builder.setRow(1, .{ .continuation = true });
+    pane.text_metadata.replace(builder.finish(.complete));
+    for ([_]Position{ .{ .x = 0, .y = 90 }, .{ .x = 10, .y = 90 }, .{ .x = 0, .y = 91 }, .{ .x = 1, .y = 91 }, .{ .x = 2, .y = 91 } }) |position| {
+        const found = resolve(&pane, position).?;
+        try std.testing.expectEqualStrings("https://e/a界z", found.target.uri());
+        try std.testing.expectEqualDeep(Position{ .x = 0, .y = 90 }, found.start);
+        try std.testing.expectEqualDeep(Position{ .x = 3, .y = 91 }, found.end);
+        try std.testing.expectEqual(null, found.link_index);
+    }
+
+    try std.testing.expect(resolve(&pane, .{ .x = 11, .y = 90 }) == null);
+    try std.testing.expect(resolve(&pane, .{ .x = 3, .y = 91 }) == null);
+    builder = core.TextMetadataBuilder.init(&storage, 3);
+    pane.text_metadata.replace(builder.finish(.complete));
+    try std.testing.expect(resolve(&pane, .{ .x = 1, .y = 91 }) == null);
+}
+
+test "OSC 8 destinations win over labels and omitted tables never authorize labels" {
+    const core = @import("telar-core");
+    var pane = try testPane(.{ 24, 2 });
+    defer pane.deinit();
+    _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "https://label.example", .style = .{} });
+    var storage: [core.text_metadata_limits.capacity(2)]u8 = undefined;
+    var builder = core.TextMetadataBuilder.init(&storage, 2);
+    builder.setRow(0, .{ .hyperlinks = true });
+    const id = try builder.addLink("https://destination.example/path");
+    try builder.addRun(.{ .start = 0, .len = 21, .link_index = id });
+    try builder.addRun(.{ .start = 25, .len = 4, .link_index = id });
+    pane.text_metadata.replace(builder.finish(.complete));
+    const found = resolve(&pane, .{ .x = 9, .y = 0 }).?;
+    try std.testing.expectEqualStrings("https://destination.example/path", found.target.uri());
+    try std.testing.expectEqual(@as(?u16, 0), found.link_index);
+    try std.testing.expectEqual(@as(u16, 21), found.end.x);
+    const repeated = resolve(&pane, .{ .x = 2, .y = 1 }).?;
+    try std.testing.expect(found.target.eql(&repeated.target));
+    try std.testing.expectEqual(found.link_index, repeated.link_index);
+    builder = core.TextMetadataBuilder.init(&storage, 2);
+    builder.setRow(0, .{ .hyperlinks = true });
+    const unsafe_id = try builder.addLink("javascript:alert(1)");
+    try builder.addRun(.{ .start = 0, .len = 21, .link_index = unsafe_id });
+    pane.text_metadata.replace(builder.finish(.complete));
+    try std.testing.expect(resolve(&pane, .{ .x = 9, .y = 0 }) == null);
+    builder = core.TextMetadataBuilder.init(&storage, 2);
+    builder.setRow(0, .{ .hyperlinks = true });
+    pane.text_metadata.replace(builder.finish(.omitted));
+    try std.testing.expect(resolve(&pane, .{ .x = 9, .y = 0 }) == null);
+    builder = core.TextMetadataBuilder.init(&storage, 2);
+    pane.text_metadata.replace(builder.finish(.complete));
+    try std.testing.expectEqualStrings("https://label.example", resolve(&pane, .{ .x = 9, .y = 0 }).?.target.uri());
+}
+
+test "link windows remain bounded by cells when grapheme bytes are empty" {
+    var buffer = try BufferType.init(std.testing.allocator, max_walk_cells + 64, 1);
+    defer buffer.deinit();
+    @memset(buffer.cells, .{ .len = 0, .width = 1 });
+    const x = max_walk_cells + 1;
+    _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = x, .y = 0 }, .text = "https://e", .style = .{} });
+    try std.testing.expect(match(&buffer, .{ .total_rows = 1, .offset = 0 }, .{ .x = x, .y = 0 }) == null);
+}
+
+test "a soft wrapped URI clipped by the viewport is not opened as a truncated URI" {
+    const core = @import("telar-core");
+    var pane = try testPane(.{ 12, 1 });
+    defer pane.deinit();
+    _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "https://e/ab", .style = .{} });
+    var storage: [core.text_metadata_limits.capacity(1)]u8 = undefined;
+    var builder = core.TextMetadataBuilder.init(&storage, 1);
+    builder.setRow(0, .{ .wrap = true });
+    pane.text_metadata.replace(builder.finish(.complete));
+    try std.testing.expect(resolve(&pane, .{ .x = 2, .y = 0 }) == null);
+    builder = core.TextMetadataBuilder.init(&storage, 1);
+    builder.setRow(0, .{ .continuation = true });
+    pane.text_metadata.replace(builder.finish(.complete));
+    try std.testing.expect(resolve(&pane, .{ .x = 2, .y = 0 }) == null);
 }

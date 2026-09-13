@@ -137,3 +137,50 @@ test "composer draft is owned, bounded and replaced whole" {
     try std.testing.expectEqualStrings("", pane.composerSlice());
     try std.testing.expectError(error.ComposerTooLong, pane.setComposer(&[_]u8{'x'} ** (Pane.max_composer_bytes + 1)));
 }
+
+test "pane metadata is owned admitted with its base and replaced without allocations" {
+    const core = @import("telar-core");
+    var allocator = std.testing.FailingAllocator.init(std.testing.allocator, .{});
+    var pane = try Pane.init(allocator.allocator(), initial);
+    defer pane.deinit();
+    allocator.fail_index = allocator.alloc_index;
+    allocator.resize_fail_index = allocator.resize_index;
+    var metadata_bytes: [core.text_metadata_limits.capacity(2)]u8 = undefined;
+    var builder = core.TextMetadataBuilder.init(&metadata_bytes, 2);
+    builder.setRow(0, .{ .hyperlinks = true });
+    const id = try builder.addLink("https://example.com");
+    try builder.addRun(.{ .start = 0, .len = 1, .link_index = id });
+    var bytes: [1024]u8 = undefined;
+    var snapshot = try frame(&bytes, .{});
+    snapshot.text_metadata = builder.finish(.complete);
+    _ = try pane.applyFrame(snapshot);
+    @memset(&metadata_bytes, 0);
+    @memset(&bytes, 0);
+    try std.testing.expectEqualStrings("https://example.com", pane.text_metadata.view().link(0).?);
+    const used = allocator.allocations;
+    for (2..122) |id_value| {
+        _ = try pane.applyFrame(try frame(&bytes, .{ .id = id_value, .base = id_value - 1 }));
+        try std.testing.expectEqualStrings("https://example.com", pane.text_metadata.view().link(0).?);
+    }
+
+    var broken = try frame(&bytes, .{ .id = 122, .base = 121, .character = 'b' });
+    builder = core.TextMetadataBuilder.init(&metadata_bytes, 2);
+    const replacement = builder.finish(.complete);
+    broken.text_metadata = replacement;
+    metadata_bytes[1] = 3;
+    try std.testing.expectError(error.InvalidTextMetadata, pane.applyFrame(broken));
+    try std.testing.expectEqualStrings("a", pane.buffer.cells[0].text());
+    try std.testing.expectEqual(@as(u64, 121), pane.applied_frame_id);
+    try std.testing.expectEqual(@as(u64, 121), pane.pending_frame_id);
+    try std.testing.expectEqualStrings("https://example.com", pane.text_metadata.view().link(0).?);
+    metadata_bytes[1] = 2;
+    broken.base_frame_id = 120;
+    try std.testing.expectError(error.FrameBaseMismatch, pane.applyFrame(broken));
+    try std.testing.expectEqualStrings("https://example.com", pane.text_metadata.view().link(0).?);
+    broken.base_frame_id = 121;
+    _ = try pane.applyFrame(broken);
+    try std.testing.expectEqual(@as(u16, 0), pane.text_metadata.view().link_count);
+    try std.testing.expectEqualStrings("b", pane.buffer.cells[0].text());
+    try std.testing.expectEqual(used, allocator.allocations);
+    try std.testing.expect(!allocator.has_induced_failure);
+}

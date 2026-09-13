@@ -177,7 +177,9 @@ test "text metadata drops an over-quota URI whole and recovers without allocatio
     defer pane.deinit();
     var capture = try TextMetadataCapture.init(std.testing.allocator, 3);
     defer capture.deinit(std.testing.allocator);
-    try pane.write("\x1b]8;;https://e/" ++ "a" ** 4096 ++ "\x1b\\label\x1b]8;;\x1b\\");
+    try pane.term.screens.active.startHyperlink("https://e/" ++ "a" ** 4096, null);
+    try pane.write("label");
+    pane.term.screens.active.endHyperlink();
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     try capture.update(failing.allocator(), &pane.state);
     const omitted = capture.current.view();
