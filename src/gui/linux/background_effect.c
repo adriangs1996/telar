@@ -48,7 +48,9 @@ void telar_background_effect_remove(telar_background_effect *self, uint32_t name
 // Example: telar_background_effect_apply(&window.background, viewport, &frame).
 bool telar_background_effect_apply(telar_background_effect *self, telar_gui_viewport viewport, const telar_gui_frame *frame) {
     bool opaque = frame->background[3] >= 1.0f;
-    bool requested = !opaque && frame->background_blur != 0;
+    // The protocol accepts a region, not a radius. Every positive configured
+    // radius requests the compositor's own blur strength.
+    bool requested = !opaque && frame->background_blur > 0;
     bool blurred = requested && self->manager != NULL &&
                    (self->capabilities & EXT_BACKGROUND_EFFECT_MANAGER_V1_CAPABILITY_BLUR);
     if (requested && !blurred && !self->warned) {

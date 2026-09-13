@@ -10,6 +10,7 @@
 
 #include "../native/telar_gui.h"
 #include "background_effect.h"
+#include "decoration.h"
 #include "frame_clock.h"
 #include "frame_worker.h"
 #include "input.h"
@@ -32,6 +33,7 @@ typedef struct {
     bool dirty, in_flight;
     telar_frame_clock clock;
     telar_background_effect background;
+    telar_decoration decoration;
     uint32_t width;
     uint32_t height;
     bool fullscreen;
@@ -60,6 +62,7 @@ static void registry_global(void *data, struct wl_registry *registry, uint32_t n
     const telar_registry_global global = {.registry = registry, .name = name, .version = version, .interface = interface};
     telar_input_global(self->input, &global);
     telar_background_effect_global(&self->background, name, interface);
+    telar_decoration_global(&self->decoration, &global);
     if (strcmp(interface, wl_compositor_interface.name) == 0) {
         self->compositor = wl_registry_bind(registry, name, &wl_compositor_interface, version < 4 ? version : 4);
     } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
@@ -73,6 +76,7 @@ static void registry_global_remove(void *data, struct wl_registry *registry, uin
     window *self = data;
     telar_input_remove(self->input, name);
     telar_background_effect_remove(&self->background, name);
+    telar_decoration_remove(&self->decoration, name);
 }
 
 static const struct wl_registry_listener registry_listener = {
@@ -96,6 +100,7 @@ static void draw(window *self) {
         self->dirty = true;
         return;
     }
+    telar_decoration_apply(&self->decoration, frame.titlebar);
     if (!telar_background_effect_apply(&self->background, viewport, &frame) ||
         !telar_frame_clock_request(&self->clock, self->surface)) {
         self->callbacks.complete(self->context, frame.token, 0);
@@ -112,6 +117,9 @@ static void draw(window *self) {
 static void surface_configure(void *data, struct xdg_surface *surface, uint32_t serial) {
     window *self = data;
     xdg_surface_ack_configure(surface, serial);
+    if (!telar_decoration_acknowledge(&self->decoration)) {
+        return;
+    }
     if (self->renderer == NULL) {
         telar_gui_viewport viewport = {self->width, self->height, 1.0f};
         self->renderer = telar_renderer_create(self->display, self->surface, viewport);
@@ -190,6 +198,7 @@ static void destroy(window *self) {
         telar_renderer_destroy(self->renderer);
     }
     telar_background_effect_deinit(&self->background);
+    telar_decoration_deinit(&self->decoration);
     if (self->toplevel != NULL) {
         xdg_toplevel_destroy(self->toplevel);
     }
@@ -263,6 +272,10 @@ int telar_gui_run(const char *title, void *context, const telar_gui_callbacks *c
     xdg_surface_add_listener(self.xdg_surface, &surface_listener, &self);
     self.toplevel = xdg_surface_get_toplevel(self.xdg_surface);
     xdg_toplevel_add_listener(self.toplevel, &toplevel_listener, &self);
+    if (!telar_decoration_attach(&self.decoration, self.toplevel)) {
+        destroy(&self);
+        return -1;
+    }
     xdg_toplevel_set_title(self.toplevel, title);
     xdg_toplevel_set_app_id(self.toplevel, "telar");
     xdg_toplevel_set_min_size(self.toplevel, 320, 200);

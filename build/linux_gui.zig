@@ -10,10 +10,12 @@ pub fn add(b: *std.Build, gui: *std.Build.Module, disable_coverage: bool) void {
     addCursorSources(b, gui, flags);
     addProtocol(b, gui, "stable/xdg-shell/xdg-shell");
     addProtocol(b, gui, "staging/ext-background-effect/ext-background-effect-v1");
+    addProtocol(b, gui, "unstable/xdg-decoration/xdg-decoration-unstable-v1");
     gui.addCSourceFiles(.{
         .files = &.{
             "src/gui/linux/window.c",
             "src/gui/linux/background_effect.c",
+            "src/gui/linux/decoration.c",
             "src/gui/linux/input.c",
             "src/gui/linux/pointer.c",
             "src/gui/linux/clipboard.c",
@@ -65,6 +67,19 @@ pub fn addCursorTests(b: *std.Build, options: std.Build.Module.CreateOptions) vo
     module.linkSystemLibrary("wayland-cursor", .{});
     const executable = b.addExecutable(.{ .name = "gui-pointer-test", .root_module = module });
     b.step("test-gui-pointer", "Verify native pointer serials, shapes, focus and retained cursor resources").dependOn(&b.addRunArtifact(executable).step);
+}
+
+/// Exercises decoration and blur negotiation without a running compositor.
+/// Example: linux_gui.addWindowOptionsTests(b, .{ .target = target, .link_libc = true }).
+pub fn addWindowOptionsTests(b: *std.Build, options: std.Build.Module.CreateOptions) void {
+    const module = b.createModule(options);
+    addProtocol(b, module, "stable/xdg-shell/xdg-shell");
+    addProtocol(b, module, "unstable/xdg-decoration/xdg-decoration-unstable-v1");
+    addProtocol(b, module, "staging/ext-background-effect/ext-background-effect-v1");
+    module.addCSourceFile(.{ .file = b.path("src/gui/linux/window_options_test.c"), .flags = &.{"-std=c11"} });
+    module.linkSystemLibrary("wayland-client", .{});
+    const executable = b.addExecutable(.{ .name = "gui-window-options-test", .root_module = module });
+    b.step("test-gui-window-options", "Verify native titlebar and background effect negotiation").dependOn(&b.addRunArtifact(executable).step);
 }
 
 fn addProtocol(b: *std.Build, module: *std.Build.Module, name: []const u8) void {
