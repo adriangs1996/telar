@@ -156,7 +156,8 @@ pub fn cursorTarget(gui: *const GuiClient) @import("CursorTarget.zig") {
     const model = gui.app.model.activeTabModelConst() orelse return .{};
     const pane = model.focusedPaneConst() orelse return .{};
     const copy = gui.app.model.copyModeProjection();
-    const cursor = selection.cursor(pane, selection.forPane(copy, pane.id));
+    const copy_view: ?client.CopyModeView = if (copy) |value| if (value.pane_id == pane.id) value.view else null else null;
+    const cursor = selection.cursor(pane, copy_view);
     var layout: client.LayoutSnapshot = .{};
     model.layout.snapshot(gui.region.area, &layout);
     for (layout.views()) |view| {
