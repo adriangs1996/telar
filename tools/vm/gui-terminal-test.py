@@ -48,7 +48,7 @@ __TRACE__./zig-out/bin/telar gui __CONFIG_ARGS__ /bin/bash --noprofile --norc -c
 printf '%s' "$!" > "$state/gui.pid"
 sleep 5
 kill -0 "$(cat "$state/gui.pid")"
-sed '/^\[[[:space:]0-9.]*\]/d' "$state/gui.log"
+sed '/^\[[[:space:]0-9:.]*\]/d' "$state/gui.log"
 '''.replace("__CONFIG_ARGS__", config_args).replace("__TRACE__", trace))
     vm.screenshot(output / "01-prompt.png")
     vm.guest(resume + r'''
@@ -245,7 +245,7 @@ wtype -k Return
 sleep 1
 test "$shell_pid" = "$(cat "$state/reattached.pid")"
 printf 'reattached shell PID: %s\n' "$shell_pid"
-sed '/^\[[[:space:]0-9.]*\]/d' "$state/gui.log" "$state/reattach.log"
+sed '/^\[[[:space:]0-9:.]*\]/d' "$state/gui.log" "$state/reattach.log"
 ! grep -E "Validation Error|VUID-" "$state/gui.log" "$state/reattach.log"
 '''.replace("__CONFIG_ARGS__", config_args))
     vm.screenshot(output / "03-reattach.png")
