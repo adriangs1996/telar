@@ -78,6 +78,21 @@ Receipt ACKs still acknowledge owned runtime state. GPU delivery retires only
 the captured presentation damage; newer state can arrive while a frame is in
 flight. Chrome does not introduce another scheduler or an unbounded frame queue.
 
+## Reopening a window
+
+`WindowIdentity` holds an exclusive file lease next to the runtime socket for
+the lifetime of `run()`. A concurrent window selects another slot. Reopening
+a free slot reuses its identity, allowing the existing runtime layout replica
+to restore tabs, split ratios, focus and fullscreen state. The lock file is
+never unlinked; closing its descriptor releases the lease. It contains no
+terminal or session data.
+
+The endpoint directory and lock file must belong to the current user. The
+directory cannot be writable by other accounts; lock files must be regular,
+single-link files with mode 0600. Descriptors use CLOEXEC. The pool is bounded
+at 64 live GUI windows per endpoint; the runtime's existing bounded layout
+retention still determines which closed sessions remain available to restore.
+
 ## Verification
 
 `zig build test-gui` exercises chrome clipping and hit maps, all default key

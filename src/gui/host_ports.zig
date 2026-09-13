@@ -2,7 +2,6 @@
 const Client = @import("telar-client").AttachedClient;
 const SoundPortType = @import("telar-client").SoundPort;
 const HostNotifierType = @import("telar-client").HostNotifier;
-const LinkOpenerType = @import("telar-client").LinkOpener;
 const CapturePortType = @import("telar-client").CapturePort;
 const HostClipboardType = @import("telar-client").HostClipboard;
 const HostGraphicsType = @import("telar-client").HostGraphics;
@@ -32,7 +31,6 @@ const config_reload = @import("telar-client").config_reload;
 const DeliveryType = @import("telar-client").Delivery;
 const InputType = @import("telar-client").NotificationInput;
 const AgentSoundType = @import("telar-core").AgentSound;
-const TargetType = @import("telar-client").LinkTarget;
 const CaptureRequestType = @import("telar-client").CaptureRequest;
 const CaptureType = @import("telar-client").Capture;
 const std = @import("std");
@@ -48,11 +46,6 @@ pub fn sound(client: *Client) SoundPortType {
 /// Example: `const port = notifier(app);`.
 pub fn notifier(client: *Client) HostNotifierType {
     return .{ .context = client, .deliver = deliverNotification };
-}
-
-/// Example: `const port = links(app);`.
-pub fn links(client: *Client) LinkOpenerType {
-    return .{ .context = client, .open = openLink };
 }
 
 /// Example: `const port = capture(app);`.
@@ -212,10 +205,6 @@ fn localTime(_: *anyopaque) LocalTimeType {
 
 fn noteInput(_: *anyopaque, _: u64) void {}
 
-fn openLink(_: *anyopaque, _: TargetType) !void {
-    return error.NativeServiceUnavailable;
-}
-
 fn paneGraphicsVisible(context: *anyopaque, pane_id: PaneIdType) bool {
     const client: *Client = @ptrCast(@alignCast(context));
     return host(client).graphics_store.paneVisible(pane_id);
@@ -299,3 +288,4 @@ pub const hostInput = @import("ports/host_input.zig").port;
 pub const timers = @import("ports/workers.zig").timers;
 pub const barCommands = @import("ports/workers.zig").bars;
 pub const pluginWorkers = @import("ports/workers.zig").plugins;
+pub const links = @import("ports/services.zig").links;

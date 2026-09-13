@@ -14,6 +14,7 @@ pub const Message = union(enum) {
     bar_tick: anyerror!void,
     bar_command: client.BarUpdatesCompletion,
     plugin_result: client.PluginActionsCompletion,
+    link_opened: anyerror!void,
 };
 
 pub const Inbox = client.GenericInbox(Message);

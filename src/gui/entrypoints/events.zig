@@ -40,6 +40,7 @@ fn dispatch(gui: *GuiClient, event: Message) !?u8 {
         .notification_tick => |result| _ = try client.controllers.notifications.handleTick(&gui.app, result),
         .bar_tick => |result| try client.controllers.bar_updates.handleTick(&gui.app, result),
         .bar_command => |result| try client.controllers.bar_updates.completeCommand(&gui.app, result),
+        .link_opened => |result| try client.controllers.link_openings.complete(&gui.app, result),
         .plugin_result => |result| {
             if (try client.controllers.plugin_actions.complete(&gui.app, result)) {
                 return 0;
@@ -52,7 +53,7 @@ fn dispatch(gui: *GuiClient, event: Message) !?u8 {
 
 fn pathFor(event: Message) core.Path {
     return switch (event) {
-        .configuration_ready, .notification_tick, .bar_tick, .bar_command, .plugin_result => .observation,
+        .configuration_ready, .notification_tick, .bar_tick, .bar_command, .plugin_result, .link_opened => .observation,
         else => .interactive,
     };
 }
