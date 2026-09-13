@@ -13,12 +13,13 @@ faces borrow the same alpha atlas, use the same configured size and synthetic
 bold/italic settings, and are destroyed with it. Hot reload creates a complete
 replacement renderer before swapping resources after GPU consumers finish.
 
-The primary face alone defines cell width, line height and baseline. Covered
-text keeps its original shaping and rasterization. Fallback spans advance by
-whole primary cells, and `GlyphTransform` fits their ink proportionally inside
-those cells without cropping wider Nerd symbols. Each fallback grapheme keeps
-its own cell advance; adjacent icons cannot accumulate the fallback font's
-wider advances.
+The primary face supplies the font metrics; the configured letter spacing and
+line height determine the final grid and baseline. Covered text keeps its
+original shaping and rasterization. Terminal cells and chrome labels pass their
+measured grid to `TextRun`. `GlyphTransform` fits fallback ink proportionally
+inside those cells without cropping wider Nerd symbols, including compressed
+spacing. Each fallback grapheme keeps its own cell advance; adjacent icons
+cannot accumulate the fallback font's wider advances.
 
 The bounded shaping cache remembers the chosen face with its glyphs. Glyph
 atlas keys include face identity, glyph index, pixel size, bold and italic, so
@@ -37,3 +38,21 @@ symbols font's source, version, SHA-256 and license are recorded in
 
 This is a GUI presentation change. It changes neither the runtime's cells and
 PTY behavior nor the TUI's small embedded icon subset.
+
+For a native visual check on macOS, build the GUI and run the Neovim probe with
+a new temporary directory:
+
+```sh
+zig build install
+python3 tools/gui_text_input.py zig-out/bin/telar /tmp/telar-font-check
+```
+
+It creates an isolated runtime and opens Neovim with DejaVu Sans Mono, size 22,
+line height 1.4 and optical thickening. `icons.png` captures BMP and supplementary
+icons next to primary text; `repeated.png` and `result.json` check repeated `j`
+delivery at the child. The probe requires DejaVu and Neovim to be installed.
+Screenshots require visual inspection; the glyph-selection and cache assertions
+live in `test-gui`. The injected AppKit repeats test event delivery, not hardware
+repeat generation or visual equivalence to another terminal's rasterizer.
+
+The companion Linux probe is documented in [native input](native-input.md).

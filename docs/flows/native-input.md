@@ -89,3 +89,22 @@ commit and focus cancellation. `test-gui-keyboard` tests Wayland listener callba
 with an injected clock, including compositor timing and cancellation. The GUI
 navigation tests check the resulting legacy and Kitty bytes and keep repeated
 input on its originally acquired pane when focus changes.
+
+`tools/gui_text_input.py` runs the native macOS path through Neovim: a `j` press,
+ten explicit repeat events and release must move from line 1 to line 12. The
+window test separately verifies that the process's press-and-hold override wins
+even when the global preference enables accents. No test writes global defaults.
+
+For actual Wayland repeat generation, build the guest executable and run the
+QEMU probe against the existing isolated desktop:
+
+```sh
+python3 tools/vm/vm.py build install test-gui test-gui-keyboard
+python3 tools/vm/gui-key-repeat-test.py /tmp/telar-key-repeat-check
+```
+
+It holds a virtual hardware `j` for 1.2 seconds and checks the bytes received by
+a raw PTY reader. At least three `j` bytes must arrive, and the byte count must
+stay unchanged after release. The probe records `repeat.json`, logs and a
+screenshot with DejaVu and Nerd icons. It uses the existing guest binary without
+rebuilding it, and must run alone because it owns the VM's keyboard focus.

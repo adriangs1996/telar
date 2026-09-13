@@ -1,5 +1,9 @@
 # Native terminal window
 
+This document records the original terminal-only delivery path. Current chrome
+and navigation are described in [native multiplexer](gui-multiplexer.md), and
+font fallback in [native appearance](native-appearance.md#configuration-and-fonts).
+
 The native client displays the terminal leaves of the shared active-tab layout.
 The whole measured grid belongs to the workbench. There are no tab, sidebar,
 border or split controls in this increment; existing terminal leaves are not
@@ -63,8 +67,9 @@ budgets, wakeups and shutdown shared with the TUI and headless driver.
   Retained cell meshes additionally reserve at most 24 quads plus their visual
   key per grid position. Capacity grows only at geometry changes and is bounded
   by the same cell limit. Shrinking a window retains its previous capacity.
-- The atlas caches bold and italic variants. Unknown glyphs use the font's
-  replacement glyph. A full page uses replacement glyphs reserved at setup.
+- The atlas caches face-specific bold and italic variants. Missing graphemes
+  try embedded text and Nerd Symbols faces before the primary replacement glyph.
+  A full page uses replacement glyphs reserved at setup.
 - Native input holds at most 1,024 items. Clipboard transfers are limited to
   64 KiB and a whole paste is admitted or rejected before its first marker.
   Outbox capacity gates input consumption; send completion resumes it.
@@ -94,9 +99,10 @@ budgets, wakeups and shutdown shared with the TUI and headless driver.
 
 ## Retained preparation and shaping
 
-`text/ShapingCache` owns 256 entries for the atlas's current font and size.
-Entries copy at most 64 UTF-8 bytes and 32 HarfBuzz glyphs/positions. Hash
-collisions replace entries; longer runs bypass the cache. Font-size changes
+`text/ShapingCache` owns 256 entries for the atlas's current font set and size.
+Entries copy at most 64 UTF-8 bytes and 32 HarfBuzz glyphs/positions, plus the
+source face identity. ASCII has dedicated slots; hash collisions replace
+non-ASCII entries. Longer runs bypass the cache. Font-size changes
 invalidate it, and font replacement creates a new cache. Location and color
 are applied after shaping; bold/italic still select separate rasterized atlas
 slots. Warm hits allocate nothing. The cache belongs to the text renderer,

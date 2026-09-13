@@ -8,11 +8,15 @@ static void send_key(NSView *view, NSDictionary *action) {
     if ([action[@"ctrl"] boolValue]) flags |= NSEventModifierFlagControl;
     if ([action[@"shift"] boolValue]) flags |= NSEventModifierFlagShift;
     if ([action[@"alt"] boolValue]) flags |= NSEventModifierFlagOption;
-    for (NSNumber *type in @[@(NSEventTypeKeyDown), @(NSEventTypeKeyUp)]) {
+    NSString *phase = action[@"phase"];
+    NSArray *types = phase == nil ? @[@(NSEventTypeKeyDown), @(NSEventTypeKeyUp)] :
+        @[[phase isEqualToString:@"release"] ? @(NSEventTypeKeyUp) : @(NSEventTypeKeyDown)];
+    for (NSNumber *type in types) {
         NSEvent *event = [NSEvent keyEventWithType:type.unsignedIntegerValue
             location:NSZeroPoint modifierFlags:flags timestamp:0
             windowNumber:view.window.windowNumber context:nil characters:characters
-            charactersIgnoringModifiers:characters isARepeat:NO keyCode:[action[@"code"] unsignedShortValue]];
+            charactersIgnoringModifiers:characters isARepeat:[phase isEqualToString:@"repeat"]
+            keyCode:[action[@"code"] unsignedShortValue]];
         if (type.unsignedIntegerValue == NSEventTypeKeyDown) [view keyDown:event];
         else [view keyUp:event];
     }

@@ -25,17 +25,33 @@ file bytes, bounded to 64 MiB. The bundled JetBrains Mono needs no lookup or fil
 allocation. Explicit lookup failures abort this GUI startup.
 
 FreeType borrows those bytes until `GlyphAtlas.deinit`; the source is freed
-after the atlas. Collection lookup is bounded to 256 faces on macOS. HarfBuzz
-shaping, glyph caching, fallback glyphs and synthesized bold/italic retain their
-existing ownership. No font lookup or disk read occurs while preparing cells.
+after the atlas. Collection lookup is bounded to 256 faces on macOS.
+`text/FontSet` owns at most three `FontFace` instances: the configured font,
+embedded JetBrains Mono when it differs, and embedded Symbols Nerd Font Mono.
+The configured font wins whenever it covers a whole grapheme. Missing graphemes
+try the embedded text font and then the symbol font; unknown characters retain
+the configured font's replacement glyph. No font lookup or disk read occurs
+while preparing cells.
+
+The GUI embeds the complete Nerd Symbols font, including supplementary-plane
+icons used by terminal applications. The TUI keeps its small chrome-only subset.
+[Asset provenance](../../src/assets/README.md) records the pinned version,
+checksum and licenses. No font installation or extra Lua setting is required.
+
+`FontRuns` selects faces at grapheme boundaries, keeping combining marks with
+their base. Shaping-cache entries retain the face identity, and atlas keys combine
+that identity with glyph index, size and style. Equal glyph indices in two fonts
+cannot alias. All faces share the existing alpha page. Fallback quads fit the
+primary grid; the configured font continues to determine cell dimensions and
+baseline. Font reload replaces the set together with its atlas and caches.
 
 On macOS, `gui.font.thicken` opts into `text/MacRasterizer` through the small
 `native/glyph_rasterizer.h` port. `macos/glyph_rasterizer.m` opens the same font
 bytes and PostScript face selected by FreeType; it does not register fonts or
-substitute an installed family. One alpha-only CoreGraphics bitmap context
-borrows the atlas page. Sized CoreText faces use the existing glyph IDs and
-baseline; FreeType metrics and HarfBuzz advances remain unchanged. The context
-and faces are destroyed before their borrowed page and font bytes.
+substitute an installed family. Each face's alpha-only CoreGraphics bitmap
+context borrows the same atlas page. Sized CoreText faces use their own glyph
+IDs and the primary baseline; the primary FreeType metrics remain unchanged.
+Contexts and faces are destroyed before their borrowed page and font bytes.
 
 This uses CoreGraphics font smoothing and its grayscale optical weight,
 following [Ghostty's font-thicken controls](https://ghostty.org/docs/config/reference#font-thicken).
