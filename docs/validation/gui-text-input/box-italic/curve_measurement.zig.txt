@@ -1,0 +1,65 @@
+// Reproduce from this checkout without modifying tracked files:
+// cp docs/validation/gui-text-input/box-italic/curve_measurement.zig.txt src/gui/box_measurement.zig
+// git show b1ae3c23:src/gui/text/BoxCurve.zig > src/gui/text/BoxCurveBaseline.zig
+// zig test src/gui/box_measurement.zig -OReleaseFast --test-filter measurement
+// rm src/gui/box_measurement.zig src/gui/text/BoxCurveBaseline.zig
+// Measurements interleave full-cell and bounded rasterization 31 times.
+// The process may compete with other builds; timings are approximate CPU costs.
+// Each result is consumed by doNotOptimizeAway with a memory clobber.
+const std = @import("std");
+const Grid = @import("text/BoxGrid.zig");
+const Curve = @import("text/BoxCurve.zig");
+const Baseline = @import("text/BoxCurveBaseline.zig");
+const Cache = @import("text/BoxCache.zig");
+const Ink = @import("text/BoxInk.zig");
+
+test "measurement" {
+    var pixels: [256 * 256]u8 = undefined;
+    for ([_][2]u16{ .{ 26, 71 }, .{ 256, 256 } }) |extent| {
+        const grid = try Grid.init(.{ .x = 0, .y = 0, .width = @floatFromInt(extent[0]), .height = @floatFromInt(extent[1]) }, 2);
+        var ns: [31]i96 = undefined;
+        var before_ns: [31]i96 = undefined;
+        for (&ns, &before_ns) |*sample, *before| {
+            const old_started = std.Io.Clock.awake.now(std.testing.io).nanoseconds;
+            for (0..7) |index| {
+                const curve = Baseline.init(grid, @intCast(index));
+                curve.rasterize(.{ .pixels = &pixels, .stride = 256, .width = extent[0], .height = extent[1] });
+                std.mem.doNotOptimizeAway(&pixels);
+            }
+            before.* = std.Io.Clock.awake.now(std.testing.io).nanoseconds - old_started;
+            const started = std.Io.Clock.awake.now(std.testing.io).nanoseconds;
+            for (0..7) |index| {
+                const curve = Curve.init(grid, @intCast(index));
+                curve.rasterize(.{ .pixels = &pixels, .stride = 256, .width = extent[0], .height = extent[1] });
+                std.mem.doNotOptimizeAway(&pixels);
+            }
+            sample.* = std.Io.Clock.awake.now(std.testing.io).nanoseconds - started;
+        }
+        std.mem.sort(i96, &ns, {}, std.sort.asc(i96));
+        std.mem.sort(i96, &before_ns, {}, std.sort.asc(i96));
+        std.debug.print("before 7 masks: median_us={d:.2} min_us={d:.2} max_us={d:.2}\n", .{ @as(f64, @floatFromInt(before_ns[15])) / 1000, @as(f64, @floatFromInt(before_ns[0])) / 1000, @as(f64, @floatFromInt(before_ns[30])) / 1000 });
+        std.debug.print("cold 7 masks {d}x{d}: median_us={d:.2} max_us={d:.2}\n", .{ extent[0], extent[1], @as(f64, @floatFromInt(ns[15])) / 1000, @as(f64, @floatFromInt(ns[30])) / 1000 });
+        var cache: Cache = .{};
+        for (0..7) |index| _ = cache.entry(grid, @intCast(index)).?;
+        const started = std.Io.Clock.awake.now(std.testing.io).nanoseconds;
+        for (0..10000) |_| {
+            for (0..7) |index| {
+                std.mem.doNotOptimizeAway(cache.entry(grid, @intCast(index)).?);
+            }
+        }
+        const elapsed = std.Io.Clock.awake.now(std.testing.io).nanoseconds - started;
+        std.debug.print("warm 7 exact-key lookups: mean_ns={d:.2}\n", .{@as(f64, @floatFromInt(elapsed)) / 10000});
+    }
+    var grid = try Grid.init(.{ .x = 0, .y = 0, .width = 26, .height = 71 }, 2);
+    const started = std.Io.Clock.awake.now(std.testing.io).nanoseconds;
+    for (0..10000) |_| {
+        for ([_]u21{ 0x2500, 0x2502, 0x253c, 0x254b, 0x2554, 0x256c, 0x250a }) |codepoint| {
+            grid.count = 0;
+            grid.draw(.{ .codepoint = codepoint });
+            const ink = try Ink.init(&grid);
+            std.mem.doNotOptimizeAway(ink);
+        }
+    }
+    const elapsed = std.Io.Clock.awake.now(std.testing.io).nanoseconds - started;
+    std.debug.print("7 rectilinear glyph geometries: mean_us={d:.2}; cache_bytes={d}\n", .{ @as(f64, @floatFromInt(elapsed)) / 10000000, @sizeOf(Cache) });
+}

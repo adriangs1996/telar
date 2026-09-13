@@ -1,0 +1,10 @@
+1/2 box_measurement.test.measurement...before 7 masks: median_us=434.63 min_us=376.96 max_us=1183.54
+cold 7 masks 26x71: median_us=157.33 max_us=418.71
+warm 7 exact-key lookups: mean_ns=19.86
+before 7 masks: median_us=8710.21 min_us=8557.46 max_us=13722.13
+cold 7 masks 256x256: median_us=2705.75 max_us=3820.08
+warm 7 exact-key lookups: mean_ns=11.88
+7 rectilinear glyph geometries: mean_us=0.61; cache_bytes=3824
+OK
+2/2 text.BoxCache.test_0...OK
+All 2 tests passed.

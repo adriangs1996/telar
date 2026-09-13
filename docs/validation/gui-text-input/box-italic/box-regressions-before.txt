@@ -1,0 +1,92 @@
+...................
+----------------------------------------------------------------------
+Ran 19 tests in 0.047s
+
+OK
+telar-client module and capability boundaries passed
+test-gui
++- run test 145 pass, 5 fail (150 total)
+error: 'tests.box_drawing.test.terminal box borders join adjacent cells for light heavy double and mixed strokes' failed:
+       [gui_config] (warn): GUI configuration unchanged: config.lua:1: unexpected symbol near <eof>
+       [gui_config] (warn): GUI configuration unchanged: cannot prepare GUI font 'Telar-Test-Missing-Family-98a34b1': FontFamilyNotFound
+       [gui_config] (warn): GUI configuration unchanged: gui.background_blur must be a number in 0..255
+       /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig/std/testing.zig:615:14: 0x10181b717 in expect (test)
+           if (!ok) return error.TestUnexpectedResult;
+                    ^
+       /Users/adriangonzalez/sandbox/telar-box-tests/src/gui/tests/box_drawing.zig:52:13: 0x101ae0b1f in test.terminal box borders join adjacent cells for light heavy double and mixed strokes (test)
+                   try std.testing.expect(isSolid(item));
+                   ^
+error: 'tests.box_drawing.test.faint straight box glyphs never blend overlapping strokes or consult a font' failed:
+       /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig/std/testing.zig:615:14: 0x10181b717 in expect (test)
+           if (!ok) return error.TestUnexpectedResult;
+                    ^
+       /Users/adriangonzalez/sandbox/telar-box-tests/src/gui/tests/box_drawing.zig:81:13: 0x101adf52b in test.faint straight box glyphs never blend overlapping strokes or consult a font (test)
+                   try std.testing.expect(isSolid(a));
+                   ^
+error: 'tests.box_drawing.test.box replacement and erasure match full rebuilding with cached rounded corners' failed:
+       expected 1, found 6
+       /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig/std/testing.zig:118:17: 0x1018044ef in expectEqualInner__anon_40313 (test)
+                       return error.TestExpectedEqual;
+                       ^
+       /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig/std/testing.zig:83:5: 0x101adeb8f in expectEqual (test)
+           return expectEqualInner(T, expected, actual);
+           ^
+       /Users/adriangonzalez/sandbox/telar-box-tests/src/gui/tests/box_drawing.zig:128:5: 0x101adec0b in test.box replacement and erasure match full rebuilding with cached rounded corners (test)
+           try std.testing.expectEqual(shapes, session.renderer.atlas.?.shape_calls);
+           ^
+error: 'tests.box_drawing.test.chrome box strokes follow line height letter spacing and scale through the shared atlas' failed:
+       /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig/std/testing.zig:615:14: 0x10181b717 in expect (test)
+           if (!ok) return error.TestUnexpectedResult;
+                    ^
+       /Users/adriangonzalez/sandbox/telar-box-tests/src/gui/tests/box_drawing.zig:147:17: 0x101add6df in test.chrome box strokes follow line height letter spacing and scale through the shared atlas (test)
+                       try std.testing.expect(isSolid(stroke));
+                       ^
+error: 'tests.box_drawing.test.all box glyphs animate within retained capacity without allocation after warming' failed:
+       expected 128, found 298
+       /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig/std/testing.zig:118:17: 0x1018044ef in expectEqualInner__anon_40313 (test)
+                       return error.TestExpectedEqual;
+                       ^
+       /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig/std/testing.zig:83:5: 0x101adca47 in expectEqual (test)
+           return expectEqualInner(T, expected, actual);
+           ^
+       /Users/adriangonzalez/sandbox/telar-box-tests/src/gui/tests/box_drawing.zig:207:5: 0x101adcb3b in test.all box glyphs animate within retained capacity without allocation after warming (test)
+           try std.testing.expectEqual(shapes, renderer.atlas.?.shape_calls);
+           ^
+failed command: ./.zig-cache/o/d49ff2ccf11c37988fa5da608fcfc343/test --cache-dir=./.zig-cache --seed=0x17d97b5c --listen=-
+
+Build Summary: 23/25 steps succeeded (1 failed); 145/150 tests passed (5 failed)
+test-gui transitive failure
++- run test 145 pass, 5 fail (150 total)
+   +- compile test Debug native success 16s MaxRSS:1G
+      +- WriteFile success
+      +- compile lib lua Debug native success 1s MaxRSS:152M
+      +- compile lib lua Debug native (reused)
+      +- WriteFile  success
+      +- compile lib simdutf ReleaseFast aarch64-macos.13.0 success 2s MaxRSS:184M
+      |  +- WriteFile libc.txt success
+      +- WriteFile hwy success
+      +- compile lib highway ReleaseFast aarch64-macos.13.0 success 2s MaxRSS:229M
+      |  +- WriteFile libc.txt (reused)
+      +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- options success
+      +- options success
+      +- WriteFile props.zig success
+      |  +- run exe props-unigen success 620ms
+      |  |  +- compile exe props-unigen Debug native success 1s MaxRSS:265M
+      |  |     +- run exe uucode_generate (tables.zig) success 1s
+      |  |        +- compile exe uucode_generate Debug native success 2s MaxRSS:301M
+      |  +- run exe symbols-unigen success 757ms
+      |     +- compile exe symbols-unigen Debug native success 1s MaxRSS:288M
+      |        +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+codestyle success
++- run exe codestyle success 3s
+   +- compile exe codestyle Debug native success 2s MaxRSS:333M
+check-client-boundaries success
++- run python3 success 644ms
+   +- run python3 success 313ms
+
+error: the following build command failed with exit code 1:
+.zig-cache/o/59c34bf8adb51e309c4b36eed4bc49cf/build /opt/homebrew/Cellar/zig/0.16.0_1/bin/zig /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig /Users/adriangonzalez/sandbox/telar-box-tests .zig-cache /Users/adriangonzalez/.cache/zig --seed 0x17d97b5c -Z22b2e79d936a8d66 test-gui codestyle check-client-boundaries --summary all

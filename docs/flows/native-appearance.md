@@ -45,6 +45,12 @@ cannot alias. All faces share the existing alpha page. Fallback quads fit the
 primary grid; the configured font continues to determine cell dimensions and
 baseline. Font reload replaces the set together with its atlas and caches.
 
+Retained cell meshes preserve the configured font's complete bitmap and bearings.
+Pane composition clips ink only at the pane boundary, allowing italic overhang
+between cells and rows without drawing into another pane. Backgrounds precede
+ink. Box drawing and Braille use the full configured grid through the shared
+[procedural glyph path](gui-procedural-glyphs.md).
+
 On macOS, `gui.font.thicken` opts into `text/MacRasterizer` through the small
 `native/glyph_rasterizer.h` port. `macos/glyph_rasterizer.m` opens the same font
 bytes and PostScript face selected by FreeType; it does not register fonts or
@@ -242,9 +248,11 @@ Linux folds the deadline into the existing native `poll` timeout. Neither host
 implements cursor policy. Their display clocks still decide when a pending
 frame can be submitted.
 
-`CursorPaint` appends quads after retained cell ink. Filled blocks redraw the
-covered glyph with the configured cursor text color, reusing cached texture
-coordinates. Bar, underline and hollow cursors need solid rectangles only.
+`CursorPaint` paints filled blocks after cell backgrounds and before retained
+ink. Composition applies the configured cursor text color to the owning cell's
+complete glyph, including overhang, without drawing its ink twice. Adjacent
+italic ink remains visible. Bar, underline and hollow cursors append solid
+rectangles above the ink.
 A cursor in a wide cell's continuation starts at the leading cell and covers
 its clipped width. An unfocused window shows a steady hollow cursor. These
 changes do not reshape text, replace atlas resources or modify cell meshes.

@@ -1,0 +1,22 @@
+telar gui: compositor does not advertise background blur; using transparency only
+native Linux: status=0 painted=15 delivered=13 retries=2 failures=0
+telar gui: compositor does not advertise background blur; using transparency only
+native Linux: rejected scene cleanup passed
+Build Summary: 16/16 steps succeeded
+test-gui-window success
++- run exe gui-window-test success 41ms
+   +- compile exe gui-window-test Debug native cached 19ms MaxRSS:38M
+   |  +- run wayland-scanner (cursor-shape-v1-client-protocol.h) cached
+   |  +- run wayland-scanner (tablet-unstable-v2-client-protocol.h) cached
+   |  +- run wayland-scanner (xdg-shell-client-protocol.h) cached
+   |  +- run wayland-scanner (ext-background-effect-v1-client-protocol.h) cached
+   |  +- run wayland-scanner (xdg-decoration-unstable-v1-client-protocol.h) cached
+   |  +- run glslc (quad.vert.inc) cached
+   |  +- run glslc (quad.frag.inc) cached
+   |  +- run wayland-scanner (cursor-shape-v1-protocol.c) cached
+   |  +- run wayland-scanner (tablet-unstable-v2-protocol.c) cached
+   |  +- run wayland-scanner (xdg-shell-protocol.c) cached
+   |  +- run wayland-scanner (ext-background-effect-v1-protocol.c) cached
+   |  +- run wayland-scanner (xdg-decoration-unstable-v1-protocol.c) cached
+   +- run exe gui-window-test success 959ms
+      +- compile exe gui-window-test Debug native (+12 more reused dependencies)

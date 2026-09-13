@@ -13,12 +13,14 @@ import subprocess
 import time
 
 from gui_multiplexer import Actions
+from gui_rendering_sample import lines as rendering_lines
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('binary', type=Path)
     parser.add_argument('directory', type=Path, help='new short /tmp directory')
+    parser.add_argument('--rendering', action='store_true', help='capture connected box drawing and italic overhang')
     options = parser.parse_args()
     binary = options.binary.resolve()
     nvim = shutil.which('nvim')
@@ -42,12 +44,19 @@ def main():
                       + ''.join(f'{row:01X}: ' + ''.join(chr(0x2800 + row * 16 + col) for col in range(16)) + '\n'
                                 for row in range(16))
                       + ''.join(f'line {index:02d}\n' for index in range(23, 61)))
+    if options.rendering:
+        sample.write_text('\n'.join(rendering_lines()) + '\n'
+                          + ''.join(f'line {index:02d}\n' for index in range(20, 61)))
     init = directory / 'init.vim'
     init.write_text("set nowrap noswapfile\n"
+                    "syntax match TelarItalic /\\<New\\>/\n"
+                    "highlight TelarItalic cterm=italic gui=italic\n"
+                    "syntax match TelarBoldItalic /ffi ffy Wyj/\n"
+                    "highlight TelarBoldItalic cterm=bold,italic gui=bold,italic\n"
                     "autocmd VimEnter * call writefile(['ready'], '" + str(directory / 'ready') + "')\n")
     actions = Actions(directory)
     actions.items.append(dict(wait=str(directory / 'ready')))
-    actions.capture('icons')
+    actions.capture('rendering' if options.rendering else 'icons')
     actions.items.append(dict(key='j', code=38, phase='press'))
     actions.items.extend(dict(key='j', code=38, phase='repeat') for _ in range(10))
     actions.items.append(dict(key='j', code=38, phase='release'))
@@ -78,7 +87,8 @@ def main():
                            env=dict(env, DYLD_INSERT_LIBRARIES=str(library), TELAR_GUI_ACTIONS=str(script)),
                            cwd=directory, stdout=log, stderr=log, timeout=45, check=True)
         line = int((directory / 'line').read_text().strip())
-        report = dict(line=line, expected_line=12, repeats=10, font='DejaVu Sans Mono')
+        report = dict(line=line, expected_line=12, repeats=10, font='DejaVu Sans Mono',
+                      fixture='rendering' if options.rendering else 'icons')
         (directory / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
         assert line == 12, report
         print(json.dumps(report))

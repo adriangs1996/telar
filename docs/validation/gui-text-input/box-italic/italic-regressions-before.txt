@@ -1,0 +1,119 @@
+test-gui
++- run test 146 pass, 4 fail (150 total)
+error: 'tests.italic.test.DejaVu italic New preserves rasterized overhang without font thickening' failed:
+       [gui_config] (warn): GUI configuration unchanged: config.lua:1: unexpected symbol near <eof>
+       [gui_config] (warn): GUI configuration unchanged: cannot prepare GUI font 'Telar-Test-Missing-Family-98a34b1': FontFamilyNotFound
+       [gui_config] (warn): GUI configuration unchanged: gui.background_blur must be a number in 0..255
+       slices differ. first difference occurs at index 0 (0x0)
+
+       ============ expected this output: =============  len: 3 (0x3)
+
+       [0]: .{ .x = 27, .y = 82, .width = 15, .height = 16, .u0 = 0.06347656, .v0 = 0, .u1 = 0.078125, .v1 = 0.015625, .r = 1, .g = 1, .b = 1, .a = 1 }
+       [1]: .{ .x = 41, .y = 86, .width = 12, .height = 12, .u0 = 0.07910156, .v0 = 0, .u1 = 0.09082031, .v1 = 0.01171875, .r = 1, .g = 1, .b = 1, .a = 1 }
+       [2]: .{ .x = 54, .y = 86, .width = 14, .height = 12, .u0 = 0.091796875, .v0 = 0, .u1 = 0.10546875, .v1 = 0.01171875, .r = 1, .g = 1, .b = 1, .a = 1 }
+
+       ============= instead found this: ==============  len: 3 (0x3)
+
+       [0]: .{ .x = 27, .y = 82, .width = 12, .height = 16, .u0 = 0.06347656, .v0 = 0, .u1 = 0.07519531, .v1 = 0.015625, .r = 1, .g = 1, .b = 1, .a = 1 }
+       [1]: .{ .x = 41, .y = 86, .width = 11, .height = 12, .u0 = 0.07910156, .v0 = 0, .u1 = 0.08984375, .v1 = 0.01171875, .r = 1, .g = 1, .b = 1, .a = 1 }
+       [2]: .{ .x = 54, .y = 86, .width = 11, .height = 12, .u0 = 0.091796875, .v0 = 0, .u1 = 0.10253906, .v1 = 0.01171875, .r = 1, .g = 1, .b = 1, .a = 1 }
+
+       ================================================
+
+       /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig/std/testing.zig:379:5: 0x102df59eb in expectEqualSlices__anon_64230 (test)
+           return error.TestExpectedEqual;
+           ^
+       /Users/adriangonzalez/sandbox/telar-italic/src/gui/tests/italic.zig:38:9: 0x1030c04d3 in expectNaturalWord (test)
+               try std.testing.expectEqualSlices(Quad, natural.items(), session.renderer.quads.items());
+               ^
+       /Users/adriangonzalez/sandbox/telar-italic/src/gui/tests/italic.zig:12:5: 0x1030c0ae3 in test.DejaVu italic New preserves rasterized overhang without font thickening (test)
+           try expectNaturalWord(false);
+           ^
+error: 'tests.italic.test.DejaVu italic New preserves rasterized overhang with font thickening' failed:
+       slices differ. first difference occurs at index 0 (0x0)
+
+       ============ expected this output: =============  len: 3 (0x3)
+
+       [0]: .{ .x = 26, .y = 80, .width = 17, .height = 19, .u0 = 0.07128906, .v0 = 0, .u1 = 0.087890625, .v1 = 0.018554688, .r = 1, .g = 1, .b = 1, .a = 1 }
+       [1]: .{ .x = 39, .y = 84, .width = 16, .height = 16, .u0 = 0.08886719, .v0 = 0, .u1 = 0.10449219, .v1 = 0.015625, .r = 1, .g = 1, .b = 1, .a = 1 }
+       [2]: .{ .x = 51, .y = 84, .width = 18, .height = 15, .u0 = 0.10546875, .v0 = 0, .u1 = 0.123046875, .v1 = 0.0146484375, .r = 1, .g = 1, .b = 1, .a = 1 }
+
+       ============= instead found this: ==============  len: 3 (0x3)
+
+       [0]: .{ .x = 26, .y = 80, .width = 13, .height = 19, .u0 = 0.07128906, .v0 = 0, .u1 = 0.083984375, .v1 = 0.018554688, .r = 1, .g = 1, .b = 1, .a = 1 }
+       [1]: .{ .x = 39, .y = 84, .width = 13, .height = 16, .u0 = 0.08886719, .v0 = 0, .u1 = 0.1015625, .v1 = 0.015625, .r = 1, .g = 1, .b = 1, .a = 1 }
+       [2]: .{ .x = 52, .y = 84, .width = 13, .height = 15, .u0 = 0.10644531, .v0 = 0, .u1 = 0.119140625, .v1 = 0.0146484375, .r = 1, .g = 1, .b = 1, .a = 1 }
+
+       ================================================
+
+       /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig/std/testing.zig:379:5: 0x102df59eb in expectEqualSlices__anon_64230 (test)
+           return error.TestExpectedEqual;
+           ^
+       /Users/adriangonzalez/sandbox/telar-italic/src/gui/tests/italic.zig:38:9: 0x1030c04d3 in expectNaturalWord (test)
+               try std.testing.expectEqualSlices(Quad, natural.items(), session.renderer.quads.items());
+               ^
+       /Users/adriangonzalez/sandbox/telar-italic/src/gui/tests/italic.zig:16:5: 0x1030c053f in test.DejaVu italic New preserves rasterized overhang with font thickening (test)
+           try expectNaturalWord(true);
+           ^
+error: 'tests.italic.test.italic overhang stays above adjacent backgrounds and the block cursor' failed:
+       expected 5, found 6
+       /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig/std/testing.zig:118:17: 0x102de44ef in expectEqualInner__anon_40313 (test)
+                       return error.TestExpectedEqual;
+                       ^
+       /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig/std/testing.zig:83:5: 0x1030bf5a3 in expectEqual (test)
+           return expectEqualInner(T, expected, actual);
+           ^
+       /Users/adriangonzalez/sandbox/telar-italic/src/gui/tests/italic.zig:53:5: 0x1030bf623 in test.italic overhang stays above adjacent backgrounds and the block cursor (test)
+           try std.testing.expectEqual(@as(usize, 5), frame.len);
+           ^
+error: 'tests.italic.test.italic clipping follows pane geometry while retained ink keeps its full texture' failed:
+       slices differ. first difference occurs at index 0 (0x0)
+
+       ============ expected this output: =============  len: 1 (0x1)
+
+       [0]: .{ .x = 377, .y = 40, .width = 17, .height = 19, .u0 = 0.07128906, .v0 = 0, .u1 = 0.087890625, .v1 = 0.018554688, .r = 1, .g = 1, .b = 1, .a = 1 }
+
+       ============= instead found this: ==============  len: 1 (0x1)
+
+       [0]: .{ .x = 377, .y = 40, .width = 13, .height = 19, .u0 = 0.07128906, .v0 = 0, .u1 = 0.083984375, .v1 = 0.018554688, .r = 1, .g = 1, .b = 1, .a = 1 }
+
+       ================================================
+
+       /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig/std/testing.zig:379:5: 0x102df59eb in expectEqualSlices__anon_64230 (test)
+           return error.TestExpectedEqual;
+           ^
+       /Users/adriangonzalez/sandbox/telar-italic/src/gui/tests/italic.zig:80:5: 0x1030be83f in test.italic clipping follows pane geometry while retained ink keeps its full texture (test)
+           try std.testing.expectEqualSlices(Quad, natural.items(), mesh.items()[1..]);
+           ^
+failed command: ./.zig-cache/o/a4d7a96c964ac15013d4e63ba61af973/test --cache-dir=./.zig-cache --seed=0x91a3d352 --listen=-
+
+Build Summary: 17/19 steps succeeded (1 failed); 146/150 tests passed (4 failed)
+test-gui transitive failure
++- run test 146 pass, 4 fail (150 total)
+   +- compile test Debug native success 17s MaxRSS:937M
+      +- WriteFile success
+      +- compile lib lua Debug native success 1s MaxRSS:150M
+      +- compile lib lua Debug native (reused)
+      +- WriteFile  success
+      +- compile lib simdutf ReleaseFast aarch64-macos.13.0 success 1s MaxRSS:184M
+      |  +- WriteFile libc.txt success
+      +- WriteFile hwy success
+      +- compile lib highway ReleaseFast aarch64-macos.13.0 success 1s MaxRSS:228M
+      |  +- WriteFile libc.txt (reused)
+      +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- options success
+      +- options success
+      +- WriteFile props.zig success
+      |  +- run exe props-unigen success 692ms
+      |  |  +- compile exe props-unigen Debug native success 1s MaxRSS:287M
+      |  |     +- run exe uucode_generate (tables.zig) success 1s
+      |  |        +- compile exe uucode_generate Debug native success 1s MaxRSS:302M
+      |  +- run exe symbols-unigen success 791ms
+      |     +- compile exe symbols-unigen Debug native success 1s MaxRSS:265M
+      |        +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+
+error: the following build command failed with exit code 1:
+.zig-cache/o/f41e6acef31c2b0e9104a47f8859b96b/build /opt/homebrew/Cellar/zig/0.16.0_1/bin/zig /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig /Users/adriangonzalez/sandbox/telar-italic .zig-cache /Users/adriangonzalez/.cache/zig --seed 0x91a3d352 -Zfc4fb1f1d9384331 -j4 test-gui --summary all
