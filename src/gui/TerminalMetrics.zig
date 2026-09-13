@@ -8,6 +8,17 @@ cell_height: u16,
 baseline: f32,
 pixel_height: u16,
 
+/// Maps host grid coordinates into physical pixels with an external inset.
+/// Example: `const pixels = metrics.rect(.{ 8, 12 }, pane.content);`
+pub fn rect(metrics: Metrics, origin: [2]u32, cells: core.Rect) @import("render/Rect.zig") {
+    return .{
+        .x = @floatFromInt(origin[0] + @as(u32, cells.x) * metrics.cell_width),
+        .y = @floatFromInt(origin[1] + @as(u32, cells.y) * metrics.cell_height),
+        .width = @floatFromInt(@as(u32, cells.w) * metrics.cell_width),
+        .height = @floatFromInt(@as(u32, cells.h) * metrics.cell_height),
+    };
+}
+
 /// Computes only complete cells. Edge pixels belong to the native chrome.
 /// Example: `const size = try metrics.measure(viewport);`
 pub fn measure(metrics: Metrics, viewport: Viewport) !core.TerminalSize {
