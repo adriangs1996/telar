@@ -23,12 +23,12 @@ pub fn rect(canvas: Canvas, area: core.Rect) Rect {
 
 /// Paints a native rectangle, including backgrounds beneath labels.
 /// Example: `try canvas.fill(regions.sidebar, canvas.theme.palette.panel_bg);`
-pub fn fill(canvas: *Canvas, area: core.Rect, color: core.Color) !void {
+pub fn fill(canvas: *Canvas, area: core.Rect, ink_color: core.Color) !void {
     if (area.isEmpty()) {
         return;
     }
 
-    try canvas.quads.pushRect(canvas.rect(area), canvas.color(color, canvas.theme.terminal.background));
+    try canvas.quads.pushRect(canvas.rect(area), canvas.color(ink_color, canvas.theme.terminal.background));
 }
 
 /// Uses the shared grapheme widths for clipping, hit targets and letter spacing.
@@ -41,7 +41,10 @@ pub fn text(canvas: *Canvas, area: core.Rect, label: Label) !void {
 
     const first = canvas.quads.items().len;
     const bounds = canvas.rect(area.row(0));
-    const ink = canvas.color(label.color, canvas.theme.terminal.foreground);
+    var ink = canvas.color(label.color, canvas.theme.terminal.foreground);
+    if (label.faint) {
+        ink.a *= 0.5;
+    }
     var iterator: core.GraphemeIterator = .{ .bytes = label.text };
     var column: u16 = 0;
     while (column < area.w) {
@@ -76,13 +79,13 @@ pub fn text(canvas: *Canvas, area: core.Rect, label: Label) !void {
 
 /// Outlines a region with pixel strokes rather than terminal border glyphs.
 /// Example: `try canvas.border(pane.outer, canvas.theme.palette.accent);`
-pub fn border(canvas: *Canvas, area: core.Rect, color: core.Color) !void {
+pub fn border(canvas: *Canvas, area: core.Rect, ink_color: core.Color) !void {
     if (area.isEmpty()) {
         return;
     }
 
     const bounds = canvas.rect(area);
-    const ink = canvas.color(color, canvas.theme.terminal.foreground);
+    const ink = canvas.color(ink_color, canvas.theme.terminal.foreground);
     try canvas.quads.pushRect(.{ .x = bounds.x, .y = bounds.y, .width = bounds.width, .height = 1 }, ink);
     try canvas.quads.pushRect(.{ .x = bounds.x, .y = bounds.y + bounds.height - 1, .width = bounds.width, .height = 1 }, ink);
     try canvas.quads.pushRect(.{ .x = bounds.x, .y = bounds.y, .width = 1, .height = bounds.height }, ink);
