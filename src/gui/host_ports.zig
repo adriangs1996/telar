@@ -1,5 +1,4 @@
-//! Native services for the terminal-only window. Chrome without a visible
-//! surface has no effects; unavailable external services fail explicitly.
+//! Native adapter port assembly. Capabilities own their service implementations.
 const Client = @import("telar-client").AttachedClient;
 const SoundPortType = @import("telar-client").SoundPort;
 const HostNotifierType = @import("telar-client").HostNotifier;
@@ -11,14 +10,8 @@ const GraphicsRetentionType = @import("telar-client").GraphicsRetention;
 const GraphicsCreditType = @import("telar-client").GraphicsCredit;
 const PaneGraphicsCommand = @import("telar-client").ApplicationPanesPaneGraphicsCommand;
 const PaneIdType = @import("telar-core").PaneId;
-const HostChromeType = @import("telar-client").HostChrome;
 const AttachmentCatalogPortType = @import("telar-client").AttachmentCatalogPort;
 const AttachmentShelfType = @import("telar-client").AttachmentShelf;
-const ColorThemeType = @import("telar-client").ColorTheme;
-const IconThemeType = @import("telar-client").Theme;
-const SidebarRendererInputType = @import("telar-client").SidebarRendererInput;
-const MouseType = @import("telar-client").Mouse;
-const ViewInteractionCommandType = @import("telar-client").ViewInteractionCommand;
 const AttachmentTargetType = @import("telar-client").AttachmentTarget;
 const AttachmentIdType = @import("telar-client").AttachmentId;
 const MarkerScreenType = @import("telar-client").MarkerScreen;
@@ -28,21 +21,10 @@ const DeletionProbeType = @import("telar-client").DeletionProbe;
 const PaneBottomReservationType = @import("telar-client").PaneBottomReservation;
 const HostPresentationType = @import("telar-client").HostPresentation;
 const GeometryType = @import("telar-client").Geometry;
-const HostTimersType = @import("telar-client").HostTimers;
-const TimerKindType = @import("telar-client").TimerKind;
-const SchedulerType = @import("telar-client").Scheduler;
-const BarCommandRunnerType = @import("telar-client").BarCommandRunner;
-const BarUpdatesJobType = @import("telar-client").BarUpdatesJob;
-const PluginWorkerRunnerType = @import("telar-client").PluginWorkerRunner;
-const PluginActionsJobType = @import("telar-client").PluginActionsJob;
 const HostClockType = @import("telar-client").HostClock;
 const LocalTimeType = @import("telar-client").LocalTime;
-const HostInputSourceType = @import("telar-client").HostInputSource;
-const RouterConfigType = @import("telar-client").RouterConfig;
 const TransportDriverType = @import("telar-client").TransportDriver;
 const RuntimeTransportStateType = @import("telar-client").RuntimeTransportState;
-const SidebarRenderingType = @import("telar-client").SidebarRendering;
-const RegionType = @import("telar-client").Region;
 const name_prompts = @import("telar-client").controllers.name_prompts;
 const ConfigReloadWatcherType = @import("telar-client").ConfigReloadWatcher;
 const ConfigWaitArgsType = @import("telar-client").ConfigWaitArgs;
@@ -103,24 +85,6 @@ pub fn graphicsRetention(client: *Client) GraphicsRetentionType {
     };
 }
 
-/// Example: `const port = chrome(app);`.
-pub fn chrome(client: *Client) HostChromeType {
-    return .{
-        .context = client,
-        .set_theme_fn = setTheme,
-        .set_icon_theme_fn = setIconTheme,
-        .configure_sidebar_fn = configureSidebar,
-        .resize_fn = resizeView,
-        .set_sidebar_layout_fn = setSidebarLayout,
-        .set_workspace_list_collapsed_fn = setWorkspaceListCollapsed,
-        .pointer_fn = pointer,
-        .sidebar_renderer_fn = sidebarRenderer,
-        .adopt_sidebar_renderer_fn = adoptSidebarRenderer,
-        .region_fn = region,
-        .inspection_scroll_limit_fn = inspectionScrollLimit,
-    };
-}
-
 /// Example: `const port = attachmentCatalog(app);`.
 pub fn attachmentCatalog(client: *Client) AttachmentCatalogPortType {
     return .{
@@ -160,34 +124,9 @@ pub fn presentation(client: *Client) HostPresentationType {
     };
 }
 
-/// Example: `const port = timers(app);`.
-pub fn timers(client: *Client) HostTimersType {
-    return .{ .context = client, .arm_fn = armTimer };
-}
-
-/// Example: `const port = barCommands(app);`.
-pub fn barCommands(client: *Client) BarCommandRunnerType {
-    return .{ .context = client, .start_fn = startBarCommand };
-}
-
-/// Example: `const port = pluginWorkers(app);`.
-pub fn pluginWorkers(client: *Client) PluginWorkerRunnerType {
-    return .{ .context = client, .start_fn = startPluginWorker };
-}
-
 /// Example: `const port = clock(app);`.
 pub fn clock(client: *Client) HostClockType {
     return .{ .context = client, .local_time_fn = localTime };
-}
-
-/// Example: `const port = hostInput(app);`.
-pub fn hostInput(client: *Client) HostInputSourceType {
-    return .{
-        .context = client,
-        .resume_read_fn = resumeHostRead,
-        .route_prompt_bytes_fn = routePromptBytes,
-        .adopt_bindings_fn = adoptBindings,
-    };
 }
 
 /// Example: `const port = transport(app);`.
@@ -204,16 +143,10 @@ fn adoptAttachment(_: *anyopaque, _: *CaptureType) !bool {
     return false;
 }
 
-fn adoptBindings(_: *anyopaque, _: RouterConfigType) void {}
-
-fn adoptSidebarRenderer(_: *anyopaque, _: SidebarRenderingType) void {}
-
 fn applyGraphics(context: *anyopaque, command: PaneGraphicsCommand) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     return host(client).applyGraphics(command);
 }
-
-fn armTimer(_: *anyopaque, _: TimerKindType, _: *SchedulerType) !void {}
 
 fn attachmentModalActive(_: *anyopaque) bool {
     return false;
@@ -235,8 +168,6 @@ fn clearPaneGraphics(context: *anyopaque, pane_id: PaneIdType) void {
 fn closeAttachmentModal(_: *anyopaque) bool {
     return false;
 }
-
-fn configureSidebar(_: *anyopaque, _: SidebarRendererInputType) !void {}
 
 fn consumeGraphicsCredit(context: *anyopaque, credit: GraphicsCreditType) void {
     const client: *Client = @ptrCast(@alignCast(context));
@@ -268,10 +199,6 @@ fn hasPaneGraphics(context: *anyopaque, pane_id: PaneIdType) bool {
 }
 
 fn idAtMarkerDeletion(_: *anyopaque, _: MarkerScreenType, _: MarkerDeletionType) ?AttachmentIdType {
-    return null;
-}
-
-fn inspectionScrollLimit(_: *anyopaque) ?u32 {
     return null;
 }
 
@@ -309,12 +236,6 @@ fn planMarkerRemoval(_: *anyopaque, _: AttachmentIdType, _: MarkerScreenType) ?M
 
 fn playSound(_: *anyopaque, _: AgentSoundType) !void {}
 
-fn pointer(context: *anyopaque, event: MouseType) ViewInteractionCommandType {
-    _ = context;
-    _ = event;
-    return .{};
-}
-
 fn presentationInFlight(context: *anyopaque) bool {
     const client: *Client = @ptrCast(@alignCast(context));
     return host(client).lifecycle.active != null;
@@ -322,11 +243,6 @@ fn presentationInFlight(context: *anyopaque) bool {
 
 fn reconcileAttachmentMarkers(_: *anyopaque, _: AttachmentTargetType, _: MarkerScreenType) ?bool {
     return null;
-}
-
-fn region(context: *anyopaque) RegionType {
-    const client: *Client = @ptrCast(@alignCast(context));
-    return host(client).region;
 }
 
 fn removeAttachment(_: *anyopaque, _: AttachmentIdType) ?bool {
@@ -339,20 +255,6 @@ fn removePromptAttachments(_: *anyopaque, _: AttachmentTargetType) ?bool {
 
 fn resizePresenter(_: *anyopaque, _: u16, _: u16) !void {}
 
-fn resizeView(context: *anyopaque, cols: u16, rows: u16) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    host(client).resizeRegion(cols, rows);
-}
-
-fn resumeHostRead(context: *anyopaque) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    try host(client).resumeInput();
-}
-
-fn routePromptBytes(_: *anyopaque, _: []const u8) !void {
-    return error.NativeServiceUnavailable;
-}
-
 fn setClipboard(context: *anyopaque, bytes: []const u8) !void {
     _ = context;
     if (native.telar_gui_clipboard(bytes.ptr, bytes.len) != 0) {
@@ -360,29 +262,9 @@ fn setClipboard(context: *anyopaque, bytes: []const u8) !void {
     }
 }
 
-fn setIconTheme(_: *anyopaque, _: IconThemeType) void {}
-
 fn setPaneGraphicsVisible(context: *anyopaque, pane_id: PaneIdType, visible: bool) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     try host(client).graphics_store.setPaneVisible(pane_id, visible);
-}
-
-fn setSidebarLayout(_: *anyopaque, _: bool, _: u16) void {}
-
-fn setTheme(context: *anyopaque, theme: ColorThemeType) void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    host(client).theme = theme;
-}
-
-fn setWorkspaceListCollapsed(_: *anyopaque, _: bool) void {}
-
-fn sidebarRenderer(context: *anyopaque) SidebarRenderingType {
-    _ = context;
-    return .cells;
-}
-
-fn startBarCommand(_: *anyopaque, _: BarUpdatesJobType) !void {
-    return error.NativeServiceUnavailable;
 }
 
 fn startCapture(_: *anyopaque, _: CaptureRequestType) !void {
@@ -392,10 +274,6 @@ fn startCapture(_: *anyopaque, _: CaptureRequestType) !void {
 fn startConfigWatch(context: *anyopaque, args: ConfigWaitArgsType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     try host(client).driver.configuration.schedule(args);
-}
-
-fn startPluginWorker(_: *anyopaque, _: PluginActionsJobType) !void {
-    return error.NativeServiceUnavailable;
 }
 
 fn startRuntimeRead(context: *anyopaque, state: *RuntimeTransportStateType) !void {
@@ -415,3 +293,9 @@ fn syncAttachmentTarget(_: *anyopaque, _: ?AttachmentTargetType) bool {
 fn visibleAttachmentTarget(_: *anyopaque) ?AttachmentTargetType {
     return null;
 }
+
+pub const chrome = @import("ports/chrome.zig").port;
+pub const hostInput = @import("ports/host_input.zig").port;
+pub const timers = @import("ports/workers.zig").timers;
+pub const barCommands = @import("ports/workers.zig").bars;
+pub const pluginWorkers = @import("ports/workers.zig").plugins;

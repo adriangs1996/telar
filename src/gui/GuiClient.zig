@@ -4,15 +4,20 @@ const client = @import("telar-client");
 const core = @import("telar-core");
 const host_ports = @import("host_ports.zig");
 const NativeLoop = @import("NativeLoop.zig");
+const NativeInput = @import("NativeInput.zig");
+const Regions = @import("chrome/Regions.zig");
+const selection = @import("render/copy_selection.zig");
 const GuiClient = @This();
 
 app: client.AttachedClient,
 driver: *NativeLoop,
-input: @import("NativeInput.zig") = .{},
+input: NativeInput = .{},
 input_revision: u64 = 0,
 focused: bool = true,
 region: client.Region,
 theme: client.ColorTheme,
+chrome: @import("chrome/Chrome.zig") = .{},
+overlays: @import("overlays/Overlays.zig") = .{},
 lifecycle: client.PresentationLifecycleState = .{},
 graphics_store: @import("graphics_delivery.zig").Store,
 
@@ -23,19 +28,22 @@ pub fn of(app: *client.AttachedClient) *GuiClient {
 /// Adopts options on success and binds all ports before receiving messages.
 /// Example: `const gui = try GuiClient.init(params, &driver);`
 pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
+    const input = try NativeInput.init(.{ .prefix = params.options.prefix, .bindings = params.options.bindings, .escape_timeout_ns = params.options.input_escape_timeout_ns, .sequence_timeout_ns = params.options.input_sequence_timeout_ns });
     const gui = try params.gpa.create(GuiClient);
     errdefer params.gpa.destroy(gui);
     try client.AttachedClient.init(&gui.app, params);
-    // The GUI's absent sidebar uses the existing cells adapter regardless of
-    // a shared Lua file's TUI renderer preference, including during reload.
+    // Native chrome uses the shared semantic projection, never TUI Kitty output.
     gui.app.options.sidebar_renderer_locked = true;
     gui.driver = driver;
     driver.configuration.inbox = &driver.inbox;
-    gui.input = .{};
+    gui.input = input;
     gui.input_revision = 0;
     gui.focused = true;
     gui.theme = params.options.theme;
-    gui.region = .{ .area = .{ .w = params.host_size.cols, .h = params.host_size.rows }, .revision = 1 };
+    gui.region = .{ .area = .{}, .revision = 0 };
+    gui.resizeRegion(params.host_size.cols, params.host_size.rows);
+    gui.chrome = .{};
+    gui.overlays = .{};
     gui.lifecycle = .{};
     gui.graphics_store = .init(params.gpa);
     gui.app.sound_port = host_ports.sound(&gui.app);
@@ -75,6 +83,7 @@ pub fn start(gui: *GuiClient, colors: core.TerminalColors) !void {
     var capabilities = gui.app.model.hostCapabilities();
     capabilities.terminal_colors = colors;
     capabilities.images = .unsupported;
+    capabilities.pointer_pixels = .supported;
     var handler: client.ResizeHostHandler = .{ .model = &gui.app.model, .effects = .{ .context = gui, .deliver = deliverResize } };
     _ = try handler.execute(.{ .size = gui.app.model.hostSize(), .capabilities = capabilities });
     gui.app.startup.phase = .opening;
@@ -86,6 +95,7 @@ pub fn start(gui: *GuiClient, colors: core.TerminalColors) !void {
     try client.runtime_io.scheduleRead(&gui.app);
     try client.runtime_io.flushGraphicsCredits(&gui.app);
     try client.controllers.config_reloads.schedule(&gui.app);
+    try client.controllers.bar_updates.synchronize(&gui.app);
 }
 
 pub fn pump(gui: *GuiClient) !?u8 {
@@ -121,6 +131,9 @@ pub fn inputReady(gui: *GuiClient) !void {
 pub fn focus(gui: *GuiClient, focused: bool) void {
     gui.focused = focused;
     gui.input_revision +%= 1;
+    if (!focused) {
+        gui.chrome.cancelPointer();
+    }
 }
 
 /// Queue one readiness notification only when input can make progress.
@@ -134,13 +147,19 @@ pub fn resumeInput(gui: *GuiClient) !void {
 /// Copies the visible cursor identity for the native blink clock.
 /// Example: `clock.observe(gui.cursorTarget(), now_ns);`
 pub fn cursorTarget(gui: *const GuiClient) @import("CursorTarget.zig") {
+    if (gui.app.model.name_prompt.active()) {
+        return .{};
+    }
+
     const model = gui.app.model.activeTabModelConst() orelse return .{};
     const pane = model.focusedPaneConst() orelse return .{};
+    const copy = gui.app.model.copyModeProjection();
+    const cursor = selection.cursor(pane, if (copy) |value| value.view else null);
     var layout: client.LayoutSnapshot = .{};
     model.layout.snapshot(gui.region.area, &layout);
     for (layout.views()) |view| {
-        if (view.pane_id == pane.id and view.surface == .terminal and pane.cursor.x < view.content.w and pane.cursor.y < view.content.h) {
-            return .{ .pane_id = pane.id, .generation = pane.attachment_generation, .cursor = pane.cursor };
+        if (view.pane_id == pane.id and view.surface == .terminal and cursor.x < view.content.w and cursor.y < view.content.h) {
+            return .{ .pane_id = pane.id, .generation = pane.attachment_generation, .cursor = cursor };
         }
     }
 
@@ -148,11 +167,12 @@ pub fn cursorTarget(gui: *const GuiClient) @import("CursorTarget.zig") {
 }
 
 pub fn resizeRegion(gui: *GuiClient, cols: u16, rows: u16) void {
-    if (gui.region.area.w == cols and gui.region.area.h == rows) {
+    const regions = Regions.calculate(cols, rows, .{ .visible = gui.app.model.sidebarVisible(), .preferred_width = gui.app.model.sidebarWidth() });
+    if (std.meta.eql(gui.region.area, regions.workbench)) {
         return;
     }
 
-    gui.region = .{ .area = .{ .w = cols, .h = rows }, .revision = gui.region.revision + 1 };
+    gui.region = .{ .area = regions.workbench, .revision = gui.region.revision + 1 };
 }
 
 /// Publishes exact font metrics and lets shared geometry negotiate the PTY.
@@ -164,6 +184,7 @@ pub fn resize(gui: *GuiClient, size: core.TerminalSize, theme: client.TerminalTh
     capabilities.cell_width_px = size.cell_width_px;
     capabilities.cell_height_px = size.cell_height_px;
     capabilities.images = .unsupported;
+    capabilities.pointer_pixels = .supported;
     capabilities.terminal_colors = .{ .foreground = theme.foreground, .background = theme.background, .palette = theme.palette };
     var handler: client.ResizeHostHandler = .{ .model = &gui.app.model, .effects = .{ .context = gui, .deliver = deliverResize } };
     _ = try handler.execute(.{ .size = size, .capabilities = capabilities });
@@ -215,10 +236,26 @@ pub fn prepare(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.zig"
         return error.PresentationBusy;
     }
 
-    const projection = client.capture(&gui.app.model, .{ .geometry = gui.region });
-    const observation: client.Observation = .{ .model = projection.version, .geometry_revision = gui.region.revision };
-    _ = gui.lifecycle.observe(observation);
-    const commit = try renderer.prepare(projection);
-    const token = try gui.lifecycle.begin(.{ .observation = observation, .commit = commit, .geometry = client.Geometry.capture(projection) });
+    const projected = gui.projection();
+    const observed = gui.observation();
+    _ = gui.lifecycle.observe(observed);
+    var scene: @import("render/Scene.zig") = .{ .terminal = renderer, .chrome = &gui.chrome, .overlays = &gui.overlays, .theme = gui.theme };
+    const commit = try scene.prepare(projected);
+    const token = try gui.lifecycle.begin(.{ .observation = observed, .commit = commit, .geometry = client.Geometry.capture(projected) });
     return @intFromEnum(token);
+}
+
+/// Captures semantic state plus adapter-owned routing and interaction revisions.
+/// Example: `const projected = gui.projection();`
+pub fn projection(gui: *const GuiClient) client.Projection {
+    return client.capture(&gui.app.model, .{ .geometry = gui.region, .status_mode = gui.input.statusMode(gui.app.model.copyModeActive()), .presentation_ingress = gui.ingress() });
+}
+
+/// Example: `_ = gui.lifecycle.observe(gui.observation());`
+pub fn observation(gui: *const GuiClient) client.Observation {
+    return .{ .model = gui.app.model.version(), .geometry_revision = gui.region.revision, .presentation_ingress = gui.ingress() };
+}
+
+fn ingress(gui: *const GuiClient) client.PresentationIngress {
+    return .{ .input_routing = gui.input.presentation_revision, .view_interaction = gui.chrome.revision };
 }

@@ -14,6 +14,7 @@ const Renderer = @This();
 const RetainedCells = @import("RetainedCells.zig");
 const CellPaint = @import("CellPaint.zig");
 const CellMesh = @import("CellMesh.zig");
+const copy_selection = @import("copy_selection.zig");
 
 allocator: std.mem.Allocator,
 config: client.GuiConfig = .{},
@@ -112,7 +113,7 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
         return error.NativeCellBudgetExceeded;
     }
 
-    try renderer.quads.reserve(cells * CellMesh.capacity + core.max_panes_per_tab * (CellMesh.capacity + 4));
+    try renderer.quads.reserve(@import("frame_budget.zig").quads(cells));
     try renderer.cell_quads.reserve(CellMesh.capacity);
     try renderer.retained.resize(.{ size.cols, size.rows });
     return size;
@@ -142,17 +143,21 @@ pub fn prepare(renderer: *Renderer, projection: client.Projection) !client.Prese
         }
 
         const pane = model.findConst(view.pane_id) orelse continue;
-        try renderer.paintPane(.{ .pane = pane, .view = view });
+        try renderer.paintPane(.{ .pane = pane, .view = view, .copy = copy_selection.forPane(projection.copy, pane.id), .hide_cursor = projection.prompt != null });
         commit.append(pane);
     }
 
+    return commit;
+}
+
+/// Seals the atlas after terminal cells, native chrome and overlays share it.
+/// Example: `renderer.seal();`
+pub fn seal(renderer: *Renderer) void {
     const page_version = renderer.atlas.?.version;
     if (renderer.last_page_version != page_version) {
         renderer.last_page_version = page_version;
         renderer.atlas_version +%= 1;
     }
-
-    return commit;
 }
 
 const PanePaint = @import("PanePaint.zig");
@@ -164,7 +169,12 @@ fn paintPane(renderer: *Renderer, paint: PanePaint) !void {
     const cols = @min(area.w, pane.buffer.w);
     for (0..rows) |row| {
         for (0..cols) |col| {
-            const cell = pane.buffer.cells[row * pane.buffer.w + col];
+            var cell = pane.buffer.cells[row * pane.buffer.w + col];
+            if (paint.copy) |copy| {
+                if (copy.selected(@intCast(col), pane.scroll.offset + @as(u32, @intCast(row)))) {
+                    cell.style.flags.inverse = !cell.style.flags.inverse;
+                }
+            }
             const position: [2]u16 = .{ area.x + @as(u16, @intCast(col)), area.y + @as(u16, @intCast(row)) };
             const key: CellPaint = .{ .cell = cell, .rect = renderer.cellRect(.{ .x = position[0], .y = position[1], .w = @intCast(@min(@max(1, cell.width), cols - col)), .h = 1 }) };
             const mesh = renderer.retained.at(position);
@@ -191,9 +201,10 @@ fn paintPane(renderer: *Renderer, paint: PanePaint) !void {
         }
     }
 
-    if (paint.view.focused and pane.cursor.visible and renderer.cursor_on and pane.cursor.x < cols and pane.cursor.y < rows) {
-        var col = pane.cursor.x;
-        const row = pane.cursor.y;
+    const visible_cursor = copy_selection.cursor(pane, paint.copy);
+    if (!paint.hide_cursor and paint.view.focused and visible_cursor.visible and renderer.cursor_on and visible_cursor.x < cols and visible_cursor.y < rows) {
+        var col = visible_cursor.x;
+        const row = visible_cursor.y;
         if (col > 0 and pane.buffer.cells[@as(usize, row) * pane.buffer.w + col].width == 0) {
             col -= 1;
         }
@@ -202,7 +213,7 @@ fn paintPane(renderer: *Renderer, paint: PanePaint) !void {
         const mesh = renderer.retained.at(.{ area.x + col, area.y + row });
         const cursor: @import("CursorPaint.zig") = .{
             .rect = renderer.cellRect(.{ .x = area.x + col, .y = area.y + row, .w = @min(@max(1, cell.width), cols - col), .h = 1 }),
-            .style = if (!renderer.focused) .hollow else switch (pane.cursor.appearance.shape) {
+            .style = if (!renderer.focused) .hollow else switch (visible_cursor.appearance.shape) {
                 .default => renderer.config.cursor.style,
                 .block => .block,
                 .bar => .bar,
@@ -252,12 +263,7 @@ fn paintCell(renderer: *Renderer, paint: CellPaint) !void {
 }
 
 fn cellRect(renderer: *const Renderer, cells: core.Rect) Rect {
-    return .{
-        .x = @floatFromInt(renderer.origin[0] + @as(u32, cells.x) * renderer.metrics.cell_width),
-        .y = @floatFromInt(renderer.origin[1] + @as(u32, cells.y) * renderer.metrics.cell_height),
-        .width = @floatFromInt(@as(u32, cells.w) * renderer.metrics.cell_width),
-        .height = @floatFromInt(@as(u32, cells.h) * renderer.metrics.cell_height),
-    };
+    return renderer.metrics.rect(renderer.origin, cells);
 }
 
 fn color(renderer: *const Renderer, value: core.Color, fallback: Color) Color {

@@ -51,25 +51,5 @@ fn send(io: std.Io, request: @import("RuntimeSend.zig")) anyerror!void {
 /// The window thread is the only consumer. Workers and native callbacks only
 /// publish owned messages. Example: `const status = try loop.drain(gui);`
 pub fn drain(loop: *Loop, gui: *GuiClient) !?u8 {
-    var turn = try loop.inbox.begin();
-    defer loop.inbox.end();
-    while (try loop.inbox.next(&turn)) |event| {
-        const path = core.enter(if (event == .configuration_ready) .observation else .interactive);
-        defer path.restore();
-        switch (event) {
-            .server => |result| {
-                if (try gui.receive(result)) |status| {
-                    return status;
-                }
-            },
-            .sent => |result| try client.runtime_io.handleSent(&gui.app, result),
-            .input_ready => try gui.inputReady(),
-            .focus => |focused| gui.focus(focused),
-            .presented => |result| try gui.complete(result.token, result.delivered),
-            .configuration_ready => try loop.configuration.accept(&gui.app),
-        }
-    }
-
-    try loop.configuration.poll(&gui.app);
-    return null;
+    return @import("entrypoints/events.zig").drain(loop, gui);
 }

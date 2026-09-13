@@ -115,6 +115,7 @@ fn prepare(app: *Application, viewport: native.Viewport) !u64 {
 
     const gui = app.gui.?;
     try gui.resize(size, app.renderer.theme);
+    gui.input.setGeometry(app.renderer.origin, size);
     const now_ns = app.now();
     app.cursor_clock.observe(gui.cursorTarget(), now_ns);
     app.renderer.cursor_on = app.cursor_clock.shown(now_ns);
@@ -144,12 +145,12 @@ fn pump(context: ?*anyopaque) callconv(.c) c_int {
         }
 
         app.cursor_clock.observe(gui.cursorTarget(), now_ns);
+        _ = gui.lifecycle.observe(gui.observation());
         if (gui.lifecycle.active != null) {
             return 0;
         }
 
-        const version = gui.app.model.version();
-        return @intFromBool(!std.meta.eql(version, gui.lifecycle.prepared.model) or gui.lifecycle.preparation_invalid or
+        return @intFromBool(gui.lifecycle.needsPreparation() or
             app.driver.configuration.pending or
             app.renderer.cursor_on != app.cursor_clock.shown(now_ns) or app.renderer.focused != app.cursor_clock.focused);
     }
