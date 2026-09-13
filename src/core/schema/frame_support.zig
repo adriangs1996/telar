@@ -15,16 +15,18 @@ const Header = @import("Header.zig");
 const StyleType = @import("../ui/Style.zig");
 const cell_support = @import("../ui/cell_support.zig");
 const Span = @import("Span.zig");
+const TextMetadataView = @import("../text_metadata/View.zig");
+const text_metadata_limits = @import("../text_metadata/limits.zig");
 
 pub const max_span_count = 4096;
 pub const cell_header_size = 1;
 pub const max_style_size = 14;
 pub const max_cell_size = cell_header_size + max_style_size + CellType.max_bytes;
-pub const body_header_size = 57;
+pub const body_header_size = 61;
 pub const span_header_size = 12;
 pub const max_body_size = transport.max_frame_size - 1;
 pub const max_cell_count: u32 = @intCast(
-    (max_body_size - body_header_size - span_header_size) / max_cell_size,
+    (max_body_size - body_header_size - span_header_size - text_metadata_limits.max_encoded_size) / max_cell_size,
 );
 
 /// Canonical OSC 22 shapes. Wire values are independent of the VT's enum ABI.
@@ -102,6 +104,23 @@ pub fn encodeBody(encoder: *EncoderType, frame: Frame) !void {
     try encoder.writeByte(@intFromEnum(frame.cursor.appearance.shape));
     try encoder.writeByte(@intFromBool(frame.cursor.appearance.blink));
 
+    if (frame.text_metadata) |metadata| {
+        _ = try TextMetadataView.decode(metadata.encoded, .{ frame.cols, frame.rows });
+        try encoder.writeSized32(metadata.encoded);
+    } else if (frame.base_frame_id == 0) {
+        try encoder.writeInt(u32, text_metadata_limits.header_size + @as(u32, frame.rows));
+        try encoder.writeByte(0);
+        try encoder.writeInt(u16, frame.rows);
+        try encoder.writeInt(u16, 0);
+        try encoder.writeInt(u16, 0);
+        try encoder.writeInt(u32, 0);
+        for (0..frame.rows) |_| {
+            try encoder.writeByte(0);
+        }
+    } else {
+        try encoder.writeInt(u32, 0);
+    }
+
     for (frame.spans) |span| {
         try encoder.writeInt(u32, span.start);
         try encoder.writeInt(u32, @intCast(span.cells.len));
@@ -166,6 +185,18 @@ pub fn decodeBody(decoder: *DecoderType) !FrameView {
     const cursor_shape = std.enums.fromInt(@import("Cursor.zig").Shape, shape_byte) orelse return error.InvalidCursorShape;
     const cursor_blink = try decoder.readBool();
 
+    const metadata_length = try decoder.readInt(u32);
+    if (metadata_length > text_metadata_limits.capacity(rows)) {
+        return error.TextMetadataTooLarge;
+    }
+
+    const text_metadata = if (metadata_length != 0)
+        try TextMetadataView.decode(try decoder.readBytes(metadata_length), .{ cols, rows })
+    else if (base_frame_id == 0)
+        return error.MissingSnapshotMetadata
+    else
+        null;
+
     try validateHeader(.{
         .pane_id = pane_id,
         .frame_id = frame_id,
@@ -224,6 +255,7 @@ pub fn decodeBody(decoder: *DecoderType) !FrameView {
         .mouse = mouse,
         .input_modes = input_modes,
         .pointer_shape = pointer_shape,
+        .text_metadata = text_metadata,
         .scroll = scroll,
         .span_count = span_count,
         .encoded_spans = decoder.consumed(spans_start),

@@ -18,5 +18,7 @@ cursor: Cursor = .{},
 mouse: Mouse = .{},
 input_modes: InputModes = .{},
 pointer_shape: frame_support.PointerShape = .default,
+/// Null preserves patch metadata; encoding a snapshot with null emits an empty replacement.
+text_metadata: ?@import("../text_metadata/View.zig") = null,
 scroll: Scroll,
 spans: []const Span,

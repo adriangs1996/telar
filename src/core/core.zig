@@ -428,3 +428,10 @@ test {
     _ = @import("ui/ui_tests.zig");
     _ = @import("unicode_substitution_test.zig");
 }
+
+pub const TextMetadata = @import("text_metadata/Storage.zig");
+pub const TextMetadataView = @import("text_metadata/View.zig");
+pub const TextMetadataBuilder = @import("text_metadata/Builder.zig");
+pub const TextRowFlags = @import("text_metadata/RowFlags.zig").RowFlags;
+pub const TextLinkRun = @import("text_metadata/LinkRun.zig");
+pub const text_metadata_limits = @import("text_metadata/limits.zig");
