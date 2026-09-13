@@ -47,14 +47,17 @@ const handshake = @import("schema/handshake.zig");
 const OpenPaneType = @import("schema/messages/OpenPane.zig");
 const FrameType = @import("schema/Frame.zig");
 const tags = @import("schema/messages/tags.zig");
+const TextMetadataBuilder = @import("text_metadata/Builder.zig");
+const text_metadata_limits = @import("text_metadata/limits.zig");
 
 test {
     std.testing.refAllDecls(schema);
+    _ = @import("text_metadata/tests.zig");
 }
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 90;
+const corpus_len = 93;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -512,6 +515,12 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         },
     };
     const frame_spans = [_]SpanType{.{ .start = 0, .cells = &frame_cells }};
+    var metadata_scratch: [text_metadata_limits.capacity(1)]u8 = undefined;
+    var metadata_builder = TextMetadataBuilder.init(&metadata_scratch, 1);
+    metadata_builder.setRow(0, .{ .wrap = true, .hyperlinks = true });
+    const link = try metadata_builder.addLink("https://example.test");
+    try metadata_builder.addRun(.{ .start = 1, .len = 1, .link_index = link });
+    const metadata = metadata_builder.finish(.complete);
     helper.add(.{ .name = "pane_frame", .direction = .server, .golden_hex = golden.pane_frame }, helper.commit(
         try pane_module.encodePaneFrame(helper.space(), .{
             .pane_id = @enumFromInt(4),
@@ -528,6 +537,44 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .pointer_shape = .pointer,
             .scroll = .{ .total_rows = 1, .offset = 0 },
             .spans = &frame_spans,
+            .text_metadata = metadata,
+        }),
+    ));
+    helper.add(.{ .name = "pane_frame_unchanged", .direction = .server, .golden_hex = golden.pane_frame_unchanged }, helper.commit(
+        try pane_module.encodePaneFrame(helper.space(), .{
+            .pane_id = @enumFromInt(4),
+            .frame_id = 2,
+            .base_frame_id = 1,
+            .cols = 2,
+            .rows = 1,
+            .scroll = .{ .total_rows = 1, .offset = 0 },
+            .spans = &.{},
+        }),
+    ));
+    metadata_builder = TextMetadataBuilder.init(&metadata_scratch, 1);
+    metadata_builder.setRow(0, .{ .continuation = true });
+    helper.add(.{ .name = "pane_frame_empty_metadata", .direction = .server, .golden_hex = golden.pane_frame_empty_metadata }, helper.commit(
+        try pane_module.encodePaneFrame(helper.space(), .{
+            .pane_id = @enumFromInt(4),
+            .frame_id = 3,
+            .base_frame_id = 2,
+            .cols = 2,
+            .rows = 1,
+            .scroll = .{ .total_rows = 1, .offset = 0 },
+            .spans = &.{},
+            .text_metadata = metadata_builder.finish(.complete),
+        }),
+    ));
+    helper.add(.{ .name = "pane_frame_omitted_metadata", .direction = .server, .golden_hex = golden.pane_frame_omitted_metadata }, helper.commit(
+        try pane_module.encodePaneFrame(helper.space(), .{
+            .pane_id = @enumFromInt(4),
+            .frame_id = 4,
+            .base_frame_id = 3,
+            .cols = 2,
+            .rows = 1,
+            .scroll = .{ .total_rows = 1, .offset = 0 },
+            .spans = &.{},
+            .text_metadata = metadata_builder.finish(.omitted),
         }),
     ));
     helper.add(.{ .name = "pane_exited", .direction = .server, .golden_hex = golden.pane_exited }, helper.commit(
@@ -987,8 +1034,8 @@ test "pane frames preserve cursor appearance and reject unknown shapes and malfo
     const Cursor = @import("schema/Cursor.zig");
     var buffer: [1024]u8 = undefined;
     const payload = try std.fmt.hexToBytes(&buffer, golden.pane_frame);
-    const shape_offset = frame.body_header_size - 1;
-    const blink_offset = frame.body_header_size;
+    const shape_offset = frame.body_header_size - 5;
+    const blink_offset = frame.body_header_size - 4;
     for (std.meta.tags(Cursor.Shape)) |shape| {
         for ([_]bool{ false, true }) |blink| {
             buffer[shape_offset] = @intFromEnum(shape);
@@ -1203,7 +1250,7 @@ test "malformed cell bytes surface as errors during iteration" {
     // that does not exist.
     var corrupted: [128]u8 = undefined;
     @memcpy(corrupted[0..payload.len], payload);
-    const first_cell = 1 + frame.body_header_size + frame.span_header_size;
+    const first_cell = 1 + frame.body_header_size + text_metadata_limits.header_size + 1 + frame.span_header_size;
     corrupted[first_cell] &= 0x7f;
     const decoded = (try root.decodeServer(corrupted[0..payload.len])).pane_frame;
     var span_iterator = decoded.spans();
@@ -2023,11 +2070,11 @@ test "workspace closure handoffs are present only for a different surviving work
 
 test "a frame past the body budget reports FrameTooLarge, not a full buffer" {
     // max_cell_count budgets for a single span header, so a delta frame using
-    // all 4096 spans of worst-case cells (unique style, full cluster) is the
-    // one shape that can outgrow max_body_size on the encode side.
+    // all 4096 spans of worst-case cells and maximal text metadata can
+    // outgrow max_body_size while its cell count remains admissible.
     const gpa = std.testing.allocator;
-    const cols: u16 = 512;
-    const rows: u16 = 264;
+    const cols: u16 = 2;
+    const rows: u16 = @intCast(frame.max_cell_count / cols);
     const total: u32 = @as(u32, cols) * rows;
     const span_count = frame.max_span_count;
     const per_span = total / span_count;
@@ -2054,7 +2101,18 @@ test "a frame past the body budget reports FrameTooLarge, not a full buffer" {
     defer gpa.free(spans);
     for (spans, 0..) |*span, index| {
         const start: u32 = @intCast(index * per_span);
-        span.* = .{ .start = start, .cells = cells[start .. start + per_span] };
+        const end = if (index + 1 == span_count) total else start + per_span;
+        span.* = .{ .start = start, .cells = cells[start..end] };
+    }
+
+    const scratch = try gpa.alloc(u8, text_metadata_limits.capacity(rows));
+    defer gpa.free(scratch);
+    var metadata_builder = TextMetadataBuilder.init(scratch, rows);
+    for (0..text_metadata_limits.max_links) |_| {
+        _ = try metadata_builder.addLink(&(.{'u'} ** (text_metadata_limits.max_total_uri_bytes / text_metadata_limits.max_links)));
+    }
+    for (0..text_metadata_limits.max_runs) |index| {
+        try metadata_builder.addRun(.{ .start = @intCast(index), .len = 1, .link_index = @intCast(index % text_metadata_limits.max_links) });
     }
 
     // Larger than any legal frame, so the only possible failure is the budget.
@@ -2070,5 +2128,6 @@ test "a frame past the body budget reports FrameTooLarge, not a full buffer" {
         .mouse = .{},
         .scroll = .{ .total_rows = rows, .offset = 0 },
         .spans = spans,
+        .text_metadata = metadata_builder.finish(.complete),
     }));
 }

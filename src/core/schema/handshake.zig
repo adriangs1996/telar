@@ -12,13 +12,13 @@ const ClientHello = @import("ClientHello.zig");
 pub const SchemaId = [8]u8;
 /// Human-readable schema generation. Bump it on any breaking wire change so a
 /// mismatch log can say which side is newer.
-pub const schema_version: *const [2]u8 = "45";
+pub const schema_version: *const [2]u8 = "46";
 /// Version prefix plus a fingerprint of the golden corpus in
 /// `schema_contract_test.zig`. The test "the handshake fingerprint derives from the
 /// golden corpus" recomputes the hash, so an encoding change cannot ship
 /// without updating this constant. Do not keep the old decoder until rolling
 /// upgrades become a supported product requirement.
-pub const schema_id: SchemaId = (schema_version.* ++ "59f9ba".*);
+pub const schema_id: SchemaId = (schema_version.* ++ "6f97d7".*);
 
 pub const magic: [8]u8 = "TELARIPC".*;
 
@@ -206,4 +206,18 @@ test "malformed handshakes are rejected" {
     wrong_tag[magic.len] = 0xff;
     try std.testing.expectError(error.UnknownMessage, decodeClientHello(&wrong_tag));
     try std.testing.expectError(error.InvalidLength, decodeClientHello(valid[0 .. valid.len - 1]));
+}
+
+test "text metadata wire generation refuses pre-metadata peers and same-version fingerprints" {
+    const previous: SchemaId = "4559f9ba".*;
+    const incoming = negotiate(previous, schema_id);
+    const outgoing = negotiate(schema_id, previous);
+    try std.testing.expectEqual(RejectReason.incompatible_schema, incoming.rejected.reason);
+    try std.testing.expectEqual(RejectReason.incompatible_schema, outgoing.rejected.reason);
+    try std.testing.expectEqual(schema_id, incoming.rejected.expected_schema);
+    try std.testing.expectEqual(previous, outgoing.rejected.expected_schema);
+
+    var different = schema_id;
+    different[different.len - 1] ^= 1;
+    try std.testing.expectEqual(RejectReason.incompatible_schema, negotiate(different, schema_id).rejected.reason);
 }

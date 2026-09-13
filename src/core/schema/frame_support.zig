@@ -544,7 +544,7 @@ test "a style run pays two bytes per ordinary cell" {
 
     // The first cell carries the five-byte default style and costs seven
     // bytes. Each following space costs only its packed header and text byte.
-    const cells_start = body_header_size + span_header_size;
+    const cells_start = body_header_size + text_metadata_limits.header_size + 1 + span_header_size;
     try std.testing.expectEqual(@as(usize, cells_start + 11), encoder.finish().len);
     try std.testing.expectEqual(@as(u8, 0xa1), encoder.finish()[cells_start]);
     try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[cells_start + 7]);
@@ -572,7 +572,7 @@ test "the first cell of every span must define its style" {
         .spans = &spans,
     });
 
-    buffer[body_header_size + span_header_size] &= ~style_changed_bit;
+    buffer[body_header_size + text_metadata_limits.header_size + 1 + span_header_size] &= ~style_changed_bit;
     var decoder = DecoderType.init(encoder.finish());
     // Cell content is validated when the consumer iterates, not at decode.
     const decoded = try decodeBody(&decoder);
@@ -617,7 +617,7 @@ test "a snapshot must contain the complete grid" {
 }
 
 test "the maximum screen is bounded by one transport frame" {
-    const maximum_snapshot_size = 1 + body_header_size + span_header_size +
+    const maximum_snapshot_size = 1 + body_header_size + span_header_size + text_metadata_limits.max_encoded_size +
         @as(usize, max_cell_count) * max_cell_size;
     const next_snapshot_size = maximum_snapshot_size + max_cell_size;
 
