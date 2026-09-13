@@ -171,15 +171,17 @@ test "text metadata captures soft wrap and wide padding before blit clears damag
     try std.testing.expectEqual(@as(usize, 0), failing.allocations);
 }
 
-test "text metadata drops an over-quota URI whole and recovers without allocation" {
+test "text metadata drops an over-quota link table whole and recovers without allocation" {
     const BlitPane = @import("BlitPane.zig");
-    var pane = try BlitPane.init(std.testing.allocator, 20, 3);
+    var pane = try BlitPane.init(std.testing.allocator, 32, 10);
     defer pane.deinit();
-    var capture = try TextMetadataCapture.init(std.testing.allocator, 3);
+    var capture = try TextMetadataCapture.init(std.testing.allocator, 10);
     defer capture.deinit(std.testing.allocator);
-    try pane.term.screens.active.startHyperlink("https://e/" ++ "a" ** 4096, null);
-    try pane.write("label");
-    pane.term.screens.active.endHyperlink();
+    for (0..core.text_metadata_limits.max_links + 1) |id| {
+        var bytes: [128]u8 = undefined;
+        const command = try std.fmt.bufPrint(&bytes, "\x1b]8;id={d};https://e/{d}\x1b\\x\x1b]8;;\x1b\\", .{ id, id });
+        try pane.write(command);
+    }
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     try capture.update(failing.allocator(), &pane.state);
     const omitted = capture.current.view();
