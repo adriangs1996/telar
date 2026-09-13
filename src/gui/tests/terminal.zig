@@ -90,9 +90,11 @@ test "cursor shapes focus and blink reuse retained ink without changing the atla
     try session.bootstrap();
     try session.receiveFrame(1);
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const content = paneContent(session);
+    const bounds = session.renderer.metrics.rect(session.renderer.origin, content);
     pane.cursor.x = 0;
-    try present(session);
-    const ink = try std.testing.allocator.dupe(@import("../render/Quad.zig").Quad, session.renderer.retained.at(.{ 0, 0 }).items());
+    try paintTerminal(session);
+    const ink = try std.testing.allocator.dupe(@import("../render/Quad.zig").Quad, session.renderer.retained.at(.{ content.x, content.y }).items());
     defer std.testing.allocator.free(ink);
     const shape_calls = session.renderer.atlas.?.shape_calls;
     const version = session.renderer.atlas_version;
@@ -100,35 +102,35 @@ test "cursor shapes focus and blink reuse retained ink without changing the atla
     const cell_height: f32 = @floatFromInt(session.renderer.metrics.cell_height);
     for (std.meta.tags(core.Cursor.Shape)) |shape| {
         pane.cursor.appearance.shape = shape;
-        try present(session);
+        try paintTerminal(session);
         const quads = session.renderer.quads.items();
         const count: usize = if (shape == .hollow) 4 else if (shape == .block or shape == .default) ink.len else 1;
         const first = quads[quads.len - count];
         try std.testing.expectEqual(if (shape == .bar) @as(f32, 2) else cell_width, first.width);
         try std.testing.expectEqual(if (shape == .underline or shape == .hollow) @as(f32, 2) else cell_height, first.height);
-        try std.testing.expectEqual(if (shape == .underline) cell_height - 2 else @as(f32, 0), first.y);
+        try std.testing.expectEqual(bounds.y + if (shape == .underline) cell_height - 2 else @as(f32, 0), first.y);
         try std.testing.expectEqual(@as(usize, 0), session.renderer.repainted_cells);
         session.renderer.cursor_on = false;
-        try present(session);
+        try paintTerminal(session);
         try std.testing.expectEqual(quads.len - count, session.renderer.quads.items().len);
         session.renderer.cursor_on = true;
     }
 
-    try std.testing.expectEqualSlices(@import("../render/Quad.zig").Quad, ink, session.renderer.retained.at(.{ 0, 0 }).items());
+    try std.testing.expectEqualSlices(@import("../render/Quad.zig").Quad, ink, session.renderer.retained.at(.{ content.x, content.y }).items());
     try std.testing.expectEqual(shape_calls, session.renderer.atlas.?.shape_calls);
     try std.testing.expectEqual(version, session.renderer.atlas_version);
     pane.cursor.appearance.shape = .bar;
     session.renderer.focused = false;
-    try present(session);
+    try paintTerminal(session);
     const hollow = session.renderer.quads.items();
     try std.testing.expectEqual(cell_width, hollow[hollow.len - 4].width);
     try std.testing.expectEqual(@as(f32, 2), hollow[hollow.len - 4].height);
     session.renderer.focused = true;
     session.renderer.config.cursor.style = .underline;
     pane.cursor.appearance.shape = .default;
-    try present(session);
+    try paintTerminal(session);
     const underline = session.renderer.quads.items();
-    try std.testing.expectEqual(cell_height - 2, underline[underline.len - 1].y);
+    try std.testing.expectEqual(bounds.y + cell_height - 2, underline[underline.len - 1].y);
 }
 
 test "a block cursor recolors wide cell ink and ANSI colors belong to the GUI theme" {
@@ -139,15 +141,17 @@ test "a block cursor recolors wide cell ink and ANSI colors belong to the GUI th
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
     pane.buffer.cells[0] = .{ .bytes = .{ 0xe7, 0x95, 0x8c } ++ .{0} ** 13, .len = 3, .width = 2, .style = .{ .fg = .{ .indexed = 1 } } };
     pane.buffer.cells[1].width = 0;
+    const content = paneContent(session);
+    const bounds = session.renderer.metrics.rect(session.renderer.origin, content);
     pane.cursor.x = 1;
     session.renderer.theme.palette[1] = .{ 12, 34, 56 };
     session.renderer.theme.cursor_color = .{ 255, 0, 0 };
     session.renderer.theme.cursor_text_color = .{ 0, 255, 0 };
-    try present(session);
-    const mesh = session.renderer.retained.at(.{ 0, 0 });
+    try paintTerminal(session);
+    const mesh = session.renderer.retained.at(.{ content.x, content.y });
     const quads = session.renderer.quads.items();
     const cursor = quads[quads.len - mesh.len];
-    try std.testing.expectEqual(@as(f32, 0), cursor.x);
+    try std.testing.expectEqual(bounds.x, cursor.x);
     try std.testing.expectEqual(@as(f32, @floatFromInt(session.renderer.metrics.cell_width * 2)), cursor.width);
     try std.testing.expectEqual(@as(f32, 1), cursor.r);
     for (quads[quads.len - mesh.len + 1 ..]) |glyph| {
@@ -218,8 +222,9 @@ test "native resize publishes exact grid pixels and preserves runtime-owned pane
     const size = try session.renderer.metrics.measure(.{ .width = 303, .height = 199, .scale = 1 });
     try session.gui.resize(size, session.renderer.theme);
     try session.settle();
-    try std.testing.expectEqual(size.cols, session.gui.region.area.w);
-    try std.testing.expectEqual(size.rows, session.gui.region.area.h);
+    const regions = @import("../chrome/Regions.zig").calculate(size.cols, size.rows, .{ .visible = session.gui.app.model.sidebarVisible(), .preferred_width = session.gui.app.model.sidebarWidth() });
+    try std.testing.expectEqual(regions.workbench, session.gui.region.area);
+    try std.testing.expectEqual(size, session.gui.app.model.hostSize());
     try std.testing.expectEqual(size.cell_width_px, session.gui.app.model.hostSize().cell_width_px);
     try std.testing.expect(session.resize_count > 0);
     try std.testing.expect(session.gui.app.model.workspace.findPane(Session.pane_id) != null);
@@ -239,8 +244,9 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
     try std.testing.expectEqual(@as(u8, 2), commit.len);
     try std.testing.expectEqual(Session.pane_id, commit.panes[0].pane_id);
     try std.testing.expectEqual(second, commit.panes[1].pane_id);
-    const width: f32 = @floatFromInt(@as(u32, session.gui.region.area.w) * session.renderer.metrics.cell_width);
-    const height: f32 = @floatFromInt(@as(u32, session.gui.region.area.h) * session.renderer.metrics.cell_height);
+    const host_size = session.gui.app.model.hostSize();
+    const width: f32 = @floatFromInt(@as(u32, host_size.cols) * session.renderer.metrics.cell_width);
+    const height: f32 = @floatFromInt(@as(u32, host_size.rows) * session.renderer.metrics.cell_height);
     for (session.renderer.quads.items()) |quad| {
         try std.testing.expect(quad.x >= 0 and quad.y >= 0);
         try std.testing.expect(quad.x + quad.width <= width and quad.y + quad.height <= height);
@@ -249,6 +255,18 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
     try session.gui.complete(token, true);
     try session.settle();
     try expectFullRedraw(session);
+    try paintTerminal(session);
+    var layout: @import("telar-client").LayoutSnapshot = .{};
+    model.layout.snapshot(session.gui.region.area, &layout);
+    for (session.renderer.quads.items()) |quad| {
+        const contained = for (layout.views()) |view| {
+            const bounds = session.renderer.metrics.rect(session.renderer.origin, view.content);
+            if (quad.x >= bounds.x and quad.y >= bounds.y and quad.x + quad.width <= bounds.x + bounds.width and quad.y + quad.height <= bounds.y + bounds.height) {
+                break true;
+            }
+        } else false;
+        try std.testing.expect(contained);
+    }
 }
 
 test "native driver joins a blocked socket read before freeing the shared client" {
@@ -287,6 +305,16 @@ test "native inbox holds input and GPU completion until the consumer runs" {
     const consumed = inbox.snapshot().consumed;
     _ = try session.gui.pump();
     try std.testing.expectEqual(consumed, inbox.snapshot().consumed);
+}
+
+fn paneContent(session: *Session) @import("telar-core").Rect {
+    const model = session.gui.app.model.activeTabModel().?;
+    return model.viewForPane(Session.pane_id, session.gui.region.area).?.content;
+}
+
+fn paintTerminal(session: *Session) !void {
+    _ = try session.renderer.prepare(session.gui.projection());
+    session.renderer.seal();
 }
 
 fn present(session: *Session) !void {

@@ -109,7 +109,15 @@ test "GUI theme and cursor reload reuse glyph storage and publish terminal color
     const model_version = session.gui.app.model.version();
     try fixture.wait();
     try std.testing.expect(!reload.pending);
-    try std.testing.expectEqualDeep(model_version, session.gui.app.model.version());
+    // Native notification timers may advance while the unchanged-file worker
+    // waits. The watch must preserve configuration, terminal state and resources.
+    const after_wait = session.gui.app.model.version();
+    try std.testing.expectEqual(model_version.configuration, after_wait.configuration);
+    try std.testing.expectEqual(model_version.workspace, after_wait.workspace);
+    try std.testing.expectEqual(model_version.frame, after_wait.frame);
+    try std.testing.expectEqual(model_version.host, after_wait.host);
+    try std.testing.expectEqual(pixels, session.renderer.atlas.?.pixels.ptr);
+    try std.testing.expectEqual(version, session.renderer.atlas_version);
     try std.testing.expect(reload.worker != null);
 }
 
@@ -283,8 +291,12 @@ test "window reload reuses the atlas and padding publishes grid size without its
     try present(session);
     try std.testing.expect(size.cols < previous_size.cols and size.rows < previous_size.rows);
     try std.testing.expectEqual(size, session.gui.app.model.hostSize());
-    try std.testing.expectEqual(@as(f32, 12), session.renderer.retained.at(.{ 0, 0 }).paint.rect.x);
-    try std.testing.expectEqual(@as(f32, 18), session.renderer.retained.at(.{ 0, 0 }).paint.rect.y);
+    const pane_origin = session.gui.region.area;
+    const pixels_origin = session.renderer.metrics.rect(session.renderer.origin, pane_origin);
+    const retained = session.renderer.retained.at(.{ pane_origin.x, pane_origin.y });
+    try std.testing.expectEqual(pixels_origin.x, retained.paint.rect.x);
+    try std.testing.expectEqual(pixels_origin.y, retained.paint.rect.y);
+    try std.testing.expectEqual([2]u32{ 12, 18 }, session.renderer.origin);
     try std.testing.expectEqual(pixels, session.renderer.atlas.?.pixels.ptr);
     try std.testing.expectEqual(version, session.renderer.atlas_version);
     try std.testing.expect(session.resize_count > 0);
