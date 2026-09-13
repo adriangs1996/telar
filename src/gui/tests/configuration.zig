@@ -70,7 +70,7 @@ test "GUI reload preserves an in-flight frame and keeps input and receipt ACKs m
     try std.testing.expect(try reload.apply(session.gui, &session.renderer));
     try std.testing.expectEqual(@as(u64, 2), session.gui.app.lua_generation.?.number);
     try std.testing.expectEqual(@as(f32, 20), session.renderer.config.font.size);
-    try std.testing.expectEqual(@import("builtin").os.tag == .macos, session.renderer.atlas.?.mac_rasterizer != null);
+    try std.testing.expectEqual(@import("builtin").os.tag == .macos, session.renderer.atlas.?.fonts.primary.mac_rasterizer != null);
     try std.testing.expect(pixels != session.renderer.atlas.?.pixels.ptr);
     try session.gui.resize(try session.renderer.measure(Fixture.viewport), session.renderer.theme);
     try present(session);

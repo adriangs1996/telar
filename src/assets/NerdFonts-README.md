@@ -31,5 +31,6 @@ together with fontconfig, so individual fonts do not need to be patched.
 | Power Symbols IEC      | https://github.com/jloughry/Unicode                   | Feb 2015        | MIT         |
 | Weather Icons          | https://github.com/erikflowers/weather-icons          | 2.0.10          | OFL 1.1     |
 
-Telar embeds a subset of `SymbolsNerdFontMono-Regular.ttf`. Its selected
-glyphs come from Codicons, extraglyphs, Font Awesome, and Octicons.
+Telar embeds `SymbolsNerdFontMono-Regular.ttf` for GUI font fallback. Its TUI
+also embeds a subset whose selected glyphs come from Codicons, extraglyphs,
+Font Awesome, and Octicons.

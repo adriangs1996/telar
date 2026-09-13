@@ -14,7 +14,7 @@ test "macOS optical weight controls alpha coverage without writing outside the r
 
     var atlas = try Atlas.init(std.testing.allocator, .{ .font = font, .pixel_height = 36 });
     defer atlas.deinit();
-    const index = freetype.c.FT_Get_Char_Index(atlas.face, 'F');
+    const index = freetype.c.FT_Get_Char_Index(atlas.fonts.primary.face, 'F');
     var pixels: [64 * 64]u8 = undefined;
     var coverage: [3][4]u64 = .{.{0} ** 4} ** 3;
     for (0..3) |mode| {
@@ -73,7 +73,7 @@ test "font thickening preserves shaping and cell metrics and cached glyphs alloc
     for (0..3) |mode| {
         var atlas = try Atlas.init(std.testing.allocator, .{ .font = font, .pixel_height = 36, .thicken = mode != 0, .thicken_strength = if (mode == 1) 0 else 255 });
         defer atlas.deinit();
-        try std.testing.expectEqual(builtin.os.tag == .macos and mode != 0, atlas.mac_rasterizer != null);
+        try std.testing.expectEqual(builtin.os.tag == .macos and mode != 0, atlas.fonts.primary.mac_rasterizer != null);
         const current = [3]i64{ atlas.cellWidth(), atlas.lineHeight(), atlas.ascender() };
         if (mode == 0) {
             metrics = current;

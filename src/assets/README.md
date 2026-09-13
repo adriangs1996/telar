@@ -26,6 +26,17 @@ and the subset SHA-256 is
 `NerdFonts-LICENSE.txt` and `NerdFonts-README.md` record the license and
 upstream attribution shipped in the release archive.
 
+The GUI additionally embeds the complete `SymbolsNerdFontMono-Regular.ttf`
+from [Nerd Fonts v3.5.1](https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.5.1)
+as a missing-glyph fallback. It retains the configured font for covered text;
+the TUI continues using the small `TelarNerdIcons-Regular.ttf` subset above.
+The full face is 2,610,012 bytes and has the source TTF SHA-256 above. It can
+be reproduced by downloading
+`https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/NerdFontsSymbolsOnly.zip`
+(SHA-256 `fdca3682534f6f65e1ccb2345b0362ccf67d9b8eca7c8025330946e93e2473bc`)
+and extracting `SymbolsNerdFontMono-Regular.ttf` without modification. The
+same bundled Nerd Fonts license and attribution apply.
+
 The subset is reproducible with fonttools:
 
 ```sh

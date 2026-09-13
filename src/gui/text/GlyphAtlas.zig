@@ -1,8 +1,7 @@
 //! Rasterizes glyphs on demand into one alpha page the GPU samples, and
 //! turns shaped text into quads. One page serves every size the client
 //! paints at, so a frame samples one texture. Texel (0, 0) stays opaque white
-//! so solid rectangles are quads too. Shaping mirrors the TUI rasterizer; sharing one
-//! face between adapters is a later step.
+//! so solid rectangles are quads too. Configured and fallback faces share the page.
 const std = @import("std");
 const freetype = @import("freetype");
 const QuadList = @import("../render/QuadList.zig");
@@ -13,7 +12,12 @@ const ShapedRun = @import("ShapedRun.zig");
 const TextRun = @import("TextRun.zig");
 const GlyphAtlas = @This();
 const ShapingCache = @import("ShapingCache.zig");
-const MacRasterizer = @import("MacRasterizer.zig");
+const FontSet = @import("FontSet.zig");
+const FontRuns = @import("FontRuns.zig");
+const FontRun = @import("FontRun.zig");
+const ShapedText = @import("ShapedText.zig");
+const Id = @import("font_id.zig").Id;
+const GlyphTransform = @import("GlyphTransform.zig");
 const GlyphFailures = @import("GlyphFailures.zig");
 
 extern fn FT_GlyphSlot_Embolden(freetype.c.FT_GlyphSlot) void;
@@ -35,8 +39,7 @@ shelf_x: u32 = reserved + padding,
 shelf_y: u32 = 0,
 shelf_height: u32 = reserved + padding,
 library: freetype.c.FT_Library,
-face: freetype.c.FT_Face,
-shaping_font: *freetype.c.hb_font_t,
+fonts: FontSet,
 shaping_buffer: *freetype.c.hb_buffer_t,
 pixel_height: u16 = 0,
 shaping_cache: ShapingCache,
@@ -44,7 +47,6 @@ shape_calls: usize = 0,
 raster_attempts: usize = 0,
 failed_glyphs: GlyphFailures = .{},
 glyphs: std.AutoHashMapUnmanaged(u64, GlyphSlot) = .empty,
-mac_rasterizer: ?MacRasterizer = null,
 
 /// `options.font` must outlive the atlas: FreeType borrows memory faces.
 /// Example: `var atlas = try GlyphAtlas.init(allocator, .{ .font = face_bytes, .pixel_height = 28 });`
@@ -66,71 +68,20 @@ pub fn init(allocator: std.mem.Allocator, options: AtlasOptions) !GlyphAtlas {
     }
     errdefer _ = freetype.c.FT_Done_FreeType(library);
 
-    var face: freetype.c.FT_Face = undefined;
-    if (freetype.c.FT_New_Memory_Face(library, @ptrCast(options.font.ptr), @intCast(options.font.len), @max(0, options.face_index), &face) != 0) {
-        return error.FontInitFailed;
-    }
-    errdefer _ = freetype.c.FT_Done_Face(face);
-    if (options.face_index < 0 and options.postscript.len != 0) {
-        const count = face.*.num_faces;
-        if (count > 256) {
-            return error.FontCollectionTooLarge;
-        }
-
-        var index: freetype.c.FT_Long = 0;
-        while (true) {
-            const name = freetype.c.FT_Get_Postscript_Name(face);
-            if (name != null and std.mem.eql(u8, std.mem.span(name), options.postscript)) {
-                break;
-            }
-            index += 1;
-            if (index == count) {
-                return error.FontFaceNotFound;
-            }
-
-            var candidate: freetype.c.FT_Face = undefined;
-            if (freetype.c.FT_New_Memory_Face(library, @ptrCast(options.font.ptr), @intCast(options.font.len), index, &candidate) != 0) {
-                return error.FontInitFailed;
-            }
-            _ = freetype.c.FT_Done_Face(face);
-            face = candidate;
-        }
-    }
-    if (freetype.c.FT_Select_Charmap(face, freetype.c.FT_ENCODING_UNICODE) != 0) {
-        return error.UnicodeCharmapUnavailable;
-    }
-    const shaping_font = freetype.c.hb_ft_font_create_referenced(face) orelse return error.ShapingFontInitFailed;
-    errdefer freetype.c.hb_font_destroy(shaping_font);
+    var fonts = try FontSet.init(library, options, pixels);
+    errdefer fonts.deinit();
     const shaping_buffer = freetype.c.hb_buffer_create() orelse return error.ShapingBufferInitFailed;
     errdefer freetype.c.hb_buffer_destroy(shaping_buffer);
-
     var shaping_cache = try ShapingCache.init(allocator);
     errdefer shaping_cache.deinit(allocator);
-    var mac_rasterizer: ?MacRasterizer = null;
-    if (@import("builtin").os.tag == .macos and options.thicken) {
-        mac_rasterizer = try MacRasterizer.init(.{
-            .font = options.font.ptr,
-            .font_len = options.font.len,
-            .postscript = @ptrCast(freetype.c.FT_Get_Postscript_Name(face)),
-            .face_index = @intCast(face.*.face_index),
-            .pixels = pixels.ptr,
-            .side = side,
-            .strength = options.thicken_strength,
-        });
-    }
-    errdefer if (mac_rasterizer) |*rasterizer| {
-        rasterizer.deinit();
-    };
 
     var atlas: GlyphAtlas = .{
         .allocator = allocator,
         .pixels = pixels,
         .library = library,
-        .face = face,
-        .shaping_font = shaping_font,
+        .fonts = fonts,
         .shaping_buffer = shaping_buffer,
         .shaping_cache = shaping_cache,
-        .mac_rasterizer = mac_rasterizer,
     };
     try atlas.select(options.pixel_height);
     return atlas;
@@ -147,29 +98,16 @@ pub fn select(atlas: *GlyphAtlas, pixel_height: u16) !void {
         return;
     }
 
-    if (freetype.c.FT_Set_Pixel_Sizes(atlas.face, 0, pixel_height) != 0) {
-        return error.FontSizeFailed;
-    }
-
-    if (atlas.mac_rasterizer) |*rasterizer| {
-        try rasterizer.select(pixel_height);
-    }
-
-    freetype.c.hb_ft_font_changed(atlas.shaping_font);
+    try atlas.fonts.select(pixel_height);
     atlas.pixel_height = pixel_height;
     atlas.shaping_cache.clear();
 }
 
 pub fn deinit(atlas: *GlyphAtlas) void {
-    if (atlas.mac_rasterizer) |*rasterizer| {
-        rasterizer.deinit();
-    }
-
     atlas.shaping_cache.deinit(atlas.allocator);
     atlas.glyphs.deinit(atlas.allocator);
     freetype.c.hb_buffer_destroy(atlas.shaping_buffer);
-    freetype.c.hb_font_destroy(atlas.shaping_font);
-    _ = freetype.c.FT_Done_Face(atlas.face);
+    atlas.fonts.deinit();
     _ = freetype.c.FT_Done_FreeType(atlas.library);
     atlas.allocator.free(atlas.pixels);
     atlas.* = undefined;
@@ -178,16 +116,16 @@ pub fn deinit(atlas: *GlyphAtlas) void {
 /// Distance from the baseline up to the top of the tallest glyph at the
 /// selected size, in pixels.
 pub fn ascender(atlas: *const GlyphAtlas) i32 {
-    return round26(atlas.face.*.size.*.metrics.ascender);
+    return round26(atlas.fonts.primary.face.*.size.*.metrics.ascender);
 }
 
 /// Measures the monospace grid. Example: `const width = atlas.cellWidth();`
 pub fn cellWidth(atlas: *const GlyphAtlas) u16 {
-    return @intCast(@max(1, round26(atlas.face.*.size.*.metrics.max_advance)));
+    return @intCast(@max(1, round26(atlas.fonts.primary.face.*.size.*.metrics.max_advance)));
 }
 
 pub fn lineHeight(atlas: *const GlyphAtlas) u32 {
-    return @intCast(@max(1, round26(atlas.face.*.size.*.metrics.height)));
+    return @intCast(@max(1, round26(atlas.fonts.primary.face.*.size.*.metrics.height)));
 }
 
 /// Shapes one line, rasterizes glyphs the page lacks and appends a quad per
@@ -199,22 +137,42 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
     }
 
     try atlas.select(run.pixel_height);
-    const shaped = try atlas.shape(run.text);
+    if (atlas.shaping_cache.find(run.text)) |cached| {
+        return atlas.paint(.{ .run = run, .shaped = cached }, list);
+    }
+
+    if (!std.unicode.utf8ValidateSlice(run.text)) {
+        return error.InvalidUtf8;
+    }
+
+    var runs: FontRuns = .{ .fonts = &atlas.fonts, .iterator = .{ .bytes = run.text } };
+    var advance: f32 = 0;
+    while (runs.next()) |part| {
+        var current = run;
+        current.text = part.text;
+        current.x += advance;
+        advance += try atlas.paint(.{ .run = current, .shaped = try atlas.shape(part) }, list);
+    }
+
+    return advance;
+}
+
+fn paint(atlas: *GlyphAtlas, text: ShapedText, list: *QuadList) !f32 {
+    const run = text.run;
+    const shaped = text.shaped;
+    const placement = try atlas.transform(text);
     const origin: i64 = @intFromFloat(@round(run.x * 64));
     var pen_x = origin;
     for (shaped.glyphs, shaped.positions) |info, position| {
-        const placed = atlas.slot(info.codepoint, run) catch |err| switch (err) {
-            error.AtlasFull => try atlas.slot(0, run),
-            else => return err,
-        };
+        const placed = try atlas.visibleSlot(.{ .font = shaped.font, .index = info.codepoint }, run);
         if (placed.width > 0 and placed.height > 0) {
             const x = round26(pen_x + position.x_offset) + placed.left;
             const y: i32 = @as(i32, @intFromFloat(@round(run.y))) - round26(position.y_offset) - placed.top;
             try list.push(.{
-                .x = @floatFromInt(x),
-                .y = @floatFromInt(y),
-                .width = @floatFromInt(placed.width),
-                .height = @floatFromInt(placed.height),
+                .x = run.x + (@as(f32, @floatFromInt(x)) - run.x) * placement.scale + placement.x,
+                .y = run.y + (@as(f32, @floatFromInt(y)) - run.y) * placement.scale + placement.y,
+                .width = @as(f32, @floatFromInt(placed.width)) * placement.scale,
+                .height = @as(f32, @floatFromInt(placed.height)) * placement.scale,
                 .u0 = placed.u0,
                 .v0 = placed.v0,
                 .u1 = placed.u1,
@@ -229,11 +187,53 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
         pen_x += position.x_advance;
     }
 
-    return @floatFromInt(round26(pen_x - origin));
+    return if (shaped.font == .primary) @floatFromInt(round26(pen_x - origin)) else @floatFromInt(shaped.columns * atlas.cellWidth());
 }
 
-fn slot(atlas: *GlyphAtlas, index: u32, run: TextRun) !GlyphSlot {
-    const key = (@as(u64, index) << 18) | (@as(u64, atlas.pixel_height) << 2) | @as(u64, @intFromBool(run.bold)) | (@as(u64, @intFromBool(run.italic)) << 1);
+// Only fallback ink is fitted; the user's configured text keeps its exact metrics.
+fn transform(atlas: *GlyphAtlas, text: ShapedText) !GlyphTransform {
+    if (text.shaped.font == .primary) {
+        return .{};
+    }
+
+    var left: f32 = std.math.inf(f32);
+    var right: f32 = -std.math.inf(f32);
+    var top: f32 = std.math.inf(f32);
+    var bottom: f32 = -std.math.inf(f32);
+    var pen_x: i64 = 0;
+    for (text.shaped.glyphs, text.shaped.positions) |info, position| {
+        const placed = try atlas.visibleSlot(.{ .font = text.shaped.font, .index = info.codepoint }, text.run);
+        if (placed.width > 0 and placed.height > 0) {
+            const x: f32 = @floatFromInt(round26(pen_x + position.x_offset) + placed.left);
+            const y: f32 = @floatFromInt(-round26(position.y_offset) - placed.top);
+            left = @min(left, x);
+            right = @max(right, x + @as(f32, @floatFromInt(placed.width)));
+            top = @min(top, y);
+            bottom = @max(bottom, y + @as(f32, @floatFromInt(placed.height)));
+        }
+
+        pen_x += position.x_advance;
+    }
+
+    return GlyphTransform.fit(.{ .x = left, .y = top, .width = right - left, .height = bottom - top }, .{
+        .x = 0,
+        .y = @floatFromInt(-atlas.ascender()),
+        .width = @floatFromInt(text.shaped.columns * atlas.cellWidth()),
+        .height = @floatFromInt(atlas.lineHeight()),
+    });
+}
+
+fn visibleSlot(atlas: *GlyphAtlas, glyph_id: @import("GlyphId.zig"), run: TextRun) !GlyphSlot {
+    return atlas.slot(glyph_id, run) catch |err| switch (err) {
+        error.AtlasFull => atlas.slot(.{}, run),
+        else => err,
+    };
+}
+
+fn slot(atlas: *GlyphAtlas, glyph_id: @import("GlyphId.zig"), run: TextRun) !GlyphSlot {
+    const index = glyph_id.index;
+    const font = atlas.fonts.get(glyph_id.font);
+    const key = (@as(u64, @intFromEnum(glyph_id.font)) << 50) | (@as(u64, index) << 18) | (@as(u64, atlas.pixel_height) << 2) | @as(u64, @intFromBool(run.bold)) | (@as(u64, @intFromBool(run.italic)) << 1);
     if (atlas.glyphs.get(key)) |cached| {
         return cached;
     }
@@ -243,7 +243,7 @@ fn slot(atlas: *GlyphAtlas, index: u32, run: TextRun) !GlyphSlot {
     }
 
     atlas.raster_attempts += 1;
-    if (atlas.mac_rasterizer) |*rasterizer| {
+    if (font.mac_rasterizer) |*rasterizer| {
         var glyph = try rasterizer.measure(.{ .index = index, .style = @as(u32, @intFromBool(run.bold)) | (@as(u32, @intFromBool(run.italic)) << 1) });
         const origin = try atlas.packGlyph(key, .{ glyph.width, glyph.height });
         glyph.x = origin[0];
@@ -256,11 +256,11 @@ fn slot(atlas: *GlyphAtlas, index: u32, run: TextRun) !GlyphSlot {
         return atlas.remember(key, glyph);
     }
 
-    if (freetype.c.FT_Load_Glyph(atlas.face, index, freetype.c.FT_LOAD_DEFAULT) != 0) {
+    if (freetype.c.FT_Load_Glyph(font.face, index, freetype.c.FT_LOAD_DEFAULT) != 0) {
         return error.GlyphLoadFailed;
     }
 
-    const glyph = atlas.face.*.glyph;
+    const glyph = font.face.*.glyph;
     if (run.bold) {
         FT_GlyphSlot_Embolden(glyph);
     }
@@ -348,7 +348,8 @@ fn pack(atlas: *GlyphAtlas, extent: [2]u32) ![2]u32 {
     return origin;
 }
 
-fn shape(atlas: *GlyphAtlas, text: []const u8) !ShapedRun {
+fn shape(atlas: *GlyphAtlas, run: FontRun) !ShapedRun {
+    const text = run.text;
     if (atlas.shaping_cache.find(text)) |cached| {
         return cached;
     }
@@ -365,7 +366,7 @@ fn shape(atlas: *GlyphAtlas, text: []const u8) !ShapedRun {
 
     freetype.c.hb_buffer_guess_segment_properties(atlas.shaping_buffer);
     atlas.shape_calls += 1;
-    freetype.c.hb_shape(atlas.shaping_font, atlas.shaping_buffer, null, 0);
+    freetype.c.hb_shape(atlas.fonts.get(run.font).shaping_font, atlas.shaping_buffer, null, 0);
     var glyph_count: c_uint = 0;
     const glyphs = freetype.c.hb_buffer_get_glyph_infos(atlas.shaping_buffer, &glyph_count) orelse return error.ShapingFailed;
     var position_count: c_uint = 0;
@@ -374,7 +375,7 @@ fn shape(atlas: *GlyphAtlas, text: []const u8) !ShapedRun {
         return error.ShapingFailed;
     }
 
-    const shaped: ShapedRun = .{ .glyphs = glyphs[0..glyph_count], .positions = positions[0..glyph_count] };
+    const shaped: ShapedRun = .{ .font = run.font, .columns = run.columns, .glyphs = glyphs[0..glyph_count], .positions = positions[0..glyph_count] };
     atlas.shaping_cache.remember(text, shaped);
     return shaped;
 }
@@ -493,7 +494,7 @@ test "full glyphs are remembered without rejecting smaller glyphs or changing re
 /// Example: `try atlas.prepareFallbacks();`
 pub fn prepareFallbacks(atlas: *GlyphAtlas) !void {
     for (0..4) |style| {
-        _ = try atlas.slot(0, .{ .text = "", .x = 0, .y = 0, .color = .white, .pixel_height = atlas.pixel_height, .bold = style & 1 != 0, .italic = style & 2 != 0 });
+        _ = try atlas.slot(.{}, .{ .text = "", .x = 0, .y = 0, .color = .white, .pixel_height = atlas.pixel_height, .bold = style & 1 != 0, .italic = style & 2 != 0 });
     }
 }
 
@@ -593,4 +594,171 @@ test "single ASCII glyphs remain cached while Unicode runs replace hashed entrie
     list.clear();
     try std.testing.expectEqual(advance, try atlas.place(unicode_run, &list));
     try std.testing.expectEqualSlices(quad.Quad, glyphs, list.items());
+}
+
+test "configured non Nerd font falls back across BMP and supplementary icons without changing metrics" {
+    const client = @import("telar-client");
+    const Source = @import("FontSource.zig");
+    var family: client.FontFamily = .{};
+    try family.set("DejaVu Sans Mono");
+    var source = Source.load(std.testing.allocator, std.testing.io, &family) catch |err| fallback: {
+        if (@import("builtin").os.tag != .macos or err != error.FontFamilyNotFound) {
+            return err;
+        }
+
+        try family.set("Menlo");
+        break :fallback try Source.load(std.testing.allocator, std.testing.io, &family);
+    };
+    defer source.deinit(std.testing.allocator);
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = source.bytes, .pixel_height = 44, .face_index = source.match.face_index, .postscript = std.mem.sliceTo(&source.match.postscript, 0), .thicken = true });
+    defer atlas.deinit();
+    const metrics = [3]i64{ atlas.cellWidth(), atlas.lineHeight(), atlas.ascender() };
+    const texts = [_][]const u8{ "A", "e\u{301}", "\u{f07b}", "\u{e620}", "\u{f4bc}", "\u{f03ff}", "\u{f02db}", "\u{f07b}\u{fe0f}" };
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    for (texts, 0..) |text, index| {
+        if (index >= 2) {
+            try std.testing.expect(!atlas.fonts.primary.covers(text));
+            try std.testing.expectEqual(Id.symbols, atlas.fonts.source(text));
+        } else {
+            try std.testing.expectEqual(Id.primary, atlas.fonts.source(text));
+        }
+
+        for (0..4) |style| {
+            list.clear();
+            const advance = try atlas.place(.{ .text = text, .x = 0, .y = 44, .color = .white, .pixel_height = 44, .bold = style & 1 != 0, .italic = style & 2 != 0 }, &list);
+            try std.testing.expect(list.items().len > 0);
+            if (index >= 2) {
+                try std.testing.expectEqual(@as(f32, @floatFromInt(atlas.cellWidth())), advance);
+                for (list.items()) |item| {
+                    try std.testing.expect(item.x >= -0.001);
+                    try std.testing.expect(item.x + item.width <= advance + 0.001);
+                    try std.testing.expect(item.y >= 44 - @as(f32, @floatFromInt(atlas.ascender())) - 0.001);
+                    try std.testing.expect(item.y + item.height <= 44 - @as(f32, @floatFromInt(atlas.ascender())) + @as(f32, @floatFromInt(atlas.lineHeight())) + 0.001);
+                }
+
+                const shaped = atlas.shaping_cache.find(text).?;
+                try std.testing.expectEqual(Id.symbols, shaped.font);
+                for (shaped.glyphs) |glyph| {
+                    try std.testing.expect(glyph.codepoint != 0);
+                }
+            }
+        }
+    }
+
+    try std.testing.expectEqual(metrics, [3]i64{ atlas.cellWidth(), atlas.lineHeight(), atlas.ascender() });
+    const calls = atlas.shape_calls;
+    const rasters = atlas.raster_attempts;
+    const version = atlas.version;
+    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0, .resize_fail_index = 0 });
+    atlas.allocator = failing.allocator();
+    list.allocator = failing.allocator();
+    defer {
+        atlas.allocator = std.testing.allocator;
+        list.allocator = std.testing.allocator;
+    }
+
+    for (0..120) |_| {
+        for (texts) |text| {
+            for (0..4) |style| {
+                list.clear();
+                _ = try atlas.place(.{ .text = text, .x = 0, .y = 44, .color = .white, .pixel_height = 44, .bold = style & 1 != 0, .italic = style & 2 != 0 }, &list);
+            }
+        }
+    }
+
+    try std.testing.expectEqual(calls, atlas.shape_calls);
+    try std.testing.expectEqual(rasters, atlas.raster_attempts);
+    try std.testing.expectEqual(version, atlas.version);
+    try std.testing.expect(!failing.has_induced_failure);
+}
+
+test "equal glyph indices in different faces never alias retained atlas coordinates" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 32 });
+    defer atlas.deinit();
+    var letter: [1]u8 = .{'A'};
+    var candidate_index: freetype.c.FT_UInt = 0;
+    var codepoint: freetype.c.FT_ULong = 0;
+    for ('A'..'Z' + 1) |byte| {
+        letter[0] = @intCast(byte);
+        const index = freetype.c.FT_Get_Char_Index(atlas.fonts.primary.face, byte);
+        codepoint = freetype.c.FT_Get_First_Char(atlas.fonts.symbols.face, &candidate_index);
+        while (candidate_index != 0 and candidate_index != index) {
+            codepoint = freetype.c.FT_Get_Next_Char(atlas.fonts.symbols.face, codepoint, &candidate_index);
+        }
+
+        if (candidate_index == index) {
+            break;
+        }
+    }
+
+    try std.testing.expect(candidate_index != 0);
+    var bytes: [4]u8 = undefined;
+    const length = try std.unicode.utf8Encode(@intCast(codepoint), &bytes);
+    const icon = bytes[0..length];
+    try std.testing.expectEqual(Id.symbols, atlas.fonts.source(icon));
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    const text: TextRun = .{ .text = &letter, .x = 0, .y = 32, .color = .white, .pixel_height = 32 };
+    _ = try atlas.place(text, &list);
+    const primary = list.items()[0];
+    list.clear();
+    var symbol = text;
+    symbol.text = icon;
+    _ = try atlas.place(symbol, &list);
+    const fallback = list.items()[0];
+    try std.testing.expect(primary.u0 != fallback.u0 or primary.v0 != fallback.v0);
+    try std.testing.expectEqual(@as(u32, 2), atlas.glyphs.count());
+    list.clear();
+    _ = try atlas.place(text, &list);
+    try std.testing.expectEqualDeep(primary, list.items()[0]);
+}
+
+test "fallback text and configured symbols keep one grid and refresh correctly at another size" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").nerd_symbols, .pixel_height = 16 });
+    defer atlas.deinit();
+    try std.testing.expectEqual(Id.text, atlas.fonts.source("A"));
+    try std.testing.expectEqual(Id.primary, atlas.fonts.source("\u{f07b}"));
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    const run: TextRun = .{ .text = "A\u{f07b}B", .x = 0, .y = 16, .color = .white, .pixel_height = 16 };
+    _ = try atlas.place(run, &list);
+    try std.testing.expectEqual(@as(usize, 3), list.items().len);
+    const before = list.items()[0];
+    const calls = atlas.shape_calls;
+    list.clear();
+    _ = try atlas.place(run, &list);
+    try std.testing.expectEqual(calls, atlas.shape_calls);
+    try std.testing.expectEqualDeep(before, list.items()[0]);
+    var resized = run;
+    resized.pixel_height = 32;
+    list.clear();
+    _ = try atlas.place(resized, &list);
+    try std.testing.expect(list.items()[0].height > before.height);
+    try std.testing.expect(atlas.shape_calls > calls);
+    list.clear();
+    _ = try atlas.place(run, &list);
+    try std.testing.expectEqualDeep(before, list.items()[0]);
+}
+
+test "mixed primary text and repeated icons use primary cell advances and preserve Unicode shaping" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 32 });
+    defer atlas.deinit();
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    var run: TextRun = .{ .text = "A\u{f07b}\u{f02db}e\u{301}", .x = 5, .y = 36, .color = .white, .pixel_height = 32 };
+    const width: f32 = @floatFromInt(atlas.cellWidth());
+    const advance = try atlas.place(run, &list);
+    try std.testing.expectEqual(width * 4, advance);
+    const mixed = try std.testing.allocator.dupe(quad.Quad, list.items());
+    defer std.testing.allocator.free(mixed);
+    try std.testing.expectEqual(@as(usize, 4), mixed.len);
+    const clusters = [_][]const u8{ "A", "\u{f07b}", "\u{f02db}", "e\u{301}" };
+    for (clusters, 0..) |cluster, index| {
+        list.clear();
+        run.text = cluster;
+        run.x = 5 + @as(f32, @floatFromInt(index)) * width;
+        try std.testing.expectEqual(width, try atlas.place(run, &list));
+        try std.testing.expectEqualDeep(mixed[index], list.items()[0]);
+    }
 }

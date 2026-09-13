@@ -62,6 +62,8 @@ pub fn remember(cache: *Cache, text: []const u8, shaped: ShapedRun) void {
     @memcpy(entry.text[0..text.len], text);
     @memcpy(entry.glyphs[0..shaped.glyphs.len], shaped.glyphs);
     @memcpy(entry.positions[0..shaped.positions.len], shaped.positions);
+    entry.font = shaped.font;
+    entry.columns = shaped.columns;
     entry.len = @intCast(text.len);
     entry.count = @intCast(shaped.glyphs.len);
 }
