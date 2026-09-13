@@ -27,7 +27,7 @@ pub fn paint(canvas: *Canvas, area: core.Rect, thread: client.ThreadView) !void 
 
     const body, const composer = rest.splitBottom(1);
     if (!body.isEmpty()) {
-        const label = "transcript index pending";
+        const label = "No conversation available";
         const width = @min(body.w, core.measure(label));
         try canvas.text(.{ .x = body.x + (body.w - width) / 2, .y = body.y + body.h / 2, .w = width, .h = 1 }, .{ .text = label, .color = palette.subtext0 });
     }
