@@ -34,3 +34,12 @@ closed consumers and cancellation of a stalled transfer without a compositor.
 The native clipboard tests also run under address and undefined-behavior
 sanitizers. Client tests verify unsupported URI schemes cannot spawn a process;
 the existing frontend suite covers the unchanged shared link routing.
+
+`python3 tools/vm/gui-clipboard-test.py /tmp/telar-gui-clipboard --skip-build`
+uses the prepared Wayland VM binary to check the complete copy path. It reuses
+the multiplexer test's isolated runtime and verified window focus. Each default
+and configured prefix run copies ASCII and UTF-8 text from copy mode, compares
+both advertised clipboard MIME types through `wl-paste`, then pastes the same
+bytes back into the original shell with Ctrl-Shift-V. Screenshots and results
+are stored per configuration. Run it sequentially with the other native VM
+tests; their keyboard and pointer injections share one compositor seat.
