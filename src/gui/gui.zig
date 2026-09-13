@@ -18,6 +18,7 @@ test {
     _ = @import("tests/terminal.zig");
     _ = @import("tests/configuration.zig");
     _ = @import("tests/font_thicken.zig");
+    _ = @import("tests/braille.zig");
     _ = @import("tests/navigation.zig");
     _ = @import("tests/chrome.zig");
     _ = @import("tests/composition_budget.zig");
