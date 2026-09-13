@@ -21,3 +21,19 @@ pub fn eql(hit: *const Hit, other: *const Hit) bool {
         std.meta.eql(hit.area, other.area) and std.meta.eql(hit.match.start, other.match.start) and
         std.meta.eql(hit.match.end, other.match.end) and hit.match.target.eql(&other.match.target);
 }
+
+/// Uses the same clipped overlay bounds for painting and delivered hit testing.
+/// Example: `const area = hit.previewArea();`
+pub fn previewArea(hit: *const Hit) ?core.Rect {
+    if (hit.content.h < 2) {
+        return null;
+    }
+
+    var area = hit.content.row(hit.content.h -| 1);
+    area.w = @min(area.w, 100);
+    if (area.y == hit.area.y) {
+        area.y -= 1;
+    }
+
+    return area;
+}

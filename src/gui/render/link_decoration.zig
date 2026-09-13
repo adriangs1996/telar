@@ -14,12 +14,7 @@ pub fn paint(canvas: *Canvas, hit: *const Hit, pane: *const client.Pane) !void {
         try canvas.quads.pushRect(.{ .x = pixels.x, .y = pixels.y + pixels.height - 2, .width = pixels.width, .height = 1 }, .rgb(ink[0], ink[1], ink[2]));
     }
 
-    var preview = hit.content.row(hit.content.h -| 1);
-    preview.w = @min(preview.w, 100);
-    if (preview.y == hit.area.y and hit.content.h > 1) {
-        preview.y -= 1;
-    }
-
+    const preview = hit.previewArea() orelse return;
     try canvas.fill(preview, canvas.theme.palette.surface0);
     try canvas.text(preview, .{ .text = hit.match.target.uri(), .color = canvas.theme.palette.text });
 }

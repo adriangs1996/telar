@@ -27,6 +27,10 @@ pub fn resolve(gui: *const GuiClient, mouse: client.Mouse, mods: u32) Target {
         return .{ .shape = .pointer };
     }
 
+    if (gui.input.pointer.hover.covers(mouse)) {
+        return .{};
+    }
+
     if (gui.chrome.sidebar_resize_active) {
         return .{ .shape = .col_resize };
     }
@@ -55,7 +59,7 @@ pub fn resolve(gui: *const GuiClient, mouse: client.Mouse, mods: u32) Target {
                 return base;
             }
 
-            const row = pane.scroll.offset + mouse.y - view.content.y;
+            const row = pane.scroll.offset + (mouse.y - view.content.y);
             const found = client.resolveLink(pane, .{ .x = mouse.x - view.content.x, .y = row }) orelse return base;
             const start_x = if (row == found.start.y) found.start.x else 0;
             const end_x = @min(if (row == found.end.y) found.end.x else pane.buffer.w, view.content.w);

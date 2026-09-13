@@ -255,7 +255,7 @@ pub fn prepare(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.zig"
     var scene: @import("render/Scene.zig") = .{ .terminal = renderer, .chrome = &gui.chrome, .overlays = &gui.overlays, .theme = gui.theme, .link = if (gui.input.pointer.hover.link) |*hit| hit else null };
     const commit = try scene.prepare(projected);
     const token = try gui.lifecycle.begin(.{ .observation = observed, .commit = commit, .geometry = client.Geometry.capture(projected) });
-    gui.input.pointer.hover.prepared_link = gui.input.pointer.hover.link;
+    gui.input.pointer.hover.prepare();
     return @intFromEnum(token);
 }
 

@@ -14,6 +14,8 @@ shape: core.PointerShape = .default,
 link: ?Hit = null,
 shown_link: ?Hit = null,
 prepared_link: ?Hit = null,
+shown_preview: ?core.Rect = null,
+prepared_preview: ?core.Rect = null,
 revision: u64 = 0,
 dirty: bool = true,
 
@@ -71,14 +73,30 @@ pub fn openable(hover: *const Hover) bool {
     return current.eql(&shown);
 }
 
+/// Seals the overlay bounds with the frame, independently of later pointer motion.
+/// Example: `hover.prepare();`
+pub fn prepare(hover: *Hover) void {
+    hover.prepared_link = hover.link;
+    hover.prepared_preview = if (hover.link) |*hit| hit.previewArea() else null;
+}
+
+/// Visible previews cover terminal cells until a replacement is delivered.
+/// Example: `if (hover.covers(mouse)) return .{ .consumed = true };`
+pub fn covers(hover: *const Hover, mouse: client.Mouse) bool {
+    const preview = hover.shown_preview orelse return false;
+    return preview.contains(mouse.x, mouse.y);
+}
+
 /// Presentation publishes only the target captured by that frame's preparation.
 /// Example: `hover.present(delivered);`
 pub fn present(hover: *Hover, delivered: bool) void {
     if (delivered) {
         hover.shown_link = hover.prepared_link;
+        hover.shown_preview = hover.prepared_preview;
     }
 
     hover.prepared_link = null;
+    hover.prepared_preview = null;
     hover.dirty = true;
 }
 

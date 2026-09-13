@@ -58,6 +58,14 @@ fn pointer(context: *anyopaque, event: client.Mouse) client.ViewInteractionComma
         return interaction;
     }
 
+    if (gui.input.pointer.hover.covers(event)) {
+        if (event.kind == .press) {
+            gui.overlays.gesture = event.button & 3;
+        }
+
+        return .{ .consumed = true };
+    }
+
     return gui.chrome.pointer(event);
 }
 

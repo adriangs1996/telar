@@ -178,3 +178,127 @@ fn receiveLink(fixture: *Fixture, frame_id: u64, text: []const u8) !void {
     _ = try client.server_messages.handleServerMessage(&fixture.session.gui.app, try core.decodeServer(encoded));
     @memset(&wire, 0xff);
 }
+
+test "native displayed link previews consume hidden URL clicks until replacement delivery" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    const gui = fixture.session.gui;
+    const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
+    _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = pane.buffer.h - 1 }, .text = "https://b.c", .style = .{} });
+    pane.markSpan(0, @intCast(pane.buffer.cells.len));
+    try fixture.present();
+    try fixture.send(fixture.event(6));
+    try fixture.present();
+    const preview = gui.input.pointer.hover.shown_preview.?;
+    const size = gui.app.model.hostSize();
+    var pointer = fixture.event(6);
+    pointer.x = @as(f64, @floatFromInt(preview.x + 2)) * size.cell_width_px + 1;
+    pointer.y = @as(f64, @floatFromInt(preview.y)) * size.cell_height_px + 1;
+    try fixture.send(pointer);
+    try std.testing.expect(gui.input.pointer.hover.link == null);
+    try std.testing.expectEqual(.default, gui.input.pointer.hover.shape);
+    pointer.code = 1;
+    try fixture.send(pointer);
+    try std.testing.expectEqual(@as(?u8, 0), gui.overlays.gesture);
+    pointer.code = 2;
+    try fixture.send(pointer);
+    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
+
+    try fixture.present();
+    try std.testing.expect(gui.input.pointer.hover.shown_preview == null);
+    pointer.code = 6;
+    try fixture.send(pointer);
+    try std.testing.expectEqualStrings("https://b.c", gui.input.pointer.hover.link.?.match.target.uri());
+    pointer.code = 1;
+    try fixture.send(pointer);
+    pointer.code = 2;
+    try fixture.send(pointer);
+    try std.testing.expectEqual(@as(usize, 1), fixture.open_count);
+    try std.testing.expectEqualStrings("https://b.c", fixture.opened.?.uri());
+}
+
+test "native preview coverage survives pointer leave failed presentation and late completions" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    const gui = fixture.session.gui;
+    try fixture.send(fixture.event(6));
+    try fixture.present();
+    const preview = gui.input.pointer.hover.shown_preview.?;
+    try fixture.send(fixture.event(7));
+    try std.testing.expect(gui.input.pointer.hover.link == null);
+    try std.testing.expectEqualDeep(@as(?core.Rect, preview), gui.input.pointer.hover.shown_preview);
+    const token = try gui.prepare(&fixture.session.renderer);
+    try std.testing.expect(gui.input.pointer.hover.prepared_preview == null);
+    try gui.complete(token + 1, true);
+    try std.testing.expectEqualDeep(@as(?core.Rect, preview), gui.input.pointer.hover.shown_preview);
+    try gui.complete(token, false);
+    try fixture.session.settle();
+    try std.testing.expectEqualDeep(@as(?core.Rect, preview), gui.input.pointer.hover.shown_preview);
+
+    const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
+    pane.mouse = .{ .tracking = .button, .sgr = true };
+    const size = gui.app.model.hostSize();
+    var pointer = fixture.event(1);
+    pointer.mods = 0;
+    pointer.x = @as(f64, @floatFromInt(preview.x)) * size.cell_width_px + 1;
+    pointer.y = @as(f64, @floatFromInt(preview.y)) * size.cell_height_px + 1;
+    try fixture.send(pointer);
+    try fixture.present();
+    try std.testing.expect(gui.input.pointer.hover.shown_preview == null);
+    try std.testing.expectEqual(@as(?u8, 0), gui.overlays.gesture);
+    pointer.code = 3;
+    pointer.y = fixture.event(3).y;
+    try fixture.send(pointer);
+    pointer.code = 2;
+    try fixture.send(pointer);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
+    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expect(gui.overlays.gesture == null);
+    try fixture.present();
+    try std.testing.expect(gui.input.pointer.hover.shown_preview == null);
+}
+
+test "native hover computes absolute rows without adding the host offset to history" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    const gui = fixture.session.gui;
+    const model = gui.app.model.activeTabModel().?;
+    const second: core.PaneId = @enumFromInt(11);
+    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .vertical, .area = gui.region.area });
+    const pane = model.find(second).?;
+    pane.attached = true;
+    pane.cursor.visible = false;
+    pane.scroll = .{ .total_rows = std.math.maxInt(u32), .offset = std.math.maxInt(u32) - @as(u32, pane.buffer.h) };
+    pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
+    _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "https://b.c", .style = .{} });
+    pane.markSpan(0, @intCast(pane.buffer.cells.len));
+    try fixture.present();
+    const view = model.viewForPane(second, gui.region.area).?;
+    try std.testing.expect(view.content.y > pane.buffer.h);
+    const size = gui.app.model.hostSize();
+    var pointer = fixture.event(6);
+    pointer.x = @as(f64, @floatFromInt(view.content.x + 2)) * size.cell_width_px + 1;
+    pointer.y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + 1;
+    try fixture.send(pointer);
+    try std.testing.expectEqualStrings("https://b.c", gui.input.pointer.hover.link.?.match.target.uri());
+    try std.testing.expectEqual(pane.scroll.offset, gui.input.pointer.hover.link.?.match.start.y);
+}
+
+test "native one-row panes keep links visible without a self-covering preview" {
+    const Hit = @import("../input/LinkHit.zig");
+    const hit: Hit = .{
+        .pane_id = Session.pane_id,
+        .generation = 1,
+        .location = Session.location,
+        .content = .{ .x = 2, .y = 3, .w = 20, .h = 1 },
+        .area = .{ .x = 2, .y = 3, .w = 11, .h = 1 },
+        .match = .{ .target = try client.LinkTarget.init("https://a.b"), .start = .{ .x = 0, .y = 0 }, .end = .{ .x = 11, .y = 0 } },
+    };
+    try std.testing.expect(hit.previewArea() == null);
+    var hover: @import("../input/PointerHover.zig") = .{ .link = hit };
+    hover.prepare();
+    hover.present(true);
+    try std.testing.expect(hover.shown_preview == null);
+    try std.testing.expect(hover.openable());
+}
