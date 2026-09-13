@@ -9,6 +9,7 @@
 #include <wayland-client.h>
 
 #include "../native/telar_gui.h"
+#include "background_effect.h"
 #include "frame_clock.h"
 #include "frame_worker.h"
 #include "input.h"
@@ -30,6 +31,7 @@ typedef struct {
     telar_frame_worker *worker;
     bool dirty, in_flight;
     telar_frame_clock clock;
+    telar_background_effect background;
     uint32_t width;
     uint32_t height;
     bool configured;
@@ -51,6 +53,7 @@ static void registry_global(void *data, struct wl_registry *registry, uint32_t n
                             uint32_t version) {
     window *self = data;
     telar_input_global(self->input, registry, name, interface, version);
+    telar_background_effect_global(&self->background, name, interface);
     if (strcmp(interface, wl_compositor_interface.name) == 0) {
         self->compositor = wl_registry_bind(registry, name, &wl_compositor_interface, version < 4 ? version : 4);
     } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
@@ -60,9 +63,9 @@ static void registry_global(void *data, struct wl_registry *registry, uint32_t n
 }
 
 static void registry_global_remove(void *data, struct wl_registry *registry, uint32_t name) {
-    (void)data;
     (void)registry;
-    (void)name;
+    window *self = data;
+    telar_background_effect_remove(&self->background, name);
 }
 
 static const struct wl_registry_listener registry_listener = {
@@ -86,7 +89,8 @@ static void draw(window *self) {
         self->dirty = true;
         return;
     }
-    if (!telar_frame_clock_request(&self->clock, self->surface)) {
+    if (!telar_background_effect_apply(&self->background, viewport, &frame) ||
+        !telar_frame_clock_request(&self->clock, self->surface)) {
         self->callbacks.complete(self->context, frame.token, 0);
         self->failed = self->closing = true;
         return;
@@ -169,6 +173,7 @@ static void destroy(window *self) {
     if (self->renderer != NULL) {
         telar_renderer_destroy(self->renderer);
     }
+    telar_background_effect_deinit(&self->background);
     if (self->toplevel != NULL) {
         xdg_toplevel_destroy(self->toplevel);
     }
@@ -212,6 +217,7 @@ int telar_gui_run(const char *title, void *context, const telar_gui_callbacks *c
         return -1;
     }
     self.registry = wl_display_get_registry(self.display);
+    self.background.registry = self.registry;
     wl_registry_add_listener(self.registry, &registry_listener, &self);
     wl_display_roundtrip(self.display);
     if (self.compositor == NULL || self.shell == NULL) {
@@ -221,6 +227,8 @@ int telar_gui_run(const char *title, void *context, const telar_gui_callbacks *c
     }
 
     self.surface = wl_compositor_create_surface(self.compositor);
+    self.background.compositor = self.compositor;
+    self.background.surface = self.surface;
     self.xdg_surface = xdg_wm_base_get_xdg_surface(self.shell, self.surface);
     xdg_surface_add_listener(self.xdg_surface, &surface_listener, &self);
     self.toplevel = xdg_surface_get_toplevel(self.xdg_surface);
@@ -319,7 +327,7 @@ int telar_gui_run(const char *title, void *context, const telar_gui_callbacks *c
         if (result < 0) {
             break;
         }
-        if (result > 0) {
+        if (result > 0 || self.background.dirty) {
             self.dirty = true;
         }
         draw(&self);

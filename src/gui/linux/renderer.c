@@ -14,6 +14,7 @@ struct telar_renderer {
     VkCommandBuffer commands;
     VkFence fence;
     VkSemaphore image_available;
+    bool warned_transparency;
 };
 
 static bool create_submission(telar_renderer *self) {
@@ -101,13 +102,18 @@ static bool encode(telar_renderer *self, uint32_t index, const telar_gui_frame *
     }
     telar_vulkan_target *target = &self->swapchain.targets[index];
     attachment_barrier(self, target->image, false);
+    const float alpha = self->swapchain.transparent ? frame->background[3] : 1.0f;
+    if (!self->swapchain.transparent && frame->background[3] < 1.0f && !self->warned_transparency) {
+        fprintf(stderr, "telar gui: Vulkan surface lacks premultiplied alpha; using an opaque background\n");
+        self->warned_transparency = true;
+    }
     VkRenderingAttachmentInfo color = {
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .imageView = target->view,
         .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .clearValue.color = {{frame->background[0], frame->background[1], frame->background[2], frame->background[3]}},
+        .clearValue.color = {{frame->background[0] * alpha, frame->background[1] * alpha, frame->background[2] * alpha, alpha}},
     };
     VkRenderingInfo rendering = {
         .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,

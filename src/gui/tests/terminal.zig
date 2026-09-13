@@ -17,6 +17,55 @@ test "GUI font metrics apply size spacing and display scale once" {
     }
 }
 
+test "native padding scales once and leaves a complete grid when the window shrinks" {
+    const Renderer = @import("../render/TerminalRenderer.zig");
+    var renderer = Renderer.init(std.testing.allocator);
+    defer renderer.deinit();
+    renderer.config.window.padding = .{ .x = 8.5, .y = 12 };
+    for ([_]f32{ 1, 1.5, 2 }) |scale| {
+        const size = try renderer.measure(.{ .width = 800, .height = 600, .scale = scale });
+        const x: u32 = @intFromFloat(@round(8.5 * scale));
+        const y: u32 = @intFromFloat(@round(12 * scale));
+        try std.testing.expectEqual([2]u32{ x, y }, renderer.origin);
+        try std.testing.expectEqual((800 - 2 * x) / size.cell_width_px, size.cols);
+        try std.testing.expectEqual((600 - 2 * y) / size.cell_height_px, size.rows);
+    }
+
+    renderer.config.window.padding = .{ .x = 256, .y = 256 };
+    const small = try renderer.measure(.{ .width = 40, .height = 60, .scale = 2 });
+    try std.testing.expectEqual(@as(u16, 1), small.cols);
+    try std.testing.expectEqual(@as(u16, 1), small.rows);
+    try std.testing.expectError(error.InvalidTerminalSize, renderer.measure(.{ .width = 0, .height = 0, .scale = 2 }));
+}
+
+test "background opacity preserves cell ink cursor and explicit backgrounds" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    try session.receiveFrame(1);
+    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    pane.buffer.cells[0].style.bg = .{ .rgb = .{ 255, 0, 0 } };
+    try present(session);
+    const shape_calls = session.renderer.atlas.?.shape_calls;
+    const atlas_version = session.renderer.atlas_version;
+    for ([_]f32{ 0, 0.5, 1 }) |opacity| {
+        session.renderer.config.window.background_opacity = opacity;
+        try present(session);
+        const frame = session.renderer.frame(1);
+        try std.testing.expectEqual(opacity, frame.background[3]);
+        try std.testing.expectEqual(@as(usize, 0), session.renderer.repainted_cells);
+        var red_background = false;
+        for (session.renderer.quads.items()) |quad| {
+            try std.testing.expectEqual(@as(f32, 1), quad.a);
+            red_background = red_background or (quad.r == 1 and quad.g == 0 and quad.b == 0);
+        }
+        try std.testing.expect(red_background);
+    }
+
+    try std.testing.expectEqual(shape_calls, session.renderer.atlas.?.shape_calls);
+    try std.testing.expectEqual(atlas_version, session.renderer.atlas_version);
+}
+
 test "native font lookup resolves installed faces and fails explicitly for missing families" {
     const client = @import("telar-client");
     const Source = @import("../text/FontSource.zig");
@@ -28,7 +77,7 @@ test "native font lookup resolves installed faces and fails explicitly for missi
     var source = try Source.load(std.testing.allocator, std.testing.io, &family);
     defer source.deinit(std.testing.allocator);
     try std.testing.expect(source.owned);
-    var atlas = try Atlas.init(std.testing.allocator, .{ .font = source.bytes, .pixel_height = 18, .face_index = source.match.face_index, .postscript = std.mem.sliceTo(&source.match.postscript, 0) });
+    var atlas = try Atlas.init(std.testing.allocator, .{ .font = source.bytes, .pixel_height = 18, .face_index = source.match.face_index, .postscript = std.mem.sliceTo(&source.match.postscript, 0), .thicken = true });
     defer atlas.deinit();
     try atlas.prepareFallbacks();
     try std.testing.expect(atlas.cellWidth() > 0);

@@ -1,3 +1,4 @@
+#include "gui_view.h"
 // Test-only AppKit injector. Wraps the existing frame contract, never production
 // input policy. Each next key waits for the expected glyph count's GPU token.
 #import <AppKit/AppKit.h>
@@ -39,7 +40,7 @@ static void send_key(void) {
     pending = YES;
     matching_token = 0;
     start_time = CACurrentMediaTime();
-    [window.contentView keyDown:[NSEvent keyEventWithType:NSEventTypeKeyDown
+    [terminal_view(window.contentView) keyDown:[NSEvent keyEventWithType:NSEventTypeKeyDown
         location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:window.windowNumber
         context:nil characters:text charactersIgnoringModifiers:text isARepeat:NO keyCode:erase ? 51 : 7]];
 }

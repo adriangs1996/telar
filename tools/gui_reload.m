@@ -1,5 +1,7 @@
+#include "gui_view.h"
 // Test-only watcher exercise through real AppKit input, GPU frames and a PTY.
 #import <AppKit/AppKit.h>
+#import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 #include <math.h>
 #include <stdlib.h>
@@ -11,13 +13,14 @@ static IMP original_init;
 static void *app_context;
 static float background[4];
 static uint32_t atlas_version, previous_atlas;
+static uint32_t background_blur;
 static unsigned int stage, changed_frames;
 static CFAbsoluteTime deadline, rejected_at;
 static NSTimer *timer;
 
 static void send_command(NSString *command) {
     NSWindow *window = NSApp.windows.firstObject;
-    NSView *view = window.contentView;
+    NSView *view = terminal_view(window.contentView);
     [(id<NSTextInputClient>)view insertText:command replacementRange:NSMakeRange(NSNotFound, 0)];
     [view keyDown:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint
         modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil
@@ -52,6 +55,14 @@ static BOOL color_is(unsigned int rgb) {
     return fabsf(background[0] - ((rgb >> 16) & 255) / 255.0f) < 0.001f &&
            fabsf(background[1] - ((rgb >> 8) & 255) / 255.0f) < 0.001f &&
            fabsf(background[2] - (rgb & 255) / 255.0f) < 0.001f;
+}
+
+static BOOL window_is(BOOL opaque, BOOL blurred) {
+    NSWindow *window = NSApp.windows.firstObject;
+    NSView *terminal = terminal_view(window.contentView);
+    NSVisualEffectView *effect = (NSVisualEffectView *)window.contentView.subviews.firstObject;
+    return window.isOpaque == opaque && terminal.layer.isOpaque == opaque &&
+           [effect isKindOfClass:NSVisualEffectView.class] && effect.isHidden != blurred;
 }
 
 static void tick(void) {
@@ -99,7 +110,68 @@ static void tick(void) {
         stage = 7;
         break;
     case 7:
-        if ([files fileExistsAtPath:@"after.pid"]) finish(NO);
+        if (![files fileExistsAtPath:@"after.pid"]) return;
+        previous_atlas = atlas_version;
+        if (write_config(@"return { api_version = 2, theme = 'tokyo-night', gui = { font = { size = 17 }, cursor = { blink = false }, window = { background_opacity = 0.5, background_blur = true, padding = { x = 16, y = 12 } } } }")) stage = 8;
+        break;
+    case 8:
+        if (background[3] != .5f || !background_blur || !window_is(NO, YES)) return;
+        if (atlas_version != previous_atlas) { finish(YES); return; }
+        changed_frames++;
+        send_command(@"stty size > padded-size");
+        stage = 9;
+        break;
+    case 9:
+        if (![files fileExistsAtPath:@"padded-size"]) return;
+        if ([[files contentsAtPath:@"after"] isEqualToData:[files contentsAtPath:@"padded-size"]]) { finish(YES); return; }
+        if (write_config(@"return { api_version = 2, theme = 'tokyo-night', gui = { font = { size = 17 }, cursor = { blink = false } } }")) stage = 10;
+        break;
+    case 10:
+        if (background[3] != 1 || background_blur || !window_is(YES, NO)) return;
+        if (atlas_version != previous_atlas) { finish(YES); return; }
+        changed_frames++;
+        send_command(@"stty size > unpadded-size");
+        stage = 11;
+        break;
+    case 11:
+        if (![files fileExistsAtPath:@"unpadded-size"]) return;
+        if (![[files contentsAtPath:@"after"] isEqualToData:[files contentsAtPath:@"unpadded-size"]]) { finish(YES); return; }
+        previous_atlas = atlas_version;
+        if (write_config(@"return { api_version = 2, theme = 'tokyo-night', gui = { font = { size = 17, thicken = true, thicken_strength = 0 }, cursor = { blink = true } } }")) stage = 12;
+        break;
+    case 12:
+        if (atlas_version <= previous_atlas || original.wakeup_after(app_context) == 0) return;
+        changed_frames++;
+        send_command(@"stty size > thicken-light-size");
+        stage = 13;
+        break;
+    case 13:
+        if (![files fileExistsAtPath:@"thicken-light-size"]) return;
+        previous_atlas = atlas_version;
+        if (write_config(@"return { api_version = 2, theme = 'tokyo-night', gui = { font = { size = 17, thicken = true, thicken_strength = 255 }, cursor = { blink = false } } }")) stage = 14;
+        break;
+    case 14:
+        if (atlas_version <= previous_atlas || original.wakeup_after(app_context) != 0) return;
+        changed_frames++;
+        send_command(@"stty size > thicken-full-size");
+        stage = 15;
+        break;
+    case 15:
+        if (![files fileExistsAtPath:@"thicken-full-size"]) return;
+        previous_atlas = atlas_version;
+        if (write_config(@"return { api_version = 2, theme = 'tokyo-night', gui = { font = { size = 17, thicken = false }, cursor = { blink = true } } }")) stage = 16;
+        break;
+    case 16:
+        if (atlas_version <= previous_atlas || original.wakeup_after(app_context) == 0) return;
+        changed_frames++;
+        send_command(@"stty size > thicken-off-size");
+        stage = 17;
+        break;
+    case 17:
+        if (![files fileExistsAtPath:@"thicken-off-size"]) return;
+        finish(![[files contentsAtPath:@"after"] isEqualToData:[files contentsAtPath:@"thicken-light-size"]] ||
+               ![[files contentsAtPath:@"after"] isEqualToData:[files contentsAtPath:@"thicken-full-size"]] ||
+               ![[files contentsAtPath:@"after"] isEqualToData:[files contentsAtPath:@"thicken-off-size"]]);
         break;
     }
 }
@@ -108,6 +180,7 @@ static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *
     original.render(context, viewport, frame);
     memcpy(background, frame->background, sizeof(background));
     atlas_version = frame->atlas_version;
+    background_blur = frame->background_blur;
 }
 
 static id initialize(id self, SEL selector, NSRect frame, void *context, const telar_gui_callbacks *callbacks) {

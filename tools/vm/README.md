@@ -71,7 +71,8 @@ The `telar` user logs in on the console automatically and its shell starts
 wlroots draws with pixman and Vulkan comes from Mesa's software driver. That
 is enough to develop and verify the native client's Linux backend; it says
 nothing about frame rate on real hardware. The backend's build needs
-`wayland-scanner`, the `xdg-shell` protocol, the Vulkan headers and loader,
+`wayland-scanner`, the `xdg-shell` and `ext-background-effect-v1` protocols,
+the Vulkan headers and loader,
 Fontconfig headers for installed font lookup, and `glslc` to compile the GLSL
 shaders as build dependencies. Provisioning
 installs them along with the Vulkan validation layer. The native renderer

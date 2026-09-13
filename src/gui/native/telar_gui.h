@@ -28,7 +28,9 @@ typedef struct {
   const uint8_t *atlas;
   uint32_t atlas_side;
   uint32_t atlas_version;
+  // Straight RGBA; the GPU target stores premultiplied color after blending.
   float background[4];
+  uint32_t background_blur;
 } telar_gui_frame;
 
 // Input kinds: 1 committed UTF-8 text, 2 clipboard paste, 3 semantic key,

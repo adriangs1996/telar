@@ -11,7 +11,8 @@ defines the Lua API and current scope.
 `client/config/Generation` validates root/profile themes with `ThemeParser` and
 native preferences with `GuiConfigParser`. `appearance/Theme` owns chrome roles
 and a `TerminalTheme` with explicit colors. `GuiConfig` owns bounded font and
-cursor behavior preferences. No native handles or Lua string pointers enter
+cursor behavior preferences, plus `GuiWindow` and its logical `GuiPadding`.
+No native handles or Lua string pointers enter
 shared client state. Invalid numbers, colors, fields and incomplete palettes reject the generation.
 `cli/ClientLaunch.frontendOptions` transfers the selected snapshot to
 `gui/Application.init`.
@@ -28,6 +29,24 @@ after the atlas. Collection lookup is bounded to 256 faces on macOS. HarfBuzz
 shaping, glyph caching, fallback glyphs and synthesized bold/italic retain their
 existing ownership. No font lookup or disk read occurs while preparing cells.
 
+On macOS, `gui.font.thicken` opts into `text/MacRasterizer` through the small
+`native/glyph_rasterizer.h` port. `macos/glyph_rasterizer.m` opens the same font
+bytes and PostScript face selected by FreeType; it does not register fonts or
+substitute an installed family. One alpha-only CoreGraphics bitmap context
+borrows the atlas page. Sized CoreText faces use the existing glyph IDs and
+baseline; FreeType metrics and HarfBuzz advances remain unchanged. The context
+and faces are destroyed before their borrowed page and font bytes.
+
+This uses CoreGraphics font smoothing and its grayscale optical weight,
+following [Ghostty's font-thicken controls](https://ghostty.org/docs/config/reference#font-thicken).
+`thicken_strength` is an integer `0..255`; zero is the lightest enabled smoothing,
+and only `thicken = false` disables it. Synthetic bold and italic remain
+independent. Glyph bounds include smoothing and stroke overhang before packing.
+Drawing clips and clears only the reserved rectangle, preserving neighbors and
+the solid-quad texel. Cache hits bypass native rasterization; cold misses share
+the existing alpha page, without an additional bitmap per glyph or a GPU pass.
+Linux continues using FreeType and ignores both optical weight settings.
+
 `TerminalRenderer.measure` derives the physical font size from the configured
 base size and display scale. Natural advance plus letter spacing determines
 cell width; natural line height times `line_height` determines cell height.
@@ -37,6 +56,52 @@ are exactly `columns * cell_width` and `rows * cell_height`; resize follows
 `ResizeHostHandler`. The runtime receives these dimensions through `pane_resize`
 and propagates them to the PTY.
 
+## Window effects and padding
+
+`gui.window` owns background opacity, a boolean blur request and symmetric
+horizontal/vertical padding. Opacity is finite in `0..1`; each inset is finite
+in `0..256` logical pixels. These are disposable host preferences, never
+runtime authority or a second theme. They inherit through profiles and use
+the same atomic configuration reload as fonts and colors.
+
+`TerminalRenderer.measure` scales and rounds the insets, keeps space for one
+complete cell when the window shrinks, then measures the remaining viewport.
+It retains the physical origin used by both cell meshes and cursor quads.
+Padding changes follow `ResizeHostHandler`; neither initial attach nor resize
+counts border pixels as PTY pixels. Retained mesh keys already include the
+resolved rectangle, so moving the origin invalidates exactly that geometry.
+Opacity and blur changes do not invalidate cell meshes or the glyph atlas.
+
+`native.Frame` carries straight RGBA background and a blur flag. Both GPU
+backends clear their target with premultiplied RGB and blend straight-alpha
+quads into that target. A different explicit cell background and ordinary ink
+remain opaque; cells matching the terminal background reuse the clear color.
+No extra Telar render pass or frame queue is introduced.
+
+On macOS, `TelarWindowBackground` owns one effect view behind `TelarView`.
+It changes window/layer opacity and effect visibility only when those flags
+change. Window alpha stays at one. The public
+[NSVisualEffectView](https://developer.apple.com/documentation/appkit/nsvisualeffectview)
+API supplies behind-window blur with the `underWindowBackground` material;
+its intensity is system-managed. Closing the window releases the effect with
+the content hierarchy, after the existing renderer shutdown.
+
+On Wayland, `background_effect` owns at most one effect manager and one effect
+surface on the window thread. It negotiates
+[ext-background-effect-v1](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/blob/main/staging/ext-background-effect/ext-background-effect-v1.xml),
+observes capability changes and global removal, and updates blur/opaque
+regions only on changed settings, capabilities or viewport. Surface state is
+committed with Vulkan's next presentation. Temporary region allocation occurs
+on those transitions, not on steady cell frames. Teardown joins the GPU worker
+before destroying effect objects and their borrowed surface.
+
+The Vulkan swapchain prefers premultiplied alpha, then Wayland's inherited
+premultiplied convention. It keeps that mode when opacity changes, without
+rebuilding the swapchain. An opaque fallback preserves the original background
+color and logs once if transparency was requested. Missing compositor blur
+support logs once and retains ordinary transparency. The platform controls the
+blur algorithm; Telar does not expose an unsupported numeric radius.
+
 ## Hot reload
 
 `GuiClient.start` schedules the existing `config_reloads` controller through
@@ -44,8 +109,13 @@ and propagates them to the PTY.
 pending result. Its worker calls the shared `config_reload.wait`: the same
 one-second fingerprint watch, selected profile, local modules, plugin registry
 and trust-store loading as the TUI. It also prepares a replacement
-`TerminalRenderer` when `GuiFont` changes, including font bytes, metrics, atlas
-fallbacks and grid capacity. Theme/cursor-only changes retain the active atlas.
+`TerminalRenderer` when effective font settings change, including font bytes, metrics, atlas
+fallbacks and grid capacity. Theme, cursor and window-only changes retain the active atlas.
+`text/font_rendering.same` excludes disabled strength and macOS-only settings
+on other platforms, avoiding an unnecessary atlas replacement. On macOS an
+optical weight change stages a new native context and page on that worker;
+it follows the same consumer lifetime as any other font replacement and does
+not alter the terminal geometry.
 
 The worker receives copied appearance/viewport values and borrowed current Lua
 owners for fingerprinting. It never reads a live renderer or mutates the model.
@@ -148,7 +218,8 @@ config, font resources, cursor clock and rendering contracts.
 ## Verification and lifecycle
 
 - `zig build test-client`: defaults, profile inheritance, owned font names,
-  strict schema validation and invalid unselected profiles.
+  strict schema validation and invalid unselected profiles, including window
+  effects and finite inset limits.
 - `zig build test-schema`: cursor/palette round trips, malformed flags, unknown
   cursor shapes, truncated messages, golden bytes and handshake fingerprint.
 - `zig build test`: fragmented VT style and palette queries, overrides and
@@ -161,9 +232,15 @@ config, font resources, cursor clock and rendering contracts.
   recovery; sealed frame lifetime with continuing input/ACKs; atlas reuse and
   versioning; named theme changes and CLI locks; cursor-only color changes
   without repainting cells; viewport restaging; unchanged idle watches and
-  cancellation.
+  cancellation. Optical weight tests compare native alpha coverage, clip all
+  four glyph styles against sentinel pixels, preserve Unicode advances and
+  cell metrics, and exercise the warmed glyph cache with a failing allocator.
+  Weight-only reloads preserve PTY geometry; inactive settings preserve the atlas.
 - `zig build test-gui-window`: a real macOS window wakes once for a deadline,
-  parks afterwards, coalesces draw requests and closes with a submission alive.
+  parks afterwards, coalesces draw requests, toggles transparent/blurred/opaque
+  state and closes with a submission alive. The Linux test checks swapchain
+  alpha mode and premultiplied clear colors across Vulkan retries and effect
+  toggles, including a compositor without blur support.
 
 Native integration also accepts a Lua configuration. On macOS,
 `python3 tools/gui_lifecycle.py zig-out/bin/telar /tmp/telar-gui-check --config examples/gui.lua --capture`
@@ -178,7 +255,9 @@ Use `--reload` instead of `--config` in either native integration command to
 generate an isolated watched configuration. The test changes the font and PTY
 grid, rejects an unavailable font without changing the active appearance, then
 recovers and checks shell survival. The macOS wrapper also inspects native
-frame colors, atlas versions and cursor deadlines. Linux captures each stage
+frame colors, atlas versions and cursor deadlines. It also enables smoothing
+at strength zero, raises it to 255 and disables it again, requiring a new atlas
+at each change and identical `stty size` throughout. Linux captures each stage
 and checks Vulkan validation and reattachment. Both replace config files
 atomically and leave the user's configuration untouched.
 
@@ -203,3 +282,19 @@ the visible cursor. Window close cancels the timer and GPU consumers before dest
 rendering resources and the connection. Runtime panes survive that close.
 Font zoom remains a future trigger; callers replacing the staged renderer must
 first finish its native consumers.
+
+Window preferences were verified on 2026-09-13 with all 41 GUI and 860 client
+tests on both hosts, both native window tests, and the macOS general suite
+with 3,289 passing tests and two platform skips. Live window-only reloads
+reused the atlas and changed rows x columns from 96x190 to 94x186 and back on
+macOS, and 34x63 to 33x60 and back on Linux. Both shells survived. Sway in the
+VM did not advertise blur; its transparency fallback and Vulkan validation
+passed. Actual compositor blur appearance on Linux remains unverified.
+
+Optical weight was verified on 2026-09-13 with 45 GUI and 860 client tests on
+macOS. Fedora passed 44 GUI and 860 client tests, skipping only the direct
+CoreGraphics coverage test. Client boundaries and codestyle passed. The native
+macOS reload test kept a 96x190 PTY across strength 0, strength 255 and disabled
+smoothing, accepted input and kept the same shell alive. The development
+configuration also passed a native startup, input, resize and screenshot check
+with DejaVu Sans Mono and thickening enabled.

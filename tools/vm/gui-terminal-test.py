@@ -103,6 +103,31 @@ done
 printf 'font recovered: '; cat "$state/recovered-size"
 ''')
         vm.screenshot(output / "02b-recovered.png")
+        vm.guest(resume + r'''
+printf '%s' "return { api_version = 2, theme = 'tokyo-night', gui = { font = { size = 17 }, cursor = { blink = false }, window = { background_opacity = 0.5, background_blur = true, padding = { x = 16, y = 12 } } } }" > "$state/save.tmp"
+mv "$state/save.tmp" "$state/config.lua"
+for attempt in {1..40}; do
+    wtype "stty size > '$state/padded-size'"
+    wtype -k Return
+    sleep .2
+    if test -s "$state/padded-size" && ! cmp -s "$state/recovered-size" "$state/padded-size"; then break; fi
+done
+! cmp -s "$state/recovered-size" "$state/padded-size"
+printf 'with padding: '; cat "$state/padded-size"
+''')
+        vm.screenshot(output / "02c-transparent-padding.png")
+        vm.guest(resume + r'''
+printf '%s' "return { api_version = 2, theme = 'tokyo-night', gui = { font = { size = 17 }, cursor = { blink = false } } }" > "$state/save.tmp"
+mv "$state/save.tmp" "$state/config.lua"
+for attempt in {1..40}; do
+    wtype "stty size > '$state/unpadded-size'"
+    wtype -k Return
+    sleep .2
+    if cmp -s "$state/recovered-size" "$state/unpadded-size"; then break; fi
+done
+cmp "$state/recovered-size" "$state/unpadded-size"
+printf 'padding removed: '; cat "$state/unpadded-size"
+''')
     vm.guest(resume + r'''
 gui=$(cat "$state/gui.pid")
 shell_pid=$(cat "$state/shell.pid")

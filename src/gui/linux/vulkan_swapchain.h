@@ -21,6 +21,7 @@ typedef struct {
     uint32_t count;
     telar_vulkan_target targets[TELAR_SWAPCHAIN_IMAGES];
     bool stale;
+    bool transparent;
 } telar_vulkan_swapchain;
 
 // Caller has drained render work before rebuilding or destroying the swapchain.

@@ -13,6 +13,7 @@ const ShapedRun = @import("ShapedRun.zig");
 const TextRun = @import("TextRun.zig");
 const GlyphAtlas = @This();
 const ShapingCache = @import("ShapingCache.zig");
+const MacRasterizer = @import("MacRasterizer.zig");
 
 extern fn FT_GlyphSlot_Embolden(freetype.c.FT_GlyphSlot) void;
 extern fn FT_GlyphSlot_Oblique(freetype.c.FT_GlyphSlot) void;
@@ -40,6 +41,7 @@ pixel_height: u16 = 0,
 shaping_cache: ShapingCache,
 shape_calls: usize = 0,
 glyphs: std.AutoHashMapUnmanaged(u64, GlyphSlot) = .empty,
+mac_rasterizer: ?MacRasterizer = null,
 
 /// `options.font` must outlive the atlas: FreeType borrows memory faces.
 /// Example: `var atlas = try GlyphAtlas.init(allocator, .{ .font = face_bytes, .pixel_height = 28 });`
@@ -101,6 +103,22 @@ pub fn init(allocator: std.mem.Allocator, options: AtlasOptions) !GlyphAtlas {
 
     var shaping_cache = try ShapingCache.init(allocator);
     errdefer shaping_cache.deinit(allocator);
+    var mac_rasterizer: ?MacRasterizer = null;
+    if (@import("builtin").os.tag == .macos and options.thicken) {
+        mac_rasterizer = try MacRasterizer.init(.{
+            .font = options.font.ptr,
+            .font_len = options.font.len,
+            .postscript = @ptrCast(freetype.c.FT_Get_Postscript_Name(face)),
+            .face_index = @intCast(face.*.face_index),
+            .pixels = pixels.ptr,
+            .side = side,
+            .strength = options.thicken_strength,
+        });
+    }
+    errdefer if (mac_rasterizer) |*rasterizer| {
+        rasterizer.deinit();
+    };
+
     var atlas: GlyphAtlas = .{
         .allocator = allocator,
         .pixels = pixels,
@@ -109,6 +127,7 @@ pub fn init(allocator: std.mem.Allocator, options: AtlasOptions) !GlyphAtlas {
         .shaping_font = shaping_font,
         .shaping_buffer = shaping_buffer,
         .shaping_cache = shaping_cache,
+        .mac_rasterizer = mac_rasterizer,
     };
     try atlas.select(options.pixel_height);
     return atlas;
@@ -129,12 +148,20 @@ pub fn select(atlas: *GlyphAtlas, pixel_height: u16) !void {
         return error.FontSizeFailed;
     }
 
+    if (atlas.mac_rasterizer) |*rasterizer| {
+        try rasterizer.select(pixel_height);
+    }
+
     freetype.c.hb_ft_font_changed(atlas.shaping_font);
     atlas.pixel_height = pixel_height;
     atlas.shaping_cache.clear();
 }
 
 pub fn deinit(atlas: *GlyphAtlas) void {
+    if (atlas.mac_rasterizer) |*rasterizer| {
+        rasterizer.deinit();
+    }
+
     atlas.shaping_cache.deinit(atlas.allocator);
     atlas.glyphs.deinit(atlas.allocator);
     freetype.c.hb_buffer_destroy(atlas.shaping_buffer);
@@ -208,6 +235,19 @@ fn slot(atlas: *GlyphAtlas, index: u32, run: TextRun) !GlyphSlot {
         return cached;
     }
 
+    if (atlas.mac_rasterizer) |*rasterizer| {
+        var glyph = try rasterizer.measure(.{ .index = index, .style = @as(u32, @intFromBool(run.bold)) | (@as(u32, @intFromBool(run.italic)) << 1) });
+        const origin = try atlas.pack(.{ glyph.width, glyph.height });
+        glyph.x = origin[0];
+        glyph.y = origin[1];
+        rasterizer.draw(glyph);
+        if (glyph.width != 0 and glyph.height != 0) {
+            atlas.version +%= 1;
+        }
+
+        return atlas.remember(key, glyph);
+    }
+
     if (freetype.c.FT_Load_Glyph(atlas.face, index, freetype.c.FT_LOAD_DEFAULT) != 0) {
         return error.GlyphLoadFailed;
     }
@@ -242,16 +282,20 @@ fn slot(atlas: *GlyphAtlas, index: u32, run: TextRun) !GlyphSlot {
         atlas.version +%= 1;
     }
 
+    return atlas.remember(key, .{ .index = index, .style = 0, .x = origin[0], .y = origin[1], .width = bitmap.width, .height = bitmap.rows, .left = glyph.*.bitmap_left, .top = glyph.*.bitmap_top });
+}
+
+fn remember(atlas: *GlyphAtlas, key: u64, glyph: @import("../native/GlyphRaster.zig").GlyphRaster) !GlyphSlot {
     const scale: f32 = 1.0 / @as(f32, @floatFromInt(side));
     const placed: GlyphSlot = .{
-        .u0 = @as(f32, @floatFromInt(origin[0])) * scale,
-        .v0 = @as(f32, @floatFromInt(origin[1])) * scale,
-        .u1 = @as(f32, @floatFromInt(origin[0] + bitmap.width)) * scale,
-        .v1 = @as(f32, @floatFromInt(origin[1] + bitmap.rows)) * scale,
-        .width = bitmap.width,
-        .height = bitmap.rows,
-        .left = glyph.*.bitmap_left,
-        .top = glyph.*.bitmap_top,
+        .u0 = @as(f32, @floatFromInt(glyph.x)) * scale,
+        .v0 = @as(f32, @floatFromInt(glyph.y)) * scale,
+        .u1 = @as(f32, @floatFromInt(glyph.x + glyph.width)) * scale,
+        .v1 = @as(f32, @floatFromInt(glyph.y + glyph.height)) * scale,
+        .width = glyph.width,
+        .height = glyph.height,
+        .left = glyph.left,
+        .top = glyph.top,
     };
     try atlas.glyphs.put(atlas.allocator, key, placed);
     return placed;

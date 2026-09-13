@@ -26,6 +26,7 @@ retained: RetainedCells,
 repainted_cells: usize = 0,
 metrics: Metrics = .{ .cell_width = 1, .cell_height = 1, .baseline = 0, .pixel_height = 15 },
 scale: f32 = 0,
+origin: [2]u32 = .{ 0, 0 },
 atlas_version: u32 = 0,
 last_page_version: u32 = 0,
 background: Color = .black,
@@ -71,7 +72,7 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
 
     if (renderer.atlas == null or renderer.scale != viewport.scale) {
         const pixel_height: u16 = @intFromFloat(@round(renderer.config.font.scaledSize(viewport.scale)));
-        var replacement = try GlyphAtlas.init(renderer.allocator, .{ .font = renderer.font.bytes, .pixel_height = pixel_height, .face_index = renderer.font.match.face_index, .postscript = std.mem.sliceTo(&renderer.font.match.postscript, 0) });
+        var replacement = try GlyphAtlas.init(renderer.allocator, .{ .font = renderer.font.bytes, .pixel_height = pixel_height, .face_index = renderer.font.match.face_index, .postscript = std.mem.sliceTo(&renderer.font.match.postscript, 0), .thicken = renderer.config.font.thicken, .thicken_strength = renderer.config.font.thicken_strength });
         errdefer replacement.deinit();
         try replacement.prepareFallbacks();
         const natural_height: f32 = @floatFromInt(replacement.lineHeight());
@@ -97,7 +98,15 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
         renderer.last_page_version = 0;
     }
 
-    const size = try renderer.metrics.measure(viewport);
+    const padding = renderer.config.window.padding;
+    const x = @min(@as(u32, @intFromFloat(@round(padding.x * viewport.scale))), (viewport.width -| renderer.metrics.cell_width) / 2);
+    const y = @min(@as(u32, @intFromFloat(@round(padding.y * viewport.scale))), (viewport.height -| renderer.metrics.cell_height) / 2);
+    const size = try renderer.metrics.measure(.{
+        .width = viewport.width -| (2 * x),
+        .height = viewport.height -| (2 * y),
+        .scale = viewport.scale,
+    });
+    renderer.origin = .{ x, y };
     const cells = @as(usize, size.cols) * size.rows;
     if (cells > RetainedCells.max_cells) {
         return error.NativeCellBudgetExceeded;
@@ -244,8 +253,8 @@ fn paintCell(renderer: *Renderer, paint: CellPaint) !void {
 
 fn cellRect(renderer: *const Renderer, cells: core.Rect) Rect {
     return .{
-        .x = @floatFromInt(@as(u32, cells.x) * renderer.metrics.cell_width),
-        .y = @floatFromInt(@as(u32, cells.y) * renderer.metrics.cell_height),
+        .x = @floatFromInt(renderer.origin[0] + @as(u32, cells.x) * renderer.metrics.cell_width),
+        .y = @floatFromInt(renderer.origin[1] + @as(u32, cells.y) * renderer.metrics.cell_height),
         .width = @floatFromInt(@as(u32, cells.w) * renderer.metrics.cell_width),
         .height = @floatFromInt(@as(u32, cells.h) * renderer.metrics.cell_height),
     };
@@ -268,6 +277,7 @@ pub fn frame(renderer: *const Renderer, token: u64) native.Frame {
         .atlas = if (renderer.atlas) |atlas| atlas.pixels.ptr else null,
         .atlas_side = GlyphAtlas.side,
         .atlas_version = renderer.atlas_version,
-        .background = .{ renderer.background.r, renderer.background.g, renderer.background.b, 1 },
+        .background = .{ renderer.background.r, renderer.background.g, renderer.background.b, renderer.config.window.background_opacity },
+        .background_blur = @intFromBool(renderer.config.window.background_blur),
     };
 }

@@ -1,5 +1,6 @@
 #import "TelarView.h"
 #import "TelarMetalRenderer.h"
+#import "TelarWindowBackground.h"
 #import <QuartzCore/CADisplayLink.h>
 #include <string.h>
 
@@ -210,6 +211,7 @@
     dirty = YES;
     return;
   }
+  [self.backgroundView applyFrame:&frame];
   if (![renderer renderFrame:&frame drawable:drawable]) {
     callbacks.complete(context, frame.token, 0);
     [self.window close];

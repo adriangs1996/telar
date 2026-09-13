@@ -82,9 +82,18 @@ bool telar_vulkan_swapchain_resize(telar_vulkan_swapchain *self, telar_gui_viewp
     if (wanted > TELAR_SWAPCHAIN_IMAGES) {
         return false;
     }
-    VkCompositeAlphaFlagBitsKHR alpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    while (!(capabilities.supportedCompositeAlpha & alpha) && alpha <= VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR) {
-        alpha <<= 1;
+    // Wayland buffers carry premultiplied alpha. Keep this mode across opacity
+    // changes so a reload does not rebuild the swapchain or stall the GPU.
+    const VkCompositeAlphaFlagBitsKHR modes[] = {
+        VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR, VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+        VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR, VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
+    };
+    VkCompositeAlphaFlagBitsKHR alpha = 0;
+    for (size_t i = 0; i < sizeof modes / sizeof modes[0]; i++) {
+        if (capabilities.supportedCompositeAlpha & modes[i]) {
+            alpha = modes[i];
+            break;
+        }
     }
     if (!(capabilities.supportedCompositeAlpha & alpha)) {
         return false;
@@ -112,6 +121,7 @@ bool telar_vulkan_swapchain_resize(telar_vulkan_swapchain *self, telar_gui_viewp
     self->format = chosen.format;
     self->extent = extent;
     self->requested = viewport;
+    self->transparent = alpha == VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR || alpha == VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
     self->stale = false;
     uint32_t count = 0;
     VK_TRY(vkGetSwapchainImagesKHR(self->gpu->device, handle, &count, NULL));

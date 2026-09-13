@@ -213,7 +213,7 @@ Telar retains its orange Vesper cursor with background-colored text.
 
 ## Graphical application
 
-`gui` configures fonts and cursor behavior in `telar gui`. Colors come from the
+`gui` configures the window, fonts and cursor behavior in `telar gui`. Colors come from the
 root `theme`. The TUI continues using its host terminal's font and default
 colors. Both clients can load the same Lua file.
 See [`examples/gui.lua`](../examples/gui.lua) for a complete runnable example:
@@ -227,11 +227,18 @@ telar gui --config examples/gui.lua --profile presentation
 ```lua
 theme = "vesper"
 gui = {
+  window = {
+    background_opacity = 0.95,
+    background_blur = true,
+    padding = { x = 8, y = 8 },
+  },
   font = {
     family = "JetBrains Mono",
     size = 15,
     line_height = 1.15,
     letter_spacing = 0,
+    thicken = false, -- macOS optical smoothing
+    thicken_strength = 255,
   },
   cursor = { style = "block", blink = true, blink_interval_ms = 600 },
 }
@@ -239,13 +246,32 @@ gui = {
 
 | Setting | Default | Meaning and bounds |
 | --- | --- | --- |
+| `window.background_opacity` | `1` | Background opacity, `0..1`. Text, cursor and cell backgrounds differing from the terminal default retain their own opacity. |
+| `window.background_blur` | `false` | Request compositor blur behind a translucent background. The system controls intensity; this is a boolean, not a pixel radius. Has no visible effect at opacity `1`. |
+| `window.padding.x` | `0` | Logical pixels on each horizontal edge, `0..256`, decimals allowed. |
+| `window.padding.y` | `0` | Logical pixels on each vertical edge, `0..256`, decimals allowed. |
 | `font.family` | bundled JetBrains Mono | Installed family name, at most 256 UTF-8 bytes, without NUL. An empty name or `JetBrains Mono` uses the bundled face. |
 | `font.size` | `15` | Logical pixel size, equivalent to points on macOS; `6..96`, decimals allowed. The display scale is applied once during rasterization. |
 | `font.line_height` | `1.0` | Multiplier of the font's natural line height; `0.75..3`. Extra space is distributed above and below the baseline. |
 | `font.letter_spacing` | `0` | Extra logical pixels per cell; `-5..20`. A combination producing a nonpositive cell width fails at startup or rejects the reload. |
+| `font.thicken` | `false` | Enable CoreGraphics optical font smoothing on macOS. Increases stroke coverage without changing cell metrics or the terminal's bold attribute. Ignored on Linux. |
+| `font.thicken_strength` | `255` | Integer `0..255`, active only with `thicken = true` on macOS. `0` is the lightest smoothing, not disabled; `255` is the strongest. |
 | `cursor.style` | `block` | `block`, `bar`, `underline`, or `hollow`. |
 | `cursor.blink` | `true` | Whether the default cursor blinks. An explicit application DECSCUSR style overrides this default; DEC mode 12 can suppress blinking. |
 | `cursor.blink_interval_ms` | `600` | Duration of each visible or hidden phase; integer `100..5000`. |
+
+Padding is applied once at the display scale, then rounded to physical pixels.
+It belongs to the window, outside the terminal grid; PTY pixel sizes contain
+only complete cells. Insets shrink when necessary to leave room for at least
+one cell. Changing padding can change `stty size` without changing the font.
+
+macOS uses an `NSVisualEffectView` behind the Metal view. On Wayland, blur uses
+`ext-background-effect-v1` when the compositor advertises blur capability.
+An unsupported compositor keeps transparency and reports the missing blur
+capability once on stderr. A Vulkan surface without premultiplied-alpha support
+falls back to an opaque background with a diagnostic. System effects and
+accessibility settings determine the final blur appearance; Ghostty's numeric
+blur radius is not imported as an equivalent setting.
 
 `theme.terminal` requires explicit RGB values; `"default"` has no exterior
 terminal to refer to here. Child truecolor and OSC palette/default-color overrides still
@@ -257,6 +283,9 @@ Font resolution uses CoreText on macOS and Fontconfig on Linux at startup and
 when a reload changes font settings. An unavailable explicitly named family is
 an error. `config check` validates the schema without requiring that font on
 the checking machine.
+With `font.thicken = true`, macOS rasterizes the selected face through CoreText
+and CoreGraphics into the existing glyph atlas. FreeType still supplies metrics
+and HarfBuzz shaping, so toggling optical weight preserves the grid and PTY size.
 Bold and italic use the existing synthesized variants; missing glyphs use the
 face's replacement glyph. Separate style families, fallback family lists,
 OpenType feature configuration, color emoji and zoom shortcuts are not part of
@@ -275,7 +304,10 @@ selected at launch. Saving by atomic file replacement also works.
 
 Lua validation and font preparation run off the window thread. A complete
 replacement becomes active once the previous GPU frame releases its resources.
-Font changes update the terminal grid and PTY size; theme and cursor changes
+Font geometry and padding changes update the terminal grid and PTY size. Optical
+weight changes replace the macOS atlas without resizing the PTY. An inactive
+strength change, or either optical weight setting on Linux, preserves the atlas. Window effects,
+theme and cursor changes
 reuse the existing glyph atlas. Input and receipt ACKs continue during loading.
 Invalid Lua, a missing font or invalid metrics leave the previous generation
 active and report a diagnostic on stderr. Correct the file and save again to

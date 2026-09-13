@@ -1,3 +1,4 @@
+#include "gui_view.h"
 // Test-only native input, resize, and detach driver for a real runtime shell.
 #import <AppKit/AppKit.h>
 #include <stdlib.h>
@@ -13,7 +14,7 @@ __attribute__((constructor)) static void install(void) {
     if (![NSProcessInfo.processInfo.arguments containsObject:@"gui"]) return;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC * 2), dispatch_get_main_queue(), ^{
         NSWindow *window = NSApp.windows.firstObject;
-        NSView *view = window.contentView;
+        NSView *view = terminal_view(window.contentView);
         send_command(view, @"echo $$ > child.pid; stty size > before; printf input-ok > typed");
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
             // Resize the content view directly so a tiling window manager cannot undo it.

@@ -7,9 +7,32 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <time.h>
+#include <math.h>
 
 static bool invalid_frame_test;
 static bool deferred;
+static atomic_uint alpha_checks;
+
+VKAPI_ATTR VkResult VKAPI_CALL vkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR *info,
+                                                    const VkAllocationCallbacks *allocator, VkSwapchainKHR *swapchain) {
+    if (info->compositeAlpha != VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR &&
+        info->compositeAlpha != VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR) {
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+    PFN_vkCreateSwapchainKHR next = (PFN_vkCreateSwapchainKHR)dlsym(RTLD_NEXT, "vkCreateSwapchainKHR");
+    return next(device, info, allocator, swapchain);
+}
+
+VKAPI_ATTR void VKAPI_CALL vkCmdBeginRendering(VkCommandBuffer commands, const VkRenderingInfo *info) {
+    const float *color = info->pColorAttachments[0].clearValue.color.float32;
+    if (fabsf(color[0] - .05f * color[3]) < .0001f &&
+        fabsf(color[1] - .08f * color[3]) < .0001f &&
+        fabsf(color[2] - .12f * color[3]) < .0001f) {
+        atomic_fetch_add(&alpha_checks, 1);
+    }
+    PFN_vkCmdBeginRendering next = (PFN_vkCmdBeginRendering)dlsym(RTLD_NEXT, "vkCmdBeginRendering");
+    next(commands, info);
+}
 
 static struct {
     int wake[2];
@@ -114,7 +137,8 @@ static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *
                                .atlas = state.atlas,
                                .atlas_side = 2,
                                .atlas_version = token,
-                               .background = {.05f, .08f, .12f, 1}};
+                               .background = {.05f, .08f, .12f, token % 2 ? .5f : 1},
+                               .background_blur = token % 3 != 0};
     if (invalid_frame_test) {
         frame->atlas_side = 0;
     }
@@ -177,6 +201,9 @@ int main(int argc, char **argv) {
     pthread_join(producer, NULL);
     telar_gui_close_pipe(state.wake);
     if (atomic_load(&state.retries) != 2) {
+        atomic_fetch_add(&state.failures, 1);
+    }
+    if (atomic_load(&alpha_checks) < atomic_load(&state.delivered)) {
         atomic_fetch_add(&state.failures, 1);
     }
     unsigned failures = atomic_load(&state.failures);

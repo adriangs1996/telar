@@ -7,6 +7,7 @@ const Renderer = @import("render/TerminalRenderer.zig");
 const GuiClient = @import("GuiClient.zig");
 const Request = @import("ConfigurationRequest.zig");
 const reloads = client.controllers.config_reloads;
+const font_rendering = @import("text/font_rendering.zig");
 const Reload = @This();
 
 io: std.Io,
@@ -76,7 +77,7 @@ pub fn apply(reload: *Reload, gui: *GuiClient, renderer: *Renderer) !bool {
     }
 
     var result = try reload.result;
-    if (result == .loaded and !std.meta.eql(result.loaded.generation.snapshot.gui.font, reload.request.?.current.font) and
+    if (result == .loaded and !font_rendering.same(result.loaded.generation.snapshot.gui.font, reload.request.?.current.font) and
         !std.meta.eql(reload.viewport, reload.request.?.viewport))
     {
         var request = reload.request.?;
@@ -175,7 +176,7 @@ fn prepare(reload: *Reload, request: Request) void {
     }
 
     const config = result.loaded.generation.snapshot.gui;
-    if (std.meta.eql(config.font, request.current.font)) {
+    if (font_rendering.same(config.font, request.current.font)) {
         return;
     }
 

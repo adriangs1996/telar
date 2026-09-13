@@ -1,3 +1,4 @@
+#include "gui_view.h"
 // Test-only common probe: one IOSurface pixel copied in the rendering command
 // buffer, then verified at GPU completion. Works with CAMetalLayer and Ghostty
 // 1.3 IOSurface targets. No presentation/scanout timestamps are inferred.
@@ -30,17 +31,6 @@ static NSString *input_class;
 @implementation ProbeFrame
 @end
 
-static NSView *terminal_view(NSView *view) {
-    NSString *name = NSStringFromClass(view.class);
-    if ([name isEqualToString:@"TelarView"] ||
-        ([name containsString:@"SurfaceView"] &&
-         [view conformsToProtocol:@protocol(NSTextInputClient)])) return view;
-    for (NSView *child in view.subviews) {
-        NSView *found = terminal_view(child);
-        if (found) return found;
-    }
-    return nil;
-}
 
 static NSView *test_view(void) {
     for (NSWindow *window in NSApp.windows) {

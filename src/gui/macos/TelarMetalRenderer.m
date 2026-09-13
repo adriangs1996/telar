@@ -216,8 +216,9 @@ static const unsigned char shader_source[] = {
   pass.colorAttachments[0].storeAction = MTLStoreActionStore;
 
   pass.colorAttachments[0].clearColor =
-      MTLClearColorMake(frame->background[0], frame->background[1],
-                        frame->background[2], frame->background[3]);
+      MTLClearColorMake(frame->background[0] * frame->background[3],
+                        frame->background[1] * frame->background[3],
+                        frame->background[2] * frame->background[3], frame->background[3]);
 
   // Only the completion callback releases in_flight, so resetting cannot
   // invalidate command memory or resources still read by the GPU.

@@ -11,10 +11,11 @@ test "GUI configuration owns font names and overlays profiles independently of c
         \\      palette = { "#000000", "#110000", "#001100", "#111100", "#000011", "#110011", "#001111", "#111111",
         \\                  "#222222", "#330000", "#003300", "#333300", "#000033", "#330033", "#003333", "#333333" } } },
         \\  gui = {
-        \\    font = { family = "Example Mono", size = 17.5, line_height = 1.2, letter_spacing = 0.5 },
+        \\    font = { family = "Example Mono", size = 17.5, line_height = 1.2, letter_spacing = 0.5, thicken = true, thicken_strength = 64 },
         \\    cursor = { style = "bar", blink = false, blink_interval_ms = 350 },
+        \\    window = { background_opacity = 0.75, background_blur = true, padding = { x = 8.5, y = 4 } },
         \\  },
-        \\  profiles = { large = { gui = { font = { size = 24 } }, theme = { terminal = { background = "#ffffff" } } } },
+        \\  profiles = { large = { gui = { font = { size = 24, thicken_strength = 0 }, window = { padding = { y = 12 } } }, theme = { terminal = { background = "#ffffff" } } } },
         \\}
     ;
     var diagnostic: Diagnostic = .{};
@@ -26,6 +27,8 @@ test "GUI configuration owns font names and overlays profiles independently of c
     try std.testing.expectEqual(@as(f32, 24), config.font.size);
     try std.testing.expectEqual(@as(f32, 1.2), config.font.line_height);
     try std.testing.expectEqual(@as(f32, 0.5), config.font.letter_spacing);
+    try std.testing.expect(config.font.thicken);
+    try std.testing.expectEqual(@as(u8, 0), config.font.thicken_strength);
     try std.testing.expectEqual(@as(f32, 18), config.font.scaledSize(0.75));
     try std.testing.expectEqual([3]u8{ 255, 255, 255 }, terminal.background);
     try std.testing.expectEqual([3]u8{ 0xab, 0xcd, 0xef }, terminal.foreground);
@@ -33,6 +36,10 @@ test "GUI configuration owns font names and overlays profiles independently of c
     try std.testing.expectEqual(.bar, config.cursor.style);
     try std.testing.expect(!config.cursor.blink);
     try std.testing.expectEqual(@as(u32, 350), config.cursor.blink_interval_ms);
+    try std.testing.expectEqual(@as(f32, 0.75), config.window.background_opacity);
+    try std.testing.expect(config.window.background_blur);
+    try std.testing.expectEqual(@as(f32, 8.5), config.window.padding.x);
+    try std.testing.expectEqual(@as(f32, 12), config.window.padding.y);
     try std.testing.expectEqual(@as(?[3]u8, .{ 0x11, 0x22, 0x33 }), terminal.cursor_color);
     try std.testing.expectEqual(@as(?[3]u8, .{ 0x44, 0x55, 0x66 }), terminal.cursor_text_color);
 
@@ -43,14 +50,52 @@ test "GUI configuration owns font names and overlays profiles independently of c
 
 test "GUI validation rejects malformed values including profiles that are not selected" {
     const invalid = [_][]const u8{
-        "gui = false",                                             "gui = { fonts = {} }",                                  "gui = { font = 'Mono' }",
-        "gui = { font = { size = 5 } }",                           "gui = { font = { size = 97 } }",                        "gui = { font = { size = '15' } }",
-        "gui = { font = { size = 0/0 } }",                         "gui = { font = { line_height = 0.7 } }",                "gui = { font = { letter_spacing = 21 } }",
-        "gui = { font = { family = string.rep('a',257) } }",       "gui = { font = { family = 'a\\0b' } }",                 "gui = { font = { family = string.char(255) } }",
-        "gui = { font = { family = 15 } }",                        "gui = { theme = { background = 'default' } }",          "gui = { theme = { foreground = '#12_456' } }",
-        "gui = { theme = { palette = {} } }",                      "gui = { theme = { palette = { extra = '#112233' } } }", "gui = { cursor = { style = 'triangle' } }",
-        "gui = { cursor = { blink = 1 } }",                        "gui = { cursor = { blink_interval_ms = 0 } }",          "gui = { cursor = { blink_interval_ms = 200.5 } }",
-        "gui = { cursor = { blink_interval_ms = 200.00000001 } }", "gui = { cursor = { color = '#12345g' } }",              "profiles = { unused = { gui = { font = { size = 0 } } } }",
+        "gui = { window = false }",
+        "gui = { window = { background_opacity = -0.1 } }",
+        "gui = { window = { background_opacity = 1.1 } }",
+        "gui = { window = { background_opacity = '0.5' } }",
+        "gui = { window = { background_opacity = 0/0 } }",
+        "gui = { window = { background_opacity = 1/0 } }",
+        "gui = { window = { background_blur = 40 } }",
+        "gui = { window = { padding = 10 } }",
+        "gui = { window = { padding = { x = -1 } } }",
+        "gui = { window = { padding = { y = 257 } } }",
+        "gui = { window = { padding = { x = 0/0 } } }",
+        "gui = { window = { padding = { z = 1 } } }",
+        "profiles = { unused = { gui = { window = { background_blur = 'yes' } } } }",
+        "gui = false",
+        "gui = { fonts = {} }",
+        "gui = { font = 'Mono' }",
+        "gui = { font = { size = 5 } }",
+        "gui = { font = { size = 97 } }",
+        "gui = { font = { size = '15' } }",
+        "gui = { font = { size = 0/0 } }",
+        "gui = { font = { line_height = 0.7 } }",
+        "gui = { font = { letter_spacing = 21 } }",
+        "gui = { font = { thicken = 1 } }",
+        "gui = { font = { thicken = 'true' } }",
+        "gui = { font = { thicken_strength = -1 } }",
+        "gui = { font = { thicken_strength = 256 } }",
+        "gui = { font = { thicken_strength = 42.5 } }",
+        "gui = { font = { thicken_strength = 0/0 } }",
+        "gui = { font = { thicken_strength = 1/0 } }",
+        "gui = { font = { thicken_strength = '255' } }",
+        "profiles = { unused = { gui = { font = { thicken_strength = 256 } } } }",
+        "gui = { font = { family = string.rep('a',257) } }",
+        "gui = { font = { family = 'a\\0b' } }",
+        "gui = { font = { family = string.char(255) } }",
+        "gui = { font = { family = 15 } }",
+        "gui = { theme = { background = 'default' } }",
+        "gui = { theme = { foreground = '#12_456' } }",
+        "gui = { theme = { palette = {} } }",
+        "gui = { theme = { palette = { extra = '#112233' } } }",
+        "gui = { cursor = { style = 'triangle' } }",
+        "gui = { cursor = { blink = 1 } }",
+        "gui = { cursor = { blink_interval_ms = 0 } }",
+        "gui = { cursor = { blink_interval_ms = 200.5 } }",
+        "gui = { cursor = { blink_interval_ms = 200.00000001 } }",
+        "gui = { cursor = { color = '#12345g' } }",
+        "profiles = { unused = { gui = { font = { size = 0 } } } }",
     };
     for (invalid) |fields| {
         var source: [512]u8 = undefined;

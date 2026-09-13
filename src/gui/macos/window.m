@@ -1,4 +1,5 @@
 #import "TelarView.h"
+#import "TelarWindowBackground.h"
 
 int telar_gui_run(const char *title, void *context,
                   const telar_gui_callbacks *callbacks) {
@@ -33,8 +34,9 @@ int telar_gui_run(const char *title, void *context,
       return -1;
     }
 
-    view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-    window.contentView = view;
+    TelarWindowBackground *background = [[TelarWindowBackground alloc] initWithContentView:view];
+    view.backgroundView = background;
+    window.contentView = background;
     window.delegate = view;
     [view startWakeSource];
     [window makeFirstResponder:view];

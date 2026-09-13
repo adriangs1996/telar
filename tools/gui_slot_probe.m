@@ -1,3 +1,4 @@
+#include "gui_view.h"
 // Test-only, bounded tracing of native scheduling and Metal submission.
 // Example: DYLD_INSERT_LIBRARIES=probe.dylib TELAR_SLOT_TRACE=trace.json telar gui.
 #import <AppKit/AppKit.h>
@@ -280,7 +281,7 @@ __attribute__((constructor)) static void install(void) {
             abort();
         }
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-            NSView *view = NSApp.windows.firstObject.contentView;
+            NSView *view = terminal_view(NSApp.windows.firstObject.contentView);
             CGFloat scale = view.window.backingScaleFactor;
             view.autoresizingMask = NSViewNotSizable;
             [view setFrameSize:NSMakeSize(width / scale, height / scale)];
@@ -290,7 +291,7 @@ __attribute__((constructor)) static void install(void) {
     double duration = getenv("TELAR_SLOT_SECONDS") ? atof(getenv("TELAR_SLOT_SECONDS")) : 0;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         atomic_store_explicit(&recording, true, memory_order_relaxed);
-        NSView *view = NSApp.windows.firstObject.contentView;
+        NSView *view = terminal_view(NSApp.windows.firstObject.contentView);
         if (view != nil) {
             record_state(MeasureStart, view);
         }

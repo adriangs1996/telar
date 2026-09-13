@@ -23,11 +23,11 @@ pub fn parse(parser: Parser, initial: Config) !Config {
         return parser.invalid("gui.theme moved to theme.terminal; select a preset once with theme = 'vesper'");
     }
 
-    try parser.table("config.gui", &.{ "font", "cursor" });
+    try parser.table("config.gui", &.{ "font", "cursor", "window" });
     var result = initial;
     _ = lua.lua_getfield(parser.state, -1, "font");
     if (lua.lua_type(parser.state, -1) != lua.LUA_TNIL) {
-        try parser.table("config.gui.font", &.{ "family", "size", "line_height", "letter_spacing" });
+        try parser.table("config.gui.font", &.{ "family", "size", "line_height", "letter_spacing", "thicken", "thicken_strength" });
         _ = lua.lua_getfield(parser.state, -1, "family");
         if (lua.lua_type(parser.state, -1) != lua.LUA_TNIL) {
             const name = value.string(parser.state, -1) orelse return parser.invalid("gui.font.family must be a string");
@@ -37,6 +37,21 @@ pub fn parse(parser: Parser, initial: Config) !Config {
         result.font.size = @floatCast(try parser.number(.{ "size", 6, 96 }, result.font.size));
         result.font.line_height = @floatCast(try parser.number(.{ "line_height", 0.75, 3 }, result.font.line_height));
         result.font.letter_spacing = @floatCast(try parser.number(.{ "letter_spacing", -5, 20 }, result.font.letter_spacing));
+        _ = lua.lua_getfield(parser.state, -1, "thicken");
+        if (lua.lua_type(parser.state, -1) != lua.LUA_TNIL) {
+            if (lua.lua_type(parser.state, -1) != lua.LUA_TBOOLEAN) {
+                return parser.invalid("gui.font.thicken must be a boolean");
+            }
+
+            result.font.thicken = lua.lua_toboolean(parser.state, -1) != 0;
+        }
+        value.pop(parser.state, 1);
+        const strength = try parser.number(.{ "thicken_strength", 0, 255 }, @floatFromInt(result.font.thicken_strength));
+        if (@trunc(strength) != strength) {
+            return parser.invalid("gui.font.thicken_strength must be an integer");
+        }
+
+        result.font.thicken_strength = @intFromFloat(strength);
     }
     value.pop(parser.state, 1);
 
@@ -64,6 +79,36 @@ pub fn parse(parser: Parser, initial: Config) !Config {
         }
 
         result.cursor.blink_interval_ms = @intFromFloat(interval);
+    }
+    value.pop(parser.state, 1);
+
+    _ = lua.lua_getfield(parser.state, -1, "window");
+    if (lua.lua_type(parser.state, -1) != lua.LUA_TNIL) {
+        result.window = try parser.window(result.window);
+    }
+    value.pop(parser.state, 1);
+    return result;
+}
+
+fn window(parser: Parser, initial: @import("GuiWindow.zig")) !@import("GuiWindow.zig") {
+    try parser.table("config.gui.window", &.{ "background_opacity", "background_blur", "padding" });
+    var result = initial;
+    result.background_opacity = @floatCast(try parser.number(.{ "background_opacity", 0, 1 }, result.background_opacity));
+    _ = lua.lua_getfield(parser.state, -1, "background_blur");
+    if (lua.lua_type(parser.state, -1) != lua.LUA_TNIL) {
+        if (lua.lua_type(parser.state, -1) != lua.LUA_TBOOLEAN) {
+            return parser.invalid("gui.window.background_blur must be a boolean");
+        }
+
+        result.background_blur = lua.lua_toboolean(parser.state, -1) != 0;
+    }
+    value.pop(parser.state, 1);
+
+    _ = lua.lua_getfield(parser.state, -1, "padding");
+    if (lua.lua_type(parser.state, -1) != lua.LUA_TNIL) {
+        try parser.table("config.gui.window.padding", &.{ "x", "y" });
+        result.padding.x = @floatCast(try parser.number(.{ "x", 0, 256 }, result.padding.x));
+        result.padding.y = @floatCast(try parser.number(.{ "y", 0, 256 }, result.padding.y));
     }
     value.pop(parser.state, 1);
     return result;

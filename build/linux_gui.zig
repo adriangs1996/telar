@@ -6,17 +6,13 @@ const c_flags = @import("c_flags.zig");
 /// installs, so the machine building Telar needs `wayland-scanner`,
 /// `wayland-protocols`, Vulkan and Fontconfig headers, and `glslc`. Example: `linux_gui.add(b, gui, false)`.
 pub fn add(b: *std.Build, gui: *std.Build.Module, disable_coverage: bool) void {
-    const protocol = "/usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml";
-    const header = b.addSystemCommand(&.{ "wayland-scanner", "client-header", protocol });
-    const header_file = header.addOutputFileArg("xdg-shell-client-protocol.h");
-    const code = b.addSystemCommand(&.{ "wayland-scanner", "private-code", protocol });
-    const code_file = code.addOutputFileArg("xdg-shell-protocol.c");
     const flags = c_flags.forCoverage(b, &.{"-std=c11"}, disable_coverage);
-    gui.addIncludePath(header_file.dirname());
-    gui.addCSourceFile(.{ .file = code_file, .flags = flags });
+    addProtocol(b, gui, "stable/xdg-shell/xdg-shell");
+    addProtocol(b, gui, "staging/ext-background-effect/ext-background-effect-v1");
     gui.addCSourceFiles(.{
         .files = &.{
             "src/gui/linux/window.c",
+            "src/gui/linux/background_effect.c",
             "src/gui/linux/input.c",
             "src/gui/linux/font.c",
             "src/gui/linux/frame_worker.c",
@@ -36,6 +32,17 @@ pub fn add(b: *std.Build, gui: *std.Build.Module, disable_coverage: bool) void {
     gui.linkSystemLibrary("fontconfig", .{});
     gui.linkSystemLibrary("wayland-client", .{});
     gui.linkSystemLibrary("vulkan", .{});
+}
+
+fn addProtocol(b: *std.Build, module: *std.Build.Module, name: []const u8) void {
+    const path = b.fmt("/usr/share/wayland-protocols/{s}.xml", .{name});
+    const stem = std.fs.path.basename(name);
+    const header = b.addSystemCommand(&.{ "wayland-scanner", "client-header", path });
+    const header_file = header.addOutputFileArg(b.fmt("{s}-client-protocol.h", .{stem}));
+    const code = b.addSystemCommand(&.{ "wayland-scanner", "private-code", path });
+    const code_file = code.addOutputFileArg(b.fmt("{s}-protocol.c", .{stem}));
+    module.addIncludePath(header_file.dirname());
+    module.addCSourceFile(.{ .file = code_file, .flags = &.{"-std=c11"} });
 }
 
 // Generate dependency-tracked C initializers from the GLSL sources.

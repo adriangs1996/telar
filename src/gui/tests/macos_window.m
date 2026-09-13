@@ -1,3 +1,4 @@
+#include "../../../tools/gui_view.h"
 #import <AppKit/AppKit.h>
 #import <QuartzCore/CAMetalLayer.h>
 #import <objc/runtime.h>
@@ -12,6 +13,8 @@ static IMP original_draw;
 static CFTimeInterval deadline;
 static int timer_wakes, focus_events;
 static int deferred;
+static unsigned appearance_phase;
+static unsigned appearance_checked;
 
 @interface NSView (TelarTest)
 - (void)requestDraw;
@@ -19,6 +22,16 @@ static int deferred;
 
 static void draw(id view, SEL selector, id drawable) {
     ((void (*)(id, SEL, id))original_draw)(view, selector, drawable);
+    if (paints > 0) {
+        BOOL opaque = appearance_phase == 1;
+        BOOL blurred = appearance_phase == 0;
+        NSWindow *window = [view window];
+        NSVisualEffectView *effect = (NSVisualEffectView *)window.contentView.subviews.firstObject;
+        if (window.isOpaque != opaque || ((NSView *)view).layer.isOpaque != opaque ||
+            ![effect isKindOfClass:NSVisualEffectView.class] || effect.isHidden == blurred ||
+            window.alphaValue != 1.0) failed++;
+        appearance_checked |= 1u << appearance_phase;
+    }
     if (close_in_flight) {
         closed_in_flight = YES;
         [[view window] close];
@@ -32,15 +45,15 @@ static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *
         deferred++;
         *frame = (telar_gui_frame){0};
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_MSEC * 10), dispatch_get_main_queue(), ^{
-            [(id)NSApp.windows.firstObject.contentView requestDraw];
+            [(id)terminal_view(NSApp.windows.firstObject.contentView) requestDraw];
         });
         return;
     }
     if (!viewport.width || !viewport.height) failed++;
-    CAMetalLayer *layer = (CAMetalLayer *)NSApp.windows.firstObject.contentView.layer;
+    CAMetalLayer *layer = (CAMetalLayer *)terminal_view(NSApp.windows.firstObject.contentView).layer;
     if (layer && (viewport.width != (uint32_t)layer.drawableSize.width ||
                   viewport.height != (uint32_t)layer.drawableSize.height)) failed++;
-    *frame = (telar_gui_frame){.token = ++paints, .quads = &quad, .quad_count = 1, .atlas = pixels, .atlas_side = 2, .atlas_version = 1, .background = {0,0,0,1}};
+    *frame = (telar_gui_frame){.token = ++paints, .quads = &quad, .quad_count = 1, .atlas = pixels, .atlas_side = 2, .atlas_version = 1, .background = {.2f,.3f,.4f,appearance_phase == 1 ? 1 : .5f}, .background_blur = appearance_phase != 2};
 }
 static int pump(void *context) {
     (void)context;
@@ -80,7 +93,7 @@ int main(void) {
         telar_gui_callbacks callbacks = {render,pump,complete,input,fds[0],wakeup_after};
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1000000000), dispatch_get_main_queue(), ^{
             NSWindow *window = NSApp.windows.firstObject;
-            NSView *view = window.contentView;
+            NSView *view = terminal_view(window.contentView);
             if (timer_wakes != 1 || delivered < 2 || !focus_events) failed++;
             injecting = YES;
             [view keyDown:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil characters:@"a" charactersIgnoringModifiers:@"a" isARepeat:NO keyCode:0]];
@@ -88,6 +101,7 @@ int main(void) {
             [view keyDown:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil characters:@"\r" charactersIgnoringModifiers:@"\r" isARepeat:NO keyCode:36]];
             [(id<NSTextInputClient>)view insertText:@"café" replacementRange:NSMakeRange(NSNotFound,0)];
             injecting = NO;
+            appearance_phase = 1;
             view.autoresizingMask = NSViewNotSizable;
             [view setFrameSize:NSMakeSize(640, 360)];
             int burst_start = paints;
@@ -98,6 +112,7 @@ int main(void) {
                 if (paints != delivered) failed++;
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 3), dispatch_get_main_queue(), ^{
                     if (paints != idle_paints) failed++;
+                    appearance_phase = 2;
                     close_in_flight = YES;
                     [view requestDraw];
                 });
@@ -106,6 +121,6 @@ int main(void) {
         int status = telar_gui_run("Telar native backend test", NULL, &callbacks);
         telar_gui_close_pipe(fds);
         fprintf(stdout, "native macOS: status=%d painted=%d delivered=%d inputs=%d timer_wakes=%d failures=%d\n",status,paints,delivered,inputs,timer_wakes,failed);
-        return status || !delivered || inputs != 4 || failed || !closed_in_flight || paints != delivered + 1;
+        return status || !delivered || inputs != 4 || failed || !closed_in_flight || paints != delivered + 1 || appearance_checked != 7;
     }
 }

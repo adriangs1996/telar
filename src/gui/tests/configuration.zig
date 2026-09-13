@@ -53,7 +53,7 @@ test "GUI reload preserves an in-flight frame and keeps input and receipt ACKs m
     defer std.testing.allocator.free(quads);
     const pixels = session.renderer.atlas.?.pixels.ptr;
     const version = session.renderer.atlas_version;
-    try fixture.write("config.lua", "return { api_version = 2, gui = { font = { size = 20, line_height = 1.3 } } }");
+    try fixture.write("config.lua", "return { api_version = 2, gui = { font = { size = 20, line_height = 1.3, thicken = true } } }");
     try fixture.wait();
     try std.testing.expect(reload.prepared != null);
     try std.testing.expect(!try reload.apply(session.gui, &session.renderer));
@@ -70,6 +70,7 @@ test "GUI reload preserves an in-flight frame and keeps input and receipt ACKs m
     try std.testing.expect(try reload.apply(session.gui, &session.renderer));
     try std.testing.expectEqual(@as(u64, 2), session.gui.app.lua_generation.?.number);
     try std.testing.expectEqual(@as(f32, 20), session.renderer.config.font.size);
+    try std.testing.expectEqual(@import("builtin").os.tag == .macos, session.renderer.atlas.?.mac_rasterizer != null);
     try std.testing.expect(pixels != session.renderer.atlas.?.pixels.ptr);
     try session.gui.resize(try session.renderer.measure(Fixture.viewport), session.renderer.theme);
     try present(session);
@@ -220,4 +221,73 @@ fn present(session: *Session) !void {
     const token = try session.gui.prepare(&session.renderer);
     try session.gui.complete(token, true);
     try session.settle();
+}
+
+test "font weight reload keeps PTY geometry and rebuilds only for effective macOS changes" {
+    const is_macos = @import("builtin").os.tag == .macos;
+    var fixture = try Fixture.init("return { api_version = 2 }", null);
+    defer fixture.deinit();
+    const session = fixture.session;
+    const reload = &session.driver.configuration;
+    try session.receiveFrame(1);
+    try present(session);
+    const size = session.gui.app.model.hostSize();
+    const resize_count = session.resize_count;
+    for ([_][]const u8{
+        "thicken_strength = 0",
+        "thicken = true, thicken_strength = 0",
+        "thicken = true, thicken_strength = 255",
+        "thicken = false",
+    }, 0..) |fields, index| {
+        const pixels = session.renderer.atlas.?.pixels.ptr;
+        var source: [256]u8 = undefined;
+        const text = try std.fmt.bufPrint(&source, "return {{ api_version = 2, gui = {{ font = {{ {s} }} }} }}", .{fields});
+        try fixture.write("config.lua", text);
+        try fixture.wait();
+        const rebuild = is_macos and index != 0;
+        try std.testing.expectEqual(rebuild, reload.prepared != null);
+        try std.testing.expect(try reload.apply(session.gui, &session.renderer));
+        try std.testing.expectEqual(rebuild, pixels != session.renderer.atlas.?.pixels.ptr);
+        const measured = try session.renderer.measure(Fixture.viewport);
+        try std.testing.expectEqual(size, measured);
+        try session.gui.resize(measured, session.renderer.theme);
+        try present(session);
+        try std.testing.expectEqual(resize_count, session.resize_count);
+    }
+}
+
+test "window reload reuses the atlas and padding publishes grid size without its border pixels" {
+    var fixture = try Fixture.init("return { api_version = 2 }", null);
+    defer fixture.deinit();
+    const session = fixture.session;
+    const reload = &session.driver.configuration;
+    try session.receiveFrame(1);
+    try present(session);
+    const pixels = session.renderer.atlas.?.pixels.ptr;
+    const version = session.renderer.atlas_version;
+    const previous_size = session.gui.app.model.hostSize();
+    try fixture.write("config.lua", "return { api_version = 2, gui = { window = { background_opacity = 0.45, background_blur = true } } }");
+    try fixture.wait();
+    try std.testing.expect(reload.prepared == null);
+    try std.testing.expect(try reload.apply(session.gui, &session.renderer));
+    try present(session);
+    try std.testing.expectEqual(@as(usize, 0), session.renderer.repainted_cells);
+    try std.testing.expectEqual(@as(f32, 0.45), session.renderer.frame(1).background[3]);
+    try std.testing.expectEqual(@as(u32, 1), session.renderer.frame(1).background_blur);
+
+    try fixture.write("config.lua", "return { api_version = 2, gui = { window = { padding = { x = 12, y = 18 } } } }");
+    try fixture.wait();
+    try std.testing.expect(try reload.apply(session.gui, &session.renderer));
+    const size = try session.renderer.measure(Fixture.viewport);
+    try session.gui.resize(size, session.renderer.theme);
+    try present(session);
+    try std.testing.expect(size.cols < previous_size.cols and size.rows < previous_size.rows);
+    try std.testing.expectEqual(size, session.gui.app.model.hostSize());
+    try std.testing.expectEqual(@as(f32, 12), session.renderer.retained.at(.{ 0, 0 }).paint.rect.x);
+    try std.testing.expectEqual(@as(f32, 18), session.renderer.retained.at(.{ 0, 0 }).paint.rect.y);
+    try std.testing.expectEqual(pixels, session.renderer.atlas.?.pixels.ptr);
+    try std.testing.expectEqual(version, session.renderer.atlas_version);
+    try std.testing.expect(session.resize_count > 0);
+    try std.testing.expectEqual(@as(f32, 1), session.renderer.frame(1).background[3]);
+    try std.testing.expectEqual(@as(u32, 0), session.renderer.frame(1).background_blur);
 }

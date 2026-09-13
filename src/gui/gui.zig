@@ -16,6 +16,7 @@ test {
     _ = Application;
     _ = @import("tests/terminal.zig");
     _ = @import("tests/configuration.zig");
+    _ = @import("tests/font_thicken.zig");
     _ = @import("TerminalMetrics.zig");
     _ = @import("NativeInput.zig");
     _ = @import("CursorClock.zig");

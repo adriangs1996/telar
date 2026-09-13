@@ -7,14 +7,17 @@ pub fn add(b: *std.Build, module: *std.Build.Module, disable_coverage: bool) voi
         .files = &.{
             "src/gui/macos/window.m",
             "src/gui/macos/TelarView.m",
+            "src/gui/macos/TelarWindowBackground.m",
             "src/gui/macos/TelarMetalRenderer.m",
             "src/gui/macos/TelarTextInputView.m",
             "src/gui/macos/font.m",
+            "src/gui/macos/glyph_rasterizer.m",
         },
         .flags = c_flags.forCoverage(b, &.{ "-fobjc-arc", "-std=c23" }, disable_coverage),
     });
     module.linkFramework("AppKit", .{});
     module.linkFramework("CoreText", .{});
+    module.linkFramework("CoreGraphics", .{});
     module.linkFramework("Metal", .{});
     module.linkFramework("QuartzCore", .{});
 }
