@@ -1,7 +1,6 @@
 const client = @import("telar-client");
 const Color = @import("Color.zig");
 const Rect = @import("Rect.zig");
-const Quad = @import("Quad.zig").Quad;
 const QuadList = @import("QuadList.zig");
 const Paint = @This();
 
@@ -10,9 +9,8 @@ style: client.GuiCursor.Style,
 color: Color,
 text_color: Color,
 thickness: f32,
-ink: []const Quad,
 
-/// Paints over retained ink without shaping or modifying the cell cache.
+/// Paints a block below ink, or another cursor shape above ink.
 /// Example: `try cursor.paint(&quads);`
 pub fn paint(cursor: Paint, quads: *QuadList) !void {
     var rect = cursor.rect;
@@ -20,14 +18,6 @@ pub fn paint(cursor: Paint, quads: *QuadList) !void {
     switch (cursor.style) {
         .block => {
             try quads.pushRect(rect, cursor.color);
-            for (cursor.ink) |original| {
-                var glyph = original;
-                glyph.r = cursor.text_color.r;
-                glyph.g = cursor.text_color.g;
-                glyph.b = cursor.text_color.b;
-                glyph.a = cursor.text_color.a;
-                try quads.push(glyph);
-            }
         },
         .bar => {
             rect.width = thickness;
@@ -45,4 +35,14 @@ pub fn paint(cursor: Paint, quads: *QuadList) !void {
             try quads.pushRect(.{ .x = rect.x + rect.width - thickness, .y = rect.y, .width = thickness, .height = rect.height }, cursor.color);
         },
     }
+}
+
+/// Recolors the owning cell's ink, including overhang outside the cursor.
+/// Example: `const override = cursor.inkColor(mesh.paint.rect);`
+pub fn inkColor(cursor: Paint, anchor: Rect) ?Color {
+    if (cursor.style == .block and anchor.x == cursor.rect.x and anchor.y == cursor.rect.y) {
+        return cursor.text_color;
+    }
+
+    return null;
 }

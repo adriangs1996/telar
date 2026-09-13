@@ -104,8 +104,8 @@ test "cursor shapes focus and blink reuse retained ink without changing the atla
         pane.cursor.appearance.shape = shape;
         try paintTerminal(session);
         const quads = session.renderer.quads.items();
-        const count: usize = if (shape == .hollow) 4 else if (shape == .block or shape == .default) ink.len else 1;
-        const first = quads[quads.len - count];
+        const count: usize = if (shape == .hollow) 4 else 1;
+        const first = quads[if (shape == .block or shape == .default) 0 else quads.len - count];
         try std.testing.expectEqual(if (shape == .bar) @as(f32, 2) else cell_width, first.width);
         try std.testing.expectEqual(if (shape == .underline or shape == .hollow) @as(f32, 2) else cell_height, first.height);
         try std.testing.expectEqual(bounds.y + if (shape == .underline) cell_height - 2 else @as(f32, 0), first.y);

@@ -14,6 +14,7 @@ const Renderer = @This();
 const RetainedCells = @import("RetainedCells.zig");
 const CellPaint = @import("CellPaint.zig");
 const CellMesh = @import("CellMesh.zig");
+const CursorPaint = @import("CursorPaint.zig");
 const copy_selection = @import("copy_selection.zig");
 
 allocator: std.mem.Allocator,
@@ -191,16 +192,46 @@ fn paintPane(renderer: *Renderer, paint: PanePaint) !void {
         }
     }
 
-    // Backgrounds precede ink so a wide glyph's trailing cell cannot erase it.
+    const cursor = renderer.paneCursor(paint);
+    if (cursor) |visible| {
+        if (visible.style == .block) {
+            try visible.paint(&renderer.quads);
+        }
+    }
+
+    // Backgrounds and the block cursor precede natural ink. The cell anchor
+    // owns its color; italic overhang remains visible across adjacent cells.
+    const bounds = renderer.cellRect(area);
     for (0..rows) |row| {
         for (0..cols) |col| {
             const mesh = renderer.retained.at(.{ area.x + @as(u16, @intCast(col)), area.y + @as(u16, @intCast(row)) });
-            for (mesh.items()[1..]) |item| {
-                try renderer.quads.push(item);
+            const cursor_color = if (cursor) |visible| visible.inkColor(mesh.paint.rect) else null;
+            for (mesh.items()[1..]) |original| {
+                var item = original;
+                if (cursor_color) |override| {
+                    item.r = override.r;
+                    item.g = override.g;
+                    item.b = override.b;
+                    item.a = override.a;
+                }
+
+                try renderer.quads.pushClipped(item, bounds);
             }
         }
     }
 
+    if (cursor) |visible| {
+        if (visible.style != .block) {
+            try visible.paint(&renderer.quads);
+        }
+    }
+}
+
+fn paneCursor(renderer: *const Renderer, paint: PanePaint) ?CursorPaint {
+    const pane = paint.pane;
+    const area = paint.view.content;
+    const rows = @min(area.h, pane.buffer.h);
+    const cols = @min(area.w, pane.buffer.w);
     const visible_cursor = copy_selection.cursor(pane, paint.copy);
     if (!paint.hide_cursor and paint.view.focused and visible_cursor.visible and renderer.cursor_on and visible_cursor.x < cols and visible_cursor.y < rows) {
         var col = visible_cursor.x;
@@ -210,8 +241,7 @@ fn paintPane(renderer: *Renderer, paint: PanePaint) !void {
         }
 
         const cell = pane.buffer.cells[@as(usize, row) * pane.buffer.w + col];
-        const mesh = renderer.retained.at(.{ area.x + col, area.y + row });
-        const cursor: @import("CursorPaint.zig") = .{
+        return .{
             .rect = renderer.cellRect(.{ .x = area.x + col, .y = area.y + row, .w = @min(@max(1, cell.width), cols - col), .h = 1 }),
             .style = if (!renderer.focused) .hollow else switch (visible_cursor.appearance.shape) {
                 .default => renderer.config.cursor.style,
@@ -223,10 +253,10 @@ fn paintPane(renderer: *Renderer, paint: PanePaint) !void {
             .color = if (renderer.theme.cursor_color) |c| rgb(c) else renderer.foreground,
             .text_color = if (renderer.theme.cursor_text_color) |c| rgb(c) else renderer.background,
             .thickness = @max(1, @round(renderer.scale * 2)),
-            .ink = mesh.items()[1..],
         };
-        try cursor.paint(&renderer.quads);
     }
+
+    return null;
 }
 
 fn paintCell(renderer: *Renderer, paint: CellPaint) !void {
@@ -248,9 +278,7 @@ fn paintCell(renderer: *Renderer, paint: CellPaint) !void {
     }
 
     if (!std.mem.eql(u8, cell.text(), " ")) {
-        const first = list.items().len;
         _ = try renderer.atlas.?.place(.{ .text = cell.text(), .x = rect.x, .y = rect.y + renderer.metrics.baseline, .color = ink, .pixel_height = renderer.metrics.pixel_height, .cell_bounds = renderer.metrics.glyphCell(), .bold = cell.style.flags.bold, .italic = cell.style.flags.italic }, list);
-        list.clipFrom(first, rect);
     }
 
     if (cell.style.flags.underline != .none) {

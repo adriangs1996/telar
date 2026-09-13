@@ -36,6 +36,15 @@ pub fn push(list: *QuadList, item: Quad) !void {
     }
 }
 
+/// Clips visible ink at its pane boundary without changing the retained mesh.
+/// Example: `try list.pushClipped(glyph, pane_bounds);`
+pub fn pushClipped(list: *QuadList, item: Quad, clip: Rect) !void {
+    const clipped = clipQuad(item, clip);
+    if (clipped.width > 0 and clipped.height > 0) {
+        try list.push(clipped);
+    }
+}
+
 /// Appends a solid rectangle through the atlas' white texel.
 /// Example: `try list.pushRect(.{ .x = 0, .y = 0, .width = 8, .height = 8 }, Color.white);`
 pub fn pushRect(list: *QuadList, rect: Rect, color: Color) !void {
@@ -81,24 +90,34 @@ pub fn reserve(list: *QuadList, count: usize) !void {
 /// Example: `list.clipFrom(first_glyph, cell_rect);`
 pub fn clipFrom(list: *QuadList, start: usize, clip: Rect) void {
     for (list.quads.items[start..]) |*item| {
-        const left = @max(item.x, clip.x);
-        const top = @max(item.y, clip.y);
-        const right = @max(left, @min(item.x + item.width, clip.x + clip.width));
-        const bottom = @max(top, @min(item.y + item.height, clip.y + clip.height));
-        if (item.width > 0 and item.height > 0) {
-            const du = (item.u1 - item.u0) / item.width;
-            const dv = (item.v1 - item.v0) / item.height;
-            item.u1 = item.u0 + (right - item.x) * du;
-            item.v1 = item.v0 + (bottom - item.y) * dv;
-            item.u0 += (left - item.x) * du;
-            item.v0 += (top - item.y) * dv;
-        }
-
-        item.x = left;
-        item.y = top;
-        item.width = right - left;
-        item.height = bottom - top;
+        item.* = clipQuad(item.*, clip);
     }
+}
+
+fn clipQuad(original: Quad, clip: Rect) Quad {
+    if (original.x >= clip.x and original.y >= clip.y and original.x + original.width <= clip.x + clip.width and original.y + original.height <= clip.y + clip.height) {
+        return original;
+    }
+
+    var item = original;
+    const left = @max(item.x, clip.x);
+    const top = @max(item.y, clip.y);
+    const right = @max(left, @min(item.x + item.width, clip.x + clip.width));
+    const bottom = @max(top, @min(item.y + item.height, clip.y + clip.height));
+    if (item.width > 0 and item.height > 0) {
+        const du = (item.u1 - item.u0) / item.width;
+        const dv = (item.v1 - item.v0) / item.height;
+        item.u1 = item.u0 + (right - item.x) * du;
+        item.v1 = item.v0 + (bottom - item.y) * dv;
+        item.u0 += (left - item.x) * du;
+        item.v0 += (top - item.y) * dv;
+    }
+
+    item.x = left;
+    item.y = top;
+    item.width = right - left;
+    item.height = bottom - top;
+    return item;
 }
 
 test "clipping a glyph adjusts texture coordinates without leaking into the next pane" {
@@ -113,4 +132,23 @@ test "clipping a glyph adjusts texture coordinates without leaking into the next
     try std.testing.expectApproxEqAbs(@as(f32, 0.25), clipped.u0, 0.001);
     try std.testing.expectApproxEqAbs(@as(f32, 0.75), clipped.u1, 0.001);
     try std.testing.expectApproxEqAbs(@as(f32, 0.5), clipped.v1, 0.001);
+}
+
+test "pane composition preserves contained texture coordinates and omits outside ink" {
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    const clip: Rect = .{ .x = 10, .y = 20, .width = 30, .height = 40 };
+    var glyph: Quad = .{ .x = 11, .y = 22, .width = 7, .height = 13, .u0 = 0.13, .v0 = 0.41, .u1 = 0.27, .v1 = 0.57, .r = 1, .g = 1, .b = 1, .a = 1 };
+    try list.pushClipped(glyph, clip);
+    try std.testing.expectEqualDeep(glyph, list.items()[0]);
+    glyph.x = clip.x + clip.width;
+    try list.pushClipped(glyph, clip);
+    glyph.x = clip.x - glyph.width;
+    try list.pushClipped(glyph, clip);
+    glyph.x = clip.x;
+    glyph.y = clip.y - glyph.height;
+    try list.pushClipped(glyph, clip);
+    glyph.y = clip.y + clip.height;
+    try list.pushClipped(glyph, clip);
+    try std.testing.expectEqual(@as(usize, 1), list.items().len);
 }
