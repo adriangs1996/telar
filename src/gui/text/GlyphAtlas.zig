@@ -14,6 +14,7 @@ const TextRun = @import("TextRun.zig");
 const GlyphAtlas = @This();
 const ShapingCache = @import("ShapingCache.zig");
 const MacRasterizer = @import("MacRasterizer.zig");
+const GlyphFailures = @import("GlyphFailures.zig");
 
 extern fn FT_GlyphSlot_Embolden(freetype.c.FT_GlyphSlot) void;
 extern fn FT_GlyphSlot_Oblique(freetype.c.FT_GlyphSlot) void;
@@ -40,6 +41,8 @@ shaping_buffer: *freetype.c.hb_buffer_t,
 pixel_height: u16 = 0,
 shaping_cache: ShapingCache,
 shape_calls: usize = 0,
+raster_attempts: usize = 0,
+failed_glyphs: GlyphFailures = .{},
 glyphs: std.AutoHashMapUnmanaged(u64, GlyphSlot) = .empty,
 mac_rasterizer: ?MacRasterizer = null,
 
@@ -235,9 +238,14 @@ fn slot(atlas: *GlyphAtlas, index: u32, run: TextRun) !GlyphSlot {
         return cached;
     }
 
+    if (atlas.failed_glyphs.contains(key)) {
+        return error.AtlasFull;
+    }
+
+    atlas.raster_attempts += 1;
     if (atlas.mac_rasterizer) |*rasterizer| {
         var glyph = try rasterizer.measure(.{ .index = index, .style = @as(u32, @intFromBool(run.bold)) | (@as(u32, @intFromBool(run.italic)) << 1) });
-        const origin = try atlas.pack(.{ glyph.width, glyph.height });
+        const origin = try atlas.packGlyph(key, .{ glyph.width, glyph.height });
         glyph.x = origin[0];
         glyph.y = origin[1];
         rasterizer.draw(glyph);
@@ -270,7 +278,7 @@ fn slot(atlas: *GlyphAtlas, index: u32, run: TextRun) !GlyphSlot {
         return error.UnsupportedPixelMode;
     }
 
-    const origin = try atlas.pack(.{ bitmap.width, bitmap.rows });
+    const origin = try atlas.packGlyph(key, .{ bitmap.width, bitmap.rows });
     if (bitmap.buffer) |buffer| {
         const pitch: usize = @intCast(@abs(bitmap.pitch));
         for (0..bitmap.rows) |row| {
@@ -299,6 +307,16 @@ fn remember(atlas: *GlyphAtlas, key: u64, glyph: @import("../native/GlyphRaster.
     };
     try atlas.glyphs.put(atlas.allocator, key, placed);
     return placed;
+}
+
+fn packGlyph(atlas: *GlyphAtlas, key: u64, extent: [2]u32) ![2]u32 {
+    return atlas.pack(extent) catch |err| {
+        if (err == error.AtlasFull) {
+            atlas.failed_glyphs.remember(key);
+        }
+
+        return err;
+    };
 }
 
 /// Shelf packing: rows of glyphs, each row as tall as its tallest glyph.
@@ -417,6 +435,58 @@ test "a page that cannot hold another glyph fails instead of wrapping" {
     atlas.shelf_y = side - 4;
     try std.testing.expectError(error.AtlasFull, atlas.pack(.{ 8, 8 }));
     try std.testing.expectError(error.GlyphTooLarge, atlas.pack(.{ side, 8 }));
+}
+
+test "full glyphs are remembered without rejecting smaller glyphs or changing retained coordinates" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    defer atlas.deinit();
+    try atlas.prepareFallbacks();
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    const existing: TextRun = .{ .text = "A", .x = 0, .y = 16, .color = .white, .pixel_height = 16 };
+    _ = try atlas.place(existing, &list);
+    const retained = list.items()[0];
+    const version = atlas.version;
+    atlas.shelf_x = 3;
+    atlas.shelf_y = side - 5;
+    atlas.shelf_height = 0;
+    const missing: TextRun = .{ .text = "W", .x = 0, .y = 16, .color = .white, .pixel_height = 16 };
+    list.clear();
+    _ = try atlas.place(missing, &list);
+    const fallback = list.items()[0];
+    const attempts = atlas.raster_attempts;
+    try std.testing.expectEqual(version, atlas.version);
+    {
+        var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+        atlas.allocator = failing.allocator();
+        defer atlas.allocator = std.testing.allocator;
+        list.allocator = failing.allocator();
+        defer list.allocator = std.testing.allocator;
+        for (0..120) |_| {
+            list.clear();
+            _ = try atlas.place(missing, &list);
+            try std.testing.expectEqualDeep(fallback, list.items()[0]);
+        }
+
+        try std.testing.expectEqual(@as(usize, 0), failing.allocations);
+    }
+
+    try std.testing.expectEqual(attempts, atlas.raster_attempts);
+    list.clear();
+    _ = try atlas.place(.{ .text = ".", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);
+    try std.testing.expect(atlas.version > version);
+    try std.testing.expect(!std.meta.eql(fallback, list.items()[0]));
+    list.clear();
+    _ = try atlas.place(existing, &list);
+    try std.testing.expectEqualDeep(retained, list.items()[0]);
+
+    var replacement = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    defer replacement.deinit();
+    try replacement.prepareFallbacks();
+    list.clear();
+    _ = try replacement.place(missing, &list);
+    try std.testing.expect(!std.meta.eql(fallback, list.items()[0]));
+    try std.testing.expect(replacement.version > 1);
 }
 
 /// Reserves fallback glyphs before terminal output fills the atlas.
