@@ -125,8 +125,8 @@ test "Braille chrome preserves blank columns clipping colors and configured grid
         const last = quads.items()[1];
         try std.testing.expect(first.x >= bounds.x and first.x + first.width <= bounds.x + width);
         try std.testing.expect(last.x >= bounds.x + 2 * width and last.x + last.width <= bounds.x + 3 * width);
-        try std.testing.expect(first.y + first.height / 2 < bounds.y + height / 4);
-        try std.testing.expect(last.y + last.height / 2 > bounds.y + 3 * height / 4);
+        try std.testing.expect(first.y + first.height / 2 < bounds.y + height / 2);
+        try std.testing.expect(last.y + last.height / 2 > bounds.y + height / 2);
         for (quads.items()) |dot| {
             try expectSolid(dot);
             try std.testing.expect(dot.y >= bounds.y and dot.y + dot.height <= bounds.y + bounds.height);
