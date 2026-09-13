@@ -26,6 +26,9 @@ test "native prompt renders selections and owns its gesture until release" {
     try fixture.paint();
     try std.testing.expect(fixture.overlays.modal == null);
     try std.testing.expect(fixture.overlays.pointer(.{ .x = 1, .y = 1, .kind = .drag }).?.consumed);
+    try std.testing.expect(fixture.overlays.pointer(.{ .x = 1, .y = 1, .kind = .press, .button = 1 }).?.consumed);
+    try std.testing.expect(fixture.overlays.pointer(.{ .x = 1, .y = 1, .kind = .release, .button = 1 }).?.consumed);
+    try std.testing.expect(fixture.overlays.pointer(.{ .x = 1, .y = 1, .kind = .drag }).?.consumed);
     try std.testing.expect(fixture.overlays.pointer(.{ .x = 1, .y = 1, .kind = .release }).?.consumed);
     try std.testing.expect(fixture.overlays.pointer(.{ .x = 1, .y = 1, .kind = .move }) == null);
 }
