@@ -20,6 +20,7 @@ test {
     _ = @import("tests/font_thicken.zig");
     _ = @import("tests/navigation.zig");
     _ = @import("tests/chrome.zig");
+    _ = @import("tests/composition_budget.zig");
     _ = @import("tests/overlays.zig");
     _ = @import("tests/scene.zig");
     _ = @import("TerminalMetrics.zig");
