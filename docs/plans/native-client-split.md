@@ -174,10 +174,12 @@ Cada paso deja la TUI funcionando con `zig build test`,
 7. Agregado compartido y puertos, con el driver en el adaptador. Sustituye al
    `Host` comptime con loop genérico: ver [Contrato del paso 7](#paso-7-contrato).
    Hecho: ver [Paso 7](#paso-7-resultado). `telar-frontend` conserva su nombre.
-8. Primer hito de `telar-gui`: pintar sidebar y un pane de terminal en una
-   ventana, sin input.
+8. Primer hito de `telar-gui`: terminal nativa con teclado, pegado y resize.
+   Hecho con el alcance ajustado a terminal, sin sidebar ni tabs gráficos:
+   ver [Native terminal](../flows/native-terminal.md).
 9. Migrar el loop real al modelo inbox/outbox de
    [frontend-execution-model](frontend-execution-model.md) con los tres hosts.
+   Hecho: ver [Paso 9](#paso-9-resultado).
 
 ## Fuera de alcance
 
@@ -450,5 +452,37 @@ install` para el enlace en el `PATH`. Verificado abriendo el bundle con
 shell de login y `TELAR_LOGIN_SHELL=1`; y en la máquina Linux con
 `vm.py gui-smoke`, que ahora lanza por `--login-shell` y comprueba la marca.
 
-Siguiente corte: un pane de terminal desde celdas reales del runtime, con
-`AttachedClient` y los puertos implementados sobre esta ventana.
+El corte posterior conectó las celdas reales del runtime, teclado, pegado,
+resize y cierre que conserva el shell, mediante `AttachedClient` y sus puertos.
+El flujo vigente está en [Native terminal](../flows/native-terminal.md).
+
+## Paso 9, resultado
+
+Los tres hosts son TUI, GUI y el driver headless de pruebas. Los dos backends
+nativos de la GUI, Metal en macOS y Vulkan en Linux, usan el mismo consumidor.
+
+- `src/client/execution/GenericInbox.zig` comparte admisión, almacenamiento
+  acotado, tickets con generación, wakes y cierre. La inbox reserva una plaza
+  antes de arrancar cada productor mediante `std.Io.Group`; no incorpora un
+  scheduler propio ni un hilo permanente por fuente.
+- `frontend/client/run.zig` drena mensajes mediante `entrypoints/events.zig`.
+  Cada pasada consume hasta 32 mensajes o 1 ms y después observa presentación
+  una vez. El handler en curso siempre termina.
+- `gui/NativeLoop.zig` sustituye a `RuntimeDriver.zig`. RX, TX, input, foco,
+  recarga y completions de GPU llegan a la inbox; el hilo de ventana aplica
+  el estado. `presentation/Fixture.zig` usa el mismo contrato en headless.
+- La outbox y los puertos existentes conservan sus políticas. RX y TX siguen
+  siendo operaciones independientes, rearmadas. RX posee tanto los bytes como
+  un único mensaje validado, que la inbox referencia hasta terminar el despacho.
+  El ACK sigue confirmando estado recibido; la completion de GPU retira daño
+  capturado. No se acumula una cola de frames visuales históricos.
+- El cierre revoca admisión y espera a los productores antes de liberar
+  buffers, generaciones o endpoints. Ambos backends aplazan la presentación
+  con token cero si la completion anterior aún espera en la inbox, conservando
+  el resize pendiente.
+
+El contrato y la propiedad de recursos están en
+[Client event dispatch](../flows/client-event-dispatch.md). Las pruebas de
+los tres hosts, ventanas nativas, recarga, cierre, y las mediciones antes/después
+están en el [informe del paso 9](../performance/client-execution/README.md).
+Los resultados locales no sustituyen los gates de release en Ubuntu nativo.

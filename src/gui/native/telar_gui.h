@@ -21,6 +21,7 @@ typedef struct {
 } telar_gui_viewport;
 
 typedef struct {
+  // Zero defers submission. The host waits for another wake or viewport change.
   uint64_t token;
   const telar_gui_quad *quads;
   uint32_t quad_count;

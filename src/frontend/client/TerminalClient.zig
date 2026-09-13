@@ -36,7 +36,7 @@ pub const ClientEvent = union(enum) {
     binding_timeout: anyerror!void,
     capability_timeout: anyerror!void,
     resized: anyerror!void,
-    server: anyerror![]u8,
+    server: anyerror!*const @import("telar-client").RuntimeMessage,
     sent: anyerror!void,
     draw: anyerror!void,
     media_tick: anyerror!void,
@@ -56,15 +56,14 @@ pub const ClientEvent = union(enum) {
     link_opened: anyerror!void,
 };
 
-const client_event_count = @typeInfo(ClientEvent).@"union".fields.len;
+const GenericInbox = @import("telar-client").GenericInbox;
 
 const TerminalClient = @This();
 
 app: AttachedClient,
 writer: *std.Io.Writer,
 output: ?OutputType = null,
-select: std.Io.Select(ClientEvent),
-select_storage: [client_event_count]ClientEvent = undefined,
+inbox: GenericInbox(ClientEvent),
 host_negotiation: HostNegotiationState = .{},
 presenter: Presenter,
 view: PresentationState,
@@ -146,7 +145,7 @@ pub fn init(params: Params) !*TerminalClient {
 
     terminal.writer = params.writer;
     terminal.output = output;
-    terminal.select = undefined;
+    terminal.inbox = .init(params.io, .{});
     terminal.host_negotiation = .{};
     terminal.presenter = undefined;
     terminal.view = view;
@@ -158,9 +157,6 @@ pub fn init(params: Params) !*TerminalClient {
         terminal.graphics_store.delivery.compression_scheduler = .{ .context = terminal, .start = scheduleCompression };
     }
 
-    // The select's storage lives inside the heap-stable client, so the
-    // select can only be built once the client's address exists.
-    terminal.select = std.Io.Select(ClientEvent).init(params.io, &terminal.select_storage);
     const client = &terminal.app;
     client.sound_port = host_ports.sound(client);
     client.notifier = host_ports.notifier(client);
@@ -180,7 +176,7 @@ pub fn init(params: Params) !*TerminalClient {
     client.host_input_source = host_ports.hostInput(client);
     client.transport_driver = host_ports.transport(client);
     client.config_watcher = host_ports.configWatcher(client);
-    // The presenter borrows the select and metrics, whose heap addresses
+    // The presenter borrows the inbox and metrics, whose heap addresses
     // only exist once the client does.
     terminal.presenter = .{
         .io = params.io,
@@ -199,12 +195,12 @@ pub fn init(params: Params) !*TerminalClient {
 
 fn scheduleCompression(context: *anyopaque, job: *CompressionType) !void {
     const terminal: *TerminalClient = @ptrCast(@alignCast(context));
-    try terminal.select.concurrent(.compression_done, CompressionType.run, .{job});
+    try terminal.inbox.start(.compression_done, .{ CompressionType.run, .{job} });
 }
 
 fn scheduleDraw(context: *anyopaque, deadline_ns: u64) !void {
     const terminal: *TerminalClient = @ptrCast(@alignCast(context));
-    try terminal.select.concurrent(.draw, waitForPresentation, .{ terminal.app.io, deadline_ns });
+    try terminal.inbox.start(.draw, .{ waitForPresentation, .{ terminal.app.io, deadline_ns } });
 }
 
 fn drawNow(context: *anyopaque) !void {
@@ -214,7 +210,7 @@ fn drawNow(context: *anyopaque) !void {
 
 fn scheduleMedia(context: *anyopaque, deadline_ns: u64) !void {
     const terminal: *TerminalClient = @ptrCast(@alignCast(context));
-    try terminal.select.concurrent(.media_tick, waitForPresentation, .{ terminal.app.io, deadline_ns });
+    try terminal.inbox.start(.media_tick, .{ waitForPresentation, .{ terminal.app.io, deadline_ns } });
 }
 
 fn waitForPresentation(io: std.Io, deadline_ns: u64) anyerror!void {
@@ -222,12 +218,12 @@ fn waitForPresentation(io: std.Io, deadline_ns: u64) anyerror!void {
     try deadline.wait(io);
 }
 
-/// Cancels every in-flight select task first — the reload task publishes
+/// Cancels every admitted producer first — the reload task publishes
 /// into the orphan slots — then releases terminal resources, the shared
 /// state and finally the allocation.
 pub fn deinit(terminal: *TerminalClient) void {
     const gpa = terminal.app.gpa;
-    terminal.select.cancelDiscard();
+    terminal.inbox.deinit();
     if (terminal.output) |*output| {
         output.deinit();
     }

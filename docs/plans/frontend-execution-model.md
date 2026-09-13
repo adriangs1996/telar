@@ -1,8 +1,11 @@
 # Modelo de ejecución del frontend
 
-Propuesta para discutir, no una descripción de `exper.zig` ni una decisión de
-migración. El runtime se representa por sus límites de entrada, autoridad y
-entrega; este documento no propone rehacer su ejecución interna.
+Diseño de referencia para el paso 9 de `native-client-split.md`. La implementación
+usa una inbox compartida y consumidores en TUI, GUI y headless; sus contratos
+concretos están en [client event dispatch](../flows/client-event-dispatch.md).
+El estudio de Native SDK que sigue conserva la revisión analizada. El runtime
+se representa por sus límites de entrada, autoridad y entrega; no se rehace su
+ejecución interna.
 
 [Ver el diagrama SVG](frontend-execution-model.svg).
 
@@ -198,7 +201,8 @@ ni orden global entre productores o entre las dos direcciones IPC.
 - **Admisión sin espera en los bucles dueños del estado.** Si la outbox está
   llena, el handler recibe un resultado explícito. Sustituir una escritura
   bloqueante por un `putOne` bloqueante sobre una cola llena solo mueve la
-  espera. La política exacta por comando queda pendiente.
+  espera. Las políticas por operación están en
+  [Client event dispatch](../flows/client-event-dispatch.md#saturation-shutdown-and-recovery).
 - **Aislamiento por conexión.** Una escritura lenta retiene únicamente el frame
   y la tarea de esa conexión. El runtime no espera a que ese cliente consuma;
   pliega estado visual o fuerza resincronización según el protocolo.
@@ -222,37 +226,45 @@ ni orden global entre productores o entre las dos direcciones IPC.
   pendientes antes de codificar; no se descartan bytes arbitrarios de un diff
   ya preparado contra el estado de pantalla anterior.
 
-## Qué ya existe y qué queda por decidir
+## Piezas reutilizadas y decisiones del paso 9
 
 El frontend actual ya tiene piezas de este modelo:
 
-- [`connection/outbox.zig`](../../src/frontend/client/connection/outbox.zig)
+- [`connection/Outbox.zig`](../../src/client/connection/Outbox.zig)
   posee mensajes y copia payloads variables en almacenamiento acotado.
-- [`connection/runtime_transport.zig`](../../src/frontend/client/connection/runtime_transport.zig)
+- [`connection/RuntimeTransportState.zig`](../../src/client/connection/RuntimeTransportState.zig)
   reserva buffers y separa lifecycle de envío y recepción.
-- [`entrypoints/runtime_io.zig`](../../src/frontend/client/entrypoints/runtime_io.zig)
+- [`entrypoints/runtime_io.zig`](../../src/client/entrypoints/runtime_io.zig)
   programa recepción y envío concurrentes.
 - [`presentation/presentation_lifecycle.zig`](../../src/frontend/client/presentation/presentation_lifecycle.zig)
   separa composición, escritura pendiente y confirmación de presentación.
 - [Client event dispatch](../flows/client-event-dispatch.md) describe el
-  despacho mediante select. Una cola consumida por una tarea permanente y
-  operaciones rearmadas mediante select pueden implementar la separación del
-  dibujo; no se decide aquí reemplazar una por la otra.
+  despacho por lotes finitos. Se mantienen operaciones rearmadas sobre
+  `std.Io.Group`, con admisión de su completion antes de arrancarlas.
 - El [ADR de client delivery](../adr/0003-separate-client-delivery-from-attachment-sync.md)
   ya separa política de entrega, sincronización de attachments y socket I/O.
 
-Quedan abiertas las capacidades en bytes y elementos, la política de admisión
-por tipo, el presupuesto de drenaje, la equidad entre fuentes, la supervisión
-concreta y la forma del sink de efectos. No se fija un hilo del SO por productor
-ni una nueva infraestructura genérica de efectos.
+La inbox tiene 64 slots entre reservas y mensajes preparados. Cada pasada
+captura su frontera FIFO y consume hasta 32 mensajes o 1 ms, terminando siempre
+el handler en curso. Las publicaciones nacidas durante la pasada quedan para
+la siguiente. Solo se fusionan notificaciones de readiness y foco; input y
+deltas conservan datos y orden. La outbox existente conserva su política de
+admisión por operación. RX mantiene un buffer de 4 MiB, TX otro de 4 MiB y el
+read-ahead ocupa 64 KiB. No se añade un hilo del SO por productor.
 
-Antes de promover este dibujo a implementación hay que verificar: cliente que
-no lee, cola llena en cada frontera, ráfaga concurrente con input, desconexión
-con envío en vuelo, completions de una generación retirada, wake durante el
-drenaje, recuperación por snapshot y cero repintados en reposo. Las mediciones
-deberían incluir p50/p95/p99 de input y presentación, bytes retenidos, profundidad
-de cola, rechazos, pérdidas y despertares. La inspección de Native no reemplaza
-esas pruebas.
+El mutex protege admisión y publicación; el callback de wake solo señala el
+endpoint nativo sin bloquear. Cada reserva tiene generación, y el cierre
+revoca admisión antes de cancelar y esperar a los productores. El dispatcher
+del host conoce sus mensajes locales y delega a handlers; el módulo compartido
+no importa eventos de AppKit, Wayland ni del terminal exterior.
+
+La verificación cubre un peer que no lee, saturación, publicaciones concurrentes,
+input con TX bloqueado, cierre con I/O en vuelo, tickets de una generación
+retirada, wakes durante el drenaje y ausencia de repintados en reposo. Los tres
+hosts ejercitan el mismo contrato, además de sus pruebas de presentación y
+recuperación. La telemetría expone bytes de almacenamiento de inbox, profundidad,
+reservas, rechazos, coalescencia y despertares. La comparación de latencia y sus
+límites se conservan en el [informe del paso 9](../performance/client-execution/README.md).
 
 [native]: https://github.com/vercel-labs/native/tree/31663e16b054f212f0377878eb901330bbc94b53
 [app-model]: https://github.com/vercel-labs/native/blob/31663e16b054f212f0377878eb901330bbc94b53/docs/src/app/docs/app-model/page.mdx

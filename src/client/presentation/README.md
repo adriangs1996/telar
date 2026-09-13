@@ -63,10 +63,15 @@ failure and cancellation. The adapter imports no terminal, font or window
 resources. It is a presentation test adapter, not a second full CLI or an
 implementation of untested host services.
 
-`headless_tests.zig` assembles real shared workspace, frame, resource-delivery,
+`headless_tests.zig` uses the shared bounded inbox and assembles real workspace, frame, resource-delivery,
 input and presentation handlers with the shared decoded-message entrypoint and
 outbox. Unwired message adapters fail explicitly. Tests cover delayed input,
 borrowed wire reuse, invalid bases, reattachment and workspace reconstruction,
 stale completions, geometry ABA, independent graphics credits, independent clients, capacity
 failure and allocation-free steady-state operation. TUI integration additionally
 checks the host-write boundary and keeps its terminal-specific regression suite.
+
+All three host drivers use the admission and drain contracts in
+[`client event dispatch`](../../../docs/flows/client-event-dispatch.md). Native
+GPU completion is an inbox message; a zero native frame token defers submission
+until the consumer can release the previous presentation.

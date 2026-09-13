@@ -3,13 +3,13 @@ const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const GuiClient = @import("../GuiClient.zig");
-const RuntimeDriver = @import("../RuntimeDriver.zig");
+const NativeLoop = @import("../NativeLoop.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
 const Session = @This();
 
 connection: core.SocketChannel,
 peer: core.SocketChannel,
-driver: RuntimeDriver,
+driver: NativeLoop,
 gui: *GuiClient,
 renderer: Renderer,
 pending: ?[]const u8 = null,
@@ -33,7 +33,7 @@ pub fn init() !*Session {
     session.* = .{
         .connection = .init(.{ .socket = .{ .handle = fds[0], .address = .{ .ip4 = .loopback(0) } } }),
         .peer = .init(.{ .socket = .{ .handle = fds[1], .address = .{ .ip4 = .loopback(0) } } }),
-        .driver = try RuntimeDriver.init(std.testing.io),
+        .driver = try NativeLoop.init(std.testing.io),
         .gui = undefined,
         .renderer = .init(std.testing.allocator),
     };
@@ -74,7 +74,15 @@ fn captureSend(context: *anyopaque, _: *client.RuntimeTransportState, bytes: []c
 
 pub fn settle(session: *Session) !void {
     var count: usize = 0;
-    while (session.pending) |bytes| {
+    while (true) {
+        if (session.pending == null) {
+            _ = try session.gui.pump();
+            if (session.pending == null) {
+                break;
+            }
+        }
+
+        const bytes = session.pending.?;
         if (count == 2048) {
             return error.UnboundedDelivery;
         }

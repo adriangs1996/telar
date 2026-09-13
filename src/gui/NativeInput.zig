@@ -92,7 +92,8 @@ pub fn drain(input: *Input, app: *client.AttachedClient) !void {
         return;
     }
 
-    while (input.len != 0 and client.runtime_io.availableCapacity(app) >= 4) {
+    var budget = client.DrainBudget.begin(app.io, input.len);
+    while (input.len != 0 and client.runtime_io.availableCapacity(app) >= 4 and budget.take(app.io)) {
         switch (input.items[input.head]) {
             .key => |key| _ = try client.controllers.pane_inputs.send(app, .{ .target = .focused, .source = .host, .payload = .{ .key = key } }),
             .paste_start => _ = try client.controllers.pane_pastes.start(app),

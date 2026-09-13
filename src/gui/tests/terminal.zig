@@ -207,7 +207,37 @@ test "native driver joins a blocked socket read before freeing the shared client
     defer session.deinit();
     session.gui.app.transport_driver = @import("../host_ports.zig").transport(&session.gui.app);
     try @import("telar-client").runtime_io.scheduleRead(&session.gui.app);
-    try std.testing.expect(session.driver.reader != null);
+    try std.testing.expect(session.gui.app.runtime_transport.receive_pending);
+}
+
+test "native inbox holds input and GPU completion until the consumer runs" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    try session.receiveFrame(1);
+    try session.settle();
+    const token = try session.gui.prepare(&session.renderer);
+    const inbox = &session.driver.inbox;
+    var text = [_]u8{'x'} ** 80;
+    try session.gui.input.accept(.{ .kind = 1, .text = &text, .len = text.len });
+    @memset(&text, 'z');
+    try inbox.notify(.input_ready);
+    try inbox.post(.{ .presented = .{ .token = token, .delivered = true } });
+    try std.testing.expectEqual(@as(usize, 0), session.input_len);
+    try std.testing.expect(session.gui.lifecycle.active != null);
+    _ = try session.gui.pump();
+    try std.testing.expect(session.gui.input.len >= 48);
+    try session.settle();
+    try std.testing.expectEqual(@as(usize, 80), session.input_len);
+    for (session.input[0..session.input_len]) |byte| {
+        try std.testing.expectEqual(@as(u8, 'x'), byte);
+    }
+
+    try std.testing.expect(session.gui.lifecycle.active == null);
+    try std.testing.expectEqual(@as(usize, 1), session.ack_count);
+    const consumed = inbox.snapshot().consumed;
+    _ = try session.gui.pump();
+    try std.testing.expectEqual(consumed, inbox.snapshot().consumed);
 }
 
 fn present(session: *Session) !void {

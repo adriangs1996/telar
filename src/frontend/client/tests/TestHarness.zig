@@ -86,7 +86,7 @@ pub fn deinit(harness: *TestHarness) void {
 /// observes exactly what the runtime peer would receive.
 pub fn settle(harness: *TestHarness) !void {
     while (harness.client.runtime_transport.outbox.inFlight() or harness.client.runtime_transport.outbox.len != 0) {
-        switch (try host(harness.client).select.await()) {
+        switch (try host(harness.client).inbox.receive()) {
             .sent => |result| try runtime_transport.handleSent(harness.client, result),
             .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
             .sidebar_animation_tick => |result| {
@@ -124,7 +124,7 @@ pub fn settleModelPresentation(harness: *TestHarness) !void {
         host(harness.client).presenter.presentation_state.prepared.presentation_ingress.input_routing !=
             input_routing_target)
     {
-        switch (try host(harness.client).select.await()) {
+        switch (try host(harness.client).inbox.receive()) {
             .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
             .sent => |result| try runtime_transport.handleSent(harness.client, result),
             .media_tick => |result| try presentation_lifecycle.handleMediaTick(harness.client, result),

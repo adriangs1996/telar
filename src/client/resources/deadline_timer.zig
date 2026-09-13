@@ -1,4 +1,4 @@
-//! One replaceable absolute deadline backed by at most one select task.
+//! One replaceable absolute deadline backed by at most one host timer worker.
 
 const std = @import("std");
 const Scheduler = @import("Scheduler.zig");

@@ -5,6 +5,7 @@ const std = @import("std");
 const RuntimeTransportState = @import("RuntimeTransportState.zig");
 const decodeClient_module = @import("telar-core").decodeClient;
 const ClientIdentityType = @import("telar-core").ClientIdentity;
+const GenericInbox = @import("../execution/GenericInbox.zig").Type;
 
 fn testingSocketPair() ![2]SocketChannelType {
     var sockets: [2]std.c.fd_t = undefined;
@@ -76,4 +77,59 @@ test "runtime bootstrap queues colors before subscribing to the initial layout" 
     const runtime_state = try decodeClient_module((try state.prepareSend()).?);
     try std.testing.expect(runtime_state == .request_runtime_state);
     try std.testing.expectEqual(@as(ClientIdentityType, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
+}
+
+test "a non-reading peer cannot block receive admission or local input and shutdown joins both actors" {
+    const core = @import("telar-core");
+    const Event = union(enum) {
+        server: anyerror!*const @import("RuntimeMessage.zig"),
+        sent: anyerror!void,
+        input: u8,
+    };
+    const io = std.testing.io;
+    var channels = try testingSocketPair();
+    defer channels[0].deinit(io);
+    defer channels[1].deinit(io);
+    var state = try RuntimeTransportState.init(std.testing.allocator, &channels[0]);
+    defer state.deinit(std.testing.allocator);
+    var inbox: GenericInbox(Event) = .init(io, .{});
+    defer inbox.deinit();
+    @memset(state.send_buffer, 0);
+    try inbox.start(.sent, .{ RuntimeTransportState.send, .{ &state, io, @as([]const u8, state.send_buffer) } });
+    try std.testing.expect(state.beginRead());
+    try inbox.start(.server, .{ RuntimeTransportState.read, .{ &state, io } });
+    try inbox.post(.{ .input = 'x' });
+    var buffer: [64]u8 = undefined;
+    try channels[1].send(io, try core.encodeSystemMetrics(&buffer, .{
+        .revision = 7,
+        .cpu_percent = 25,
+        .memory_used_decigib = 10,
+        .has_battery = false,
+        .battery_percent = 0,
+    }));
+    var input_seen = false;
+    var server_seen = false;
+    for (0..2) |_| {
+        switch (try inbox.receive()) {
+            .input => |value| {
+                try std.testing.expectEqual(@as(u8, 'x'), value);
+                input_seen = true;
+            },
+            .server => |result| {
+                const received = try state.completeRead(result);
+                try std.testing.expectEqual(&state.received, received);
+                try std.testing.expectEqual(@as(u64, 7), received.message.system_metrics.revision);
+                server_seen = true;
+            },
+            .sent => return error.SendCompletedWithoutPeerReading,
+        }
+    }
+
+    try std.testing.expect(input_seen and server_seen);
+    try std.testing.expectEqual(@as(usize, 1), inbox.snapshot().reserved);
+    try std.testing.expect(state.beginRead());
+    try inbox.start(.server, .{ RuntimeTransportState.read, .{ &state, io } });
+    inbox.deinit();
+    try std.testing.expectEqual(@as(u64, 2), inbox.snapshot().stale);
+    try std.testing.expectEqual(@as(usize, 0), inbox.snapshot().reserved);
 }

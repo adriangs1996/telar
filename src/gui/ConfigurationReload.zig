@@ -10,7 +10,8 @@ const reloads = client.controllers.config_reloads;
 const Reload = @This();
 
 io: std.Io,
-wake_fd: c_int,
+inbox: *@import("gui_event.zig").Inbox = undefined,
+ticket: ?@import("telar-client").InboxProducerTicket = null,
 worker: ?std.Io.Future(void) = null,
 ready: std.atomic.Value(bool) = .init(false),
 scheduled: ?client.ConfigWaitArgs = null,
@@ -41,8 +42,8 @@ pub fn schedule(reload: *Reload, args: client.ConfigWaitArgs) !void {
 }
 
 /// Joins only completed work. Unchanged fingerprints never request a frame.
-/// Example: `try reload.poll(app);`
-pub fn poll(reload: *Reload, app: *client.AttachedClient) !void {
+/// Example: `try reload.accept(app);`
+pub fn accept(reload: *Reload, app: *client.AttachedClient) !void {
     if (reload.ready.swap(false, .acquire)) {
         reload.worker.?.await(reload.io);
         reload.worker = null;
@@ -53,12 +54,16 @@ pub fn poll(reload: *Reload, app: *client.AttachedClient) !void {
             _ = try reloads.handle(app, reload.result);
         }
     }
+}
 
+/// Starts a scheduled watcher after adoption captured the current generation.
+/// Example: `try reload.poll(app);`
+pub fn poll(reload: *Reload, _: *client.AttachedClient) !void {
     if (reload.scheduled) |args| {
         std.debug.assert(!reload.pending and reload.worker == null);
         const request: Request = .{ .wait = args, .current = reload.current, .viewport = reload.viewport };
         reload.request = request;
-        reload.worker = try std.Io.concurrent(reload.io, load, .{ reload, request });
+        try reload.launch(load, request);
         reload.scheduled = null;
     }
 }
@@ -77,7 +82,7 @@ pub fn apply(reload: *Reload, gui: *GuiClient, renderer: *Renderer) !bool {
         var request = reload.request.?;
         request.viewport = reload.viewport;
         reload.request = request;
-        reload.worker = try std.Io.concurrent(reload.io, restage, .{ reload, request });
+        try reload.launch(restage, request);
         reload.pending = false;
         return false;
     }
@@ -184,7 +189,14 @@ fn prepare(reload: *Reload, request: Request) void {
 
 fn publish(reload: *Reload) void {
     reload.ready.store(true, .release);
-    native.telar_gui_wake(reload.wake_fd);
+    _ = reload.inbox.publish(reload.ticket.?, .configuration_ready);
+}
+
+fn launch(reload: *Reload, comptime function: anytype, request: Request) !void {
+    const ticket = try reload.inbox.reserve();
+    errdefer reload.inbox.release(ticket);
+    reload.ticket = ticket;
+    reload.worker = try std.Io.concurrent(reload.io, function, .{ reload, request });
 }
 
 fn discardPrepared(reload: *Reload) void {

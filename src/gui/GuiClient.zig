@@ -3,12 +3,14 @@ const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const host_ports = @import("host_ports.zig");
-const RuntimeDriver = @import("RuntimeDriver.zig");
+const NativeLoop = @import("NativeLoop.zig");
 const GuiClient = @This();
 
 app: client.AttachedClient,
-driver: *RuntimeDriver,
+driver: *NativeLoop,
 input: @import("NativeInput.zig") = .{},
+input_revision: u64 = 0,
+focused: bool = true,
 region: client.Region,
 theme: client.ColorTheme,
 lifecycle: client.PresentationLifecycleState = .{},
@@ -20,7 +22,7 @@ pub fn of(app: *client.AttachedClient) *GuiClient {
 
 /// Adopts options on success and binds all ports before receiving messages.
 /// Example: `const gui = try GuiClient.init(params, &driver);`
-pub fn init(params: client.ClientInit, driver: *RuntimeDriver) !*GuiClient {
+pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
     const gui = try params.gpa.create(GuiClient);
     errdefer params.gpa.destroy(gui);
     try client.AttachedClient.init(&gui.app, params);
@@ -28,7 +30,10 @@ pub fn init(params: client.ClientInit, driver: *RuntimeDriver) !*GuiClient {
     // a shared Lua file's TUI renderer preference, including during reload.
     gui.app.options.sidebar_renderer_locked = true;
     gui.driver = driver;
+    driver.configuration.inbox = &driver.inbox;
     gui.input = .{};
+    gui.input_revision = 0;
+    gui.focused = true;
     gui.theme = params.options.theme;
     gui.region = .{ .area = .{ .w = params.host_size.cols, .h = params.host_size.rows }, .revision = 1 };
     gui.lifecycle = .{};
@@ -84,7 +89,13 @@ pub fn start(gui: *GuiClient, colors: core.TerminalColors) !void {
 }
 
 pub fn pump(gui: *GuiClient) !?u8 {
-    if (try gui.driver.drain(&gui.app)) |status| {
+    return gui.driver.drain(gui);
+}
+
+/// Applies one validated runtime message before releasing its receive borrow.
+/// Example: `const status = try gui.receive(result);`
+pub fn receive(gui: *GuiClient, result: anyerror!*const client.RuntimeMessage) !?u8 {
+    if (try client.runtime_io.handleRead(&gui.app, result)) |status| {
         return status;
     }
 
@@ -92,8 +103,32 @@ pub fn pump(gui: *GuiClient) !?u8 {
         gui.app.startup.phase = .active;
     }
 
-    try gui.input.drain(&gui.app);
+    try gui.resumeInput();
     return null;
+}
+
+/// Consumes bounded native input and schedules another turn if it can advance.
+/// Example: `try gui.inputReady();`
+pub fn inputReady(gui: *GuiClient) !void {
+    if (gui.input.len != 0) {
+        gui.input_revision +%= 1;
+        try gui.input.drain(&gui.app);
+        try gui.resumeInput();
+    }
+}
+
+/// Example: `gui.focus(true);`
+pub fn focus(gui: *GuiClient, focused: bool) void {
+    gui.focused = focused;
+    gui.input_revision +%= 1;
+}
+
+/// Queue one readiness notification only when input can make progress.
+/// Example: `try gui.resumeInput();`
+pub fn resumeInput(gui: *GuiClient) !void {
+    if (gui.input.len != 0 and !gui.app.startup.holdsInput() and client.runtime_io.availableCapacity(&gui.app) >= 4) {
+        try gui.driver.inbox.notify(.input_ready);
+    }
 }
 
 /// Copies the visible cursor identity for the native blink clock.

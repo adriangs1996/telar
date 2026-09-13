@@ -3,6 +3,7 @@
 const Quad = @import("../render/Quad.zig").Quad;
 
 pub const Frame = extern struct {
+    // Zero defers submission until another consumer wake or viewport change.
     token: u64 = 0,
     quads: ?[*]const Quad,
     quad_count: u32,

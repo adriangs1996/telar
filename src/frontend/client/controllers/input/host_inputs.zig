@@ -68,7 +68,7 @@ pub fn scheduleRead(client: *Client) !void {
     }
 
     state.read_pending = true;
-    host(client).select.concurrent(.input, read, .{ client.io, state.file, &state.chunk }) catch |err| {
+    host(client).inbox.start(.input, .{ read, .{ client.io, state.file, &state.chunk } }) catch |err| {
         state.read_pending = false;
 
         return err;

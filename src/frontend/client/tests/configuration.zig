@@ -223,7 +223,7 @@ test "dynamic bar ticks commit current Lua content before paced presentation" {
 
     try std.testing.expect(commit.bars_changed);
     try std.testing.expect(client.bar_updates.scheduler.pending);
-    const event = try host(client).select.await();
+    const event = try host(client).inbox.receive();
     switch (event) {
         .bar_tick => |result| try bar_updates.handleTick(client, result),
         else => return error.UnexpectedEvent,
@@ -263,7 +263,7 @@ test "command completion from a replaced bar generation is discarded" {
     );
     _ = try config_reloads.apply(client, running);
 
-    const tick = try host(client).select.await();
+    const tick = try host(client).inbox.receive();
     switch (tick) {
         .bar_tick => |result| try bar_updates.handleTick(client, result),
         else => return error.UnexpectedEvent,
@@ -280,7 +280,7 @@ test "command completion from a replaced bar generation is discarded" {
     _ = try config_reloads.apply(client, replacement);
     const version_after_reload = client.model.version();
 
-    const completed = try host(client).select.await();
+    const completed = try host(client).inbox.receive();
     switch (completed) {
         .bar_command => |value| try bar_updates.completeCommand(client, value),
         else => return error.UnexpectedEvent,

@@ -239,7 +239,7 @@ test "a media tick that yields to a pending draw runs at that draw's completion"
     try std.testing.expect(!host(client).presenter.media_after_draw);
     // The deferred pass was armed for now, not a pacer interval later.
     while (true) {
-        switch (try host(client).select.await()) {
+        switch (try host(client).inbox.receive()) {
             .media_tick => |result| {
                 try presentation_lifecycle.handleMediaTick(client, result);
                 break;

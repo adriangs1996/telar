@@ -114,7 +114,7 @@ pub fn pumpOutput(client: *Client) anyerror!void {
         return;
     }
 
-    try host(client).select.concurrent(.host_written, OutputType.write, .{work});
+    try host(client).inbox.start(.host_written, .{ OutputType.write, .{work} });
 }
 
 /// Commits only the presentation whose bytes reached the host, then folds work.

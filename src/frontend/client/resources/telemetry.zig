@@ -78,6 +78,21 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
         metrics.server_messages,
         metrics.server_bytes,
     });
+    try writer.print("\"inbox_depth\":{d},\"inbox_storage_bytes\":{d},\"inbox_reserved\":{d},\"inbox_high_water\":{d}," ++
+        "\"inbox_admitted\":{d},\"inbox_consumed\":{d},\"inbox_coalesced\":{d}," ++
+        "\"inbox_rejected\":{d},\"inbox_stale\":{d},\"inbox_wakes\":{d},\"inbox_budget_yields\":{d},", .{
+        state.inbox.depth,
+        state.inbox.storage_bytes,
+        state.inbox.reserved,
+        state.inbox.high_water,
+        state.inbox.admitted,
+        state.inbox.consumed,
+        state.inbox.coalesced,
+        state.inbox.rejected,
+        state.inbox.stale,
+        state.inbox.wakes,
+        state.inbox.budget_yields,
+    });
     try writer.print("\"graphics_messages\":{d},\"graphics_bytes\":{d}," ++
         "\"graphics_images\":{d},\"pane_shared_images\":{d}," ++
         "\"pane_inline_images\":{d},\"pane_compressed_images\":{d}," ++
@@ -247,11 +262,11 @@ pub fn handleTick(client: *Client, result: anyerror!void, heap: Snapshot) void {
         return;
     }
 
-    host(client).select.concurrent(.telemetry_written, writeDiagnostics, .{
+    host(client).inbox.start(.telemetry_written, .{ writeDiagnostics, .{
         client.io,
         &client.telemetry.sink,
         line,
-    }) catch {
+    } }) catch {
         client.telemetry.write_pending = false;
         client.telemetry.disable(client.io);
     };
@@ -281,6 +296,7 @@ fn capture(client: *Client, heap: Snapshot) ?SnapshotType {
         .draw_pending = host(client).presenter.draw_pending,
         .media_pending = host(client).presenter.media_tick_pending,
         .outbox = runtime_transport.snapshot(client),
+        .inbox = host(client).inbox.snapshot(),
         .capabilities = client.model.hostCapabilities(),
         .zlib_support = host(client).host_negotiation.zlib_support,
         .sidebar_rendering = host(client).view.sidebar_rendering,
@@ -303,7 +319,7 @@ fn capture(client: *Client, heap: Snapshot) ?SnapshotType {
 }
 
 fn scheduleTick(client: *Client) !void {
-    try host(client).select.concurrent(.telemetry_tick, waitForTick_module, .{client.io});
+    try host(client).inbox.start(.telemetry_tick, .{ waitForTick_module, .{client.io} });
 }
 
 fn finishWrite(state: *TelemetryState, io: std.Io, result: anyerror!void) void {

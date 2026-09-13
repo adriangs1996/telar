@@ -3,8 +3,6 @@
 const Client = @import("../AttachedClient.zig");
 const Snapshot = @import("../connection/OutboxSnapshot.zig");
 const mark_module = @import("telar-core").mark;
-const now_module = @import("telar-core").now;
-const decodeServer_module = @import("telar-core").decodeServer;
 const server_messages = @import("server_messages.zig");
 const Message = @import("../connection/outbox_support.zig").Message;
 const PaneIdType = @import("telar-core").PaneId;
@@ -17,9 +15,8 @@ const ShowNotificationType = @import("telar-core").ShowNotification;
 const ClientLayoutUpdateType = @import("telar-core").ClientLayoutUpdate;
 const std = @import("std");
 const RuntimeTransportState = @import("../connection/RuntimeTransportState.zig");
-const DecodedObservation = @import("DecodedObservation.zig");
+const RuntimeMessage = @import("../connection/RuntimeMessage.zig");
 const enabled_module = @import("telar-core").enabled;
-const elapsed_module = @import("telar-core").elapsed;
 
 /// Reports remaining bounded outbound message slots without exposing the
 /// queue representation.
@@ -64,17 +61,11 @@ pub fn scheduleRead(client: *Client) !void {
 /// ```zig
 /// if (try runtime_transport.handleRead(client, result)) |status| return status;
 /// ```
-pub fn handleRead(client: *Client, result: anyerror![]u8) !?u8 {
+pub fn handleRead(client: *Client, result: anyerror!*const RuntimeMessage) !?u8 {
     mark_module(client.io, .client_frame);
-    const payload = try client.runtime_transport.completeRead(result);
-    const decode_started = now_module(client.io);
-    const message = try decodeServer_module(payload);
-    recordMessage(client, .{
-        .payload_len = payload.len,
-        .message = message,
-        .decode_started_ns = decode_started,
-    });
-    const status = try server_messages.handleServerMessage(client, message);
+    const received = try client.runtime_transport.completeRead(result);
+    recordMessage(client, received);
+    const status = try server_messages.handleServerMessage(client, received.message);
     if (status) |exit_status| {
         return exit_status;
     }
@@ -210,7 +201,7 @@ fn pump(client: *Client) !void {
     };
 }
 
-fn recordMessage(client: *Client, observation: DecodedObservation) void {
+fn recordMessage(client: *Client, observation: *const RuntimeMessage) void {
     if (comptime !enabled_module) {
         return;
     }
@@ -231,7 +222,5 @@ fn recordMessage(client: *Client, observation: DecodedObservation) void {
         },
         else => {},
     }
-    client.telemetry.metrics.decode.observe(
-        elapsed_module(observation.decode_started_ns, now_module(client.io)),
-    );
+    client.telemetry.metrics.decode.observe(observation.decode_ns);
 }

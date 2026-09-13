@@ -346,7 +346,7 @@ fn resizeView(context: *anyopaque, cols: u16, rows: u16) !void {
 
 fn resumeHostRead(context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    try host(client).input.drain(client);
+    try host(client).resumeInput();
 }
 
 fn routePromptBytes(_: *anyopaque, _: []const u8) !void {

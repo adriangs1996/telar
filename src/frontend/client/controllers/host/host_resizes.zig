@@ -21,7 +21,7 @@ const host_resources = @import("telar-client").controllers.host_resources;
 /// try schedule(client, watcher);
 /// ```
 pub fn schedule(client: *Client, watcher: *platform.ResizeWatcher) !void {
-    try host(client).select.concurrent(.resized, wait, .{ client.io, watcher });
+    try host(client).inbox.start(.resized, .{ wait, .{ client.io, watcher } });
 }
 
 /// Handles one completed platform resize event and rearms its watcher.

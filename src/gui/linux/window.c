@@ -77,15 +77,20 @@ static void draw(window *self) {
     if (self->closing || !telar_frame_clock_ready(&self->clock)) {
         return;
     }
-    if (!telar_frame_clock_request(&self->clock, self->surface)) {
-        self->failed = self->closing = true;
-        return;
-    }
     telar_gui_viewport viewport = {self->width, self->height, 1.0f};
     telar_gui_frame frame;
     memset(&frame, 0, sizeof frame);
     self->callbacks.render(self->context, viewport, &frame);
     self->dirty = false;
+    if (frame.token == 0) {
+        self->dirty = true;
+        return;
+    }
+    if (!telar_frame_clock_request(&self->clock, self->surface)) {
+        self->callbacks.complete(self->context, frame.token, 0);
+        self->failed = self->closing = true;
+        return;
+    }
     self->in_flight = true;
     if (!telar_frame_worker_submit(self->worker, viewport, &frame)) {
         self->callbacks.complete(self->context, frame.token, 0);

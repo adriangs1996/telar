@@ -49,8 +49,9 @@ fallbacks and grid capacity. Theme/cursor-only changes retain the active atlas.
 
 The worker receives copied appearance/viewport values and borrowed current Lua
 owners for fingerprinting. It never reads a live renderer or mutates the model.
-Completion wakes the native pipe. `RuntimeDriver.drain` joins completed work;
-unchanged fingerprints rearm without requesting a draw. A changed result waits
+Completion publishes into a reserved inbox slot. `NativeLoop.drain` delegates
+to `ConfigurationReload.accept`, which joins only that finished worker.
+Unchanged fingerprints rearm without requesting a draw. A changed result waits
 for `Application.prepare`, after the previous presentation token has ended.
 Input, socket reads and receipt ACKs continue while a candidate waits.
 
@@ -85,8 +86,8 @@ the driver launches it after adoption has finished, so it captures the new
 font settings. Window close cancels and joins this worker before destroying
 the client generations or closing the wake pipe. A pending unadopted generation
 remains in the shared orphan slots until client teardown. This component uses
-the existing host port and can move to the step 9 inbox/outbox driver without
-moving native font policy into `src/client`.
+the existing host port and the shared inbox. Native font policy stays in
+`src/gui`.
 
 ## Colors
 
@@ -141,8 +142,8 @@ changes do not reshape text, replace atlas resources or modify cell meshes.
 ACKs continue to mean successful application of owned state; blinking does not
 send new ACKs for already applied frames. GPU completion still releases the
 captured presentation token. Native consumers own sealed frames and never
-borrow a mutable client model. Step 9 can replace `RuntimeDriver` while retaining
-the typed config, font resources, cursor clock and rendering contracts.
+borrow a mutable client model. The inbox/outbox driver retains the typed
+config, font resources, cursor clock and rendering contracts.
 
 ## Verification and lifecycle
 

@@ -186,7 +186,7 @@ fn invalidatePlacements(context: *anyopaque) void {
 fn playSound(context: *anyopaque, kind: AgentSoundType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try host(client).select.concurrent(.sound_played, sound_worker.play, .{ client.io, kind });
+    try host(client).inbox.start(.sound_played, .{ sound_worker.play, .{ client.io, kind } });
 }
 
 /// `terminal` adds OSC 9 for the outer terminal and `system` posts through
@@ -203,7 +203,7 @@ fn deliverNotification(context: *anyopaque, channel: DeliveryType, input: InputT
         },
         .system => {
             const payload = PayloadType.init(input.title, input.message);
-            host(client).select.concurrent(.notified, notification_host.notify, .{ client.io, payload }) catch {};
+            host(client).inbox.start(.notified, .{ notification_host.notify, .{ client.io, payload } }) catch {};
         },
     }
 }
@@ -211,7 +211,7 @@ fn deliverNotification(context: *anyopaque, channel: DeliveryType, input: InputT
 fn openLink(context: *anyopaque, target: TargetType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try host(client).select.concurrent(.link_opened, link_host.open, .{ client.io, target });
+    try host(client).inbox.start(.link_opened, .{ link_host.open, .{ client.io, target } });
 }
 
 fn captureSupported(_: *anyopaque) bool {
@@ -221,11 +221,11 @@ fn captureSupported(_: *anyopaque) bool {
 fn startCapture(context: *anyopaque, request: CaptureRequestType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try host(client).select.concurrent(.clipboard_image, executeCapture, .{
+    try host(client).inbox.start(.clipboard_image, .{ executeCapture, .{
         client.gpa,
         request,
         &client.clipboard_capture_resources.orphan,
-    });
+    } });
 }
 
 fn executeCapture(gpa: std.mem.Allocator, request: CaptureRequestType, orphan: *?*CaptureType) Completion {
@@ -480,16 +480,16 @@ pub fn timers(client: *Client) HostTimersType {
     return .{ .context = client, .arm_fn = armTimer };
 }
 
-/// One select task per scheduler; the kind names the completion it delivers.
+/// One inbox producer per scheduler; the kind names its completion.
 fn armTimer(context: *anyopaque, kind: TimerKindType, scheduler: *SchedulerType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     switch (kind) {
-        .input => try host(client).select.concurrent(.input_timeout, wait_module, .{ client.io, scheduler }),
-        .binding => try host(client).select.concurrent(.binding_timeout, wait_module, .{ client.io, scheduler }),
-        .bar => try host(client).select.concurrent(.bar_tick, wait_module, .{ client.io, scheduler }),
-        .notification => try host(client).select.concurrent(.notification_tick, wait_module, .{ client.io, scheduler }),
-        .sidebar_animation => try host(client).select.concurrent(.sidebar_animation_tick, wait_module, .{ client.io, scheduler }),
+        .input => try host(client).inbox.start(.input_timeout, .{ wait_module, .{ client.io, scheduler } }),
+        .binding => try host(client).inbox.start(.binding_timeout, .{ wait_module, .{ client.io, scheduler } }),
+        .bar => try host(client).inbox.start(.bar_tick, .{ wait_module, .{ client.io, scheduler } }),
+        .notification => try host(client).inbox.start(.notification_tick, .{ wait_module, .{ client.io, scheduler } }),
+        .sidebar_animation => try host(client).inbox.start(.sidebar_animation_tick, .{ wait_module, .{ client.io, scheduler } }),
     }
 }
 
@@ -501,7 +501,7 @@ pub fn barCommands(client: *Client) BarCommandRunnerType {
 fn startBarCommand(context: *anyopaque, job: BarUpdatesJobType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try host(client).select.concurrent(.bar_command, executeBarCommand, .{ client.io, job });
+    try host(client).inbox.start(.bar_command, .{ executeBarCommand, .{ client.io, job } });
 }
 
 fn executeBarCommand(io: std.Io, job: BarUpdatesJobType) BarUpdatesCompletionType {
@@ -519,7 +519,7 @@ pub fn pluginWorkers(client: *Client) PluginWorkerRunnerType {
 fn startPluginWorker(context: *anyopaque, job: PluginActionsJobType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try host(client).select.concurrent(.plugin_result, executePluginWorker, .{ client.io, client.gpa, job });
+    try host(client).inbox.start(.plugin_result, .{ executePluginWorker, .{ client.io, client.gpa, job } });
 }
 
 fn executePluginWorker(io: std.Io, gpa: std.mem.Allocator, job: PluginActionsJobType) PluginActionsCompletionType {
@@ -603,19 +603,17 @@ pub fn transport(client: *Client) TransportDriverType {
 fn startRuntimeRead(context: *anyopaque, state: *RuntimeTransportStateType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try host(client).select.concurrent(.server, receiveRuntime, .{ client.io, state });
+    try host(client).inbox.start(.server, .{ receiveRuntime, .{ client.io, state } });
 }
 
 fn startRuntimeSend(context: *anyopaque, state: *RuntimeTransportStateType, payload: []const u8) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try host(client).select.concurrent(.sent, sendRuntime, .{ client.io, state, payload });
+    try host(client).inbox.start(.sent, .{ sendRuntime, .{ client.io, state, payload } });
 }
 
-fn receiveRuntime(io: std.Io, state: *RuntimeTransportStateType) anyerror![]u8 {
-    const bytes = try state.read(io);
-    mark_module(io, .client_read);
-    return bytes;
+fn receiveRuntime(io: std.Io, state: *RuntimeTransportStateType) anyerror!*const @import("telar-client").RuntimeMessage {
+    return state.read(io);
 }
 
 fn sendRuntime(io: std.Io, state: *RuntimeTransportStateType, payload: []const u8) anyerror!void {
@@ -632,5 +630,5 @@ pub fn configWatcher(client: *Client) ConfigReloadWatcherType {
 fn startConfigWatch(context: *anyopaque, args: ConfigWaitArgsType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try host(client).select.concurrent(.config_reload, config_reload.wait, .{args});
+    try host(client).inbox.start(.config_reload, .{ config_reload.wait, .{args} });
 }

@@ -100,9 +100,10 @@ The worker rejects a second submission until completion is taken. The sealed
 scene's pointers remain borrowed until `take` or `destroy` returns. Normal
 completion occurs after the GPU fence. Closing first disconnects frame
 callbacks, then stops and joins the worker before destroying GPU resources or
-the Zig owner. No completion is delivered to a detached context. The temporary
-worker is independent of resource reuse and can be replaced by the step 9
-inbox/outbox driver without redesigning the renderer.
+the Zig owner. No completion is delivered to a detached context. The native
+callback publishes the token into `NativeLoop`'s inbox. The consumer releases
+presentation state before reusing its scene. A zero frame token defers GPU
+submission and does not request a Wayland frame callback.
 
 There is one command buffer, one render fence and one acquire semaphore.
 Swapchains are bounded to eight images. Each image has its own presentation

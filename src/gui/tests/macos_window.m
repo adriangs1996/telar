@@ -11,6 +11,7 @@ static BOOL injecting, close_in_flight, closed_in_flight;
 static IMP original_draw;
 static CFTimeInterval deadline;
 static int timer_wakes, focus_events;
+static int deferred;
 
 @interface NSView (TelarTest)
 - (void)requestDraw;
@@ -27,6 +28,14 @@ static const uint8_t pixels[] = {255,255,255,255};
 static const telar_gui_quad quad = {20,20,200,100,0,0,1,1,0,1,0,1};
 static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *frame) {
     (void)context;
+    if (!deferred) {
+        deferred++;
+        *frame = (telar_gui_frame){0};
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_MSEC * 10), dispatch_get_main_queue(), ^{
+            [(id)NSApp.windows.firstObject.contentView requestDraw];
+        });
+        return;
+    }
     if (!viewport.width || !viewport.height) failed++;
     CAMetalLayer *layer = (CAMetalLayer *)NSApp.windows.firstObject.contentView.layer;
     if (layer && (viewport.width != (uint32_t)layer.drawableSize.width ||

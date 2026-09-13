@@ -1,5 +1,5 @@
-//! Routes one completed client event through its owning adapter, then
-//! publishes the resulting presentation observation before the next event.
+//! The TUI consumer classifies inbox messages and delegates each transition.
+//! Presentation observes the latest committed state once per bounded turn.
 
 const TerminalClient = @import("../TerminalClient.zig");
 const host = TerminalClient.of;
@@ -41,6 +41,43 @@ pub const Outcome = union(enum) {
 /// const outcome = try handle(client, event, resources);
 /// ```
 pub fn handle(client: *Client, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
+    const outcome = try dispatch(client, event, resources);
+    if (outcome == .keep_running) {
+        try observe(client);
+    }
+
+    return outcome;
+}
+
+/// Consumes only this turn's admitted work, then derives one presentation.
+/// Example: `const outcome = try events.drain(client, resources);`
+pub fn drain(client: *Client, resources: Resources) !Outcome {
+    const inbox = &host(client).inbox;
+    var turn = try inbox.begin();
+    defer inbox.end();
+    while (try inbox.next(&turn)) |event| {
+        const outcome = try dispatch(client, event, resources);
+        if (outcome == .exit) {
+            return outcome;
+        }
+    }
+
+    if (turn.processed != 0) {
+        try observe(client);
+    }
+
+    return .keep_running;
+}
+
+fn observe(client: *Client) !void {
+    const path = enter_module(.interactive);
+    defer path.restore();
+    try client_layouts.observe(client);
+    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.pumpOutput(client);
+}
+
+fn dispatch(client: *Client, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
     const path = enter_module(pathFor(@as(EventTag, event)));
     defer path.restore();
 
@@ -49,10 +86,6 @@ pub fn handle(client: *Client, event: TerminalClient.ClientEvent, resources: Res
             if (try client_startup.advance(client)) {
                 return .{ .exit = 0 };
             }
-
-            try client_layouts.observe(client);
-            try presentation_lifecycle.observe(client);
-            try presentation_lifecycle.pumpOutput(client);
         },
         .exit => |status| return .{ .exit = status },
     }

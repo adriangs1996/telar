@@ -306,6 +306,27 @@ test "client event dispatch observes a completed capability expiry" {
     try std.testing.expectEqual(pending_after, host(client).presenter.pending_updates);
 }
 
+test "TUI inbox drains a finite FIFO batch and observes presentation once" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    var heap = HeapType.init(std.testing.allocator);
+    const terminal = host(client);
+    const pending = terminal.presenter.pending_updates;
+    _ = try client.model.setDiagnostic("inbox batch", .{});
+    for (0..40) |_| {
+        try terminal.inbox.post(.{ .notified = {} });
+    }
+
+    try std.testing.expect(try client_events.drain(client, support.clientEventResourcesForTest(&heap)) == .keep_running);
+    const stats = terminal.inbox.snapshot();
+    try std.testing.expect(stats.consumed >= 1 and stats.consumed <= 32);
+    try std.testing.expect(stats.depth >= 8);
+    try std.testing.expectEqual(pending + 1, terminal.presenter.pending_updates);
+    try std.testing.expectEqual(@as(u64, 1), stats.budget_yields);
+}
+
 test "client event dispatch skips observation after terminal input" {
     var harness: TestHarness = undefined;
     try harness.init();

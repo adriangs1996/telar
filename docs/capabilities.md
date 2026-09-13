@@ -104,7 +104,8 @@ neither runtime truth nor a common instance of navigation or focus.
 | Panes | `src/client/panes/` | Cells, damage, child modes and attachment-aware commits |
 | Workspace | `src/client/workspace/` | Tabs, splits, navigation and explicit geometry |
 | Input | `src/client/input/` | Semantic values, bindings, leases, editing and child encoding |
-| Connection | `src/client/connection/` | Bounded outbox, correlation and transport state |
+| Connection | `src/client/connection/` | Bounded outbox, correlation, validated runtime messages and transport state |
+| Execution | `src/client/execution/` | Producer admission, bounded inbox, wakeups, finite drains and completion generations |
 | Resources | `src/client/resources/` | Clock, timers, configuration reload, layout persistence and telemetry state |
 | Presentation | `src/client/presentation/` | Projections, preparation, completion, geometry and title port |
 | Graphics | `src/client/graphics/` | Image retention, generations, quotas and credits |
@@ -121,7 +122,7 @@ neither runtime truth nor a common instance of navigation or focus.
 
 | Capability | Location | Owns |
 | --- | --- | --- |
-| Terminal client | `src/frontend/client/TerminalClient.zig` | Embeds `AttachedClient`, owns terminal resources, binds host ports, runs the select driver |
+| Terminal client | `src/frontend/client/TerminalClient.zig` | Embeds `AttachedClient`, owns terminal resources, binds host ports, runs the inbox consumer |
 | Sound | `src/frontend/sound/` | Host-audio queue and platform worker |
 | Input | `src/frontend/input/` | Terminal decoder integration with shared routing |
 | Workspace | `src/frontend/workspace/` | Cell compositor over the shared workspace model |

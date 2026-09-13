@@ -30,6 +30,27 @@ static NSString *input_class;
 @implementation ProbeFrame
 @end
 
+static NSView *terminal_view(NSView *view) {
+    NSString *name = NSStringFromClass(view.class);
+    if ([name isEqualToString:@"TelarView"] ||
+        ([name containsString:@"SurfaceView"] &&
+         [view conformsToProtocol:@protocol(NSTextInputClient)])) return view;
+    for (NSView *child in view.subviews) {
+        NSView *found = terminal_view(child);
+        if (found) return found;
+    }
+    return nil;
+}
+
+static NSView *test_view(void) {
+    for (NSWindow *window in NSApp.windows) {
+        if (!window.isVisible) continue;
+        NSView *view = terminal_view(window.contentView);
+        if (view) return view;
+    }
+    return nil;
+}
+
 static void finish(int failed) {
     if (finished) return;
     finished=YES;
@@ -41,7 +62,7 @@ static void finish(int failed) {
         for(int i=0;i<count;i++)fprintf(f,"%s%.6f",i?",":"",gpu_work_samples[i]);
         fprintf(f,"],\"input_class\":\"%s\",\"input_method\":\"%s\"}\n",input_class.UTF8String ?: "",text_input ? "text" : "key");fclose(f);
     }
-    if ([NSApp.windows.firstObject.contentView respondsToSelector:@selector(keyDown:)]) [NSApp.windows.firstObject close];
+    [test_view().window close];
     // Ghostty can keep its app process alive after closing the only test window.
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,NSEC_PER_SEC),dispatch_get_main_queue(),^{ [NSApp terminate:nil]; });
 }
@@ -49,9 +70,11 @@ static void finish(int failed) {
 static void send_key(void) {
     if(finished)return;
     if(count==limit){finish(0);return;}
-    NSWindow *w=NSApp.windows.firstObject;
+    NSView *view=test_view();
+    NSWindow *w=view.window;
     if(!w){finish(2);return;}
-    NSResponder *target=text_input ? w.contentView : w.firstResponder;
+    if(w.firstResponder != view && ![w makeFirstResponder:view]){finish(8);return;}
+    NSResponder *target=text_input ? view : w.firstResponder;
     if(text_input && ![target respondsToSelector:@selector(insertText:replacementRange:)]){finish(7);return;}
     if(!count)input_class=NSStringFromClass(target.class);
     pending=YES;
@@ -252,7 +275,7 @@ __attribute__((constructor)) static void install(void){
         unsigned width, height;
         if (sscanf(viewport, "%u,%u", &width, &height) != 2) abort();
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-            NSView *view = NSApp.windows.firstObject.contentView;
+            NSView *view = test_view();
             CGFloat scale = view.window.backingScaleFactor;
             view.autoresizingMask = NSViewNotSizable;
             [view setFrameSize:NSMakeSize(width / scale, height / scale)];

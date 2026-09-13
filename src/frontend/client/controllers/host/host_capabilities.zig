@@ -46,9 +46,9 @@ pub fn scheduleExpiry(client: *Client) !void {
     const state = &host(client).host_negotiation;
     switch (state.timer.update(client.io, state.deadline_ns)) {
         .idle, .retained => {},
-        .schedule => host(client).select.concurrent(.capability_timeout, wait_module, .{
+        .schedule => host(client).inbox.start(.capability_timeout, .{ wait_module, .{
             client.io, &state.timer,
-        }) catch |err| {
+        } }) catch |err| {
             state.timer.schedulingFailed();
             return err;
         },

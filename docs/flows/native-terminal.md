@@ -12,19 +12,18 @@ transfers those resources to `Application`, which constructs `GuiClient` after
 the first valid font and window measurement. The shared `AttachedClient` lives at
 one stable heap address. Every host port is bound before the first event.
 
-`RuntimeDriver` owns one asynchronous receive and one asynchronous send. Workers
-publish a completion flag and wake the native loop through an owner-held,
-nonblocking pipe. The window thread joins the completed operation before calling
-`runtime_io.handleRead` or `runtime_io.handleSent`. A receive buffer remains
-borrowed until synchronous dispatch finishes. No worker accesses the model.
+`NativeLoop` connects the shared bounded inbox to an owner-held nonblocking
+wake pipe. Socket workers publish validated `RuntimeMessage` values or send
+completions into reserved slots. The window thread drains a finite FIFO batch
+and delegates to `runtime_io.handleRead` or `runtime_io.handleSent`. A receive
+buffer remains borrowed until synchronous dispatch finishes. No worker accesses
+the model. Input readiness, focus and GPU completion use that same inbox.
 
-`ConfigurationReload` adds one worker for the shared config watch and native
-font preparation. It publishes through the same pipe; the window thread adopts
-a prepared generation after native consumers finish. See
-[native appearance](native-appearance.md#hot-reload) for the swap and cleanup.
-
-This bridge is provisional. Step 9 of `docs/plans/native-client-split.md` replaces
-it with the inbox/outbox execution model. It contains no general scheduler.
+`ConfigurationReload` reserves a completion slot for its config/font worker.
+The window thread adopts a prepared generation after native consumers finish.
+See [native appearance](native-appearance.md#hot-reload) for the swap and cleanup,
+and [client event dispatch](client-event-dispatch.md) for admission, drain
+budgets, wakeups and shutdown shared with the TUI and headless driver.
 
 ## Three verification cuts
 
@@ -128,8 +127,8 @@ complete sealed scene. Their swapchain drawables need no preserved contents,
 and failed presentation can retry the same prepared geometry. Neither cache
 stores a presentation token, model pointer or transport state.
 
-Step 9 can replace the temporary driver while keeping these caches, projection
-preparation and the existing sealed-frame/completion contract. If preparation
+The inbox/outbox driver retains these caches, projection preparation and the
+existing sealed-frame/completion contract. If preparation
 later moves to a worker, its owner must transfer/copy visual input and retain
 the cache there; the worker must never borrow the mutable client model.
 

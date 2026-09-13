@@ -7,7 +7,7 @@ terminal state.
 
 ## Boundary
 
-`runtime_transport.State` owns the client side of runtime I/O:
+`connection/RuntimeTransportState` owns the client side of runtime I/O:
 
 - one borrowed `SocketChannel` for the client's lifetime;
 - one receive buffer and one send buffer, each exactly
@@ -32,17 +32,16 @@ refer to this event adapter for enqueue and scheduling operations.
 
 ## Bootstrap
 
-Before the event loop starts its first read, `client_startup` registers the
-initial continuation and asks `State.bootstrap` to send these frames
-synchronously through the same send buffer:
+After host negotiation, `RuntimeTransportState.bootstrap` admits these frames
+atomically to the ordinary outbox, in order:
 
 1. `configure_graphics`, so the runtime knows whether it may offer shared
    memory resources;
-2. `request_runtime_state`, so reconnectable replicas can be rebuilt;
-3. `open_pane`, which starts or attaches the initial pane transaction.
+2. `configure_terminal_colors`, so terminal queries use the host defaults;
+3. `request_runtime_state`, so reconnectable replicas can be rebuilt.
 
-After all three writes finish, `client_startup` asks
-`runtime_transport.scheduleRead` to reserve the only receive token.
+The send actor writes these messages independently of reception. The initial
+runtime layout determines the subsequent `open_pane` transaction.
 
 ## Outbound path
 
@@ -55,7 +54,7 @@ Outbox copies and folds bounded data
        |
 runtime_transport.pump
        |
-Outbox.beginSend -> schema encoder -> SocketChannel.send
+Outbox.beginSend -> schema encoder -> inbox producer reservation -> SocketChannel.send
        |
 ClientEvent.sent
        |
@@ -83,13 +82,13 @@ therefore delays credit without losing it.
 ```text
 SocketChannel.receive
        |
-ClientEvent.server
+RuntimeMessage.decode on the receiving worker
        |
-client_events.handle
+reserved inbox slot -> ClientEvent.server -> consumer dispatch
        |
 runtime_transport.handleRead
        |
-schema.decodeServer -> server_messages.handleServerMessage
+server_messages.handleServerMessage
        |
 client slice adapter -> ClientModel or disposable resources
        |
@@ -113,11 +112,11 @@ wire data early.
 
 ## Destruction and failures
 
-`Client.deinit` cancels its select before `State.deinit` frees either frame
+The host closes its inbox and joins producers before `State.deinit` frees either frame
 buffer. The caller still owns and closes the `SocketChannel` after `client.run`
 returns.
 
-If the select refuses a read or write actor, transport releases the token it
+If inbox admission or task creation refuses a read or write actor, transport releases the token it
 reserved. A completed socket error also releases its token, retains bounded
 queue ownership for cleanup and propagates the error. Telar does not retry an
 uncertain partial socket write inside the same client session. Dispatch errors

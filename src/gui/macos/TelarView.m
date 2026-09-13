@@ -206,6 +206,10 @@
 
   dirty = NO;
   callbacks.render(context, viewport, &frame);
+  if (frame.token == 0) {
+    dirty = YES;
+    return;
+  }
   if (![renderer renderFrame:&frame drawable:drawable]) {
     callbacks.complete(context, frame.token, 0);
     [self.window close];

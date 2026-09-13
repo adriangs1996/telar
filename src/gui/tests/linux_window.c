@@ -9,6 +9,7 @@
 #include <time.h>
 
 static bool invalid_frame_test;
+static bool deferred;
 
 static struct {
     int wake[2];
@@ -87,6 +88,13 @@ close:
 
 static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *frame) {
     (void)context;
+    if (!invalid_frame_test && !deferred) {
+        deferred = true;
+        *frame = (telar_gui_frame){0};
+        atomic_store(&state.requested, true);
+        telar_gui_wake(state.wake[1]);
+        return;
+    }
     unsigned token = atomic_fetch_add(&state.painted, 1) + 1;
     if (!viewport.width || !viewport.height) {
         atomic_fetch_add(&state.failures, 1);

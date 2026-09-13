@@ -4,7 +4,7 @@ const Client = @import("../AttachedClient.zig");
 const monotonic_module = @import("clock.zig").monotonic;
 
 /// Replaces the pending deadline from current model state and starts at most
-/// one client select task.
+/// one inbox producer through the timer port.
 ///
 /// ```zig
 /// try reschedule(client);
@@ -26,7 +26,7 @@ pub fn reschedule(client: *Client) !void {
     }
 }
 
-/// Releases the completed select task before propagating its result.
+/// Releases the completed timer reservation before propagating its result.
 ///
 /// ```zig
 /// try complete(client, result);

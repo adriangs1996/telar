@@ -22,8 +22,9 @@ the window nor the Zig context. `shutdown` cancels delivery and waits for submit
 GPU work. A rejected submission leaves failure delivery to the view.
 
 Shared client behavior, terminal geometry and shaping remain in their
-existing packages. The temporary socket driver is independent of this slot;
-the step 9 inbox/outbox migration can replace it without replacing GPU resources.
+existing packages. `NativeLoop` publishes GPU completions into the shared
+inbox; the consumer releases presentation state before preparing another frame.
+A zero token defers submission while that completion still awaits dispatch.
 
 ## From changes to delivery
 

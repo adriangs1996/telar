@@ -469,7 +469,7 @@ test "client telemetry writes one snapshot without mutating semantic state" {
     try std.testing.expect(std.mem.indexOf(u8, line, "\"active_tab\":1") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"observation_allocs\":7") != null);
 
-    switch (try host(client).select.await()) {
+    switch (try host(client).inbox.receive()) {
         .telemetry_written => |result| client_telemetry.handleWritten(client, result),
         else => return error.UnexpectedEvent,
     }

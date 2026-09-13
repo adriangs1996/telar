@@ -4,12 +4,14 @@ const std = @import("std");
 const max_frame_size_module = @import("telar-core").max_frame_size;
 const read_buffer_size_module = @import("telar-core").read_buffer_size;
 const Bootstrap = @import("Bootstrap.zig");
+const RuntimeMessage = @import("RuntimeMessage.zig");
 const State = @This();
 
 connection: *SocketChannelType,
 send_buffer: []u8,
 receive_buffer: []u8,
 read_buffer: []u8,
+received: RuntimeMessage = undefined,
 outbox: OutboxType = .{},
 receive_pending: bool = false,
 
@@ -30,18 +32,23 @@ pub fn cancelRead(state: *State) void {
     state.receive_pending = false;
 }
 
-/// Retires the read borrow before delivering its result.
+/// Releases the read reservation. The returned borrow lasts until the next
+/// read, which the consumer arms only after dispatch finishes.
 /// Example: `const payload = try state.completeRead(result);`.
-pub fn completeRead(state: *State, result: anyerror![]u8) ![]u8 {
+pub fn completeRead(state: *State, result: anyerror!*const RuntimeMessage) !*const RuntimeMessage {
     std.debug.assert(state.receive_pending);
     state.receive_pending = false;
     return result;
 }
 
-/// Reads into the reserved bounded frame buffer on the I/O actor.
+/// Owns the decoded value beside its wire bytes until dispatch finishes.
+/// Inbox messages borrow this value; they do not duplicate it in every slot.
 /// Example: `return state.read(io);`.
-pub fn read(state: *State, io: std.Io) ![]u8 {
-    return state.connection.receive(io, state.receive_buffer);
+pub fn read(state: *State, io: std.Io) !*const RuntimeMessage {
+    const bytes = try state.connection.receive(io, state.receive_buffer);
+    @import("telar-core").mark(io, .client_read);
+    state.received = try RuntimeMessage.decode(io, bytes);
+    return &state.received;
 }
 
 /// Reserves and encodes the next outbound frame for its send actor.
@@ -83,7 +90,7 @@ pub fn init(gpa: std.mem.Allocator, connection: *SocketChannelType) !State {
     };
 }
 
-/// Releases frame storage after the client's select has cancelled every
+/// Releases frame storage after the client's inbox has joined every
 /// task that borrows it.
 ///
 /// ```zig

@@ -5,17 +5,18 @@ const client = @import("telar-client");
 const core = @import("telar-core");
 const native = @import("native/native.zig");
 const GuiClient = @import("GuiClient.zig");
-const RuntimeDriver = @import("RuntimeDriver.zig");
+const NativeLoop = @import("NativeLoop.zig");
 const Renderer = @import("render/TerminalRenderer.zig");
 const Application = @This();
 
 params: client.ClientInit,
-driver: RuntimeDriver,
+driver: NativeLoop,
 renderer: Renderer,
 gui: ?*GuiClient = null,
 failure: ?anyerror = null,
 exit_status: ?u8 = null,
 cursor_clock: @import("CursorClock.zig") = .{},
+input_revision: u64 = 0,
 
 pub fn init(params: client.ClientInit) !Application {
     var renderer = try Renderer.configured(params.gpa, params.io, .{ .config = params.options.gui, .theme = params.options.theme.terminal });
@@ -81,6 +82,12 @@ fn prepare(app: *Application, viewport: native.Viewport) !u64 {
         return 0;
     }
 
+    if (app.gui) |gui| {
+        if (gui.lifecycle.active != null) {
+            return 0;
+        }
+    }
+
     app.driver.configuration.observe(app.renderer.config, viewport);
     if (app.gui) |gui| {
         if (try app.driver.configuration.apply(gui, &app.renderer)) {
@@ -130,7 +137,17 @@ fn pump(context: ?*anyopaque) callconv(.c) c_int {
 
     if (app.gui) |gui| {
         const now_ns = app.now();
+        if (app.input_revision != gui.input_revision) {
+            app.input_revision = gui.input_revision;
+            app.cursor_clock.focused = gui.focused;
+            app.cursor_clock.reset(now_ns);
+        }
+
         app.cursor_clock.observe(gui.cursorTarget(), now_ns);
+        if (gui.lifecycle.active != null) {
+            return 0;
+        }
+
         const version = gui.app.model.version();
         return @intFromBool(!std.meta.eql(version, gui.lifecycle.prepared.model) or gui.lifecycle.preparation_invalid or
             app.driver.configuration.pending or
@@ -143,28 +160,28 @@ fn pump(context: ?*anyopaque) callconv(.c) c_int {
 fn complete(context: ?*anyopaque, token: u64, delivered: c_int) callconv(.c) void {
     const app = from(context);
     core.mark(app.params.io, .host_flush_done);
-    if (app.gui) |gui| {
-        gui.complete(token, delivered != 0) catch |err| app.fail(err);
+    if (app.gui != null and token != 0) {
+        app.driver.inbox.post(.{ .presented = .{ .token = token, .delivered = delivered != 0 } }) catch |err| app.fail(err);
     }
 }
 
 fn input(context: ?*anyopaque, event: native.InputEvent) callconv(.c) c_int {
     const app = from(context);
-    app.cursor_clock.reset(app.now());
     if (event.kind == 5) {
-        app.cursor_clock.focused = event.code != 0;
-        native.telar_gui_wake(app.driver.fds[1]);
+        app.driver.inbox.notify(.{ .focus = event.code != 0 }) catch |err| {
+            app.fail(err);
+            return 0;
+        };
         return 1;
     }
 
     core.mark(app.params.io, .client_input);
     const gui = app.gui orelse return 0;
     gui.input.accept(event) catch return 0;
-    gui.input.drain(&gui.app) catch |err| {
+    app.driver.inbox.notify(.input_ready) catch |err| {
         app.fail(err);
         return 0;
     };
-    native.telar_gui_wake(app.driver.fds[1]);
     return 1;
 }
 

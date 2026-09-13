@@ -67,8 +67,10 @@ pub fn wait(fixture: *Fixture) !void {
     try reload.poll(&fixture.session.gui.app);
     for (0..1000) |_| {
         if (reload.ready.load(.acquire)) {
-            try reload.poll(&fixture.session.gui.app);
-            return;
+            _ = try fixture.session.gui.pump();
+            if (!reload.ready.load(.acquire)) {
+                return;
+            }
         }
 
         try std.testing.io.sleep(.fromMilliseconds(10), .awake);

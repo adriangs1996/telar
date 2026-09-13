@@ -82,7 +82,7 @@ pub fn run(init: std.process.Init, connection: *SocketChannelType, options: Opti
     });
     options_owned = false;
     // Registered after `watcher`'s defer on purpose: deinit cancels the
-    // select tasks — one of them waits on the watcher — before the watcher
+    // inbox producers — one of them waits on the watcher — before the watcher
     // itself is torn down.
     defer terminal.deinit();
     const client = &terminal.app;
@@ -90,8 +90,8 @@ pub fn run(init: std.process.Init, connection: *SocketChannelType, options: Opti
     try client_startup.start(client, .{ .resize_watcher = &watcher });
 
     while (true) {
-        const event = try terminal.select.await();
-        switch (try client_events.handle(client, event, .{
+        try terminal.inbox.wait();
+        switch (try client_events.drain(client, .{
             .tty = &tty,
             .resize_watcher = &watcher,
             .heap = &heap,

@@ -4,7 +4,6 @@ const Fixture = @import("Fixture.zig");
 const FrameInput = @import("FrameInput.zig");
 const CellType = @import("telar-core").Cell;
 const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
-const decodeServer_module = @import("telar-core").decodeServer;
 const std = @import("std");
 const decodeClient_module = @import("telar-core").decodeClient;
 const GeometryType = @import("Geometry.zig");
@@ -36,8 +35,64 @@ fn sendFrame(fixture: *Fixture, input: FrameInput) !void {
         .input_modes = .{ .cursor_keys = input.cursor_keys },
         .spans = &.{.{ .start = 0, .cells = if (input.base == 0) &cells else cells[0..1] }},
     });
-    try fixture.receive(try decodeServer_module(bytes));
+    try fixture.receive(bytes);
     @memset(&wire, 0xff);
+}
+
+test "headless inbox owns delayed wire state and preserves patches before dependent input" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    try sendFrame(fixture, .{});
+    try fixture.expectAck(1);
+    const token = try fixture.prepare();
+    var wire: [1024]u8 = undefined;
+    var cells: [1]CellType = @splat(.{});
+    cells[0].bytes[0] = 'B';
+    const bytes = try encodePaneFrame_module(&wire, .{
+        .pane_id = pane_id,
+        .frame_id = 2,
+        .base_frame_id = 1,
+        .cols = 4,
+        .rows = 1,
+        .scroll = .{ .total_rows = 1, .offset = 0 },
+        .input_modes = .{ .cursor_keys = false },
+        .spans = &.{.{ .start = 0, .cells = &cells }},
+    });
+    try fixture.postFrame(bytes);
+    @memset(&wire, 0xff);
+    try std.testing.expectError(error.ReceiveBusy, fixture.postFrame(""));
+    try std.testing.expect(fixture.outbox.peek() == null);
+    try std.testing.expectEqualStrings("A", fixture.adapter.frame.cells[0].text());
+    try fixture.inbox.post(.{ .key = .{ .code = .up } });
+    try fixture.inbox.post(.{ .completed = .{ .token = token, .outcome = .delivered } });
+    while (fixture.inbox.snapshot().depth != 0) {
+        try fixture.drain();
+    }
+
+    try fixture.expectAck(2);
+    const input = (try fixture.outbox.beginSend(&wire)).?;
+    try std.testing.expectEqualStrings("\x1b[A", (try decodeClient_module(input)).pane_input.bytes);
+    try fixture.outbox.finishSend({});
+    try std.testing.expectEqual(@as(u64, 2), fixture.model.workspace.findPane(pane_id).?.pending_frame_id);
+    const latest = try fixture.prepare();
+    try std.testing.expectEqualStrings("B", fixture.adapter.frame.cells[0].text());
+    try fixture.complete(latest, .delivered);
+}
+
+test "headless inbox rejects malformed and oversized payloads before changing state" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    const version = fixture.model.version();
+    try std.testing.expectError(error.Truncated, fixture.postFrame(""));
+    const oversized = try std.testing.allocator.alloc(u8, fixture.receive_buffer.len + 1);
+    defer std.testing.allocator.free(oversized);
+    try std.testing.expectError(error.HeadlessReceiveTooLarge, fixture.postFrame(oversized));
+    try std.testing.expectEqualDeep(version, fixture.model.version());
+    try std.testing.expectEqual(@as(usize, 0), fixture.inbox.snapshot().reserved);
+    try std.testing.expectEqual(@as(usize, 0), fixture.inbox.snapshot().depth);
+    try std.testing.expect(!fixture.receive_pending);
+    try sendFrame(fixture, .{});
+    try fixture.expectAck(1);
 }
 
 test "applied patches are acknowledged and coalesced while headless delivery owns an older frame" {

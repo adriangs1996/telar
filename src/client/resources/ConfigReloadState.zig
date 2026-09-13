@@ -10,7 +10,7 @@ next_generation: u64 = 2,
 orphans: Orphans = .{},
 
 /// Frees whatever a cancelled reload task published. Call only after
-/// the select's tasks are cancelled.
+/// the client's producers have been cancelled and joined.
 pub fn deinit(state: *State, gpa: std.mem.Allocator) void {
     if (state.orphans.generation) |generation| {
         generation.deinit();

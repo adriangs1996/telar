@@ -11,7 +11,9 @@ const ProjectionType = @import("Projection.zig");
 const projection_support = @import("projection_support.zig");
 const lifecycle_module = @import("lifecycle.zig");
 const DeliverPresentationHandlerType = @import("../application/presentation/DeliverPresentationHandler.zig");
-const ServerMessageType = @import("telar-core").ServerMessage;
+const RuntimeMessage = @import("../connection/RuntimeMessage.zig");
+const GenericInbox = @import("../execution/GenericInbox.zig").Type;
+const Message = @import("headless_event.zig").Message;
 const runtime_messages_module = @import("../entrypoints/runtime_messages.zig");
 const Adapters = @import("Adapters.zig");
 const PaneFrameRecoveryType = @import("../model/PaneFrameRecovery.zig");
@@ -26,6 +28,10 @@ const PaneViewportChangeType = @import("../model/PaneViewportChange.zig");
 const Fixture = @This();
 
 model: ModelType,
+inbox: GenericInbox(Message),
+receive_buffer: [64 * 1024]u8 = undefined,
+received: RuntimeMessage = undefined,
+receive_pending: bool = false,
 adapter: AdapterType = .{},
 outbox: OutboxType = .{},
 graphics: retained_module.Store,
@@ -41,7 +47,7 @@ pub fn init() !*Fixture {
 pub fn initWithAllocator(allocator: std.mem.Allocator) !*Fixture {
     const fixture = try std.testing.allocator.create(Fixture);
     errdefer std.testing.allocator.destroy(fixture);
-    fixture.* = .{ .model = ModelType.init(allocator, true), .graphics = retained_module.Store.init(allocator) };
+    fixture.* = .{ .model = ModelType.init(allocator, true), .graphics = retained_module.Store.init(allocator), .inbox = .init(std.testing.io, .{}) };
     errdefer fixture.model.deinit();
     fixture.geometry.update(.{ .w = 40, .h = 10 });
     try fixture.arrive();
@@ -49,6 +55,7 @@ pub fn initWithAllocator(allocator: std.mem.Allocator) !*Fixture {
 }
 
 pub fn deinit(fixture: *Fixture) void {
+    fixture.inbox.deinit();
     if (fixture.adapter.state.active) |flight| {
         _ = fixture.adapter.complete(flight.token, .cancelled);
     }
@@ -80,6 +87,11 @@ pub fn prepare(fixture: *Fixture) !lifecycle_module.Token {
 }
 
 pub fn complete(fixture: *Fixture, token: lifecycle_module.Token, outcome: lifecycle_module.Outcome) !void {
+    try fixture.inbox.post(.{ .completed = .{ .token = token, .outcome = outcome } });
+    try fixture.drain();
+}
+
+fn deliver(fixture: *Fixture, token: lifecycle_module.Token, outcome: lifecycle_module.Outcome) !void {
     const delivery = fixture.adapter.complete(token, outcome) orelse return;
     var handler: DeliverPresentationHandlerType = .{
         .model = &fixture.model,
@@ -88,8 +100,45 @@ pub fn complete(fixture: *Fixture, token: lifecycle_module.Token, outcome: lifec
     try handler.execute(.{ .commit = delivery.commit, .media_pending = delivery.media_pending });
 }
 
-pub fn receive(fixture: *Fixture, message: ServerMessageType) !void {
-    _ = try runtime_messages_module.dispatch(fixture, message, Adapters);
+pub fn receive(fixture: *Fixture, bytes: []const u8) !void {
+    try fixture.postFrame(bytes);
+    try fixture.drain();
+}
+
+/// Owns the wire bytes through delayed dispatch, as a transport reservation does.
+/// Example: `try fixture.postFrame(encoded); @memset(encoded, 0); try fixture.drain();`
+pub fn postFrame(fixture: *Fixture, bytes: []const u8) !void {
+    if (fixture.receive_pending) {
+        return error.ReceiveBusy;
+    }
+
+    if (bytes.len > fixture.receive_buffer.len) {
+        return error.HeadlessReceiveTooLarge;
+    }
+
+    const ticket = try fixture.inbox.reserve();
+    errdefer fixture.inbox.release(ticket);
+    @memcpy(fixture.receive_buffer[0..bytes.len], bytes);
+    fixture.received = try RuntimeMessage.decode(std.testing.io, fixture.receive_buffer[0..bytes.len]);
+    fixture.receive_pending = true;
+    std.debug.assert(fixture.inbox.publish(ticket, .{ .server = &fixture.received }));
+}
+
+/// The same finite consumer boundary used by the terminal and native hosts.
+/// Example: `try fixture.drain();`
+pub fn drain(fixture: *Fixture) !void {
+    var turn = try fixture.inbox.begin();
+    defer fixture.inbox.end();
+    while (try fixture.inbox.next(&turn)) |message| {
+        switch (message) {
+            .server => |received| {
+                defer fixture.receive_pending = false;
+                _ = try runtime_messages_module.dispatch(fixture, received.message, Adapters);
+            },
+            .key => |value| try fixture.applyKey(value),
+            .completed => |value| try fixture.deliver(value.token, value.outcome),
+        }
+    }
 }
 
 pub fn recover(context: *anyopaque, recovery: PaneFrameRecoveryType) !void {
@@ -141,6 +190,11 @@ fn media(context: *anyopaque) !void {
 }
 
 pub fn key(fixture: *Fixture, value: KeyType) !void {
+    try fixture.inbox.post(.{ .key = value });
+    try fixture.drain();
+}
+
+fn applyKey(fixture: *Fixture, value: KeyType) !void {
     var handler: PaneInputHandlerType = .{
         .model = &fixture.model,
         .effects = .{ .context = fixture, .send = sendInput, .viewport = .{ .context = fixture, .sync = viewport } },
