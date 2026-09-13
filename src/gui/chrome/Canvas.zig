@@ -58,6 +58,7 @@ pub fn text(canvas: *Canvas, area: core.Rect, label: Label) !void {
             .x = bounds.x + @as(f32, @floatFromInt(@as(u32, column) * canvas.metrics.cell_width)),
             .y = bounds.y + canvas.metrics.baseline,
             .pixel_height = canvas.metrics.pixel_height,
+            .cell_bounds = canvas.metrics.glyphCell(),
             .color = ink,
             .bold = label.bold,
             .italic = label.italic,
@@ -125,4 +126,24 @@ test "chrome text clips graphemes preserves metrics and reuses the terminal atla
     try canvas.text(area, label);
     try std.testing.expectEqual(version, atlas.version);
     try std.testing.expectEqual(calls, atlas.shape_calls);
+}
+
+test "fallback icons fit each chrome column with negative letter spacing" {
+    var renderer = @import("../render/TerminalRenderer.zig").init(std.testing.allocator);
+    defer renderer.deinit();
+    renderer.config.font = .{ .size = 22, .line_height = 0.75, .letter_spacing = -5, .thicken = true };
+    _ = try renderer.measure(.{ .width = 800, .height = 600, .scale = 2 });
+    var quads = @import("../render/QuadList.zig").init(std.testing.allocator);
+    defer quads.deinit();
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = .{ 8, 12 }, .theme = client.theme_support.default_theme };
+    const area: core.Rect = .{ .x = 1, .y = 1, .w = 3, .h = 1 };
+    try canvas.text(area, .{ .text = "\u{f07b}\u{f02db} " });
+    try std.testing.expectEqual(@as(usize, 2), quads.items().len);
+    const bounds = canvas.rect(area);
+    const width: f32 = @floatFromInt(renderer.metrics.cell_width);
+    for (quads.items(), 0..) |item, index| {
+        const x = bounds.x + @as(f32, @floatFromInt(index)) * width;
+        try std.testing.expect(item.x >= x and item.x + item.width <= x + width + 0.001);
+        try std.testing.expect(item.y >= bounds.y and item.y + item.height <= bounds.y + bounds.height + 0.001);
+    }
 }

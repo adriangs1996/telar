@@ -166,11 +166,12 @@ fn paint(atlas: *GlyphAtlas, text: ShapedText, list: *QuadList) !f32 {
     for (shaped.glyphs, shaped.positions) |info, position| {
         const placed = try atlas.visibleSlot(.{ .font = shaped.font, .index = info.codepoint }, run);
         if (placed.width > 0 and placed.height > 0) {
-            const x = round26(pen_x + position.x_offset) + placed.left;
-            const y: i32 = @as(i32, @intFromFloat(@round(run.y))) - round26(position.y_offset) - placed.top;
+            const primary = shaped.font == .primary;
+            const x = round26(pen_x - (if (primary) @as(i64, 0) else origin) + position.x_offset) + placed.left;
+            const y = -round26(position.y_offset) - placed.top;
             try list.push(.{
-                .x = run.x + (@as(f32, @floatFromInt(x)) - run.x) * placement.scale + placement.x,
-                .y = run.y + (@as(f32, @floatFromInt(y)) - run.y) * placement.scale + placement.y,
+                .x = if (primary) @floatFromInt(x) else run.x + @as(f32, @floatFromInt(x)) * placement.scale + placement.x,
+                .y = if (primary) @round(run.y) + @as(f32, @floatFromInt(y)) else run.y + @as(f32, @floatFromInt(y)) * placement.scale + placement.y,
                 .width = @as(f32, @floatFromInt(placed.width)) * placement.scale,
                 .height = @as(f32, @floatFromInt(placed.height)) * placement.scale,
                 .u0 = placed.u0,
@@ -187,7 +188,7 @@ fn paint(atlas: *GlyphAtlas, text: ShapedText, list: *QuadList) !f32 {
         pen_x += position.x_advance;
     }
 
-    return if (shaped.font == .primary) @floatFromInt(round26(pen_x - origin)) else @floatFromInt(shaped.columns * atlas.cellWidth());
+    return if (shaped.font == .primary) @floatFromInt(round26(pen_x - origin)) else atlas.cellBounds(text).width;
 }
 
 // Only fallback ink is fitted; the user's configured text keeps its exact metrics.
@@ -215,12 +216,18 @@ fn transform(atlas: *GlyphAtlas, text: ShapedText) !GlyphTransform {
         pen_x += position.x_advance;
     }
 
-    return GlyphTransform.fit(.{ .x = left, .y = top, .width = right - left, .height = bottom - top }, .{
+    return GlyphTransform.fit(.{ .x = left, .y = top, .width = right - left, .height = bottom - top }, atlas.cellBounds(text));
+}
+
+fn cellBounds(atlas: *const GlyphAtlas, text: ShapedText) @import("../render/Rect.zig") {
+    var bounds = text.run.cell_bounds orelse @import("../render/Rect.zig"){
         .x = 0,
         .y = @floatFromInt(-atlas.ascender()),
-        .width = @floatFromInt(text.shaped.columns * atlas.cellWidth()),
+        .width = @floatFromInt(atlas.cellWidth()),
         .height = @floatFromInt(atlas.lineHeight()),
-    });
+    };
+    bounds.width *= @floatFromInt(text.shaped.columns);
+    return bounds;
 }
 
 fn visibleSlot(atlas: *GlyphAtlas, glyph_id: @import("GlyphId.zig"), run: TextRun) !GlyphSlot {

@@ -19,6 +19,12 @@ pub fn rect(metrics: Metrics, origin: [2]u32, cells: core.Rect) @import("render/
     };
 }
 
+/// Supplies fallback fitting with the actual grid rather than natural font metrics.
+/// Example: `run.cell_bounds = metrics.glyphCell();`
+pub fn glyphCell(metrics: Metrics) @import("render/Rect.zig") {
+    return .{ .x = 0, .y = -metrics.baseline, .width = @floatFromInt(metrics.cell_width), .height = @floatFromInt(metrics.cell_height) };
+}
+
 /// Computes only complete cells. Edge pixels belong to the native chrome.
 /// Example: `const size = try metrics.measure(viewport);`
 pub fn measure(metrics: Metrics, viewport: Viewport) !core.TerminalSize {

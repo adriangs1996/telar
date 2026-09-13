@@ -249,7 +249,7 @@ fn paintCell(renderer: *Renderer, paint: CellPaint) !void {
 
     if (!std.mem.eql(u8, cell.text(), " ")) {
         const first = list.items().len;
-        _ = try renderer.atlas.?.place(.{ .text = cell.text(), .x = rect.x, .y = rect.y + renderer.metrics.baseline, .color = ink, .pixel_height = renderer.metrics.pixel_height, .bold = cell.style.flags.bold, .italic = cell.style.flags.italic }, list);
+        _ = try renderer.atlas.?.place(.{ .text = cell.text(), .x = rect.x, .y = rect.y + renderer.metrics.baseline, .color = ink, .pixel_height = renderer.metrics.pixel_height, .cell_bounds = renderer.metrics.glyphCell(), .bold = cell.style.flags.bold, .italic = cell.style.flags.italic }, list);
         list.clipFrom(first, rect);
     }
 
@@ -286,4 +286,38 @@ pub fn frame(renderer: *const Renderer, token: u64) native.Frame {
         .background = .{ renderer.background.r, renderer.background.g, renderer.background.b, renderer.config.window.background_opacity },
         .background_blur = @intFromBool(renderer.config.window.background_blur),
     };
+}
+
+test "fallback icons retain their full texture in tightened terminal cells" {
+    var renderer = Renderer.init(std.testing.allocator);
+    defer renderer.deinit();
+    renderer.config.font = .{ .size = 22, .line_height = 0.75, .letter_spacing = -5, .thicken = true };
+    var natural = QuadList.init(std.testing.allocator);
+    defer natural.deinit();
+    for ([_]f32{ 1, 2 }) |scale| {
+        _ = try renderer.measure(.{ .width = 800, .height = 600, .scale = scale });
+        const rect = renderer.metrics.rect(.{ 4, 7 }, .{ .x = 1, .y = 1, .w = 1, .h = 1 });
+        for ([_][]const u8{ "\u{f07b}", "\u{f02db}" }) |icon| {
+            var cell: core.Cell = .{ .len = @intCast(icon.len) };
+            @memcpy(cell.bytes[0..icon.len], icon);
+            for (0..4) |style| {
+                cell.style.flags.bold = style & 1 != 0;
+                cell.style.flags.italic = style & 2 != 0;
+                natural.clear();
+                _ = try renderer.atlas.?.place(.{ .text = icon, .x = rect.x, .y = rect.y + renderer.metrics.baseline, .color = .white, .pixel_height = renderer.metrics.pixel_height, .bold = cell.style.flags.bold, .italic = cell.style.flags.italic }, &natural);
+                try renderer.paintCell(.{ .cell = cell, .rect = rect });
+                const ink = renderer.cell_quads.items()[1..];
+                try std.testing.expectEqual(natural.items().len, ink.len);
+                for (natural.items(), ink) |source, actual| {
+                    try std.testing.expectApproxEqAbs(source.u0, actual.u0, 0.000001);
+                    try std.testing.expectApproxEqAbs(source.u1, actual.u1, 0.000001);
+                    try std.testing.expectApproxEqAbs(source.v0, actual.v0, 0.000001);
+                    try std.testing.expectApproxEqAbs(source.v1, actual.v1, 0.000001);
+                    try std.testing.expect(actual.x >= rect.x and actual.y >= rect.y);
+                    try std.testing.expect(actual.x + actual.width <= rect.x + rect.width + 0.001);
+                    try std.testing.expect(actual.y + actual.height <= rect.y + rect.height + 0.001);
+                }
+            }
+        }
+    }
 }
