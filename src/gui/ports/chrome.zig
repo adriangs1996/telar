@@ -49,7 +49,7 @@ fn workspaceList(_: *anyopaque, _: bool) void {}
 fn pointer(context: *anyopaque, event: client.Mouse) client.ViewInteractionCommand {
     const gui = host(context);
     // A prompt can open before its first paint; it already owns the pointer.
-    if (gui.app.model.name_prompt.active() and gui.overlays.modal == null) {
+    if (gui.app.model.name_prompt.active() and gui.overlays.presented().modal == null) {
         return .{ .consumed = true };
     }
 

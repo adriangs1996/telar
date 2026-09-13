@@ -37,6 +37,11 @@ pub fn projection(fixture: *Fixture) client.Projection {
 }
 
 pub fn paint(fixture: *Fixture, projection_value: client.Projection) !void {
+    try fixture.prepare(projection_value);
+    fixture.chrome.present(true);
+}
+
+pub fn prepare(fixture: *Fixture, projection_value: client.Projection) !void {
     const renderer = &fixture.session.renderer;
     renderer.quads.clear();
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme };
@@ -44,7 +49,8 @@ pub fn paint(fixture: *Fixture, projection_value: client.Projection) !void {
 }
 
 pub fn target(fixture: *Fixture, intent: client.Intent) ?core.Rect {
-    for (fixture.chrome.hits.items[0..fixture.chrome.hits.len]) |hit| {
+    const hits = &fixture.chrome.presented().hits;
+    for (hits.items[0..hits.len]) |hit| {
         if (hit.action == .intent and std.meta.eql(hit.action.intent, intent)) {
             return hit.area;
         }

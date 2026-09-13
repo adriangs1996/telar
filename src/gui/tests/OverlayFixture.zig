@@ -38,6 +38,11 @@ pub fn canvas(fixture: *Fixture) Canvas {
 }
 
 pub fn paint(fixture: *Fixture) !void {
+    try fixture.prepare();
+    fixture.overlays.present(true);
+}
+
+pub fn prepare(fixture: *Fixture) !void {
     fixture.renderer.quads.clear();
     var target = fixture.canvas();
     try fixture.overlays.paint(&target, fixture.projection());

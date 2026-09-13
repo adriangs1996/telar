@@ -27,6 +27,14 @@ rejected. Presentation geometry additionally rejects new pane gestures whose del
 layout differs from the current model, including the interval before a new GPU
 flight starts.
 
+Chrome and overlays keep two bounded hit states. Painting replaces the prepared
+state; pointer lookup uses the last delivered state. A matching successful GPU
+completion publishes the prepared state by swapping an index. Failed and stale
+completions cannot change visible control identities. This also covers tab
+reordering, notification replacement and modal closure when the pane geometry
+does not change. Hover, sidebar scrolling and captured gestures remain outside
+these snapshots, so publishing a frame cannot erase input received in flight.
+
 Each gesture has one owner. Chrome retains controls and resize handles, shared
 copy mode retains selection, and `PointerRouting` retains child mouse reporting
 by button. A child capture stores pane ID, attachment generation and tab location;

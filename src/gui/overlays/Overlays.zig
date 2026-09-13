@@ -2,24 +2,27 @@ const client = @import("telar-client");
 const core = @import("telar-core");
 const Canvas = @import("../chrome/Canvas.zig");
 const Modal = @import("Modal.zig");
-const Notifications = @import("Notifications.zig");
+const HitState = @import("HitState.zig");
+const GenericPresentedState = @import("../render/GenericPresentedState.zig").Type;
 const name_prompt = @import("name_prompt.zig");
 const picker = @import("picker.zig");
 const history = @import("history.zig");
 const suggestion = @import("suggestion.zig");
 const Overlays = @This();
 
-modal: ?core.Rect = null,
-notifications: Notifications = .{},
+maps: GenericPresentedState(HitState) = .{},
 gesture: ?u8 = null,
 
 /// Prepares native modal chrome and its hit map from one borrowed projection.
 /// Call after panes and permanent chrome, before sealing the frame.
 /// Example: `try overlays.paint(canvas, projection);`.
 pub fn paint(overlays: *Overlays, canvas: *Canvas, projection: client.Projection) !void {
-    overlays.modal = null;
-    try overlays.notifications.paint(canvas, projection);
-    const prompt = projection.prompt orelse return;
+    const pending = overlays.maps.begin();
+    try pending.notifications.paint(canvas, projection);
+    const prompt = projection.prompt orelse {
+        overlays.maps.seal();
+        return;
+    };
     const host: core.Rect = .{ .w = projection.host_size.cols, .h = projection.host_size.rows };
     const area = switch (prompt.target()) {
         .history => history.area(projection),
@@ -27,7 +30,7 @@ pub fn paint(overlays: *Overlays, canvas: *Canvas, projection: client.Projection
         .suggest => Modal.bounds(host, .{ .w = 84, .h = 9 }),
         else => Modal.bounds(host, .{ .w = 64, .h = 7 }),
     };
-    overlays.modal = area;
+    pending.modal = area;
     const modal: Modal = .{ .canvas = canvas, .area = area };
     switch (prompt.target()) {
         .goto => try picker.paint(modal, projection),
@@ -35,6 +38,21 @@ pub fn paint(overlays: *Overlays, canvas: *Canvas, projection: client.Projection
         .suggest => try suggestion.paint(modal, projection),
         else => try name_prompt.paint(modal, prompt),
     }
+    overlays.maps.seal();
+}
+
+/// Publishes only the controls belonging to the host's completed frame token.
+/// Example: `overlays.present(delivered);`.
+pub fn present(overlays: *Overlays, delivered: bool) void {
+    overlays.maps.present(delivered);
+}
+
+pub fn prepared(overlays: *const Overlays) *const HitState {
+    return overlays.maps.prepared();
+}
+
+pub fn presented(overlays: *const Overlays) *const HitState {
+    return overlays.maps.presented();
 }
 
 /// Consumes modal gestures even outside their rectangle and retains their owner
@@ -47,7 +65,8 @@ pub fn pointer(overlays: *Overlays, mouse: client.Mouse) ?client.ViewInteraction
         overlays.gesture = null;
     }
 
-    if (overlays.modal != null or captured) {
+    const visible = overlays.presented();
+    if (visible.modal != null or captured) {
         if (mouse.kind == .press and overlays.gesture == null) {
             overlays.gesture = button;
         }
@@ -55,7 +74,7 @@ pub fn pointer(overlays: *Overlays, mouse: client.Mouse) ?client.ViewInteraction
         return .{ .consumed = true };
     }
 
-    const intent = overlays.notifications.at(mouse) orelse return null;
+    const intent = visible.notifications.at(mouse) orelse return null;
     if (mouse.kind == .press) {
         overlays.gesture = button;
         return .{ .consumed = true, .intent = if (button == 0) intent else .none };

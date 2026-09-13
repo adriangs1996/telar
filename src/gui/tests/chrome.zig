@@ -47,12 +47,14 @@ test "native chrome preserves gesture ownership outside the sidebar and clamps s
     var projection = fixture.projection();
     projection.sidebar_visible = true;
     try fixture.paint(projection);
-    const sidebar = fixture.chrome.regions.sidebar;
+    const sidebar = fixture.chrome.presented().regions.sidebar;
     const press = fixture.chrome.pointer(.{ .x = sidebar.x + sidebar.w - 1, .y = 4, .kind = .press });
     try std.testing.expect(press.consumed);
+    try fixture.prepare(projection);
     const drag = fixture.chrome.pointer(.{ .x = 90, .y = 10, .kind = .drag, .button = 32 });
     try std.testing.expectEqualDeep(client.Intent{ .resize_sidebar = 91 }, drag.intent);
     try std.testing.expect(drag.consumed);
+    fixture.chrome.present(true);
     const release = fixture.chrome.pointer(.{ .x = 88, .y = 10, .kind = .release });
     try std.testing.expectEqualDeep(client.Intent{ .resize_sidebar = 89 }, release.intent);
     try std.testing.expect(fixture.chrome.gesture_button == null);
@@ -232,7 +234,7 @@ test "native configured bar segments preserve colors decorations and faint ink" 
     var faint_ink = false;
     var underline = false;
     const renderer = &fixture.session.renderer;
-    const bottom = renderer.metrics.rect(renderer.origin, fixture.chrome.regions.bottom);
+    const bottom = renderer.metrics.rect(renderer.origin, fixture.chrome.presented().regions.bottom);
     for (renderer.quads.items()) |quad| {
         background = background or (quad.r == 0 and quad.g == 1 and quad.b == 0 and quad.a == 1);
         faint_ink = faint_ink or (quad.r == 1 and quad.g == 0 and quad.b == 0 and quad.a == 0.5);
@@ -274,4 +276,69 @@ test "native mode hints replace tabs without publishing hidden tab controls" {
     projection.status_mode = .normal;
     try fixture.paint(projection);
     try std.testing.expect(fixture.target(.{ .select_tab = Session.location.tab_id }) != null);
+}
+
+test "native tab hit maps change only after their reordered frame is delivered" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    const tabs = &fixture.session.gui.app.model.workspace;
+    const second_id: core.TabId = @enumFromInt(2);
+    _ = try tabs.addCreated(.{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_id }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
+    _ = tabs.select(Session.location.tab_id);
+    try fixture.prepare(fixture.projection());
+    try std.testing.expectEqual(@as(usize, 0), fixture.chrome.presented().hits.len);
+    fixture.chrome.present(true);
+    const first = fixture.target(.{ .select_tab = Session.location.tab_id }).?;
+    const geometry = client.Geometry.capture(fixture.projection());
+    _ = try tabs.applyPosition(second_id, 0);
+    const current_geometry = client.Geometry.capture(fixture.projection());
+    try std.testing.expect(geometry.matches(&current_geometry));
+
+    try fixture.prepare(fixture.projection());
+    const pending = fixture.chrome.prepared();
+    const visible = fixture.chrome.presented();
+    try std.testing.expect(pending != visible);
+    try std.testing.expectEqualDeep(client.Intent{ .select_tab = Session.location.tab_id }, fixture.click(first, 0).intent);
+    fixture.chrome.present(false);
+    try std.testing.expectEqual(visible, fixture.chrome.presented());
+    fixture.chrome.present(true);
+    try std.testing.expectEqualDeep(client.Intent{ .select_tab = Session.location.tab_id }, fixture.click(first, 0).intent);
+
+    try fixture.prepare(fixture.projection());
+    fixture.chrome.present(true);
+    try std.testing.expectEqual(pending, fixture.chrome.presented());
+    try std.testing.expectEqualDeep(client.Intent{ .select_tab = second_id }, fixture.click(first, 0).intent);
+    fixture.chrome.present(true);
+    try std.testing.expectEqual(pending, fixture.chrome.presented());
+}
+
+test "native GUI discards failed and stale completions before publishing controls" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    try session.receiveFrame(1);
+    const gui = session.gui;
+    const initial = gui.chrome.presented();
+    gui.app.model.name_prompt.begin(.create_workspace);
+    const first = try gui.prepare(&session.renderer);
+    try gui.complete(first + 1, true);
+    try std.testing.expectEqual(initial, gui.chrome.presented());
+    try std.testing.expect(gui.overlays.presented().modal == null);
+    try std.testing.expect(gui.lifecycle.active != null);
+    try gui.complete(first, false);
+    try std.testing.expectEqual(initial, gui.chrome.presented());
+    try std.testing.expect(gui.overlays.presented().modal == null);
+    try std.testing.expect(gui.lifecycle.active == null);
+
+    const next = try gui.prepare(&session.renderer);
+    const prepared = gui.chrome.prepared();
+    try gui.complete(first, true);
+    try std.testing.expectEqual(initial, gui.chrome.presented());
+    try std.testing.expect(gui.overlays.presented().modal == null);
+    try gui.complete(next, true);
+    try std.testing.expectEqual(prepared, gui.chrome.presented());
+    try std.testing.expect(gui.overlays.presented().modal != null);
+    try session.settle();
+    try gui.complete(next, true);
+    try std.testing.expectEqual(prepared, gui.chrome.presented());
 }
