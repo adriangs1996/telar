@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "input.h"
 #include "pointer.h"
+#include "clipboard.h"
 #include <xkbcommon/xkbcommon.h>
 #include <xkbcommon/xkbcommon-compose.h>
 #include <errno.h>
@@ -14,7 +15,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define PASTE_LIMIT (64 * 1024)
+#define PASTE_LIMIT TELAR_CLIPBOARD_LIMIT
 #define OFFER_LIMIT 16
 struct offer { struct wl_data_offer *handle; bool utf8, plain; };
 struct telar_input {
@@ -23,6 +24,8 @@ struct telar_input {
     struct wl_seat *seat;
     struct wl_keyboard *keyboard;
     telar_pointer *pointer;
+    telar_clipboard *clipboard;
+    uint32_t selection_serial;
     void *window_context;
     void (*toggle_fullscreen)(void *);
     telar_gui_input held_keys[256];
@@ -179,7 +182,9 @@ static void keymap(void *data, struct wl_keyboard *keyboard, uint32_t format, in
     self->state = state;
 }
 static void keyboard_enter(void *data, struct wl_keyboard *keyboard, uint32_t serial, struct wl_surface *surface, struct wl_array *keys) {
-    (void)keyboard; (void)serial; (void)surface; (void)keys;
+    (void)keyboard; (void)surface; (void)keys;
+    telar_input *self = data;
+    self->selection_serial = serial;
     emit(data, (telar_gui_input){.kind = 5, .code = 1, .phase = 1});
 }
 static void keyboard_leave(void *data, struct wl_keyboard *keyboard, uint32_t serial, struct wl_surface *surface) {
@@ -194,8 +199,9 @@ static void keyboard_leave(void *data, struct wl_keyboard *keyboard, uint32_t se
     if (self->compose != NULL) xkb_compose_state_reset(self->compose);
 }
 static void keyboard_key(void *data, struct wl_keyboard *keyboard, uint32_t serial, uint32_t time, uint32_t key, uint32_t state) {
-    (void)keyboard; (void)serial; (void)time;
+    (void)keyboard; (void)time;
     telar_input *self = data;
+    self->selection_serial = serial;
     send_key(self, key, state == WL_KEYBOARD_KEY_STATE_PRESSED ? 1 : 3);
     if (state == WL_KEYBOARD_KEY_STATE_PRESSED && self->keymap != NULL && self->repeat_rate > 0 && xkb_keymap_key_repeats(self->keymap, key + 8)) {
         self->repeat_key = key;
@@ -294,8 +300,20 @@ telar_input *telar_input_create(void *context, const telar_gui_callbacks *callba
         return NULL;
     }
 
+    self->clipboard = telar_clipboard_create();
+    if (self->clipboard == NULL) {
+        telar_pointer_destroy(self->pointer);
+        free(self);
+        return NULL;
+    }
+
     self->xkb = xkb_context_new(0);
-    if (self->xkb == NULL) { telar_pointer_destroy(self->pointer); free(self); return NULL; }
+    if (self->xkb == NULL) {
+        telar_clipboard_destroy(self->clipboard);
+        telar_pointer_destroy(self->pointer);
+        free(self);
+        return NULL;
+    }
     const char *locale = getenv("LC_ALL");
     if (locale == NULL || !*locale) locale = getenv("LC_CTYPE");
     if (locale == NULL || !*locale) locale = getenv("LANG");
@@ -304,6 +322,14 @@ telar_input *telar_input_create(void *context, const telar_gui_callbacks *callba
     if (self->compose_table != NULL) self->compose = xkb_compose_state_new(self->compose_table, 0);
     return self;
 }
+int telar_input_clipboard(telar_input *self, const uint8_t *bytes, size_t len) {
+    const telar_clipboard_offer offer = {
+        .manager = self->manager, .device = self->device,
+        .serial = self->selection_serial, .bytes = bytes, .len = len,
+    };
+    return telar_clipboard_publish(self->clipboard, &offer) ? 0 : -1;
+}
+
 void telar_input_fullscreen(telar_input *self, void *context, void (*toggle)(void *)) {
     self->window_context = context;
     self->toggle_fullscreen = toggle;
@@ -351,6 +377,7 @@ void telar_input_destroy(telar_input *self) {
     if (self == NULL) return;
     if (self->paste_fd >= 0) close(self->paste_fd);
     for (size_t i = 0; i < OFFER_LIMIT; i++) if (self->offers[i].handle != NULL) wl_data_offer_destroy(self->offers[i].handle);
+    telar_clipboard_destroy(self->clipboard);
     if (self->device != NULL) wl_data_device_destroy(self->device);
     if (self->manager != NULL) wl_data_device_manager_destroy(self->manager);
     telar_pointer_destroy(self->pointer);

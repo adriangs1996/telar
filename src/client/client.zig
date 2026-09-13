@@ -61,6 +61,7 @@ pub const HostInputSource = @import("input/HostInputSource.zig");
 pub const HostNotifier = @import("notifications/HostNotifier.zig");
 pub const HostPresentation = @import("presentation/HostPresentation.zig");
 pub const HostTimers = @import("resources/HostTimers.zig");
+pub const openHostLink = @import("links/host.zig").open;
 pub const LinkOpener = @import("links/LinkOpener.zig");
 pub const LocalTime = @import("resources/LocalTime.zig");
 pub const MarkerRemoval = @import("attachments/MarkerRemoval.zig");
@@ -679,6 +680,7 @@ test {
     _ = @import("links/cells.zig");
     _ = @import("links/file_uri.zig");
     _ = @import("links/opening_support.zig");
+    _ = @import("links/host.zig");
     _ = @import("links/pointer_support.zig");
     _ = @import("links/target_support.zig");
     _ = @import("model/goto_picker.zig");

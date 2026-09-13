@@ -451,6 +451,7 @@
     "links/Pointer.zig",
     "links/PointerCommand.zig",
     "links/cells.zig",
+    "links/host.zig",
     "model/AgentHandoff.zig",
     "model/AgentSnapshotCommit.zig",
     "model/AgentStatusChange.zig",

@@ -15,6 +15,7 @@ pub fn add(b: *std.Build, gui: *std.Build.Module, disable_coverage: bool) void {
             "src/gui/linux/background_effect.c",
             "src/gui/linux/input.c",
             "src/gui/linux/pointer.c",
+            "src/gui/linux/clipboard.c",
             "src/gui/linux/font.c",
             "src/gui/linux/frame_worker.c",
             "src/gui/linux/frame_clock.c",

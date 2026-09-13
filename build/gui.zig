@@ -68,6 +68,11 @@ pub fn add(b: *std.Build, app: Application) ?*std.Build.Module {
             });
             const worker_test = b.addExecutable(.{ .name = "gui-worker-test", .root_module = worker_module });
             b.step("test-gui-worker", "Verify joining a consumer before releasing its borrowed frame").dependOn(&b.addRunArtifact(worker_test).step);
+            const clipboard_module = b.createModule(.{ .target = app.modules.target, .optimize = app.modules.optimize, .link_libc = true });
+            clipboard_module.addCSourceFile(.{ .file = b.path("src/gui/linux/clipboard_test.c"), .flags = &.{"-std=c11"} });
+            clipboard_module.linkSystemLibrary("wayland-client", .{});
+            const clipboard_test = b.addExecutable(.{ .name = "gui-clipboard-test", .root_module = clipboard_module });
+            b.step("test-gui-clipboard", "Verify bounded native clipboard transfer ownership and cancellation").dependOn(&b.addRunArtifact(clipboard_test).step);
         }
     }
 
