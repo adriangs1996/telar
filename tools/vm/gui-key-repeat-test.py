@@ -5,6 +5,7 @@ import importlib.util
 import json
 from pathlib import Path
 import shlex
+import sys
 import time
 
 
@@ -13,11 +14,15 @@ state = pathlib.Path(sys.argv[1])
 saved = termios.tcgetattr(0)
 try:
     tty.setraw(0)
-    os.write(1, "\\033[2J\\033[HDejaVu Sans Mono fallback: \\uf07b \\uf115 \\ue7a8 \\U000f035b\\r\\n".encode())
-    os.write(1, "Codex dots: \\u2801 \\u2802 \\u2804 \\u2808 \\u2810 \\u2820 \\u2840 \\u2880\\r\\nBraille blank/full: [\\u2800] [\\u28ff]\\r\\n".encode())
-    for row in range(16):
-        patterns = ''.join(chr(0x2800 + row * 16 + col) for col in range(16))
-        os.write(1, (f'{row:X}: ' + patterns + '\\r\\n').encode())
+    os.write(1, b"\\033[2J\\033[H")
+    if (state / 'sample.ansi').exists():
+        os.write(1, (state / 'sample.ansi').read_bytes())
+    else:
+        os.write(1, "DejaVu Sans Mono fallback: \\uf07b \\uf115 \\ue7a8 \\U000f035b\\r\\n".encode())
+        os.write(1, "Codex dots: \\u2801 \\u2802 \\u2804 \\u2808 \\u2810 \\u2820 \\u2840 \\u2880\\r\\nBraille blank/full: [\\u2800] [\\u28ff]\\r\\n".encode())
+        for row in range(16):
+            patterns = ''.join(chr(0x2800 + row * 16 + col) for col in range(16))
+            os.write(1, (f'{row:X}: ' + patterns + '\\r\\n').encode())
     with (state / 'keys').open('wb', buffering=0) as output:
         (state / 'ready').touch()
         deadline = time.monotonic() + 20
@@ -35,6 +40,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('output', type=Path)
     parser.add_argument('--binary', default='zig-out/bin/telar')
+    parser.add_argument('--rendering', action='store_true', help='capture the shared box drawing and italic fixture')
     options = parser.parse_args()
     options.output = options.output.resolve()
     path = Path(__file__).with_name('gui-multiplexer-test.py')
@@ -52,6 +58,10 @@ def main():
 
     try:
         window.setup()
+        if options.rendering:
+            sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+            from gui_rendering_sample import ansi
+            window.guest('cat > "$state/sample.ansi"', input_text=ansi())
         window.guest('cat > "$state/reader.py"', input_text=READER)
         window.type('python3 ' + shlex.quote(window.state + '/reader.py') + ' ' + shlex.quote(window.state))
         window.key('Return')
@@ -74,8 +84,9 @@ def main():
         released = window.guest('cat "$state/keys"')
         if released != first:
             raise AssertionError('Repeat continued after key release')
-        window.screenshot('icons-and-repeat')
-        result = dict(count=len(first), bytes=first, release_stopped=True)
+        window.screenshot('rendering-and-repeat' if options.rendering else 'icons-and-repeat')
+        result = dict(count=len(first), bytes=first, release_stopped=True,
+                      fixture='rendering' if options.rendering else 'icons')
         (window.output / 'repeat.json').write_text(json.dumps(result, indent=2) + '\n')
         window.step(f'held j delivered {len(first)} bytes and stopped on release')
         window.guest('! grep -E "Validation Error|VUID-|native input capacity exceeded" "$state/gui.log"')
