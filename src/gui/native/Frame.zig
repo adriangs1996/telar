@@ -12,4 +12,5 @@ pub const Frame = extern struct {
     atlas_version: u32,
     background: [4]f32,
     background_blur: u32 = 0,
+    titlebar: u32 = 1,
 };

@@ -13,7 +13,7 @@ test "GUI configuration owns font names and overlays profiles independently of c
         \\  gui = {
         \\    font = { family = "Example Mono", size = 17.5, line_height = 1.2, letter_spacing = 0.5, thicken = true, thicken_strength = 64 },
         \\    cursor = { style = "bar", blink = false, blink_interval_ms = 350 },
-        \\    window = { background_opacity = 0.75, background_blur = true, padding = { x = 8.5, y = 4 } },
+        \\    window = { background_opacity = 0.75, background_blur = true, titlebar = false, padding = { x = 8.5, y = 4 } },
         \\  },
         \\  profiles = { large = { gui = { font = { size = 24, thicken_strength = 0 }, window = { padding = { y = 12 } } }, theme = { terminal = { background = "#ffffff" } } } },
         \\}
@@ -37,7 +37,8 @@ test "GUI configuration owns font names and overlays profiles independently of c
     try std.testing.expect(!config.cursor.blink);
     try std.testing.expectEqual(@as(u32, 350), config.cursor.blink_interval_ms);
     try std.testing.expectEqual(@as(f32, 0.75), config.window.background_opacity);
-    try std.testing.expect(config.window.background_blur);
+    try std.testing.expectEqual(@as(u8, 20), config.window.background_blur);
+    try std.testing.expect(!config.window.titlebar);
     try std.testing.expectEqual(@as(f32, 8.5), config.window.padding.x);
     try std.testing.expectEqual(@as(f32, 12), config.window.padding.y);
     try std.testing.expectEqual(@as(?[3]u8, .{ 0x11, 0x22, 0x33 }), terminal.cursor_color);
@@ -56,7 +57,19 @@ test "GUI validation rejects malformed values including profiles that are not se
         "gui = { window = { background_opacity = '0.5' } }",
         "gui = { window = { background_opacity = 0/0 } }",
         "gui = { window = { background_opacity = 1/0 } }",
-        "gui = { window = { background_blur = 40 } }",
+        "gui = { window = { background_blur = -1 } }",
+        "gui = { window = { background_blur = 256 } }",
+        "gui = { window = { background_blur = 2.5 } }",
+        "gui = { window = { background_blur = 20.0 } }",
+        "gui = { window = { background_blur = 0/0 } }",
+        "gui = { window = { background_blur = 1/0 } }",
+        "gui = { window = { background_blur = -1/0 } }",
+        "gui = { window = { background_blur = '20' } }",
+        "gui = { window = { background_blur = {} } }",
+        "gui = { window = { titlebar = 0 } }",
+        "gui = { window = { titlebar = 'false' } }",
+        "profiles = { unused = { gui = { window = { background_blur = 256 } } } }",
+        "profiles = { unused = { gui = { window = { titlebar = 1 } } } }",
         "gui = { window = { padding = 10 } }",
         "gui = { window = { padding = { x = -1 } } }",
         "gui = { window = { padding = { y = 257 } } }",
@@ -104,4 +117,33 @@ test "GUI validation rejects malformed values including profiles that are not se
         try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = text, .source_name = "@invalid.lua", .number = 1 }));
         try std.testing.expect(diagnostic.message().len > 0);
     }
+}
+
+test "window preferences preserve defaults and profile inheritance with numeric or legacy blur" {
+    const source =
+        \\return { api_version = 2,
+        \\  gui = { window = { background_blur = 40, titlebar = false } },
+        \\  profiles = {
+        \\    inherited = { gui = { window = { padding = { x = 4 } } } },
+        \\    zero = { gui = { window = { background_blur = 0, titlebar = true } } },
+        \\    minimal = { gui = { window = { background_blur = 1 } } },
+        \\    maximal = { gui = { window = { background_blur = 255 } } },
+        \\    legacy_on = { gui = { window = { background_blur = true } } },
+        \\    legacy_off = { gui = { window = { background_blur = false } } },
+        \\  },
+        \\}
+    ;
+    for ([_][]const u8{ "inherited", "zero", "minimal", "maximal", "legacy_on", "legacy_off" }, [_]u8{ 40, 0, 1, 255, 20, 0 }) |profile, radius| {
+        var diagnostic: Diagnostic = .{};
+        const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@window.lua", .number = 1, .profile = profile });
+        defer generation.deinit();
+        try std.testing.expectEqual(radius, generation.snapshot.gui.window.background_blur);
+        try std.testing.expectEqual(std.mem.eql(u8, profile, "zero"), generation.snapshot.gui.window.titlebar);
+    }
+
+    var diagnostic: Diagnostic = .{};
+    const defaults = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2 }", .source_name = "@defaults.lua", .number = 1 });
+    defer defaults.deinit();
+    try std.testing.expectEqual(@as(u8, 0), defaults.snapshot.gui.window.background_blur);
+    try std.testing.expect(defaults.snapshot.gui.window.titlebar);
 }

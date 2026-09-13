@@ -274,14 +274,15 @@ test "window reload reuses the atlas and padding publishes grid size without its
     const pixels = session.renderer.atlas.?.pixels.ptr;
     const version = session.renderer.atlas_version;
     const previous_size = session.gui.app.model.hostSize();
-    try fixture.write("config.lua", "return { api_version = 2, gui = { window = { background_opacity = 0.45, background_blur = true } } }");
+    try fixture.write("config.lua", "return { api_version = 2, gui = { window = { background_opacity = 0.45, background_blur = true, titlebar = false } } }");
     try fixture.wait();
     try std.testing.expect(reload.prepared == null);
     try std.testing.expect(try reload.apply(session.gui, &session.renderer));
     try present(session);
     try std.testing.expectEqual(@as(usize, 0), session.renderer.repainted_cells);
     try std.testing.expectEqual(@as(f32, 0.45), session.renderer.frame(1).background[3]);
-    try std.testing.expectEqual(@as(u32, 1), session.renderer.frame(1).background_blur);
+    try std.testing.expectEqual(@as(u32, 20), session.renderer.frame(1).background_blur);
+    try std.testing.expectEqual(@as(u32, 0), session.renderer.frame(1).titlebar);
 
     try fixture.write("config.lua", "return { api_version = 2, gui = { window = { padding = { x = 12, y = 18 } } } }");
     try fixture.wait();
@@ -302,4 +303,44 @@ test "window reload reuses the atlas and padding publishes grid size without its
     try std.testing.expect(session.resize_count > 0);
     try std.testing.expectEqual(@as(f32, 1), session.renderer.frame(1).background[3]);
     try std.testing.expectEqual(@as(u32, 0), session.renderer.frame(1).background_blur);
+}
+
+test "blur radius and titlebar reload preserve the atlas and geometry through validation failure" {
+    var fixture = try Fixture.init("return { api_version = 2, gui = { window = { background_opacity = 0.5 } } }", null);
+    defer fixture.deinit();
+    const session = fixture.session;
+    const reload = &session.driver.configuration;
+    try session.receiveFrame(1);
+    try present(session);
+    const pixels = session.renderer.atlas.?.pixels.ptr;
+    const version = session.renderer.atlas_version;
+    const shape_calls = session.renderer.atlas.?.shape_calls;
+    const size = session.gui.app.model.hostSize();
+    const resizes = session.resize_count;
+    for ([_]u8{ 1, 40, 255, 0 }, [_]bool{ false, true, false, true }) |radius, titlebar| {
+        var source: [256]u8 = undefined;
+        const text = try std.fmt.bufPrint(&source, "return {{ api_version = 2, gui = {{ window = {{ background_opacity = 0.5, background_blur = {d}, titlebar = {} }} }} }}", .{ radius, titlebar });
+        try fixture.write("config.lua", text);
+        try fixture.wait();
+        try std.testing.expect(reload.prepared == null);
+        try std.testing.expect(try reload.apply(session.gui, &session.renderer));
+        try present(session);
+        try std.testing.expectEqual(@as(u32, radius), session.renderer.frame(1).background_blur);
+        try std.testing.expectEqual(@as(u32, @intFromBool(titlebar)), session.renderer.frame(1).titlebar);
+        try std.testing.expectEqual(size, try session.renderer.measure(Fixture.viewport));
+        try std.testing.expectEqual(resizes, session.resize_count);
+        try std.testing.expectEqual(pixels, session.renderer.atlas.?.pixels.ptr);
+        try std.testing.expectEqual(version, session.renderer.atlas_version);
+        try std.testing.expectEqual(shape_calls, session.renderer.atlas.?.shape_calls);
+        try std.testing.expectEqual(@as(usize, 0), session.renderer.repainted_cells);
+    }
+
+    const generation = session.gui.app.lua_generation.?.number;
+    try fixture.write("config.lua", "return { api_version = 2, gui = { window = { background_blur = 256, titlebar = false } } }");
+    try fixture.wait();
+    try std.testing.expect(!try reload.apply(session.gui, &session.renderer));
+    try std.testing.expectEqual(generation, session.gui.app.lua_generation.?.number);
+    try std.testing.expectEqual(@as(u32, 0), session.renderer.frame(1).background_blur);
+    try std.testing.expectEqual(@as(u32, 1), session.renderer.frame(1).titlebar);
+    try std.testing.expectEqual(pixels, session.renderer.atlas.?.pixels.ptr);
 }

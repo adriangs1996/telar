@@ -284,7 +284,8 @@ pub fn frame(renderer: *const Renderer, token: u64) native.Frame {
         .atlas_side = GlyphAtlas.side,
         .atlas_version = renderer.atlas_version,
         .background = .{ renderer.background.r, renderer.background.g, renderer.background.b, renderer.config.window.background_opacity },
-        .background_blur = @intFromBool(renderer.config.window.background_blur),
+        .background_blur = renderer.config.window.background_blur,
+        .titlebar = @intFromBool(renderer.config.window.titlebar),
     };
 }
 

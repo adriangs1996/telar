@@ -91,16 +91,17 @@ pub fn parse(parser: Parser, initial: Config) !Config {
 }
 
 fn window(parser: Parser, initial: @import("GuiWindow.zig")) !@import("GuiWindow.zig") {
-    try parser.table("config.gui.window", &.{ "background_opacity", "background_blur", "padding" });
+    try parser.table("config.gui.window", &.{ "background_opacity", "background_blur", "titlebar", "padding" });
     var result = initial;
     result.background_opacity = @floatCast(try parser.number(.{ "background_opacity", 0, 1 }, result.background_opacity));
-    _ = lua.lua_getfield(parser.state, -1, "background_blur");
+    result.background_blur = try parser.backgroundBlur(result.background_blur);
+    _ = lua.lua_getfield(parser.state, -1, "titlebar");
     if (lua.lua_type(parser.state, -1) != lua.LUA_TNIL) {
         if (lua.lua_type(parser.state, -1) != lua.LUA_TBOOLEAN) {
-            return parser.invalid("gui.window.background_blur must be a boolean");
+            return parser.invalid("gui.window.titlebar must be a boolean");
         }
 
-        result.background_blur = lua.lua_toboolean(parser.state, -1) != 0;
+        result.titlebar = lua.lua_toboolean(parser.state, -1) != 0;
     }
     value.pop(parser.state, 1);
 
@@ -112,6 +113,27 @@ fn window(parser: Parser, initial: @import("GuiWindow.zig")) !@import("GuiWindow
     }
     value.pop(parser.state, 1);
     return result;
+}
+
+fn backgroundBlur(parser: Parser, initial: u8) !u8 {
+    _ = lua.lua_getfield(parser.state, -1, "background_blur");
+    defer value.pop(parser.state, 1);
+    switch (lua.lua_type(parser.state, -1)) {
+        lua.LUA_TNIL => return initial,
+        // Existing boolean configs retain the default radius used by Ghostty.
+        lua.LUA_TBOOLEAN => return if (lua.lua_toboolean(parser.state, -1) != 0) 20 else 0,
+        lua.LUA_TNUMBER => {
+            if (lua.lua_isinteger(parser.state, -1) != 0) {
+                const radius = lua.lua_tointegerx(parser.state, -1, null);
+                if (radius >= 0 and radius <= 255) {
+                    return @intCast(radius);
+                }
+            }
+        },
+        else => {},
+    }
+
+    return parser.invalid("gui.window.background_blur must be an integer in 0..255 or a boolean");
 }
 
 fn table(parser: Parser, path: []const u8, allowed: []const []const u8) !void {
