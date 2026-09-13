@@ -434,4 +434,5 @@ pub const TextMetadataView = @import("text_metadata/View.zig");
 pub const TextMetadataBuilder = @import("text_metadata/Builder.zig");
 pub const TextRowFlags = @import("text_metadata/RowFlags.zig").RowFlags;
 pub const TextLinkRun = @import("text_metadata/LinkRun.zig");
+pub const TextLinkRuns = @import("text_metadata/Runs.zig");
 pub const text_metadata_limits = @import("text_metadata/limits.zig");

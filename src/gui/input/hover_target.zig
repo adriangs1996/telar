@@ -55,9 +55,11 @@ pub fn resolve(gui: *const GuiClient, mouse: client.Mouse, mods: u32) Target {
                 return base;
             }
 
-            const found = client.matchLink(&pane.buffer, pane.scroll, .{ .x = mouse.x - view.content.x, .y = pane.scroll.offset + mouse.y - view.content.y }) orelse return base;
-            const end_x = @min(found.end.x, view.content.w);
-            if (found.start.x >= end_x) {
+            const row = pane.scroll.offset + mouse.y - view.content.y;
+            const found = client.resolveLink(pane, .{ .x = mouse.x - view.content.x, .y = row }) orelse return base;
+            const start_x = if (row == found.start.y) found.start.x else 0;
+            const end_x = @min(if (row == found.end.y) found.end.x else pane.buffer.w, view.content.w);
+            if (start_x >= end_x) {
                 return base;
             }
 
@@ -66,7 +68,8 @@ pub fn resolve(gui: *const GuiClient, mouse: client.Mouse, mods: u32) Target {
                 .generation = pane.attachment_generation,
                 .location = model.location orelse return base,
                 .content = view.content,
-                .area = .{ .x = view.content.x + found.start.x, .y = mouse.y, .w = end_x - found.start.x, .h = 1 },
+                .scroll_offset = pane.scroll.offset,
+                .area = .{ .x = view.content.x + start_x, .y = mouse.y, .w = end_x - start_x, .h = 1 },
                 .match = found,
             } };
         },

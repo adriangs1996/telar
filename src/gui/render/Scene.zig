@@ -33,7 +33,13 @@ pub fn prepare(scene: *Scene, projection: client.Projection) !client.Presentatio
     }
 
     if (scene.link) |hit| {
-        try @import("link_decoration.zig").paint(&canvas, hit);
+        if (projection.model) |model| {
+            if (model.findConst(hit.pane_id)) |pane| {
+                if (pane.attachment_generation == hit.generation) {
+                    try @import("link_decoration.zig").paint(&canvas, hit, pane);
+                }
+            }
+        }
     }
 
     try scene.chrome.paint(&canvas, projection);

@@ -35,6 +35,7 @@ pub fn text(fixture: *Fixture, value: []const u8) void {
     pane.cursor.visible = false;
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = value, .style = .{} });
+    pane.markSpan(0, @intCast(pane.buffer.cells.len));
     fixture.session.gui.input.pointer.hover.dirty = true;
 }
 

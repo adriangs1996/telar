@@ -14,6 +14,7 @@ pub const quad = @import("render/Quad.zig");
 
 test {
     _ = @import("tests/links.zig");
+    _ = @import("tests/link_metadata.zig");
     _ = @import("tests/link_regressions.zig");
     _ = Application;
     _ = @import("WindowIdentity.zig");
