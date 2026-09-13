@@ -60,7 +60,6 @@ test "GUI validation rejects malformed values including profiles that are not se
         "gui = { window = { background_blur = -1 } }",
         "gui = { window = { background_blur = 256 } }",
         "gui = { window = { background_blur = 2.5 } }",
-        "gui = { window = { background_blur = 20.0 } }",
         "gui = { window = { background_blur = 0/0 } }",
         "gui = { window = { background_blur = 1/0 } }",
         "gui = { window = { background_blur = -1/0 } }",
@@ -127,13 +126,14 @@ test "window preferences preserve defaults and profile inheritance with numeric 
         \\    inherited = { gui = { window = { padding = { x = 4 } } } },
         \\    zero = { gui = { window = { background_blur = 0, titlebar = true } } },
         \\    minimal = { gui = { window = { background_blur = 1 } } },
+        \\    integral_float = { gui = { window = { background_blur = 20.0 } } },
         \\    maximal = { gui = { window = { background_blur = 255 } } },
         \\    legacy_on = { gui = { window = { background_blur = true } } },
         \\    legacy_off = { gui = { window = { background_blur = false } } },
         \\  },
         \\}
     ;
-    for ([_][]const u8{ "inherited", "zero", "minimal", "maximal", "legacy_on", "legacy_off" }, [_]u8{ 40, 0, 1, 255, 20, 0 }) |profile, radius| {
+    for ([_][]const u8{ "inherited", "zero", "minimal", "integral_float", "maximal", "legacy_on", "legacy_off" }, [_]u8{ 40, 0, 1, 20, 255, 20, 0 }) |profile, radius| {
         var diagnostic: Diagnostic = .{};
         const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@window.lua", .number = 1, .profile = profile });
         defer generation.deinit();
