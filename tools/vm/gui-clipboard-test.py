@@ -35,7 +35,7 @@ def expect_clipboard(window, expected):
 
 
 def round_trip(window, sample, marker):
-    window.guest('printf %s "$1" | wl-copy --type text/plain;charset=utf-8 > /dev/null 2>&1', "stale-" + marker)
+    window.guest('printf %s "$1" | wl-copy --type "text/plain;charset=utf-8" > /dev/null 2>&1', "stale-" + marker)
     # Leave the terminal cursor immediately after the marker, with no prompt.
     # End in copy mode selects the final nonblank cell, not the cursor's blank.
     command = "PS1=; printf '\\033[2J\\033[H%s' " + shlex.quote(marker)
