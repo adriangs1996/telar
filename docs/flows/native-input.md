@@ -111,3 +111,33 @@ rebuilding it, and must run alone because it owns the VM's keyboard focus.
 
 The Neovim probe also exercises alternate-screen startup and resize through the
 runtime's [terminal command history observer](terminal-command-history.md).
+
+## Native pointer feedback
+
+Pointer ABI kind 6 uses codes 1/2/3 for press/release/drag, 4/5 for vertical
+scroll, 6 for hover and 7 for leave. Pointer modifiers are Shift=1, Alt=2,
+Control=4 and Super/Command=8. Keyboard modifiers keep their existing three-bit
+contract. `PointerGeometry` removes Super before encoding child mouse reports,
+so it cannot become an SGR motion bit. Hover and leave preserve keyboard prefixes.
+
+The optional `pointer_shape` callback returns the existing core `PointerShape`
+value (0–33), independently of drawing. `hover_target` resolves delivered chrome
+and overlays first: actionable controls use a hand, sidebar resizing uses a
+horizontal resize cursor, terminal text uses a text cursor, and modifier-hovered
+links use a hand. Child OSC 22 shapes apply inside terminal content. Focus and
+leave clear stale feedback even when the socket outbox is full.
+
+AppKit’s `TelarPointerCursor` retains system `NSCursor` objects and refreshes after
+input or model pumping, including `flagsChanged` with a stationary pointer. Public
+macOS cursors provide resizing, zoom and the available CSS equivalents; unsupported
+help/progress/wait shapes fall back to the arrow, cell to crosshair, and move or
+all-scroll to open hand. It does not install a cursor timer.
+
+Wayland prefers the cursor-shape protocol, with an explicit mapping because its
+wire enum order differs from core. When unavailable, a retained `wayland-cursor`
+theme provides scaled images and aliases. Cursor requests use the latest pointer
+enter serial, including zero, never a button serial. Seat removal and capability
+loss destroy device state; outputs and scale changes refresh the retained theme.
+The fallback uses a static first image for animated cursor themes.
+
+See [link opening](link-opening.md) for native activation and ownership.

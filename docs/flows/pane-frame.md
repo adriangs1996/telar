@@ -129,3 +129,36 @@ the same handlers and outbox without terminal resources.
   tests against that shared pane capability.
 - `src/backend/runtime/attachment/CellSync.zig` and transport integration tests prove
   diff publication against acknowledged bases.
+
+## Terminal text metadata
+
+`pane_frame` also carries bounded OSC 8 URI identities, row-local cell runs and
+physical-row flags (`wrap`, `continuation`, wide-character padding, hyperlinks).
+URLs do not enlarge `Cell`. `TextMetadataCapture` reads Ghostty VT state before
+blit consumes damage and before a temporary history viewport is restored. It
+uses the original page cell for hyperlink lookup, preserves explicit identities
+across pages, and reserves its buffers at initialization or resize.
+
+A snapshot carries a complete replacement, including an explicitly empty table.
+A patch carries either a replacement or a zero-length unchanged marker. Separate
+active/history sources and revisions prevent a viewport transition from reusing
+the wrong table. Metadata-only changes publish a frame even when no cell changes.
+
+The decoder validates dimensions, flags, offsets, run ordering, bounds, dictionary
+indices and quotas before client application. The pane copies the complete
+replacement into owned storage before the existing application ACK. Corrupt
+metadata or an invalid frame base cannot install a partial replacement. The
+metadata shares the frame ID and base: no extra queue, ACK, or GPU dependency.
+
+Limits per viewport are 256 destinations, 2,048 runs, 4,096 bytes per URI and
+64 KiB of combined URI bytes. Exceeding any capture quota emits `omitted` with
+row flags and no links; hyperlink rows then decline textual fallback. Later valid
+content restores a complete table. One reserved buffer occupies `87,563 + rows`
+bytes: a pane uses one in the client, two in the runtime and two per attachment
+for its independent history projection. Normal unchanged patches add only a
+four-byte marker. The maximum cell grid reserves the worst-case metadata size
+within the existing 4 MiB frame limit.
+
+The wire fingerprint changes with this representation. Runtime and clients must
+use matching builds. An already-running older runtime is never restarted
+automatically: doing so would terminate the children it owns.

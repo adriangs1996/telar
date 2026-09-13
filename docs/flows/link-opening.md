@@ -1,83 +1,92 @@
 # Link opening
 
-Telar recognizes textual `http://`, `https://` and `file://` URIs in pane
-cells. A left click over one, or `o` with the copy-mode cursor over one,
-produces the same owned `links.Target` value.
+Telar shares bounded URI recognition and opening between its terminal and native
+adapters. Native URL hover follows [Ghostty’s modifier convention](https://ghostty.org/docs/config/reference#link-url):
+Command on macOS, Control on Linux. Hold Shift as well when the child owns mouse
+reporting. A left press acquires the gesture; release opens the unchanged target.
+Dragging, leaving the window, losing focus, changing geometry or switching context
+cancels it. Modifier changes re-evaluate a stationary pointer.
+
+The GUI recognizes visible URLs across VT-confirmed soft wraps, and OSC 8 links
+whose label differs from their URI. Explicit links take precedence over textual
+recognition. Hover underlines the matching spans and shows the actual destination
+in a clipped pane-local preview. Distinct OSC 8 identities with the same URI remain
+distinct groups. A hard newline never joins text into a URL.
+
+Supported explicit schemes are `http`, `https`, `file`, `mailto`, `ftp`, `ssh`,
+`git`, `tel`, `magnet`, `ipfs`, `ipns`, `gemini`, `gopher` and `news`. Relative paths
+and user-defined link matchers are outside this implementation. An unsupported,
+invalid, overlong or omitted explicit destination cannot authorize its label as
+a substitute URL.
 
 ```text
-pane cells + position
-        |
-links.extract -> core.link.extractAt/classify
-        |
-OpenLinkHandler
-        |
-        +-------------------------+
-        |                         |
-     file://                 http:// or https://
-        |                         |
-FilePath decode             Opening latest-wins state
-        |                         |
-create_tab($EDITOR, path)   client worker
-                                  |
-                     default host URL handler
+VT RenderState -> TextMetadataCapture -> pane_frame -> owned client Pane
+                                                           |
+native event -> NativeInput -> PointerRouting -> hover_target / resolveLink
+                                      |                    |
+                                LinkGesture           LinkRegions
+                                      |              underline + preview
+                          HostChrome.link_pointer_fn
+                                      |
+                    OpenLinkHandler -> file tab or host worker
 ```
 
-## Ownership and budget
+## Ownership and budgets
 
-The client owns the copy cursor, pointer gesture, extracted target, `$EDITOR`
-snapshot and host worker. Core owns no state. `core.link` only classifies and
-extracts bytes. `frontend.links.cells` is the adapter between pane cells and
-that pure API.
+The runtime owns VT hyperlinks and physical-row wrap semantics. Core owns their
+bounded wire representation and the pure URI classifier. Each client pane owns
+its received metadata, independent of the socket buffer. See
+[pane frames](pane-frame.md#terminal-text-metadata) for application and ACK rules.
 
-Cell extraction runs on the interactive path without allocation. It inspects
-one bounded row window and copies at most 8,224 bytes to the stack. Each URI is
-limited to 4,096 bytes. Opening a `file://` target only enqueues the existing
-tab-creation request. Starting a host URL handler runs on an observation worker
-and never blocks pane input or rendering.
+`client.links.cells.resolve` gives OSC 8 priority and otherwise traverses the
+visible logical line. It copies a bounded text window to stack storage, with
+independent byte and cell-visit limits, then returns an owned URI and cell range.
+No row cache, regex engine, URL opener or allocation runs for movement within the
+same cell and unchanged model/control state. URI length is limited to 4,096 bytes;
+overlong targets are rejected rather than truncated.
 
-Only local file authorities are accepted. An empty authority and `localhost`
-map to the decoded absolute path. User information, ports, remote authorities,
-queries, fragments, malformed escapes and decoded null bytes are rejected.
-The client passes `$EDITOR` as `argv[0]` and the decoded path as `argv[1]`; it
-does not evaluate the variable through a shell.
+The native adapter owns hover, prepared/shown target identities, and the pressed
+link. A URI newly received from the runtime is not openable until that same target
+was presented. GPU completion publishes only the identity captured by that flight;
+it does not ACK cells. URI or context changes during a press cancel it permanently,
+even if the original state subsequently returns. A captured link consumes its
+whole gesture, including stationary modifier motion, without leaking child input.
 
-One host opener worker may run per client. While it runs, a new web target
-replaces the previous pending target. Completion starts that latest target or
-returns the state to idle. Worker startup failure and nonzero or timed-out host
-commands publish a bounded in-app warning.
+Underline and preview use the existing retained glyph atlas and frame quads.
+They do not invalidate terminal cell meshes. Native pointer shape changes alone
+require no GPU frame, timer or polling. Browser launch uses the existing bounded
+worker and never blocks input or presentation.
 
-## Pointer and copy-mode authority
+## Shared opening policy and the TUI
 
-`PointerRoutingHandler` keeps its existing copy-mode and client-view priority.
-After the view accepts pane input, textual links get refusal before child mouse
-reporting. A left press over a link opens it and owns that gesture. Matching
-drag and release events never leak to the child. A press outside a link leaves
-pane mouse behavior unchanged. Shift-left press declines link opening so
-[mouse selection](mouse-selection.md) can own the gesture when the host delivers
-that modifier.
+The optional `HostChrome.link_pointer_fn` is an adapter port. GUI implements its
+modifier/release policy there. An absent callback retains TUI behavior: ordinary
+left press opens a row-local textual link, Shift declines opening for selection,
+and copy mode uses `o`. The common client contains no GUI gesture policy.
 
-Active copy mode already owns every pointer event, so it opens links through
-the `o` key instead. `ClientModel.planCopyMode` resolves the target from the
-same cell adapter. `CopyModeHandler` dispatches it without committing copy
-state, changing the viewport or leaving the mode.
-
-## Platform adapters
-
-The host worker uses `/usr/bin/open` on macOS, `xdg-open` on Linux and
+`OpenLinkHandler` sends supported non-file schemes through `Opening`: at most one
+worker and one replaceable pending target per client. The worker uses
+`/usr/bin/open` on macOS, `xdg-open` on Linux, or
 `rundll32.exe url.dll,FileProtocolHandler` on Windows. It passes the URI as one
-argv entry, captures bounded output and expires after five seconds.
+argument, captures bounded output, and expires after five seconds. Failure emits
+an in-app warning.
+
+`file://` preserves Telar’s editor policy: decode a local absolute path and create
+a tab with `[$EDITOR, path]`. Empty authority and `localhost` are local. Remote
+hosts, user information, ports, query/fragment, malformed escapes and decoded NUL
+are rejected. No command or URI is evaluated through a shell.
 
 ## Proof
 
-- `src/core/link.zig` proves classification, cursor-relative extraction and
-  punctuation boundaries.
-- `src/client/links/cells.zig` proves absolute pane-coordinate adaptation.
-- `src/client/links/file_uri.zig` proves local file decoding and rejection.
-- `src/client/links/opening_support.zig` proves one active worker and latest-wins
-  queuing.
-- `src/client/links/pointer_support.zig` proves whole-gesture ownership.
-- `src/client/application/input/open_link.zig` proves scheme dispatch.
-- `src/client/application/input/copy_mode.zig` proves that `o`
-  dispatches without a copy-state commit.
-- `src/frontend/client/tests/host_interaction.zig` proves both file-opening
-  triggers reach `create_tab` as `[$EDITOR, decoded_path]`.
+- `src/core/link.zig`: scheme allowlist, punctuation, Unicode, and length limits.
+- `src/client/links/cells.zig`: row, OSC 8 and soft-wrap resolution.
+- `src/backend/pane/TextMetadataCapture.zig`: VT identity, wide cells, wrap and quotas.
+- `src/gui/tests/links.zig`, `link_regressions.zig`, `link_metadata.zig`: release
+  ownership, presented identity, cancellation, metadata and retained rendering.
+- `tools/gui_links.py`: isolated AppKit gestures, native cursor assertions,
+  destination preview, recording editor and child survival.
+- `tools/vm/gui-links-test.py`: Wayland gestures through QEMU, a recording
+  `xdg-open`, OSC 8/soft-wrap targets, Vulkan validation and child survival.
+
+Native probes own window focus and must run sequentially on each desktop. They
+use separate sockets, history and configuration; no real URL is launched.

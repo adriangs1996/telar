@@ -7,14 +7,14 @@ pressed: ?Hit = null,
 version: client.Version = .{},
 
 /// Acquires the complete gesture without dispatching an external operation.
-/// Example: `gesture.begin(hit);`
+/// Example: `gesture.begin(hit, app.model.version());`
 pub fn begin(gesture: *Gesture, hit: Hit, version: client.Version) void {
     gesture.pressed = hit;
     gesture.version = version;
 }
 
 /// A release opens only the unchanged target. Cancellation never opens a URL.
-/// Example: `const target = gesture.finish(current_hit);`
+/// Example: `const target = gesture.finish(current_hit, app.model.version());`
 pub fn finish(gesture: *Gesture, current: ?Hit, version: client.Version) ?client.LinkTarget {
     gesture.validate(current, version);
     const pressed = gesture.pressed orelse return null;
