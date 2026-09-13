@@ -208,7 +208,7 @@ test "native window leases reject symlinks hard links and public permissions" {
 
 test "native window leases reject writable directories and wrong owners" {
     const io = std.testing.io;
-    var temp = std.testing.tmpDir(.{});
+    var temp = std.testing.tmpDir(.{ .iterate = true });
     defer temp.cleanup();
     var directory: [std.fs.max_path_bytes]u8 = undefined;
     const length = try temp.dir.realPath(io, &directory);
