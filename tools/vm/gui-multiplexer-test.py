@@ -248,6 +248,34 @@ def check(condition, message):
         raise AssertionError(message)
 
 
+def pointer_drag(window, start, end):
+    window.focus()
+    outputs = json.loads(window.guest("swaymsg -r -t get_outputs"))
+    outputs = [output for output in outputs if output.get("active")]
+    check(len(outputs) == 1, "The VM pointer probe requires one active output")
+    bounds = outputs[0]["rect"]
+
+    def move(point):
+        events = []
+        for axis, length, value in zip(("x", "y"), ("width", "height"), point):
+            offset = value - bounds[axis]
+            check(0 <= offset < bounds[length], "Pointer coordinate lies outside the guest output")
+            events.append({"type": "abs", "data": {
+                "axis": axis, "value": round(offset * 32767 / (bounds[length] - 1)),
+            }})
+        vm.qmp("input-send-event", events=events)
+
+    move(start)
+    time.sleep(0.1)
+    vm.qmp("input-send-event", events=[{"type": "btn", "data": {"button": "left", "down": True}}])
+    try:
+        time.sleep(0.1)
+        move(end)
+        time.sleep(0.15)
+    finally:
+        vm.qmp("input-send-event", events=[{"type": "btn", "data": {"button": "left", "down": False}}])
+
+
 def sidebar(window, first):
     window.action("s")
     hidden = window.same_pane(first, "sidebar-hidden")
@@ -274,28 +302,12 @@ def sidebar(window, first):
         return
     x = rect["x"] + (hidden["cols"] - first["cols"]) * cell - max(1, cell // 2)
     y = rect["y"] + rect["height"] // 2
-    try:
-        window.sway(f"seat seat0 cursor set {x} {y}")
-    except RuntimeError as error:
-        window.pointer = "skipped: " + str(error)
-        window.step("sidebar keyboard toggle and resize")
-        return
-
-    def drag(start, end):
-        window.sway(f"seat seat0 cursor set {start} {y}")
-        window.sway("seat seat0 cursor press button1")
-        try:
-            window.sway(f"seat seat0 cursor set {end} {y}")
-            time.sleep(0.15)
-        finally:
-            window.sway("seat seat0 cursor release button1")
-
-    drag(x, x + 3 * cell)
+    pointer_drag(window, (x, y), (x + 3 * cell, y))
     dragged = window.same_pane(first, "sidebar-dragged")
     check(dragged["cols"] < first["cols"], "Native sidebar drag did not resize its workbench")
-    drag(x + 3 * cell, x)
+    pointer_drag(window, (x + 3 * cell, y), (x, y))
     window.same_pane(first, "sidebar-drag-restored", same_size=True)
-    window.pointer = "sidebar drag passed through Sway seat cursor events"
+    window.pointer = "sidebar drag passed through the QEMU virtio-tablet"
     window.step("sidebar keyboard and pointer toggle/resize")
 
 
