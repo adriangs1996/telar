@@ -1,4 +1,4 @@
-//! One contiguous span whose graphemes use the same face.
+//! One font span or one procedural grapheme.
 text: []const u8,
-font: @import("font_id.zig").Id,
+source: @import("glyph_source.zig").Source,
 columns: u32,
