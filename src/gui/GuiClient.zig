@@ -201,10 +201,13 @@ fn deliverResize(context: *anyopaque, commit: client.HostCommit) !void {
 /// Retires captured damage after GPU delivery, preserving newer received state.
 /// Example: `try gui.complete(token, true);`
 pub fn complete(gui: *GuiClient, token: u64, delivered: bool) !void {
-    if (token == 0) {
+    const active = gui.lifecycle.active orelse return;
+    if (token == 0 or token != @intFromEnum(active.token)) {
         return;
     }
 
+    gui.chrome.present(delivered);
+    gui.overlays.present(delivered);
     const delivery = gui.lifecycle.complete(@enumFromInt(token), if (delivered) .delivered else .failed) orelse return;
     var handler: client.DeliverPresentationHandler = .{
         .model = &gui.app.model,

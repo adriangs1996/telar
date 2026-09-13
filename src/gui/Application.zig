@@ -169,7 +169,8 @@ fn complete(context: ?*anyopaque, token: u64, delivered: c_int) callconv(.c) voi
 fn input(context: ?*anyopaque, event: native.InputEvent) callconv(.c) c_int {
     const app = from(context);
     if (event.kind == 5) {
-        app.driver.inbox.notify(.{ .focus = event.code != 0 }) catch |err| {
+        // Losing focus must release gestures even if focus returns before drain.
+        app.driver.inbox.post(.{ .focus = event.code != 0 }) catch |err| {
             app.fail(err);
             return 0;
         };
