@@ -12,7 +12,7 @@ theme: client.ColorTheme,
 /// Example: `const commit = try scene.prepare(projection);`
 pub fn prepare(scene: *Scene, projection: client.Projection) !client.PresentationCommit {
     const renderer = scene.terminal;
-    const commit = try renderer.prepare(projection);
+    var commit = try renderer.prepare(projection);
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = scene.theme };
     if (projection.model) |model| {
         var layout: client.LayoutSnapshot = .{};
@@ -24,6 +24,9 @@ pub fn prepare(scene: *Scene, projection: client.Projection) !client.Presentatio
 
             if (projection.threadView(view.pane_id)) |thread| {
                 try @import("../overlays/thread.zig").paint(&canvas, view.content, thread);
+                if (model.findConst(view.pane_id)) |pane| {
+                    commit.append(pane);
+                }
             }
         }
     }

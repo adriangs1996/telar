@@ -20,6 +20,7 @@ test {
     _ = @import("tests/navigation.zig");
     _ = @import("tests/chrome.zig");
     _ = @import("tests/overlays.zig");
+    _ = @import("tests/scene.zig");
     _ = @import("TerminalMetrics.zig");
     _ = @import("NativeInput.zig");
     _ = @import("CursorClock.zig");

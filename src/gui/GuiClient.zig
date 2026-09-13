@@ -127,12 +127,14 @@ pub fn inputReady(gui: *GuiClient) !void {
     }
 }
 
-/// Example: `gui.focus(true);`
-pub fn focus(gui: *GuiClient, focused: bool) void {
+/// Example: `try gui.focus(true);`
+pub fn focus(gui: *GuiClient, focused: bool) !void {
     gui.focused = focused;
     gui.input_revision +%= 1;
     if (!focused) {
         gui.chrome.cancelPointer();
+        gui.overlays.cancelPointer();
+        try gui.input.cancelPointer(&gui.app);
     }
 }
 
@@ -154,7 +156,7 @@ pub fn cursorTarget(gui: *const GuiClient) @import("CursorTarget.zig") {
     const model = gui.app.model.activeTabModelConst() orelse return .{};
     const pane = model.focusedPaneConst() orelse return .{};
     const copy = gui.app.model.copyModeProjection();
-    const cursor = selection.cursor(pane, if (copy) |value| value.view else null);
+    const cursor = selection.cursor(pane, selection.forPane(copy, pane.id));
     var layout: client.LayoutSnapshot = .{};
     model.layout.snapshot(gui.region.area, &layout);
     for (layout.views()) |view| {

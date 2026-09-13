@@ -31,7 +31,7 @@ fn dispatch(gui: *GuiClient, event: Message) !?u8 {
         .server => |result| return gui.receive(result),
         .sent => |result| try client.runtime_io.handleSent(&gui.app, result),
         .input_ready => try gui.inputReady(),
-        .focus => |focused| gui.focus(focused),
+        .focus => |focused| try gui.focus(focused),
         .presented => |result| try gui.complete(result.token, result.delivered),
         .configuration_ready => try gui.driver.configuration.accept(&gui.app),
         .input_timeout => |result| try result,
