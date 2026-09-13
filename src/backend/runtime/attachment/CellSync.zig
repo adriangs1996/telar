@@ -24,6 +24,8 @@ const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
 const Sync = @This();
 
 acknowledged: BufferType,
+acknowledged_text_revision: u64 = 0,
+acknowledged_text_projected: bool = false,
 acknowledged_cursor: CursorType = .{},
 acknowledged_mouse: MouseType = .{},
 acknowledged_input_modes: InputModesType = .{},
@@ -32,6 +34,7 @@ acknowledged_scroll: ScrollType = .{ .total_rows = 1, .offset = 0 },
 projected: BufferType,
 projected_damage: []bool,
 projected_state: vt.RenderState = .empty,
+projected_text_metadata: @import("../../pane/TextMetadataCapture.zig"),
 viewport_pin: ?*vt.Pin = null,
 viewport_screen: vt.ScreenSet.Key,
 observed_revision: u64 = 0,
@@ -49,7 +52,9 @@ pub fn init(gpa: std.mem.Allocator, pane: *PaneType) !Sync {
     const projected_damage = try gpa.alloc(bool, pane.screen.h);
     errdefer gpa.free(projected_damage);
     @memset(projected_damage, false);
+    const projected_text_metadata = try @import("../../pane/TextMetadataCapture.zig").init(gpa, pane.screen.h);
     return .{
+        .projected_text_metadata = projected_text_metadata,
         .acknowledged = acknowledged,
         .projected = projected,
         .projected_damage = projected_damage,
@@ -60,6 +65,7 @@ pub fn init(gpa: std.mem.Allocator, pane: *PaneType) !Sync {
 
 pub fn deinit(sync: *Sync, pane: *PaneType) void {
     sync.clearViewport(pane);
+    sync.projected_text_metadata.deinit(sync.gpa);
     sync.projected_state.deinit(sync.gpa);
     sync.gpa.free(sync.projected_damage);
     sync.projected.deinit();
@@ -182,6 +188,7 @@ pub fn project(sync: *Sync, pane: *PaneType, force: bool) !Projection {
             defer terminal_allocations.restore();
             try sync.projected_state.update(sync.gpa, &pane.terminal);
         }
+        try sync.projected_text_metadata.update(sync.gpa, &sync.projected_state);
         _ = blit_module.blit(.{
             .buffer = &sync.projected,
             .area = sync.projected.area(),
@@ -191,6 +198,8 @@ pub fn project(sync: *Sync, pane: *PaneType, force: bool) !Projection {
         });
         return .{
             .buffer = &sync.projected,
+            .text_metadata = sync.projected_text_metadata.current.view(),
+            .text_revision = sync.projected_text_metadata.revision,
             .damaged_rows = sync.projected_damage,
             .cursor = .{},
             .scroll = scrollState(screen.pages.scrollbar()),
@@ -198,6 +207,8 @@ pub fn project(sync: *Sync, pane: *PaneType, force: bool) !Projection {
     }
     return .{
         .buffer = &pane.screen,
+        .text_metadata = pane.text_metadata.current.view(),
+        .text_revision = pane.text_metadata.revision,
         .damaged_rows = pane.damaged_rows,
         .cursor = pane.cursor,
         .scroll = scrollState(screen.pages.scrollbar()),
@@ -247,6 +258,8 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
     var span_count = diff.span_count;
     snapshot = snapshot or diff.snapshot_required;
 
+    const text_projected = sync.viewport_pin != null;
+    const text_changed = projection.text_revision != sync.acknowledged_text_revision or text_projected != sync.acknowledged_text_projected;
     const cursor_changed = !std.meta.eql(projection.cursor, sync.acknowledged_cursor);
     const mouse_changed = !std.meta.eql(pane.mouse, sync.acknowledged_mouse);
     const input_modes_changed = !std.meta.eql(
@@ -256,7 +269,7 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
     const pointer_changed = pane.pointer_shape != sync.acknowledged_pointer_shape;
     const scroll_changed = !std.meta.eql(projection.scroll, sync.acknowledged_scroll);
     if (!snapshot and span_count == 0 and !cursor_changed and !mouse_changed and
-        !input_modes_changed and !pointer_changed and !scroll_changed)
+        !input_modes_changed and !pointer_changed and !scroll_changed and !text_changed)
     {
         sync.observeProjection(pane, projection);
 
@@ -290,6 +303,7 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
         .pointer_shape = pane.pointer_shape,
         .scroll = projection.scroll,
         .spans = span_storage[0..span_count],
+        .text_metadata = if (snapshot or text_changed) projection.text_metadata else null,
     });
     if (snapshot) {
         @memcpy(sync.acknowledged.cells, source.cells);
@@ -299,6 +313,8 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
             @memcpy(sync.acknowledged.cells[start..][0..span.cells.len], span.cells);
         }
     }
+    sync.acknowledged_text_revision = projection.text_revision;
+    sync.acknowledged_text_projected = text_projected;
     sync.acknowledged_cursor = projection.cursor;
     sync.acknowledged_mouse = pane.mouse;
     sync.acknowledged_input_modes = pane.input_modes;

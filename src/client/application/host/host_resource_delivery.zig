@@ -94,15 +94,17 @@ test "DeliverHostResourcesHandler orders grid and cell-size resources" {
 
 test "DeliverHostResourcesHandler selects grid and cell-size branches independently" {
     {
-        var model = ModelType.init(std.testing.allocator, true);
+        const model = try std.testing.allocator.create(ModelType);
+        defer std.testing.allocator.destroy(model);
+        model.* = ModelType.init(std.testing.allocator, true);
         defer model.deinit();
         const commit = (try model.reconcileHost(.{
             .capabilities = model.hostCapabilities(),
             .size = .{ .cols = 100, .rows = 30 },
         })).?;
-        var capture: EffectCapture = .{ .model = &model, .commit = commit };
+        var capture: EffectCapture = .{ .model = model, .commit = commit };
         var handler: DeliverHostResourcesHandler = .{
-            .model = &model,
+            .model = model,
             .effects = capture.effects(),
         };
 
@@ -118,15 +120,17 @@ test "DeliverHostResourcesHandler selects grid and cell-size branches independen
     }
 
     {
-        var model = ModelType.init(std.testing.allocator, true);
+        const model = try std.testing.allocator.create(ModelType);
+        defer std.testing.allocator.destroy(model);
+        model.* = ModelType.init(std.testing.allocator, true);
         defer model.deinit();
         const commit = (try model.observeHostCapability(.{ .cell_pixels = .{
             .width = 10,
             .height = 20,
         } })).?;
-        var capture: EffectCapture = .{ .model = &model, .commit = commit };
+        var capture: EffectCapture = .{ .model = model, .commit = commit };
         var handler: DeliverHostResourcesHandler = .{
-            .model = &model,
+            .model = model,
             .effects = capture.effects(),
         };
 

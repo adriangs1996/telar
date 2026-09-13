@@ -7,3 +7,6 @@ buffer: *const BufferType,
 damaged_rows: []const bool,
 cursor: CursorType,
 scroll: ScrollType,
+
+text_metadata: @import("telar-core").TextMetadataView,
+text_revision: u64,

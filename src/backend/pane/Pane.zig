@@ -81,6 +81,7 @@ input_write_pending: bool = false,
 input_write_len: usize = 0,
 size: TerminalSizeType,
 render_state: vt.RenderState = .empty,
+text_metadata: @import("TextMetadataCapture.zig"),
 screen: BufferType,
 damaged_rows: []bool,
 output_buffer: [pane_namespace.output_chunk_size]u8 = undefined,
@@ -188,6 +189,7 @@ pub fn create(resources: CreationResourcesType, request: CreationRequestType) !*
         .history_observer = undefined,
         .agent_process_cache = .init(std.mem.span(command.file)),
         .screen = undefined,
+        .text_metadata = undefined,
         .damaged_rows = undefined,
     };
     pane.terminal = try .init(io, gpa, .{
@@ -237,6 +239,8 @@ pub fn create(resources: CreationResourcesType, request: CreationRequestType) !*
         .capture_output = resources.history_service.capturesOutput(),
     });
     errdefer pane.history_observer.deinit();
+    pane.text_metadata = try .init(gpa, size.rows);
+    errdefer pane.text_metadata.deinit(gpa);
     pane.screen = try .init(gpa, size.cols, size.rows);
     errdefer pane.screen.deinit();
     pane.damaged_rows = try gpa.alloc(bool, size.rows);
@@ -468,6 +472,7 @@ pub fn destroy(pane: *Pane) void {
     pane.finishHistory();
     gpa.free(pane.workspace_path);
     gpa.free(pane.damaged_rows);
+    pane.text_metadata.deinit(gpa);
     pane.screen.deinit();
     pane.render_state.deinit(gpa);
     pane.history_observer.deinit();
@@ -1234,6 +1239,7 @@ pub fn render(pane: *Pane, force: bool) !void {
         defer terminal_allocations.restore();
         try pane.render_state.update(pane.gpa, &pane.terminal);
     }
+    try pane.text_metadata.update(pane.gpa, &pane.render_state);
     const force_all = force or pane.semantic_colors_dirty;
     _ = blit.blit(.{
         .buffer = &pane.screen,

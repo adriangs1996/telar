@@ -25,6 +25,7 @@ gpa: std.mem.Allocator,
 id: PaneIdType,
 location: TabLocationType,
 buffer: BufferType,
+text_metadata: *@import("telar-core").TextMetadata,
 damage_rows: []DamageRowType,
 attached: bool,
 attachment_generation: u64 = 0,
@@ -58,8 +59,13 @@ pub fn init(gpa: std.mem.Allocator, initial: InitialType) !Pane {
     errdefer buffer.deinit();
 
     const rows = try gpa.alloc(DamageRowType, initial.spec.size.rows);
+    errdefer gpa.free(rows);
     @memset(rows, .{});
+    const text_metadata = try gpa.create(@import("telar-core").TextMetadata);
+    errdefer gpa.destroy(text_metadata);
+    text_metadata.* = try .init(gpa, initial.spec.size.rows);
     return .{
+        .text_metadata = text_metadata,
         .gpa = gpa,
         .id = initial.spec.pane_id,
         .location = initial.spec.location,
@@ -75,6 +81,8 @@ pub fn deinit(pane: *Pane) void {
     pane.gpa.free(pane.title);
     pane.gpa.free(pane.composer);
     pane.gpa.free(pane.damage_rows);
+    pane.text_metadata.deinit(pane.gpa);
+    pane.gpa.destroy(pane.text_metadata);
     pane.buffer.deinit();
 }
 
@@ -89,11 +97,26 @@ pub fn applyFrame(pane: *Pane, frame: FrameViewType) !AppliedType {
         return error.FrameBaseMismatch;
     }
 
+    const metadata = if (frame.text_metadata) |value|
+        try @import("telar-core").TextMetadataView.decode(value.encoded, .{ frame.cols, frame.rows })
+    else if (frame.base_frame_id == 0)
+        return error.MissingSnapshotMetadata
+    else
+        null;
     const resized = pane.buffer.w != frame.cols or pane.buffer.h != frame.rows;
+    if (resized and frame.base_frame_id != 0) {
+        return error.PatchSizeMismatch;
+    }
+
+    try pane.text_metadata.reserve(pane.gpa, frame.rows);
     const replacement_damage = if (resized) try pane.gpa.alloc(DamageRowType, frame.rows) else null;
     errdefer if (replacement_damage) |rows| pane.gpa.free(rows);
 
     const applied = try frames.applyBuffer(&pane.buffer, &pane.cursor, frame);
+    if (metadata) |value| {
+        pane.text_metadata.replace(value);
+    }
+
     pane.mouse = frame.mouse;
     pane.input_modes = frame.input_modes;
     pane.pointer_shape = frame.pointer_shape;

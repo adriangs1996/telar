@@ -26,84 +26,94 @@ pub fn extract(buffer: *const BufferType, scroll: ScrollType, position: Position
 /// The row window and the owned target are bounded; no allocation occurs.
 /// Example: `const found = match(&buffer, scroll, .{ .x = 3, .y = 10 });`
 pub fn match(buffer: *const BufferType, scroll: ScrollType, position: Position) ?LinkMatch {
-    if (position.x >= buffer.w or position.y < scroll.offset) {
+    return matchGrid(.{ .buffer = buffer, .scroll = scroll }, position);
+}
+
+/// Resolves OSC 8 first, then visible URI text across VT-confirmed soft wraps.
+/// Example: `const found = resolve(pane, .{ .x = 3, .y = pane.scroll.offset });`
+pub fn resolve(pane: *const @import("../panes/Pane.zig"), position: Position) ?LinkMatch {
+    const metadata = pane.text_metadata.view();
+    const grid: @import("LinkGrid.zig") = .{ .buffer = &pane.buffer, .scroll = pane.scroll, .rows = metadata.rows };
+    const index = grid.cellIndex(position) orelse return null;
+    if (metadata.at(@intCast(index))) |run| {
+        return .{
+            .target = TargetType.init(metadata.link(run.link_index).?) catch return null,
+            .start = grid.position(run.start),
+            .end = grid.cellEnd(run.start + run.len - 1),
+            .link_index = run.link_index,
+        };
+    }
+
+    // A discarded link table cannot authorize a label as its own destination.
+    if (metadata.status == .omitted and metadata.rows[index / pane.buffer.w].hyperlinks) {
         return null;
     }
 
-    const relative_y = position.y - scroll.offset;
-    if (relative_y >= buffer.h) {
-        return null;
-    }
+    return matchGrid(grid, position);
+}
 
-    const row_start = @as(usize, @intCast(relative_y)) * buffer.w;
-    const row = buffer.cells[row_start..][0..buffer.w];
-    var cursor_x = position.x;
-    if (row[cursor_x].width == 0) {
-        if (cursor_x == 0 or row[cursor_x - 1].width != 2) {
-            return null;
-        }
-
-        cursor_x -= 1;
-    }
-
-    var start_x = cursor_x;
+fn matchGrid(grid: @import("LinkGrid.zig"), position: Position) ?LinkMatch {
+    const cursor = grid.cellIndex(position) orelse return null;
+    var start = cursor;
     var bytes_before: usize = 0;
-    while (start_x != 0 and bytes_before <= max_uri_bytes_module) {
-        start_x -= 1;
-        bytes_before += row[start_x].text().len;
+    while (bytes_before <= max_uri_bytes_module) {
+        start = grid.previous(start) orelse break;
+        bytes_before += grid.buffer.cells[start].text().len;
     }
 
     var storage: [row_window_bytes]u8 = undefined;
     var len: usize = 0;
     var cursor_offset: ?usize = null;
-    var x = start_x;
-    while (x < buffer.w) : (x += 1) {
-        if (x == cursor_x) {
+    var index = start;
+    while (true) {
+        if (index == cursor) {
             cursor_offset = len;
         }
 
-        const text = row[x].text();
+        const text = grid.buffer.cells[index].text();
         if (text.len > storage.len - len) {
             break;
         }
 
-        @memcpy(storage[len .. len + text.len], text);
+        @memcpy(storage[len..][0..text.len], text);
         len += text.len;
-
         if (cursor_offset) |offset| {
             if (len - offset >= max_uri_bytes_module + CellType.max_bytes) {
                 break;
             }
         }
+
+        index = grid.next(index) orelse break;
     }
 
     const offset = cursor_offset orelse return null;
     const found = extractAt_module(storage[0..len], offset) orelse return null;
-    const range = columns(row, start_x, .{ found.start, found.end }) orelse return null;
+    const range = positions(grid, start, .{ found.start, found.end }) orelse return null;
     return .{
         .target = TargetType.init(found.text(storage[0..len])) catch return null,
-        .start = .{ .x = range[0], .y = position.y },
-        .end = .{ .x = range[1], .y = position.y },
+        .start = range[0],
+        .end = range[1],
     };
 }
 
-fn columns(row: []const CellType, start_x: u16, span: [2]usize) ?[2]u16 {
+fn positions(grid: @import("LinkGrid.zig"), first: usize, span: [2]usize) ?[2]Position {
+    var index = first;
     var offset: usize = 0;
-    var start: ?u16 = null;
-    for (row[start_x..], start_x..) |cell, x| {
+    var start: ?Position = null;
+    while (true) {
+        const cell = &grid.buffer.cells[index];
         const end = offset + cell.text().len;
         if (start == null and offset <= span[0] and end > span[0]) {
-            start = @intCast(x);
+            start = grid.position(index);
         }
 
         if (end >= span[1]) {
-            return .{ start orelse return null, @intCast(@min(row.len, x + @max(1, cell.width))) };
+            return .{ start orelse return null, grid.cellEnd(index) };
         }
 
         offset = end;
+        index = grid.next(index) orelse return null;
     }
-
-    return null;
 }
 
 fn testBuffer(rows: []const []const u8) !BufferType {

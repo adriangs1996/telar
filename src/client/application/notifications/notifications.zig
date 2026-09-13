@@ -123,7 +123,9 @@ test "notification activation preserves its commit and effect order on failure" 
         .{ .timer = true, .navigation = false, .navigation_calls = 0 },
         .{ .timer = false, .navigation = true, .navigation_calls = 1 },
     }) |scenario| {
-        var model = ModelType.init(std.testing.allocator, true);
+        const model = try std.testing.allocator.create(ModelType);
+        defer std.testing.allocator.destroy(model);
+        model.* = ModelType.init(std.testing.allocator, true);
         defer model.deinit();
         const publication = model.publishNotification(0, .{
             .title = "Ready",
@@ -131,13 +133,13 @@ test "notification activation preserves its commit and effect order on failure" 
             .target = .{ .focus_pane = @enumFromInt(7) },
         });
         var timers: NotificationsEffectsCapture = .{
-            .model = &model,
+            .model = model,
             .expected_revision = 2,
             .fail = scenario.timer,
         };
         var navigation: NavigationCapture = .{ .fail = scenario.navigation };
         var handler: ActivateNotificationHandler = .{
-            .model = &model,
+            .model = model,
             .effects = navigation.effects(timers.port()),
         };
 

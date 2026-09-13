@@ -231,7 +231,9 @@ fn expectInactiveFullscreenReturn(replace: bool) !void {
 }
 
 test "rejected workspace arrival preserves its previous model and version" {
-    var empty = ModelType.init(std.testing.allocator, true);
+    const empty = try std.testing.allocator.create(ModelType);
+    defer std.testing.allocator.destroy(empty);
+    empty.* = ModelType.init(std.testing.allocator, true);
     defer empty.deinit();
     const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
@@ -248,7 +250,9 @@ test "rejected workspace arrival preserves its previous model and version" {
     try std.testing.expectEqual(@as(usize, 0), empty.workspace.count);
     try std.testing.expectEqualDeep(VersionType{}, empty.version());
 
-    var occupied = ModelType.init(std.testing.allocator, true);
+    const occupied = try std.testing.allocator.create(ModelType);
+    defer std.testing.allocator.destroy(occupied);
+    occupied.* = ModelType.init(std.testing.allocator, true);
     defer occupied.deinit();
     try occupied.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 30, .rows = 8 } });
 

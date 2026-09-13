@@ -508,6 +508,7 @@ pub const identity = @import("graphics/store.zig").identity;
 pub const initial_request_id = @import("connection/lifecycle.zig").initial_request_id;
 pub const keybind = @import("input/keybind.zig");
 pub const matchLink = @import("links/cells.zig").match;
+pub const resolveLink = @import("links/cells.zig").resolve;
 pub const markRows = @import("panes/damage.zig").markRows;
 pub const markerPolicy = @import("application/input/attachment_prompt.zig").markerPolicy;
 pub const max_callback_effects = @import("config/effects.zig").max_callback_effects;
