@@ -108,3 +108,6 @@ a raw PTY reader. At least three `j` bytes must arrive, and the byte count must
 stay unchanged after release. The probe records `repeat.json`, logs and a
 screenshot with DejaVu and Nerd icons. It uses the existing guest binary without
 rebuilding it, and must run alone because it owns the VM's keyboard focus.
+
+The Neovim probe also exercises alternate-screen startup and resize through the
+runtime's [terminal command history observer](terminal-command-history.md).
