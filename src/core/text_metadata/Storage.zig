@@ -11,9 +11,9 @@ len: usize,
 /// Example: `var storage = try Storage.init(gpa, rows);`
 pub fn init(allocator: std.mem.Allocator, rows: u16) !Storage {
     const buffer = try allocator.alloc(u8, limits.capacity(rows));
-    @memset(buffer[0 .. limits.header_size + rows], 0);
+    @memset(buffer[0 .. limits.header_size + @as(usize, rows)], 0);
     std.mem.writeInt(u16, buffer[1..3], rows, .little);
-    return .{ .buffer = buffer, .len = limits.header_size + rows };
+    return .{ .buffer = buffer, .len = limits.header_size + @as(usize, rows) };
 }
 
 pub fn deinit(storage: *Storage, allocator: std.mem.Allocator) void {

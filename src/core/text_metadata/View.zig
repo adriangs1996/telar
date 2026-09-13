@@ -39,7 +39,7 @@ pub fn decode(bytes: []const u8, size: [2]u16) !View {
 
     const rows = try reader.readBytes(row_count);
     for (rows) |flags| {
-        if (flags & 0xf0 != 0 or (flags & 4 != 0 and flags & 1 == 0)) {
+        if (flags & 0xf0 != 0 or (flags & 4 != 0 and (flags & 1 == 0 or size[0] < 2))) {
             return error.InvalidTextMetadata;
         }
     }
@@ -89,7 +89,7 @@ pub fn trusted(bytes: []const u8) View {
     const row_count = std.mem.readInt(u16, bytes[1..3], .little);
     const link_count = std.mem.readInt(u16, bytes[3..5], .little);
     const run_count = std.mem.readInt(u16, bytes[5..7], .little);
-    const links_start = limits.header_size + row_count;
+    const links_start = limits.header_size + @as(usize, row_count);
     const runs_start = links_start + @as(usize, link_count) * limits.link_size;
     const uris_start = runs_start + @as(usize, run_count) * limits.run_size;
     return .{

@@ -16,7 +16,7 @@ uri_len: u32 = 0,
 /// Example: `var builder = Builder.init(scratch, rows);`
 pub fn init(buffer: []u8, rows: u16) Builder {
     std.debug.assert(buffer.len >= limits.capacity(rows));
-    @memset(buffer[0 .. limits.header_size + rows], 0);
+    @memset(buffer[0 .. limits.header_size + @as(usize, rows)], 0);
     return .{ .buffer = buffer, .rows = rows };
 }
 
