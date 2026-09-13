@@ -55,6 +55,21 @@ test "native modal geometry clips every glyph on tiny hosts and preserves prompt
     try std.testing.expectEqualStrings("A workspace that does not fit", fixture.model.name_prompt.currentConst().?.field.text());
 }
 
+test "native overlay gestures ignore modifier bits and cancel on focus loss" {
+    var overlays: Overlays = .{ .modal = .{ .w = 20, .h = 10 } };
+    try std.testing.expect(overlays.pointer(.{ .x = 1, .y = 1, .kind = .press, .button = 4 }).?.consumed);
+    overlays.modal = null;
+    try std.testing.expect(overlays.pointer(.{ .x = 1, .y = 1, .kind = .drag, .button = 32 }).?.consumed);
+    try std.testing.expect(overlays.pointer(.{ .x = 1, .y = 1, .kind = .release, .button = 0 }).?.consumed);
+    try std.testing.expect(overlays.pointer(.{ .x = 1, .y = 1, .kind = .move }) == null);
+
+    overlays.modal = .{ .w = 20, .h = 10 };
+    _ = overlays.pointer(.{ .x = 1, .y = 1, .kind = .press });
+    overlays.cancelPointer();
+    overlays.modal = null;
+    try std.testing.expect(overlays.pointer(.{ .x = 1, .y = 1, .kind = .move }) == null);
+}
+
 test "native goto picker uses bounded shared results and reuses warm glyphs without allocation" {
     const fixture = try Fixture.init();
     defer fixture.deinit();

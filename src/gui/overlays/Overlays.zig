@@ -41,14 +41,15 @@ pub fn paint(overlays: *Overlays, canvas: *Canvas, projection: client.Projection
 /// through release if a prompt closes between pointer events.
 /// Example: `if (overlays.pointer(mouse)) |interaction| return interaction;`.
 pub fn pointer(overlays: *Overlays, mouse: client.Mouse) ?client.ViewInteractionCommand {
+    const button = mouse.button & 3;
     const captured = overlays.gesture != null;
-    if (mouse.kind == .release and overlays.gesture == mouse.button) {
+    if (mouse.kind == .release and overlays.gesture == button) {
         overlays.gesture = null;
     }
 
     if (overlays.modal != null or captured) {
         if (mouse.kind == .press and overlays.gesture == null) {
-            overlays.gesture = mouse.button;
+            overlays.gesture = button;
         }
 
         return .{ .consumed = true };
@@ -56,11 +57,17 @@ pub fn pointer(overlays: *Overlays, mouse: client.Mouse) ?client.ViewInteraction
 
     const intent = overlays.notifications.at(mouse) orelse return null;
     if (mouse.kind == .press) {
-        overlays.gesture = mouse.button;
-        return .{ .consumed = true, .intent = if (mouse.button == 0) intent else .none };
+        overlays.gesture = button;
+        return .{ .consumed = true, .intent = if (button == 0) intent else .none };
     }
 
     return .{ .consumed = true };
+}
+
+/// Cancels pointer ownership when the native window loses focus.
+/// Example: `overlays.cancelPointer();`.
+pub fn cancelPointer(overlays: *Overlays) void {
+    overlays.gesture = null;
 }
 
 /// Exposes the native inspector's wrapping to the shared prompt controller.
