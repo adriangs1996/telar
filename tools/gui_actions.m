@@ -90,6 +90,10 @@ static NSString *native_cursor(void) {
 }
 
 static void send_pointer(NSView *view, NSDictionary *action) {
+    if (!NSApp.isActive || !view.window.isKeyWindow) {
+        fprintf(stderr, "Native pointer probe lost application/window focus before input\n");
+        abort();
+    }
     NSString *kind = action[@"pointer"];
     NSEventModifierFlags flags = modifiers(action);
     if ([kind isEqualToString:@"modifiers"]) {
@@ -134,6 +138,7 @@ static NSDictionary *pointer_record(NSView *view) {
         [lines addObject:@[@(rules[i].x), @(rules[i].y), @(rules[i].width), @(rules[i].height)]];
     }
     return @{@"desired_pointer": @([view desiredPointerShape]), @"native_cursor": native_cursor(),
+             @"app_active": @(NSApp.isActive), @"window_key": @(view.window.isKeyWindow),
              @"viewport": @[@(viewport.width), @(viewport.height), @(viewport.scale)],
              @"view_points": @[@(view.bounds.size.width), @(view.bounds.size.height)],
              @"marker": @[@(marker.x), @(marker.y), @(marker.width), @(marker.height)],
@@ -165,6 +170,10 @@ __attribute__((constructor)) static void install(void) {
             const BOOL cursor_pending = action[@"assert_pointer"] != nil &&
                 ([view desiredPointerShape] != [action[@"assert_pointer"] unsignedIntValue] ||
                  (action[@"native_cursor"] != nil && ![native_cursor() isEqualToString:action[@"native_cursor"]]));
+            if (cursor_pending && (!NSApp.isActive || !window.isKeyWindow)) {
+                fprintf(stderr, "Native pointer assertion lost application/window focus: %s\n", [pointer_record(view).description UTF8String]);
+                abort();
+            }
             if ((action[@"wait"] && ![NSFileManager.defaultManager fileExistsAtPath:action[@"wait"]]) ||
                 ([action[@"wait_marker"] boolValue] && !marker_valid) || cursor_pending) {
                 if (++waiting > 80) {

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Check native macOS link hover, OSC 22, file opening and child survival.
+"""Check native macOS link hover, OSC 8, OSC 22, soft wraps and child survival.
 
 Uses synthetic AppKit pointer events and records both desiredPointerShape and
 NSCursor. A uniquely colored terminal cell provides exact rendered geometry.
 Only file:// is opened, through an isolated EDITOR stub; HTTP stays a hover test.
+The window must remain focused; external focus changes abort the probe.
 Usage: python3 tools/gui_links.py /path/to/telar /tmp/telar-links-probe
 """
 import argparse
@@ -20,6 +21,8 @@ from gui_multiplexer import Actions
 def write_fixture(directory):
     target = directory / 'document with space.txt'
     target.write_text('Native file link fixture.\n')
+    osc_target = directory / 'osc8 destination.txt'
+    osc_target.write_text('This target is carried by OSC 8, not its visible label.\n')
     child = directory / 'child.py'
     child.write_text('''import fcntl, json, os, struct, termios, time, tty
 from pathlib import Path
@@ -33,13 +36,15 @@ while True:
         raise RuntimeError('GUI metrics did not reach the child PTY')
     time.sleep(.02)
 uri = (Path.cwd() / 'document with space.txt').as_uri()
+osc_uri = (Path.cwd() / 'osc8 destination.txt').as_uri()
 if len(uri) >= cols:
     raise RuntimeError(f'Fixture URI requires {len(uri)} columns; pane has {cols}')
 os.write(1, ('\\x1b[2J\\x1b[H\\x1b[?25l\\x1b]22;default\\x07'
              '\\x1b[48;2;23;57;91m \\x1b[0m Native pointer probe\\r\\n'
              'HTTP hover and an isolated file opener\\r\\n'
              'https://example.invalid/probe\\r\\n' + uri + '\\r\\n'
-             'c: OSC 22 crosshair   t: OSC 22 text\\r\\n').encode())
+             'c: OSC 22 crosshair   t: OSC 22 text\\r\\n'
+             '\\x1b[7;1H\\x1b]8;id=local;' + osc_uri + '\\x1b\\\\Open local document\\x1b]8;;\\x1b\\\\').encode())
 Path('child.json').write_text(json.dumps(dict(pid=os.getpid(), rows=rows, cols=cols,
                                             xpixel=xpixel, ypixel=ypixel, uri=uri)))
 while True:
@@ -47,6 +52,12 @@ while True:
     if not data:
         break
     for key in data:
+        if key == ord('w'):
+            cols = struct.unpack('HHHH', fcntl.ioctl(0, termios.TIOCGWINSZ, bytes(8)))[1]
+            wrapped = 'https://example.invalid/wrapped'
+            first_columns = 12
+            os.write(1, f'\\x1b[9;{cols - first_columns + 1}H{wrapped}'.encode())
+            Path('wrapped.json').write_text(json.dumps(dict(cols=cols, first_columns=first_columns, uri=wrapped)))
         shape = {ord('c'): 'crosshair', ord('t'): 'text'}.get(key)
         if shape:
             os.write(1, f'\\x1b]22;{shape}\\x07'.encode())
@@ -56,7 +67,8 @@ while True:
     editor.write_text(f'''#!{sys.executable}
 import json, os, signal, sys
 from pathlib import Path
-Path({str(directory / 'editor.json')!r}).write_text(json.dumps(dict(pid=os.getpid(), argv=sys.argv)))
+destination = 'osc8-editor.json' if Path(sys.argv[1]).name == 'osc8 destination.txt' else 'editor.json'
+(Path({str(directory)!r}) / destination).write_text(json.dumps(dict(pid=os.getpid(), argv=sys.argv)))
 while True:
     signal.pause()
 ''')
@@ -67,19 +79,23 @@ while True:
       gui = { font = { family = 'DejaVu Sans Mono', size = 15, line_height = 1.1 },
               window = { padding = { x = 8, y = 6 } }, cursor = { blink = false } } }
 ''')
-    return child, editor, config, target
+    return child, editor, config, target, osc_target
 
 
 def actions_for(directory):
     actions = Actions(directory)
 
     def pointer(kind, cell=None, **mods):
-        actions.items.append(dict(pointer=kind, **({'cell': cell} if cell else {}), **mods))
+        action = dict(pointer=kind, **({'cell': cell} if cell else {}), **mods)
+        if kind == 'press':
+            action.update(assert_pointer=3, native_cursor='pointer')
+        actions.items.append(action)
 
     def observe(name, shape, native):
         actions.items.append(dict(assert_pointer=shape, native_cursor=native))
         actions.capture(name)
-        actions.items.append(dict(record=str(directory / f'{name}.json')))
+        actions.items.append(dict(assert_pointer=shape, native_cursor=native,
+                                  record=str(directory / f'{name}.json')))
 
     actions.items.extend([dict(wait=str(directory / 'child.json')), dict(wait_marker=True)])
     pointer('enter', [4, 2])
@@ -104,6 +120,18 @@ def actions_for(directory):
     actions.items.append(dict(wait_marker=True))
     pointer('move', [4, 2])
     observe('original-tab', 8, 'text')
+    pointer('move', [4, 6], cmd=True)
+    observe('osc8-hover', 3, 'pointer')
+    pointer('press', [4, 6], cmd=True)
+    pointer('release', [4, 6], cmd=True)
+    actions.items.append(dict(wait=str(directory / 'osc8-editor.json')))
+    actions.capture('osc8-editor-tab')
+    actions.prefix('1', 18)
+    actions.items.append(dict(wait_marker=True))
+    actions.text('w')
+    actions.items.append(dict(wait=str(directory / 'wrapped.json')))
+    pointer('move', [2, 9], cmd=True)
+    observe('softwrap-hover', 3, 'pointer')
     actions.prefix('s', 1)
     actions.items.append(dict(wait_marker=True))
     pointer('move', [-1, 1])
@@ -117,9 +145,10 @@ def actions_for(directory):
     return actions
 
 
-def has_link_underline(record, row, columns):
+def has_link_underline(record, span):
+    column, row, columns = span
     x, y, width, height = record['marker']
-    expected = [x, y + (row + 1) * height - 2, columns * width, 1]
+    expected = [x + column * width, y + (row + 1) * height - 2, columns * width, 1]
     return any(all(abs(a - b) < .01 for a, b in zip(line, expected))
                for line in record['horizontal_rules'])
 
@@ -134,7 +163,7 @@ def main():
     binary = options.binary.resolve(strict=True)
     directory = options.directory.resolve()
     directory.mkdir(mode=0o700, parents=True, exist_ok=False)
-    child, editor, config, target = write_fixture(directory)
+    child, editor, config, target, osc_target = write_fixture(directory)
     actions = actions_for(directory)
     script = directory / 'actions.json'
     script.write_text(json.dumps(actions.items, indent=2) + '\n')
@@ -160,24 +189,33 @@ def main():
                                     TELAR_GUI_MARKER='23,57,91'), cwd=directory, stdout=log, stderr=log,
                            timeout=90, check=True)
         names = ['plain', 'hover', 'released-modifier', 'osc-crosshair', 'osc-text', 'file-hover',
-                 'original-tab', 'sidebar-resize', 'restored-hover', 'leave']
+                 'original-tab', 'osc8-hover', 'softwrap-hover', 'sidebar-resize', 'restored-hover', 'leave']
         records = {name: json.loads((directory / f'{name}.json').read_text()) for name in names}
+        assert all(record['app_active'] and record['window_key'] for record in records.values()), records
         opened = json.loads((directory / 'editor.json').read_text())
+        osc_opened = json.loads((directory / 'osc8-editor.json').read_text())
+        wrapped = json.loads((directory / 'wrapped.json').read_text())
         terminal = json.loads((directory / 'child.json').read_text())
         assert opened['argv'] == [str(editor), str(target)], opened
+        assert osc_opened['argv'] == [str(editor), str(osc_target)], osc_opened
         columns = len('https://example.invalid/probe')
-        assert not has_link_underline(records['plain'], 2, columns), records
-        assert has_link_underline(records['hover'], 2, columns), records
-        assert not has_link_underline(records['released-modifier'], 2, columns), records
-        assert has_link_underline(records['file-hover'], 3, len(terminal['uri'])), records
-        assert not has_link_underline(records['leave'], 2, columns), records
+        assert not has_link_underline(records['plain'], (0, 2, columns)), records
+        assert has_link_underline(records['hover'], (0, 2, columns)), records
+        assert not has_link_underline(records['released-modifier'], (0, 2, columns)), records
+        assert has_link_underline(records['file-hover'], (0, 3, len(terminal['uri']))), records
+        assert has_link_underline(records['osc8-hover'], (0, 6, len('Open local document'))), records
+        first_columns = wrapped['first_columns']
+        assert has_link_underline(records['softwrap-hover'], (wrapped['cols'] - first_columns, 8, first_columns)), records
+        assert has_link_underline(records['softwrap-hover'], (0, 9, len(wrapped['uri']) - first_columns)), records
+        assert not has_link_underline(records['leave'], (0, 2, columns)), records
         marker = records['plain']['marker']
         assert marker[2] == terminal['xpixel'] / terminal['cols'], (marker, terminal)
         assert marker[3] == terminal['ypixel'] / terminal['rows'], (marker, terminal)
-        for pid in (terminal['pid'], opened['pid']):
+        for pid in (terminal['pid'], opened['pid'], osc_opened['pid']):
             os.kill(pid, 0)
-        result = dict(records=records, editor=opened, terminal=terminal,
-                      file_opened=True, children_survived_window_close=True, external_http_opened=False)
+        result = dict(records=records, editor=opened, osc8_editor=osc_opened, terminal=terminal, wrapped=wrapped,
+                      file_opened=True, osc8_destination_opened=True, softwrap_underlined=True,
+                      children_survived_window_close=True, external_http_opened=False)
         (directory / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
         print(json.dumps(result, indent=2))
     finally:
