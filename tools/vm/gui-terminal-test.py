@@ -127,7 +127,7 @@ return telar.config({
     api_version = 2,
     theme = "tokyo-night",
     client = { keybindings = {
-        telar.bind_expr_global({ "f12" }, function()
+        telar.bind_expr_global({ "ctrl+alt+x" }, function()
             return telar.input.paste("printf '%s' '$generation' > '$state/window-generation'")
         end),
     } },
@@ -142,7 +142,7 @@ EOF
     # A generation-specific binding proves adoption even if the compositor has
     # no blur protocol. A fixed delay or an unchanged stty size cannot do that.
     for attempt in {1..40}; do
-        wtype -M ctrl -k u -m ctrl -k F12 -k Return
+        wtype -M ctrl -k u -m ctrl -M ctrl -M alt -k x -m alt -m ctrl -k Return
         sleep .2
         if test "$(cat "$state/window-generation" 2>/dev/null || true)" = "$generation"; then break; fi
     done
