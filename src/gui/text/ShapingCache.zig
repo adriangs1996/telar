@@ -1,6 +1,6 @@
-//! Bounded, owned shaping results for one font at one size. Collisions replace
+//! Bounded, owned shaping results for one font set at one size. Collisions replace
 //! non-ASCII entries; single-byte ASCII has collision-free slots. Long runs
-//! bypass the cache. No position, color or GPU state is held.
+//! bypass the cache. Entries include face identity; no paint or GPU state is held.
 const std = @import("std");
 const Entry = @import("ShapingEntry.zig");
 const ShapedRun = @import("ShapedRun.zig");

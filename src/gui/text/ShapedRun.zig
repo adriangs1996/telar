@@ -1,5 +1,4 @@
-//! HarfBuzz's view of one shaped line, borrowed from the shaping buffer
-//! until the next shape call.
+//! One shaped face span, borrowed from HarfBuzz or the bounded shaping cache.
 const freetype = @import("freetype");
 
 font: @import("font_id.zig").Id,
