@@ -476,6 +476,9 @@ right in the last row of the sidebar. It accepts every source except
 `telar.bar.tabs()`; an empty list hides the row. The footer follows the same
 generation, tick and reload rules as the other slots. Only `telar gui` paints
 it today: the TUI sidebar ignores `sidebar_footer` and keeps its cell layout.
+Conversely `telar gui` does not paint the `bottom` slots: its status band
+shows only the mode chip and key hints, tabs have their own strip and metrics
+live in the sidebar footer, so `bottom` applies to the TUI alone.
 Prefix mode, copy mode and a rename prompt temporarily replace the configured
 bottom row with their own controls.
 

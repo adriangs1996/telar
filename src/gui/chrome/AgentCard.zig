@@ -15,7 +15,7 @@ const card_degradation = @import("card_degradation.zig");
 const Level = card_degradation.Level;
 const AgentCard = @This();
 
-pub const project_glyph = "\u{25a3}";
+pub const project_glyph = "\u{f07b}";
 const elapsed_gap: f32 = 4;
 
 context: *Context,

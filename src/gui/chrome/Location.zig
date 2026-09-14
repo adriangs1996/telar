@@ -1,5 +1,5 @@
 //! The selected workspace's location on the right of the top bar, in the
-//! monospace face: `▣ ~/sandbox/telar ⎇ main`. The branch comes from the
+//! monospace face: ` ~/sandbox/telar  main`. The branch comes from the
 //! workspace list replica when the runtime reported one; a worktree tab has
 //! no entry in that list, so only the tabs model's name can be shown.
 //! Tokens drop from the right when the space runs out: branch first.
@@ -16,8 +16,8 @@ const Location = @This();
 context: *Context,
 home: []const u8,
 
-pub const path_glyph = "\u{25a3} ";
-pub const branch_glyph = " \u{2387} ";
+pub const path_glyph = "\u{f07b} ";
+pub const branch_glyph = " \u{e0a0} ";
 
 /// Paints right-aligned inside `area` and returns the pixels used.
 /// Example: `const used = try location.paint(area);`

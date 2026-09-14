@@ -4,8 +4,8 @@ const Modal = @import("Modal.zig");
 const EditorView = @import("EditorView.zig");
 const CompletionRows = @import("CompletionRows.zig");
 
-pub const create_hints = "tab complete · ↑↓ choose · ↵ create · esc cancel";
-pub const create_confirmation = "Directory does not exist · ↵ creates it · esc cancel";
+pub const create_hints = "tab complete · ↑↓ choose · enter create · esc cancel";
+pub const create_confirmation = "Directory does not exist · enter creates it · esc cancel";
 
 /// Draws name editing and copy search using the same bounded prompt state.
 /// Example: `try paint(modal, prompt);`.

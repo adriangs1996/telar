@@ -216,7 +216,7 @@ test "native workspace collapse exposes its toggle and tiny bars stay within vie
     }
 }
 
-test "native configured bar segments preserve colors decorations and faint ink" {
+test "native configured footer segments preserve colors decorations and faint ink" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var state: client.State = .{};
@@ -230,17 +230,18 @@ test "native configured bar segments preserve colors decorations and faint ink" 
         .underline = true,
         .strikethrough = true,
     } });
-    state.layout.bottom = .{ .{ .content = content }, .empty, .tabs };
+    state.layout.sidebar_footer = .{ .{ .content = content }, .empty, .empty };
     var projection = fixture.projection();
+    projection.sidebar_visible = true;
     projection.bar_state = &state;
     try fixture.paint(projection);
     var background = false;
     var faint_ink = false;
     var underline = false;
     const renderer = &fixture.session.renderer;
-    const bottom = fixture.chrome.presented().bands.status_bar;
+    const footer = Sidebar.footerArea(fixture.chrome.presented().regions.sidebar);
     const cell_height: f32 = @floatFromInt(renderer.metrics.cell_height);
-    const row_top = bottom.y + @floor((bottom.height - cell_height) / 2);
+    const row_top = renderer.metrics.rect(renderer.origin, footer).y;
     for (renderer.quads.items()) |quad| {
         background = background or (quad.r == 0 and quad.g == 1 and quad.b == 0 and quad.a == 1);
         faint_ink = faint_ink or (quad.r == 1 and quad.g == 0 and quad.b == 0 and quad.a == 0.5);

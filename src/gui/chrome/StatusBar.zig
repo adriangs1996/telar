@@ -1,11 +1,10 @@
 //! The 26 px band along the bottom. In prefix or copy mode it shows the mode
-//! chip and the key hints and nothing else. In normal mode it lends its row
-//! to the Lua-configured bottom slots until those move to the sidebar
-//! footer; the `tabs` slot paints nothing because tabs have their own strip.
+//! chip and the key hints; in normal mode it is empty. The Lua `bottom`
+//! slots belong to the TUI: the GUI surfaces are `top_right` and the sidebar
+//! footer, and tabs have their own strip.
 const Context = @import("Context.zig");
 const Rect = @import("../render/Rect.zig");
 const ModeBar = @import("ModeBar.zig");
-const SlotRow = @import("SlotRow.zig");
 const StatusBar = @This();
 
 context: *Context,
@@ -21,12 +20,10 @@ pub fn paint(bar: StatusBar) !void {
     try canvas.fillAt(bar.area, canvas.theme.palette.panel_bg);
     const margin = canvas.chrome.px(8);
     const row: Rect = .{ .x = bar.area.x + margin, .y = bar.area.y, .width = @max(0, bar.area.width - 2 * margin), .height = bar.area.height };
-    if (bar.context.projection.status_mode != .normal) {
-        const mode_bar: ModeBar = .{ .context = bar.context, .area = row };
-        try mode_bar.paint();
+    if (bar.context.projection.status_mode == .normal) {
         return;
     }
 
-    const row_slots: SlotRow = .{ .context = bar.context, .slots = &bar.context.projection.bar_state.layout.bottom };
-    try row_slots.paintIn(row);
+    const mode_bar: ModeBar = .{ .context = bar.context, .area = row };
+    try mode_bar.paint();
 }
