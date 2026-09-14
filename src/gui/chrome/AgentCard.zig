@@ -65,7 +65,7 @@ pub fn level(card: AgentCard, width: f32) !Level {
         .workspace = card.projectSlot() + 4 + try canvas.measure(.{ .text = card.agent.workspaceLabel(), .face = .sans }),
         .age = try canvas.measure(.{ .text = age_label.format(card.age_s, &age_buffer), .face = .sans }),
         .status = try card.statusWidth(),
-        .mark = CardGeometry.mark_size + CardGeometry.gap,
+        .mark = card.markSide() + CardGeometry.gap,
         .gap = CardGeometry.gap,
     });
 }
@@ -98,7 +98,7 @@ fn paintProject(card: AgentCard, row: Rect, tokens: Level) !void {
     // takes one monospace cell so the label start never depends on shaping.
     const slot = card.projectSlot();
     if (card.project_icon) |icon| {
-        const side = @min(CardGeometry.mark_size, row.height);
+        const side = @min(card.markSide(), row.height);
         try canvas.spriteAt(.{ .x = row.x + (slot - side) / 2, .y = row.y + (row.height - side) / 2, .width = side, .height = side }, icon);
     } else {
         _ = try canvas.textAt(.{ .x = row.x, .y = row.y, .width = slot, .height = row.height }, .{ .text = project_glyph, .color = palette.subtext0 });
@@ -130,8 +130,9 @@ fn paintEvent(card: AgentCard, row: Rect, tokens: Level) !void {
     const palette = canvas.theme.palette;
     var right = row.x + row.width;
     if (tokens.shows(.mark)) {
-        right -= CardGeometry.mark_size;
-        try card.paintMark(.{ .x = right, .y = row.y + (row.height - CardGeometry.mark_size) / 2, .width = CardGeometry.mark_size, .height = CardGeometry.mark_size });
+        const side = card.markSide();
+        right -= side;
+        try card.paintMark(.{ .x = right, .y = row.y + (row.height - side) / 2, .width = side, .height = side });
         right -= CardGeometry.gap;
     }
 
@@ -172,10 +173,16 @@ fn paintEvent(card: AgentCard, row: Rect, tokens: Level) !void {
 // is resolved, else one monospace cell for the generic glyph.
 fn projectSlot(card: AgentCard) f32 {
     if (card.project_icon != null) {
-        return @max(card.geometry.glyph_width, CardGeometry.mark_size);
+        return @max(card.geometry.glyph_width, card.markSide());
     }
 
     return card.geometry.glyph_width;
+}
+
+// The mark and the favicon are `CardGeometry.mark_size` logical pixels, the
+// size the sprite page's cell is built for at this display scale.
+fn markSide(card: AgentCard) f32 {
+    return @round(card.context.canvas.chrome.px(CardGeometry.mark_size));
 }
 
 // Built-in providers draw their official artwork from the sprite page; a

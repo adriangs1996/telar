@@ -126,7 +126,7 @@ test "the card draws the sheet mark for the three providers and the chip for a c
             for (quads) |item| {
                 if (item.texture == quad.sprite_texture) {
                     try std.testing.expectEqualSlices(f32, &expected, &.{ item.u0, item.v0, item.u1, item.v1 });
-                    try std.testing.expectEqual(CardGeometry.mark_size, item.width);
+                    try std.testing.expectEqual(@round(canvas.chrome.px(CardGeometry.mark_size)), item.width);
                     found = true;
                 }
             }
