@@ -31,7 +31,7 @@ bars.Layout -> ClientModel.bars
                          |
                Presenter -> composition
                          |
-             top_bar / bottom bar slots
+    top_bar / bottom bar / GUI sidebar footer slots
 ```
 
 Static content becomes a fixed bounded value during configuration parsing.
@@ -54,7 +54,10 @@ budget. Rendering reads fixed values, formats built-in metrics in fixed
 buffers, and allocates nothing.
 
 Configuration may choose bottom left, center and right content, but exactly
-one slot belongs to built-in tabs. It may choose only the top-right content.
+one slot belongs to built-in tabs. It may choose only the top-right content
+and up to three sidebar footer slots (`sidebar_footer_left`, `_center`,
+`_right`), which never hold tabs. The GUI sidebar paints the footer through
+the same `SlotRow` as the bottom bar; the TUI ignores it.
 Workspace navigation, the sidebar toggle and the permanent ProxyTLS signal
 remain authoritative Telar UI. Narrow rows reserve a usable tabs region,
 truncate custom content and never let the configurable top-right block cover

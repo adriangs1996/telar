@@ -25,6 +25,8 @@ const PaneIdType = @import("telar-core").PaneId;
 const KeyType = @import("../input/Key.zig");
 const IconType = @import("../layout/icons.zig").Icon;
 const ClientColor = @import("../bars/model.zig").Color;
+const SourceType = @import("../bars/model.zig").Source;
+const SlotType = @import("../bars/model.zig").Slot;
 const max_intercept_hosts = @import("telar-core").max_intercept_hosts;
 const orderHostname_module = @import("telar-core").orderHostname;
 const default_bindings = @import("default_bindings.zig");
@@ -769,8 +771,56 @@ test "bar callback context tables are immutable" {
     try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), "immutable") != null);
 }
 
+test "client bars default the sidebar footer to metrics and accept a bounded slot list" {
+    var diagnostic: Diagnostic = .{};
+    const defaults = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2 }", .source_name = "@config.lua", .number = 1 });
+    defer defaults.deinit();
+    try std.testing.expectEqualDeep([3]SourceType{ .metrics, .empty, .empty }, defaults.snapshot.bars.sidebar_footer);
+    try std.testing.expectEqualDeep([3]SlotType{ .metrics, .empty, .empty }, defaults.snapshot.bars.presentation().sidebar_footer);
+
+    const source =
+        \\local t = require('telar')
+        \\return { api_version = 2, client = { bars = { sidebar_footer = {
+        \\  t.bar.static({ { text = "left", fg = "accent" } }),
+        \\  t.bar.metrics(),
+        \\  t.bar.dynamic({ every_ms = 500, render = function() return { "tick" } end }),
+        \\} } } }
+    ;
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 3 });
+    defer generation.deinit();
+    const footer = &generation.snapshot.bars.sidebar_footer;
+    try std.testing.expectEqualStrings("left", footer[0].static.text(footer[0].static.slice()[0]));
+    try std.testing.expect(footer[1] == .metrics);
+    try std.testing.expectEqual(@as(u64, 500 * std.time.ns_per_ms), footer[2].dynamic.interval_ns);
+    const layout = generation.snapshot.bars.presentation();
+    try std.testing.expect(layout.isLive(.sidebar_footer_right));
+    try std.testing.expect(!layout.isLive(.sidebar_footer_left));
+    try std.testing.expectEqual(@as(u64, 3), layout.generation);
+    try std.testing.expectEqualDeep([3]SourceType{ .metrics, .empty, .tabs }, generation.snapshot.bars.bottom);
+
+    const hidden = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { bars = { sidebar_footer = {} } } }", .source_name = "@config.lua", .number = 4 });
+    defer hidden.deinit();
+    try std.testing.expectEqualDeep([3]SourceType{ .empty, .empty, .empty }, hidden.snapshot.bars.sidebar_footer);
+}
+
 test "client bars reject invalid positions timing and tab ownership" {
     const cases = [_]struct { source: []const u8, message: []const u8 }{
+        .{
+            .source = "local t = require('telar'); return { api_version = 2, client = { bars = { sidebar_footer = { t.bar.tabs() } } } }",
+            .message = "sidebar_footer cannot contain tabs",
+        },
+        .{
+            .source = "local t = require('telar'); return { api_version = 2, client = { bars = { sidebar_footer = { t.bar.metrics(), t.bar.metrics(), t.bar.metrics(), t.bar.metrics() } } } }",
+            .message = "sidebar_footer accepts at most 3 slots",
+        },
+        .{
+            .source = "local t = require('telar'); return { api_version = 2, client = { bars = { sidebar_footer = { left = t.bar.metrics() } } } }",
+            .message = "sidebar_footer must be an array",
+        },
+        .{
+            .source = "local t = require('telar'); return { api_version = 2, client = { bars = { sidebar_footer = t.bar.metrics() } } }",
+            .message = "sidebar_footer must be an array",
+        },
         .{
             .source = "local t = require('telar'); return { api_version = 2, client = { bars = { bottom = { left = t.bar.metrics() } } } }",
             .message = "exactly one telar.bar.tabs()",

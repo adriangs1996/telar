@@ -3,12 +3,17 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Context = @import("Context.zig");
 const AgentCard = @import("AgentCard.zig");
+const SlotRow = @import("SlotRow.zig");
 const Sidebar = @This();
+
+/// Rows the footer needs below the header and the list before it is drawn.
+const min_footer_height = 5;
 
 scroll: u16 = 0,
 maximum_scroll: u16 = 0,
 
-/// Paints bounded runtime agent cards and retains only the local scroll bound.
+/// Paints bounded runtime agent cards, the configured footer row and retains
+/// only the local scroll bound.
 /// Example: `try sidebar.paint(&context, regions.sidebar);`
 pub fn paint(sidebar: *Sidebar, context: *Context, area: core.Rect) !void {
     if (area.isEmpty()) {
@@ -24,7 +29,13 @@ pub fn paint(sidebar: *Sidebar, context: *Context, area: core.Rect) !void {
         return;
     }
 
-    const list: core.Rect = .{ .x = area.x + 1, .y = area.y + 2, .w = area.w - 3, .h = area.h - 2 };
+    const footer = footerArea(area);
+    if (!footer.isEmpty()) {
+        const row: SlotRow = .{ .context = context, .slots = &context.projection.bar_state.layout.sidebar_footer };
+        try row.paint(footer);
+    }
+
+    const list: core.Rect = .{ .x = area.x + 1, .y = area.y + 2, .w = area.w - 3, .h = area.h - 2 - footer.h };
     const agents = context.projection.agents.slice();
     const total: u16 = if (agents.len == 0) 0 else @intCast(agents.len * 4 - 1);
     sidebar.maximum_scroll = total -| list.h;
@@ -56,6 +67,17 @@ pub fn paint(sidebar: *Sidebar, context: *Context, area: core.Rect) !void {
     const separator: core.Rect = .{ .x = area.x + area.w - 1, .y = area.y, .w = 1, .h = area.h };
     try context.canvas.border(separator, palette.surface1);
     try context.hits.add(.{ .area = separator, .action = .resize_sidebar });
+}
+
+/// The one-row footer at the bottom of the sidebar, left of the resize handle.
+/// Empty while the sidebar is too short to keep a header and a card visible.
+/// Example: `const footer = Sidebar.footerArea(regions.sidebar);`
+pub fn footerArea(area: core.Rect) core.Rect {
+    if (area.h < min_footer_height or area.w < 4) {
+        return .{};
+    }
+
+    return .{ .x = area.x, .y = area.y + area.h - 1, .w = area.w - 1, .h = 1 };
 }
 
 /// Scrolls by one bounded wheel step without a model mutation.

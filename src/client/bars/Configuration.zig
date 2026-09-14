@@ -5,6 +5,8 @@ const Configuration = @This();
 
 bottom: [3]model.Source = .{ .metrics, .empty, .tabs },
 top_right: model.Source = .empty,
+/// Left-to-right slots of the sidebar footer row; tabs are never accepted here.
+sidebar_footer: [3]model.Source = .{ .metrics, .empty, .empty },
 
 pub fn source(configuration: *const Configuration, position: model.Position) *const model.Source {
     return switch (position) {
@@ -12,6 +14,9 @@ pub fn source(configuration: *const Configuration, position: model.Position) *co
         .bottom_center => &configuration.bottom[1],
         .bottom_right => &configuration.bottom[2],
         .top_right => &configuration.top_right,
+        .sidebar_footer_left => &configuration.sidebar_footer[0],
+        .sidebar_footer_center => &configuration.sidebar_footer[1],
+        .sidebar_footer_right => &configuration.sidebar_footer[2],
     };
 }
 

@@ -6,6 +6,7 @@ const Session = @import("Session.zig");
 const Regions = @import("../chrome/Regions.zig");
 const HitMap = @import("../chrome/HitMap.zig");
 const bar_regions = @import("../chrome/bar_regions.zig");
+const Sidebar = @import("../chrome/Sidebar.zig");
 
 test "native chrome geometry preserves a pane row and partitions every host" {
     for ([_]u16{ 1, 2, 3, 10, 40 }) |height| {
@@ -66,7 +67,8 @@ test "native chrome preserves gesture ownership outside the sidebar and clamps s
 test "native agent targets retain generation through scroll and snapshot replacement" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    try fixture.resize(120, 8);
+    // Nine rows: header, gap, six list rows and the footer.
+    try fixture.resize(120, 9);
     var agents: client.AgentSnapshot = .{};
     const entries = [_]client.AgentInput{
         .{ .key = .{ .pane_id = @enumFromInt(51), .pane_generation = 4 }, .location = Session.location, .pane_index = 1, .provider = .codex, .status = .working, .display_name = "Codex", .session_title = "Implement GUI", .workspace_label = "telar", .cwd_label = "/telar" },
@@ -242,6 +244,37 @@ test "native configured bar segments preserve colors decorations and faint ink" 
     }
 
     try std.testing.expect(background and faint_ink and underline);
+}
+
+test "native sidebar footer paints configured slots in its last row and stays inside the sidebar" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    var state: client.State = .{};
+    var content: client.Content = .{};
+    try content.append(.{ .text = "footer", .style = .{ .background = .{ .value = .{ .rgb = .{ 0, 0, 255 } } } } });
+    state.layout.sidebar_footer = .{ .{ .content = content }, .empty, .metrics };
+    var projection = fixture.projection();
+    projection.sidebar_visible = true;
+    projection.bar_state = &state;
+    try fixture.paint(projection);
+    const regions = fixture.chrome.presented().regions;
+    const footer = Sidebar.footerArea(regions.sidebar);
+    try std.testing.expectEqual(regions.sidebar.y + regions.sidebar.h - 1, footer.y);
+    try std.testing.expectEqual(regions.sidebar.w - 1, footer.w);
+    try std.testing.expect(footer.intersect(regions.workbench).isEmpty());
+    const renderer = &fixture.session.renderer;
+    const row = renderer.metrics.rect(renderer.origin, footer);
+    var background = false;
+    for (renderer.quads.items()) |quad| {
+        background = background or (quad.r == 0 and quad.g == 0 and quad.b == 1 and quad.a == 1 and quad.y == row.y and quad.x >= row.x and quad.x < row.x + row.width);
+    }
+    try std.testing.expect(background);
+
+    const press = fixture.chrome.pointer(.{ .x = footer.x + 1, .y = footer.y, .kind = .press });
+    try std.testing.expect(press.consumed);
+    try std.testing.expectEqualDeep(client.Intent.none, press.intent);
+    _ = fixture.chrome.pointer(.{ .x = footer.x + 1, .y = footer.y, .kind = .release });
+    try std.testing.expect(Sidebar.footerArea(.{ .x = 0, .y = 0, .w = 40, .h = 4 }).isEmpty());
 }
 
 test "native progress remains visible with a single borderless pane" {

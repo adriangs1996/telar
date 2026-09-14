@@ -6,6 +6,7 @@ generation: u64 = 0,
 live_mask: u8 = 0,
 bottom: [3]model.Slot = .{ .metrics, .empty, .tabs },
 top_right: model.Slot = .empty,
+sidebar_footer: [3]model.Slot = .{ .metrics, .empty, .empty },
 
 pub fn slot(layout: *const Layout, position: model.Position) *const model.Slot {
     return switch (position) {
@@ -13,6 +14,9 @@ pub fn slot(layout: *const Layout, position: model.Position) *const model.Slot {
         .bottom_center => &layout.bottom[1],
         .bottom_right => &layout.bottom[2],
         .top_right => &layout.top_right,
+        .sidebar_footer_left => &layout.sidebar_footer[0],
+        .sidebar_footer_center => &layout.sidebar_footer[1],
+        .sidebar_footer_right => &layout.sidebar_footer[2],
     };
 }
 
@@ -26,6 +30,9 @@ pub fn set(layout: *Layout, position: model.Position, slot_value: model.Slot) vo
         .bottom_center => layout.bottom[1] = slot_value,
         .bottom_right => layout.bottom[2] = slot_value,
         .top_right => layout.top_right = slot_value,
+        .sidebar_footer_left => layout.sidebar_footer[0] = slot_value,
+        .sidebar_footer_center => layout.sidebar_footer[1] = slot_value,
+        .sidebar_footer_right => layout.sidebar_footer[2] = slot_value,
     }
 }
 

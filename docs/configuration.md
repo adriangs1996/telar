@@ -232,7 +232,7 @@ telar gui --config examples/gui.lua --profile presentation
 theme = "osaka-jade"
 gui = {
   window = {
-    titlebar = true,
+    titlebar = false, -- the macOS default; Linux defaults to true
     background_opacity = 0.95,
     background_blur = 20,
     padding = { x = 8, y = 8 },
@@ -251,7 +251,7 @@ gui = {
 
 | Setting | Default | Meaning and bounds |
 | --- | --- | --- |
-| `window.titlebar` | `true` | Show the native titlebar. Set `false` to hide it; Telar's workspace, tab and status bars remain available. On Wayland this is a decoration request which the compositor may override. |
+| `window.titlebar` | `false` on macOS, `true` on Linux | Show the native titlebar. On macOS it starts hidden so Telar's top bar sits at the window edge; set `true` to restore it. On Wayland it defaults to the compositor decoration and is a request which the compositor may override. Telar's workspace, tab and status bars remain available either way. |
 | `window.background_opacity` | `1` | Background opacity, `0..1`. Text, cursor and cell backgrounds differing from the terminal default retain their own opacity. |
 | `window.background_blur` | `0` | Integer `0..255`: macOS blur radius, with `0` disabling blur. On Wayland any positive value requests compositor blur; its intensity remains compositor-controlled. Has no visible effect at opacity `1`. Legacy `true` means `20`, and `false` means `0`. |
 | `window.padding.x` | `0` | Logical pixels on each horizontal edge, `0..256`, decimals allowed. |
@@ -433,9 +433,9 @@ Diagnostics name the entry and the field, for example
 
 ## Bars
 
-`client.bars` controls all three blocks of the bottom bar and the right block
-of the top bar. The bottom bar must contain exactly one `telar.bar.tabs()`
-source. Tabs keep their built-in behavior; configuration can only choose their
+`client.bars` controls all three blocks of the bottom bar, the right block
+of the top bar and the sidebar footer row. The bottom bar must contain exactly
+one `telar.bar.tabs()` source. Tabs keep their built-in behavior; configuration can only choose their
 position. The top bar keeps workspace navigation and the sidebar control under
 Telar's ownership, so only `top.right` exists. The ProxyTLS badge remains
 reserved at the far right whenever interception is active. While the sidebar
@@ -462,12 +462,20 @@ bars = {
       { icon = "provider-codex", text = " telar ", fg = "accent", bold = true },
     }),
   },
+  sidebar_footer = { telar.bar.metrics() },
 }
 ```
 
 When `client.bars` is absent, the bottom bar keeps metrics on the left and tabs
-on the right, and `top.right` is empty. If `bottom` is present, omitted
-positions are empty and one declared position still has to contain the tabs.
+on the right, `top.right` is empty and the sidebar footer shows `metrics`. If
+`bottom` is present, omitted positions are empty and one declared position
+still has to contain the tabs.
+
+`sidebar_footer` is a list of at most three sources laid out left, center and
+right in the last row of the sidebar. It accepts every source except
+`telar.bar.tabs()`; an empty list hides the row. The footer follows the same
+generation, tick and reload rules as the other slots. Only `telar gui` paints
+it today: the TUI sidebar ignores `sidebar_footer` and keeps its cell layout.
 Prefix mode, copy mode and a rename prompt temporarily replace the configured
 bottom row with their own controls.
 

@@ -5,7 +5,7 @@ return telar.config({
   theme = "osaka-jade",
   gui = {
     window = {
-      titlebar = true, -- Set false to hide the native titlebar.
+      titlebar = true, -- Defaults to false on macOS and true on Linux.
       background_opacity = 0.95,
       background_blur = 20, -- 0 disables; Wayland controls the positive intensity.
       padding = { x = 8, y = 8 },
