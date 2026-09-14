@@ -1,6 +1,7 @@
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Context = @import("Context.zig");
+const Rect = @import("../render/Rect.zig");
 const colors = @import("../render/cell_colors.zig");
 const Color = @import("../render/Color.zig");
 const Progress = @This();
@@ -11,12 +12,23 @@ pane: *const client.Pane,
 /// Keeps progress as a thin native stroke rather than covering terminal text.
 /// Example: `try progress.paint(border);`
 pub fn paint(progress: Progress, area: core.Rect) !void {
-    if (progress.pane.progress_state == .remove or area.isEmpty()) {
+    if (area.isEmpty()) {
+        return;
+    }
+
+    try progress.paintPixels(progress.context.canvas.rect(area));
+}
+
+/// The same stroke along the bottom edge of a device-pixel rectangle, so a
+/// tab in the pixel strip shows its pane's progress.
+/// Example: `try progress.paintPixels(tab_bounds);`
+pub fn paintPixels(progress: Progress, area: Rect) !void {
+    if (progress.pane.progress_state == .remove or area.width <= 0 or area.height <= 0) {
         return;
     }
 
     const canvas = progress.context.canvas;
-    var bounds = canvas.rect(area);
+    var bounds = area;
     bounds.y += bounds.height - 2;
     bounds.height = 2;
     const palette = canvas.theme.palette;

@@ -13,7 +13,7 @@ test "GUI font metrics apply size spacing and display scale once" {
         try std.testing.expectEqual(atlas.cellWidth() + @as(u16, @intFromFloat(2 * scale)), size.cell_width_px);
         try std.testing.expectEqual(@as(u16, @intFromFloat(@round(@as(f32, @floatFromInt(atlas.lineHeight())) * 1.5))), size.cell_height_px);
         try std.testing.expectEqual(800 / size.cell_width_px, size.cols);
-        try std.testing.expectEqual(600 / size.cell_height_px, size.rows);
+        try std.testing.expectEqual((600 - renderer.chrome.vertical()) / size.cell_height_px, size.rows);
     }
 }
 
@@ -26,9 +26,11 @@ test "native padding scales once and leaves a complete grid when the window shri
         const size = try renderer.measure(.{ .width = 800, .height = 600, .scale = scale });
         const x: u32 = @intFromFloat(@round(8.5 * scale));
         const y: u32 = @intFromFloat(@round(12 * scale));
-        try std.testing.expectEqual([2]u32{ x, y }, renderer.origin);
+        const chrome = renderer.chrome;
+        try std.testing.expectEqual([2]u32{ x, chrome.top_bar + chrome.tab_strip + y }, renderer.origin);
         try std.testing.expectEqual((800 - 2 * x) / size.cell_width_px, size.cols);
-        try std.testing.expectEqual((600 - 2 * y) / size.cell_height_px, size.rows);
+        try std.testing.expectEqual((600 - chrome.vertical() - 2 * y) / size.cell_height_px, size.rows);
+        try std.testing.expectEqual(chrome.vertical() + 2 * y + @as(u32, size.rows) * size.cell_height_px <= 600, true);
     }
 
     renderer.config.window.padding = .{ .x = 256, .y = 256 };
@@ -244,9 +246,8 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
     try std.testing.expectEqual(@as(u8, 2), commit.len);
     try std.testing.expectEqual(Session.pane_id, commit.panes[0].pane_id);
     try std.testing.expectEqual(second, commit.panes[1].pane_id);
-    const host_size = session.gui.app.model.hostSize();
-    const width: f32 = @floatFromInt(@as(u32, host_size.cols) * session.renderer.metrics.cell_width);
-    const height: f32 = @floatFromInt(@as(u32, host_size.rows) * session.renderer.metrics.cell_height);
+    const width: f32 = @floatFromInt(session.renderer.viewport[0]);
+    const height: f32 = @floatFromInt(session.renderer.viewport[1]);
     for (session.renderer.quads.items()) |quad| {
         try std.testing.expect(quad.x >= 0 and quad.y >= 0);
         try std.testing.expect(quad.x + quad.width <= width and quad.y + quad.height <= height);

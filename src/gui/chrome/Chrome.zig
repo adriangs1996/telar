@@ -6,17 +6,26 @@ const Context = @import("Context.zig");
 const HitMap = @import("HitMap.zig");
 const Action = @import("action.zig").Action;
 const Regions = @import("Regions.zig");
+const Bands = @import("Bands.zig");
 const Sidebar = @import("Sidebar.zig");
-const Bars = @import("Bars.zig");
+const TopBar = @import("TopBar.zig");
+const TabStrip = @import("TabStrip.zig");
+const StatusBar = @import("StatusBar.zig");
 const PaneDecorations = @import("PaneDecorations.zig");
 const HitState = @import("HitState.zig");
+const HomePrefix = @import("HomePrefix.zig");
+const RingFades = @import("RingFades.zig");
+const InputEvent = @import("../native/InputEvent.zig").InputEvent;
 const GenericPresentedState = @import("../render/GenericPresentedState.zig").Type;
 const Chrome = @This();
 
 maps: GenericPresentedState(HitState) = .{},
 sidebar: Sidebar = .{},
+rings: RingFades = .{},
+home: HomePrefix = .{},
 hovered: ?Action = null,
 gesture_button: ?u8 = null,
+band_gesture: ?u8 = null,
 sidebar_resize_active: bool = false,
 revision: u64 = 0,
 
@@ -27,11 +36,16 @@ pub fn paint(chrome: *Chrome, canvas: *Canvas, projection: client.Projection) !v
     const pending = chrome.maps.begin();
     try registerPanes(&pending.hits, projection);
     pending.regions = Regions.calculate(projection.host_size.cols, projection.host_size.rows, .{ .visible = projection.sidebar_visible, .preferred_width = projection.sidebar_width });
-    var context: Context = .{ .canvas = canvas, .hits = &pending.hits, .projection = &projection, .hovered = chrome.hovered };
-    const bars: Bars = .{ .context = &context, .regions = pending.regions };
-    try bars.paint();
+    pending.bands = Bands.resolve(canvas, pending.regions.workbench);
+    var context: Context = .{ .canvas = canvas, .hits = &pending.hits, .bands = &pending.band_hits, .projection = &projection, .hovered = chrome.hovered };
+    const top_bar: TopBar = .{ .context = &context, .bands = pending.bands, .home = chrome.home.slice(), .sidebar_visible = !pending.regions.sidebar.isEmpty() };
+    try top_bar.paint();
+    const strip: TabStrip = .{ .context = &context, .bands = pending.bands };
+    try strip.paint();
+    const status: StatusBar = .{ .context = &context, .area = pending.bands.status_bar };
+    try status.paint();
     try chrome.sidebar.paint(&context, pending.regions.sidebar);
-    const decorations: PaneDecorations = .{ .context = &context };
+    const decorations: PaneDecorations = .{ .context = &context, .rings = &chrome.rings };
     try decorations.paint();
     chrome.maps.seal();
 }
@@ -62,11 +76,7 @@ pub fn invalidate(chrome: *Chrome) void {
 pub fn pointer(chrome: *Chrome, event: client.Mouse) client.ViewInteractionCommand {
     const visible = chrome.presented();
     const action = visible.hits.at(.{ event.x, event.y });
-    if (!std.meta.eql(action, chrome.hovered)) {
-        chrome.hovered = action;
-        chrome.invalidate();
-    }
-
+    chrome.hover(action);
     if (chrome.gesture_button) |button| {
         if (event.kind == .drag or event.kind == .release) {
             if (event.button & 3 != button and event.button & 3 != 3) {
@@ -98,7 +108,7 @@ pub fn pointer(chrome: *Chrome, event: client.Mouse) client.ViewInteractionComma
         }
     }
 
-    const within_chrome = action != null or visible.regions.sidebar.contains(event.x, event.y) or visible.regions.top.contains(event.x, event.y) or visible.regions.bottom.contains(event.x, event.y);
+    const within_chrome = action != null or visible.regions.sidebar.contains(event.x, event.y);
     if (event.kind != .press or !within_chrome) {
         return .{ .consumed = within_chrome };
     }
@@ -110,19 +120,72 @@ pub fn pointer(chrome: *Chrome, event: client.Mouse) client.ViewInteractionComma
         return .{ .consumed = true };
     }
 
-    var intent = target.intent;
+    return .{ .intent = buttonIntent(target.intent, event.button & 3), .consumed = true };
+}
+
+/// Routes a native pointer sample that lands in a chrome band, outside the
+/// cell grid. Returns null when no band and no band gesture owns the sample,
+/// so the caller can map it to cells. A press acquires the gesture until
+/// its release, like `pointer`.
+/// Example: `if (chrome.bandPointer(event)) |command| return apply(command);`
+pub fn bandPointer(chrome: *Chrome, event: InputEvent) ?client.ViewInteractionCommand {
+    const visible = chrome.presented();
+    const inside = visible.bands.contains(event.x, event.y);
+    if (chrome.band_gesture) |button| {
+        if (event.code == 2 or event.code == 3) {
+            if (event.code == 2 and event.button & 3 == button) {
+                chrome.band_gesture = null;
+                chrome.invalidate();
+            }
+
+            return .{ .consumed = true };
+        }
+
+        return if (inside) .{ .consumed = true } else null;
+    }
+
+    if (!inside) {
+        return null;
+    }
+
+    const action = visible.band_hits.at(.{ event.x, event.y });
+    chrome.hover(action);
+    if (event.code != 1) {
+        return .{ .consumed = true };
+    }
+
+    const button: u8 = @intCast(event.button & 3);
+    chrome.band_gesture = button;
+    chrome.invalidate();
+    const target = action orelse return .{ .consumed = true };
+    return .{ .intent = buttonIntent(target.intent, button), .consumed = true };
+}
+
+/// The cursor a band point deserves, from the delivered band targets.
+/// Example: `hover.assign(null, chrome.bandShape(event));`
+pub fn bandShape(chrome: *const Chrome, event: InputEvent) @import("telar-core").PointerShape {
+    const action = chrome.presented().band_hits.at(.{ event.x, event.y }) orelse return .default;
+    return if (action == .intent and action.intent != .none) .pointer else .default;
+}
+
+fn buttonIntent(intent: client.Intent, button: u8) client.Intent {
     if (intent == .select_tab) {
         const tab_id = intent.select_tab;
-        intent = switch (event.button & 3) {
+        return switch (button) {
             0 => .{ .select_tab = tab_id },
             2 => .{ .rename_tab = tab_id },
             else => .none,
         };
-    } else if (event.button & 3 != 0) {
-        intent = .none;
     }
 
-    return .{ .intent = intent, .consumed = true };
+    return if (button != 0) .none else intent;
+}
+
+fn hover(chrome: *Chrome, action: ?Action) void {
+    if (!std.meta.eql(action, chrome.hovered)) {
+        chrome.hovered = action;
+        chrome.invalidate();
+    }
 }
 
 fn registerPanes(hits: *HitMap, projection: client.Projection) !void {
@@ -137,11 +200,12 @@ fn registerPanes(hits: *HitMap, projection: client.Projection) !void {
 /// Clears gestures when window focus is lost and no release can arrive.
 /// Example: `chrome.cancelPointer();`
 pub fn cancelPointer(chrome: *Chrome) void {
-    if (chrome.gesture_button == null and chrome.hovered == null) {
+    if (chrome.gesture_button == null and chrome.band_gesture == null and chrome.hovered == null) {
         return;
     }
 
     chrome.gesture_button = null;
+    chrome.band_gesture = null;
     chrome.sidebar_resize_active = false;
     chrome.hovered = null;
     chrome.invalidate();

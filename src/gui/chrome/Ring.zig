@@ -3,3 +3,5 @@
 width: f32,
 color: @import("telar-core").Color,
 radius: f32 = 0,
+/// Opacity of the stroke, so a ring can fade in over animation frames.
+alpha: f32 = 1,

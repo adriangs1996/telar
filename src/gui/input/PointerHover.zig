@@ -43,7 +43,7 @@ pub fn refresh(hover: *Hover, gui: *const GuiClient) void {
     var moved = event;
     moved.code = 6;
     const mouse = gui.input.pointer.geometry.resolve(moved) orelse {
-        hover.assign(null, .default);
+        hover.assign(null, gui.chrome.bandShape(moved));
         hover.cached = null;
         return;
     };

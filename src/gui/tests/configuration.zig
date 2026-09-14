@@ -297,7 +297,8 @@ test "window reload reuses the atlas and padding publishes grid size without its
     const retained = session.renderer.retained.at(.{ pane_origin.x, pane_origin.y });
     try std.testing.expectEqual(pixels_origin.x, retained.paint.rect.x);
     try std.testing.expectEqual(pixels_origin.y, retained.paint.rect.y);
-    try std.testing.expectEqual([2]u32{ 12, 18 }, session.renderer.origin);
+    const chrome = session.renderer.chrome;
+    try std.testing.expectEqual([2]u32{ 12, chrome.top_bar + chrome.tab_strip + 18 }, session.renderer.origin);
     try std.testing.expectEqual(pixels, session.renderer.atlas.?.pixels.ptr);
     try std.testing.expectEqual(version, session.renderer.atlas_version);
     try std.testing.expect(session.resize_count > 0);

@@ -21,6 +21,8 @@ pub const Intent = union(enum) {
     select_tab: TabIdType,
     focus_pane: PaneIdType,
     rename_tab: TabIdType,
+    /// The strip's `+` control: the same request the `create_tab` action sends.
+    create_tab,
     select_workspace: WorkspaceIdType,
     notification_activate: notification_capability.Id,
     notification_dismiss: notification_capability.Id,

@@ -80,7 +80,15 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
         return;
     }
 
-    const mouse = pointer.geometry.resolve(event) orelse return;
+    // Chrome bands lie outside the cell grid: a sample the grid does not
+    // resolve goes to the delivered band targets, and a band gesture keeps
+    // its drag and release even over cells.
+    const gui = GuiClient.of(app);
+    const resolved = if (gui.chrome.band_gesture != null) null else pointer.geometry.resolve(event);
+    const mouse = resolved orelse {
+        try bandRoute(app, event);
+        return;
+    };
     if (event.code <= 3) {
         pointer.last[button] = mouse;
     }
@@ -145,6 +153,24 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
             },
         };
     }
+}
+
+fn bandRoute(app: *client.AttachedClient, event: Event) !void {
+    const gui = GuiClient.of(app);
+    const command = gui.chrome.bandPointer(event) orelse {
+        if (event.code == 6) {
+            gui.chrome.leavePointer();
+        }
+
+        return;
+    };
+    const covered = app.model.name_prompt.active() or gui.overlays.presented().modal != null;
+    if (covered) {
+        return;
+    }
+
+    const model = app.model.activeTabModel() orelse return;
+    _ = try client.controllers.view_interactions.apply(app, model, command);
 }
 
 /// Closes existing gestures on focus loss, without assigning their releases

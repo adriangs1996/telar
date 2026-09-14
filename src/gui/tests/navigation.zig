@@ -260,12 +260,12 @@ test "native saturated mouse release cancels captured owners and admits a fresh 
     try input.accept(press);
     try drainInput(session);
     try std.testing.expect(input.pointer.owners[0] == .child);
-    _ = gui.chrome.pointer(.{ .x = 0, .y = 0, .kind = .press, .button = 2 });
+    _ = gui.chrome.bandPointer(.{ .kind = 6, .code = 1, .button = 2, .x = 1, .y = 1 });
     gui.app.model.name_prompt.begin(.create_workspace);
     const token = try gui.prepare(&session.renderer);
     try gui.complete(token, true);
     _ = gui.overlays.pointer(.{ .x = 0, .y = 0, .kind = .press, .button = 1 });
-    try std.testing.expect(gui.chrome.gesture_button != null and gui.overlays.gesture != null);
+    try std.testing.expect(gui.chrome.band_gesture != null and gui.overlays.gesture != null);
     try saturate(input);
     var release = press;
     release.code = 2;
@@ -275,7 +275,7 @@ test "native saturated mouse release cancels captured owners and admits a fresh 
     try std.testing.expectError(error.NativeInputFull, input.accept(press));
     try drainInput(session);
     try std.testing.expect(input.pointer.owners[0] == .shared);
-    try std.testing.expect(gui.chrome.gesture_button == null and gui.overlays.gesture == null);
+    try std.testing.expect(gui.chrome.band_gesture == null and gui.overlays.gesture == null);
     try std.testing.expect(std.mem.endsWith(u8, session.input[0..session.input_len], "m"));
 
     _ = gui.app.model.name_prompt.apply(.cancel);

@@ -4,18 +4,17 @@ const SidebarSpec = @import("SidebarSpec.zig");
 const Regions = @This();
 
 full: core.Rect,
-top: core.Rect,
 sidebar: core.Rect,
 workbench: core.Rect,
-bottom: core.Rect,
 
-/// Reserves chrome while retaining a terminal row even in a tiny window.
+/// Partitions the cell grid between the sidebar column and the workbench.
+/// The top bar, the tab strip and the status bar are pixel bands that
+/// `TerminalRenderer.measure` subtracts before this grid exists, so every
+/// cell here is a complete terminal cell and the PTY never sees chrome.
 /// Example: `const regions = Regions.calculate(120, 40, sidebar);`
 pub fn calculate(width: u16, height: u16, sidebar_spec: SidebarSpec) Regions {
     const full: core.Rect = .{ .w = width, .h = height };
-    const sidebar, const body = full.splitLeft(client.actualWidth(width, sidebar_spec.visible, sidebar_spec.preferred_width));
-    const top, const below = body.splitTop(@intFromBool(height >= 3));
-    const workbench, const bottom = below.splitBottom(@intFromBool(height >= 2));
+    const sidebar, const workbench = full.splitLeft(client.actualWidth(width, sidebar_spec.visible, sidebar_spec.preferred_width));
 
-    return .{ .full = full, .top = top, .sidebar = sidebar, .workbench = workbench, .bottom = bottom };
+    return .{ .full = full, .sidebar = sidebar, .workbench = workbench };
 }

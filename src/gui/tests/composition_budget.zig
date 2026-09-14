@@ -57,7 +57,7 @@ test "native composed multiplexer scenes keep warm allocation shaping and cell w
         try std.testing.expectEqual(@as(usize, 0), failing.allocated_bytes);
         try std.testing.expectEqual(version, renderer.last_page_version);
         try std.testing.expectEqual(frame_version, renderer.atlas_version);
-        const bounds = renderer.metrics.rect(renderer.origin, .{ .w = 160, .h = 60 });
+        const bounds: @import("../render/Rect.zig") = .{ .x = 0, .y = 0, .width = @floatFromInt(renderer.viewport[0]), .height = @floatFromInt(renderer.viewport[1]) };
         for (renderer.quads.items()) |quad| {
             try std.testing.expect(std.math.isFinite(quad.a) and quad.a >= 0 and quad.a <= 1);
             try std.testing.expect(quad.x >= bounds.x and quad.y >= bounds.y);
@@ -73,7 +73,7 @@ test "native decorated combining clusters remain bounded and atlas exhaustion re
     defer fixture.deinit();
     const renderer = &fixture.session.renderer;
     const atlas = &renderer.atlas.?;
-    var canvas: Canvas = .{ .atlas = atlas, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme };
+    var canvas: Canvas = .{ .atlas = atlas, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
     const cluster = "a" ++ "\u{301}" ** 15;
     const area: core.Rect = .{ .w = 120, .h = 1 };
     renderer.quads.clear();
