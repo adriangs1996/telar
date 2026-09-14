@@ -66,7 +66,7 @@ test "sprite quads carry the texture selector and plain quads stay on the atlas"
     defer page.deinit();
     var canvas = fixture.canvas();
     canvas.sprites = &page;
-    try canvas.fillAt(.{ .x = 0, .y = 0, .width = 8, .height = 8 }, .default);
+    try canvas.fillAt(.{ .x = 0, .y = 0, .width = 8, .height = 8 }, .{ .rgb = .{ 1, 2, 3 } });
     try canvas.spriteAt(.{ .x = 10.5, .y = 20.25, .width = 16, .height = 16 }, canvas.providerMark(.codex).?);
     try canvas.text(.{ .x = 0, .y = 1, .w = 4, .h = 1 }, .{ .text = "ab" });
     const quads = fixture.quads.items();

@@ -36,7 +36,10 @@ pub fn rect(canvas: Canvas, area: core.Rect) Rect {
     return canvas.metrics.rect(canvas.origin, area);
 }
 
-/// Paints a native rectangle, including backgrounds beneath labels.
+/// Paints a native rectangle, including backgrounds beneath labels. A
+/// `.default` color is the window background, which the clear color already
+/// provides at the configured opacity, so it paints nothing; overlays that
+/// must cover pane content resolve it first with `opaque`.
 /// Example: `try canvas.fill(regions.sidebar, canvas.theme.palette.panel_bg);`
 pub fn fill(canvas: *Canvas, area: core.Rect, ink_color: core.Color) !void {
     if (area.isEmpty()) {
@@ -49,7 +52,7 @@ pub fn fill(canvas: *Canvas, area: core.Rect, ink_color: core.Color) !void {
 /// `fill` over a device-pixel rectangle, for chrome laid out in pixels.
 /// Example: `try canvas.fillAt(thumb, palette.overlay0);`
 pub fn fillAt(canvas: *Canvas, bounds: Rect, ink_color: core.Color) !void {
-    if (bounds.width <= 0 or bounds.height <= 0) {
+    if (bounds.width <= 0 or bounds.height <= 0 or ink_color == .default) {
         return;
     }
 
@@ -71,7 +74,7 @@ pub fn fillRounded(canvas: *Canvas, area: core.Rect, fill_value: RoundedFill) !v
 /// the shorter side is clamped, so `999` draws a pill.
 /// Example: `try canvas.fillRoundedAt(pill, .{ .radius = 999, .color = palette.accent });`
 pub fn fillRoundedAt(canvas: *Canvas, bounds: Rect, fill_value: RoundedFill) !void {
-    if (bounds.width <= 0 or bounds.height <= 0) {
+    if (bounds.width <= 0 or bounds.height <= 0 or fill_value.color == .default) {
         return;
     }
 
@@ -290,6 +293,13 @@ pub fn border(canvas: *Canvas, area: core.Rect, ink_color: core.Color) !void {
     try canvas.quads.pushRect(.{ .x = bounds.x, .y = bounds.y + bounds.height - 1, .width = bounds.width, .height = 1 }, ink);
     try canvas.quads.pushRect(.{ .x = bounds.x, .y = bounds.y, .width = 1, .height = bounds.height }, ink);
     try canvas.quads.pushRect(.{ .x = bounds.x + bounds.width - 1, .y = bounds.y, .width = 1, .height = bounds.height }, ink);
+}
+
+/// The window background as an explicit color, for surfaces that must cover
+/// what lies beneath them instead of showing the translucent window.
+/// Example: `try canvas.fill(modal.area, canvas.covering(palette.panel_bg));`
+pub fn covering(canvas: Canvas, value: core.Color) core.Color {
+    return if (value == .default) .{ .rgb = canvas.theme.terminal.background } else value;
 }
 
 fn color(canvas: Canvas, value: core.Color, fallback: [3]u8) Color {

@@ -23,7 +23,7 @@ pub fn bounds(host: core.Rect, wanted: core.Rect) core.Rect {
 /// Example: `try modal.frame("Rename tab");`.
 pub fn frame(modal: Modal, title: []const u8) !void {
     const palette = modal.canvas.theme.palette;
-    try modal.canvas.fill(modal.area, palette.panel_bg);
+    try modal.canvas.fill(modal.area, modal.canvas.covering(palette.panel_bg));
     try modal.canvas.border(modal.area, palette.accent);
 
     if (modal.area.w > 4) {

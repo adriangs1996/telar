@@ -137,7 +137,7 @@ fn pageRange(modal: Modal, state: *const client.HistoryPaletteState) !void {
     const text = std.fmt.bufPrint(&storage, "{d}-{d}{s}", .{ @as(u64, state.page_offset) + @intFromBool(state.len != 0), @as(u64, state.page_offset) + state.len, if (state.has_more) " +more" else "" }) catch "";
     const width = @min(core.measure(text), modal.area.w - 34);
     const row: core.Rect = .{ .x = modal.area.x + modal.area.w - width - 2, .y = modal.area.y, .w = width, .h = 1 };
-    try modal.canvas.fill(row, modal.canvas.theme.palette.panel_bg);
+    try modal.canvas.fill(row, modal.canvas.covering(modal.canvas.theme.palette.panel_bg));
     try modal.canvas.text(row, .{ .text = text, .color = modal.canvas.theme.palette.subtext0 });
 }
 

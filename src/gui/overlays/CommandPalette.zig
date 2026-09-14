@@ -73,7 +73,7 @@ pub fn paint(palette: CommandPalette, hits: *PaletteHits) !core.Rect {
     };
     const visible: u16 = @max(@min(total, max_rows), 1);
     const frame = palette.area(visible);
-    try canvas.fillRounded(frame, .{ .radius = radius_px * scale, .color = colors.panel_bg });
+    try canvas.fillRounded(frame, .{ .radius = radius_px * scale, .color = canvas.covering(colors.panel_bg) });
     try canvas.ring(frame, .{ .width = scale, .radius = radius_px * scale, .color = colors.surface1 });
 
     const content = frame.inner(1);
