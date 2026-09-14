@@ -18,7 +18,7 @@ pub fn paint(sidebar: *Sidebar, context: *Context, area: core.Rect) !void {
 
     const palette = context.canvas.theme.palette;
     try context.canvas.fill(area, palette.panel_bg);
-    try context.canvas.text(area.row(0), .{ .text = "  minions", .color = palette.accent, .bold = true });
+    try context.canvas.text(area.row(0), .{ .text = "  minions", .color = palette.accent, .bold = true, .face = .sans });
     if (area.w < 4 or area.h < 3) {
         sidebar.maximum_scroll = 0;
         return;
