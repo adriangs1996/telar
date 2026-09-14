@@ -124,6 +124,14 @@ test "native fullscreen labels keep hidden panes reachable without covering term
     model.layout.snapshot(projection.geometry.area, &layout);
     const content = fixture.session.renderer.metrics.rect(fixture.session.renderer.origin, layout.views()[0].content);
     for (fixture.session.renderer.quads.items()) |quad| {
+        if (quad.a == 0 and quad.border > 0) {
+            // A frame ring paints only its stroke: the content must sit inside it.
+            try std.testing.expect(quad.x + quad.border <= content.x and quad.y + quad.border <= content.y);
+            try std.testing.expect(quad.x + quad.width - quad.border >= content.x + content.width);
+            try std.testing.expect(quad.y + quad.height - quad.border >= content.y + content.height);
+            continue;
+        }
+
         const overlaps = quad.x < content.x + content.width and quad.x + quad.width > content.x and quad.y < content.y + content.height and quad.y + quad.height > content.y;
         try std.testing.expect(!overlaps);
     }

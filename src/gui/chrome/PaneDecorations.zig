@@ -1,5 +1,7 @@
 //! Borders, headers, attention rings and the unfocused dim of every visible
-//! pane. Borders stay one pixel: `surface1`, `accent` when focused. The ring
+//! pane. Borders are the TUI frame in pixels: a one-pixel rounded outline,
+//! `overlay0`, `accent` when focused, drawn only when the layout has
+//! borders, so a single pane shows nothing but the sidebar edge. The ring
 //! is two logical pixels inside the border in the status colour, only for a
 //! pane whose agent is blocked or failed and only while it is not focused;
 //! it fades in through `RingFades`. Unfocused panes get one quad of the
@@ -18,6 +20,9 @@ const PaneDecorations = @This();
 
 pub const dim_alpha: f32 = 0.15;
 pub const ring_width: f32 = 2;
+/// Corner radius of the pane frame in logical pixels, the pixel twin of the
+/// TUI's rounded box-drawing corners.
+pub const frame_radius: f32 = 6;
 
 context: *Context,
 rings: *RingFades,
@@ -69,6 +74,7 @@ fn ring(decorations: PaneDecorations, spec: RingSpec) !void {
     const inset: Rect = .{ .x = outer.x + 1, .y = outer.y + 1, .width = @max(0, outer.width - 2), .height = @max(0, outer.height - 2) };
     try canvas.ringAt(inset, .{
         .width = canvas.chrome.px(ring_width),
+        .radius = @max(0, canvas.chrome.px(frame_radius) - 1),
         .color = attention.statusColor(canvas.theme.palette, spec.status),
         .alpha = decorations.rings.alpha(spec.view.pane_id, spec.motion),
     });
@@ -89,5 +95,10 @@ fn border(decorations: PaneDecorations, view: client.LayoutView) !void {
         try context.hits.add(.{ .area = band, .action = .{ .intent = .{ .focus_pane = view.pane_id } } });
     }
 
-    try context.canvas.border(outer, if (view.focused) context.canvas.theme.palette.accent else context.canvas.theme.palette.surface1);
+    const canvas = context.canvas;
+    try canvas.ringAt(canvas.rect(outer), .{
+        .width = 1,
+        .radius = canvas.chrome.px(frame_radius),
+        .color = if (view.focused) canvas.theme.palette.accent else canvas.theme.palette.overlay0,
+    });
 }
