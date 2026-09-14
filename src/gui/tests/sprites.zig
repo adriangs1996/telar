@@ -163,7 +163,6 @@ test "a warm repaint with sprites shapes rasterizes and allocates nothing" {
     _ = try agents.replace(.{ .revision = 1, .agents = &.{ agent(.claude, 51), agent(.codex, 52), agent(.pi, 53), agent(.unknown, 54) } });
     var projection = fixture.projection();
     projection.agents = &agents;
-    projection.sidebar_visible = true;
     try fixture.paint(projection);
     const renderer = &fixture.session.renderer;
     const count = renderer.quads.items().len;
@@ -357,7 +356,6 @@ test "a workspace favicon reaches the card one frame after the worker completes"
     _ = try agents.replace(.{ .revision = 1, .agents = &.{agent(.claude, 51)} });
     var projection = fixture.projection();
     projection.agents = &agents;
-    projection.sidebar_visible = true;
     fixture.chrome.favicons = gui.chrome.favicons;
     try fixture.paint(projection);
     try std.testing.expectEqual(@as(usize, 2), spriteCount(renderer.quads.items()));

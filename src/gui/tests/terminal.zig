@@ -224,7 +224,7 @@ test "native resize publishes exact grid pixels and preserves runtime-owned pane
     const size = try session.renderer.metrics.measure(.{ .width = 303, .height = 199, .scale = 1 });
     try session.gui.resize(size, session.renderer.theme);
     try session.settle();
-    const regions = @import("../chrome/Regions.zig").calculate(size.cols, size.rows, .{ .visible = session.gui.app.model.sidebarVisible(), .preferred_width = session.gui.app.model.sidebarWidth() });
+    const regions = @import("../chrome/Regions.zig").calculate(size.cols, size.rows);
     try std.testing.expectEqual(regions.workbench, session.gui.region.area);
     try std.testing.expectEqual(size, session.gui.app.model.hostSize());
     try std.testing.expectEqual(size.cell_width_px, session.gui.app.model.hostSize().cell_width_px);

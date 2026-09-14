@@ -50,8 +50,7 @@ fn roundedCount(quads: []const Quad, radius: f32, column: ?Rect) usize {
 }
 
 fn sidebarColumn(fixture: *Fixture) Rect {
-    const renderer = &fixture.session.renderer;
-    return renderer.metrics.rect(renderer.origin, fixture.chrome.presented().regions.sidebar);
+    return fixture.band();
 }
 
 fn ring(quads: []const Quad) ?Quad {
@@ -71,26 +70,25 @@ test "the sidebar orders six agents by attention and maps one hit per card" {
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
-    projection.sidebar_visible = true;
     try fixture.paint(projection);
     try std.testing.expectEqualSlices(u8, &expected_order, fixture.chrome.sidebar.ordering());
-    const hits = &fixture.chrome.presented().hits;
+    const hits = &fixture.chrome.presented().band_hits;
     var position: usize = 0;
-    var previous_bottom: u16 = 0;
+    var previous_bottom: f32 = 0;
     for (hits.items[0..hits.len]) |hit| {
         if (hit.action != .intent or hit.action.intent != .focus_agent) {
             continue;
         }
 
         try std.testing.expectEqualDeep(entries[expected_order[position]].key, hit.action.intent.focus_agent);
-        try std.testing.expect(hit.area.y >= previous_bottom -| 1);
-        previous_bottom = hit.area.y + hit.area.h;
+        try std.testing.expect(hit.area.y >= previous_bottom + CardGeometry.spacing);
+        previous_bottom = hit.area.y + hit.area.height;
         position += 1;
     }
 
     try std.testing.expectEqual(entries.len, position);
     try std.testing.expectEqual(@as(u16, 0), fixture.chrome.sidebar.maximum_scroll);
-    try std.testing.expectEqualDeep(client.Intent{ .focus_agent = entries[5].key }, fixture.click(fixture.target(.{ .focus_agent = entries[5].key }).?, 0).intent);
+    try std.testing.expectEqualDeep(client.Intent{ .focus_agent = entries[5].key }, fixture.clickBand(fixture.bandTarget(.{ .focus_agent = entries[5].key }).?, 0).intent);
 }
 
 test "the selected card is the focused pane's agent and carries the fill and ring" {
@@ -100,7 +98,6 @@ test "the selected card is the focused pane's agent and carries the fill and rin
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
-    projection.sidebar_visible = true;
     try fixture.paint(projection);
     const quads = fixture.session.renderer.quads.items();
     try std.testing.expectEqual(@as(usize, 1), roundedCount(quads, CardGeometry.radius, sidebarColumn(&fixture)));
@@ -109,15 +106,14 @@ test "the selected card is the focused pane's agent and carries the fill and rin
     try std.testing.expectEqual(@as(usize, 5), sprites.spriteCount(quads));
     const selected = ring(quads).?;
     const renderer = &fixture.session.renderer;
-    const sidebar = fixture.chrome.presented().regions.sidebar;
-    const bounds = renderer.metrics.rect(renderer.origin, .{ .x = sidebar.x, .y = sidebar.y, .w = sidebar.w - 1, .h = sidebar.h });
+    const bounds = fixture.band();
     const geometry = CardGeometry.derive(renderer.chrome, renderer.metrics);
     const list_top = bounds.y + Sidebar.margin + renderer.chrome.rowHeight(.body) + Sidebar.header_gap;
     try std.testing.expectEqual(list_top + 5 * geometry.pitch(), selected.y);
     try std.testing.expectEqual(geometry.height(), selected.height);
     try std.testing.expectEqual(bounds.x + Sidebar.margin, selected.x);
-    const hovered = fixture.target(.{ .focus_agent = entries[2].key }).?;
-    _ = fixture.chrome.pointer(.{ .x = hovered.x, .y = hovered.y, .kind = .move });
+    const hovered = fixture.bandTarget(.{ .focus_agent = entries[2].key }).?;
+    _ = fixture.chrome.bandPointer(.{ .kind = 6, .code = 6, .x = hovered.x, .y = hovered.y });
     try fixture.paint(projection);
     try std.testing.expectEqual(@as(usize, 2), roundedCount(fixture.session.renderer.quads.items(), CardGeometry.radius, sidebarColumn(&fixture)));
 }
@@ -171,7 +167,6 @@ test "the working pulse steps the status alpha from the animation frame" {
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
-    projection.sidebar_visible = true;
     projection.sidebar_animation_frame = 0;
     try fixture.paint(projection);
     for (fixture.session.renderer.quads.items()) |item| {
@@ -195,7 +190,6 @@ test "the snapshot arrival is retained until the revision changes" {
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
-    projection.sidebar_visible = true;
     fixture.chrome.now_s = 100;
     try fixture.paint(projection);
     try std.testing.expectEqual(@as(u32, 100), fixture.chrome.sidebar.arrived_s);
@@ -215,7 +209,6 @@ test "a warm sidebar repaint with six agents allocates nothing" {
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
-    projection.sidebar_visible = true;
     try fixture.paint(projection);
     const count = fixture.session.renderer.quads.items().len;
     const atlas = &fixture.session.renderer.atlas.?;

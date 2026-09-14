@@ -102,25 +102,30 @@ test "native pointer refreshes after resize ownership ends without a model or GP
     defer fixture.deinit();
     const session = fixture.session;
     const gui = session.gui;
-    const size = try session.renderer.measure(.{ .width = @as(u32, session.renderer.metrics.cell_width) * 120, .height = @as(u32, session.renderer.metrics.cell_height) * 12, .scale = 1 });
+    const size = try gui.measure(&session.renderer, .{ .width = @as(u32, session.renderer.metrics.cell_width) * 120 + 292, .height = @as(u32, session.renderer.metrics.cell_height) * 12 + session.renderer.chrome.vertical(), .scale = 1 });
     try gui.resize(size, session.renderer.theme);
-    gui.input.setGeometry(.{ 0, 0 }, size);
+    gui.input.setGeometry(session.renderer.origin, size);
     try fixture.present();
-    const hits = &gui.chrome.presented().hits;
+    const hits = &gui.chrome.presented().band_hits;
     const divider = for (hits.items[0..hits.len]) |hit| {
         if (hit.action == .resize_sidebar) {
             break hit.area;
         }
     } else return error.MissingSidebarDivider;
-    _ = gui.chrome.pointer(.{ .x = divider.x, .y = divider.y, .kind = .press });
+    _ = gui.chrome.bandPointer(.{ .kind = 6, .code = 1, .x = divider.x + 1, .y = divider.y + 1 });
+    try std.testing.expect(gui.chrome.sidebar_resize_active);
+    // The pointer moves over pane text while the band owns the drag.
     var moved = fixture.event(6);
     moved.mods = 0;
+    moved.x += @floatFromInt(session.renderer.origin[0]);
+    moved.y += @floatFromInt(session.renderer.origin[1]);
     try fixture.send(moved);
     try std.testing.expectEqual(.col_resize, gui.input.pointer.hover.shape);
 
     const version = gui.app.model.version();
-    const mouse = gui.input.pointer.geometry.resolve(moved).?;
-    _ = gui.chrome.pointer(.{ .x = mouse.x, .y = mouse.y, .kind = .release });
+    var released = moved;
+    released.code = 2;
+    try fixture.send(released);
     try std.testing.expect(!gui.chrome.sidebar_resize_active);
     try std.testing.expectEqualDeep(version, gui.app.model.version());
     _ = try gui.pump();

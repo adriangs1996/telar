@@ -4,7 +4,7 @@ const core = @import("telar-core");
 const Session = @import("Session.zig");
 const Chrome = @import("../chrome/Chrome.zig");
 const Canvas = @import("../chrome/Canvas.zig");
-const Regions = @import("../chrome/Regions.zig");
+const SidebarBand = @import("../chrome/SidebarBand.zig");
 const Rect = @import("../render/Rect.zig");
 const Fixture = @This();
 
@@ -24,17 +24,44 @@ pub fn deinit(fixture: *Fixture) void {
     fixture.session.deinit();
 }
 
+/// Sizes the window so the workbench grid holds exactly `cols` by `rows`
+/// cells beside the sidebar band the model's visibility and the GUI's
+/// preference ask for.
+/// Example: `try fixture.resize(120, 40);`
 pub fn resize(fixture: *Fixture, cols: u16, rows: u16) !void {
     const renderer = &fixture.session.renderer;
-    const size = try renderer.measure(.{ .width = @as(u32, renderer.metrics.cell_width) * cols, .height = @as(u32, renderer.metrics.cell_height) * rows + renderer.chrome.vertical(), .scale = 1 });
-    try fixture.session.gui.resize(size, renderer.theme);
+    const gui = fixture.session.gui;
+    const reserved = SidebarBand.resolve(gui.sidebar.request(gui.app.model.sidebarVisible()), .{ .width = 65535, .cell_width = renderer.metrics.cell_width }).reserved();
+    try fixture.measure(.{ .width = @as(u32, renderer.metrics.cell_width) * cols + reserved, .height = @as(u32, renderer.metrics.cell_height) * rows + renderer.chrome.vertical(), .scale = 1 });
+}
+
+/// Measures one exact window through the GUI client and settles the PTY.
+/// Example: `try fixture.measure(.{ .width = 800, .height = 600, .scale = 2 });`
+pub fn measure(fixture: *Fixture, viewport: @import("../native/native.zig").Viewport) !void {
+    const renderer = &fixture.session.renderer;
+    const gui = fixture.session.gui;
+    const size = try gui.measure(renderer, viewport);
+    try gui.resize(size, renderer.theme);
+    gui.input.setGeometry(renderer.origin, size);
     try fixture.session.settle();
 }
 
+/// Changes the shared visibility and measures the same window again.
+/// Example: `try fixture.showSidebar(false);`
+pub fn showSidebar(fixture: *Fixture, visible: bool) !void {
+    const renderer = &fixture.session.renderer;
+    _ = fixture.session.gui.app.model.setSidebarVisible(visible);
+    try fixture.measure(.{ .width = renderer.viewport[0], .height = renderer.viewport[1], .scale = renderer.scale });
+}
+
 pub fn projection(fixture: *Fixture) client.Projection {
-    var value = client.capture(&fixture.session.gui.app.model, .{ .geometry = fixture.session.gui.region });
-    value.geometry.area = Regions.calculate(value.host_size.cols, value.host_size.rows, .{ .visible = value.sidebar_visible, .preferred_width = value.sidebar_width }).workbench;
-    return value;
+    return client.capture(&fixture.session.gui.app.model, .{ .geometry = fixture.session.gui.region });
+}
+
+/// The sidebar band of the last painted frame, in device pixels.
+/// Example: `const band = fixture.band();`
+pub fn band(fixture: *Fixture) Rect {
+    return fixture.chrome.presented().bands.sidebar;
 }
 
 pub fn paint(fixture: *Fixture, projection_value: client.Projection) !void {
@@ -45,7 +72,7 @@ pub fn paint(fixture: *Fixture, projection_value: client.Projection) !void {
 pub fn prepare(fixture: *Fixture, projection_value: client.Projection) !void {
     const renderer = &fixture.session.renderer;
     renderer.quads.clear();
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport, .sprites = if (renderer.sprites) |*page| page else null };
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar, .sprites = if (renderer.sprites) |*page| page else null };
     try fixture.chrome.paint(&canvas, projection_value);
 }
 
@@ -72,7 +99,20 @@ pub fn bandTarget(fixture: *Fixture, intent: client.Intent) ?Rect {
 pub fn clickBand(fixture: *Fixture, area: Rect, button: u32) client.ViewInteractionCommand {
     const command = fixture.chrome.bandPointer(.{ .kind = 6, .code = 1, .button = button, .x = area.x, .y = area.y }) orelse return .{};
     _ = fixture.chrome.bandPointer(.{ .kind = 6, .code = 2, .button = button, .x = area.x, .y = area.y });
-    return command;
+    return command.interaction;
+}
+
+/// The delivered sidebar resize handle.
+/// Example: `const handle = fixture.resizeHandle().?;`
+pub fn resizeHandle(fixture: *Fixture) ?Rect {
+    const hits = &fixture.chrome.presented().band_hits;
+    for (hits.items[0..hits.len]) |hit| {
+        if (hit.action == .resize_sidebar) {
+            return hit.area;
+        }
+    }
+
+    return null;
 }
 
 pub fn click(fixture: *Fixture, area: core.Rect, button: u8) client.ViewInteractionCommand {
