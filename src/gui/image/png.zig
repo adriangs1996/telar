@@ -275,7 +275,9 @@ fn filterRow(kind: u8, bpp: u8, rows: [2][]const u8) [64]u8 {
     return out;
 }
 
-fn encodeForTest(allocator: std.mem.Allocator, spec: PngTestSpec, samples: []const u8) ![]u8 {
+/// Test-only encoder shared with the worker tests.
+/// Example: `const bytes = try png.encodeForTest(gpa, .{ .header = header }, samples);`
+pub fn encodeForTest(allocator: std.mem.Allocator, spec: PngTestSpec, samples: []const u8) ![]u8 {
     const stride = spec.header.stride();
     const raw = try allocator.alloc(u8, (stride + 1) * spec.header.height);
     defer allocator.free(raw);

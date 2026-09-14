@@ -194,3 +194,179 @@ test "a warm repaint with sprites shapes rasterizes and allocates nothing" {
     try std.testing.expectEqual(sprites_version, renderer.sprites_version);
     try std.testing.expectEqual(@as(usize, 0), failure.allocations);
 }
+
+const Favicons = @import("../chrome/Favicons.zig");
+const png = @import("../image/png.zig");
+const favicon_worker = @import("../image/favicon_worker.zig");
+
+fn cellImage(side: u16, value: u8) !*client.FaviconImage {
+    const image = try std.testing.allocator.create(client.FaviconImage);
+    image.* = .{ .side = side };
+    @memset(image.mutableSlice(), value);
+    return image;
+}
+
+test "the registry places one landed image per workspace and forgets a rebuilt page" {
+    const gpa = std.testing.allocator;
+    var page = try SpritePage.init(gpa, 16);
+    defer page.deinit();
+    var workspaces: client.WorkspaceListSnapshot = .{};
+    _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
+        .{ .workspace = @enumFromInt(1), .name = "a", .path = "/a", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(2), .name = "b", .path = "/b", .tab_count = 1 },
+    } });
+    var favicons: Favicons = .{};
+    defer favicons.deinit(gpa);
+    favicons.refresh(gpa, &page);
+    const first = favicons.next(&workspaces).?;
+    try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(1)), first.workspace);
+    try std.testing.expectEqualStrings("/a", first.cwd);
+    try std.testing.expectEqual(first.workspace, favicons.next(&workspaces).?.workspace);
+    favicons.started(first.workspace);
+    try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(2)), favicons.next(&workspaces).?.workspace);
+    favicons.started(@enumFromInt(2));
+    try std.testing.expect(favicons.next(&workspaces) == null);
+
+    favicons.land(gpa, .{ .workspace = @enumFromInt(1), .image = try cellImage(16, 200) });
+    try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(1) }) == null);
+    favicons.refresh(gpa, &page);
+    const placed = favicons.sprite(.{ .workspace = @enumFromInt(1) }).?;
+    try std.testing.expectEqual(@as(u16, 3), placed.index);
+    try std.testing.expectEqual(@as(u16, 4), page.count);
+    try std.testing.expect(favicons.sprite(.{ .worktree = @enumFromInt(1) }) == null);
+
+    favicons.land(gpa, .{ .workspace = @enumFromInt(2), .image = null });
+    favicons.refresh(gpa, &page);
+    try std.testing.expectEqual(Favicons.capacity, @as(usize, core.max_workspace_list_entries));
+    try std.testing.expect(favicons.stateOf(@enumFromInt(2)) == .missing);
+    try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(2) }) == null);
+
+    // A landing for a workspace the registry never saw is released unread.
+    favicons.land(gpa, .{ .workspace = @enumFromInt(9), .image = try cellImage(16, 1) });
+    favicons.refresh(gpa, &page);
+    try std.testing.expectEqual(@as(u16, 4), page.count);
+
+    // A cell of the wrong size asks for the lookup again.
+    _ = try workspaces.replace(.{ .revision = 2, .entries = &.{
+        .{ .workspace = @enumFromInt(1), .name = "a", .path = "/a", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(3), .name = "c", .path = "/c", .tab_count = 1 },
+    } });
+    favicons.started(favicons.next(&workspaces).?.workspace);
+    favicons.land(gpa, .{ .workspace = @enumFromInt(3), .image = try cellImage(8, 1) });
+    favicons.refresh(gpa, &page);
+    try std.testing.expect(favicons.stateOf(@enumFromInt(3)) == .wanted);
+
+    // A full sheet keeps the glyph.
+    while (page.faviconRoom() != 0) {
+        const filler = try cellImage(16, 7);
+        defer gpa.destroy(filler);
+        _ = try page.addFavicon(.{ .pixels = filler.slice(), .stride = 64, .width = 16, .height = 16 });
+    }
+
+    favicons.started(@enumFromInt(3));
+    favicons.land(gpa, .{ .workspace = @enumFromInt(3), .image = try cellImage(16, 1) });
+    favicons.refresh(gpa, &page);
+    try std.testing.expect(favicons.stateOf(@enumFromInt(3)) == .full);
+    try std.testing.expect(favicons.next(&workspaces) == null);
+
+    // Another page forgets every placement, so the lookups run again.
+    var rebuilt = try SpritePage.init(gpa, 32);
+    defer rebuilt.deinit();
+    favicons.refresh(gpa, &rebuilt);
+    try std.testing.expect(favicons.sprite(.{ .workspace = @enumFromInt(1) }) == null);
+    try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(1)), favicons.next(&workspaces).?.workspace);
+}
+
+test "the favicon worker decodes a workspace favicon.png into the sprite cell" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = root_buffer[0..try temp.dir.realPath(io, &root_buffer)];
+    const missing = favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(1), .workspace = @enumFromInt(1), .cell = 16 }, root));
+    try std.testing.expectError(error.FaviconNotFound, missing.result);
+
+    const samples = [_]u8{ 0, 0, 255, 255 } ** 64;
+    const bytes = try png.encodeForTest(gpa, .{ .header = .{ .width = 8, .height = 8, .color = .rgba }, .filter = 2 }, &samples);
+    defer gpa.free(bytes);
+    try temp.dir.writeFile(io, .{ .sub_path = "favicon.png", .data = bytes });
+    const landed = favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(2), .workspace = @enumFromInt(1), .cell = 16 }, root));
+    const image = try landed.result;
+    defer gpa.destroy(image);
+    try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(1)), landed.workspace);
+    try std.testing.expectEqual(@as(u16, 16), image.side);
+    for (0..256) |index| {
+        try std.testing.expectEqualSlices(u8, &.{ 0, 0, 255, 255 }, image.slice()[index * 4 ..][0..4]);
+    }
+
+    try temp.dir.writeFile(io, .{ .sub_path = "favicon.png", .data = "GIF89a not a png but long enough to be read" });
+    try std.testing.expectError(error.NotPng, favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(3), .workspace = @enumFromInt(1), .cell = 16 }, root)).result);
+    try std.testing.expectError(error.InvalidSpriteCell, favicon_worker.execute(io, gpa, .init(.{ .execution_id = @enumFromInt(4), .workspace = @enumFromInt(1), .cell = 0 }, root)).result);
+}
+
+test "a workspace favicon reaches the card one frame after the worker completes" {
+    var fixture = try ChromeFixture.init();
+    defer fixture.deinit();
+    const session = fixture.session;
+    const gui = session.gui;
+    const renderer = &session.renderer;
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = root_buffer[0..try temp.dir.realPath(io, &root_buffer)];
+    const samples = [_]u8{ 255, 0, 0, 255 } ** 64;
+    const bytes = try png.encodeForTest(gpa, .{ .header = .{ .width = 8, .height = 8, .color = .rgba }, .filter = 1 }, &samples);
+    defer gpa.free(bytes);
+    try temp.dir.createDirPath(io, ".telar");
+    try temp.dir.writeFile(io, .{ .sub_path = ".telar/icon.png", .data = bytes });
+    const workspace = Session.location.workspace.workspace;
+    _ = try gui.app.model.workspace_list_snapshot.replace(.{ .revision = 1, .entries = &.{.{ .workspace = workspace, .name = "telar", .path = root, .tab_count = 1 }} });
+
+    // The first preparation starts the lookup; its completion lands through
+    // the inbox and the next preparation places the cell.
+    const first = try gui.prepare(renderer);
+    try gui.complete(first, true);
+    try std.testing.expect(gui.chrome.favicons.stateOf(workspace) == .pending);
+    try std.testing.expect(gui.app.favicons.busy());
+    var rounds: usize = 0;
+    while (gui.chrome.favicons.stateOf(workspace) != .resolved) : (rounds += 1) {
+        if (rounds == 8) {
+            return error.FaviconNeverLanded;
+        }
+
+        try session.driver.inbox.wait();
+        _ = try gui.pump();
+        const token = try gui.prepare(renderer);
+        try gui.complete(token, true);
+    }
+
+    try std.testing.expect(!gui.app.favicons.busy());
+    const placed = gui.chrome.favicons.sprite(Session.location.workspace).?;
+    try std.testing.expectEqual(@as(u16, 3), placed.index);
+    try std.testing.expectEqual(@as(u16, 4), renderer.sprites.?.count);
+    renderer.seal();
+    const version = renderer.sprites_version;
+    const again = try gui.prepare(renderer);
+    try gui.complete(again, true);
+    try std.testing.expectEqual(version, renderer.sprites_version);
+
+    var agents: client.AgentSnapshot = .{};
+    _ = try agents.replace(.{ .revision = 1, .agents = &.{agent(.claude, 51)} });
+    var projection = fixture.projection();
+    projection.agents = &agents;
+    projection.sidebar_visible = true;
+    fixture.chrome.favicons = gui.chrome.favicons;
+    try fixture.paint(projection);
+    try std.testing.expectEqual(@as(usize, 2), spriteCount(renderer.quads.items()));
+    var found = false;
+    for (renderer.quads.items()) |item| {
+        if (item.texture == quad.sprite_texture and item.u0 == renderer.sprites.?.uv(placed)[0] and item.v0 == renderer.sprites.?.uv(placed)[1]) {
+            found = true;
+        }
+    }
+
+    try std.testing.expect(found);
+}

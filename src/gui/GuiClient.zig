@@ -61,6 +61,7 @@ pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
     gui.app.bar_runner = host_ports.barCommands(&gui.app);
     gui.app.plugin_runner = host_ports.pluginWorkers(&gui.app);
     gui.app.path_completion_runner = host_ports.pathCompletions(&gui.app);
+    gui.app.favicon_runner = host_ports.favicons(&gui.app);
     gui.app.clock = host_ports.clock(&gui.app);
     gui.app.host_input_source = host_ports.hostInput(&gui.app);
     gui.app.transport_driver = host_ports.transport(&gui.app);
@@ -76,6 +77,7 @@ pub fn deinit(gui: *GuiClient) void {
     }
 
     gui.graphics_store.deinit();
+    gui.chrome.favicons.deinit(gpa);
     gui.app.deinit();
     gpa.destroy(gui);
 }
@@ -251,6 +253,7 @@ pub fn prepare(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.zig"
 
     gui.refreshPointer();
     gui.chrome.now_s = @intCast(client.monotonic(gui.app.io) / std.time.ns_per_s);
+    try gui.resolveFavicons(renderer);
     const projected = gui.projection();
     const observed = gui.observation();
     _ = gui.lifecycle.observe(observed);
@@ -259,6 +262,30 @@ pub fn prepare(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.zig"
     const token = try gui.lifecycle.begin(.{ .observation = observed, .commit = commit, .geometry = client.Geometry.capture(projected) });
     gui.input.pointer.hover.prepare();
     return @intFromEnum(token);
+}
+
+/// Lands one favicon lookup from the inbox; the next preparation places it.
+/// Example: `gui.landFavicon(completion);`
+pub fn landFavicon(gui: *GuiClient, completion: client.FaviconCompletion) void {
+    const image: ?*client.FaviconImage = switch (client.controllers.favicons.complete(&gui.app, completion)) {
+        .stale => return,
+        .missing => null,
+        .image => |owned| owned,
+    };
+    gui.chrome.favicons.land(gui.app.gpa, .{ .workspace = completion.workspace, .image = image });
+    gui.chrome.invalidate();
+}
+
+// Places a landed favicon into the page and starts the next lookup the
+// list needs. Warm frames find nothing landed and nothing wanted.
+fn resolveFavicons(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.zig")) !void {
+    const page = if (renderer.sprites) |*sprites| sprites else return;
+    const favicons = &gui.chrome.favicons;
+    favicons.refresh(gui.app.gpa, page);
+    const want = favicons.next(gui.app.model.workspaceListSnapshot()) orelse return;
+    if (try client.controllers.favicons.request(&gui.app, .{ .workspace = want.workspace, .cwd = want.cwd, .cell = @intCast(page.cell) })) {
+        favicons.started(want.workspace);
+    }
 }
 
 fn refreshPointer(gui: *GuiClient) void {
