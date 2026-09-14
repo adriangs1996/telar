@@ -10,7 +10,9 @@ constructing the renderer, through `FontSource`; painting never queries the OS
 for another family. Unsupported graphemes retain the primary replacement glyph.
 
 `FontFace` owns FreeType/HarfBuzz and, when optical thickening is enabled on
-macOS, that face's CoreText rasterizer. `FontSet` owns at most three faces. All
+macOS, that face's CoreText rasterizer. `FontSet` owns at most five faces: the
+three terminal faces plus IBM Plex Sans Regular and SemiBold, which only chrome
+labels request (see [native appearance](native-appearance.md)). All
 faces borrow the same alpha atlas, use the same configured size and synthetic
 bold/italic settings, and are destroyed with it. Hot reload creates a complete
 replacement renderer before swapping resources after GPU consumers finish.
@@ -23,9 +25,10 @@ inside those cells without cropping wider Nerd symbols, including compressed
 spacing. Each fallback grapheme keeps its own cell advance; adjacent icons
 cannot accumulate the fallback font's wider advances.
 
-The bounded shaping cache remembers the chosen face with its glyphs. Glyph
-atlas keys include face identity, glyph index, pixel size, bold and italic, so
-an index shared by two faces cannot select another face's cached bitmap. The
+The bounded shaping cache remembers the requested face, the chosen face and
+the glyphs. Glyph atlas keys include face identity, glyph index, pixel size,
+bold and italic, so an index shared by two faces cannot select another face's
+cached bitmap. The
 existing 1024-square page, failure cache and frame budgets remain unchanged.
 Glyphs are packed once; cached repainting performs no shaping, rasterization
 or adapter allocation. Font-size changes invalidate shaping but preserve the

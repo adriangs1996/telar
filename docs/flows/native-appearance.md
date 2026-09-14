@@ -26,12 +26,24 @@ allocation. Explicit lookup failures abort this GUI startup.
 
 FreeType borrows those bytes until `GlyphAtlas.deinit`; the source is freed
 after the atlas. Collection lookup is bounded to 256 faces on macOS.
-`text/FontSet` owns at most three `FontFace` instances: the configured font,
-embedded JetBrains Mono when it differs, and embedded Symbols Nerd Font Mono.
+`text/FontSet` owns at most five `FontFace` instances: the configured font,
+embedded JetBrains Mono when it differs, embedded Symbols Nerd Font Mono, and
+embedded IBM Plex Sans Regular and SemiBold for native chrome labels.
 The configured font wins whenever it covers a whole grapheme. Missing graphemes
 try the embedded text font and then the symbol font; unknown characters retain
 the configured font's replacement glyph. No font lookup or disk read occurs
 while preparing cells.
+
+Terminal cells never select the sans faces. A chrome `Label` with
+`face = .sans` shapes as one HarfBuzz run in Plex Sans with its own
+proportional advances and bearings; `bold` selects the SemiBold file rather
+than synthetic emboldening. Graphemes Plex lacks, such as Nerd icons, follow
+the terminal chain and are fitted to one cell as before. `Canvas.measure`
+returns a label's pixel width so callers clip or right-align whole tokens;
+`Canvas.text` clips a sans label at the area's pixel edge. Sans labels use the
+terminal's pixel size in this slice. Shaping-cache entries are keyed by the
+requested face as well as the text, so equal words in the two families never
+share glyphs or advances.
 
 The GUI embeds the complete Nerd Symbols font, including supplementary-plane
 icons used by terminal applications. The TUI keeps its small chrome-only subset.
@@ -95,6 +107,14 @@ Padding changes follow `ResizeHostHandler`; neither initial attach nor resize
 counts border pixels as PTY pixels. Retained mesh keys already include the
 resolved rectangle, so moving the origin invalidates exactly that geometry.
 Opacity and blur changes do not invalidate cell meshes or the glyph atlas.
+
+`render/Quad` is an 80-byte `extern struct` of five `vec4` rows: rectangle,
+texture coordinates, straight RGBA fill, shape (corner radius, border width and
+two zero reserved floats) and straight RGBA border color. Both fragment shaders
+resolve radius and border by signed distance in device pixels with one pixel of
+anti-aliasing; a quad with zero radius and zero border takes the previous
+textured path unchanged. `Canvas.fillRounded` and `Canvas.ring` emit one such
+quad each; `Canvas.fill`, `Canvas.border` and glyphs keep zero shape.
 
 `native.Frame` carries straight RGBA background, a numeric blur radius and
 titlebar visibility. These values cross only the in-process native ABI; they
