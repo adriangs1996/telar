@@ -25,6 +25,8 @@ pub const Intent = union(enum) {
     notification_activate: notification_capability.Id,
     notification_dismiss: notification_capability.Id,
     attachment_dismiss: types.Id,
+    /// A pointer press on one visible row of the active list prompt.
+    prompt_row: u16,
 };
 
 pub fn capturesPaneInput(intent: Intent) bool {

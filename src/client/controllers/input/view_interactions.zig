@@ -80,6 +80,7 @@ fn applyIntent(raw_context: *anyopaque, intent: IntentType) !IntentOutcomeType {
         .notification_activate => |id| _ = try notification_flow.activateNow(client, id),
         .notification_dismiss => |id| _ = try notification_flow.dismissNow(client, id),
         .attachment_dismiss => |id| outcome.layout_changed = try attachment_prompts.dismiss(client, id),
+        .prompt_row => |index| try name_prompts.chooseRow(client, index),
     }
 
     return outcome;

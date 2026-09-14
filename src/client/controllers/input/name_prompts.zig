@@ -32,6 +32,9 @@ const NamePromptState = @import("../../model/NamePromptState.zig");
 const EffectsCapture = @import("EffectsCapture.zig");
 const path_completions = @import("path_completions.zig");
 const path_expansion = @import("../../completion/path_expansion.zig");
+const command_palette = @import("../../model/command_palette.zig");
+const CommandResultsType = @import("../../model/CommandResults.zig");
+const actions = @import("actions.zig");
 
 /// Starts workspace creation only when the current client can plan the
 /// request.
@@ -128,6 +131,37 @@ pub fn beginSuggestPalette(client: *Client) bool {
     return use_case.execute(.suggest_palette);
 }
 
+/// Opens the command palette with `prefix` already typed. A `?` palette
+/// starts with a cleared suggestion, like `suggestions.begin`.
+///
+/// ```zig
+/// _ = beginPalette(client, .goto);
+/// ```
+pub fn beginPalette(client: *Client, prefix: command_palette.Prefix) bool {
+    var use_case = openingHandler(client);
+    if (!use_case.execute(.{ .palette = prefix })) {
+        return false;
+    }
+
+    if (prefix == .suggest) {
+        client.model.suggestion.begin();
+    }
+
+    return true;
+}
+
+/// Chooses one visible list row with the pointer and submits it, exactly as
+/// moving the selection there and pressing Enter would.
+///
+/// ```zig
+/// try chooseRow(client, index);
+/// ```
+pub fn chooseRow(client: *Client, index: u16) !void {
+    client.model.name_prompt.select(index);
+    clampPickerSelection(client);
+    _ = try handleInput(client, .{ .key = .{ .code = .enter } });
+}
+
 /// One semantic host event the prompt can interpret. Pasted text arrives as
 /// bounded slices between the paste markers; the adapter decodes bytes.
 pub const Input = union(enum) {
@@ -191,12 +225,17 @@ fn listSnapshot(client: *Client) ListSnapshot {
         .goto => .{ .kind = .goto },
         .history => .{ .kind = .history },
         .suggest => .{ .kind = .suggest },
+        .palette => switch (prompt.paletteMode()) {
+            .goto => .{ .kind = .goto },
+            .suggest => .{ .kind = .suggest },
+            .actions => .{ .kind = .actions },
+        },
         else => return .{},
     };
 
     snapshot.selection = prompt.selection();
     snapshot.scope = prompt.scope();
-    const text = prompt.field.text();
+    const text = prompt.paletteQuery();
     snapshot.len = @intCast(text.len);
     @memcpy(snapshot.text[0..text.len], text);
     return snapshot;
@@ -223,6 +262,16 @@ fn finishListSubmission(client: *Client, before: ListSnapshot) !void {
             const index = @min(before.selection, @as(u16, results.len) - 1);
             try navigatePickerItem(client, results.slice()[index].item);
         },
+        .actions => {
+            var results: CommandResultsType = .{};
+            command_palette.collect(before.textSlice(), &results);
+            if (results.len == 0) {
+                return;
+            }
+
+            const index = @min(before.selection, @as(u16, results.len) - 1);
+            _ = try actions.apply(client, command_palette.entries[results.slice()[index].index].action);
+        },
     }
 }
 
@@ -245,14 +294,15 @@ fn refreshHistoryQuery(client: *Client, before: ListSnapshot) !void {
 }
 
 /// Drops a landed or pending suggestion once its request text changed, so
-/// the next Enter asks again instead of pasting a stale answer.
+/// the next Enter asks again instead of pasting a stale answer. Entering
+/// the palette's `?` mode from another mode counts as a change.
 fn discardEditedSuggestion(client: *Client, before: ListSnapshot) void {
     const prompt = client.model.name_prompt.currentConst() orelse return;
-    if (prompt.target() != .suggest or before.kind != .suggest) {
+    if (listSnapshot(client).kind != .suggest) {
         return;
     }
 
-    if (std.mem.eql(u8, before.textSlice(), prompt.field.text())) {
+    if (before.kind == .suggest and std.mem.eql(u8, before.textSlice(), prompt.paletteQuery())) {
         return;
     }
 
@@ -268,17 +318,28 @@ fn clampPickerSelection(client: *Client) void {
     }
 
     const count: u16 = switch (prompt.target()) {
-        .goto => blk: {
-            var results: ResultsType = .{};
-            collect_module(pickerSources(client), prompt.field.text(), &results);
-            break :blk results.len;
-        },
+        .goto => pickerCount(client, prompt.field.text()),
         .history => client.model.history_palette.len,
         .suggest => 1,
         .create_workspace => @intCast(client.model.path_completion.entries().len),
+        .palette => switch (prompt.paletteMode()) {
+            .goto => pickerCount(client, prompt.paletteQuery()),
+            .suggest => 1,
+            .actions => blk: {
+                var results: CommandResultsType = .{};
+                command_palette.collect(prompt.paletteQuery(), &results);
+                break :blk results.len;
+            },
+        },
         else => return,
     };
     client.model.name_prompt.constrainSelection(count);
+}
+
+fn pickerCount(client: *Client, query: []const u8) u16 {
+    var results: ResultsType = .{};
+    collect_module(pickerSources(client), query, &results);
+    return results.len;
 }
 
 fn pickerSources(client: *Client) SourcesType {
@@ -360,19 +421,23 @@ fn submit(context: *anyopaque, submission: SubmissionType) !bool {
             client.list_submission_alternate = submission.alternate;
             break :blk true;
         },
-        // Enter asks while no suggestion is ready and the prompt stays
-        // open; once a suggestion landed, Enter closes and pastes it.
-        .suggest => blk: {
-            if (client.model.suggestion.phase == .ready) {
-                break :blk true;
+        .suggest => submitSuggestion(client, submission.name),
+        // The palette closes like the list its prefix selects; `>` closes
+        // only when a catalogue entry matches, so Enter on no match is inert.
+        .palette => blk: {
+            const prompt = client.model.name_prompt.currentConst() orelse break :blk false;
+            switch (prompt.paletteMode()) {
+                .goto => {
+                    client.list_submission_alternate = submission.alternate;
+                    break :blk true;
+                },
+                .suggest => break :blk try submitSuggestion(client, prompt.paletteQuery()),
+                .actions => {
+                    var results: CommandResultsType = .{};
+                    command_palette.collect(prompt.paletteQuery(), &results);
+                    break :blk results.len != 0;
+                },
             }
-
-            if (submission.name.len == 0 or client.model.suggestion.phase == .waiting) {
-                break :blk false;
-            }
-
-            try suggestions.request(client, submission.name);
-            break :blk false;
         },
         .copy_search => blk: {
             const pane_id = client.model.copyModeTarget() orelse break :blk true;
@@ -387,6 +452,21 @@ fn submit(context: *anyopaque, submission: SubmissionType) !bool {
             break :blk true;
         },
     };
+}
+
+/// Enter asks while no suggestion is ready and the prompt stays open; once
+/// a suggestion landed, Enter closes and pastes it.
+fn submitSuggestion(client: *Client, text: []const u8) !bool {
+    if (client.model.suggestion.phase == .ready) {
+        return true;
+    }
+
+    if (text.len == 0 or client.model.suggestion.phase == .waiting) {
+        return false;
+    }
+
+    try suggestions.request(client, text);
+    return false;
 }
 
 /// Expands the typed directory, asks once before creating a missing one and

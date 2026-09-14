@@ -7,6 +7,7 @@ const name_prompt = @import("../../model/name_prompt.zig");
 const ModelType = @import("../../model/Model.zig");
 const NamePromptOpeningTestingModel = @import("NamePromptOpeningTestingModel.zig");
 const GateCapture = @import("GateCapture.zig");
+const command_palette = @import("../../model/command_palette.zig");
 const std = @import("std");
 
 pub const Intent = union(enum) {
@@ -20,6 +21,8 @@ pub const Intent = union(enum) {
     goto_picker,
     history_palette,
     suggest_palette,
+    /// The command palette with its prefix already typed.
+    palette: command_palette.Prefix,
 };
 
 pub fn renameTab(tab_id: TabIdType, label: []const u8) name_prompt.Begin {
@@ -80,6 +83,7 @@ test "OpenNamePromptHandler rejects copy and pane-paste input authority" {
         .goto_picker,
         .history_palette,
         .suggest_palette,
+        .{ .palette = .actions },
     };
 
     var copy = try NamePromptOpeningTestingModel.init();

@@ -69,7 +69,7 @@ pub fn promptKind(prompt: ?*const PromptType) tab_rename_module.Kind {
     const current = prompt orelse return .rename_tab;
 
     return switch (current.target()) {
-        .rename_tab, .goto, .history, .suggest => .rename_tab,
+        .rename_tab, .goto, .history, .suggest, .palette => .rename_tab,
         .create_workspace => .create_workspace,
         .rename_workspace => .rename_workspace,
         .copy_search => |direction| switch (direction) {
@@ -82,7 +82,7 @@ pub fn promptKind(prompt: ?*const PromptType) tab_rename_module.Kind {
 pub fn pickerPrompt(prompt: ?*PromptType) ?*PromptType {
     const current = prompt orelse return null;
     return switch (current.target()) {
-        .goto, .history, .suggest => current,
+        .goto, .history, .suggest, .palette => current,
         else => null,
     };
 }
@@ -90,7 +90,7 @@ pub fn pickerPrompt(prompt: ?*PromptType) ?*PromptType {
 pub fn promptField(prompt: ?*PromptType) ?*tab_rename_module.Field {
     const current = prompt orelse return null;
     return switch (current.target()) {
-        .goto, .history, .suggest => null,
+        .goto, .history, .suggest, .palette => null,
         else => &current.field,
     };
 }
@@ -107,11 +107,11 @@ pub fn renderGotoPicker(context: *ContextType, application: RectType, sources: P
     if (sources.prompt.target() == .suggest) {
         return renderSuggestPalette(context, application, sources);
     }
-    if (sources.prompt.target() != .goto) {
+    if (sources.prompt.target() != .goto and sources.prompt.target() != .palette) {
         return renderHistoryPalette(context, application, sources);
     }
 
-    collect_module(match_sources, sources.prompt.field.text(), &results);
+    collect_module(match_sources, sources.prompt.paletteQuery(), &results);
 
     const total: u16 = results.len;
     const selected: u16 = if (total == 0) 0 else @min(sources.prompt.selection(), total - 1);

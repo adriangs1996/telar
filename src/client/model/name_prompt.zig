@@ -9,6 +9,7 @@ const copy_mode = @import("../input/copy_mode.zig");
 const Submission = @import("Submission.zig");
 const NamePromptState = @import("NamePromptState.zig");
 const WorkspaceForm = @import("WorkspaceForm.zig");
+const command_palette = @import("command_palette.zig");
 const std = @import("std");
 
 pub const Field = GenericField(max_tab_label_bytes_module);
@@ -28,6 +29,9 @@ pub const Target = union(enum) {
     /// Command-suggestion palette; the reply lives in the suggestion model
     /// state and Enter asks or pastes depending on it.
     suggest,
+    /// One field whose first byte selects actions (`>`), the goto picker
+    /// (`@`) or the suggestion engine (`?`); see `command_palette`.
+    palette,
 };
 
 pub const Begin = union(enum) {
@@ -44,6 +48,8 @@ pub const Begin = union(enum) {
     goto_picker,
     history_palette,
     suggest_palette,
+    /// Opens the palette with the prefix already typed.
+    palette: command_palette.Prefix,
 };
 
 pub const HistoryScope = enum(u8) {
@@ -114,7 +120,7 @@ pub const Transition = union(enum) {
 /// The suggestion palette lists one row, so Enter on an empty field can
 /// still paste it.
 pub fn selects(target: Target) bool {
-    return target == .goto or target == .history or target == .suggest;
+    return target == .goto or target == .history or target == .suggest or target == .palette;
 }
 
 test "selection clamping and combined history updates publish exactly one revision" {
@@ -249,6 +255,44 @@ test "the history palette cycles scope with Tab and only there" {
 
     state.begin(.{ .rename_tab = .{ .tab_id = @enumFromInt(1), .label = "x" } });
     try std.testing.expect(state.apply(.tab) == .unchanged);
+}
+
+test "the command palette opens prefixed, switches mode by its first byte and submits its query" {
+    var state: NamePromptState = .{};
+    state.begin(.{ .palette = .goto });
+    var prompt = state.currentConst().?;
+    try std.testing.expectEqual(Target.palette, prompt.target());
+    try std.testing.expectEqualStrings("@", prompt.field.text());
+    try std.testing.expectEqual(command_palette.Prefix.goto, prompt.paletteMode());
+    try std.testing.expectEqualStrings("", prompt.paletteQuery());
+
+    try std.testing.expect(state.apply(.move_down) == .changed);
+    try std.testing.expect(state.apply(.{ .insert = "tel" }) == .changed);
+    prompt = state.currentConst().?;
+    try std.testing.expectEqual(@as(u16, 0), prompt.selection());
+    try std.testing.expectEqualStrings("tel", prompt.paletteQuery());
+
+    _ = state.apply(.{ .home = false });
+    try std.testing.expect(state.apply(.delete) == .changed);
+    try std.testing.expectEqual(command_palette.Prefix.goto, state.currentConst().?.paletteMode());
+    try std.testing.expectEqualStrings("tel", state.currentConst().?.paletteQuery());
+    try std.testing.expect(state.apply(.{ .insert = ">" }) == .changed);
+    try std.testing.expectEqual(command_palette.Prefix.actions, state.currentConst().?.paletteMode());
+    try std.testing.expectEqualStrings("tel", state.currentConst().?.paletteQuery());
+    try std.testing.expect(state.apply(.tab) == .unchanged);
+    try std.testing.expect(state.apply(.remove_entry) == .unchanged);
+
+    state.select(3);
+    try std.testing.expectEqual(@as(u16, 3), state.currentConst().?.selection());
+    const submitted = state.apply(.submit).submitted;
+    try std.testing.expectEqualStrings(">tel", submitted.name);
+    try std.testing.expect(state.finish(.palette));
+    try std.testing.expect(!state.active());
+
+    state.begin(.{ .palette = .suggest });
+    try std.testing.expectEqualStrings("?", state.currentConst().?.field.text());
+    try std.testing.expect(state.apply(.submit) == .submitted);
+    try std.testing.expect(state.apply(.cancel) == .cancelled);
 }
 
 test "the suggestion palette submits empty fields and ignores history-only commands" {

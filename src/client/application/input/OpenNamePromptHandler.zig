@@ -59,6 +59,7 @@ pub fn execute(handler: *OpenNamePromptHandler, intent: name_prompt_opening.Inte
         .goto_picker => .goto_picker,
         .history_palette => .history_palette,
         .suggest_palette => .suggest_palette,
+        .palette => |prefix| .{ .palette = prefix },
         .copy_search => unreachable,
     };
 
