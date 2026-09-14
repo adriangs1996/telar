@@ -11,8 +11,10 @@ pub const solid_uv: [4]f32 = .{ 0.5 / 1024.0, 0.5 / 1024.0, 0.5 / 1024.0, 0.5 / 
 /// device pixels. Both zero keeps the plain textured path bit for bit, so a
 /// glyph or a flat fill costs nothing more than before. The band `border`
 /// pixels wide inside the outline takes the border color; the rest of the
-/// shape takes the fill color. Two reserved floats keep the std430 stride of
-/// five `vec4`s; they are always zero.
+/// shape takes the fill color. `texture` selects the sampled page: zero is
+/// the alpha glyph atlas read as coverage, one the premultiplied RGBA sprite
+/// page whose texel is the color. One reserved float keeps the std430 stride
+/// of five `vec4`s; it is always zero.
 pub const Quad = extern struct {
     x: f32,
     y: f32,
@@ -28,8 +30,8 @@ pub const Quad = extern struct {
     a: f32,
     radius: f32 = 0,
     border: f32 = 0,
-    reserved0: f32 = 0,
-    reserved1: f32 = 0,
+    texture: f32 = 0,
+    reserved: f32 = 0,
     border_r: f32 = 0,
     border_g: f32 = 0,
     border_b: f32 = 0,
@@ -39,11 +41,16 @@ pub const Quad = extern struct {
 /// The std430 stride both shaders index the quad buffer with.
 pub const stride: usize = 80;
 
+/// `texture` values both shaders branch on.
+pub const atlas_texture: f32 = 0;
+pub const sprite_texture: f32 = 1;
+
 comptime {
     const std = @import("std");
     std.debug.assert(@sizeOf(Quad) == stride);
     std.debug.assert(@offsetOf(Quad, "u0") == 16);
     std.debug.assert(@offsetOf(Quad, "r") == 32);
     std.debug.assert(@offsetOf(Quad, "radius") == 48);
+    std.debug.assert(@offsetOf(Quad, "texture") == 56);
     std.debug.assert(@offsetOf(Quad, "border_r") == 64);
 }

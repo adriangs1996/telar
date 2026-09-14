@@ -1,5 +1,6 @@
 // The whole contract between Zig and a native backend: a frame is a quad
-// buffer plus one alpha page, and the backend calls back for each paint.
+// buffer, one alpha page and one RGBA sprite page, and the backend calls
+// back for each paint.
 // These mirror `render/Quad.zig`, `native/Frame.zig` and `native/Viewport.zig`
 // field for field.
 #ifndef TELAR_GUI_H
@@ -9,13 +10,14 @@
 #include <stdint.h>
 
 // Five vec4 rows in std430 order: rect, uv, fill color, shape (corner radius,
-// border width, two zero reserved floats) and border color. Radius and border
-// at zero select the plain textured path.
+// border width, texture selector, one zero reserved float) and border color.
+// Radius and border at zero select the plain textured path; texture 0 samples
+// the alpha atlas as coverage, texture 1 the premultiplied RGBA sprite page.
 typedef struct {
   float x, y, width, height;
   float u0, v0, u1, v1;
   float r, g, b, a;
-  float radius, border, reserved0, reserved1;
+  float radius, border, texture, reserved;
   float border_r, border_g, border_b, border_a;
 } telar_gui_quad;
 
@@ -33,6 +35,10 @@ typedef struct {
   const uint8_t *atlas;
   uint32_t atlas_side;
   uint32_t atlas_version;
+  // Premultiplied RGBA8, square; NULL or zero side means no sprites this frame.
+  const uint8_t *sprites;
+  uint32_t sprites_side;
+  uint32_t sprites_version;
   // Straight RGBA; the GPU target stores premultiplied color after blending.
   float background[4];
   uint32_t background_blur;

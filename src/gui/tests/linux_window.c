@@ -6,6 +6,7 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <math.h>
 
@@ -40,7 +41,8 @@ static struct {
     atomic_uint cursor_shape, cursor_observed, cursor_queries;
     atomic_bool requested, closing;
     uint8_t atlas[4];
-    telar_gui_quad quads[4];
+    uint8_t sprites[16];
+    telar_gui_quad quads[5];
 } state;
 
 // Test-only interposition exercises retry paths against the real Vulkan backend.
@@ -150,12 +152,22 @@ static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *
         .x = 40, .y = 140, .width = 200, .height = 100, .u0 = 0, .v0 = 0, .u1 = 1, .v1 = 1, .r = .2f, .g = .4f, .b = .9f, .a = 1, .radius = 8};
     state.quads[3] = (telar_gui_quad){
         .x = 60, .y = 260, .width = 200, .height = 100, .u0 = 0, .v0 = 0, .u1 = 1, .v1 = 1, .radius = 8, .border = 2, .border_r = 1, .border_g = .8f, .border_b = .2f, .border_a = 1};
+    // A 2x2 premultiplied RGBA sprite page changes with the token like the atlas;
+    // the fifth quad selects it through the shape's texture component.
+    const uint8_t sprites[16] = {255, 0, 0, 255, 0, (uint8_t)(token & 1 ? 255 : 64), 0, 255, 0, 0, 255, 255, 128, 128, 128, 128};
+    memcpy(state.sprites, sprites, sizeof sprites);
+    state.quads[4] = (telar_gui_quad){
+        .x = 300, .y = 30, .width = 64, .height = 64, .u0 = 0, .v0 = 0, .u1 = 1, .v1 = 1, .r = 1, .g = 1, .b = 1, .a = 1, .texture = 1};
     *frame = (telar_gui_frame){.token = token,
                                .quads = state.quads,
-                               .quad_count = 4,
+                               .quad_count = 5,
                                .atlas = state.atlas,
                                .atlas_side = 2,
                                .atlas_version = token,
+                               // Frames without sprites keep the previous page bound.
+                               .sprites = token % 4 == 0 ? NULL : state.sprites,
+                               .sprites_side = 2,
+                               .sprites_version = token,
                                .background = {.05f, .08f, .12f, token % 2 ? .5f : 1},
                                .background_blur = token % 3 != 0};
     if (invalid_frame_test) {

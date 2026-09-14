@@ -9,15 +9,25 @@ typedef struct {
     void *mapped;
 } mapped_buffer;
 
+// One sampled square texture with its staging buffer: the R8 glyph atlas at
+// binding 1 and the RGBA8 sprite page at binding 2 share this shape.
+typedef struct {
+    VkImage image;
+    VkDeviceMemory memory;
+    VkImageView view;
+    mapped_buffer staging;
+    VkFormat format;
+    uint32_t bytes_per_texel, binding;
+    uint32_t side, version;
+    bool uploaded;
+} gpu_texture;
+
 struct telar_vulkan_resources {
     const telar_vulkan_device *gpu;
     telar_vulkan_pipeline *pipeline;
-    mapped_buffer quads, staging;
-    VkImage atlas;
-    VkDeviceMemory atlas_memory;
-    VkImageView atlas_view;
-    uint32_t atlas_side, atlas_version;
-    bool atlas_uploaded;
+    mapped_buffer quads;
+    gpu_texture atlas, sprites;
+    bool sprites_bound;
 };
 
 static void destroy_buffer(VkDevice device, mapped_buffer *buffer) {
@@ -79,34 +89,48 @@ static bool ensure_buffer(const telar_vulkan_device *gpu, mapped_buffer *buffer,
     return true;
 }
 
-static void destroy_atlas(telar_vulkan_resources *self) {
+static void destroy_texture(telar_vulkan_resources *self, gpu_texture *texture) {
     VkDevice device = self->gpu->device;
-    if (self->atlas_view) {
-        vkDestroyImageView(device, self->atlas_view, NULL);
+    if (texture->view) {
+        vkDestroyImageView(device, texture->view, NULL);
     }
-    if (self->atlas) {
-        vkDestroyImage(device, self->atlas, NULL);
+    if (texture->image) {
+        vkDestroyImage(device, texture->image, NULL);
     }
-    if (self->atlas_memory) {
-        vkFreeMemory(device, self->atlas_memory, NULL);
+    if (texture->memory) {
+        vkFreeMemory(device, texture->memory, NULL);
     }
-    self->atlas_view = VK_NULL_HANDLE;
-    self->atlas = VK_NULL_HANDLE;
-    self->atlas_memory = VK_NULL_HANDLE;
-    self->atlas_side = 0;
-    self->atlas_uploaded = false;
+    destroy_buffer(device, &texture->staging);
+    texture->view = VK_NULL_HANDLE;
+    texture->image = VK_NULL_HANDLE;
+    texture->memory = VK_NULL_HANDLE;
+    texture->side = 0;
+    texture->uploaded = false;
 }
 
-static bool ensure_atlas(telar_vulkan_resources *self, uint32_t side) {
-    if (self->atlas_side == side) {
+static void bind_texture(telar_vulkan_resources *self, uint32_t binding, VkImageView view, VkSampler sampler) {
+    VkDescriptorImageInfo image = {sampler, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkWriteDescriptorSet write = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = self->pipeline->descriptors,
+        .dstBinding = binding,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .pImageInfo = &image,
+    };
+    vkUpdateDescriptorSets(self->gpu->device, 1, &write, 0, NULL);
+}
+
+static bool ensure_texture(telar_vulkan_resources *self, gpu_texture *texture, uint32_t side) {
+    if (texture->side == side) {
         return true;
     }
-    destroy_atlas(self);
+    destroy_texture(self, texture);
     VkDevice device = self->gpu->device;
     VkImageCreateInfo image = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
-        .format = VK_FORMAT_R8_UNORM,
+        .format = texture->format,
         .extent = {side, side, 1},
         .mipLevels = 1,
         .arrayLayers = 1,
@@ -115,9 +139,9 @@ static bool ensure_atlas(telar_vulkan_resources *self, uint32_t side) {
         .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
-    VK_TRY(vkCreateImage(device, &image, NULL, &self->atlas));
+    VK_TRY(vkCreateImage(device, &image, NULL, &texture->image));
     VkMemoryRequirements requirements;
-    vkGetImageMemoryRequirements(device, self->atlas, &requirements);
+    vkGetImageMemoryRequirements(device, texture->image, &requirements);
     uint32_t type =
         telar_vulkan_memory_type(self->gpu, requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     if (type == UINT32_MAX) {
@@ -131,51 +155,46 @@ static bool ensure_atlas(telar_vulkan_resources *self, uint32_t side) {
         .allocationSize = requirements.size,
         .memoryTypeIndex = type,
     };
-    VK_TRY(vkAllocateMemory(device, &allocate, NULL, &self->atlas_memory));
-    VK_TRY(vkBindImageMemory(device, self->atlas, self->atlas_memory, 0));
+    VK_TRY(vkAllocateMemory(device, &allocate, NULL, &texture->memory));
+    VK_TRY(vkBindImageMemory(device, texture->image, texture->memory, 0));
     VkImageViewCreateInfo view = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = self->atlas,
+        .image = texture->image,
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
-        .format = VK_FORMAT_R8_UNORM,
+        .format = texture->format,
         .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
     };
-    VK_TRY(vkCreateImageView(device, &view, NULL, &self->atlas_view));
-    if (!ensure_buffer(self->gpu, &self->staging,
-                       (buffer_request){(VkDeviceSize)side * side, VK_BUFFER_USAGE_TRANSFER_SRC_BIT})) {
+    VK_TRY(vkCreateImageView(device, &view, NULL, &texture->view));
+    VkDeviceSize bytes = (VkDeviceSize)side * side * texture->bytes_per_texel;
+    if (!ensure_buffer(self->gpu, &texture->staging, (buffer_request){bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT})) {
         return false;
     }
-    VkDescriptorImageInfo binding = {self->pipeline->sampler, self->atlas_view,
-                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkWriteDescriptorSet write = {
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = self->pipeline->descriptors,
-        .dstBinding = 1,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .pImageInfo = &binding,
-    };
-    vkUpdateDescriptorSets(device, 1, &write, 0, NULL);
-    self->atlas_side = side;
+    texture->side = side;
     return true;
 }
 
-static void upload_atlas(telar_vulkan_resources *self, VkCommandBuffer commands, const telar_gui_frame *frame) {
-    if (self->atlas_uploaded && self->atlas_version == frame->atlas_version) {
+typedef struct {
+    const uint8_t *pixels;
+    uint32_t version;
+} texture_source;
+
+static void upload_texture(telar_vulkan_resources *self, VkCommandBuffer commands, gpu_texture *texture,
+                           texture_source source) {
+    if (texture->uploaded && texture->version == source.version) {
         return;
     }
-    memcpy(self->staging.mapped, frame->atlas, (size_t)frame->atlas_side * frame->atlas_side);
+    memcpy(texture->staging.mapped, source.pixels, (size_t)texture->side * texture->side * texture->bytes_per_texel);
     VkImageMemoryBarrier2 barrier = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = self->atlas_uploaded ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_NONE,
-        .srcAccessMask = self->atlas_uploaded ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT : 0,
+        .srcStageMask = texture->uploaded ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_NONE,
+        .srcAccessMask = texture->uploaded ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT : 0,
         .dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
         .dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        .oldLayout = self->atlas_uploaded ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
+        .oldLayout = texture->uploaded ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = self->atlas,
+        .image = texture->image,
         .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
     };
     VkDependencyInfo dependency = {
@@ -186,9 +205,9 @@ static void upload_atlas(telar_vulkan_resources *self, VkCommandBuffer commands,
     vkCmdPipelineBarrier2(commands, &dependency);
     VkBufferImageCopy region = {
         .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-        .imageExtent = {frame->atlas_side, frame->atlas_side, 1},
+        .imageExtent = {texture->side, texture->side, 1},
     };
-    vkCmdCopyBufferToImage(commands, self->staging.handle, self->atlas, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+    vkCmdCopyBufferToImage(commands, texture->staging.handle, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
                            &region);
     barrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
     barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
@@ -197,8 +216,8 @@ static void upload_atlas(telar_vulkan_resources *self, VkCommandBuffer commands,
     barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     vkCmdPipelineBarrier2(commands, &dependency);
-    self->atlas_version = frame->atlas_version;
-    self->atlas_uploaded = true;
+    texture->version = source.version;
+    texture->uploaded = true;
 }
 
 telar_vulkan_resources *telar_vulkan_resources_create(const telar_vulkan_device *gpu, telar_vulkan_pipeline *pipeline) {
@@ -206,6 +225,12 @@ telar_vulkan_resources *telar_vulkan_resources_create(const telar_vulkan_device 
     if (self) {
         self->gpu = gpu;
         self->pipeline = pipeline;
+        self->atlas.format = VK_FORMAT_R8_UNORM;
+        self->atlas.bytes_per_texel = 1;
+        self->atlas.binding = 1;
+        self->sprites.format = VK_FORMAT_R8G8B8A8_UNORM;
+        self->sprites.bytes_per_texel = 4;
+        self->sprites.binding = 2;
     }
     return self;
 }
@@ -218,6 +243,10 @@ bool telar_vulkan_resources_prepare(telar_vulkan_resources *self, VkCommandBuffe
     VkDeviceSize bytes = (VkDeviceSize)frame->quad_count * sizeof(telar_gui_quad);
     if (!frame->quads || !frame->atlas || !frame->atlas_side ||
         frame->atlas_side > self->gpu->limits.maxImageDimension2D || bytes > self->gpu->limits.maxStorageBufferRange) {
+        return false;
+    }
+    bool sprites = frame->sprites && frame->sprites_side;
+    if (sprites && frame->sprites_side > self->gpu->limits.maxImageDimension2D) {
         return false;
     }
     VkBuffer previous = self->quads.handle;
@@ -237,10 +266,30 @@ bool telar_vulkan_resources_prepare(telar_vulkan_resources *self, VkCommandBuffe
         vkUpdateDescriptorSets(self->gpu->device, 1, &write, 0, NULL);
     }
     memcpy(self->quads.mapped, frame->quads, (size_t)bytes);
-    if (!ensure_atlas(self, frame->atlas_side)) {
+    uint32_t atlas_side = self->atlas.side;
+    if (!ensure_texture(self, &self->atlas, frame->atlas_side)) {
         return false;
     }
-    upload_atlas(self, commands, frame);
+    bool rebind_atlas = atlas_side != self->atlas.side;
+    if (rebind_atlas) {
+        bind_texture(self, self->atlas.binding, self->atlas.view, self->pipeline->sampler);
+    }
+    upload_texture(self, commands, &self->atlas, (texture_source){frame->atlas, frame->atlas_version});
+    if (sprites) {
+        uint32_t sprites_side = self->sprites.side;
+        if (!ensure_texture(self, &self->sprites, frame->sprites_side)) {
+            return false;
+        }
+        if (sprites_side != self->sprites.side || !self->sprites_bound) {
+            bind_texture(self, self->sprites.binding, self->sprites.view, self->pipeline->sprite_sampler);
+            self->sprites_bound = true;
+        }
+        upload_texture(self, commands, &self->sprites, (texture_source){frame->sprites, frame->sprites_version});
+    } else if (!self->sprites_bound || rebind_atlas) {
+        // Every declared binding is written before the draw; the atlas stands
+        // in for the sprite page until one arrives and no quad selects it.
+        bind_texture(self, self->sprites.binding, self->atlas.view, self->pipeline->sprite_sampler);
+    }
     return true;
 }
 
@@ -248,8 +297,8 @@ void telar_vulkan_resources_destroy(telar_vulkan_resources *self) {
     if (!self) {
         return;
     }
-    destroy_atlas(self);
+    destroy_texture(self, &self->atlas);
+    destroy_texture(self, &self->sprites);
     destroy_buffer(self->gpu->device, &self->quads);
-    destroy_buffer(self->gpu->device, &self->staging);
     free(self);
 }

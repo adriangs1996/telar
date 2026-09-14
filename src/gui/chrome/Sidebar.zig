@@ -187,6 +187,7 @@ fn paintList(sidebar: *Sidebar, context: *Context, list: SidebarList) !void {
             .agent = agent,
             .geometry = geometry,
             .age_s = agent.statusAgeSeconds() +| (context.now_s -| sidebar.arrived_s),
+            .project_icon = if (context.favicons) |favicons| favicons.sprite(agent.location.workspace) else null,
         };
         const first = canvas.quads.items().len;
         try card.paint(bounds);

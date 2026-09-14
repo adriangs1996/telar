@@ -15,6 +15,7 @@ const PaneDecorations = @import("PaneDecorations.zig");
 const HitState = @import("HitState.zig");
 const HomePrefix = @import("HomePrefix.zig");
 const RingFades = @import("RingFades.zig");
+const Favicons = @import("Favicons.zig");
 const InputEvent = @import("../native/InputEvent.zig").InputEvent;
 const GenericPresentedState = @import("../render/GenericPresentedState.zig").Type;
 const Chrome = @This();
@@ -22,6 +23,7 @@ const Chrome = @This();
 maps: GenericPresentedState(HitState) = .{},
 sidebar: Sidebar = .{},
 rings: RingFades = .{},
+favicons: Favicons = .{},
 home: HomePrefix = .{},
 hovered: ?Action = null,
 gesture_button: ?u8 = null,
@@ -39,7 +41,7 @@ pub fn paint(chrome: *Chrome, canvas: *Canvas, projection: client.Projection) !v
     try registerPanes(&pending.hits, projection);
     pending.regions = Regions.calculate(projection.host_size.cols, projection.host_size.rows, .{ .visible = projection.sidebar_visible, .preferred_width = projection.sidebar_width });
     pending.bands = Bands.resolve(canvas, pending.regions.workbench);
-    var context: Context = .{ .canvas = canvas, .hits = &pending.hits, .bands = &pending.band_hits, .projection = &projection, .hovered = chrome.hovered, .now_s = chrome.now_s };
+    var context: Context = .{ .canvas = canvas, .hits = &pending.hits, .bands = &pending.band_hits, .projection = &projection, .hovered = chrome.hovered, .now_s = chrome.now_s, .favicons = &chrome.favicons };
     const top_bar: TopBar = .{ .context = &context, .bands = pending.bands, .home = chrome.home.slice(), .sidebar_visible = !pending.regions.sidebar.isEmpty() };
     try top_bar.paint();
     const strip: TabStrip = .{ .context = &context, .bands = pending.bands };

@@ -15,6 +15,7 @@ const Sidebar = @import("../chrome/Sidebar.zig");
 const Level = @import("../chrome/card_degradation.zig").Level;
 const Quad = @import("../render/Quad.zig").Quad;
 const Rect = @import("../render/Rect.zig");
+const sprites = @import("sprites.zig");
 
 test {
     _ = @import("../chrome/age_label.zig");
@@ -103,7 +104,9 @@ test "the selected card is the focused pane's agent and carries the fill and rin
     try fixture.paint(projection);
     const quads = fixture.session.renderer.quads.items();
     try std.testing.expectEqual(@as(usize, 1), roundedCount(quads, CardGeometry.radius, sidebarColumn(&fixture)));
-    try std.testing.expectEqual(@as(usize, entries.len), roundedCount(quads, 4, sidebarColumn(&fixture)));
+    // Five built-in providers draw the sheet mark; the unknown one keeps its chip.
+    try std.testing.expectEqual(@as(usize, 1), roundedCount(quads, 4, sidebarColumn(&fixture)));
+    try std.testing.expectEqual(@as(usize, 5), sprites.spriteCount(quads));
     const selected = ring(quads).?;
     const renderer = &fixture.session.renderer;
     const sidebar = fixture.chrome.presented().regions.sidebar;
@@ -129,7 +132,7 @@ test "card tokens leave from the right as the card narrows" {
     const renderer = &fixture.session.renderer;
     var hits: HitMap = .{};
     var band_hits: BandHitMap = .{};
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome };
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .sprites = &renderer.sprites.? };
     var context: Context = .{ .canvas = &canvas, .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
     const geometry = CardGeometry.derive(renderer.chrome, renderer.metrics);
     const card: AgentCard = .{ .context = &context, .agent = &agents.slice()[4], .geometry = geometry, .age_s = 30 };
@@ -153,7 +156,7 @@ test "card tokens leave from the right as the card narrows" {
         renderer.quads.clear();
         try card.paint(.{ .x = 100, .y = 100, .width = inner + 2 * CardGeometry.padding_x, .height = geometry.height() });
         counts[index] = renderer.quads.items().len;
-        try std.testing.expectEqual(@as(usize, @intFromBool(index < 2)), roundedCount(renderer.quads.items(), 4, null));
+        try std.testing.expectEqual(@as(usize, @intFromBool(index < 2)), sprites.spriteCount(renderer.quads.items()));
     }
 
     try std.testing.expect(counts[0] > counts[1]);

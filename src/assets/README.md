@@ -100,10 +100,13 @@ reproducible with librsvg 2.62.3:
 rsvg-convert -w 256 -h 256 -f png -o Pi.png Pi.svg
 ```
 
-At runtime Telar downsamples the atlas's checked-in 256 px source slots with
-premultiplied-alpha bilinear filtering. It centers the square artwork inside
-slots that match the terminal cell aspect ratio, so a two-column by two-row
-placement never stretches either logo.
+At runtime the TUI downsamples the atlas's checked-in 256 px source slots
+with premultiplied-alpha bilinear filtering. It centers the square artwork
+inside slots that match the terminal cell aspect ratio, so a two-column by
+two-row placement never stretches either logo. The GUI box-filters the same
+three slots into the first cells of its RGBA sprite page
+(`src/gui/image/SpritePage.zig`) at 16 logical pixels for the display scale
+and premultiplies them on upload; the sidebar card samples them linearly.
 
 Official sources and usage terms:
 

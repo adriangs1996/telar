@@ -148,8 +148,14 @@ the provider mark, then the last event; the status glyph always stays. The
 working glyph `◌` pulses through six alpha steps between 1.0 and 0.35 over
 17 animation frames (about 2 s at 120 ms per frame). The selected card is
 the focused pane's agent: `surface0` fill and an inner 1px `surface1` ring.
-The provider mark is a rounded chip with the provider glyph until the atlas
-can hold RGBA artwork. Hits are cell-based: one `focus_agent` target per
+The provider mark of a built-in provider is the official artwork from the
+embedded sheet, one sprite quad of 16 logical pixels sampled from the RGBA
+page beside the glyph atlas; a custom or unknown provider keeps a rounded
+chip with its glyph. The project slot of the first row shows the workspace's
+favicon (`favicon.png`, then `.telar/icon.png` in the workspace root, PNG
+only) once the client's favicon worker has resolved it, else the generic
+glyph. The image never crosses the wire; the GUI reads, decodes and resizes
+it off the interactive path and keeps at most 64 favicons per page. Hits are cell-based: one `focus_agent` target per
 card covering the rows its pixels touch; a boundary row shared by two cards
 belongs to the later one. The wheel scrolls one card pitch. The rightmost
 sidebar column stays the resize border.

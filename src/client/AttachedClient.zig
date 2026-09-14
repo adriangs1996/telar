@@ -48,6 +48,8 @@ const BarCommandRunnerType = @import("bars/BarCommandRunner.zig");
 const PluginWorkerRunnerType = @import("plugins/PluginWorkerRunner.zig");
 const PathCompletionRunnerType = @import("completion/PathCompletionRunner.zig");
 const PathCompletionsStateType = @import("controllers/input/PathCompletionsState.zig");
+const FaviconRunnerType = @import("completion/FaviconRunner.zig");
+const FaviconsStateType = @import("controllers/workspaces/FaviconsState.zig");
 const HostClockType = @import("resources/HostClock.zig");
 const HostInputSourceType = @import("input/HostInputSource.zig");
 const TransportDriverType = @import("connection/TransportDriver.zig");
@@ -94,6 +96,7 @@ sidebar_animation_scheduler: SchedulerType = .{},
 notification_scheduler: SchedulerType = .{},
 bar_updates: BarUpdatesState = .{},
 path_completions: PathCompletionsStateType = .{},
+favicons: FaviconsStateType = .{},
 /// Application key leases, owned by routing rather than by the host reader.
 input_leases: LeasesType = .{},
 /// Host ports, bound by the adapter before the first event.
@@ -112,6 +115,8 @@ timers: HostTimersType = undefined,
 bar_runner: BarCommandRunnerType = undefined,
 plugin_runner: PluginWorkerRunnerType = undefined,
 path_completion_runner: PathCompletionRunnerType = undefined,
+/// Bound only by adapters that draw sprites; unset means no favicon lookups.
+favicon_runner: ?FaviconRunnerType = null,
 clock: HostClockType = undefined,
 host_input_source: HostInputSourceType = undefined,
 transport_driver: TransportDriverType = undefined,

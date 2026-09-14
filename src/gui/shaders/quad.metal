@@ -2,8 +2,8 @@
 
 using namespace metal;
 
-// Mirrors `telar_gui_quad`: rect, uv, fill color, shape (radius, border, 0, 0)
-// and border color.
+// Mirrors `telar_gui_quad`: rect, uv, fill color, shape (radius, border,
+// texture selector, 0) and border color.
 struct Quad {
     float4 rect;
     float4 uv;
@@ -20,6 +20,7 @@ struct Vertex {
     float2 size [[flat]];
     float2 shape [[flat]];
     float4 border_color [[flat]];
+    float texture [[flat]];
 };
 
 // One instanced draw: six vertices per quad, quads read from buffer 0.
@@ -44,6 +45,7 @@ vertex Vertex quad_vertex(uint vid [[vertex_id]], uint iid [[instance_id]], cons
     out.size = q.rect.zw;
     out.shape = q.shape.xy;
     out.border_color = q.border_color;
+    out.texture = q.shape.z;
     return out;
 }
 
@@ -56,7 +58,17 @@ static float rounded_distance(float2 local, float2 size, float radius) {
     return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
 }
 
-fragment float4 quad_fragment(Vertex in [[stage_in]], texture2d<float> atlas [[texture(0)]]) {
+// Texture 0 is the alpha atlas read as coverage; texture 1 the premultiplied
+// RGBA sprite page sampled linearly, divided back to straight alpha for the
+// blend state and multiplied by the tint.
+fragment float4 quad_fragment(Vertex in [[stage_in]], texture2d<float> atlas [[texture(0)]], texture2d<float> sprites [[texture(1)]]) {
+    if (in.texture > 0.5) {
+        constexpr sampler linear(filter::linear, address::clamp_to_edge);
+        float4 texel = sprites.sample(linear, in.uv);
+        float3 straight = texel.a > 0.0 ? texel.rgb / texel.a : float3(0.0);
+        return float4(straight * in.color.rgb, texel.a * in.color.a);
+    }
+
     constexpr sampler nearest(filter::nearest);
     float coverage = atlas.sample(nearest, in.uv).r;
     if (in.shape.x == 0.0 && in.shape.y == 0.0) {

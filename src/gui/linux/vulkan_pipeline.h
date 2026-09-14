@@ -8,7 +8,9 @@ typedef struct {
     VkDescriptorSet descriptors;
     VkPipelineLayout layout;
     VkPipeline pipeline;
+    // Nearest for the alpha atlas, linear for the premultiplied sprite page.
     VkSampler sampler;
+    VkSampler sprite_sampler;
     VkFormat format;
 } telar_vulkan_pipeline;
 

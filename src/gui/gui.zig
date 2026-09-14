@@ -31,6 +31,7 @@ test {
     _ = @import("tests/scene.zig");
     _ = @import("tests/visual_language.zig");
     _ = @import("tests/sidebar_cards.zig");
+    _ = @import("tests/sprites.zig");
     _ = @import("tests/palette.zig");
     _ = @import("tests/visual_chrome.zig");
     _ = @import("tests/chrome_sizes.zig");

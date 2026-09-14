@@ -17,6 +17,8 @@ hovered: ?Action,
 /// Monotonic seconds when this frame was prepared; ages add it to the
 /// runtime's `status_age_s` since the snapshot arrived.
 now_s: u32 = 0,
+/// Placed workspace favicons; `null` in fixtures without a registry.
+favicons: ?*const @import("Favicons.zig") = null,
 
 /// Paints a semantic control and its matching fixed hit target together.
 /// Example: `try context.button(.{ .area = row, .intent = .toggle_sidebar, .text = "telar" });`

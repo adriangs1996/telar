@@ -23,6 +23,7 @@ layout(location = 2) out vec2 out_local;
 layout(location = 3) flat out vec2 out_size;
 layout(location = 4) flat out vec2 out_shape;
 layout(location = 5) flat out vec4 out_border_color;
+layout(location = 6) flat out float out_texture;
 
 void main() {
     Quad quad = quads[gl_InstanceIndex];
@@ -38,4 +39,5 @@ void main() {
     out_size = quad.rect.zw;
     out_shape = quad.shape.xy;
     out_border_color = quad.border_color;
+    out_texture = quad.shape.z;
 }

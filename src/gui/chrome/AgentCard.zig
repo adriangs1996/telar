@@ -13,6 +13,7 @@ const age_label = @import("age_label.zig");
 const status_glyph = @import("status_glyph.zig");
 const card_degradation = @import("card_degradation.zig");
 const Level = card_degradation.Level;
+const Sprite = @import("../image/Sprite.zig");
 const AgentCard = @This();
 
 pub const project_glyph = "\u{f07b}";
@@ -23,9 +24,9 @@ agent: *const client.Agent,
 geometry: CardGeometry,
 /// Seconds the status has held, including the time since the snapshot arrived.
 age_s: u32,
-/// Atlas index of the workspace favicon once a later slice resolves it;
-/// `null` draws `project_glyph`.
-project_icon: ?u16 = null,
+/// The workspace favicon in the sprite page once the favicon worker has
+/// resolved it; `null` draws `project_glyph`.
+project_icon: ?Sprite = null,
 
 /// Paints the card inside `bounds`. Selected means the focused pane is this
 /// agent's pane; hover comes from the chrome's pointer state.
@@ -61,10 +62,10 @@ pub fn level(card: AgentCard, width: f32) !Level {
     const canvas = card.context.canvas;
     return card_degradation.resolve(.{
         .available = width,
-        .workspace = card.geometry.glyph_width + 4 + try canvas.measure(.{ .text = card.agent.workspaceLabel(), .face = .sans, .size = .small }),
+        .workspace = card.projectSlot() + 4 + try canvas.measure(.{ .text = card.agent.workspaceLabel(), .face = .sans, .size = .small }),
         .age = try canvas.measure(.{ .text = age_label.format(card.age_s, &age_buffer), .face = .sans, .size = .small }),
         .status = try card.statusWidth(),
-        .mark = CardGeometry.mark_size + CardGeometry.gap,
+        .mark = card.markSide() + CardGeometry.gap,
         .gap = CardGeometry.gap,
     });
 }
@@ -93,12 +94,18 @@ fn paintProject(card: AgentCard, row: Rect, tokens: Level) !void {
         age_width += CardGeometry.gap;
     }
 
-    // `project_icon` is reserved for the favicon atlas; the generic glyph
+    // The favicon is one sprite quad in a square slot; the generic glyph
     // takes one monospace cell so the label start never depends on shaping.
-    const glyph_width = card.geometry.glyph_width;
-    _ = try canvas.textAt(.{ .x = row.x, .y = row.y, .width = glyph_width, .height = row.height }, .{ .text = project_glyph, .color = palette.subtext0 });
-    const label_x = row.x + glyph_width + 4;
-    const label_width = @max(0, row.width - glyph_width - 4 - age_width);
+    const slot = card.projectSlot();
+    if (card.project_icon) |icon| {
+        const side = @min(card.markSide(), row.height);
+        try canvas.spriteAt(.{ .x = row.x + (slot - side) / 2, .y = row.y + (row.height - side) / 2, .width = side, .height = side }, icon);
+    } else {
+        _ = try canvas.textAt(.{ .x = row.x, .y = row.y, .width = slot, .height = row.height }, .{ .text = project_glyph, .color = palette.subtext0 });
+    }
+
+    const label_x = row.x + slot + 4;
+    const label_width = @max(0, row.width - slot - 4 - age_width);
     var buffer: [TextFit.max_bytes]u8 = undefined;
     const fit: TextFit = .{ .canvas = canvas, .width = label_width };
     const label: Label = .{ .text = card.agent.workspaceLabel(), .color = palette.subtext0, .face = .sans, .size = .small };
@@ -123,8 +130,9 @@ fn paintEvent(card: AgentCard, row: Rect, tokens: Level) !void {
     const palette = canvas.theme.palette;
     var right = row.x + row.width;
     if (tokens.shows(.mark)) {
-        right -= CardGeometry.mark_size;
-        try card.paintMark(.{ .x = right, .y = row.y + (row.height - CardGeometry.mark_size) / 2, .width = CardGeometry.mark_size, .height = CardGeometry.mark_size });
+        const side = card.markSide();
+        right -= side;
+        try card.paintMark(.{ .x = right, .y = row.y + (row.height - side) / 2, .width = side, .height = side });
         right -= CardGeometry.gap;
     }
 
@@ -161,11 +169,32 @@ fn paintEvent(card: AgentCard, row: Rect, tokens: Level) !void {
     _ = try canvas.textAt(.{ .x = row.x, .y = row.y, .width = event_width, .height = row.height }, fitted);
 }
 
-// The glyph atlas holds alpha only, so the official provider artwork cannot
-// enter it yet; a rounded chip with the provider glyph stands in for the mark.
+// Width of the slot before the workspace name: the favicon square when one
+// is resolved, else one monospace cell for the generic glyph.
+fn projectSlot(card: AgentCard) f32 {
+    if (card.project_icon != null) {
+        return @max(card.geometry.glyph_width, card.markSide());
+    }
+
+    return card.geometry.glyph_width;
+}
+
+// The mark and the favicon are `CardGeometry.mark_size` logical pixels, the
+// size the sprite page's cell is built for at this display scale.
+fn markSide(card: AgentCard) f32 {
+    return @round(card.context.canvas.chrome.px(CardGeometry.mark_size));
+}
+
+// Built-in providers draw their official artwork from the sprite page; a
+// custom or unknown provider keeps a rounded chip with its glyph.
 fn paintMark(card: AgentCard, chip: Rect) !void {
     const canvas = card.context.canvas;
     const palette = canvas.theme.palette;
+    if (canvas.providerMark(card.agent.provider)) |mark| {
+        try canvas.spriteAt(chip, mark);
+        return;
+    }
+
     try canvas.fillRoundedAt(chip, .{ .radius = 4, .color = palette.surface1 });
     const glyph = card.providerGlyph();
     const width: f32 = @floatFromInt(@as(u32, core.measure(glyph)) * canvas.metrics.cell_width);

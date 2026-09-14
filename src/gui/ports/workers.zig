@@ -18,6 +18,11 @@ pub fn pathCompletions(app: *client.AttachedClient) client.PathCompletionRunner 
     return .{ .context = app, .start_fn = startPathCompletion };
 }
 
+/// Example: `app.favicon_runner = workers.favicons(app);`
+pub fn favicons(app: *client.AttachedClient) client.FaviconRunner {
+    return .{ .context = app, .start_fn = startFavicon };
+}
+
 /// Example: `app.plugin_runner = workers.plugins(app);`
 pub fn plugins(app: *client.AttachedClient) client.PluginWorkerRunner {
     return .{ .context = app, .start_fn = startPlugin };
@@ -56,6 +61,11 @@ fn executePlugin(io: std.Io, gpa: std.mem.Allocator, job: client.PluginActionsJo
 fn startPathCompletion(context: *anyopaque, job: client.PathCompletionJob) !void {
     const app: *client.AttachedClient = @ptrCast(@alignCast(context));
     try GuiClient.of(app).driver.inbox.start(.path_completion, .{ executePathCompletion, .{ app.io, app.gpa, job } });
+}
+
+fn startFavicon(context: *anyopaque, job: client.FaviconJob) !void {
+    const app: *client.AttachedClient = @ptrCast(@alignCast(context));
+    try GuiClient.of(app).driver.inbox.start(.favicon, .{ @import("../image/favicon_worker.zig").execute, .{ app.io, app.gpa, job } });
 }
 
 fn executePathCompletion(io: std.Io, gpa: std.mem.Allocator, job: client.PathCompletionJob) client.PathCompletionCompletion {

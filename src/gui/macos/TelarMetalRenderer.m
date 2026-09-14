@@ -21,8 +21,10 @@ static const unsigned char shader_source[] = {
   uint64_t active_token;
   id<MTLRenderPipelineState> pipeline;
   id<MTLTexture> atlas;
+  id<MTLTexture> sprites;
   id<MTLBuffer> quads;
   uint32_t atlas_version;
+  uint32_t sprites_version;
   BOOL in_flight, stopped;
   TelarMetalCompletion completion;
 }
@@ -62,7 +64,7 @@ static const unsigned char shader_source[] = {
   command_allocator = [device newCommandAllocator];
   MTL4ArgumentTableDescriptor *bindings = [MTL4ArgumentTableDescriptor new];
   bindings.maxBufferBindCount = 2;
-  bindings.maxTextureBindCount = 1;
+  bindings.maxTextureBindCount = 2;
   NSError *error = nil;
   arguments = [device newArgumentTableWithDescriptor:bindings error:&error];
   MTLResidencySetDescriptor *resident = [MTLResidencySetDescriptor new];
@@ -198,6 +200,44 @@ static const unsigned char shader_source[] = {
   return YES;
 }
 
+// The premultiplied RGBA sprite page beside the atlas; uploaded once per
+// version like the atlas, e.g. after a favicon lands. A frame without sprites
+// leaves the previous texture in place.
+- (BOOL)uploadSprites:(const telar_gui_frame *)frame {
+  if (frame->sprites == NULL || frame->sprites_side == 0) {
+    return YES;
+  }
+
+  if (sprites == nil || sprites.width != frame->sprites_side) {
+    MTLTextureDescriptor *descriptor = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+                                     width:frame->sprites_side
+                                    height:frame->sprites_side
+                                 mipmapped:NO];
+
+    descriptor.usage = MTLTextureUsageShaderRead;
+    sprites = [device newTextureWithDescriptor:descriptor];
+    if (sprites == nil) {
+      return NO;
+    }
+
+    sprites_version = 0;
+  }
+
+  if (sprites_version == frame->sprites_version) {
+    return YES;
+  }
+
+  [sprites replaceRegion:MTLRegionMake2D(0, 0, frame->sprites_side,
+                                         frame->sprites_side)
+             mipmapLevel:0
+               withBytes:frame->sprites
+             bytesPerRow:frame->sprites_side * 4];
+
+  sprites_version = frame->sprites_version;
+  return YES;
+}
+
 - (BOOL)renderFrame:(const telar_gui_frame *)frame
            drawable:(id<CAMetalDrawable>)drawable {
   if (stopped || in_flight || drawable == nil) {
@@ -205,7 +245,7 @@ static const unsigned char shader_source[] = {
   }
 
   CGSize size = CGSizeMake(drawable.texture.width, drawable.texture.height);
-  if (![self uploadAtlas:frame]) {
+  if (![self uploadAtlas:frame] || ![self uploadSprites:frame]) {
     return NO;
   }
 
@@ -255,6 +295,10 @@ static const unsigned char shader_source[] = {
     [arguments setAddress:quads.gpuAddress atIndex:0];
     [arguments setAddress:viewport_buffer.gpuAddress atIndex:1];
     [arguments setTexture:atlas.gpuResourceID atIndex:0];
+    // Every argument slot the shader declares is bound; without a sprite
+    // page the atlas stands in and no quad selects it.
+    id<MTLTexture> sprite_page = sprites != nil ? sprites : atlas;
+    [arguments setTexture:sprite_page.gpuResourceID atIndex:1];
     [encoder setArgumentTable:arguments
                      atStages:MTLRenderStageVertex | MTLRenderStageFragment];
 
@@ -278,6 +322,10 @@ static const unsigned char shader_source[] = {
 
   if (atlas != nil) {
     [residency addAllocation:atlas];
+  }
+
+  if (sprites != nil) {
+    [residency addAllocation:sprites];
   }
 
   [residency commit];

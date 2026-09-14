@@ -20,7 +20,8 @@ static VkShaderModule create_shader(VkDevice device, const uint32_t *code, uint3
 bool telar_vulkan_pipeline_init(telar_vulkan_pipeline *self, VkDevice device, VkFormat format) {
     self->device = device;
     self->format = format;
-    VkDescriptorSetLayoutBinding bindings[2] = {
+    // Binding 1 is the alpha atlas, binding 2 the RGBA sprite page.
+    VkDescriptorSetLayoutBinding bindings[3] = {
         {.binding = 0,
          .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
          .descriptorCount = 1,
@@ -29,16 +30,20 @@ bool telar_vulkan_pipeline_init(telar_vulkan_pipeline *self, VkDevice device, Vk
          .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
          .descriptorCount = 1,
          .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT},
+        {.binding = 2,
+         .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+         .descriptorCount = 1,
+         .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT},
     };
     VkDescriptorSetLayoutCreateInfo set_layout = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 2,
+        .bindingCount = 3,
         .pBindings = bindings,
     };
     VK_TRY(vkCreateDescriptorSetLayout(self->device, &set_layout, NULL, &self->set_layout));
     VkDescriptorPoolSize sizes[2] = {
         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2},
     };
     VkDescriptorPoolCreateInfo pool = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -164,10 +169,16 @@ bool telar_vulkan_pipeline_init(telar_vulkan_pipeline *self, VkDevice device, Vk
         .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
     };
     VK_TRY(vkCreateSampler(self->device, &sampler, NULL, &self->sampler));
+    sampler.magFilter = VK_FILTER_LINEAR;
+    sampler.minFilter = VK_FILTER_LINEAR;
+    VK_TRY(vkCreateSampler(self->device, &sampler, NULL, &self->sprite_sampler));
     return true;
 }
 
 void telar_vulkan_pipeline_deinit(telar_vulkan_pipeline *self) {
+    if (self->sprite_sampler) {
+        vkDestroySampler(self->device, self->sprite_sampler, NULL);
+    }
     if (self->sampler) {
         vkDestroySampler(self->device, self->sampler, NULL);
     }
