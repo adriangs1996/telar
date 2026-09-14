@@ -12,6 +12,8 @@ const max_agent_icon_bytes_module = @import("telar-core").max_agent_icon_bytes;
 const AgentAttachmentMarkersType = @import("telar-core").AgentAttachmentMarkers;
 const AgentProviderType = @import("telar-core").AgentProvider;
 const AgentStatusType = @import("telar-core").AgentStatus;
+const AgentBlockedReasonType = @import("telar-core").AgentBlockedReason;
+const max_agent_last_event_bytes_module = @import("telar-core").max_agent_last_event_bytes;
 const generic_display_name_module = @import("telar-core").generic_display_name;
 const AgentInput = @import("AgentInput.zig");
 const snapshot_support = @import("snapshot_support.zig");
@@ -39,6 +41,11 @@ icon_len: u8 = 0,
 attachments: AgentAttachmentMarkersType,
 provider: AgentProviderType,
 status: AgentStatusType,
+blocked_reason: AgentBlockedReasonType,
+last_event: [max_agent_last_event_bytes_module]u8 = undefined,
+last_event_len: u8 = 0,
+/// Seconds the status had held when the runtime encoded this revision.
+status_age_s: u32,
 
 /// Manifest name of the provider ("claude"), or "agent" when the runtime
 /// sent none because the provider is unknown.
@@ -88,6 +95,8 @@ pub fn init(input: AgentInput) !Agent {
         .provider = input.provider,
         .attachments = input.attachments,
         .status = input.status,
+        .blocked_reason = input.blocked_reason,
+        .status_age_s = input.status_age_s,
     };
     agent.workspace_label_len = try snapshot_support.copyLabel(&agent.workspace_label, input.workspace_label);
     agent.tab_label_len = try snapshot_support.copyLabel(&agent.tab_label, input.tab_label);
@@ -96,8 +105,39 @@ pub fn init(input: AgentInput) !Agent {
     agent.provider_name_len = try snapshot_support.copyLabel(&agent.provider_name, input.provider_name);
     agent.display_name_len = try snapshot_support.copyLabel(&agent.display_name, input.display_name);
     agent.icon_len = try snapshot_support.copyLabel(&agent.icon, input.icon);
+    agent.last_event_len = try snapshot_support.copyLabel(&agent.last_event, input.last_event);
 
     return agent;
+}
+
+/// Borrows the last event line: the pending prompt while blocked, the last
+/// tool call while working, a result summary when done. Empty when the
+/// runtime has none.
+///
+/// ```zig
+/// const event = agent.lastEvent();
+/// ```
+pub fn lastEvent(agent: *const Agent) []const u8 {
+    return agent.last_event[0..agent.last_event_len];
+}
+
+/// Why the agent is blocked; `none` for every other status.
+///
+/// ```zig
+/// if (agent.blockedReason() == .permission) drawPermissionIcon();
+/// ```
+pub fn blockedReason(agent: *const Agent) AgentBlockedReasonType {
+    return agent.blocked_reason;
+}
+
+/// Seconds the current status had held when this revision was encoded.
+/// Presentation adds the time elapsed since the snapshot arrived.
+///
+/// ```zig
+/// const age = agent.statusAgeSeconds();
+/// ```
+pub fn statusAgeSeconds(agent: *const Agent) u32 {
+    return agent.status_age_s;
 }
 
 /// Borrows the workspace label owned by this replica entry.
