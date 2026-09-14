@@ -6,6 +6,7 @@
 //! one another. Texel (0, 0) stays opaque white so solid rectangles are
 //! quads too. Configured and fallback faces share the page.
 const std = @import("std");
+const core = @import("telar-core");
 const freetype = @import("freetype");
 const QuadList = @import("../render/QuadList.zig");
 const quad = @import("../render/Quad.zig");
@@ -85,7 +86,7 @@ pub fn init(allocator: std.mem.Allocator, options: AtlasOptions) !GlyphAtlas {
     errdefer _ = freetype.c.FT_Done_FreeType(library);
 
     var fonts = try FontSet.init(library, options, pixels);
-    errdefer fonts.deinit();
+    errdefer fonts.deinit(allocator);
     const shaping_buffer = freetype.c.hb_buffer_create() orelse return error.ShapingBufferInitFailed;
     errdefer freetype.c.hb_buffer_destroy(shaping_buffer);
     var shaping_cache = try ShapingCache.init(allocator);
@@ -109,7 +110,7 @@ pub fn deinit(atlas: *GlyphAtlas) void {
     atlas.shaping_cache.deinit(atlas.allocator);
     atlas.glyphs.deinit(atlas.allocator);
     freetype.c.hb_buffer_destroy(atlas.shaping_buffer);
-    atlas.fonts.deinit();
+    atlas.fonts.deinit(atlas.allocator);
     _ = freetype.c.FT_Done_FreeType(atlas.library);
     atlas.allocator.free(atlas.pixels);
     atlas.* = undefined;
@@ -173,6 +174,7 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
         return error.InvalidUtf8;
     }
 
+    atlas.discoverFallbacks(run);
     var runs: FontRuns = .{ .fonts = &atlas.fonts, .iterator = .{ .bytes = run.text }, .preferred = run.face };
     var advance: f32 = 0;
     while (runs.next()) |part| {
@@ -210,6 +212,7 @@ pub fn measure(atlas: *GlyphAtlas, run: TextRun) !f32 {
         return error.InvalidUtf8;
     }
 
+    atlas.discoverFallbacks(run);
     var runs: FontRuns = .{ .fonts = &atlas.fonts, .iterator = .{ .bytes = run.text }, .preferred = run.face };
     var total: f32 = 0;
     while (runs.next()) |part| {
@@ -222,6 +225,22 @@ pub fn measure(atlas: *GlyphAtlas, run: TextRun) !f32 {
     }
 
     return total;
+}
+
+// A run reaches here only when its shaping result is not cached, so the
+// installed-font lookup and file read happen once per new grapheme and never
+// on a warm repaint. Failures keep the replacement glyph.
+fn discoverFallbacks(atlas: *GlyphAtlas, run: TextRun) void {
+    var iterator: core.GraphemeIterator = .{ .bytes = run.text };
+    while (iterator.next()) |cluster| {
+        if (Braille.parse(cluster.bytes) != null or Box.parse(cluster.bytes) != null) {
+            continue;
+        }
+
+        if (atlas.fonts.source(cluster.bytes, run.face) == .primary) {
+            _ = atlas.fonts.discover(atlas.allocator, cluster.bytes);
+        }
+    }
 }
 
 fn shapingKey(text: []const u8, run: TextRun) ShapingKey {

@@ -26,13 +26,41 @@ allocation. Explicit lookup failures abort this GUI startup.
 
 FreeType borrows those bytes until `GlyphAtlas.deinit`; the source is freed
 after the atlas. Collection lookup is bounded to 256 faces on macOS.
-`text/FontSet` owns at most five `FontFace` instances: the configured font,
-embedded JetBrains Mono when it differs, embedded Symbols Nerd Font Mono, and
-embedded IBM Plex Sans Regular and SemiBold for native chrome labels.
-The configured font wins whenever it covers a whole grapheme. Missing graphemes
-try the embedded text font and then the symbol font; unknown characters retain
-the configured font's replacement glyph. No font lookup or disk read occurs
-while preparing cells.
+`text/FontSet` owns at most five embedded or configured `FontFace` instances:
+the configured font, embedded JetBrains Mono when it differs, embedded Symbols
+Nerd Font Mono, and embedded IBM Plex Sans Regular and SemiBold for native
+chrome labels, plus a `FallbackPool` of at most eight installed faces
+discovered at runtime. The configured font wins whenever it covers a whole
+grapheme. Missing graphemes try the embedded text font, the symbol font and
+then the discovered faces in discovery order; unknown characters retain the
+configured font's replacement glyph.
+
+Discovery is automatic and monochrome. When a run's shaping result is not
+cached, `GlyphAtlas.discoverFallbacks` walks its graphemes once and, for each
+one no resident face covers, asks the `native/font.h` port which installed
+face covers it: `CTFontCreateForString` over Menlo and then every descriptor
+whose character set covers the text on macOS, an `FcCharSet` pattern through
+`FcFontSort` on Linux, monospace candidates first. The port skips color faces
+(sbix, CBDT, COLR; Apple Color Emoji), bitmap-only faces, Apple's LastResort
+and files over 64 MiB, and `FontFace.monochrome` rejects the same after
+loading. A hit reads the file once (the same 64 MiB bound and `FT_Size`
+handling as the configured face) into one pool slot keyed by file, index and
+PostScript name, so one installed file serves every grapheme it covers. A
+miss, an unusable file or a full pool is remembered in `GraphemeMisses`, a
+256-entry direct-mapped negative cache, so each grapheme costs one native
+lookup. The pool never evicts: a shaped run cached against slot N means the
+same face until a font reload rebuilds the set, its atlas and both caches.
+
+This is cold-path work only: a warm repaint hits the shaping cache before
+discovery runs, and warm tests prove no lookup, shaping, rasterization or
+allocation after the first sighting. The cost of a first sighting is one
+CoreText or Fontconfig query (tens of milliseconds the first time CoreText
+enumerates descriptors) plus one file read of at most 64 MiB, on the same
+path that already rasterizes the new glyph. Discovered ink is fitted into
+the cell like the embedded fallbacks; the configured font keeps cell
+dimensions and baseline. Color emoji remain a gap: the alpha page cannot
+hold them, so a grapheme only color faces cover keeps the replacement glyph.
+An atlas opened without an `Io` (unit tests) never discovers.
 
 Terminal cells never select the sans faces. A chrome `Label` with
 `face = .sans` shapes as one HarfBuzz run in Plex Sans with its own
@@ -69,8 +97,8 @@ checksum and licenses. No font installation or extra Lua setting is required.
 
 `FontRuns` selects faces at grapheme boundaries, keeping combining marks with
 their base. Shaping-cache entries retain the face identity, and atlas keys combine
-that identity with glyph index, size and style. Equal glyph indices in two fonts
-cannot alias. All faces share the existing alpha page. Fallback quads fit the
+that identity with glyph index, size and style. Equal glyph indices in two fonts,
+including two discovered pool slots, cannot alias. All faces share the existing alpha page. Fallback quads fit the
 primary grid; the configured font continues to determine cell dimensions and
 baseline. Font reload replaces the set together with its atlas and caches.
 
@@ -334,6 +362,12 @@ config, font resources, cursor clock and rendering contracts.
 
 ## Verification and lifecycle
 
+- `zig build test-gui` (`tests/font_fallback.zig`): U+23F5 resolves to a
+  discovered monochrome face fitted to the cell, a miss is looked up once,
+  eight pool slots refuse a ninth face without evicting, one file serves
+  every grapheme it covers, and the warm terminal and chrome tests repaint
+  a discovered grapheme without lookups or allocation
+  ([validation](../validation/gui-font-fallback/README.md)).
 - `zig build test-client`: defaults, profile inheritance, owned font names,
   strict schema validation and invalid unselected profiles, including window
   effects and finite inset limits.

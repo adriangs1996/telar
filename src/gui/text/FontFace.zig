@@ -168,6 +168,13 @@ fn emptySlot(font: *FontFace) ?*?FontSize {
     return null;
 }
 
+/// True for an outline face without color glyph tables: the only kind the
+/// alpha page can hold. Example: `if (!face.monochrome()) { ... }`
+pub fn monochrome(font: *const FontFace) bool {
+    const flags = font.face.*.face_flags;
+    return flags & freetype.c.FT_FACE_FLAG_SCALABLE != 0 and flags & freetype.c.FT_FACE_FLAG_COLOR == 0;
+}
+
 /// Tests the whole grapheme so combining marks never switch faces mid-cluster.
 /// Example: `if (face.covers("e\u{301}")) { ... }`
 pub fn covers(font: *const FontFace, text: []const u8) bool {

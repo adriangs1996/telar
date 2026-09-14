@@ -169,7 +169,7 @@ test "warm sans labels shape rasterize and allocate nothing" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var canvas = fixture.canvas();
-    const labels = [_][]const u8{ "telar", "fix proxy tests", "hace 3m", "\u{f07b} agents \u{2801}" };
+    const labels = [_][]const u8{ "telar", "fix proxy tests", "hace 3m", "\u{f07b} agents \u{2801}", "\u{23f5}\u{23f5} auto mode on" };
     for (labels) |label| {
         for (0..2) |bold| {
             try canvas.text(.{ .x = 0, .y = 0, .w = 60, .h = 1 }, .{ .text = label, .face = .sans, .bold = bold == 1 });

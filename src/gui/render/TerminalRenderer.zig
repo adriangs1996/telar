@@ -20,6 +20,9 @@ const CursorPaint = @import("CursorPaint.zig");
 const copy_selection = @import("copy_selection.zig");
 
 allocator: std.mem.Allocator,
+/// Reads discovered fallback font files; `configured` sets it, and a
+/// renderer without one never looks for installed faces.
+io: ?std.Io = null,
 config: client.GuiConfig = .{},
 theme: client.TerminalTheme = client.theme_support.default_theme.terminal,
 font: FontSource = .{},
@@ -55,6 +58,7 @@ pub fn init(allocator: std.mem.Allocator) Renderer {
 pub fn configured(allocator: std.mem.Allocator, io: std.Io, options: @import("RendererOptions.zig")) !Renderer {
     var renderer = Renderer.init(allocator);
     errdefer renderer.deinit();
+    renderer.io = io;
     renderer.config = options.config;
     renderer.theme = options.theme;
     renderer.font = try FontSource.load(allocator, io, &options.config.font.family);
@@ -87,7 +91,7 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
 
     if (renderer.atlas == null or renderer.scale != viewport.scale) {
         const pixel_height: u16 = @intFromFloat(@round(renderer.config.font.scaledSize(viewport.scale)));
-        var replacement = try GlyphAtlas.init(renderer.allocator, .{ .font = renderer.font.bytes, .pixel_height = pixel_height, .face_index = renderer.font.match.face_index, .postscript = std.mem.sliceTo(&renderer.font.match.postscript, 0), .thicken = renderer.config.font.thicken, .thicken_strength = renderer.config.font.thicken_strength });
+        var replacement = try GlyphAtlas.init(renderer.allocator, .{ .font = renderer.font.bytes, .pixel_height = pixel_height, .face_index = renderer.font.match.face_index, .postscript = std.mem.sliceTo(&renderer.font.match.postscript, 0), .thicken = renderer.config.font.thicken, .thicken_strength = renderer.config.font.thicken_strength, .io = renderer.io });
         errdefer replacement.deinit();
         try replacement.prepareFallbacks();
         var sprites = try SpritePage.init(renderer.allocator, SpritePage.cellFor(viewport.scale));
