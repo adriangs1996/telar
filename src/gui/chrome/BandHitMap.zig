@@ -1,14 +1,15 @@
 //! Fixed pointer targets for the pixel bands: the sidebar toggle, every
-//! workspace pill and its overflow counter, every tab and the new-tab
-//! control. Cell targets stay in `HitMap`; this table is looked up first
-//! because bands lie outside the grid the cell table addresses.
+//! workspace pill and its overflow counter, every tab, the new-tab control,
+//! one target per visible agent card and the sidebar resize handle. Cell
+//! targets stay in `HitMap`; this table is looked up first because bands lie
+//! outside the grid the cell table addresses.
 const core = @import("telar-core");
 const Action = @import("action.zig").Action;
 const BandHit = @import("BandHit.zig");
 const Bands = @import("Bands.zig");
 const BandHitMap = @This();
 
-pub const capacity = 1 + core.max_workspace_list_entries + 1 + core.max_tabs_per_workspace + 1 + 4;
+pub const capacity = 1 + core.max_workspace_list_entries + 1 + core.max_tabs_per_workspace + 1 + core.max_agent_snapshot_entries + 1 + 4;
 items: [capacity]BandHit = undefined,
 len: usize = 0,
 

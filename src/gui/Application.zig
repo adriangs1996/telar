@@ -31,6 +31,8 @@ pub fn init(params: client.ClientInit) !Application {
         },
     );
     errdefer renderer.deinit();
+    // Before the shared client exists the band follows the launch options.
+    renderer.sidebar_request = .{ .visible = params.options.sidebar_visible, .logical_width = params.options.gui.sidebar.width };
     return .{
         .params = params,
         .driver = try .init(params.io),
@@ -122,7 +124,8 @@ fn prepare(app: *Application, viewport: native.Viewport) !u64 {
         }
     }
 
-    const size = app.renderer.measure(viewport) catch |err| switch (err) {
+    const measured = if (app.gui) |gui| gui.measure(&app.renderer, viewport) else app.renderer.measure(viewport);
+    const size = measured catch |err| switch (err) {
         error.InvalidTerminalSize => return 0,
         else => return err,
     };
@@ -133,6 +136,7 @@ fn prepare(app: *Application, viewport: native.Viewport) !u64 {
         params.window_height_px = @as(u32, size.rows) * size.cell_height_px;
         app.gui = try GuiClient.init(params, &app.driver);
         app.gui.?.chrome.home.set(app.home);
+        app.gui.?.sidebar.observe(app.renderer.sidebar);
         try app.gui.?.start(.{
             .foreground = params.options.theme.terminal.foreground,
             .background = params.options.theme.terminal.background,

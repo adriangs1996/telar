@@ -6,6 +6,8 @@ const host_ports = @import("host_ports.zig");
 const NativeLoop = @import("NativeLoop.zig");
 const NativeInput = @import("NativeInput.zig");
 const Regions = @import("chrome/Regions.zig");
+const Renderer = @import("render/TerminalRenderer.zig");
+const native = @import("native/native.zig");
 const selection = @import("render/copy_selection.zig");
 const GuiClient = @This();
 
@@ -17,6 +19,8 @@ focused: bool = true,
 region: client.Region,
 theme: client.ColorTheme,
 chrome: @import("chrome/Chrome.zig") = .{},
+/// The sidebar band width preference; the shared model keeps only visibility.
+sidebar: @import("SidebarPreference.zig") = .{},
 overlays: @import("overlays/Overlays.zig") = .{},
 lifecycle: client.PresentationLifecycleState = .{},
 graphics_store: @import("graphics_delivery.zig").Store,
@@ -43,6 +47,7 @@ pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
     gui.region = .{ .area = .{}, .revision = 0 };
     gui.resizeRegion(params.host_size.cols, params.host_size.rows);
     gui.chrome = .{};
+    gui.sidebar = .init(params.options.gui.sidebar.width);
     gui.overlays = .{ .router = &gui.input.router };
     gui.lifecycle = .{};
     gui.graphics_store = .init(params.gpa);
@@ -177,13 +182,37 @@ pub fn cursorTarget(gui: *const GuiClient) @import("CursorTarget.zig") {
     return .{};
 }
 
+/// The workbench owns the whole measured grid: the sidebar is a pixel band
+/// the renderer already took off the window, not a column of this grid.
+/// Example: `gui.resizeRegion(size.cols, size.rows);`
 pub fn resizeRegion(gui: *GuiClient, cols: u16, rows: u16) void {
-    const regions = Regions.calculate(cols, rows, .{ .visible = gui.app.model.sidebarVisible(), .preferred_width = gui.app.model.sidebarWidth() });
+    const regions = Regions.calculate(cols, rows);
     if (std.meta.eql(gui.region.area, regions.workbench)) {
         return;
     }
 
     gui.region = .{ .area = regions.workbench, .revision = gui.region.revision + 1 };
+}
+
+/// Measures the window with the shared sidebar visibility and this window's
+/// width preference, then retains the band the renderer resolved so the
+/// next keyboard step or drag clamps to it. The caller still negotiates the
+/// PTY with `resize`.
+/// Example: `const size = try gui.measure(&renderer, viewport);`
+pub fn measure(gui: *GuiClient, renderer: *Renderer, viewport: native.Viewport) !core.TerminalSize {
+    renderer.sidebar_request = gui.sidebar.request(gui.app.model.sidebarVisible());
+    const size = try renderer.measure(viewport);
+    gui.sidebar.observe(renderer.sidebar);
+    return size;
+}
+
+/// Applies a dragged or stepped sidebar width: the preference changes and
+/// the next preparation measures the grid again.
+/// Example: `gui.adoptSidebarWidth(command.sidebar_width.?);`
+pub fn adoptSidebarWidth(gui: *GuiClient, width: u32) void {
+    if (gui.sidebar.drag(width)) {
+        gui.chrome.invalidate();
+    }
 }
 
 /// Publishes exact font metrics and lets shared geometry negotiate the PTY.

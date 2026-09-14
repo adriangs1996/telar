@@ -19,14 +19,23 @@ pub fn key(handler: *Handler, value: client.Key) !void {
     _ = try client.controllers.key_routing.apply(handler.app, .{ .key = value });
 }
 
-/// The goto and suggest keys open the native palette already prefixed;
-/// every other action keeps the shared routing. Copy mode retires first,
-/// as the shared native action policy does.
+/// The goto and suggest keys open the native palette already prefixed and
+/// a sidebar resize moves this window's pixel preference instead of the
+/// shared column width; every other action keeps the shared routing. Copy
+/// mode retires first, as the shared native action policy does.
 /// Example: `const control = try handler.action(.new_tab);`
 pub fn action(handler: *Handler, value: client.Action) !client.Control {
     const prefix: client.command_palette.Prefix = switch (value) {
         .goto_picker => .goto,
         .suggest_command => .suggest,
+        .resize_sidebar => |direction| {
+            const gui = @import("../GuiClient.zig").of(handler.app);
+            if (gui.sidebar.step(direction)) {
+                gui.chrome.invalidate();
+            }
+
+            return .continue_routing;
+        },
         else => return client.controllers.action_routing.apply(handler.app, value),
     };
     if (handler.app.model.copyModeActive()) {

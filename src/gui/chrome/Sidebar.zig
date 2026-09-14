@@ -1,7 +1,7 @@
 //! The agent list: a header with counts and one list of cards ordered by
-//! attention, laid out in device pixels inside the sidebar's cell column.
-//! The sidebar retains only its scroll offset, the order of the last
-//! snapshot and when that snapshot arrived.
+//! attention, laid out in device pixels inside the sidebar band. The
+//! sidebar retains only its scroll offset, the order of the last snapshot
+//! and when that snapshot arrived.
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -15,8 +15,9 @@ const SnapshotMark = @import("SnapshotMark.zig");
 const SlotRow = @import("SlotRow.zig");
 const Sidebar = @This();
 
-/// Rows the footer needs below the header and the list before it is drawn.
-const min_footer_height = 5;
+/// Terminal rows the band needs before the footer row is drawn: the header,
+/// a gap and one card above it.
+const min_footer_rows: f32 = 5;
 
 pub const margin: f32 = 8;
 pub const header_gap: f32 = 6;
@@ -32,62 +33,60 @@ ordered: SnapshotMark = .{},
 /// Monotonic seconds at which the ordered snapshot was first painted.
 arrived_s: u32 = 0,
 
-/// Paints the header, the ordered cards and the resize border; retains only
-/// the local scroll bound and the snapshot order.
-/// Example: `try sidebar.paint(&context, regions.sidebar);`
-pub fn paint(sidebar: *Sidebar, context: *Context, area: core.Rect) !void {
-    if (area.isEmpty()) {
+/// Paints the band, the header, the ordered cards, the footer slot row, the
+/// edge line and the resize handle; retains only the local scroll bound
+/// and the snapshot order. Every target goes to the band hit map.
+/// Example: `try sidebar.paint(&context, bands.sidebar);`
+pub fn paint(sidebar: *Sidebar, context: *Context, area: Rect) !void {
+    if (area.width <= 0 or area.height <= 0) {
         sidebar.maximum_scroll = 0;
         return;
     }
 
     const canvas = context.canvas;
     const palette = canvas.theme.palette;
-    const separator: core.Rect = .{ .x = area.x + area.w - 1, .y = area.y, .w = 1, .h = area.h };
-    // The resize column stays unpainted past the edge line, so the padding
-    // keeps the window's own background and opacity like the workbench.
-    try canvas.fill(.{ .x = area.x, .y = area.y, .w = area.w - 1, .h = area.h }, palette.panel_bg);
-    // The line sits at the left of the resize column so the rest of that
-    // column is padding between the edge and the workbench cells.
-    const edge = canvas.rect(separator);
-    try canvas.fillAt(.{ .x = edge.x, .y = edge.y, .width = 1, .height = edge.height }, palette.surface1);
-    const footer = footerArea(area);
-    if (!footer.isEmpty()) {
+    // The band ends at its edge line; the gap past it keeps the window's own
+    // background and opacity like the workbench.
+    try canvas.fillAt(.{ .x = area.x, .y = area.y, .width = area.width - 1, .height = area.height }, palette.panel_bg);
+    try canvas.fillAt(.{ .x = area.x + area.width - 1, .y = area.y, .width = 1, .height = area.height }, palette.surface1);
+    const footer = footerArea(canvas.metrics, area);
+    if (footer.height > 0) {
         const row: SlotRow = .{ .context = context, .slots = &context.projection.bar_state.layout.sidebar_footer };
-        try row.paint(footer);
+        try row.paintIn(footer);
     }
 
-    const content: core.Rect = .{ .x = area.x, .y = area.y, .w = area.w - 1, .h = area.h - footer.h };
     sidebar.observe(context);
-    if (content.isEmpty()) {
-        sidebar.maximum_scroll = 0;
-        try context.hits.add(.{ .area = separator, .action = .resize_sidebar });
-        return;
-    }
-
     const geometry = CardGeometry.derive(canvas.chrome, canvas.metrics);
-    const bounds = canvas.rect(content);
-    const header: Rect = .{ .x = bounds.x + margin, .y = bounds.y + margin, .width = @max(0, bounds.width - 2 * margin), .height = canvas.chrome.rowHeight(.body) };
-    try paintHeader(context, header);
+    const header: Rect = .{ .x = area.x + margin, .y = area.y + margin, .width = @max(0, area.width - 1 - 2 * margin), .height = canvas.chrome.rowHeight(.body) };
+    const content_bottom = if (footer.height > 0) footer.y - margin else area.y + area.height - margin;
     const list: Rect = .{
         .x = header.x,
         .y = header.y + header.height + header_gap,
         .width = header.width,
-        .height = @max(0, bounds.y + bounds.height - margin - (header.y + header.height + header_gap)),
+        .height = @max(0, content_bottom - (header.y + header.height + header_gap)),
     };
-    try sidebar.paintList(context, .{ .cells = content, .bounds = list, .geometry = geometry });
-    try context.hits.add(.{ .area = separator, .action = .resize_sidebar });
-}
-
-/// The one-row footer at the bottom of the sidebar, left of the resize handle.
-/// Empty while the sidebar is too short to keep a header and a card visible.
-/// Example: `const footer = Sidebar.footerArea(regions.sidebar);`
-pub fn footerArea(area: core.Rect) core.Rect {
-    if (area.h < min_footer_height or area.w < 4) {
-        return .{};
+    if (header.width <= 0 or list.height <= 0) {
+        sidebar.maximum_scroll = 0;
+    } else {
+        try paintHeader(context, header);
+        try sidebar.paintList(context, .{ .bounds = list, .geometry = geometry });
     }
 
-    return .{ .x = area.x, .y = area.y + area.h - 1, .w = area.w - 1, .h = 1 };
+    try context.bands.add(.{ .area = canvas.sidebar.handle(area), .action = .resize_sidebar });
+}
+
+/// The footer row at the bottom of the band, left of the edge line: one
+/// terminal row tall, so the Lua slots paint in cells lent to it. Empty
+/// while the band is too short to keep a header and a card above it.
+/// Example: `const footer = Sidebar.footerArea(canvas.metrics, bands.sidebar);`
+pub fn footerArea(metrics: @import("../TerminalMetrics.zig"), area: Rect) Rect {
+    const row: f32 = @floatFromInt(metrics.cell_height);
+    const cell: f32 = @floatFromInt(metrics.cell_width);
+    if (area.height < min_footer_rows * row or area.width - 1 - 2 * margin < 3 * cell) {
+        return .{ .x = area.x, .y = area.y, .width = 0, .height = 0 };
+    }
+
+    return .{ .x = area.x + margin, .y = area.y + area.height - margin - row, .width = area.width - 1 - 2 * margin, .height = row };
 }
 
 /// Scrolls by one card without a model mutation.
@@ -197,7 +196,7 @@ fn paintList(sidebar: *Sidebar, context: *Context, list: SidebarList) !void {
         const first = canvas.quads.items().len;
         try card.paint(bounds);
         canvas.quads.clipFrom(first, list.bounds);
-        try context.hits.add(.{ .area = list.hitCells(canvas, bounds), .action = card.action() });
+        try context.bands.add(.{ .area = list.hitArea(bounds), .action = card.action() });
     }
 
     if (sidebar.maximum_scroll != 0) {

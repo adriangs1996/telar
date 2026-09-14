@@ -26,6 +26,8 @@ theme: client.ColorTheme,
 chrome: ChromeMetrics = .{},
 /// Whole window in device pixels; the bands span it, the grid sits inside.
 viewport: [2]u32 = .{ 0, 0 },
+/// The sidebar band the renderer took off the left of the grid.
+sidebar: @import("SidebarBand.zig") = .{},
 /// The RGBA sprite page of the renderer; `null` while a fixture has none,
 /// in which case `spriteAt` draws nothing and `providerMark` finds nothing.
 sprites: ?*const SpritePage = null,
@@ -40,7 +42,7 @@ pub fn rect(canvas: Canvas, area: core.Rect) Rect {
 /// `.default` color is the window background, which the clear color already
 /// provides at the configured opacity, so it paints nothing; overlays that
 /// must cover pane content resolve it first with `opaque`.
-/// Example: `try canvas.fill(regions.sidebar, canvas.theme.palette.panel_bg);`
+/// Example: `try canvas.fill(regions.workbench, canvas.theme.palette.panel_bg);`
 pub fn fill(canvas: *Canvas, area: core.Rect, ink_color: core.Color) !void {
     if (area.isEmpty()) {
         return;

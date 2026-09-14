@@ -126,6 +126,9 @@ pub fn apply(reload: *Reload, gui: *GuiClient, renderer: *Renderer) !bool {
         renderer.config = config.?;
         renderer.theme = theme.?;
         reload.current = config.?;
+        if (gui.sidebar.reload(config.?.sidebar.width)) {
+            gui.chrome.invalidate();
+        }
     } else if (reload.prepared) |replacement| {
         std.debug.assert(reload.retired == null);
         reload.retired = replacement;
