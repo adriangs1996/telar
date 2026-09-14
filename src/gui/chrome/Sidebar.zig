@@ -45,8 +45,10 @@ pub fn paint(sidebar: *Sidebar, context: *Context, area: core.Rect) !void {
     const palette = canvas.theme.palette;
     try canvas.fill(area, palette.panel_bg);
     const separator: core.Rect = .{ .x = area.x + area.w - 1, .y = area.y, .w = 1, .h = area.h };
+    // The line sits at the left of the resize column so the rest of that
+    // column is padding between the edge and the workbench cells.
     const edge = canvas.rect(separator);
-    try canvas.fillAt(.{ .x = edge.x + edge.width - 1, .y = edge.y, .width = 1, .height = edge.height }, palette.surface1);
+    try canvas.fillAt(.{ .x = edge.x, .y = edge.y, .width = 1, .height = edge.height }, palette.surface1);
     const footer = footerArea(area);
     if (!footer.isEmpty()) {
         const row: SlotRow = .{ .context = context, .slots = &context.projection.bar_state.layout.sidebar_footer };
