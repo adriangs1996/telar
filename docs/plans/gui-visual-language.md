@@ -7,8 +7,12 @@ studied: T3 Code, cmux, herdr, Zed, Warp 2.0, Conductor, Ghostty, Claude Code
 Desktop, Codex app, Cursor. Every claim about telar below was verified in the
 tree at the baseline commit.
 
-Status: open. Implementation on `feat/gui-visual-language`, one worktree and
-branch per slice (`feat/gui-vl-*`).
+Status: implemented on `feat/gui-visual-language` (six slices, one branch
+each under `feat/gui-vl-*`), validated in
+`docs/validation/gui-visual-language/final.md`. Open follow-ups: chrome
+text at its own 13px size (the atlas holds one pixel height per face),
+provider marks and favicons as color images (the atlas is alpha only),
+branch for worktree tabs, Wayland pass over the merged branch.
 
 ## Thesis
 
