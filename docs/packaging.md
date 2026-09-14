@@ -10,7 +10,16 @@ terminal is still the terminal client.
 ```sh
 zig build bundle -Doptimize=ReleaseFast   # zig-out/Telar.app
 zig build dmg -Doptimize=ReleaseFast      # zig-out/Telar.dmg
+just install-gui                          # bundle into ~/Applications, telar into ~/.local/bin
 ```
+
+`just install-gui` builds the bundle in ReleaseFast, replaces
+`~/Applications/Telar.app` and links `~/.local/bin/telar` to the bundled
+executable through `telar cli install`; both directories are recipe
+parameters. On Linux the same recipe runs `zig build --prefix ~/.local` in
+ReleaseFast. A running runtime keeps its old executable until it is
+restarted, and hooks installed with `telar integration install` keep the
+path they were installed with.
 
 The bundle layout:
 

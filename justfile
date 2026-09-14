@@ -12,6 +12,23 @@ build *args:
 release:
     zig build --prefix .zig-out/prod -Doptimize=ReleaseFast
 
+# Build the GUI in ReleaseFast and install it for this user: Telar.app under
+# ~/Applications and `telar` symlinked into ~/.local/bin, so Finder, shells and
+# the agent hooks all find the same executable.
+[macos]
+install-gui apps=(home_directory() / "Applications") bin=(home_directory() / ".local/bin"):
+    zig build bundle -Doptimize=ReleaseFast
+    mkdir -p "{{ apps }}" "{{ bin }}"
+    rm -rf "{{ apps }}/Telar.app"
+    cp -R zig-out/Telar.app "{{ apps }}/Telar.app"
+    "{{ apps }}/Telar.app/Contents/Resources/bin/telar" cli install --dir "{{ bin }}"
+
+# Build the GUI in ReleaseFast and install it for this user: `bin/telar`, the
+# desktop entry and the icon under the prefix.
+[linux]
+install-gui prefix=(home_directory() / ".local"):
+    zig build --prefix "{{ prefix }}" -Doptimize=ReleaseFast
+
 # Stop only the development runtime.
 stop:
     TELAR_SOCKET="{{ dev_runtime_dir }}/runtime.sock" zig build run -- server stop
