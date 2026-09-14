@@ -1,0 +1,386 @@
+{
+  "status": "passed",
+  "error": null,
+  "state": "/tmp/telar-gui-multiplexer-b1a134e0e976c4d5866bf99b",
+  "steps": [
+    "initial prompt and configured name prompts",
+    "sidebar keyboard and pointer toggle/resize",
+    "horizontal/vertical splits, directional focus, resize and pane fullscreen",
+    "tab creation, rename, positions, next/previous and reordering",
+    "workspace creation/rename, goto targets, pane close and tab close",
+    "detach/reattach preserves five shell PIDs, pane generations, tabs, workspaces and split sizes",
+    "Vulkan core and synchronization validation clean"
+  ],
+  "pointer": "sidebar drag passed through the QEMU virtio-tablet",
+  "records": {
+    "initial": {
+      "pane": 1,
+      "generation": 1,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 394130,
+      "rows": 38,
+      "cols": 86
+    },
+    "sidebar-hidden": {
+      "pane": 1,
+      "generation": 1,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 394130,
+      "rows": 38,
+      "cols": 128
+    },
+    "sidebar-visible": {
+      "pane": 1,
+      "generation": 1,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 394130,
+      "rows": 38,
+      "cols": 86
+    },
+    "sidebar-wider": {
+      "pane": 1,
+      "generation": 1,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 394130,
+      "rows": 38,
+      "cols": 80
+    },
+    "sidebar-restored": {
+      "pane": 1,
+      "generation": 1,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 394130,
+      "rows": 38,
+      "cols": 86
+    },
+    "sidebar-dragged": {
+      "pane": 1,
+      "generation": 1,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 394130,
+      "rows": 38,
+      "cols": 83
+    },
+    "sidebar-drag-restored": {
+      "pane": 1,
+      "generation": 1,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 394130,
+      "rows": 38,
+      "cols": 86
+    },
+    "right-pane": {
+      "pane": 2,
+      "generation": 2,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 399174,
+      "rows": 36,
+      "cols": 41
+    },
+    "focus-left": {
+      "pane": 1,
+      "generation": 1,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 394130,
+      "rows": 36,
+      "cols": 40
+    },
+    "focus-right": {
+      "pane": 2,
+      "generation": 2,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 399174,
+      "rows": 36,
+      "cols": 41
+    },
+    "bottom-pane": {
+      "pane": 3,
+      "generation": 3,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 400497,
+      "rows": 17,
+      "cols": 41
+    },
+    "focus-up": {
+      "pane": 2,
+      "generation": 2,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 399174,
+      "rows": 16,
+      "cols": 41
+    },
+    "focus-down": {
+      "pane": 3,
+      "generation": 3,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 400497,
+      "rows": 17,
+      "cols": 41
+    },
+    "pane-resized": {
+      "pane": 3,
+      "generation": 3,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 400497,
+      "rows": 23,
+      "cols": 41
+    },
+    "pane-fullscreen": {
+      "pane": 3,
+      "generation": 3,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 400497,
+      "rows": 36,
+      "cols": 84
+    },
+    "pane-unfullscreen": {
+      "pane": 3,
+      "generation": 3,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 400497,
+      "rows": 23,
+      "cols": 41
+    },
+    "second-tab": {
+      "pane": 4,
+      "generation": 4,
+      "workspace": 1,
+      "tab": 2,
+      "pid": 403421,
+      "rows": 38,
+      "cols": 86
+    },
+    "tab-one": {
+      "pane": 3,
+      "generation": 3,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 400497,
+      "rows": 23,
+      "cols": 41
+    },
+    "tab-next": {
+      "pane": 4,
+      "generation": 4,
+      "workspace": 1,
+      "tab": 2,
+      "pid": 403421,
+      "rows": 38,
+      "cols": 86
+    },
+    "tab-previous": {
+      "pane": 3,
+      "generation": 3,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 400497,
+      "rows": 23,
+      "cols": 41
+    },
+    "tab-two": {
+      "pane": 4,
+      "generation": 4,
+      "workspace": 1,
+      "tab": 2,
+      "pid": 403421,
+      "rows": 38,
+      "cols": 86
+    },
+    "tab-moved-left": {
+      "pane": 3,
+      "generation": 3,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 400497,
+      "rows": 23,
+      "cols": 41
+    },
+    "tab-moved-selection": {
+      "pane": 4,
+      "generation": 4,
+      "workspace": 1,
+      "tab": 2,
+      "pid": 403421,
+      "rows": 38,
+      "cols": 86
+    },
+    "tab-move-restored": {
+      "pane": 3,
+      "generation": 3,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 400497,
+      "rows": 23,
+      "cols": 41
+    },
+    "new-workspace": {
+      "pane": 5,
+      "generation": 5,
+      "workspace": 2,
+      "tab": 3,
+      "pid": 408020,
+      "rows": 38,
+      "cols": 86
+    },
+    "workspace-home": {
+      "pane": 3,
+      "generation": 3,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 400497,
+      "rows": 23,
+      "cols": 41
+    },
+    "workspace-renamed": {
+      "pane": 5,
+      "generation": 5,
+      "workspace": 2,
+      "tab": 3,
+      "pid": 408020,
+      "rows": 38,
+      "cols": 86
+    },
+    "goto-renamed-tab": {
+      "pane": 4,
+      "generation": 4,
+      "workspace": 1,
+      "tab": 2,
+      "pid": 403421,
+      "rows": 38,
+      "cols": 86
+    },
+    "temporary-pane": {
+      "pane": 6,
+      "generation": 6,
+      "workspace": 1,
+      "tab": 2,
+      "pid": 411477,
+      "rows": 36,
+      "cols": 41
+    },
+    "close-pane": {
+      "pane": 4,
+      "generation": 4,
+      "workspace": 1,
+      "tab": 2,
+      "pid": 403421,
+      "rows": 38,
+      "cols": 86
+    },
+    "temporary-tab": {
+      "pane": 7,
+      "generation": 7,
+      "workspace": 1,
+      "tab": 4,
+      "pid": 412360,
+      "rows": 38,
+      "cols": 86
+    },
+    "close-tab": {
+      "pane": 4,
+      "generation": 4,
+      "workspace": 1,
+      "tab": 2,
+      "pid": 403421,
+      "rows": 38,
+      "cols": 86
+    },
+    "goto-main-tab": {
+      "pane": 3,
+      "generation": 3,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 400497,
+      "rows": 23,
+      "cols": 41
+    },
+    "before-bottom": {
+      "pane": 3,
+      "generation": 3,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 400497,
+      "rows": 23,
+      "cols": 41
+    },
+    "before-top": {
+      "pane": 2,
+      "generation": 2,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 399174,
+      "rows": 10,
+      "cols": 41
+    },
+    "before-left": {
+      "pane": 1,
+      "generation": 1,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 394130,
+      "rows": 36,
+      "cols": 40
+    },
+    "reattach-left": {
+      "pane": 1,
+      "generation": 1,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 394130,
+      "rows": 36,
+      "cols": 40
+    },
+    "reattach-top": {
+      "pane": 2,
+      "generation": 2,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 399174,
+      "rows": 10,
+      "cols": 41
+    },
+    "reattach-bottom": {
+      "pane": 3,
+      "generation": 3,
+      "workspace": 1,
+      "tab": 1,
+      "pid": 400497,
+      "rows": 23,
+      "cols": 41
+    },
+    "reattach-tab": {
+      "pane": 4,
+      "generation": 4,
+      "workspace": 1,
+      "tab": 2,
+      "pid": 403421,
+      "rows": 38,
+      "cols": 86
+    },
+    "reattach-workspace": {
+      "pane": 5,
+      "generation": 5,
+      "workspace": 2,
+      "tab": 3,
+      "pid": 408020,
+      "rows": 38,
+      "cols": 86
+    }
+  }
+}

@@ -10,8 +10,11 @@ const FontSet = @This();
 primary: FontFace,
 text: ?FontFace,
 symbols: FontFace,
+sans: FontFace,
+sans_semibold: FontFace,
 
-/// Loads the configured face plus embedded text and symbols, sharing one page.
+/// Loads the configured face plus embedded text, symbols and the two chrome
+/// sans weights, sharing one page.
 /// Example: `var fonts = try FontSet.init(library, options, pixels);`
 pub fn init(library: freetype.c.FT_Library, options: AtlasOptions, pixels: []u8) !FontSet {
     var primary = try FontFace.init(library, options, pixels);
@@ -25,11 +28,19 @@ pub fn init(library: freetype.c.FT_Library, options: AtlasOptions, pixels: []u8)
         face.deinit();
     };
     fallback.font = assets.nerd_symbols;
-    const symbols = try FontFace.init(library, fallback, pixels);
-    return .{ .primary = primary, .text = text, .symbols = symbols };
+    var symbols = try FontFace.init(library, fallback, pixels);
+    errdefer symbols.deinit();
+    fallback.font = assets.plex_sans;
+    var sans = try FontFace.init(library, fallback, pixels);
+    errdefer sans.deinit();
+    fallback.font = assets.plex_sans_semibold;
+    const sans_semibold = try FontFace.init(library, fallback, pixels);
+    return .{ .primary = primary, .text = text, .symbols = symbols, .sans = sans, .sans_semibold = sans_semibold };
 }
 
 pub fn deinit(fonts: *FontSet) void {
+    fonts.sans_semibold.deinit();
+    fonts.sans.deinit();
     fonts.symbols.deinit();
     if (fonts.text) |*face| {
         face.deinit();
@@ -47,17 +58,24 @@ pub fn select(fonts: *FontSet, pixel_height: u16) !void {
     }
 
     try fonts.symbols.select(pixel_height);
+    try fonts.sans.select(pixel_height);
+    try fonts.sans_semibold.select(pixel_height);
 }
 
-/// Preserves the configured face wherever it covers the complete grapheme.
-/// Example: `const id = fonts.source("\u{f07b}");`
-pub fn source(fonts: *const FontSet, text: []const u8) Id {
+/// Prefers the requested face whenever it covers the whole grapheme, then the
+/// terminal chain: configured font, embedded text font, symbols.
+/// Example: `const id = fonts.source("\u{f07b}", .sans);`
+pub fn source(fonts: *const FontSet, text: []const u8, preferred: Id) Id {
+    if (preferred != .primary and fonts.borrow(preferred).covers(text)) {
+        return preferred;
+    }
+
     if (fonts.primary.covers(text)) {
         return .primary;
     }
 
-    if (fonts.text) |*face| {
-        if (face.covers(text)) {
+    if (fonts.text) |*face_value| {
+        if (face_value.covers(text)) {
             return .text;
         }
     }
@@ -70,5 +88,17 @@ pub fn get(fonts: *FontSet, id: Id) *FontFace {
         .primary => &fonts.primary,
         .text => &fonts.text.?,
         .symbols => &fonts.symbols,
+        .sans => &fonts.sans,
+        .sans_semibold => &fonts.sans_semibold,
+    };
+}
+
+fn borrow(fonts: *const FontSet, id: Id) *const FontFace {
+    return switch (id) {
+        .primary => &fonts.primary,
+        .text => &fonts.text.?,
+        .symbols => &fonts.symbols,
+        .sans => &fonts.sans,
+        .sans_semibold => &fonts.sans_semibold,
     };
 }

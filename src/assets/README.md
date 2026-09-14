@@ -47,6 +47,22 @@ SOURCE_DATE_EPOCH=1787335283 pyftsubset SymbolsNerdFontMono-Regular.ttf \
   --name-languages='*' --notdef-glyph --recommended-glyphs
 ```
 
+`IBMPlexSans-Regular.ttf` (200,500 bytes) and `IBMPlexSans-SemiBold.ttf`
+(202,632 bytes) are the GUI's embedded proportional chrome face. They are the
+static complete TTFs from IBM Plex release
+[`@ibm/plex-sans@1.1.0`](https://github.com/IBM/plex/releases/tag/%40ibm%2Fplex-sans%401.1.0),
+downloaded on 2026-09-14 from
+`https://github.com/IBM/plex/releases/download/%40ibm%2Fplex-sans%401.1.0/ibm-plex-sans.zip`
+(SHA-256 `fb365d910566e6d199cc2c15579a7dd9a267128e18431a394ed81f1970c69200`)
+as `ibm-plex-sans/fonts/complete/ttf/IBMPlexSans-Regular.ttf` and
+`IBMPlexSans-SemiBold.ttf` without modification. Their SHA-256 are
+`975dcda37d80f038dcd143c22e33ca2d97a0cc5a929aace1c749153b0fe1afa5` and
+`a20caf8286023a6a7a85e40b1d2a4ae9fc3e3b1f9eda8f4c542dd4986af67bb1`.
+The fonts are distributed under the SIL Open Font License 1.1 with Reserved
+Font Name "Plex"; the release's `LICENSE.txt` is copied verbatim as
+`IBMPlexSans-OFL.txt`. Only native chrome labels use these faces; terminal
+cells never select them.
+
 `provider-marks-768x256.rgba` is the reproducible KGP provider atlas. Its three
 256 x 256 RGBA slots contain official PNG assets in Claude, Codex, Pi order.
 The atlas SHA-256 is

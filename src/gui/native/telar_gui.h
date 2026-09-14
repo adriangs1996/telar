@@ -8,10 +8,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Five vec4 rows in std430 order: rect, uv, fill color, shape (corner radius,
+// border width, two zero reserved floats) and border color. Radius and border
+// at zero select the plain textured path.
 typedef struct {
   float x, y, width, height;
   float u0, v0, u1, v1;
   float r, g, b, a;
+  float radius, border, reserved0, reserved1;
+  float border_r, border_g, border_b, border_a;
 } telar_gui_quad;
 
 typedef struct {

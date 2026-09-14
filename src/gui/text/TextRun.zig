@@ -14,3 +14,6 @@ cell_bounds: ?@import("../render/Rect.zig") = null,
 
 bold: bool = false,
 italic: bool = false,
+/// The face to shape with; graphemes it lacks fall back through the terminal
+/// chain. Terminal cells keep `.primary`.
+face: @import("font_id.zig").Id = .primary,

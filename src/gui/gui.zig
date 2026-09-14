@@ -29,6 +29,7 @@ test {
     _ = @import("tests/composition_budget.zig");
     _ = @import("tests/overlays.zig");
     _ = @import("tests/scene.zig");
+    _ = @import("tests/visual_language.zig");
     _ = @import("TerminalMetrics.zig");
     _ = @import("NativeInput.zig");
     _ = @import("CursorClock.zig");

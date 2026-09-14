@@ -52,11 +52,19 @@ Dynamic rendering uses `vkCmdBeginRendering` with the acquired image view;
 there are no `VkRenderPass` or `VkFramebuffer` objects. See the Khronos
 [dynamic rendering example](https://docs.vulkan.org/samples/latest/samples/extensions/dynamic_rendering/README.html).
 
-Binding 0 is a storage buffer containing 48-byte quads. Binding 1 is the glyph
+Binding 0 is a storage buffer containing 80-byte quads: five std430 `vec4`
+rows for rectangle, texture coordinates, fill color, shape (corner radius,
+border width, two reserved zeros) and border color, checked against
+`telar_gui_quad` by `_Static_assert` in `shaders.c`. Binding 1 is the glyph
 atlas and sampler. An eight-byte vertex push constant holds drawable width and
 height. The shaders use instancing, six vertices per quad, and the same alpha
-blending factors as Metal. Surface selection uses the core sRGB nonlinear
-color space, preferring BGRA8 UNORM.
+blending factors as Metal. The vertex stage forwards the pixel position inside
+the quad plus its flat size, shape and border color; the fragment stage keeps
+the textured path for zero shape and otherwise resolves a rounded rectangle
+with an inner border band by signed distance, one pixel of anti-aliasing, and
+straight-alpha compositing of fill and border before the atlas coverage
+multiplies the result. Surface selection uses the core sRGB nonlinear color
+space, preferring BGRA8 UNORM.
 
 ## From damage to delivery
 

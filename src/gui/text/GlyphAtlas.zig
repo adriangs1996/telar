@@ -12,6 +12,7 @@ const ShapedRun = @import("ShapedRun.zig");
 const TextRun = @import("TextRun.zig");
 const GlyphAtlas = @This();
 const ShapingCache = @import("ShapingCache.zig");
+const ShapingKey = @import("ShapingKey.zig");
 const FontSet = @import("FontSet.zig");
 const FontRuns = @import("FontRuns.zig");
 const FontRun = @import("FontRun.zig");
@@ -155,7 +156,7 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
     }
 
     if (run.pixel_height == atlas.pixel_height) {
-        if (atlas.shaping_cache.find(run.text)) |cached| {
+        if (atlas.shaping_cache.find(.{ .text = run.text, .face = run.face })) |cached| {
             return atlas.paint(.{ .run = run, .shaped = cached }, list);
         }
     }
@@ -164,7 +165,7 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
         return error.InvalidUtf8;
     }
 
-    var runs: FontRuns = .{ .fonts = &atlas.fonts, .iterator = .{ .bytes = run.text } };
+    var runs: FontRuns = .{ .fonts = &atlas.fonts, .iterator = .{ .bytes = run.text }, .preferred = run.face };
     var advance: f32 = 0;
     while (runs.next()) |part| {
         var current = run;
@@ -184,6 +185,42 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
     }
 
     return advance;
+}
+
+/// Measures the pen advance `place` would return without appending quads or
+/// rasterizing. Warm labels only read the shaping cache, so callers can clip
+/// or right-align proportional chrome text on the interactive path.
+/// Example: `const width = try atlas.measure(.{ .text = "agents", .x = 0, .y = 0, .color = ink, .pixel_height = 16, .face = .sans });`
+pub fn measure(atlas: *GlyphAtlas, run: TextRun) !f32 {
+    if (run.text.len == 0) {
+        return 0;
+    }
+
+    if (run.pixel_height == atlas.pixel_height) {
+        if (atlas.shaping_cache.find(.{ .text = run.text, .face = run.face })) |cached| {
+            return atlas.penAdvance(.{ .run = run, .shaped = cached });
+        }
+    }
+
+    if (!std.unicode.utf8ValidateSlice(run.text)) {
+        return error.InvalidUtf8;
+    }
+
+    var runs: FontRuns = .{ .fonts = &atlas.fonts, .iterator = .{ .bytes = run.text }, .preferred = run.face };
+    var total: f32 = 0;
+    while (runs.next()) |part| {
+        var current = run;
+        current.text = part.text;
+        total += switch (part.source) {
+            .box, .braille => (try atlas.gridBounds(current)).width,
+            .font => font: {
+                try atlas.select(run.pixel_height);
+                break :font atlas.penAdvance(.{ .run = current, .shaped = try atlas.shape(part) });
+            },
+        };
+    }
+
+    return total;
 }
 
 fn initBoxFallback(atlas: *GlyphAtlas) !void {
@@ -291,15 +328,15 @@ fn paint(atlas: *GlyphAtlas, text: ShapedText, list: *QuadList) !f32 {
     const placement = try atlas.transform(text);
     const origin: i64 = @intFromFloat(@round(run.x * 64));
     var pen_x = origin;
+    const natural = !shaped.font.fitted();
     for (shaped.glyphs, shaped.positions) |info, position| {
         const placed = try atlas.visibleSlot(.{ .font = shaped.font, .index = info.codepoint }, run);
         if (placed.width > 0 and placed.height > 0) {
-            const primary = shaped.font == .primary;
-            const x = round26(pen_x - (if (primary) @as(i64, 0) else origin) + position.x_offset) + placed.left;
+            const x = round26(pen_x - (if (natural) @as(i64, 0) else origin) + position.x_offset) + placed.left;
             const y = -round26(position.y_offset) - placed.top;
             try list.push(.{
-                .x = if (primary) @floatFromInt(x) else run.x + @as(f32, @floatFromInt(x)) * placement.scale + placement.x,
-                .y = if (primary) @round(run.y) + @as(f32, @floatFromInt(y)) else run.y + @as(f32, @floatFromInt(y)) * placement.scale + placement.y,
+                .x = if (natural) @floatFromInt(x) else run.x + @as(f32, @floatFromInt(x)) * placement.scale + placement.x,
+                .y = if (natural) @round(run.y) + @as(f32, @floatFromInt(y)) else run.y + @as(f32, @floatFromInt(y)) * placement.scale + placement.y,
                 .width = @as(f32, @floatFromInt(placed.width)) * placement.scale,
                 .height = @as(f32, @floatFromInt(placed.height)) * placement.scale,
                 .u0 = placed.u0,
@@ -316,12 +353,27 @@ fn paint(atlas: *GlyphAtlas, text: ShapedText, list: *QuadList) !f32 {
         pen_x += position.x_advance;
     }
 
-    return if (shaped.font == .primary) @floatFromInt(round26(pen_x - origin)) else atlas.cellBounds(text).width;
+    return atlas.penAdvance(text);
 }
 
-// Only fallback ink is fitted; the user's configured text keeps its exact metrics.
+// Natural faces advance by their shaped pen; fitted fallback ink advances by
+// the cells it was fitted into.
+fn penAdvance(atlas: *const GlyphAtlas, text: ShapedText) f32 {
+    if (text.shaped.font.fitted()) {
+        return atlas.cellBounds(text).width;
+    }
+
+    var pen_x: i64 = 0;
+    for (text.shaped.positions) |position| {
+        pen_x += position.x_advance;
+    }
+
+    return @floatFromInt(round26(pen_x));
+}
+
+// Only fallback ink is fitted; configured and chrome faces keep their exact metrics.
 fn transform(atlas: *GlyphAtlas, text: ShapedText) !GlyphTransform {
-    if (text.shaped.font == .primary) {
+    if (!text.shaped.font.fitted()) {
         return .{};
     }
 
@@ -489,7 +541,8 @@ fn pack(atlas: *GlyphAtlas, extent: [2]u32) ![2]u32 {
 
 fn shape(atlas: *GlyphAtlas, run: FontRun) !ShapedRun {
     const text = run.text;
-    if (atlas.shaping_cache.find(text)) |cached| {
+    const key: ShapingKey = .{ .text = text, .face = run.preferred };
+    if (atlas.shaping_cache.find(key)) |cached| {
         return cached;
     }
 
@@ -515,7 +568,7 @@ fn shape(atlas: *GlyphAtlas, run: FontRun) !ShapedRun {
     }
 
     const shaped: ShapedRun = .{ .font = run.source.font, .columns = run.columns, .glyphs = glyphs[0..glyph_count], .positions = positions[0..glyph_count] };
-    atlas.shaping_cache.remember(text, shaped);
+    atlas.shaping_cache.remember(key, shaped);
     return shaped;
 }
 
@@ -758,9 +811,9 @@ test "configured non Nerd font falls back across BMP and supplementary icons wit
     for (texts, 0..) |text, index| {
         if (index >= 2) {
             try std.testing.expect(!atlas.fonts.primary.covers(text));
-            try std.testing.expectEqual(Id.symbols, atlas.fonts.source(text));
+            try std.testing.expectEqual(Id.symbols, atlas.fonts.source(text, .primary));
         } else {
-            try std.testing.expectEqual(Id.primary, atlas.fonts.source(text));
+            try std.testing.expectEqual(Id.primary, atlas.fonts.source(text, .primary));
         }
 
         for (0..4) |style| {
@@ -776,7 +829,7 @@ test "configured non Nerd font falls back across BMP and supplementary icons wit
                     try std.testing.expect(item.y + item.height <= 44 - @as(f32, @floatFromInt(atlas.ascender())) + @as(f32, @floatFromInt(atlas.lineHeight())) + 0.001);
                 }
 
-                const shaped = atlas.shaping_cache.find(text).?;
+                const shaped = atlas.shaping_cache.find(.{ .text = text }).?;
                 try std.testing.expectEqual(Id.symbols, shaped.font);
                 for (shaped.glyphs) |glyph| {
                     try std.testing.expect(glyph.codepoint != 0);
@@ -835,7 +888,7 @@ test "equal glyph indices in different faces never alias retained atlas coordina
     var bytes: [4]u8 = undefined;
     const length = try std.unicode.utf8Encode(@intCast(codepoint), &bytes);
     const icon = bytes[0..length];
-    try std.testing.expectEqual(Id.symbols, atlas.fonts.source(icon));
+    try std.testing.expectEqual(Id.symbols, atlas.fonts.source(icon, .primary));
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
     const text: TextRun = .{ .text = &letter, .x = 0, .y = 32, .color = .white, .pixel_height = 32 };
@@ -856,8 +909,8 @@ test "equal glyph indices in different faces never alias retained atlas coordina
 test "fallback text and configured symbols keep one grid and refresh correctly at another size" {
     var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").nerd_symbols, .pixel_height = 16 });
     defer atlas.deinit();
-    try std.testing.expectEqual(Id.text, atlas.fonts.source("A"));
-    try std.testing.expectEqual(Id.primary, atlas.fonts.source("\u{f07b}"));
+    try std.testing.expectEqual(Id.text, atlas.fonts.source("A", .primary));
+    try std.testing.expectEqual(Id.primary, atlas.fonts.source("\u{f07b}", .primary));
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
     const run: TextRun = .{ .text = "A\u{f07b}B", .x = 0, .y = 16, .color = .white, .pixel_height = 16 };
