@@ -18,3 +18,5 @@ proxy_scope: ProxyScopeType = .exact,
 proxy_system_trusted: bool = false,
 home: ?[]const u8,
 client_layouts: ?*StoreType = null,
+/// Wall clock at preparation time; dates agent status ages.
+now_ms: i64 = 0,

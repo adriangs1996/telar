@@ -776,6 +776,7 @@ pub fn pump(application: *Application, session: *Session) !void {
             .proxy_system_trusted = application.proxy_runtime.systemTrusted(),
             .home = application.inherited_environment.getPosix("HOME"),
             .client_layouts = &application.model.client_layouts,
+            .now_ms = std.Io.Timestamp.now(application.io, .real).toMilliseconds(),
         },
         .metrics = &application.metrics,
     });

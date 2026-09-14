@@ -34,7 +34,7 @@ test "runtime model starts with empty configured capability roots" {
     try std.testing.expectEqualDeep(graphics_limits, model.panes.graphics_limits);
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    try std.testing.expectEqual(@as(usize, 0), model.agents.snapshot(&entries).len);
+    try std.testing.expectEqual(@as(usize, 0), model.agents.snapshot(&entries, 0).len);
 }
 
 test "workspace repository releases allocations retained by the runtime model" {

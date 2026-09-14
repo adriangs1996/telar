@@ -32,6 +32,8 @@ pub fn execute(handler: *ReportAgentHandler, command: ReportAgent) ReportAgentRe
     const changed = handler.agents.observeReport(.{
         .identity = identity,
         .state = command.state,
+        .blocked_reason = command.blocked_reason,
+        .event = command.event,
         .observed_at_ms = command.now_ms,
         .observed_at_ns = command.now_ns,
         .session = session,

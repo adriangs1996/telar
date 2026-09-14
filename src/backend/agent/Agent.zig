@@ -32,6 +32,9 @@ const validateSessionTitle_module = @import("telar-core").validateSessionTitle;
 const pane_module = @import("telar-core").pane;
 const ProxyExchange = @import("ProxyExchange.zig");
 const AgentSourceType = @import("telar-core").AgentSource;
+const AgentBlockedReasonType = @import("telar-core").AgentBlockedReason;
+const ReportDetail = @import("ReportDetail.zig");
+const EventLine = @import("EventLine.zig");
 
 const Agent = @This();
 
@@ -69,6 +72,13 @@ screen: ?Evidence = null,
 /// Official lifecycle report; outranks every other evidence while valid.
 report: ?Evidence = null,
 report_settling: bool = false,
+/// Reason and event line of `report`; consulted only while it decides.
+report_detail: ReportDetail = .{},
+/// The line the projection shows; recomputed on every reprojection.
+event: EventLine = .{},
+/// Wall-clock time of the last projected status change; 0 until the first
+/// projection.
+status_changed_at_ms: i64 = 0,
 title: Title = .{},
 /// False from a completed turn until a client acknowledges it; the projection
 /// reports `done` instead of `ready` while unseen.
@@ -228,10 +238,15 @@ pub fn applyReport(agent: *Agent, observation: ReportObservation) bool {
         }
 
         agent.report = null;
+        agent.report_detail = .{};
         return true;
     }
 
     agent.report_settling = observation.state == .settling;
+    agent.report_detail = .{
+        .blocked_reason = observation.blocked_reason,
+        .event = EventLine.init(observation.event),
+    };
     if (providers.of(agent.provider()).ready_prompt_settles_report and observation.state == .working) {
         // A prompt from before this tool or turn cannot become completion
         // evidence later, when the report expires.
@@ -405,28 +420,51 @@ pub fn reproject(agent: *Agent, context: ProjectionContextType) ProjectionResult
         .expires_at_ms = evidence.expires_at_ms,
     };
 
+    agent.projected.blocked_reason = agent.blockedReason(evidence);
+    if (agent.projected.status != previous.status or agent.status_changed_at_ms == 0) {
+        agent.status_changed_at_ms = context.now_ms;
+    }
+
     const title_changed = agent.advanceTitle(evidence.status, context.can_queue_description);
+    const event_changed = agent.refreshEvent(evidence);
 
     if (sameProjection(previous, agent.projected)) {
         agent.projected.sequence = previous.sequence;
-        return if (title_changed) .changed else .unchanged;
+        return if (title_changed or event_changed) .changed else .unchanged;
     }
 
     return .changed;
 }
 
-/// Returns the current immutable client projection, including title storage
-/// borrowed from this aggregate.
+/// Returns the current immutable client projection, including title and
+/// event storage borrowed from this aggregate. `now_ms` measures how long
+/// the projected status has held; the age is never part of the revision.
 ///
 /// ```zig
-/// const entry = agent.snapshot();
+/// const entry = agent.snapshot(now_ms);
 /// ```
-pub fn snapshot(agent: *const Agent) AgentSnapshotEntryType {
+pub fn snapshot(agent: *const Agent, now_ms: i64) AgentSnapshotEntryType {
     var entry = agent.projected;
     entry.session_title = agent.title.slice();
     entry.title_source = agent.title.source;
     entry.title_state = agent.title.state;
+    entry.last_event = agent.event.slice();
+    entry.status_age_s = agent.statusAgeSeconds(now_ms);
     return entry;
+}
+
+/// Seconds the projected status has held at `now_ms`, saturating instead of
+/// wrapping when the clock moves backwards or the agent outlives `u32`.
+///
+/// ```zig
+/// const age = agent.statusAgeSeconds(now_ms);
+/// ```
+pub fn statusAgeSeconds(agent: *const Agent, now_ms: i64) u32 {
+    if (agent.status_changed_at_ms == 0 or now_ms <= agent.status_changed_at_ms) {
+        return 0;
+    }
+
+    return @intCast(@min(@divFloor(now_ms - agent.status_changed_at_ms, 1000), std.math.maxInt(u32)));
 }
 
 /// Returns the last projected status for transition detection.
@@ -669,6 +707,37 @@ fn applyReadyTitle(agent: *Agent, value: []const u8, source: AgentTitleSourceTyp
     agent.title.source = source;
     agent.title.state = .ready;
     agent.title.phase = .finished;
+}
+
+// The hook names the reason when it has one. Without it, a response that
+// closed on a tool request while nothing is in flight is a permission
+// prompt; the remaining blocked states carry no evidence about their cause.
+fn blockedReason(agent: *const Agent, evidence: Evidence) AgentBlockedReasonType {
+    if (agent.projected.status != .blocked) {
+        return .none;
+    }
+
+    if (evidence.source == .lifecycle_report and agent.report_detail.blocked_reason != .none) {
+        return agent.report_detail.blocked_reason;
+    }
+
+    if (agent.proxy.awaitingToolResult()) {
+        return .permission;
+    }
+
+    return .other;
+}
+
+// The event line follows the report that decides the projection; any other
+// evidence carries no line. Returns whether the shown line changed.
+fn refreshEvent(agent: *Agent, evidence: Evidence) bool {
+    const next: EventLine = if (evidence.source == .lifecycle_report) agent.report_detail.event else .{};
+    if (agent.event.eql(&next)) {
+        return false;
+    }
+
+    agent.event = next;
+    return true;
 }
 
 fn provider(agent: *const Agent) AgentProviderType {
