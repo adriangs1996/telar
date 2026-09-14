@@ -23,7 +23,7 @@ pub fn parse(parser: Parser, initial: Config) !Config {
         return parser.invalid("gui.theme moved to theme.terminal; select a preset once with theme = 'vesper'");
     }
 
-    try parser.table("config.gui", &.{ "font", "cursor", "window" });
+    try parser.table("config.gui", &.{ "font", "cursor", "window", "chrome" });
     var result = initial;
     _ = lua.lua_getfield(parser.state, -1, "font");
     if (lua.lua_type(parser.state, -1) != lua.LUA_TNIL) {
@@ -87,6 +87,19 @@ pub fn parse(parser: Parser, initial: Config) !Config {
         result.window = try parser.window(result.window);
     }
     value.pop(parser.state, 1);
+
+    _ = lua.lua_getfield(parser.state, -1, "chrome");
+    if (lua.lua_type(parser.state, -1) != lua.LUA_TNIL) {
+        result.chrome = try parser.chrome(result.chrome);
+    }
+    value.pop(parser.state, 1);
+    return result;
+}
+
+fn chrome(parser: Parser, initial: @import("GuiChrome.zig")) !@import("GuiChrome.zig") {
+    try parser.table("config.gui.chrome", &.{"scale"});
+    var result = initial;
+    result.scale = @floatCast(try parser.number(.{ "scale", 0.5, 2 }, result.scale));
     return result;
 }
 

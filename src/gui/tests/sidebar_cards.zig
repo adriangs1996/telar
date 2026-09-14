@@ -108,8 +108,8 @@ test "the selected card is the focused pane's agent and carries the fill and rin
     const renderer = &fixture.session.renderer;
     const sidebar = fixture.chrome.presented().regions.sidebar;
     const bounds = renderer.metrics.rect(renderer.origin, .{ .x = sidebar.x, .y = sidebar.y, .w = sidebar.w - 1, .h = sidebar.h });
-    const geometry = CardGeometry.derive(renderer.metrics);
-    const list_top = bounds.y + Sidebar.margin + geometry.row_height + Sidebar.header_gap;
+    const geometry = CardGeometry.derive(renderer.chrome, renderer.metrics);
+    const list_top = bounds.y + Sidebar.margin + renderer.chrome.rowHeight(.body) + Sidebar.header_gap;
     try std.testing.expectEqual(list_top + 5 * geometry.pitch(), selected.y);
     try std.testing.expectEqual(geometry.height(), selected.height);
     try std.testing.expectEqual(bounds.x + Sidebar.margin, selected.x);
@@ -129,9 +129,9 @@ test "card tokens leave from the right as the card narrows" {
     const renderer = &fixture.session.renderer;
     var hits: HitMap = .{};
     var band_hits: BandHitMap = .{};
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme };
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome };
     var context: Context = .{ .canvas = &canvas, .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
-    const geometry = CardGeometry.derive(renderer.metrics);
+    const geometry = CardGeometry.derive(renderer.chrome, renderer.metrics);
     const card: AgentCard = .{ .context = &context, .agent = &agents.slice()[4], .geometry = geometry, .age_s = 30 };
     var widths: [4]f32 = undefined;
     var previous: Level = .full;

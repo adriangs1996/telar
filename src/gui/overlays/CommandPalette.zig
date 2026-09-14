@@ -88,7 +88,7 @@ pub fn paint(palette: CommandPalette, hits: *PaletteHits) !core.Rect {
     const start = (selected + 1) -| count;
     hits.first = start;
     if (total == 0) {
-        try canvas.text(rows.row(0).splitLeft(2)[1], .{ .text = "No matches", .color = colors.subtext0, .face = .sans });
+        try canvas.text(rows.row(0).splitLeft(2)[1], .{ .text = "No matches", .color = colors.subtext0, .face = .sans, .size = .body });
     }
 
     for (0..@min(count, total)) |offset| {
@@ -119,7 +119,7 @@ fn paintLegend(palette: CommandPalette, row: core.Rect, mode: client.command_pal
     for (legend, 0..) |token, index| {
         const is_key = index % 2 == 0;
         const active = token.len == 1 and client.command_palette.Prefix.parse(token[0]) == mode;
-        const label: Label = .{ .text = token, .color = if (active) colors.accent else colors.subtext0, .bold = active, .face = if (is_key) .mono else .sans };
+        const label: Label = .{ .text = token, .color = if (active) colors.accent else colors.subtext0, .bold = active, .face = if (is_key) .mono else .sans, .size = .body };
         const used: u16 = @intFromFloat(@ceil(try canvas.measure(label) / cell));
         if (used + 1 > remaining.w) {
             return;
@@ -213,7 +213,7 @@ fn paintRow(palette: CommandPalette, row: core.Rect, content: PaletteRow) !void 
     const body = parts[1].splitLeft(parts[1].w -| (hint_cells + 1))[0];
     const hint_area: core.Rect = .{ .x = row.x + row.w - hint_cells, .y = row.y, .w = hint_cells, .h = 1 };
     try canvas.text(hint_area, .{ .text = content.hint, .color = colors.subtext0 });
-    const primary_label: Label = .{ .text = content.primary, .color = content.color orelse colors.text, .face = if (content.mono) .mono else .sans };
+    const primary_label: Label = .{ .text = content.primary, .color = content.color orelse colors.text, .face = if (content.mono) .mono else .sans, .size = .body };
     try canvas.text(body, primary_label);
     if (content.secondary.len == 0 or body.w < 4) {
         return;
@@ -222,5 +222,5 @@ fn paintRow(palette: CommandPalette, row: core.Rect, content: PaletteRow) !void 
     const cell: f32 = @floatFromInt(@max(canvas.metrics.cell_width, 1));
     const used: u16 = @intFromFloat(@ceil(try canvas.measure(primary_label) / cell));
     const rest = body.splitLeft(used + 1)[1];
-    try canvas.text(rest, .{ .text = content.secondary, .color = colors.subtext0, .face = .sans });
+    try canvas.text(rest, .{ .text = content.secondary, .color = colors.subtext0, .face = .sans, .size = .body });
 }

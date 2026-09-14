@@ -301,6 +301,7 @@
     "config/EffectBatch.zig",
     "config/FontFamily.zig",
     "config/Generation.zig",
+    "config/GuiChrome.zig",
     "config/GuiConfig.zig",
     "config/GuiCursor.zig",
     "config/GuiFont.zig",

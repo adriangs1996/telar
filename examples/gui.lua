@@ -23,6 +23,9 @@ return telar.config({
       blink = true,
       blink_interval_ms = 600,
     },
+    chrome = {
+      scale = 1, -- 0.5..2; chrome text only, the terminal grid stays.
+    },
   },
   profiles = {
     presentation = { gui = { font = { size = 20, line_height = 1.3 } } },

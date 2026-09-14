@@ -1,10 +1,10 @@
-//! Bounded, owned shaping results for one font set at one size. Single-byte
-//! ASCII requested for the primary face has collision-free slots; every
-//! other run hashes into a four-way set, so up to four labels sharing a hash
-//! stay cached together instead of evicting one another every frame. A
-//! fifth replaces the set's oldest. Long runs bypass the cache. Entries
-//! include the requested and the resolved face identity; no paint or GPU
-//! state is held.
+//! Bounded, owned shaping results for one font set at every height it
+//! paints. Single-byte ASCII requested for the primary face has
+//! collision-free slots; every other run hashes into a four-way set, so up
+//! to four labels sharing a hash stay cached together instead of evicting
+//! one another every frame. A fifth replaces the set's oldest. Long runs
+//! bypass the cache. Entries include the requested and the resolved face
+//! identity and the pixel height; no paint or GPU state is held.
 const std = @import("std");
 const Entry = @import("ShapingEntry.zig");
 const ShapedRun = @import("ShapedRun.zig");
@@ -56,11 +56,17 @@ fn slotFor(key: Key) ?Slot {
         return .{ .dedicated = text[0] };
     }
 
-    return .{ .set = std.hash.Wyhash.hash(@intFromEnum(key.face), text) % sets };
+    return .{ .set = std.hash.Wyhash.hash(seed(key), text) % sets };
+}
+
+// The face and the height salt the hash so one word at three chrome sizes
+// spreads over the sets instead of contending for one.
+fn seed(key: Key) u64 {
+    return @as(u64, @intFromEnum(key.face)) | (@as(u64, key.pixel_height) << 8);
 }
 
 fn matches(entry: *const Entry, key: Key) bool {
-    return entry.len == key.text.len and entry.preferred == key.face and std.mem.eql(u8, entry.text[0..entry.len], key.text);
+    return entry.len == key.text.len and entry.preferred == key.face and entry.pixel_height == key.pixel_height and std.mem.eql(u8, entry.text[0..entry.len], key.text);
 }
 
 fn setEntries(cache: *Cache, set: usize) []Entry {
@@ -104,6 +110,7 @@ pub fn remember(cache: *Cache, key: Key, shaped: ShapedRun) void {
     @memcpy(entry.positions[0..shaped.positions.len], shaped.positions);
     entry.font = shaped.font;
     entry.preferred = key.face;
+    entry.pixel_height = key.pixel_height;
     entry.columns = shaped.columns;
     entry.len = @intCast(key.text.len);
     entry.count = @intCast(shaped.glyphs.len);
@@ -178,4 +185,22 @@ test "a repeated run reuses its own way and dedicated ASCII faces and long runs 
     try std.testing.expect(cache.find(.{ .text = "a", .face = .sans }) == null);
     try std.testing.expect(cache.find(.{ .text = "x" ** (Entry.max_bytes + 1), .face = .sans }) == null);
     try std.testing.expectEqual(@as(usize, 384), capacity);
+}
+
+test "one label at three heights keeps three entries and a height mismatch misses" {
+    var cache = try Cache.init(std.testing.allocator);
+    defer cache.deinit(std.testing.allocator);
+    const shaped: ShapedRun = .{ .font = .sans, .columns = 1, .glyphs = &.{}, .positions = &.{} };
+    for ([_]u16{ 15, 13, 11 }) |height| {
+        cache.remember(.{ .text = "agents", .face = .sans, .pixel_height = height }, shaped);
+    }
+
+    for ([_]u16{ 15, 13, 11 }) |height| {
+        try std.testing.expect(cache.find(.{ .text = "agents", .face = .sans, .pixel_height = height }) != null);
+    }
+
+    try std.testing.expect(cache.find(.{ .text = "agents", .face = .sans, .pixel_height = 16 }) == null);
+    cache.remember(.{ .text = "a", .face = .primary, .pixel_height = 16 }, shaped);
+    try std.testing.expect(cache.find(.{ .text = "a", .face = .primary, .pixel_height = 16 }) != null);
+    try std.testing.expect(cache.find(.{ .text = "a", .face = .primary, .pixel_height = 15 }) == null);
 }

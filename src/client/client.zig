@@ -738,6 +738,7 @@ test {
 }
 
 pub const GuiConfig = @import("config/GuiConfig.zig");
+pub const GuiChrome = @import("config/GuiChrome.zig");
 pub const GuiFont = @import("config/GuiFont.zig");
 pub const TerminalTheme = @import("appearance/TerminalTheme.zig");
 pub const GuiCursor = @import("config/GuiCursor.zig");

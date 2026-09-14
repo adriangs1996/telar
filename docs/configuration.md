@@ -246,6 +246,7 @@ gui = {
     thicken_strength = 255,
   },
   cursor = { style = "block", blink = true, blink_interval_ms = 600 },
+  chrome = { scale = 1 },
 }
 ```
 
@@ -265,6 +266,7 @@ gui = {
 | `cursor.style` | `block` | `block`, `bar`, `underline`, or `hollow`. |
 | `cursor.blink` | `true` | Whether the default cursor blinks. An explicit application DECSCUSR style overrides this default; DEC mode 12 can suppress blinking. |
 | `cursor.blink_interval_ms` | `600` | Duration of each visible or hidden phase; integer `100..5000`. |
+| `chrome.scale` | `1` | Multiplies the native chrome text sizes; `0.5..2`, decimals allowed. The chrome derives three sizes from `font.size` times the display scale: title ×1.0, body ×0.87, small ×0.73, rounded to device pixels and never below 6. The bands (top bar 38, tab strip 32, status bar 26, pane header 22 logical pixels) do not scale with it, so the body size is capped at the largest whose line box fits the pane header: at `font.size = 15` the body stops growing at 16 px (scale ≈ 1.3) while title and small keep growing, reaching 30 and 22 px at scale 2. The terminal grid and the PTY size never change with it; a reload applies it without rebuilding the atlas. |
 
 Padding is applied once at the display scale, then rounded to physical pixels.
 It belongs to the window, outside the terminal grid; PTY pixel sizes contain

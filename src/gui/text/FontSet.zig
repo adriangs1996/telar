@@ -49,19 +49,6 @@ pub fn deinit(fonts: *FontSet) void {
     fonts.primary.deinit();
 }
 
-/// Resizes all faces without changing their identities in the glyph cache.
-/// Example: `try fonts.select(28);`
-pub fn select(fonts: *FontSet, pixel_height: u16) !void {
-    try fonts.primary.select(pixel_height);
-    if (fonts.text) |*face| {
-        try face.select(pixel_height);
-    }
-
-    try fonts.symbols.select(pixel_height);
-    try fonts.sans.select(pixel_height);
-    try fonts.sans_semibold.select(pixel_height);
-}
-
 /// Prefers the requested face whenever it covers the whole grapheme, then the
 /// terminal chain: configured font, embedded text font, symbols.
 /// Example: `const id = fonts.source("\u{f07b}", .sans);`

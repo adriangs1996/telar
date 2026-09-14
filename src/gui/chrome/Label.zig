@@ -10,3 +10,5 @@ alpha: f32 = 1,
 underline: bool = false,
 strikethrough: bool = false,
 face: @import("label_face.zig").Face = .mono,
+/// The chrome text size a sans label is set at; monospace labels keep the cell size.
+size: @import("label_size.zig").Size = .terminal,

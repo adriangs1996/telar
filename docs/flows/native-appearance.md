@@ -38,12 +38,29 @@ Terminal cells never select the sans faces. A chrome `Label` with
 `face = .sans` shapes as one HarfBuzz run in Plex Sans with its own
 proportional advances and bearings; `bold` selects the SemiBold file rather
 than synthetic emboldening. Graphemes Plex lacks, such as Nerd icons, follow
-the terminal chain and are fitted to one cell as before. `Canvas.measure`
+the terminal chain and are fitted to one cell of the label's size. `Canvas.measure`
 returns a label's pixel width so callers clip or right-align whole tokens;
-`Canvas.text` clips a sans label at the area's pixel edge. Sans labels use the
-terminal's pixel size in this slice. Shaping-cache entries are keyed by the
-requested face as well as the text, so equal words in the two families never
-share glyphs or advances.
+`Canvas.text` clips a sans label at the area's pixel edge.
+
+A sans label also carries a size role. `ChromeMetrics` derives three pixel
+heights from the scaled terminal size: `title` (x1.0), `body` (x0.87) and
+`small` (x0.73), times `gui.chrome.scale` (`0.5..2`), rounded to device
+pixels and never below 6. The bands keep their heights; `body` is capped at
+the largest em whose Plex line box (1.3 em) fits the pane header, so at
+`font.size = 15` it stops at 16 px while `title` and `small` keep growing.
+`Label.size` defaults to `terminal`; `Canvas.textAt` centres the role's own
+line box (`GlyphAtlas.lineBox`) in the row, and terminal-sized or monospace
+labels keep the cell box so they share a baseline with cells. Cards use
+`small` context and event rows and a `title` SemiBold row; headers, pills,
+tabs, pane headers, palette rows and the new-context form use `body`.
+
+Every `FontFace` keeps one `FT_Size` per pixel height it has painted (at
+most eight) and activates it per run, so terminal cells and the three chrome
+sizes shape and rasterize side by side without clearing anything.
+Shaping-cache entries are keyed by the requested face and the pixel height
+as well as the text, so equal words in two families or at two sizes never
+share glyphs or advances. A chrome scale change re-measures the chrome on
+the next frame and reuses the atlas; the PTY size never changes with it.
 
 The GUI embeds the complete Nerd Symbols font, including supplementary-plane
 icons used by terminal applications. The TUI keeps its small chrome-only subset.

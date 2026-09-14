@@ -225,6 +225,33 @@ test "GUI watches imported modules across atomic saves and retains the selected 
     try std.testing.expectEqual(.cells, session.gui.app.chrome.sidebarRenderer());
 }
 
+test "chrome scale reload enlarges chrome text without resizing the PTY or the atlas" {
+    var fixture = try Fixture.init("return { api_version = 2 }", null);
+    defer fixture.deinit();
+    const session = fixture.session;
+    const reload = &session.driver.configuration;
+    try session.receiveFrame(1);
+    try present(session);
+    const size = session.gui.app.model.hostSize();
+    const resize_count = session.resize_count;
+    const pixels = session.renderer.atlas.?.pixels.ptr;
+    const before = session.renderer.chrome;
+    try fixture.write("config.lua", "return { api_version = 2, gui = { chrome = { scale = 1.5 } } }");
+    try fixture.wait();
+    try std.testing.expect(reload.prepared == null);
+    try std.testing.expect(try reload.apply(session.gui, &session.renderer));
+    try std.testing.expectEqual(@as(f32, 1.5), session.renderer.config.chrome.scale);
+    const measured = try session.renderer.measure(Fixture.viewport);
+    try std.testing.expectEqual(size, measured);
+    try session.gui.resize(measured, session.renderer.theme);
+    try present(session);
+    try std.testing.expectEqual(resize_count, session.resize_count);
+    try std.testing.expectEqual(pixels, session.renderer.atlas.?.pixels.ptr);
+    try std.testing.expectEqual(before.vertical(), session.renderer.chrome.vertical());
+    try std.testing.expect(session.renderer.chrome.title > before.title);
+    try std.testing.expect(session.renderer.chrome.small > before.small);
+}
+
 fn present(session: *Session) !void {
     const token = try session.gui.prepare(&session.renderer);
     try session.gui.complete(token, true);

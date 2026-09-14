@@ -52,6 +52,7 @@ pub fn pill(context: *Context, input: PixelButton) !void {
         .color = if (input.active) palette.surface_dim else if (hovered) palette.text else palette.subtext0,
         .bold = input.bold or input.active,
         .face = input.face,
+        .size = input.size,
     });
     if (input.dot) |color| {
         try context.dot(input.area, color);

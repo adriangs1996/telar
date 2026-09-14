@@ -46,14 +46,14 @@ pub fn paintCreateForm(modal: Modal, projection: client.Projection) !void {
         return;
     }
 
-    try modal.line(0, .{ .text = "Name", .color = palette.subtext0 });
+    try modal.line(0, .{ .text = "Name", .color = palette.subtext0, .face = .sans, .size = .body });
     try modal.editor(content.row(1), EditorView.capture(&prompt.field, content.w, form.focus == .name));
-    try modal.line(2, .{ .text = "Working directory", .color = palette.subtext0 });
+    try modal.line(2, .{ .text = "Working directory", .color = palette.subtext0, .face = .sans, .size = .body });
     try modal.editor(content.row(3), EditorView.capture(&prompt.directory, content.w, form.focus == .directory));
 
     const footer: []const u8 = if (form.confirm_create) create_confirmation else create_hints;
     if (content.h > 5) {
-        try modal.line(content.h - 1, .{ .text = footer, .color = if (form.confirm_create) palette.yellow else palette.subtext0 });
+        try modal.line(content.h - 1, .{ .text = footer, .color = if (form.confirm_create) palette.yellow else palette.subtext0, .face = .sans, .size = .body });
     }
 
     const rows = content.splitTop(@min(content.h, 5))[1].splitBottom(1)[0];

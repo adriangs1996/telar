@@ -131,8 +131,8 @@ test "bold sans selects the SemiBold face without synthetic emboldening" {
     try std.testing.expectEqual(regular.len, semibold.len);
     try std.testing.expect(regular[0].u0 != semibold[0].u0 or regular[0].v0 != semibold[0].v0);
     try std.testing.expect(try canvas.measure(.{ .text = "agents", .face = .sans, .bold = true }) > try canvas.measure(.{ .text = "agents", .face = .sans }));
-    try std.testing.expectEqual(Id.sans, fixture.atlas.shaping_cache.find(.{ .text = "agents", .face = .sans }).?.font);
-    try std.testing.expectEqual(Id.sans_semibold, fixture.atlas.shaping_cache.find(.{ .text = "agents", .face = .sans_semibold }).?.font);
+    try std.testing.expectEqual(Id.sans, fixture.atlas.shaping_cache.find(.{ .text = "agents", .face = .sans, .pixel_height = 16 }).?.font);
+    try std.testing.expectEqual(Id.sans_semibold, fixture.atlas.shaping_cache.find(.{ .text = "agents", .face = .sans_semibold, .pixel_height = 16 }).?.font);
     var keys = fixture.atlas.glyphs.keyIterator();
     while (keys.next()) |key| {
         try std.testing.expectEqual(@as(u64, 0), key.* & 1);

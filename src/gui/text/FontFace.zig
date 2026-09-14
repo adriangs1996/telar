@@ -1,13 +1,30 @@
-//! Owns one FreeType/HarfBuzz face and its optional macOS optical rasterizer.
+//! Owns one FreeType/HarfBuzz face, its optional macOS optical rasterizer
+//! and a bounded set of sized instances, so chrome labels at several
+//! heights and terminal cells share the face without re-running its size
+//! setup or invalidating anything cached per height.
 const std = @import("std");
 const freetype = @import("freetype");
 const AtlasOptions = @import("AtlasOptions.zig");
 const MacRasterizer = @import("MacRasterizer.zig");
+const FontSize = @import("FontSize.zig");
 const FontFace = @This();
+
+extern fn FT_New_Size(freetype.c.FT_Face, *freetype.c.FT_Size) freetype.c.FT_Error;
+extern fn FT_Done_Size(freetype.c.FT_Size) freetype.c.FT_Error;
+extern fn FT_Activate_Size(freetype.c.FT_Size) freetype.c.FT_Error;
+
+/// Pixel heights one face keeps sized at once: the terminal cell, the three
+/// chrome roles and room for a size change in flight. More is an error, not
+/// an eviction, so a sized instance never disappears under a cached run.
+pub const max_sizes = 8;
 
 face: freetype.c.FT_Face,
 shaping_font: *freetype.c.hb_font_t,
 mac_rasterizer: ?MacRasterizer,
+sizes: [max_sizes]?FontSize = @splat(null),
+/// The pixel height FreeType loads and HarfBuzz shapes with; zero before
+/// the first selection.
+active: u16 = 0,
 
 /// Borrows font bytes and the shared alpha page until deinit.
 /// Example: `var face = try FontFace.init(library, options, pixels);`
@@ -75,18 +92,80 @@ pub fn deinit(font: *FontFace) void {
     _ = freetype.c.FT_Done_Face(font.face);
 }
 
-/// Sizes this face while leaving the primary font's grid authoritative.
+/// Makes `pixel_height` the size glyph loading and shaping use. A height
+/// seen before reuses its `FT_Size`; switching between resident heights
+/// only activates one and refreshes the HarfBuzz scale.
 /// Example: `try face.select(28);`
 pub fn select(font: *FontFace, pixel_height: u16) !void {
-    if (freetype.c.FT_Set_Pixel_Sizes(font.face, 0, pixel_height) != 0) {
+    if (font.active == pixel_height) {
+        return;
+    }
+
+    const size = try font.sized(pixel_height);
+    if (FT_Activate_Size(size.handle) != 0) {
         return error.FontSizeFailed;
     }
 
-    if (font.mac_rasterizer) |*rasterizer| {
-        try rasterizer.select(pixel_height);
+    font.active = pixel_height;
+    freetype.c.hb_ft_font_changed(font.shaping_font);
+}
+
+/// The sized instance for `pixel_height`, created on first use without
+/// changing the active size, so metrics of any resident height are
+/// readable while another is selected.
+/// Example: `const line = (try face.sized(13)).lineHeight();`
+pub fn sized(font: *FontFace, pixel_height: u16) !FontSize {
+    if (pixel_height == 0) {
+        return error.InvalidPixelHeight;
     }
 
-    freetype.c.hb_ft_font_changed(font.shaping_font);
+    if (font.find(pixel_height)) |size| {
+        return size;
+    }
+
+    const slot = font.emptySlot() orelse return error.TooManyFontSizes;
+    var handle: freetype.c.FT_Size = undefined;
+    if (FT_New_Size(font.face, &handle) != 0) {
+        return error.FontSizeFailed;
+    }
+    errdefer _ = FT_Done_Size(handle);
+
+    // Pixel sizes apply to the active size; restore the previous one after.
+    if (FT_Activate_Size(handle) != 0 or freetype.c.FT_Set_Pixel_Sizes(font.face, 0, pixel_height) != 0) {
+        return error.FontSizeFailed;
+    }
+
+    if (font.find(font.active)) |previous| {
+        if (FT_Activate_Size(previous.handle) != 0) {
+            return error.FontSizeFailed;
+        }
+    }
+
+    const size: FontSize = .{ .pixel_height = pixel_height, .handle = handle };
+    slot.* = size;
+    return size;
+}
+
+fn find(font: *const FontFace, pixel_height: u16) ?FontSize {
+    for (font.sizes) |slot| {
+        if (slot) |size| {
+            if (size.pixel_height == pixel_height) {
+                return size;
+            }
+        }
+    }
+
+    return null;
+}
+
+fn emptySlot(font: *FontFace) ?*?FontSize {
+    for (&font.sizes) |*slot| {
+        if (slot.* == null) {
+            return slot;
+        }
+    }
+
+    return null;
 }
 
 /// Tests the whole grapheme so combining marks never switch faces mid-cluster.
