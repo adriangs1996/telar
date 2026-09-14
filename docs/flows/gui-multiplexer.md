@@ -14,8 +14,9 @@ rectangle. `render/Scene.zig` borrows that projection for one preparation:
 2. The thread surface paints the shared agent header and composer.
 3. `chrome/Chrome.zig` draws bars, workspaces, tabs, the agent sidebar and pane
    decorations. Each component has its own file and receives a borrowed context.
-4. `overlays/Overlays.zig` paints notifications, prompts, the goto picker,
-   history inspection and command suggestions.
+4. `overlays/Overlays.zig` paints notifications, prompts, the command
+   palette (`CommandPalette.zig`), history inspection and, for prompts opened
+   outside the native key path, the goto picker and command suggestion.
 5. `TerminalRenderer.seal()` publishes the atlas version after every layer has
    finished adding glyphs. The presentation commit records the panes represented
    by terminal and thread surfaces.
@@ -47,14 +48,17 @@ router. Some useful default suffixes are:
 | `n`, `p`, `1`–`9` | Select tab |
 | `,`, `.` | Move tab |
 | `x`, `X` | Close pane or tab |
-| `g`, `/`, `?` | Goto picker, history, command suggestion |
+| `g`, `?` | Command palette prefixed `@` (agents and panes) or `?` (suggest a command); `>` lists actions |
+| `/` | History palette |
 | `[` | Enter copy mode |
 | `a` | Toggle agent thread surface |
 | `d` | Detach client |
 
-Chrome hit maps retain stable pane, tab, workspace and agent identities. Pane
-content clicks focus before shared mouse routing; controls consume their own
-gestures. Right-clicking a tab opens its rename prompt. Sidebar scrolling and
+Chrome hit maps retain stable pane, tab, workspace and agent identities. The
+palette keeps its own bounded hit map of at most 16 visible rows in the
+overlay state; a primary press on a row submits it through the `prompt_row`
+intent. Pane content clicks focus before shared mouse routing; controls
+consume their own gestures. Right-clicking a tab opens its rename prompt. Sidebar scrolling and
 hover advance `chrome.revision`; prefix changes advance the input revision.
 Both enter `PresentationIngress`, so they can request a frame without changing
 terminal cells. Modal gestures cannot fall through to panes behind them.

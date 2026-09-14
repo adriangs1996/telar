@@ -21,7 +21,8 @@ pub const top_percent = 11;
 pub const radius_px = 10;
 /// Footer tokens; each stays under the shaping cache's entry size so a warm
 /// frame shapes nothing. The active prefix token is painted in the accent.
-pub const legend = [_][]const u8{ ">", "actions", "@", "agents & panes", "?", "suggest", "↑↓", "select", "↵", "run", "esc", "close" };
+/// Icons and key words use glyphs the embedded faces cover.
+pub const legend = [_][]const u8{ ">", "actions", "@", "agents & panes", "?", "suggest", "↑↓", "select", "enter", "run", "esc", "close" };
 
 canvas: *Canvas,
 projection: client.Projection,
@@ -156,9 +157,9 @@ fn paintPickerRow(palette: CommandPalette, row: core.Rect, item: client.ModelGot
     const label = client.describe(palette.sources(), item, &storage);
     const split = std.mem.indexOf(u8, label, "  ") orelse label.len;
     const icon: []const u8 = switch (item) {
-        .workspace => "▣",
-        .tab => "⌗",
-        .agent => "✳",
+        .workspace => "■",
+        .tab => "□",
+        .agent => "●",
     };
     const kind: []const u8 = switch (item) {
         .workspace => "context",
@@ -193,10 +194,10 @@ fn paintSuggestionRow(palette: CommandPalette, row: core.Rect) !void {
         },
     };
     const hint: []const u8 = switch (state.phase) {
-        .idle => "↵ ask",
+        .idle => "enter ask",
         .waiting => "esc cancel",
-        .ready => "↵ paste",
-        .failed => "↵ retry",
+        .ready => "enter paste",
+        .failed => "enter retry",
     };
     try palette.paintRow(row, .{ .icon = "?", .primary = text, .hint = hint, .mono = state.phase == .ready, .color = if (state.phase == .failed) colors.red else colors.text });
 }
