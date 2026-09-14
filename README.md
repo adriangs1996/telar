@@ -82,11 +82,12 @@ keeps a headless Pi alive as Telar's model engine.
 
 ## Themes
 
-Set `theme = "vesper"` once in Lua for Telar's interface and native terminal.
-Vesper is the default. Catppuccin Mocha, Tokyo Night, and a terminal-palette
-theme are also built in:
+Set `theme = "osaka-jade"` once in Lua for Telar's interface and native
+terminal. Osaka Jade is the default. Vesper, Catppuccin Mocha, Tokyo Night, and
+a terminal-palette theme are also built in:
 
 ```sh
+zig build run -- --theme vesper
 zig build run -- --theme catppuccin
 zig build run -- --theme tokyo-night
 zig build run -- --theme terminal

@@ -2,7 +2,7 @@ local telar = require("telar")
 
 return telar.config({
   api_version = 2,
-  theme = "vesper",
+  theme = "osaka-jade",
   gui = {
     window = {
       titlebar = true, -- Set false to hide the native titlebar.

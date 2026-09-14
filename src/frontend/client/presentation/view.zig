@@ -993,7 +993,7 @@ test "client chrome uses Vesper by default" {
     try std.testing.expectEqualDeep(state.palette().panel_bg, screen.back.cells[top_start].style.bg);
     try std.testing.expectEqualDeep(state.palette().accent, screen.back.cells[top_start].style.fg);
     try std.testing.expect(!screen.back.cells[top_start].style.flags.inverse);
-    try std.testing.expectEqual(theme_mod.Builtin.vesper, state.theme.base);
+    try std.testing.expectEqual(theme_mod.Builtin.osaka_jade, state.theme.base);
 }
 
 test "configuration diagnostics stay inside the bottom bar" {

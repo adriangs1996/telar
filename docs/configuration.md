@@ -161,12 +161,15 @@ failures, and transitions from any other state remain silent. Set
 Select a theme once at the root of the configuration:
 
 ```lua
-theme = "vesper"
+theme = "osaka-jade"
 ```
 
 Each preset defines Telar's chrome roles and the native terminal's foreground,
-background, ANSI palette and cursor colors. Built-ins are `vesper`, the default,
-`catppuccin` (Mocha), `tokyo-night`, and `terminal`. The TUI uses the chrome roles
+background, ANSI palette and cursor colors. Built-ins are `osaka-jade` (also
+spelled `osaka_jade` or `osakajade`), the default, `vesper`, `catppuccin`
+(Mocha), `tokyo-night`, and `terminal`. Osaka Jade's `panel_bg` is `default`:
+the chrome takes the terminal background, so the TUI keeps its host background
+and the GUI paints `#111c18`. The TUI uses the chrome roles
 and keeps the host terminal's palette and defaults. The GUI uses the terminal
 colors too; child truecolor and OSC overrides still apply. The `terminal`
 preset uses host-relative chrome roles and a neutral explicit palette in the
@@ -206,7 +209,8 @@ level; declaring both is an error. The earlier `gui.theme` table has moved to
 `theme.terminal`. Likewise, `gui.cursor.color` and `gui.cursor.text_color` move
 to `theme.terminal.cursor_color` and `theme.terminal.cursor_text_color`.
 
-The ANSI data comes from the [Vesper terminal port](https://github.com/mbadolato/iTerm2-Color-Schemes/blob/master/ghostty/Vesper),
+The Osaka Jade ANSI data is the Ghostty Osaka Jade port as recorded in
+`dev/osaka-jade.lua`. The other ANSI data comes from the [Vesper terminal port](https://github.com/mbadolato/iTerm2-Color-Schemes/blob/master/ghostty/Vesper),
 [Catppuccin Mocha](https://github.com/catppuccin/ghostty/blob/main/themes/catppuccin-mocha.conf)
 and [Tokyo Night](https://github.com/folke/tokyonight.nvim/blob/main/extras/ghostty/tokyonight_night).
 Telar retains its orange Vesper cursor with background-colored text.
@@ -225,7 +229,7 @@ telar gui --config examples/gui.lua --profile presentation
 ```
 
 ```lua
-theme = "vesper"
+theme = "osaka-jade"
 gui = {
   window = {
     titlebar = true,
