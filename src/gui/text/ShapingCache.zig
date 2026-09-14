@@ -1,9 +1,11 @@
 //! Bounded, owned shaping results for one font set at one size. Collisions replace
-//! non-ASCII entries; single-byte ASCII has collision-free slots. Long runs
-//! bypass the cache. Entries include face identity; no paint or GPU state is held.
+//! hashed entries; single-byte ASCII requested for the primary face has
+//! collision-free slots. Long runs bypass the cache. Entries include the
+//! requested and the resolved face identity; no paint or GPU state is held.
 const std = @import("std");
 const Entry = @import("ShapingEntry.zig");
 const ShapedRun = @import("ShapedRun.zig");
+const Key = @import("ShapingKey.zig");
 const Cache = @This();
 
 pub const capacity = 256;
@@ -30,40 +32,43 @@ pub fn clear(cache: *Cache) void {
     }
 }
 
-fn entryFor(cache: *Cache, text: []const u8) ?*Entry {
+fn entryFor(cache: *Cache, key: Key) ?*Entry {
+    const text = key.text;
     if (text.len == 0 or text.len > Entry.max_bytes) {
         return null;
     }
 
-    if (text.len == 1 and text[0] < ascii_capacity) {
+    if (text.len == 1 and text[0] < ascii_capacity and key.face == .primary) {
         return &cache.entries[text[0]];
     }
 
-    return &cache.entries[ascii_capacity + std.hash.Wyhash.hash(0, text) % (capacity - ascii_capacity)];
+    return &cache.entries[ascii_capacity + std.hash.Wyhash.hash(@intFromEnum(key.face), text) % (capacity - ascii_capacity)];
 }
 
-/// Borrows until the next insertion or clear. Example: `const hit = cache.find(text);`
-pub fn find(cache: *Cache, text: []const u8) ?ShapedRun {
-    const entry = cache.entryFor(text) orelse return null;
-    if (entry.len != text.len or !std.mem.eql(u8, entry.text[0..entry.len], text)) {
+/// Borrows until the next insertion or clear.
+/// Example: `const hit = cache.find(.{ .text = text, .face = .sans });`
+pub fn find(cache: *Cache, key: Key) ?ShapedRun {
+    const entry = cache.entryFor(key) orelse return null;
+    if (entry.len != key.text.len or entry.preferred != key.face or !std.mem.eql(u8, entry.text[0..entry.len], key.text)) {
         return null;
     }
 
     return entry.view();
 }
 
-/// Copies the borrowed HarfBuzz result. Example: `cache.remember(text, shaped);`
-pub fn remember(cache: *Cache, text: []const u8, shaped: ShapedRun) void {
-    const entry = cache.entryFor(text) orelse return;
+/// Copies the borrowed HarfBuzz result. Example: `cache.remember(.{ .text = text }, shaped);`
+pub fn remember(cache: *Cache, key: Key, shaped: ShapedRun) void {
+    const entry = cache.entryFor(key) orelse return;
     if (shaped.glyphs.len > Entry.max_glyphs) {
         return;
     }
 
-    @memcpy(entry.text[0..text.len], text);
+    @memcpy(entry.text[0..key.text.len], key.text);
     @memcpy(entry.glyphs[0..shaped.glyphs.len], shaped.glyphs);
     @memcpy(entry.positions[0..shaped.positions.len], shaped.positions);
     entry.font = shaped.font;
+    entry.preferred = key.face;
     entry.columns = shaped.columns;
-    entry.len = @intCast(text.len);
+    entry.len = @intCast(key.text.len);
     entry.count = @intCast(shaped.glyphs.len);
 }

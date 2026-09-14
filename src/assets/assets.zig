@@ -4,5 +4,7 @@
 pub const jetbrains_mono: []const u8 = @embedFile("JetBrainsMono-Regular.ttf");
 pub const nerd_symbols: []const u8 = @embedFile("SymbolsNerdFontMono-Regular.ttf");
 pub const nerd_icons: []const u8 = @embedFile("TelarNerdIcons-Regular.ttf");
+pub const plex_sans: []const u8 = @embedFile("IBMPlexSans-Regular.ttf");
+pub const plex_sans_semibold: []const u8 = @embedFile("IBMPlexSans-SemiBold.ttf");
 pub const telar_mark_64_rgba: []const u8 = @embedFile("telar-mark-64.rgba");
 pub const provider_marks_rgba: []const u8 = @embedFile("provider-marks-768x256.rgba");
