@@ -9,8 +9,10 @@ tree at the baseline commit.
 
 Status: implemented on `feat/gui-visual-language` (six slices, one branch
 each under `feat/gui-vl-*`), validated in
-`docs/validation/gui-visual-language/final.md`. Slices 7 (chrome text sizes) and 8 (sprites) in progress. Open
-follow-ups: branch for worktree tabs, Wayland pass over the merged branch.
+`docs/validation/gui-visual-language/final.md`. Slice 7 (chrome text sizes)
+in progress; slice 8 (sprites) implemented on `feat/gui-vl-sprites`, see
+`docs/validation/gui-visual-language/slice-8.md`. Open follow-ups: branch for
+worktree tabs, Wayland pass over the merged branch.
 
 ## Thesis
 

@@ -109,12 +109,44 @@ resolved rectangle, so moving the origin invalidates exactly that geometry.
 Opacity and blur changes do not invalidate cell meshes or the glyph atlas.
 
 `render/Quad` is an 80-byte `extern struct` of five `vec4` rows: rectangle,
-texture coordinates, straight RGBA fill, shape (corner radius, border width and
-two zero reserved floats) and straight RGBA border color. Both fragment shaders
-resolve radius and border by signed distance in device pixels with one pixel of
-anti-aliasing; a quad with zero radius and zero border takes the previous
-textured path unchanged. `Canvas.fillRounded` and `Canvas.ring` emit one such
-quad each; `Canvas.fill`, `Canvas.border` and glyphs keep zero shape.
+texture coordinates, straight RGBA fill, shape (corner radius, border width,
+texture selector and one zero reserved float) and straight RGBA border color.
+Both fragment shaders resolve radius and border by signed distance in device
+pixels with one pixel of anti-aliasing; a quad with zero radius and zero border
+takes the previous textured path unchanged. `Canvas.fillRounded` and
+`Canvas.ring` emit one such quad each; `Canvas.fill`, `Canvas.border` and
+glyphs keep zero shape.
+
+The texture selector chooses the sampled page: zero reads the alpha atlas as
+coverage, one reads `image/SpritePage`, a 512² premultiplied RGBA8 page bound
+beside the atlas on both backends (`MTLPixelFormatRGBA8Unorm`,
+`VK_FORMAT_R8G8B8A8_UNORM`, linear sampling). The shaders divide the texel
+back to straight alpha for the blend state and multiply the quad's tint. The
+page holds equal square cells of `SpritePage.cellFor(scale)` texels, 16
+logical pixels at the display scale, clamped to 8..48: the three provider
+marks box-filtered from the embedded sheet at construction, then at most 64
+workspace favicons. `TerminalRenderer.measure` builds it with the atlas for
+the same scale; `seal` advances `sprites_version` only when a cell was
+written, so the backend uploads the page once per landed favicon and never on
+a warm frame. `native.Frame` carries the page pointer, side and version
+beside the atlas; a frame without a page leaves the atlas bound in the sprite
+slot and no quad selects it. `Canvas.spriteAt` draws one cell into a
+device-pixel rectangle, snapped to whole pixels, as one quad with zero shape.
+
+Workspace favicons never cross the wire. `chrome/Favicons` keeps one entry per
+workspace of the list; each preparation places the one landed image into the
+page and asks `controllers/workspaces/favicons` to look up the next wanted
+workspace when the client's `favicon_runner` is bound (the TUI leaves it
+unset). The GUI job runs on an inbox task: the shared `favicon_lookup` reads
+`favicon.png` then `.telar/icon.png` under the workspace root (regular files,
+256 KiB at most), `image/png` decodes 8-bit non-interlaced RGB, RGBA or
+palette files under `PngLimits` (4096 px a side, 1 Mi pixels) into a fixed
+scanline buffer, and `image/box_filter` area-averages the result into one
+cell. One lookup is in flight at a time; a completion for another execution
+is released unread, a missing file is silent and an unusable one logs once
+under the `favicons` scope. A full sheet or a failed lookup keeps the generic
+glyph. A page rebuilt for another scale forgets its placements, so the
+lookups run again at the new cell size.
 
 `native.Frame` carries straight RGBA background, a numeric blur radius and
 titlebar visibility. These values cross only the in-process native ABI; they
@@ -292,7 +324,13 @@ config, font resources, cursor clock and rendering contracts.
   cursor shapes, truncated messages, golden bytes and handshake fingerprint.
 - `zig build test`: fragmented VT style and palette queries, overrides and
   resets, plus existing client/runtime/transport regressions.
-- `zig build test-gui`: installed font resolution, missing family failure,
+- `zig build test-gui`: the sprite page's bounds and premultiplication,
+  sprite quads carrying the texture selector, the card drawing the three
+  sheet marks and the chip for a custom provider, warm repaints with sprites
+  that shape, rasterize and allocate nothing, the PNG decoder on synthetic
+  files with every filter type and its rejections, the favicon registry,
+  worker and one favicon reaching the card a frame after its completion;
+  installed font resolution, missing family failure,
   scaled metrics, all cursor shapes, wide-cell ink, palette rendering and
   allocation failure after warmup. Twenty cursor phases reuse the atlas and
   retained cell meshes without adapter allocations. Reload tests exercise real

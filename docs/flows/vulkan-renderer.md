@@ -21,7 +21,7 @@ All paths below are relative to `src/gui/linux/`.
 | [vulkan_device.c](../../src/gui/linux/vulkan_device.c) | Instance, surface, device, queue and memory capabilities |
 | [vulkan_swapchain.c](../../src/gui/linux/vulkan_swapchain.c) | Swapchain images, views, presentation semaphores and fences |
 | [vulkan_pipeline.c](../../src/gui/linux/vulkan_pipeline.c) | Shader modules, pipeline, descriptor layout/set and sampler |
-| [vulkan_resources.c](../../src/gui/linux/vulkan_resources.c) | Persistently mapped quad/staging buffers, glyph atlas and upload barriers |
+| [vulkan_resources.c](../../src/gui/linux/vulkan_resources.c) | Persistently mapped quad buffer, the R8 glyph atlas and RGBA8 sprite page with their staging buffers and upload barriers |
 | [shaders.c](../../src/gui/linux/shaders.c) | Embedded SPIR-V and compile-time checks of the shared quad layout |
 
 The window sees only the renderer and worker contracts. Vulkan components do
@@ -54,16 +54,22 @@ there are no `VkRenderPass` or `VkFramebuffer` objects. See the Khronos
 
 Binding 0 is a storage buffer containing 80-byte quads: five std430 `vec4`
 rows for rectangle, texture coordinates, fill color, shape (corner radius,
-border width, two reserved zeros) and border color, checked against
-`telar_gui_quad` by `_Static_assert` in `shaders.c`. Binding 1 is the glyph
-atlas and sampler. An eight-byte vertex push constant holds drawable width and
-height. The shaders use instancing, six vertices per quad, and the same alpha
-blending factors as Metal. The vertex stage forwards the pixel position inside
-the quad plus its flat size, shape and border color; the fragment stage keeps
-the textured path for zero shape and otherwise resolves a rounded rectangle
-with an inner border band by signed distance, one pixel of anti-aliasing, and
-straight-alpha compositing of fill and border before the atlas coverage
-multiplies the result. Surface selection uses the core sRGB nonlinear color
+border width, texture selector, one reserved zero) and border color, checked
+against `telar_gui_quad` by `_Static_assert` in `shaders.c`. Binding 1 is the
+R8 glyph atlas with a nearest sampler; binding 2 is the premultiplied RGBA8
+sprite page with a linear sampler. Both are written before the first draw:
+until a frame carries a sprite page the atlas view stands in at binding 2 and
+no quad selects it. Each texture uploads through its own staging buffer when
+its frame version changes. An eight-byte vertex push constant holds drawable
+width and height. The shaders use instancing, six vertices per quad, and the
+same alpha blending factors as Metal. The vertex stage forwards the pixel
+position inside the quad plus its flat size, shape, border color and texture
+selector; the fragment stage returns the sprite texel divided back to
+straight alpha times the tint when the selector is set, keeps the textured
+path for zero shape and otherwise resolves a rounded rectangle with an inner
+border band by signed distance, one pixel of anti-aliasing, and straight-alpha
+compositing of fill and border before the atlas coverage multiplies the
+result. Surface selection uses the core sRGB nonlinear color
 space, preferring BGRA8 UNORM.
 
 ## From damage to delivery
@@ -78,9 +84,9 @@ space, preferring BGRA8 UNORM.
    an unbounded acquisition wait on window close. A transient failure returns
    `RETRY`; it does not retire damage.
 4. The renderer resets its completed command buffer, updates mapped buffers,
-   uploads changed atlas pixels, and records dynamic rendering. Explicit
-   `vkCmdPipelineBarrier2` transitions protect atlas transfers/sampling and
-   swapchain color attachment/presentation use.
+   uploads changed atlas and sprite page pixels, and records dynamic
+   rendering. Explicit `vkCmdPipelineBarrier2` transitions protect texture
+   transfers/sampling and swapchain color attachment/presentation use.
 5. `vkQueueSubmit2` waits for image acquisition at color attachment output and
    signals the acquired image's presentation semaphore after command execution.
    The worker queues FIFO presentation and waits for the render fence.
@@ -139,8 +145,9 @@ VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation VK_LAYER_VALIDATE_SYNC=1 \
 zig build test-gui-worker test-gui codestyle
 ```
 
-The native test paints changing atlas pixels across multiple frames, checks
-ordered completion, coalescing and idle stability. Test-only Vulkan
+The native test paints changing atlas and sprite page pixels across multiple
+frames, including frames without a sprite page, draws one quad through the
+sprite branch, and checks ordered completion, coalescing and idle stability. Test-only Vulkan
 interposition forces `OUT_OF_DATE` on acquisition and presentation and checks
 two unsuccessful deliveries before recovery. A second run rejects an invalid
 scene after image acquisition and verifies cleanup without successful delivery.
