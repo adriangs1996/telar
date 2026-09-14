@@ -9,10 +9,8 @@ tree at the baseline commit.
 
 Status: implemented on `feat/gui-visual-language` (six slices, one branch
 each under `feat/gui-vl-*`), validated in
-`docs/validation/gui-visual-language/final.md`. Open follow-ups: chrome
-text at its own 13px size (the atlas holds one pixel height per face),
-provider marks and favicons as color images (the atlas is alpha only),
-branch for worktree tabs, Wayland pass over the merged branch.
+`docs/validation/gui-visual-language/final.md`. Slices 7 (chrome text sizes) and 8 (sprites) in progress. Open
+follow-ups: branch for worktree tabs, Wayland pass over the merged branch.
 
 ## Thesis
 
@@ -99,7 +97,7 @@ Nothing blinks forever.
 | Token | Value | Notes |
 | --- | --- | --- |
 | chrome.font | IBM Plex Sans Regular/SemiBold, embedded | Single-line labels only; HarfBuzz advances, no paragraph layout. Mono for commands, paths, branches, kbd. |
-| chrome.size | 13px at terminal 15 (×0.87); 11px for context rows and footers | Card title SemiBold. Derived through `GuiFont.scaledSize`. |
+| chrome.size | roles title ×1.0, body ×0.87, small ×0.73 of the terminal size, times `gui.chrome.scale` | Card title SemiBold. The terminal size is only the default base; the GUI chooses its own sizes (slice 7). |
 | chrome.radius | pane 0 · card 8 · chip 4 · toast 8 · pill 999 | Rounded quads for cards, chips, pills, toasts only. |
 | chrome.gap | 0 between panes; 8 sidebar margins | As today. |
 | chrome.heights | top 38 · tabs 32 · pane header 22 · status 26 (logical px) | Chrome pixels are subtracted before `TerminalMetrics`; PTY sees complete cells only. |
@@ -217,6 +215,49 @@ and adds a capture under `docs/validation/`.
 6. **Palette** (after 1). One overlay wrapping `picker.zig` and
    `suggestion.zig` with `>` `@` `?` prefixes; the `telar-client`
    controllers do not change; history keeps its modal.
+
+7. **Chrome text sizes** (`feat/gui-vl-sizes`). The GUI is free to pick
+   sizes; the terminal size is only the default base. `ChromeMetrics` gains
+   three text sizes derived from the base: `title` (×1.0), `body` (×0.87),
+   `small` (×0.73), all rounded to physical pixels, plus a Lua
+   `gui.chrome.scale` factor (0.5..2, default 1) applied on top. `Label`
+   takes a size role; `Canvas.text/textAt/measure` shape at that pixel
+   height. Facts today: `TextRun.pixel_height` already reaches the atlas
+   and `GlyphAtlas.place` re-selects a size per run, but `select` clears
+   the whole shaping cache and re-selects every face, so alternating sizes
+   within one frame thrashes. The atlas must hold several sizes at once:
+   shaping-cache and glyph keys include the pixel height (glyph keys
+   already do), faces keep one `FT_Size` per active height or set the size
+   per run without invalidating caches, and the warm-repaint tests must
+   still show zero shaping and zero allocation with three sizes in one
+   frame. Card rows, the top bar, the tab strip, the pane header, the
+   status band, the palette and the new-context form use the roles from
+   the plan (context rows and footers `small`, titles `title` SemiBold,
+   everything else `body`).
+   Done when: a frame with the three sizes repaints warm with zero shaping
+   and zero allocation, the card at base 15 shows 13px body and 11px
+   context rows in a capture, and `gui.chrome.scale = 1.5` enlarges the
+   chrome without changing the PTY size.
+8. **Sprites: provider marks and favicons** (`feat/gui-vl-sprites`). The
+   marks are images, shared with the TUI: `src/assets/provider-marks-768x256.rgba`
+   and `telar-mark-64.rgba` are already embedded raw RGBA sprites built by
+   `tools/build_provider_atlas.py`. Add an RGBA sprite page next to the
+   alpha glyph atlas: one RGBA8 texture (Metal and Vulkan) bound beside the
+   atlas, a quad attribute selecting the sampled texture (the shape vector
+   from slice 1 reserves two zero components), premultiplied on upload,
+   and `Canvas.spriteAt(bounds, sprite_id)`. Provider marks come from the
+   embedded sheet at startup; favicons are decoded from `favicon.png` or
+   `.telar/icon.png` in the workspace root (PNG only, 8-bit, non-interlaced,
+   through `std.compress.flate`; ICO is not supported), resized to the
+   sprite cell with a box filter, by a bounded worker off the interactive
+   path (one job in flight, 256 KiB file cap, 4096 px² cap), cached per
+   workspace, and published to the card's `project_icon` hook as a sprite
+   index. The sheet is bounded: 64 favicon cells plus the provider marks;
+   a full sheet keeps the generic glyph. No image bytes cross the wire.
+   Done when: the card shows the Claude, Codex and Pi marks from the sheet
+   and a workspace with a `favicon.png` shows it after at most one frame
+   following the worker's completion, on Metal and Vulkan, with the same
+   warm-repaint guarantees.
 
 ## Contract
 
