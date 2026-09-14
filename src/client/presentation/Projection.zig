@@ -9,6 +9,7 @@ const WorkspaceListSnapshot = @import("../workspace/WorkspaceListSnapshot.zig");
 const PromptType = @import("../model/Prompt.zig");
 const HistoryPaletteState = @import("../model/HistoryPaletteState.zig");
 const SuggestionState = @import("../model/SuggestionState.zig");
+const PathCompletionState = @import("../model/PathCompletionState.zig");
 const ProxyScopeType = @import("telar-core").ProxyScope;
 const SystemMetricsType = @import("../model/SystemMetrics.zig");
 const StateType = @import("../bars/State.zig");
@@ -32,6 +33,7 @@ workspaces: *const WorkspaceListSnapshot,
 prompt: ?PromptType,
 history: *const HistoryPaletteState,
 suggestion: *const SuggestionState,
+path_completion: *const PathCompletionState,
 proxy_tls_active: bool,
 proxy_tls_scope: ProxyScopeType,
 proxy_system_trusted: bool,

@@ -29,6 +29,7 @@ events: CreateWorkspaceEventPublisher,
 pub fn execute(handler: *CreateWorkspaceHandler, command: CreateWorkspace) !CreateWorkspaceResult {
     const launch_cwd = try handler.authority.prepare(handler.authority.context, .{
         .launch = command.launch,
+        .create_cwd = command.create_cwd,
     });
     var proposal = handler.workspaces.propose(.{
         .path = launch_cwd,

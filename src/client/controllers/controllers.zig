@@ -42,6 +42,7 @@ pub const pane_resources = @import("panes/pane_resources.zig");
 pub const pane_splits = @import("panes/pane_splits.zig");
 pub const pane_viewports = @import("panes/pane_viewports.zig");
 pub const paste_routing = @import("input/paste_routing.zig");
+pub const path_completions = @import("input/path_completions.zig");
 pub const plugin_actions = @import("configuration/plugin_actions.zig");
 pub const pointer_routing = @import("input/pointer_routing.zig");
 pub const proxy_status = @import("agents/proxy_status.zig");

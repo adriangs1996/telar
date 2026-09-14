@@ -73,6 +73,7 @@ test "Controller maps every expected create-workspace failure" {
         message: []const u8,
     }{
         .{ .command_error = error.InvalidLaunchCwd, .failure_code = .invalid_request, .message = "cwd source pane is unavailable" },
+        .{ .command_error = error.LaunchCwdCreateFailed, .failure_code = .spawn_failed, .message = "could not create the working directory" },
         .{ .command_error = error.WorkspaceCreateFailed, .failure_code = .resource_limit, .message = "could not create workspace" },
         .{ .command_error = error.GeometryUnavailable, .failure_code = .resource_limit, .message = "workspace geometry is unavailable" },
         .{ .command_error = error.PaneLimitReached, .failure_code = .resource_limit, .message = "pane limit reached" },

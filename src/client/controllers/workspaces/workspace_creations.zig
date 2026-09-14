@@ -76,8 +76,9 @@ fn sendCreation(context: *anyopaque, creation: WorkspaceCreationType) !void {
         .request_id = request_id,
         .size = rectSize_module(client.geometry().area) orelse return error.TerminalTooSmall,
         .name = creation.name,
+        .create_cwd = creation.create_cwd,
         .launch = .{
-            .cwd = client.options.cwd,
+            .cwd = if (creation.cwd.len != 0) creation.cwd else client.options.cwd,
             .cwd_source = creation.cwd_source,
             .arguments = client.options.arguments,
         },

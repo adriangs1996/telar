@@ -2,14 +2,18 @@
 
 const GenericField = @import("../input/GenericField.zig").Type;
 const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
 const TabIdType = @import("telar-core").TabId;
 const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const copy_mode = @import("../input/copy_mode.zig");
 const Submission = @import("Submission.zig");
 const NamePromptState = @import("NamePromptState.zig");
+const WorkspaceForm = @import("WorkspaceForm.zig");
 const std = @import("std");
 
 pub const Field = GenericField(max_tab_label_bytes_module);
+/// The working-directory field of the new-context form.
+pub const DirectoryField = GenericField(max_cwd_bytes_module);
 
 pub const Target = union(enum) {
     rename_tab: TabIdType,
@@ -73,7 +77,11 @@ pub const Command = union(enum) {
     insert: []const u8,
     move_up,
     move_down,
-    cycle_scope,
+    /// Tab: cycles the history scope, moves the new-context form from the
+    /// name to the directory or asks for the selected path completion.
+    tab,
+    /// Shift+Tab: moves the new-context form back to the previous field.
+    back_tab,
     remove_entry,
     toggle_inspection,
     page_up,
@@ -96,6 +104,9 @@ pub const Transition = union(enum) {
     cancelled,
     /// The history palette asked to delete its selected entry.
     removed: u16,
+    /// The directory field asked for its selected completion; the
+    /// controller owns the list and answers with `replaceDirectory`.
+    completion_requested,
     submitted: Submission,
 };
 
@@ -223,21 +234,21 @@ test "the history palette cycles scope with Tab and only there" {
     state.begin(.history_palette);
     try std.testing.expect(state.apply(.move_down) == .changed);
 
-    try std.testing.expect(state.apply(.cycle_scope) == .changed);
+    try std.testing.expect(state.apply(.tab) == .changed);
     const prompt = state.currentConst().?;
     try std.testing.expectEqual(HistoryScope.workspace, prompt.mode.history.scope);
     try std.testing.expectEqual(@as(u16, 0), prompt.selection());
 
-    _ = state.apply(.cycle_scope);
-    _ = state.apply(.cycle_scope);
-    try std.testing.expect(state.apply(.cycle_scope) == .changed);
+    _ = state.apply(.tab);
+    _ = state.apply(.tab);
+    try std.testing.expect(state.apply(.tab) == .changed);
     try std.testing.expectEqual(HistoryScope.global, state.currentConst().?.scope());
 
     const submitted = state.apply(.submit_alternate).submitted;
     try std.testing.expect(submitted.alternate);
 
-    state.begin(.create_workspace);
-    try std.testing.expect(state.apply(.cycle_scope) == .unchanged);
+    state.begin(.{ .rename_tab = .{ .tab_id = @enumFromInt(1), .label = "x" } });
+    try std.testing.expect(state.apply(.tab) == .unchanged);
 }
 
 test "the suggestion palette submits empty fields and ignores history-only commands" {
@@ -245,7 +256,7 @@ test "the suggestion palette submits empty fields and ignores history-only comma
     state.begin(.suggest_palette);
     try std.testing.expectEqual(Target.suggest, state.currentConst().?.target());
 
-    try std.testing.expect(state.apply(.cycle_scope) == .unchanged);
+    try std.testing.expect(state.apply(.tab) == .unchanged);
     try std.testing.expect(state.apply(.remove_entry) == .unchanged);
     try std.testing.expect(state.apply(.submit) == .submitted);
     try std.testing.expect(state.apply(.{ .insert = "list files" }) == .changed);
@@ -268,4 +279,68 @@ test "history inspection preserves query and selection and escape returns before
     try std.testing.expect(state.apply(.cancel) == .changed);
     try std.testing.expect(!state.currentConst().?.inspecting());
     try std.testing.expect(state.apply(.cancel) == .cancelled);
+}
+
+test "the new-context form moves focus with tab and edits only the focused field" {
+    var state: NamePromptState = .{};
+    state.begin(.create_workspace);
+    try std.testing.expect(state.apply(.{ .insert = "agents" }) == .changed);
+    try std.testing.expectEqual(WorkspaceForm.Focus.name, state.currentConst().?.form().?.focus);
+
+    try std.testing.expect(state.apply(.tab) == .changed);
+    try std.testing.expectEqual(WorkspaceForm.Focus.directory, state.currentConst().?.form().?.focus);
+    try std.testing.expect(state.apply(.{ .insert = "~/sand" }) == .changed);
+    try std.testing.expectEqualStrings("agents", state.currentConst().?.field.text());
+    try std.testing.expectEqualStrings("~/sand", state.currentConst().?.directory.text());
+
+    try std.testing.expect(state.apply(.tab) == .completion_requested);
+    try std.testing.expect(state.apply(.back_tab) == .changed);
+    try std.testing.expectEqual(WorkspaceForm.Focus.name, state.currentConst().?.form().?.focus);
+    try std.testing.expect(state.apply(.back_tab) == .changed);
+    try std.testing.expectEqual(WorkspaceForm.Focus.directory, state.currentConst().?.form().?.focus);
+}
+
+test "the new-context form selects completions in the directory field and resets on edits" {
+    var state: NamePromptState = .{};
+    state.begin(.create_workspace);
+    try std.testing.expect(state.apply(.move_down) == .unchanged);
+    _ = state.apply(.tab);
+    try std.testing.expect(state.apply(.move_up) == .unchanged);
+    try std.testing.expect(state.apply(.move_down) == .changed);
+    try std.testing.expect(state.apply(.move_down) == .changed);
+    try std.testing.expectEqual(@as(u16, 2), state.currentConst().?.selection());
+    try std.testing.expect(state.apply(.move_up) == .changed);
+    try std.testing.expectEqual(@as(u16, 1), state.currentConst().?.selection());
+
+    try std.testing.expect(state.apply(.{ .insert = "t" }) == .changed);
+    try std.testing.expectEqual(@as(u16, 0), state.currentConst().?.selection());
+    state.constrainSelection(0);
+
+    state.replaceDirectory("/work/telar/");
+    try std.testing.expectEqualStrings("/work/telar/", state.currentConst().?.directory.text());
+    try std.testing.expectEqual(WorkspaceForm.Focus.directory, state.currentConst().?.form().?.focus);
+}
+
+test "the new-context form submits either field and carries the directory confirmation" {
+    var state: NamePromptState = .{};
+    state.begin(.create_workspace);
+    try std.testing.expect(state.apply(.submit) == .unchanged);
+    _ = state.apply(.tab);
+    _ = state.apply(.{ .insert = "/tmp/new" });
+
+    const first = state.apply(.submit).submitted;
+    try std.testing.expectEqualStrings("", first.name);
+    try std.testing.expectEqualStrings("/tmp/new", first.directory);
+    try std.testing.expect(!first.create_directory);
+
+    const before = state.version();
+    state.requestDirectoryConfirmation();
+    try std.testing.expectEqual(before + 1, state.version());
+    try std.testing.expect(state.currentConst().?.form().?.confirm_create);
+    const second = state.apply(.submit).submitted;
+    try std.testing.expect(second.create_directory);
+
+    try std.testing.expect(state.apply(.backspace) == .changed);
+    try std.testing.expect(!state.currentConst().?.form().?.confirm_create);
+    try std.testing.expect(!state.apply(.submit).submitted.create_directory);
 }

@@ -8,6 +8,7 @@ const presentation_lifecycle = @import("../presentation/presentation_lifecycle.z
 const sidebar_animations = @import("telar-client").controllers.sidebar_animations;
 const notification_flow = @import("telar-client").controllers.notifications;
 const bar_updates = @import("telar-client").controllers.bar_updates;
+const path_completions = @import("telar-client").controllers.path_completions;
 const ClientMessageType = @import("telar-core").ClientMessage;
 const decodeClient_module = @import("telar-core").decodeClient;
 const PaneIdType = @import("telar-core").PaneId;
@@ -105,6 +106,10 @@ pub fn settle(harness: *TestHarness) !void {
                 try bar_updates.completeCommand(harness.client, completion);
                 try presentation_lifecycle.observe(harness.client);
             },
+            .path_completion => |completion| {
+                try path_completions.complete(harness.client, completion);
+                try presentation_lifecycle.observe(harness.client);
+            },
             else => return error.UnexpectedEvent,
         }
     }
@@ -145,6 +150,11 @@ pub fn settleModelPresentation(harness: *TestHarness) !void {
             },
             .bar_command => |completion| {
                 try bar_updates.completeCommand(harness.client, completion);
+                try presentation_lifecycle.observe(harness.client);
+                target = harness.client.model.version();
+            },
+            .path_completion => |completion| {
+                try path_completions.complete(harness.client, completion);
                 try presentation_lifecycle.observe(harness.client);
                 target = harness.client.model.version();
             },

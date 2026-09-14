@@ -30,6 +30,8 @@ const CharType = @import("../../input/Char.zig");
 const ModelNamePromptCommand = @import("../../model/name_prompt.zig").Command;
 const NamePromptState = @import("../../model/NamePromptState.zig");
 const EffectsCapture = @import("EffectsCapture.zig");
+const path_completions = @import("path_completions.zig");
+const path_expansion = @import("../../completion/path_expansion.zig");
 
 /// Starts workspace creation only when the current client can plan the
 /// request.
@@ -39,8 +41,12 @@ const EffectsCapture = @import("EffectsCapture.zig");
 /// ```
 pub fn beginWorkspaceCreate(client: *Client) bool {
     var use_case = openingHandler(client);
+    if (!use_case.execute(.create_workspace)) {
+        return false;
+    }
 
-    return use_case.execute(.create_workspace);
+    path_completions.open(client) catch {};
+    return true;
 }
 
 /// Starts renaming the attached workspace from its canonical name.
@@ -142,9 +148,17 @@ pub fn handleInput(client: *Client, input: Input) !ApplicationInputNamePromptOut
     var use_case = handler(client);
 
     const before = listSnapshot(client);
+    const directory_before = directoryVersion(client);
     const outcome = try dispatchInput(&use_case, input);
     try refreshHistoryQuery(client, before);
     try history_palettes.navigatePage(client);
+    if (outcome == .completion_requested) {
+        try path_completions.acceptSelected(client);
+    } else if (outcome == .cancelled or outcome == .finished) {
+        path_completions.close(client);
+    } else if (directory_before != null and !std.meta.eql(directory_before, directoryVersion(client))) {
+        try path_completions.refresh(client);
+    }
     clampPickerSelection(client);
     try history_palettes.refreshInspection(client);
     discardEditedSuggestion(client, before);
@@ -158,6 +172,17 @@ pub fn handleInput(client: *Client, input: Input) !ApplicationInputNamePromptOut
         try history_palettes.deleteSelected(client, before.selection);
     }
     return outcome;
+}
+
+/// Length and head of the directory field, enough to notice a text change
+/// without copying up to `max_cwd_bytes` per keystroke.
+fn directoryVersion(client: *const Client) ?[2]usize {
+    const prompt = client.model.name_prompt.currentConst() orelse return null;
+    if (prompt.form() == null) {
+        return null;
+    }
+
+    return .{ prompt.directory.len, std.hash.Crc32.hash(prompt.directory.text()) };
 }
 
 fn listSnapshot(client: *Client) ListSnapshot {
@@ -250,6 +275,7 @@ fn clampPickerSelection(client: *Client) void {
         },
         .history => client.model.history_palette.len,
         .suggest => 1,
+        .create_workspace => @intCast(client.model.path_completion.entries().len),
         else => return,
     };
     client.model.name_prompt.constrainSelection(count);
@@ -304,10 +330,7 @@ fn submit(context: *anyopaque, submission: SubmissionType) !bool {
     const client: *Client = @ptrCast(@alignCast(context));
 
     return switch (submission.target) {
-        .create_workspace => blk: {
-            var use_case = workspace_creations.requestHandler(client);
-            break :blk try use_case.execute(.{ .name = submission.name });
-        },
+        .create_workspace => submitWorkspaceCreation(client, submission),
         .rename_workspace => |workspace| blk: {
             var use_case = workspace_renames.requestHandler(client);
             break :blk try use_case.execute(.{
@@ -366,6 +389,41 @@ fn submit(context: *anyopaque, submission: SubmissionType) !bool {
     };
 }
 
+/// Expands the typed directory, asks once before creating a missing one and
+/// derives the context name from the directory when the name is empty.
+fn submitWorkspaceCreation(client: *Client, submission: SubmissionType) !bool {
+    var buffer: [path_completions.max_path_bytes]u8 = undefined;
+    const cwd: []const u8 = if (submission.directory.len == 0)
+        ""
+    else
+        path_completions.expandDirectory(client, submission.directory, &buffer) catch return false;
+    if (cwd.len != 0) {
+        switch (path_completions.directoryStatus(client, cwd)) {
+            .directory => {},
+            .other => return false,
+            .missing => if (!submission.create_directory) {
+                client.model.name_prompt.requestDirectoryConfirmation();
+                return false;
+            },
+        }
+    }
+
+    const name = if (submission.name.len != 0) submission.name else path_expansion.basename(cwd);
+    if (name.len == 0) {
+        return false;
+    }
+
+    var use_case = workspace_creations.requestHandler(client);
+    return use_case.execute(.{
+        .name = name,
+        .cwd = cwd,
+        .create_cwd = submission.create_directory and cwd.len != 0,
+    }) catch |err| switch (err) {
+        error.InvalidWorkspaceName, error.InvalidUtf8 => false,
+        else => err,
+    };
+}
+
 fn dispatchInput(use_case: *NamePromptHandlerType, input: Input) !ApplicationInputNamePromptOutcome {
     const command = commandFor(input) orelse return .unchanged;
 
@@ -390,7 +448,8 @@ fn commandFor(input: Input) ?ModelNamePromptCommand {
             .down => .move_down,
             .page_up => .page_up,
             .page_down => .page_down,
-            .tab => .cycle_scope,
+            .tab => .tab,
+            .back_tab => .back_tab,
             .home => .{ .home = key.mods.shift },
             .end => .{ .end = key.mods.shift },
             .char => |char| if (!key.mods.ctrl and !key.mods.alt)
@@ -401,7 +460,6 @@ fn commandFor(input: Input) ?ModelNamePromptCommand {
                 .toggle_inspection
             else
                 null,
-            else => null,
         },
     };
 }

@@ -153,6 +153,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .request_id = @enumFromInt(4),
             .size = .{ .cols = 80, .rows = 24 },
             .name = "agents",
+            .create_cwd = true,
             .launch = .{
                 .cwd = "/work",
                 .cwd_source = @enumFromInt(5),
@@ -1376,6 +1377,7 @@ test "explicit workspace attachment and creation round trip" {
         },
     }))).create_workspace;
     try std.testing.expectEqualStrings("agents", created.name);
+    try std.testing.expect(!created.create_cwd);
     try std.testing.expectEqualStrings("/work/project", created.launch.cwd);
     try std.testing.expectEqual(@as(id_module.PaneId, @enumFromInt(8)), created.launch.cwd_source.?);
     var iterator = created.launch.arguments();

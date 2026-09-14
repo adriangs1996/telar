@@ -42,6 +42,27 @@ test "workspace creation request sends the focused attached pane without mutatio
     try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
+test "workspace creation request sends an explicit directory without a source pane" {
+    var testing = try CreateWorkspaceTestingModel.init();
+    defer testing.deinit();
+    var capture: CreateWorkspaceRequestCapture = .{};
+    var handler: RequestWorkspaceCreationHandler = .{
+        .model = testing.model,
+        .gate = capture.gate(),
+        .effects = capture.effects(),
+    };
+
+    try std.testing.expect(try handler.execute(.{ .name = "agents", .cwd = "/work/agents", .create_cwd = true }));
+
+    try std.testing.expectEqual(@as(usize, 1), capture.calls);
+    try std.testing.expect(capture.source == null);
+    try std.testing.expectEqualStrings("/work/agents", capture.cwdSlice());
+    try std.testing.expect(capture.create_cwd);
+    _ = testing.model.departWorkspace();
+    try std.testing.expect(try handler.execute(.{ .name = "agents", .cwd = "/work/agents" }));
+    try std.testing.expectEqual(@as(usize, 2), capture.calls);
+}
+
 test "workspace creation request suppresses blocked and absent sources" {
     var testing = try CreateWorkspaceTestingModel.init();
     defer testing.deinit();

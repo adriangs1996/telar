@@ -7,3 +7,5 @@ name: []const u8,
 size: TerminalSizeType,
 /// Every slice in this view is borrowed only for `execute`.
 launch: LaunchViewType,
+/// The user confirmed creating `launch.cwd` when it does not exist.
+create_cwd: bool = false,

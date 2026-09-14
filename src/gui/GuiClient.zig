@@ -60,6 +60,7 @@ pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
     gui.app.timers = host_ports.timers(&gui.app);
     gui.app.bar_runner = host_ports.barCommands(&gui.app);
     gui.app.plugin_runner = host_ports.pluginWorkers(&gui.app);
+    gui.app.path_completion_runner = host_ports.pathCompletions(&gui.app);
     gui.app.clock = host_ports.clock(&gui.app);
     gui.app.host_input_source = host_ports.hostInput(&gui.app);
     gui.app.transport_driver = host_ports.transport(&gui.app);

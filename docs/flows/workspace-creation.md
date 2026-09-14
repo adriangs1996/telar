@@ -20,9 +20,12 @@ runtime socket
 ```
 
 `RequestWorkspaceCreationHandler` rejects pending operations, invalid names
-and a missing or detached focused pane before any effect. A valid request uses
-the focused pane only as `cwd_source`; it does not mutate the client model and
-does not advance a semantic version.
+and, without an explicit directory, a missing or detached focused pane before
+any effect. A request without a typed directory uses the focused pane as
+`cwd_source`; a typed directory is sent expanded in `launch.cwd` with
+`cwd_source` unset and `create_cwd` carrying the user's confirmation to create
+it (see [Name prompt](name-prompt.md)). The request does not mutate the
+client model and does not advance a semantic version.
 
 The adapter supplies workbench geometry and launch configuration. The outbox
 copies the prompt name and launch cwd into bounded storage before the input
@@ -43,7 +46,9 @@ replace client attachments -> pane_opened(created = true)
 ```
 
 `CreateWorkspaceHandler` keeps the workspace proposal invisible until launch
-succeeds. Authority, proposal, geometry and pane-launch failures roll back all
+succeeds. The launch authority resolves `cwd_source` or, when `create_cwd`
+is set with an explicit absolute `launch.cwd`, creates that directory before
+the proposal; a failure maps to `spawn_failed`. Authority, proposal, geometry and pane-launch failures roll back all
 pre-commit state. Once committed, the workspace survives an attachment failure
 because rollback would contradict the authoritative runtime state.
 

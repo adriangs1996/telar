@@ -8,6 +8,7 @@ const OptionsType = @import("telar-client").Options;
 const Params = @import("Params.zig");
 const CompressionType = @import("../graphics/Compression.zig");
 const BarUpdatesCompletion = @import("telar-client").BarUpdatesCompletion;
+const PathCompletionCompletion = @import("telar-client").PathCompletionCompletion;
 const PluginActionsCompletion = @import("telar-client").PluginActionsCompletion;
 const ConfigReloadType = @import("telar-client").ConfigReload;
 const CompletionType = @import("telar-client").controllers.ClipboardImageCompletion;
@@ -52,6 +53,7 @@ pub const ClientEvent = union(enum) {
     telemetry_written: anyerror!void,
     config_reload: anyerror!ConfigReloadType,
     plugin_result: PluginActionsCompletion,
+    path_completion: PathCompletionCompletion,
     clipboard_image: CompletionType,
     link_opened: anyerror!void,
 };
@@ -172,6 +174,7 @@ pub fn init(params: Params) !*TerminalClient {
     client.timers = host_ports.timers(client);
     client.bar_runner = host_ports.barCommands(client);
     client.plugin_runner = host_ports.pluginWorkers(client);
+    client.path_completion_runner = host_ports.pathCompletions(client);
     client.clock = host_ports.clock(client);
     client.host_input_source = host_ports.hostInput(client);
     client.transport_driver = host_ports.transport(client);

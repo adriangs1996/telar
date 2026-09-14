@@ -8,6 +8,7 @@ const HostState = @import("HostState.zig");
 const NamePromptState = @import("NamePromptState.zig");
 const HistoryPaletteState = @import("HistoryPaletteState.zig");
 const SuggestionState = @import("SuggestionState.zig");
+const PathCompletionState = @import("PathCompletionState.zig");
 const model_types = @import("types.zig");
 const DiagnosticType = @import("../config/Diagnostic.zig");
 const WorkspaceListSnapshot = @import("../workspace/WorkspaceListSnapshot.zig");
@@ -126,6 +127,7 @@ host: HostState,
 name_prompt: NamePromptState = .{},
 history_palette: HistoryPaletteState = .{},
 suggestion: SuggestionState = .{},
+path_completion: PathCompletionState = .{},
 workspace_revision: u64 = 0,
 configuration_generation: u64 = 0,
 window_title_template: [model_types.max_window_title_template_bytes]u8 = undefined,
@@ -291,6 +293,7 @@ pub fn version(model: *const Model) VersionType {
         .prompt = model.name_prompt.version(),
         .history = model.history_palette.version(),
         .suggestion = model.suggestion.version(),
+        .path_completion = model.path_completion.version(),
         .copy = model.copy_revision,
         .viewport = model.viewport_revision,
     };

@@ -265,6 +265,8 @@ pub fn presentDue(presenter: *Presenter, projection: ProjectionType, resources: 
         projection.version.history;
     const suggestion_changed = presenter.presentation_state.prepared.model.suggestion !=
         projection.version.suggestion;
+    const path_completion_changed = presenter.presentation_state.prepared.model.path_completion !=
+        projection.version.path_completion;
     const viewport_changed = presenter.presentation_state.prepared.model.viewport !=
         projection.version.viewport;
     const was_copy_mode = if (presenter.compositor.copy) |copy| !copy.view.pointer else false;
@@ -289,7 +291,7 @@ pub fn presentDue(presenter: *Presenter, projection: ProjectionType, resources: 
         proxy_status_changed or system_metrics_changed or bars_changed or notifications_changed or tabs_changed or
         active_tab_changed or panes_changed or pane_metadata_changed or chrome_changed or
         pane_progress_changed or
-        prompt_changed or history_changed or suggestion_changed or copy_status_changed or
+        prompt_changed or history_changed or suggestion_changed or path_completion_changed or copy_status_changed or
         view_interaction_changed or input_routing_changed)
     {
         resources.view.invalidate();
@@ -496,6 +498,7 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
         .prompt = if (prompt) |*value| value else null,
         .history = input.projection.history,
         .suggestion = input.projection.suggestion,
+        .path_completion = input.projection.path_completion,
         .proxy_tls_active = input.projection.proxy_tls_active,
         .proxy_tls_scope = input.projection.proxy_tls_scope,
         .proxy_system_trusted = input.projection.proxy_system_trusted,

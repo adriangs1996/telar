@@ -8,6 +8,7 @@ const WorkspaceListSnapshot = @import("telar-client").WorkspaceListSnapshot;
 const PlanType = @import("../../presentation/Plan.zig");
 const State = @import("telar-client").State;
 const PromptType = @import("telar-client").Prompt;
+const PathCompletionState = @import("telar-client").PathCompletionState;
 const tab_rename_module = @import("../../widgets/tab_rename.zig");
 const ContextType = @import("../../widgets/Context.zig");
 const RectType = @import("telar-core").Rect;
@@ -58,6 +59,7 @@ const EntryInputType = @import("telar-client").EntryInput;
 pub const empty_agent_snapshot: SnapshotType = .{};
 pub const empty_history_palette: HistoryPaletteState = .{};
 pub const empty_suggestion: SuggestionState = .{};
+pub const empty_path_completion: PathCompletionState = .{};
 pub const empty_notifications: CenterType = .{};
 pub const empty_workspace_list: WorkspaceListSnapshot = .{};
 pub const empty_pane_labels: PlanType = .{};
@@ -375,6 +377,64 @@ test "empty production sidebar has no task controls" {
     try std.testing.expect(state.hits.at(state.regions.sidebar.w - 4, 2) == null);
 }
 
+test "the inline new-context form shows both fields and the selected completion on the bottom row" {
+    const gpa = std.testing.allocator;
+    var state = try StateType.init(gpa, 120, 30);
+    defer state.deinit();
+    state.toggleSidebar();
+    var model = MultiplexerModel.init(gpa);
+    defer model.deinit();
+    const location: TabLocationType = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 120, .rows = 28 } });
+    var screen = try ScreenType.init(gpa, 120, 30);
+    defer screen.deinit();
+    var prompt: PromptType = .{ .mode = .{ .create_workspace = .{ .focus = .directory, .selection = 1 } }, .field = .init("agents"), .directory = .init("/work/te") };
+    var completion: PathCompletionState = .{};
+    completion.expect(@enumFromInt(1));
+    var result: @import("telar-client").PathCompletionResult = .{};
+    try result.setBase("/work");
+    try result.append("telar");
+    try result.append("tests");
+    try std.testing.expect(completion.apply(@enumFromInt(1), .{ .query = "/work/te", .result = &result }));
+
+    _ = try state.render(&screen, .{ .model = &model, .prompt = &prompt, .path_completion = &completion, .force = true });
+
+    var row: [256]u8 = undefined;
+    var len: usize = 0;
+    const bottom = state.regions.bottom;
+    for (screen.back.cells[bottom.y * screen.back.w ..][0..bottom.w]) |cell| {
+        const glyph = cell.text();
+        if (len + glyph.len > row.len) {
+            break;
+        }
+
+        @memcpy(row[len .. len + glyph.len], glyph);
+        len += glyph.len;
+    }
+    const line = row[0..len];
+    try std.testing.expect(std.mem.indexOf(u8, line, "new context:") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "agents") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "dir:") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "/work/te") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "tests") != null);
+    const selected_x = bottom.x + @as(u16, @intCast(std.mem.indexOf(u8, line, "tests").?));
+    try std.testing.expectEqual(state.palette().surface1, screen.back.cells[bottom.y * screen.back.w + selected_x].style.bg);
+
+    prompt.mode.create_workspace.confirm_create = true;
+    _ = try state.render(&screen, .{ .model = &model, .prompt = &prompt, .path_completion = &completion, .force = true });
+    len = 0;
+    for (screen.back.cells[bottom.y * screen.back.w ..][0..bottom.w]) |cell| {
+        const glyph = cell.text();
+        @memcpy(row[len .. len + glyph.len], glyph);
+        len += glyph.len;
+    }
+    try std.testing.expect(std.mem.indexOf(u8, row[0..len], tab_rename_module.create_hint) != null);
+    try std.testing.expect(std.mem.indexOf(u8, row[0..len], "tests") == null);
+}
+
 test "workbench clicks return focus intent without mutating pane layout" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
@@ -443,7 +503,7 @@ test "workbench clicks return focus intent without mutating pane layout" {
     model.find(second).?.pointer_shape = .text;
     _ = try state.render(&screen, .{ .model = &model, .copy_mode_active = true });
     try std.testing.expectEqual(PointerShape.default, screen.mouse_pointer);
-    var prompt: PromptType = .{ .mode = .create_workspace, .field = .{} };
+    var prompt: PromptType = .{ .mode = .{ .create_workspace = .{} }, .field = .{} };
     _ = try state.render(&screen, .{ .model = &model, .prompt = &prompt });
     try std.testing.expectEqual(PointerShape.default, screen.mouse_pointer);
     _ = try state.render(&screen, input);

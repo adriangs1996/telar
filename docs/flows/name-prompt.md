@@ -5,9 +5,51 @@ creation, workspace rename and tab rename. `ClientModel.name_prompt` is its
 only authority. It owns the target identity, edit field, bracketed-paste state
 and `prompt` revision.
 
-The prompt runs on the interactive path. Its field holds at most
+The prompt runs on the interactive path. Its name field holds at most
 `schema.max_tab_label_bytes`, editing allocates nothing and no borrowed text
 survives the synchronous submit effect.
+
+Workspace creation is a two-field form (`Prompt.mode.create_workspace` holds
+a `WorkspaceForm`): the name and a working directory bounded by
+`schema.max_cwd_bytes`. `Tab` moves from the name to the directory and, in
+the directory, accepts the selected completion; `Shift+Tab` moves back;
+`Up`/`Down` choose a completion; `Enter` creates; `Esc` cancels. An empty
+name defaults to the directory's basename. The directory is expanded in the
+client (`~`, `$VAR`, `${VAR}`, relative paths against the focused pane's cwd
+from `completion/path_expansion.zig`).
+
+### Directory completion
+
+```text
+directory edit -> name_prompts.handleInput
+        |
+path_completions.refresh (expand, compare with the wanted query)
+        |
+PathCompletionRunner.start (adapter inbox producer, observation path)
+        |
+completion/path_completion.run: one listing, <= 64 directories, <= 4096 B per path
+        |
+path_completion event -> path_completions.complete
+        |
+ClientModel.path_completion (PathCompletionState, Version.path_completion)
+```
+
+One listing runs at a time. Every keystroke replaces the wanted query; a
+listing that completes for a superseded query is discarded and the wanted one
+starts, so a burst of typing costs at most one stale listing. Results are
+identified by execution id, never by pointer, and the worker's heap result is
+released by the controller. Closing the form clears the list.
+
+### Missing directories
+
+Submit performs one `stat` on the expanded path. A missing directory blocks
+the submission and sets `WorkspaceForm.confirm_create`; the renderers show
+the confirmation instead of the hints, and the next `Enter` sends
+`create_workspace` with `create_cwd = true`. The runtime creates the path
+(`launch_cwd.createLaunchDirectory`) before proposing the workspace and
+refuses relative paths or an existing non-directory. Any edit clears the
+confirmation. The TUI paints the form inline on the bottom row (fields, then
+the completion names); the GUI paints a modal with the list.
 
 ## Opening and input
 

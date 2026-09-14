@@ -28,6 +28,7 @@ pub fn paint(overlays: *Overlays, canvas: *Canvas, projection: client.Projection
         .history => history.area(projection),
         .goto => Modal.bounds(host, .{ .w = 84, .h = 18 }),
         .suggest => Modal.bounds(host, .{ .w = 84, .h = 9 }),
+        .create_workspace => Modal.bounds(host, .{ .w = 72, .h = 16 }),
         else => Modal.bounds(host, .{ .w = 64, .h = 7 }),
     };
     pending.modal = area;
@@ -36,6 +37,7 @@ pub fn paint(overlays: *Overlays, canvas: *Canvas, projection: client.Projection
         .goto => try picker.paint(modal, projection),
         .history => try history.paint(modal, projection),
         .suggest => try suggestion.paint(modal, projection),
+        .create_workspace => try name_prompt.paintCreateForm(modal, projection),
         else => try name_prompt.paint(modal, prompt),
     }
     overlays.maps.seal();

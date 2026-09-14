@@ -2,6 +2,7 @@ const client = @import("telar-client");
 const core = @import("telar-core");
 const Canvas = @import("../chrome/Canvas.zig");
 const Label = @import("../chrome/Label.zig");
+const EditorView = @import("EditorView.zig");
 const Modal = @This();
 
 canvas: *Canvas,
@@ -37,10 +38,20 @@ pub fn field(modal: Modal, area: core.Rect, prompt: client.Prompt) !void {
         return;
     }
 
+    var editor_field = prompt.field;
+    try modal.editor(area, EditorView.capture(&editor_field, area.w, true));
+}
+
+/// Paints one captured field; only a focused one shows its cursor.
+/// Example: `try modal.editor(row, EditorView.capture(&prompt.directory, row.w, focused));`.
+pub fn editor(modal: Modal, area: core.Rect, view: EditorView) !void {
+    if (area.isEmpty()) {
+        return;
+    }
+
     const palette = modal.canvas.theme.palette;
-    var editor = prompt.field;
-    const view = editor.view(area.w);
-    try modal.canvas.fill(area, palette.surface0);
+    const focused = view.focused;
+    try modal.canvas.fill(area, if (focused) palette.surface0 else palette.surface_dim);
 
     if (view.selection) |selection| {
         const start = @min(selection[0], area.w);
@@ -49,7 +60,9 @@ pub fn field(modal: Modal, area: core.Rect, prompt: client.Prompt) !void {
     }
 
     try modal.canvas.text(area, .{ .text = view.text, .color = palette.text });
-    try modal.canvas.border(.{ .x = area.x + @min(view.cursor, area.w - 1), .y = area.y, .w = 1, .h = 1 }, palette.accent);
+    if (focused) {
+        try modal.canvas.border(.{ .x = area.x + @min(view.cursor, area.w - 1), .y = area.y, .w = 1, .h = 1 }, palette.accent);
+    }
 }
 
 /// Draws one clipped line relative to the modal's content rectangle.

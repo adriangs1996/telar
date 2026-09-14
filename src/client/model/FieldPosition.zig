@@ -1,11 +1,11 @@
-const name_prompt = @import("name_prompt.zig");
 const FieldPosition = @This();
 
 len: usize,
 head: usize,
 anchor: usize,
 
-pub fn capture(field: *const name_prompt.Field) FieldPosition {
+/// Snapshots either prompt field. Example: `const before: FieldPosition = .capture(&prompt.directory);`
+pub fn capture(field: anytype) FieldPosition {
     return .{
         .len = field.len,
         .head = field.head,
@@ -13,6 +13,6 @@ pub fn capture(field: *const name_prompt.Field) FieldPosition {
     };
 }
 
-pub fn changed(before: FieldPosition, field: *const name_prompt.Field) bool {
+pub fn changed(before: FieldPosition, field: anytype) bool {
     return before.len != field.len or before.head != field.head or before.anchor != field.anchor;
 }

@@ -10,3 +10,6 @@ request_id: id.RequestId,
 size: TerminalSizeType,
 name: []const u8,
 launch: LaunchType,
+/// Asks the runtime to create `launch.cwd` before launching when the user
+/// confirmed a directory that does not exist yet. Ignored with `cwd_source`.
+create_cwd: bool = false,

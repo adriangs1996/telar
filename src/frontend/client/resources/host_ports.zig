@@ -39,6 +39,10 @@ const BarCommandRunnerType = @import("telar-client").BarCommandRunner;
 const BarUpdatesJobType = @import("telar-client").BarUpdatesJob;
 const BarUpdatesCompletionType = @import("telar-client").BarUpdatesCompletion;
 const runBarCommand_module = @import("telar-client").runBarCommand;
+const PathCompletionRunnerType = @import("telar-client").PathCompletionRunner;
+const PathCompletionJobType = @import("telar-client").PathCompletionJob;
+const PathCompletionCompletionType = @import("telar-client").PathCompletionCompletion;
+const runPathCompletion_module = @import("telar-client").runPathCompletion;
 const PluginWorkerRunnerType = @import("telar-client").PluginWorkerRunner;
 const PluginActionsJobType = @import("telar-client").PluginActionsJob;
 const PluginActionsCompletionType = @import("telar-client").PluginActionsCompletion;
@@ -511,6 +515,24 @@ fn executeBarCommand(io: std.Io, job: BarUpdatesJobType) BarUpdatesCompletionTyp
     };
 }
 
+/// Example: `client.path_completion_runner = host_ports.pathCompletions(client);`.
+pub fn pathCompletions(client: *Client) PathCompletionRunnerType {
+    return .{ .context = client, .start_fn = startPathCompletion };
+}
+
+fn startPathCompletion(context: *anyopaque, job: PathCompletionJobType) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    try host(client).inbox.start(.path_completion, .{ executePathCompletion, .{ client.io, client.gpa, job } });
+}
+
+fn executePathCompletion(io: std.Io, gpa: std.mem.Allocator, job: PathCompletionJobType) PathCompletionCompletionType {
+    return .{
+        .execution_id = job.execution_id,
+        .result = runPathCompletion_module(io, gpa, job),
+    };
+}
+
 /// Example: `client.plugin_runner = host_ports.pluginWorkers(client);`.
 pub fn pluginWorkers(client: *Client) PluginWorkerRunnerType {
     return .{ .context = client, .start_fn = startPluginWorker };
@@ -581,7 +603,7 @@ fn routePromptBytes(context: *anyopaque, bytes: []const u8) !void {
         };
         switch (try name_prompts.handleInput(client, input)) {
             .cancelled, .blocked, .finished, .removed => return,
-            .unchanged, .routing_changed, .changed => {},
+            .unchanged, .routing_changed, .changed, .completion_requested => {},
         }
     }
 }
