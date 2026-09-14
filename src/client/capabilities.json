@@ -310,6 +310,7 @@
     "config/GuiConfig.zig",
     "config/GuiCursor.zig",
     "config/GuiFont.zig",
+    "config/GuiSidebar.zig",
     "config/InputKeys.zig",
     "config/InputPaste.zig",
     "config/PluginSpec.zig",

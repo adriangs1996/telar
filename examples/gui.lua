@@ -26,6 +26,9 @@ return telar.config({
     chrome = {
       scale = 1, -- 0.5..2; chrome text only, the terminal grid stays.
     },
+    sidebar = {
+      width = 284, -- 220..480 logical px; the grid starts after it and an 8 px gap.
+    },
   },
   profiles = {
     presentation = { gui = { font = { size = 20, line_height = 1.3 } } },

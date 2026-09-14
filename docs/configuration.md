@@ -247,6 +247,7 @@ gui = {
   },
   cursor = { style = "block", blink = true, blink_interval_ms = 600 },
   chrome = { scale = 1 },
+  sidebar = { width = 284 },
 }
 ```
 
@@ -266,12 +267,15 @@ gui = {
 | `cursor.style` | `block` | `block`, `bar`, `underline`, or `hollow`. |
 | `cursor.blink` | `true` | Whether the default cursor blinks. An explicit application DECSCUSR style overrides this default; DEC mode 12 can suppress blinking. |
 | `cursor.blink_interval_ms` | `600` | Duration of each visible or hidden phase; integer `100..5000`. |
+| `sidebar.width` | `284` | Width of the native sidebar band in logical pixels; `220..480`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the narrowest band hides it. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. The TUI ignores it: its sidebar stays a column preference retained by the runtime in the shared layout, which the GUI no longer reads. |
 | `chrome.scale` | `1` | Multiplies the native chrome text sizes; `0.5..2`, decimals allowed. The chrome derives three sizes from `font.size` times the display scale: title ×1.0, body ×0.87, small ×0.73, rounded to device pixels and never below 6. The bands (top bar 38, tab strip 32, status bar 26, pane header 22 logical pixels) do not scale with it, so the body size is capped at the largest whose line box fits the pane header: at `font.size = 15` the body stops growing at 16 px (scale ≈ 1.3) while title and small keep growing, reaching 30 and 22 px at scale 2. The terminal grid and the PTY size never change with it; a reload applies it without rebuilding the atlas. |
 
 Padding is applied once at the display scale, then rounded to physical pixels.
 It belongs to the window, outside the terminal grid; PTY pixel sizes contain
 only complete cells. Insets shrink when necessary to leave room for at least
 one cell. Changing padding can change `stty size` without changing the font.
+While the sidebar is visible its band and gap replace the left inset; the
+right inset stays `padding.x`.
 
 macOS adjusts the WindowServer blur radius through the same optional private
 API used by Ghostty. If the API is unavailable or rejects the request, Telar
@@ -327,7 +331,7 @@ selected at launch. Saving by atomic file replacement also works.
 
 Lua validation and font preparation run off the window thread. A complete
 replacement becomes active once the previous GPU frame releases its resources.
-Font geometry and padding changes update the terminal grid and PTY size. Optical
+Font geometry, padding and sidebar width changes update the terminal grid and PTY size. Optical
 weight changes replace the macOS atlas without resizing the PTY. An inactive
 strength change, or either optical weight setting on Linux, preserves the atlas. Window effects,
 theme and cursor changes

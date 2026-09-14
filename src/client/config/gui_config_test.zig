@@ -15,8 +15,9 @@ test "GUI configuration owns font names and overlays profiles independently of c
         \\    cursor = { style = "bar", blink = false, blink_interval_ms = 350 },
         \\    window = { background_opacity = 0.75, background_blur = true, titlebar = false, padding = { x = 8.5, y = 4 } },
         \\    chrome = { scale = 1.25 },
+        \\    sidebar = { width = 300 },
         \\  },
-        \\  profiles = { large = { gui = { font = { size = 24, thicken_strength = 0 }, window = { padding = { y = 12 } }, chrome = { scale = 1.5 } }, theme = { terminal = { background = "#ffffff" } } } },
+        \\  profiles = { large = { gui = { font = { size = 24, thicken_strength = 0 }, window = { padding = { y = 12 } }, chrome = { scale = 1.5 }, sidebar = { width = 320 } }, theme = { terminal = { background = "#ffffff" } } } },
         \\}
     ;
     var diagnostic: Diagnostic = .{};
@@ -39,6 +40,7 @@ test "GUI configuration owns font names and overlays profiles independently of c
     try std.testing.expectEqual(@as(u32, 350), config.cursor.blink_interval_ms);
     try std.testing.expectEqual(@as(f32, 0.75), config.window.background_opacity);
     try std.testing.expectEqual(@as(f32, 1.5), config.chrome.scale);
+    try std.testing.expectEqual(@as(f32, 320), config.sidebar.width);
     try std.testing.expectEqual(@as(u8, 20), config.window.background_blur);
     try std.testing.expect(!config.window.titlebar);
     try std.testing.expectEqual(@as(f32, 8.5), config.window.padding.x);
@@ -76,6 +78,11 @@ test "GUI validation rejects malformed values including profiles that are not se
         "gui = { window = { padding = { y = 257 } } }",
         "gui = { window = { padding = { x = 0/0 } } }",
         "gui = { window = { padding = { z = 1 } } }",
+        "gui = { sidebar = 284 }",
+        "gui = { sidebar = { width = 219 } }",
+        "gui = { sidebar = { width = 481 } }",
+        "gui = { sidebar = { width = '284' } }",
+        "gui = { sidebar = { height = 10 } }",
         "profiles = { unused = { gui = { window = { background_blur = 'yes' } } } }",
         "gui = false",
         "gui = { fonts = {} }",
