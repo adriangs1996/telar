@@ -129,8 +129,30 @@ Each agent card stays three rows high:
 
 The card shows no location row (`workspace › tab › pane N`) and no cwd;
 the top bar shows the selected workspace's location instead. The TUI cell
-renderer still draws the previous rows until the sidebar rewrite of the GUI
-visual language plan lands; the entry fields above are already on the wire.
+renderer still draws the previous rows; the entry fields above are already on
+the wire.
+
+The GUI draws the card in device pixels inside the sidebar's cell column
+(`src/gui/chrome/Sidebar.zig`, `AgentCard.zig`). With glyph height `g` from
+the chrome font metrics (`TerminalMetrics.pixel_height`): row height
+`ceil(1.25 g)`, card height `3 rows + 12`, card spacing 3, sidebar margins 8,
+card padding 8 horizontal and 6 vertical, radius 8, provider chip 16. The
+header reads `agents` with `N · M need you` right-aligned, `M` counting
+`blocked` and `failed`. There are no section headers: the list is one array
+of at most 64 replica indices sorted by `agent_attention.lessThan` when the
+snapshot identity (revision, replica, length) changes, never per frame. The
+age is `status_age_s` plus the monotonic seconds since that snapshot was
+first painted, formatted `now`, `3m`, `2h`, `1d`; it refreshes whenever a
+frame is painted. Tokens leave from the right as the card narrows: age, then
+the provider mark, then the last event; the status glyph always stays. The
+working glyph `◌` pulses through six alpha steps between 1.0 and 0.35 over
+17 animation frames (about 2 s at 120 ms per frame). The selected card is
+the focused pane's agent: `surface0` fill and an inner 1px `surface1` ring.
+The provider mark is a rounded chip with the provider glyph until the atlas
+can hold RGBA artwork. Hits are cell-based: one `focus_agent` target per
+card covering the rows its pixels touch; a boundary row shared by two cards
+belongs to the later one. The wheel scrolls one card pitch. The rightmost
+sidebar column stays the resize border.
 
 KGP owns two reusable assets: one three-row focused-agent card and an official
 provider-mark atlas. The card is an antialiased rounded rectangle below the
