@@ -2,8 +2,9 @@
 
 Terminal cells and chrome labels enter `GlyphAtlas.place` with UTF-8 text, color
 and a `TextRun.cell_bounds` measured from the configured grid. A complete Braille
-character, U+2800 through U+28FF, or box-drawing character, U+2500 through U+257F,
-selects procedural drawing before font coverage or shaping. Ordinary text retains
+character, U+2800 through U+28FF, box-drawing character, U+2500 through U+257F,
+or block element, U+2580 through U+259F, selects procedural drawing before font
+coverage or shaping. Ordinary text retains
 the existing font and shaping path. Mixed text separates spans at grapheme
 boundaries; combining and variation-selector clusters remain intact on the font
 path.
@@ -67,6 +68,33 @@ Adapted modules include its attribution and MIT license. Curves use sixteen line
 segments for the cubic section and pixel-center distance coverage; their
 antialiasing is not intended to match Ghostty pixel for pixel.
 
+## Block elements
+
+A font's block glyphs fill its em box, not the cell. With `gui.font.line_height`
+above 1 the cell is taller than the em box, so U+2580 through U+259F left a gap
+under every row, shades broke between rows and the Claude Code mascot split
+into pieces. The fitting transform is not involved: `GlyphAtlas.transform`
+returns the identity for every face that is not `fitted()`, which is only the
+fallback text and symbol faces, so primary-face ink keeps its font metrics.
+
+`BlockElement` decodes each bare block grapheme and `block_shapes` maps it to
+Unicode semantics: a slab of one to eight eighths anchored to the top, bottom,
+left or right edge, one of the ten quadrant sets, or a shade. `BlockInk` measures
+the rectangles from the complete physical cell. Slab and quadrant boundaries
+sit at `round(extent * eighths / 8)` from the cell origin, so opposite halves,
+the upper eighth and lower seven eighths, and complementary quadrant sets tile
+the full block exactly at every cell size, including fractional ones. Rows of a
+quadrant set merge horizontally and vertically, so a cell emits at most two
+disjoint solid quads. The shades U+2591, U+2592 and U+2593 cover the whole cell
+with the run color at 25, 50 and 75 percent alpha, matching Ghostty's shade
+levels; adjacent cells therefore blend into one continuous tone with no seam.
+
+Ink uses the existing white texel and needs no raster, cache or atlas page, so
+the path never allocates once frame capacity is reserved and cannot fail under
+atlas or cache pressure. Bold and italic do not deform the geometry. Tiny cells
+drop rectangles that round to zero pixels. Graphemes carrying combining marks or
+variation selectors take the font path, like the box and Braille paths.
+
 ## Composition and verification
 
 Foreground, inverse colors, faint alpha and cursor recoloring follow the normal
@@ -85,6 +113,10 @@ advance, tiny cells, configured metrics, mixed font runs, retained damage,
 cursor/color behavior and allocation-free repeated updates. Box tests cover all
 128 characters, joins, disjoint ink, fractional and tiny geometry, cache/atlas
 saturation, retained damage and warmed updates without shaping or allocation.
+Block tests cover all 32 characters, the Unicode chart, tiling of opposite
+slabs and complementary quadrants at every pixel, monotonic eighths, quadrant
+merging, shade alpha and cell coverage, mixed font runs, natural metrics and
+cold placement without shaping, rasterization, atlas writes or allocation.
 Italic tests cover the configured font, thickening, vertical and horizontal
 overhang, pane edges, combining marks, selection and cursor composition.
 
@@ -94,6 +126,11 @@ in Codex's input animation and a 16-by-16 table of all Braille patterns. They
 capture the result with an unpatched DejaVu Sans Mono font on macOS and Linux.
 Screenshots require visual inspection; the tests verify the geometry and cache
 contracts independently.
+
+`tools/gui_block_elements.py` prints the Claude Code mascot, halves, eighths,
+quadrants, shades and the two block rows from a shell child with the bundled
+JetBrains Mono at the line height of `examples/gui.lua`; its before and after
+captures live in `docs/validation/gui-procedural-glyphs/`.
 
 Pass `--rendering` to either probe for the shared box-and-italic fixture in
 `tools/gui_rendering_sample.py`. It includes the Codex-style rounded frame,

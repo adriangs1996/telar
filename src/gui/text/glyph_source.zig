@@ -2,5 +2,6 @@
 pub const Source = union(enum) {
     font: @import("font_id.zig").Id,
     box: @import("BoxDrawing.zig"),
+    block: @import("BlockElement.zig"),
     braille: @import("Braille.zig"),
 };

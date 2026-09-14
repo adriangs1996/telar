@@ -3,6 +3,7 @@ const core = @import("telar-core");
 const FontSet = @import("FontSet.zig");
 const FontRun = @import("FontRun.zig");
 const Box = @import("BoxDrawing.zig");
+const Block = @import("BlockElement.zig");
 const Braille = @import("Braille.zig");
 const Id = @import("font_id.zig").Id;
 const FontRuns = @This();
@@ -27,6 +28,10 @@ pub fn next(runs: *FontRuns) ?FontRun {
         return .{ .text = runs.iterator.bytes[start..runs.iterator.index], .source = .{ .box = box }, .columns = first.width };
     }
 
+    if (Block.parse(first.bytes)) |block| {
+        return .{ .text = runs.iterator.bytes[start..runs.iterator.index], .source = .{ .block = block }, .columns = first.width };
+    }
+
     const id = runs.fonts.source(first.bytes, runs.preferred);
     if (id != runs.preferred) {
         return .{ .text = runs.iterator.bytes[start..runs.iterator.index], .source = .{ .font = id }, .columns = first.width, .preferred = runs.preferred };
@@ -36,7 +41,7 @@ pub fn next(runs: *FontRuns) ?FontRun {
     while (true) {
         const previous = runs.iterator.index;
         const cluster = runs.iterator.next() orelse break;
-        if (Braille.parse(cluster.bytes) != null or Box.parse(cluster.bytes) != null or runs.fonts.source(cluster.bytes, runs.preferred) != id) {
+        if (Braille.parse(cluster.bytes) != null or Box.parse(cluster.bytes) != null or Block.parse(cluster.bytes) != null or runs.fonts.source(cluster.bytes, runs.preferred) != id) {
             runs.iterator.index = previous;
             break;
         }
@@ -75,6 +80,22 @@ test "box drawing keeps contextual text and marked boxes in whole font spans" {
     try std.testing.expectEqual(@as(u21, 0x256d), box.source.box.codepoint);
     const after = runs.next().?;
     try std.testing.expectEqualStrings("│\u{301}ffi", after.text);
+    try std.testing.expectEqual(.font, std.meta.activeTag(after.source));
+    try std.testing.expectEqual(@as(?FontRun, null), runs.next());
+}
+
+test "block elements separate font spans while marked blocks stay in the font path" {
+    const std = @import("std");
+    var atlas = try @import("GlyphAtlas.zig").init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    defer atlas.deinit();
+    var runs: FontRuns = .{ .fonts = &atlas.fonts, .iterator = .{ .bytes = "office\u{301}▐▛\u{fe0f}█\u{301}ffi" } };
+    try std.testing.expectEqualStrings("office\u{301}", runs.next().?.text);
+    const block = runs.next().?;
+    try std.testing.expectEqualStrings("▐", block.text);
+    try std.testing.expectEqual(@as(u21, 0x2590), block.source.block.codepoint);
+    try std.testing.expectEqual(@as(u32, 1), block.columns);
+    const after = runs.next().?;
+    try std.testing.expectEqualStrings("▛\u{fe0f}█\u{301}ffi", after.text);
     try std.testing.expectEqual(.font, std.meta.activeTag(after.source));
     try std.testing.expectEqual(@as(?FontRun, null), runs.next());
 }

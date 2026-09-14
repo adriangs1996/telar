@@ -25,6 +25,8 @@ const GlyphTransform = @import("GlyphTransform.zig");
 const GlyphFailures = @import("GlyphFailures.zig");
 const Braille = @import("Braille.zig");
 const Box = @import("BoxDrawing.zig");
+const Block = @import("BlockElement.zig");
+const BlockInk = @import("BlockInk.zig");
 const BoxGrid = @import("BoxGrid.zig");
 const BoxCurve = @import("BoxCurve.zig");
 const BoxCache = @import("BoxCache.zig");
@@ -159,6 +161,10 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
         return atlas.paintBox(run, list);
     }
 
+    if (Block.parse(run.text) != null) {
+        return atlas.paintBlock(run, list);
+    }
+
     if (atlas.shaping_cache.find(shapingKey(run.text, run))) |cached| {
         return atlas.paint(.{ .run = run, .shaped = cached }, list);
     }
@@ -175,6 +181,7 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
         current.x += advance;
         advance += switch (part.source) {
             .box => try atlas.paintBox(current, list),
+            .block => try atlas.paintBlock(current, list),
             .font => try atlas.paint(.{ .run = current, .shaped = try atlas.shape(part, run.pixel_height) }, list),
             .braille => |pattern| braille: {
                 current.cell_bounds = try atlas.gridBounds(current);
@@ -209,7 +216,7 @@ pub fn measure(atlas: *GlyphAtlas, run: TextRun) !f32 {
         var current = run;
         current.text = part.text;
         total += switch (part.source) {
-            .box, .braille => (try atlas.gridBounds(current)).width,
+            .box, .block, .braille => (try atlas.gridBounds(current)).width,
             .font => try atlas.penAdvance(.{ .run = current, .shaped = try atlas.shape(part, run.pixel_height) }),
         };
     }
@@ -281,6 +288,17 @@ fn paintBox(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
         try ink.paint(current, list);
     }
 
+    return bounds.width;
+}
+
+// Block elements are solid rectangles of the cell: no raster, cache or atlas work.
+fn paintBlock(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
+    const block = Block.parse(run.text).?;
+    var current = run;
+    const bounds = try atlas.gridBounds(run);
+    current.cell_bounds = bounds;
+    const ink = try BlockInk.init(bounds, block);
+    try ink.paint(current, list);
     return bounds.width;
 }
 
