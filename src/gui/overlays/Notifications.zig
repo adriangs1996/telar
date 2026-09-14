@@ -1,32 +1,36 @@
-const core = @import("telar-core");
+//! Native notification composition and bounded, disposable stack motion.
 const client = @import("telar-client");
 const Canvas = @import("../chrome/Canvas.zig");
-const OverlayHit = @import("OverlayHit.zig");
+const Clock = @import("../animation/FrameClock.zig");
+const Card = @import("NotificationCard.zig");
+const Motion = @import("NotificationMotion.zig");
+const Hits = @import("NotificationHits.zig");
 const Notifications = @This();
+const GenericWidgetList = @import("../widgets/GenericWidgetList.zig").Type;
 
-/// At most this many toasts are on screen; older ones wait their turn.
-pub const max_visible: usize = 2;
+pub const max_visible = Hits.max_visible;
+pub const Cards = GenericWidgetList(Card, max_visible);
+motions: [client.max_items]Motion = @splat(.{}),
 
-hits: [max_visible * 2]OverlayHit = undefined,
-count: usize = 0,
-
-/// Rebuilds a bounded hit map from exactly the cards painted in this frame.
-/// A toast that points at a pane already visible in the active tab is
-/// skipped: the pane itself shows what happened.
-/// Example: `try notifications.paint(canvas, projection);`.
-pub fn paint(notifications: *Notifications, canvas: *Canvas, projection: client.Projection) !void {
-    notifications.count = 0;
-    const host = projection.geometry.area;
-    if (host.w < 12 or host.h < 4) {
-        return;
+/// Returns a bounded list of measured cards without emitting quads. Its text
+/// borrows the projection until the caller draws the list.
+/// Example: `var cards = try notifications.prepare(canvas, projection);`
+pub fn prepare(notifications: *Notifications, canvas: *Canvas, projection: client.Projection) !Cards {
+    var result: Cards = .{};
+    const host = canvas.rect(projection.geometry.area);
+    const margin = canvas.chrome.px(16);
+    const width = @min(canvas.chrome.px(360), host.width - 2 * margin);
+    if (width < canvas.chrome.px(160) or host.height < canvas.chrome.px(96)) {
+        notifications.motions = @splat(.{});
+        return result;
     }
 
-    const palette = canvas.theme.palette;
-    const width = @min(@as(u16, 48), host.w -| 2);
-    const slots = @min(max_visible, (host.h -| 1) / 5);
+    var used: [client.max_items]bool = @splat(false);
+    var y = host.y + margin;
     var painted: usize = 0;
+    var cards: [max_visible]Card = undefined;
     for (0..projection.notifications.count) |index| {
-        if (painted == slots) {
+        if (painted == max_visible) {
             break;
         }
 
@@ -35,40 +39,99 @@ pub fn paint(notifications: *Notifications, canvas: *Canvas, projection: client.
             continue;
         }
 
-        const visible = item.animatedWidth(width);
-        if (visible == 0) {
+        if (item.transition_position_ns == 0 and item.phase == .exiting) {
             continue;
         }
 
-        const card: core.Rect = .{ .x = host.x + host.w - 1 - visible, .y = host.y + 1 + @as(u16, @intCast(painted)) * 5, .w = visible, .h = 4 };
+        var card: Card = .{ .item = item, .bounds = .{ .x = host.x + host.width - margin - width, .y = y, .width = width, .height = 0 }, .clip = host };
+        try card.measure(canvas);
+        if (y + card.bounds.height > host.y + host.height - margin) {
+            break;
+        }
+
+        const opacity = visibility(item, canvas.animation);
+        card.opacity = opacity;
+        if (opacity == 0 and item.phase == .exiting) {
+            continue;
+        }
+
+        if (canvas.animation) |clock| {
+            if (notifications.motion(item.id, y)) |slot| {
+                used[slot] = true;
+                card.bounds.y = notifications.motions[slot].position(y, clock);
+            }
+        }
+
+        card.bounds.x += canvas.chrome.px(12) * (1 - opacity);
+        card.bounds.y += canvas.chrome.px(6) * (1 - opacity);
+        y += card.bounds.height + canvas.chrome.px(10);
+        cards[painted] = card;
         painted += 1;
-        const accent = switch (item.level) {
-            .info => palette.blue,
-            .success => palette.green,
-            .warning => palette.yellow,
-            .failure => palette.red,
-        };
-        notifications.add(.{ .area = card, .intent = .{ .notification_activate = item.id } });
-        try canvas.fill(card, palette.surface0);
-        try canvas.border(card, accent);
+    }
 
-        if (card.w < 8) {
+    // Newer cards stay above older cards while the stack changes position.
+    while (painted > 0) {
+        painted -= 1;
+        const card = &cards[painted];
+        if (card.opacity == 0) {
             continue;
         }
 
-        try canvas.text(.{ .x = card.x + 2, .y = card.y, .w = card.w -| 6, .h = 1 }, .{ .text = item.title(), .color = accent, .bold = true });
-        const content = card.inner(1);
-        try canvas.text(content.row(0), .{ .text = item.message(), .color = palette.text });
-        try canvas.text(content.row(1), .{ .text = if (item.clickable()) "click to open" else "click to dismiss", .color = palette.subtext0 });
-
-        const close: core.Rect = .{ .x = card.x + card.w - 3, .y = card.y, .w = 2, .h = 1 };
-        notifications.add(.{ .area = close, .intent = .{ .notification_dismiss = item.id } });
-        try canvas.text(close, .{ .text = "×", .color = accent, .bold = true });
+        try result.append(card.*);
     }
+
+    for (&notifications.motions, used) |*motion_state, seen| {
+        if (!seen) {
+            motion_state.* = .{};
+        }
+    }
+
+    return result;
 }
 
-/// Whether the pane a toast points at is on screen in the active tab now.
-/// Example: `if (targetVisible(projection, item.target)) continue;`
+fn motion(notifications: *Notifications, id: client.Id, y: f32) ?usize {
+    for (notifications.motions, 0..) |entry, index| {
+        if (entry.id == id) {
+            return index;
+        }
+    }
+
+    for (&notifications.motions, 0..) |*entry, index| {
+        if (entry.id == .invalid) {
+            entry.* = .{ .id = id, .from = y, .to = y };
+            return index;
+        }
+    }
+
+    // Repeated failed preparations can retain an older set until pruning.
+    // A new card uses its final position for this frame if the slots are full.
+    return null;
+}
+
+fn visibility(item: *const client.NotificationItem, clock: ?*Clock) f32 {
+    var sampled = item.*;
+    if (clock) |frame| {
+        if (sampled.phase == .entering) {
+            _ = sampled.advanceEntering(frame.now_ns);
+        }
+        if (sampled.phase == .visible and frame.now_ns >= sampled.expires_at_ns) {
+            _ = sampled.beginExit(sampled.expires_at_ns);
+        }
+        if (sampled.phase == .exiting) {
+            _ = sampled.advanceExiting(frame.now_ns);
+        }
+
+        if (sampled.phase == .entering or (sampled.phase == .exiting and sampled.transition_position_ns > 0)) {
+            frame.requestAt(sampled.nextDeadline(frame.now_ns, Clock.frame_interval_ns));
+        }
+    }
+
+    const t = @as(f32, @floatFromInt(sampled.transition_position_ns)) / @as(f32, @floatFromInt(client.transition_duration_ns));
+    return t * t * (3 - 2 * t);
+}
+
+/// Suppresses a notice whose target pane is already visible in the active tab.
+/// Example: `if (Notifications.targetVisible(projection, item.target)) continue;`
 pub fn targetVisible(projection: client.Projection, target: client.NotificationTarget) bool {
     const pane_id = switch (target) {
         .focus_pane => |id| id,
@@ -78,24 +141,4 @@ pub fn targetVisible(projection: client.Projection, target: client.NotificationT
     var layout: client.LayoutSnapshot = .{};
     model.layout.snapshot(projection.geometry.area, &layout);
     return layout.find(pane_id) != null;
-}
-
-fn add(notifications: *Notifications, hit: OverlayHit) void {
-    notifications.hits[notifications.count] = hit;
-    notifications.count += 1;
-}
-
-/// Resolves the topmost card control using stable notification IDs.
-/// Example: `const intent = notifications.at(mouse);`.
-pub fn at(notifications: *const Notifications, mouse: client.Mouse) ?client.Intent {
-    var index = notifications.count;
-    while (index > 0) {
-        index -= 1;
-        const hit = notifications.hits[index];
-        if (hit.area.contains(mouse.x, mouse.y)) {
-            return hit.intent;
-        }
-    }
-
-    return null;
 }

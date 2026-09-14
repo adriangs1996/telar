@@ -9,6 +9,8 @@ const Fixture = @This();
 model: client.Model,
 renderer: Renderer,
 overlays: Overlays = .{},
+widgets: @import("../widgets/interaction/State.zig") = .{},
+animation: ?@import("../animation/FrameClock.zig") = null,
 size: core.TerminalSize,
 
 pub fn init() !*Fixture {
@@ -39,11 +41,27 @@ pub fn canvas(fixture: *Fixture) Canvas {
 
 pub fn paint(fixture: *Fixture) !void {
     try fixture.prepare();
-    fixture.overlays.present(true);
+    fixture.present(true);
 }
 
 pub fn prepare(fixture: *Fixture) !void {
     fixture.renderer.quads.clear();
     var target = fixture.canvas();
+    target.animation = if (fixture.animation) |*clock| clock else null;
+    fixture.widgets.begin(fixture.model.name_prompt.active());
     try fixture.overlays.paint(&target, fixture.projection());
+    try fixture.widgets.overlays(&target, &fixture.overlays);
+    fixture.widgets.seal();
+}
+
+/// Example: `fixture.present(false);`
+pub fn present(fixture: *Fixture, delivered: bool) void {
+    fixture.overlays.present(delivered);
+    fixture.widgets.present(delivered);
+}
+
+/// Example: `const result = fixture.pointer(.{ .kind = .press, .x = 10, .y = 20 });`
+pub fn pointer(fixture: *Fixture, event: @import("../input/PointerEvent.zig")) client.ViewInteractionCommand {
+    const routed = fixture.widgets.dispatcher.route(.{ .pointer = event });
+    return .{ .consumed = routed.consumed, .intent = if (routed.target) |target| if (target.action == .intent) target.action.intent else .none else .none };
 }

@@ -26,6 +26,7 @@ test {
     _ = @import("host/Services.zig");
     _ = @import("tests/widgets.zig");
     _ = @import("tests/widget_animation.zig");
+    _ = @import("tests/widget_composition.zig");
     _ = @import("tests/host_input.zig");
     _ = @import("animation/FrameClock.zig");
     _ = @import("animation/Transition.zig");
@@ -48,6 +49,7 @@ test {
     _ = @import("tests/chrome.zig");
     _ = @import("tests/composition_budget.zig");
     _ = @import("tests/overlays.zig");
+    _ = @import("tests/notifications.zig");
     _ = @import("tests/scene.zig");
     _ = @import("tests/visual_language.zig");
     _ = @import("tests/sidebar_cards.zig");

@@ -116,6 +116,15 @@ pub fn items(list: *const QuadList) []const Quad {
     return list.quads.items;
 }
 
+/// Fades a composed widget, including glyphs, sprites and rounded borders.
+/// Example: `list.fadeFrom(first_card_quad, opacity);`
+pub fn fadeFrom(list: *QuadList, start: usize, opacity: f32) void {
+    for (list.quads.items[start..]) |*item| {
+        item.a *= opacity;
+        item.border_a *= opacity;
+    }
+}
+
 test "plain rectangles keep zero shape attributes and rounded surfaces carry theirs" {
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();

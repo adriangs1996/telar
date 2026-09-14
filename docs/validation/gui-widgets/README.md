@@ -10,6 +10,9 @@ model. Platform adapters translate text input, clipboard requests, scrolling
 and accessibility. Widgets execute application commands in Zig. The quad
 frame and Metal/Vulkan drawing protocols remain unchanged.
 
+The [complete widget composition report](composition.md) covers the subsequent
+integration that makes the whole GUI frame pass through one widget list.
+
 | Check | Result | Evidence |
 | --- | --- | --- |
 | macOS GUI, source style, client boundaries | 314 tests passed; all build steps passed | [GUI log](macos-gui.log) |

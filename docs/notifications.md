@@ -92,15 +92,32 @@ only after the whole effect batch passes validation.
 
 Titles are limited to 48 UTF-8 bytes, bodies to 192 bytes, and each client
 keeps at most four notifications. A fifth replaces the oldest. The native GUI
-shows at most two toasts at a time, oldest first, and does not show a toast
-whose target pane is already on screen in the active tab; the others wait
-their turn without losing their duration. Toasts animate
-in and out on a continuous smoothstep curve sampled at the client's frame
-cadence. Their duration is time-based, so dropped frames do not stretch the
-transition; once stable, the client sleeps until the next expiry instead of
-polling. Toasts can be dismissed explicitly, and click targets are semantic
-IDs; a pane, tab, or workspace that disappeared before the click is safely
-ignored.
+shows at most two cards at a time, newest first, and suppresses a card whose
+target pane is already visible in the active tab. Items outside the visible
+set retain their original expiry time. Cards can be dismissed explicitly;
+targets use semantic IDs, so a pane, tab, or workspace that disappeared before
+the click is safely ignored.
+
+### Native GUI presentation
+
+GUI cards use proportional typography, rounded surfaces, a severity icon and
+a close control. Their width is capped at 360 logical chrome pixels. The body
+wraps to three lines at word or grapheme boundaries and truncates with an
+ellipsis. A targeted card displays an explicit action such as "Open pane".
+The layout scales with GUI chrome metrics and fits the workbench viewport.
+
+Entry and exit translate and fade the whole card over 200 ms, keeping its
+text layout fixed. Stack positions interpolate over 180 ms when notices are
+added or removed. The host frame clock samples current monotonic time and
+requests frames only while visible cards move. The shared notification timer
+wakes at lifecycle boundaries on the GUI; the TUI retains its frame cadence.
+Neither animation stores a queue of missed frames.
+
+The widget dispatcher registers card and close bounds in device pixels, with
+accessible labels and keyboard focus. It publishes them only after successful
+frame delivery, retains pointer capture through release, and blocks them
+behind a modal. Drawing borrows the shared notification snapshot without
+changing it; all stack motion belongs to the disposable GUI connection.
 
 ## Agent sound playback
 

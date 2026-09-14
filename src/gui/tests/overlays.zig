@@ -99,24 +99,24 @@ test "native notification replacement retains the delivered card identity" {
     const first = fixture.model.publishNotification(0, .{ .title = "First", .message = "Delivered" }).id;
     _ = fixture.model.advanceNotifications(client.transition_duration_ns);
     try fixture.paint();
-    const close = fixture.overlays.presented().notifications.hits[1].area;
+    const close = fixture.overlays.presented().notifications.hits[1].bounds;
     _ = fixture.model.dismissNotification(first, client.transition_duration_ns);
     _ = fixture.model.advanceNotifications(client.transition_duration_ns * 2);
     const second = fixture.model.publishNotification(client.transition_duration_ns * 2, .{ .title = "Next", .message = "Prepared" }).id;
     _ = fixture.model.advanceNotifications(client.transition_duration_ns * 3);
     try fixture.prepare();
-    try std.testing.expectEqual(close, fixture.overlays.prepared().notifications.hits[1].area);
-    const mouse: client.Mouse = .{ .x = close.x, .y = close.y, .kind = .press };
-    const release: client.Mouse = .{ .x = 0, .y = 0, .kind = .release };
-    try std.testing.expectEqualDeep(client.Intent{ .notification_dismiss = first }, fixture.overlays.pointer(mouse).?.intent);
-    _ = fixture.overlays.pointer(release);
-    fixture.overlays.present(false);
-    try std.testing.expectEqualDeep(client.Intent{ .notification_dismiss = first }, fixture.overlays.pointer(mouse).?.intent);
-    _ = fixture.overlays.pointer(release);
+    try std.testing.expectEqual(close, fixture.overlays.prepared().notifications.hits[1].bounds);
+    const mouse: @import("../input/PointerEvent.zig") = .{ .x = close.x, .y = close.y, .kind = .press };
+    const release: @import("../input/PointerEvent.zig") = .{ .x = 0, .y = 0, .kind = .release };
+    try std.testing.expectEqualDeep(client.Intent{ .notification_dismiss = first }, fixture.pointer(mouse).intent);
+    _ = fixture.pointer(release);
+    fixture.present(false);
+    try std.testing.expectEqualDeep(client.Intent{ .notification_dismiss = first }, fixture.pointer(mouse).intent);
+    _ = fixture.pointer(release);
 
     try fixture.prepare();
-    fixture.overlays.present(true);
-    try std.testing.expectEqualDeep(client.Intent{ .notification_dismiss = second }, fixture.overlays.pointer(mouse).?.intent);
+    fixture.present(true);
+    try std.testing.expectEqualDeep(client.Intent{ .notification_dismiss = second }, fixture.pointer(mouse).intent);
 }
 
 test "native modal geometry clips every glyph on tiny hosts and preserves prompt state" {
@@ -202,18 +202,18 @@ test "native notification close has precedence and cannot leak its release to a 
     _ = fixture.model.advanceNotifications(client.transition_duration_ns);
     try fixture.paint();
     try std.testing.expectEqual(@as(usize, 2), fixture.overlays.presented().notifications.count);
-    const card = fixture.overlays.presented().notifications.hits[0].area;
-    const close = fixture.overlays.presented().notifications.hits[1].area;
-    const press = fixture.overlays.pointer(.{ .x = close.x, .y = close.y, .kind = .press }).?;
+    const card = fixture.overlays.presented().notifications.hits[0].bounds;
+    const close = fixture.overlays.presented().notifications.hits[1].bounds;
+    const press = fixture.pointer(.{ .x = close.x, .y = close.y, .kind = .press });
     try std.testing.expectEqualDeep(client.Intent{ .notification_dismiss = id }, press.intent);
-    try std.testing.expect(fixture.overlays.pointer(.{ .x = 0, .y = 0, .kind = .release }).?.consumed);
-    const open = fixture.overlays.pointer(.{ .x = card.x + 1, .y = card.y + 1, .kind = .press }).?;
+    try std.testing.expect(fixture.pointer(.{ .x = 0, .y = 0, .kind = .release }).consumed);
+    const open = fixture.pointer(.{ .x = card.x + 1, .y = card.y + 1, .kind = .press });
     try std.testing.expectEqualDeep(client.Intent{ .notification_activate = id }, open.intent);
 
-    _ = fixture.overlays.pointer(.{ .x = 0, .y = 0, .kind = .release });
+    _ = fixture.pointer(.{ .x = 0, .y = 0, .kind = .release });
     fixture.model.name_prompt.begin(.create_workspace);
     try fixture.paint();
-    const blocked = fixture.overlays.pointer(.{ .x = close.x, .y = close.y, .kind = .press }).?;
+    const blocked = fixture.pointer(.{ .x = close.x, .y = close.y, .kind = .press });
     try std.testing.expect(blocked.consumed and blocked.intent == .none);
 }
 

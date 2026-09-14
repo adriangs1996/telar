@@ -1,9 +1,17 @@
 const client = @import("telar-client");
 const Modal = @import("Modal.zig");
 
+const Canvas = @import("../chrome/Canvas.zig");
+const SuggestionModal = @This();
+
+area: @import("telar-core").Rect,
+projection: *const client.Projection,
+
 /// Paints the engine's owned response without running engine work in the GUI.
-/// Example: `try paint(modal, projection);`.
-pub fn paint(modal: Modal, projection: client.Projection) !void {
+/// Example: `try widget.draw(canvas);`
+pub fn draw(widget: SuggestionModal, canvas: *Canvas) !void {
+    const modal: Modal = .{ .canvas = canvas, .area = widget.area };
+    const projection = widget.projection.*;
     const state = projection.suggestion;
     const palette = modal.canvas.theme.palette;
     const text: []const u8 = switch (state.phase) {

@@ -125,6 +125,21 @@ The view stores only physical presentation state such as hit regions, overlay
 cleanup and prepared raster data. Graphics preparation runs on the independent
 media path and cannot mutate notification semantics.
 
+The native GUI samples a copy of each visible item at `FrameClock.now_ns`.
+`overlays/Notifications` owns four bounded stack-position slots keyed by item
+ID; at most two cards draw. Whole-card translation and opacity never change
+the measured text width. Position changes start from the current sampled
+position. Tiny viewports and absent cards retire their motion slots.
+The GUI's shared notification scheduler requests only transition completion
+and expiry; host frame requests cover intermediate visible samples. Stable
+cards request no animation frames.
+
+`NotificationHits` captures pixel bounds and owned widget actions. The widget
+dispatcher publishes those actions with the matching delivered frame, gives
+the close control precedence, and retains gesture ownership if a card exits.
+Modal scope suppresses notification input. Failed delivery preserves the old
+controls while later preparation samples current time.
+
 ## Interaction path
 
 ```text
@@ -168,6 +183,12 @@ as proxy status and agent state, rebuild their own model replicas and may emit
 new notifications after reconciliation.
 
 ## Proof
+
+- `src/gui/tests/notifications.zig` covers host-time sampling, failed delivery,
+  fixed text geometry, stack motion, retirement, Unicode wrapping, pixel hit
+  boundaries, warm allocation bounds and lifecycle-only GUI deadlines.
+- `src/gui/tests/overlays.zig` covers notification replacement, close precedence,
+  captured release and modal input isolation through the native dispatcher.
 
 - `src/frontend/notifications/` proves bounds, owned text, duplicate
   refresh, replacement, elapsed-time transitions, stale interaction and UTF-8

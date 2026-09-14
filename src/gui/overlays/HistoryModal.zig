@@ -6,9 +6,15 @@ const HistoryDetails = @import("HistoryDetails.zig");
 const WrappedLines = @import("WrappedLines.zig");
 const labels = @import("history_labels.zig");
 
+const Canvas = @import("../chrome/Canvas.zig");
+const HistoryModal = @This();
+
+area: @import("telar-core").Rect,
+projection: *const client.Projection,
+
 /// Shares one responsive layout between drawing and inspector scroll bounds.
-/// Example: `const modal_area = area(projection);`.
-pub fn area(projection: client.Projection) core.Rect {
+/// Example: `const modal_area = preferredArea(projection);`.
+pub fn preferredArea(projection: client.Projection) core.Rect {
     const inspecting = projection.prompt.?.inspecting();
     return Modal.bounds(.{ .w = projection.host_size.cols, .h = projection.host_size.rows }, .{
         .w = if (inspecting) 140 else 104,
@@ -17,8 +23,10 @@ pub fn area(projection: client.Projection) core.Rect {
 }
 
 /// Draws a bounded history page and its captured output through native glyphs.
-/// Example: `try paint(modal, projection);`.
-pub fn paint(modal: Modal, projection: client.Projection) !void {
+/// Example: `try widget.draw(canvas);`
+pub fn draw(widget: HistoryModal, canvas: *Canvas) !void {
+    const modal: Modal = .{ .canvas = canvas, .area = widget.area };
+    const projection = widget.projection.*;
     const palette = modal.canvas.theme.palette;
     const prompt = projection.prompt.?;
     const state = projection.history;
@@ -178,7 +186,7 @@ pub fn inspectionScrollLimit(projection: client.Projection) ?u32 {
         return null;
     }
 
-    const rect = area(projection);
+    const rect = preferredArea(projection);
     const content = if (rect.w > 2 and rect.h > 2) rect.inner(1) else rect;
     const list = inspectionArea(content.splitBottom(3)[0]);
     const selection = @min(prompt.selection(), state.len - 1);

@@ -1,17 +1,12 @@
 const client = @import("telar-client");
-const core = @import("telar-core");
 const Canvas = @import("../chrome/Canvas.zig");
-const Modal = @import("Modal.zig");
 const HitState = @import("HitState.zig");
 const GenericPresentedState = @import("../render/GenericPresentedState.zig").Type;
-const name_prompt = @import("name_prompt.zig");
-const picker = @import("picker.zig");
-const history = @import("history.zig");
-const suggestion = @import("suggestion.zig");
-const CommandPalette = @import("CommandPalette.zig");
+const HistoryModal = @import("HistoryModal.zig");
 const Overlays = @This();
 
 maps: GenericPresentedState(HitState) = .{},
+notifications: @import("Notifications.zig") = .{},
 gesture: ?u8 = null,
 /// The native keymap, for the palette's bound-key column.
 router: ?*const @import("../input/router.zig").Type = null,
@@ -22,38 +17,33 @@ scale: f32 = 1,
 /// Call after panes and permanent chrome, before sealing the frame.
 /// Example: `try overlays.paint(canvas, projection);`.
 pub fn paint(overlays: *Overlays, canvas: *Canvas, projection: client.Projection) !void {
+    var widgets: @import("../widgets/frame_widget.zig").List = .{};
+    try overlays.compose(.{ .canvas = canvas, .projection = &projection }, &widgets);
+    try widgets.draw(canvas);
+    overlays.seal();
+}
+
+/// Selects cards and the active modal without emitting quads. The list borrows
+/// the projection and pending hit storage until it finishes drawing.
+/// Example: `try overlays.compose(input, &widgets);`
+pub fn compose(overlays: *Overlays, input: @import("OverlayComposition.zig"), widgets: anytype) !void {
     const pending = overlays.maps.begin();
-    try pending.notifications.paint(canvas, projection);
-    const prompt = projection.prompt orelse {
-        pending.palette = .{};
-        overlays.maps.seal();
-        return;
-    };
-    if (prompt.target() == .palette) {
-        const palette: CommandPalette = .{ .canvas = canvas, .projection = projection, .router = overlays.router, .scale = overlays.scale };
-        pending.modal = try palette.paint(&pending.palette);
-        overlays.maps.seal();
-        return;
+    const cards = try overlays.notifications.prepare(input.canvas, input.projection.*);
+    for (cards.storage[0..cards.len]) |value| {
+        var card = value;
+        card.hits = &pending.notifications;
+        try widgets.append(.{ .notification = card });
     }
 
-    pending.palette = .{};
-    const host: core.Rect = .{ .w = projection.host_size.cols, .h = projection.host_size.rows };
-    const area = switch (prompt.target()) {
-        .history => history.area(projection),
-        .goto => Modal.bounds(host, .{ .w = 84, .h = 18 }),
-        .suggest => Modal.bounds(host, .{ .w = 84, .h = 9 }),
-        .create_workspace => Modal.bounds(host, .{ .w = 72, .h = 16 }),
-        else => Modal.bounds(host, .{ .w = 64, .h = 7 }),
-    };
-    pending.modal = area;
-    const modal: Modal = .{ .canvas = canvas, .area = area };
-    switch (prompt.target()) {
-        .goto => try picker.paint(modal, projection),
-        .history => try history.paint(modal, projection),
-        .suggest => try suggestion.paint(modal, projection),
-        .create_workspace => try name_prompt.paintCreateForm(modal, projection),
-        else => try name_prompt.paint(modal, prompt),
-    }
+    var modal_input = input;
+    modal_input.router = overlays.router;
+    modal_input.scale = overlays.scale;
+    try @import("modal_widget.zig").compose(modal_input, pending, widgets);
+}
+
+/// Seal after all widgets have drawn and registered their controls.
+/// Example: `overlays.seal();`
+pub fn seal(overlays: *Overlays) void {
     overlays.maps.seal();
 }
 
@@ -96,13 +86,7 @@ pub fn pointer(overlays: *Overlays, mouse: client.Mouse) ?client.ViewInteraction
         return .{ .consumed = true };
     }
 
-    const intent = visible.notifications.at(mouse) orelse return null;
-    if (mouse.kind == .press) {
-        overlays.gesture = button;
-        return .{ .consumed = true, .intent = if (button == 0) intent else .none };
-    }
-
-    return .{ .consumed = true };
+    return null;
 }
 
 /// Cancels pointer ownership when the native window loses focus.
@@ -114,5 +98,5 @@ pub fn cancelPointer(overlays: *Overlays) void {
 /// Exposes the native inspector's wrapping to the shared prompt controller.
 /// Example: `const limit = Overlays.inspectionScrollLimit(projection);`.
 pub fn inspectionScrollLimit(projection: client.Projection) ?u32 {
-    return history.inspectionScrollLimit(projection);
+    return HistoryModal.inspectionScrollLimit(projection);
 }

@@ -18,6 +18,8 @@ const Sprite = @import("../image/Sprite.zig");
 const Canvas = @This();
 
 widgets: ?*@import("../widgets/interaction/State.zig") = null,
+/// The specialized cell cache is available to terminal widgets in a GUI frame.
+terminal_renderer: ?*@import("../render/TerminalRenderer.zig") = null,
 
 atlas: *@import("../text/GlyphAtlas.zig"),
 quads: *@import("../render/QuadList.zig"),
@@ -36,6 +38,18 @@ sidebar: @import("SidebarBand.zig") = .{},
 /// The RGBA sprite page of the renderer; `null` while a fixture has none,
 /// in which case `spriteAt` draws nothing and `providerMark` finds nothing.
 sprites: ?*const SpritePage = null,
+
+/// Draws canonical terminal cells and their cursor through the frame's retained
+/// cache. A canvas backed by another quad list cannot use that cache.
+/// Example: `try canvas.terminal(.{ .pane = pane, .view = view });`
+pub fn terminal(canvas: *Canvas, paint: @import("../render/PanePaint.zig")) !void {
+    const renderer = canvas.terminal_renderer orelse return error.TerminalPainterUnavailable;
+    if (canvas.quads != &renderer.quads or canvas.atlas != &renderer.atlas.?) {
+        return error.TerminalCanvasMismatch;
+    }
+
+    try renderer.drawPane(paint);
+}
 
 /// Converts host grid coordinates including the configured window inset.
 /// Example: `const pixels = canvas.rect(regions.top);`

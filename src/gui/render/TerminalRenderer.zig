@@ -162,9 +162,10 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
     return size;
 }
 
-/// Copies the visible leaves into quads while the projection is borrowed.
-/// Example: `const commit = try renderer.prepare(projection);`
-pub fn prepare(renderer: *Renderer, projection: client.Projection) !client.PresentationCommit {
+/// Starts a frame without traversing the model or emitting any quads. The
+/// widget composition decides which terminal leaves to draw afterwards.
+/// Example: `renderer.begin();`
+pub fn begin(renderer: *Renderer) void {
     renderer.quads.clear();
     renderer.repainted_cells = 0;
     const background = rgb(renderer.theme.background);
@@ -176,6 +177,12 @@ pub fn prepare(renderer: *Renderer, projection: client.Projection) !client.Prese
     renderer.last_theme = renderer.theme;
     renderer.background = background;
     renderer.foreground = foreground;
+}
+
+/// Terminal-only preparation for renderer probes. The GUI composes its complete
+/// widget list in Scene instead. Example: `try renderer.prepare(projection);`
+pub fn prepare(renderer: *Renderer, projection: client.Projection) !client.PresentationCommit {
+    renderer.begin();
     const model = projection.model orelse return .{};
     var layout: client.LayoutSnapshot = .{};
     model.layout.snapshot(projection.geometry.area, &layout);
@@ -186,7 +193,7 @@ pub fn prepare(renderer: *Renderer, projection: client.Projection) !client.Prese
         }
 
         const pane = model.findConst(view.pane_id) orelse continue;
-        try renderer.paintPane(.{ .pane = pane, .view = view, .copy = copy_selection.forPane(projection.copy, pane.id), .hide_cursor = projection.prompt != null });
+        try renderer.drawPane(.{ .pane = pane, .view = view, .copy = copy_selection.forPane(projection.copy, pane.id), .hide_cursor = projection.prompt != null });
         commit.append(pane);
     }
 
@@ -213,7 +220,9 @@ pub fn seal(renderer: *Renderer) void {
 
 const PanePaint = @import("PanePaint.zig");
 
-fn paintPane(renderer: *Renderer, paint: PanePaint) !void {
+/// The Canvas terminal operation reuses retained cell meshes and cursor policy.
+/// Example: `try renderer.drawPane(paint);`
+pub fn drawPane(renderer: *Renderer, paint: PanePaint) !void {
     const pane = paint.pane;
     const area = paint.view.content;
     const rows = @min(area.h, pane.buffer.h);

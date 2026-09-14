@@ -27,10 +27,6 @@ pub fn resolve(gui: *const GuiClient, mouse: client.Mouse, mods: u32) Target {
         return .{};
     }
 
-    if (overlays.notifications.at(mouse) != null) {
-        return .{ .shape = .pointer };
-    }
-
     if (gui.input.pointer.hover.covers(mouse)) {
         return .{};
     }

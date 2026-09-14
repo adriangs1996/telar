@@ -14,7 +14,7 @@ pub fn reschedule(client: *Client) !void {
     const now_ns = monotonic_module(client.io);
     const deadline_ns = client.model.nextNotificationDeadline(
         now_ns,
-        client.presentation.frameIntervalNs(),
+        if (client.timers.animation_clock == .host) @import("std").math.maxInt(u64) else client.presentation.frameIntervalNs(),
     );
     switch (scheduler.update(client.io, deadline_ns)) {
         .idle, .retained => {},

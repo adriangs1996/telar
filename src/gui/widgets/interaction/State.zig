@@ -68,6 +68,11 @@ pub fn chrome(state: *State, canvas: *Canvas, input: @import("ChromeRegistration
 /// Imports modal result rows after their field, preserving painter priority.
 /// Example: `try state.overlays(canvas, &overlays);`
 pub fn overlays(state: *State, canvas: *Canvas, value: *@import("../../overlays/Overlays.zig")) !void {
+    const notifications = &value.prepared().notifications;
+    for (notifications.hits[0..notifications.count]) |hit| {
+        _ = try state.dispatcher.add(hit);
+    }
+
     const palette = &value.prepared().palette;
     for (palette.rows[0..palette.count], 0..) |row, index| {
         _ = try state.dispatcher.add(.{ .id = .{ .generation = state.prompt_generation }, .bounds = canvas.rect(row), .action = .{ .intent = .{ .prompt_row = palette.first + @as(u16, @intCast(index)) } }, .layer = 1, .focusable = false });

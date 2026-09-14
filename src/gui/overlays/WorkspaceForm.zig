@@ -1,36 +1,22 @@
+//! The workspace name, directory editor and landed completion rows.
 const client = @import("telar-client");
 const core = @import("telar-core");
+const Canvas = @import("../chrome/Canvas.zig");
 const Modal = @import("Modal.zig");
-const EditorView = @import("EditorView.zig");
 const CompletionRows = @import("CompletionRows.zig");
 const TextField = @import("../widgets/TextField.zig");
+const WorkspaceForm = @This();
 
 pub const create_hints = "tab complete · ↑↓ choose · enter create · esc cancel";
 pub const create_confirmation = "Directory does not exist · enter creates it · esc cancel";
 
-/// Draws name editing and copy search using the same bounded prompt state.
-/// Example: `try paint(modal, prompt);`.
-pub fn paint(modal: Modal, prompt: client.Prompt) !void {
-    const title: []const u8 = switch (prompt.target()) {
-        .rename_tab => "Rename tab",
-        .rename_workspace => "Rename workspace",
-        .copy_search => |direction| if (direction == .forward) "Search forward" else "Search backward",
-        else => unreachable,
-    };
-    try modal.frame(title);
+area: core.Rect,
+projection: *const client.Projection,
 
-    const content = modal.content();
-    try modal.field(content.row(if (content.h > 2) 1 else 0), prompt);
-
-    if (content.h > 2) {
-        try modal.line(content.h - 1, .{ .text = "Enter confirm  Esc cancel", .color = modal.canvas.theme.palette.subtext0 });
-    }
-}
-
-/// Draws the new-context form: name, working directory, the client's landed
-/// completion list and either the key hints or the directory confirmation.
-/// Example: `try paintCreateForm(modal, projection);`.
-pub fn paintCreateForm(modal: Modal, projection: client.Projection) !void {
+/// Example: `try form.draw(canvas);`
+pub fn draw(widget: WorkspaceForm, canvas: *Canvas) !void {
+    const modal: Modal = .{ .canvas = canvas, .area = widget.area };
+    const projection = widget.projection.*;
     var prompt = projection.prompt.?;
     const form = prompt.mode.create_workspace;
     const palette = modal.canvas.theme.palette;

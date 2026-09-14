@@ -1,9 +1,17 @@
 const client = @import("telar-client");
 const Modal = @import("Modal.zig");
 
+const Canvas = @import("../chrome/Canvas.zig");
+const PickerModal = @This();
+
+area: @import("telar-core").Rect,
+projection: *const client.Projection,
+
 /// Uses the client's canonical fuzzy matches, including its selection ordering.
-/// Example: `try paint(modal, projection);`.
-pub fn paint(modal: Modal, projection: client.Projection) !void {
+/// Example: `try widget.draw(canvas);`
+pub fn draw(widget: PickerModal, canvas: *Canvas) !void {
+    const modal: Modal = .{ .canvas = canvas, .area = widget.area };
+    const projection = widget.projection.*;
     const prompt = projection.prompt.?;
     const palette = modal.canvas.theme.palette;
     const sources: client.Sources = .{ .agents = projection.agents, .workspaces = projection.workspaces, .tabs = projection.tabs };

@@ -1,0 +1,7 @@
+2026-09-15 00:35:21.194 gui-window-test[5189:66723175] Metal API Validation Enabled
+native host input: preedit, UTF-8 ranges, caret, Command, precise scroll, AX and clipboard failures=0
+native macOS: status=0 painted=16 delivered=12 discarded=3 inputs=10 repeats=26 pointer_inputs=8 pointer_queries=176 timer_wakes=1 fullscreen=3 failures=0
+Build Summary: 3/3 steps succeeded
+test-gui-window success
++- run exe gui-window-test success 4s
+   +- compile exe gui-window-test Debug native cached 149ms MaxRSS:35M

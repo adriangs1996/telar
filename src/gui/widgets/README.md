@@ -5,11 +5,35 @@ The GUI builds concrete Zig widgets during synchronous preparation of a client
 the sealed quad frame, glyph atlas and sprite page; adding a widget does not add
 a native drawing callback or a GPU command type.
 
-The permanent chrome exercises this path in `Chrome.paint`: it constructs a
-bounded `GenericWidgetList` of top bar, tabs, status bar, sidebar and pane
-decorations, then calls `draw(canvas)`. `chrome_widget.zig` declares that union.
-Other compositions can declare their own union. `Surface`, `Text` and `Sprite`
-are small reusable leaves.
+`Scene.prepare` starts the frame resources, then calls `Composition.render` with
+the borrowed projection. That method returns the complete `frame_widget.List`:
+terminal leaves, thread views, a hovered link, top bar, tabs, status bar, sidebar,
+pane decorations, chrome focus, notifications and the selected modal. It emits
+no quads. `Scene` draws the list once through `draw(canvas)` and seals the frame
+and its control registries only after drawing and registration succeed.
+
+```zig
+var composition: Composition = .{
+    .chrome = chrome,
+    .overlays = overlays,
+    .canvas = &canvas,
+};
+const widgets = try composition.render(&projection);
+try widgets.draw(&canvas);
+```
+
+`Composition` owns the context borrowed by chrome widgets. Keep it and the
+projection at stable addresses until drawing returns; returning the list does
+not extend either lifetime. The list holds at most 74 widgets, derived from the
+64-pane limit, one link, five chrome sections, one focus indicator, two notices
+and one modal. A frame can contain both terminal and thread leaves. Its commit
+captures the generations and damage of the panes actually composed.
+
+`frame_widget.zig` declares the frame's tagged union. Add a variant and select it
+in `Composition.render` to introduce a new frame section. Containers may build
+their own concrete widget lists. `Surface`, `Text` and `Sprite` are reusable
+leaves. `Chrome.paint` and `Overlays.paint` remain standalone entrypoints for
+isolated rendering tests; both use their composition and widget draw methods.
 
 ```mermaid
 flowchart LR
@@ -19,9 +43,11 @@ flowchart LR
     Dispatch --> Commands[Shared application commands]
     Commands --> Model[Client model]
     Model --> Projection
-    Projection --> Scene[Widget composition and layout]
-    Clock[Animation deadlines] --> Scene
-    Scene --> Canvas
+    Projection --> Composition[Composition.render]
+    Clock[Animation deadlines] --> Composition
+    Composition --> List[Frame widget list]
+    List --> Draw[Each widget.draw]
+    Draw --> Canvas
     Canvas --> Frame[Quads and resource references]
     Frame --> GPU[Metal or Vulkan]
     GPU --> Completion[Presentation completion]
@@ -36,6 +62,12 @@ uses fixed, measured-content or fill sizes, with minimum and maximum bounds.
 Containers provide rows, columns, overlays, padding, gaps and alignment. Nest a
 container by resolving another array inside its parent's assigned rectangle.
 Chrome logical dimensions are converted through `ChromeMetrics.px` first.
+
+`TerminalPane.draw` uses `Canvas.terminal` to paint canonical cells and the cursor
+through the existing retained cell cache. Terminal shaping, selection colors and
+cursor ordering stay in that specialized painter. Selecting terminal leaves is
+the composition's job; the GUI no longer calls `TerminalRenderer.prepare` to
+paint them before its widget list.
 
 ```zig
 var rows = [_]LayoutItem{

@@ -47,22 +47,39 @@ pub fn paint(chrome: *Chrome, canvas: *Canvas, projection: client.Projection) !v
     }
 
     defer canvas.animation = previous_animation;
+    var context = try chrome.begin(canvas, &projection);
+    var widgets: WidgetList = .{};
+    try chrome.compose(&context, &widgets);
+    try widgets.draw(canvas);
+    chrome.seal();
+}
+
+/// Starts the pending hit map and returns a context borrowing only the caller's
+/// projection and persistent chrome state. Keep it alive until drawing ends.
+/// Example: `composition.context = try chrome.begin(canvas, projection);`
+pub fn begin(chrome: *Chrome, canvas: *Canvas, projection: *const client.Projection) !Context {
     const pending = chrome.maps.begin();
-    try registerPanes(&pending.hits, projection);
-    // The shared column preference stays with the TUI: the band the
-    // renderer measured is the sidebar here, and its visibility followed
-    // the model when the request was built.
+    try registerPanes(&pending.hits, projection.*);
     pending.regions = Regions.calculate(projection.host_size.cols, projection.host_size.rows);
     pending.bands = Bands.resolve(canvas);
     chrome.ages.observe(projection.agents, chrome.now_ns);
-    var context: Context = .{ .canvas = canvas, .hits = &pending.hits, .bands = &pending.band_hits, .projection = &projection, .hovered = chrome.hovered, .ages = &chrome.ages, .favicons = &chrome.favicons };
-    var widgets: WidgetList = .{};
-    try widgets.append(.{ .top_bar = .{ .context = &context, .bands = pending.bands, .home = chrome.home.slice(), .sidebar_visible = canvas.sidebar.visible() } });
-    try widgets.append(.{ .tabs = .{ .context = &context, .bands = pending.bands } });
-    try widgets.append(.{ .status = .{ .context = &context, .area = pending.bands.status_bar } });
-    try widgets.append(.{ .sidebar = .{ .state = &chrome.sidebar, .context = &context, .area = pending.bands.sidebar } });
-    try widgets.append(.{ .panes = .{ .context = &context, .rings = &chrome.rings } });
-    try widgets.draw(canvas);
+    return .{ .canvas = canvas, .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = chrome.hovered, .ages = &chrome.ages, .favicons = &chrome.favicons };
+}
+
+/// Appends the permanent chrome in painter order without emitting quads.
+/// The caller owns the context through draw. Example: `try chrome.compose(&context, &widgets);`
+pub fn compose(chrome: *Chrome, context: *Context, widgets: anytype) !void {
+    const bands = chrome.maps.preparing().bands;
+    try widgets.append(.{ .top_bar = .{ .context = context, .bands = bands, .home = chrome.home.slice(), .sidebar_visible = context.canvas.sidebar.visible() } });
+    try widgets.append(.{ .tabs = .{ .context = context, .bands = bands } });
+    try widgets.append(.{ .status = .{ .context = context, .area = bands.status_bar } });
+    try widgets.append(.{ .sidebar = .{ .state = &chrome.sidebar, .context = context, .area = bands.sidebar } });
+    try widgets.append(.{ .panes = .{ .context = context, .rings = &chrome.rings } });
+}
+
+/// Seals hit records only after every composed widget has drawn successfully.
+/// Example: `chrome.seal();`
+pub fn seal(chrome: *Chrome) void {
     chrome.maps.seal();
 }
 

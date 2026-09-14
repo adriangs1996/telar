@@ -39,6 +39,14 @@ pub fn refresh(hover: *Hover, gui: *const GuiClient) void {
     }
 
     const event = hover.event orelse return;
+    if (!gui.app.model.name_prompt.active() and gui.overlays.presented().modal == null) {
+        if (gui.overlays.presented().notifications.at(.{ event.x, event.y })) |target| {
+            hover.assign(null, if (target.enabled) .pointer else .default);
+            hover.cached = null;
+            return;
+        }
+    }
+
     var moved = event;
     moved.kind = .move;
     const mouse = gui.input.pointer.geometry.resolve(moved) orelse {

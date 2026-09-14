@@ -2,11 +2,18 @@
 const Canvas = @import("../chrome/Canvas.zig");
 const Hit = @import("../input/LinkHit.zig");
 const client = @import("telar-client");
-const LinkRegions = @import("LinkRegions.zig");
+const LinkRegions = @import("../render/LinkRegions.zig");
 
-/// Paints the hovered span and a clipped destination preview below pane output.
-/// Example: `try link_decoration.paint(canvas, hit, pane);`
-pub fn paint(canvas: *Canvas, hit: *const Hit, pane: *const client.Pane) !void {
+const HoveredLink = @This();
+
+hit: *const Hit,
+pane: *const client.Pane,
+
+/// Paints the captured link span and its clipped destination preview.
+/// Example: `try hovered_link.draw(canvas);`
+pub fn draw(widget: HoveredLink, canvas: *Canvas) !void {
+    const hit = widget.hit;
+    const pane = widget.pane;
     const ink = canvas.theme.terminal.foreground;
     var regions = LinkRegions.init(hit, pane);
     while (regions.next()) |area| {

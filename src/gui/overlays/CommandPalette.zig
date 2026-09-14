@@ -24,8 +24,9 @@ pub const radius_px = 10;
 /// Icons and key words use glyphs the embedded faces cover.
 pub const legend = [_][]const u8{ ">", "actions", "@", "agents & panes", "?", "suggest", "↑↓", "select", "enter", "run", "esc", "close" };
 
-canvas: *Canvas,
-projection: client.Projection,
+projection: *const client.Projection,
+hits: *PaletteHits,
+modal: *?core.Rect,
 /// The native keymap that prints bound chords next to actions; absent in
 /// fixtures without a window.
 router: ?*const Router,
@@ -34,11 +35,11 @@ scale: f32,
 /// Cells the palette occupies for `rows` visible results, centered
 /// horizontally and anchored at eleven percent of the host height. Tiny
 /// hosts fall back to the shared modal bounds.
-/// Example: `const area = palette.area(rows);`.
-pub fn area(palette: CommandPalette, rows: u16) core.Rect {
+/// Example: `const bounds = palette.area(canvas, rows);`
+pub fn area(palette: CommandPalette, canvas: *Canvas, rows: u16) core.Rect {
     const host: core.Rect = .{ .w = palette.projection.host_size.cols, .h = palette.projection.host_size.rows };
     const scale = if (palette.scale > 0) palette.scale else 1;
-    const cell: f32 = @floatFromInt(@max(palette.canvas.metrics.cell_width, 1));
+    const cell: f32 = @floatFromInt(@max(canvas.metrics.cell_width, 1));
     const wanted: u16 = @intFromFloat(@ceil(@as(f32, width_px) * scale / cell));
     const width = @min(@max(wanted, 24), @min(host.w -| 4, 140));
     const height = rows + 4;
@@ -51,11 +52,11 @@ pub fn area(palette: CommandPalette, rows: u16) core.Rect {
 }
 
 /// Paints the palette and records one hit per visible row.
-/// Example: `const area = try palette.paint(&pending.palette);`.
-pub fn paint(palette: CommandPalette, hits: *PaletteHits) !core.Rect {
+/// Example: `try palette.draw(canvas);`
+pub fn draw(palette: CommandPalette, canvas: *Canvas) !void {
+    const hits = palette.hits;
     hits.* = .{};
     const prompt = palette.projection.prompt.?;
-    const canvas = palette.canvas;
     const colors = canvas.theme.palette;
     const scale = if (palette.scale > 0) palette.scale else 1;
     var goto_results: client.Results = .{};
@@ -72,16 +73,17 @@ pub fn paint(palette: CommandPalette, hits: *PaletteHits) !core.Rect {
         .suggest => 1,
     };
     const visible: u16 = @max(@min(total, max_rows), 1);
-    const frame = palette.area(visible);
+    const frame = palette.area(canvas, visible);
+    palette.modal.* = frame;
     try canvas.fillRounded(frame, .{ .radius = radius_px * scale, .color = canvas.covering(colors.panel_bg) });
     try canvas.ring(frame, .{ .width = scale, .radius = radius_px * scale, .color = colors.surface1 });
 
     const content = frame.inner(1);
     if (content.h < 3) {
-        return frame;
+        return;
     }
 
-    try palette.paintField(content.row(0), prompt);
+    try paintField(.{ .canvas = canvas, .area = content.row(0) }, prompt);
     const rows = content.splitTop(1)[1].splitBottom(1)[0];
     const selected: u16 = if (total == 0) 0 else @min(prompt.selection(), total - 1);
     const count = @min(rows.h, visible);
@@ -100,19 +102,19 @@ pub fn paint(palette: CommandPalette, hits: *PaletteHits) !core.Rect {
         }
 
         switch (prompt.paletteMode()) {
-            .goto => try palette.paintPickerRow(row, goto_results.slice()[index].item),
-            .actions => try palette.paintActionRow(row, action_results.slice()[index].index),
-            .suggest => try palette.paintSuggestionRow(row),
+            .goto => try palette.paintPickerRow(.{ .canvas = canvas, .area = row }, goto_results.slice()[index].item),
+            .actions => try palette.paintActionRow(.{ .canvas = canvas, .area = row }, action_results.slice()[index].index),
+            .suggest => try palette.paintSuggestionRow(.{ .canvas = canvas, .area = row }),
         }
     }
 
-    try palette.paintLegend(content.row(content.h - 1), prompt.paletteMode());
-    return frame;
+    try paintLegend(.{ .canvas = canvas, .area = content.row(content.h - 1) }, prompt.paletteMode());
 }
 
 // Keys in the monospace face, words in sans; the active prefix in accent.
-fn paintLegend(palette: CommandPalette, row: core.Rect, mode: client.command_palette.Prefix) !void {
-    const canvas = palette.canvas;
+fn paintLegend(modal: Modal, mode: client.command_palette.Prefix) !void {
+    const canvas = modal.canvas;
+    const row = modal.area;
     const colors = canvas.theme.palette;
     const cell: f32 = @floatFromInt(@max(canvas.metrics.cell_width, 1));
     var remaining = row;
@@ -136,8 +138,9 @@ fn sources(palette: CommandPalette) client.Sources {
 
 // The prefix byte is painted over the field text in the accent color; the
 // field keeps it as ordinary text so editing never needs a second cursor.
-fn paintField(palette: CommandPalette, row: core.Rect, prompt: client.Prompt) !void {
-    const canvas = palette.canvas;
+fn paintField(modal: Modal, prompt: client.Prompt) !void {
+    const canvas = modal.canvas;
+    const row = modal.area;
     const colors = canvas.theme.palette;
     var field = prompt.field;
     const view = field.view(row.w);
@@ -149,7 +152,7 @@ fn paintField(palette: CommandPalette, row: core.Rect, prompt: client.Prompt) !v
     }
 }
 
-fn paintPickerRow(palette: CommandPalette, row: core.Rect, item: client.ModelGotoPickerItem) !void {
+fn paintPickerRow(palette: CommandPalette, modal: Modal, item: client.ModelGotoPickerItem) !void {
     var storage: [client.max_label_bytes]u8 = undefined;
     const label = client.describe(palette.sources(), item, &storage);
     const split = std.mem.indexOf(u8, label, "  ") orelse label.len;
@@ -163,22 +166,22 @@ fn paintPickerRow(palette: CommandPalette, row: core.Rect, item: client.ModelGot
         .tab => "tab",
         .agent => "agent",
     };
-    try palette.paintRow(row, .{ .icon = icon, .primary = label[0..split], .secondary = std.mem.trimStart(u8, label[split..], " "), .hint = kind });
+    try paintRow(modal, .{ .icon = icon, .primary = label[0..split], .secondary = std.mem.trimStart(u8, label[split..], " "), .hint = kind });
 }
 
-fn paintActionRow(palette: CommandPalette, row: core.Rect, index: u8) !void {
+fn paintActionRow(palette: CommandPalette, modal: Modal, index: u8) !void {
     const entry = client.command_palette.entries[index];
     var storage: [key_label.max_bytes]u8 = undefined;
     const hint: []const u8 = if (palette.router) |router| blk: {
         const key = router.prefixedKeyForAction(entry.action) orelse break :blk "";
         break :blk key_label.chord(&storage, router.prefix, key);
     } else "";
-    try palette.paintRow(row, .{ .icon = "»", .primary = entry.label, .hint = hint });
+    try paintRow(modal, .{ .icon = "»", .primary = entry.label, .hint = hint });
 }
 
-fn paintSuggestionRow(palette: CommandPalette, row: core.Rect) !void {
+fn paintSuggestionRow(palette: CommandPalette, modal: Modal) !void {
     const state = palette.projection.suggestion;
-    const colors = palette.canvas.theme.palette;
+    const colors = modal.canvas.theme.palette;
     const text: []const u8 = switch (state.phase) {
         .idle => "Describe the command you need",
         .waiting => "Asking the engine…",
@@ -196,13 +199,14 @@ fn paintSuggestionRow(palette: CommandPalette, row: core.Rect) !void {
         .ready => "enter paste",
         .failed => "enter retry",
     };
-    try palette.paintRow(row, .{ .icon = "?", .primary = text, .hint = hint, .mono = state.phase == .ready, .color = if (state.phase == .failed) colors.red else colors.text });
+    try paintRow(modal, .{ .icon = "?", .primary = text, .hint = hint, .mono = state.phase == .ready, .color = if (state.phase == .failed) colors.red else colors.text });
 }
 
 // Icon column, sans label, muted secondary text and a right-aligned
 // monospace hint; the hint keeps its cells and the label clips before it.
-fn paintRow(palette: CommandPalette, row: core.Rect, content: PaletteRow) !void {
-    const canvas = palette.canvas;
+fn paintRow(modal: Modal, content: PaletteRow) !void {
+    const canvas = modal.canvas;
+    const row = modal.area;
     const colors = canvas.theme.palette;
     const parts = row.splitLeft(2);
     try canvas.text(parts[0], .{ .text = content.icon, .color = colors.subtext0 });
