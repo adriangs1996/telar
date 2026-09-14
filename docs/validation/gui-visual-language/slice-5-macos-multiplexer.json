@@ -1,0 +1,86 @@
+{
+  "records": {
+    "initial": [
+      99129,
+      64,
+      49
+    ],
+    "right": [
+      99145,
+      62,
+      22
+    ],
+    "bottom": [
+      99149,
+      30,
+      22
+    ],
+    "fullscreen": [
+      99149,
+      62,
+      47
+    ],
+    "restored": [
+      99149,
+      30,
+      22
+    ],
+    "pointer-right": [
+      99145,
+      29,
+      22
+    ],
+    "pointer-bottom": [
+      99149,
+      30,
+      22
+    ],
+    "left": [
+      99129,
+      62,
+      22
+    ],
+    "sidebar-off": [
+      99129,
+      62,
+      43
+    ],
+    "sidebar-on": [
+      99129,
+      62,
+      22
+    ],
+    "tab-two": [
+      99473,
+      64,
+      49
+    ],
+    "tab-one": [
+      99129,
+      62,
+      22
+    ],
+    "tab-again": [
+      99473,
+      64,
+      49
+    ],
+    "workspace-two": [
+      99622,
+      64,
+      49
+    ],
+    "workspace-back": [
+      99473,
+      64,
+      49
+    ]
+  },
+  "reconnect": [
+    99473,
+    64,
+    49
+  ],
+  "shell_survival": true,
+  "layout_survival": true
+}
