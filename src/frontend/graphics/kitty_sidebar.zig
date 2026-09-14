@@ -99,7 +99,12 @@ pub fn renderProviderAtlas(input: ProviderAtlasInput) void {
                 const destination_x = provider * input.slot.width + offset_x + x;
                 const destination_y = offset_y + y;
                 const destination_index = (@as(usize, destination_y) * input.atlas.width + destination_x) * 4;
-                input.destination[destination_index..][0..4].* = bitmap.sample(source, .{ .x = x, .y = y }, icon_size);
+                var rgba = bitmap.sample(source, .{ .x = x, .y = y }, icon_size);
+                if (provider == @intFromEnum(SidebarProvider.codex)) {
+                    rgba[0..3].* = input.foreground;
+                }
+
+                input.destination[destination_index..][0..4].* = rgba;
             }
         }
     }
@@ -107,6 +112,49 @@ pub fn renderProviderAtlas(input: ProviderAtlasInput) void {
 
 fn providerAtlasSourceCount() u32 {
     return KittySidebarRenderer.provider_count;
+}
+
+test "sidebar theme changes recolor OpenAI without reallocating or changing other providers" {
+    var renderer = KittySidebarRenderer.init(std.testing.allocator);
+    defer renderer.deinit();
+    const providers = [_]SidebarProviderPlacement{.{ .area = .{ .w = 2, .h = 2 }, .provider = .codex }};
+    var content: @import("SidebarContent.zig") = .{ .area = .{ .w = 8, .h = 8 }, .focused_card = null, .provider_marks = &providers };
+    const cell: @import("CellSize.zig") = .{ .width = 10, .height = 20 };
+    try renderer.prepare(content, cell);
+    const original = try std.testing.allocator.dupe(u8, renderer.provider_atlas);
+    defer std.testing.allocator.free(original);
+    const allocation = renderer.provider_atlas.ptr;
+    var buffer: [128 * 1024]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buffer);
+    _ = try renderer.write(&writer);
+
+    content.provider_foreground = .{ 16, 24, 32 };
+    try renderer.prepare(content, cell);
+    try std.testing.expectEqual(allocation, renderer.provider_atlas.ptr);
+    try std.testing.expect(renderer.provider_dirty);
+    try std.testing.expect(!renderer.provider_emitted);
+    var visible: usize = 0;
+    for (0..renderer.provider_atlas_height) |y| {
+        for (0..renderer.provider_atlas_width) |x| {
+            const offset = (y * renderer.provider_atlas_width + x) * 4;
+            const before = original[offset..][0..4];
+            const after = renderer.provider_atlas[offset..][0..4];
+            if (x / renderer.provider_slot_width == @intFromEnum(SidebarProvider.codex) and after[3] != 0) {
+                try std.testing.expectEqualSlices(u8, &content.provider_foreground, after[0..3]);
+                try std.testing.expectEqual(before[3], after[3]);
+                visible += 1;
+            } else if (x / renderer.provider_slot_width != @intFromEnum(SidebarProvider.codex)) {
+                try std.testing.expectEqualSlices(u8, before, after);
+            }
+        }
+    }
+
+    try std.testing.expect(visible > 0);
+    writer = std.Io.Writer.fixed(&buffer);
+    _ = try renderer.write(&writer);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=t") != null);
+    try renderer.prepare(content, cell);
+    try std.testing.expect(!renderer.damaged());
 }
 
 test "sidebar provider marks preserve aspect ratio and reuse their atlas" {

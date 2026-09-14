@@ -21,7 +21,7 @@ pub fn line(draw: *Drawing, area: RectType, value: Text) void {
 }
 
 pub fn rows(draw: *Drawing, area: RectType) void {
-    if (draw.input.loading or draw.input.entries.len == 0) {
+    if (draw.input.entries.len == 0) {
         draw.line(area, .{ .text = if (draw.input.loading) "Searching..." else "No matching commands", .color = draw.context.palette.subtext0 });
         return;
     }

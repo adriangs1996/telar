@@ -1,6 +1,6 @@
 #import "TelarView.h"
-#import "TelarWindowBackground.h"
 #import "TelarWindow.h"
+#import "TelarWindowBackground.h"
 
 int telar_gui_run(const char *title, void *context,
                   const telar_gui_callbacks *callbacks) {
@@ -15,7 +15,8 @@ int telar_gui_run(const char *title, void *context,
     // Keep terminal key repeat local to this process, even when macOS enables
     // press-and-hold accents globally. Do not write the user's preferences.
     NSUserDefaults *preferences = NSUserDefaults.standardUserDefaults;
-    NSMutableDictionary *arguments = [[preferences volatileDomainForName:NSArgumentDomain] mutableCopy];
+    NSMutableDictionary *arguments =
+        [[preferences volatileDomainForName:NSArgumentDomain] mutableCopy];
     arguments[@"ApplePressAndHoldEnabled"] = @NO;
     [preferences setVolatileDomain:arguments forName:NSArgumentDomain];
 
@@ -24,11 +25,11 @@ int telar_gui_run(const char *title, void *context,
 
     TelarWindow *window =
         [[TelarWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 480)
-                                    styleMask:NSWindowStyleMaskTitled |
-                                              NSWindowStyleMaskClosable |
-                                              NSWindowStyleMaskResizable
-                                      backing:NSBackingStoreBuffered
-                                        defer:NO];
+                                       styleMask:NSWindowStyleMaskTitled |
+                                                 NSWindowStyleMaskClosable |
+                                                 NSWindowStyleMaskResizable
+                                         backing:NSBackingStoreBuffered
+                                           defer:NO];
 
     window.title = [NSString stringWithUTF8String:title];
     window.minSize = NSMakeSize(320, 200);
@@ -45,7 +46,8 @@ int telar_gui_run(const char *title, void *context,
       return -1;
     }
 
-    TelarWindowBackground *background = [[TelarWindowBackground alloc] initWithContentView:view];
+    TelarWindowBackground *background =
+        [[TelarWindowBackground alloc] initWithContentView:view];
     view.backgroundView = background;
     window.contentView = background;
     window.delegate = view;

@@ -1,4 +1,4 @@
-//! Slice 4 of the GUI visual language: the sidebar header with counts, one
+//! Slice 4 of the GUI visual language: the sidebar header, one
 //! list ordered by attention and the three-row card in device pixels.
 const std = @import("std");
 const core = @import("telar-core");
@@ -12,7 +12,6 @@ const BandHitMap = @import("../chrome/BandHitMap.zig");
 const AgentCard = @import("../chrome/AgentCard.zig");
 const CardGeometry = @import("../chrome/CardGeometry.zig");
 const Sidebar = @import("../chrome/Sidebar.zig");
-const Level = @import("../chrome/card_degradation.zig").Level;
 const Quad = @import("../render/Quad.zig").Quad;
 const Rect = @import("../render/Rect.zig");
 const sprites = @import("sprites.zig");
@@ -20,7 +19,6 @@ const sprites = @import("sprites.zig");
 test {
     _ = @import("../chrome/age_label.zig");
     _ = @import("../chrome/status_glyph.zig");
-    _ = @import("../chrome/card_degradation.zig");
     _ = CardGeometry;
 }
 
@@ -101,8 +99,8 @@ test "the selected card is the focused pane's agent and carries the fill and rin
     try fixture.paint(projection);
     const quads = fixture.session.renderer.quads.items();
     try std.testing.expectEqual(@as(usize, 1), roundedCount(quads, CardGeometry.radius, sidebarColumn(&fixture)));
-    // Five built-in providers draw the sheet mark; the unknown one keeps its chip.
-    try std.testing.expectEqual(@as(usize, 1), roundedCount(quads, 4, sidebarColumn(&fixture)));
+    // Provider marks are secondary; custom providers use an unboxed glyph.
+    try std.testing.expectEqual(@as(usize, 0), roundedCount(quads, 4, sidebarColumn(&fixture)));
     try std.testing.expectEqual(@as(usize, 5), sprites.spriteCount(quads));
     const selected = ring(quads).?;
     const renderer = &fixture.session.renderer;
@@ -118,7 +116,7 @@ test "the selected card is the focused pane's agent and carries the fill and rin
     try std.testing.expectEqual(@as(usize, 2), roundedCount(fixture.session.renderer.quads.items(), CardGeometry.radius, sidebarColumn(&fixture)));
 }
 
-test "card tokens leave from the right as the card narrows" {
+test "narrow cards keep status in the first row and clip every token to its card" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var agents: client.AgentSnapshot = .{};
@@ -132,32 +130,69 @@ test "card tokens leave from the right as the card narrows" {
     var context: Context = .{ .canvas = &canvas, .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
     const geometry = CardGeometry.derive(renderer.chrome, renderer.metrics);
     const card: AgentCard = .{ .context = &context, .agent = &agents.slice()[4], .geometry = geometry, .age_s = 30 };
-    var widths: [4]f32 = undefined;
-    var previous: Level = .full;
-    var width: f32 = 600;
-    widths[0] = width;
-    while (width > 0) : (width -= 1) {
-        const level = try card.level(width);
-        try std.testing.expect(@intFromEnum(level) >= @intFromEnum(previous));
-        if (level != previous) {
-            widths[@intFromEnum(level)] = width;
+    projection.sidebar_animation_frame = 9;
+    for ([_]f32{ 300, 220, 120, 60, 24, 8, 0 }) |width| {
+        renderer.quads.clear();
+        const bounds: Rect = .{ .x = 100, .y = 100, .width = width, .height = geometry.height() };
+        try card.paint(bounds);
+        const first = geometry.row(bounds, 0);
+        var pulsing = false;
+        for (renderer.quads.items()) |item| {
+            try std.testing.expect(item.x >= bounds.x and item.y >= bounds.y);
+            try std.testing.expect(item.x + item.width <= bounds.x + bounds.width + 0.001);
+            try std.testing.expect(item.y + item.height <= bounds.y + bounds.height + 0.001);
+            if (@abs(item.a - 0.35) < 0.001) {
+                try std.testing.expect(item.y >= first.y and item.y + item.height <= first.y + first.height);
+                pulsing = true;
+            }
         }
 
-        previous = level;
+        if (width >= 60) {
+            try std.testing.expect(pulsing);
+        }
+    }
+}
+
+test "card detail follows working state and the agent workspace across branch-only revisions" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    var agents: client.AgentSnapshot = .{};
+    var input = entries[1];
+    const own_workspace = input.location.workspace.workspace;
+    var workspaces: client.WorkspaceListSnapshot = .{};
+    _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
+        .{ .workspace = @enumFromInt(900), .name = "other", .path = "/other", .tab_count = 1, .branch = "wrong-branch" },
+        .{ .workspace = own_workspace, .name = "telar", .path = "/telar", .tab_count = 1, .branch = "feature/sidebar" },
+    } });
+    var projection = fixture.projection();
+    projection.agents = &agents;
+    projection.workspaces = &workspaces;
+    const renderer = &fixture.session.renderer;
+    var hits: HitMap = .{};
+    var band_hits: BandHitMap = .{};
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome };
+    var context: Context = .{ .canvas = &canvas, .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
+    var card: AgentCard = .{ .context = &context, .agent = undefined, .geometry = CardGeometry.derive(renderer.chrome, renderer.metrics), .age_s = 10 };
+    for ([_]core.AgentStatus{ .working, .ready, .done, .blocked, .failed, .unknown }, 1..) |state, revision| {
+        input.status = state;
+        _ = try agents.replace(.{ .revision = revision, .agents = &.{input} });
+        card.agent = &agents.slice()[0];
+        try std.testing.expectEqualStrings(if (state == .working) input.last_event else "feature/sidebar", card.detailText());
     }
 
-    try std.testing.expectEqual(Level.no_event, previous);
-    var counts: [4]usize = undefined;
-    for (widths, 0..) |inner, index| {
-        renderer.quads.clear();
-        try card.paint(.{ .x = 100, .y = 100, .width = inner + 2 * CardGeometry.padding_x, .height = geometry.height() });
-        counts[index] = renderer.quads.items().len;
-        try std.testing.expectEqual(@as(usize, @intFromBool(index < 2)), sprites.spriteCount(renderer.quads.items()));
-    }
-
-    try std.testing.expect(counts[0] > counts[1]);
-    try std.testing.expect(counts[1] > counts[2]);
-    try std.testing.expect(counts[2] > counts[3]);
+    _ = try workspaces.replace(.{ .revision = 2, .entries = &.{.{ .workspace = own_workspace, .name = "telar", .path = "/telar", .tab_count = 1, .branch = "main" }} });
+    try std.testing.expectEqualStrings("main", card.detailText());
+    _ = try workspaces.replace(.{ .revision = 3, .entries = &.{.{ .workspace = own_workspace, .name = "telar", .path = "/telar", .tab_count = 1 }} });
+    try std.testing.expectEqualStrings("", card.detailText());
+    _ = try workspaces.replace(.{ .revision = 4, .entries = &.{} });
+    try std.testing.expectEqualStrings("", card.detailText());
+    input.location.workspace = .{ .worktree = @enumFromInt(1) };
+    _ = try agents.replace(.{ .revision = 7, .agents = &.{input} });
+    try std.testing.expectEqualStrings("", card.detailText());
+    input.status = .working;
+    input.last_event = "";
+    _ = try agents.replace(.{ .revision = 8, .agents = &.{input} });
+    try std.testing.expectEqualStrings("", card.detailText());
 }
 
 test "the working pulse steps the status alpha from the animation frame" {
@@ -170,7 +205,7 @@ test "the working pulse steps the status alpha from the animation frame" {
     projection.sidebar_animation_frame = 0;
     try fixture.paint(projection);
     for (fixture.session.renderer.quads.items()) |item| {
-        try std.testing.expect(item.a == 1 or item.a == 0);
+        try std.testing.expect(item.a == 1 or item.a == 0 or item.a == AgentCard.provider_alpha);
     }
 
     projection.sidebar_animation_frame = 9;
@@ -183,23 +218,45 @@ test "the working pulse steps the status alpha from the animation frame" {
     try std.testing.expect(dimmed > 0);
 }
 
-test "the snapshot arrival is retained until the revision changes" {
+test "sidebar clocks survive unrelated snapshot changes" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var agents: client.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
-    fixture.chrome.now_s = 100;
+    fixture.chrome.now_ns = 100 * std.time.ns_per_s;
     try fixture.paint(projection);
-    try std.testing.expectEqual(@as(u32, 100), fixture.chrome.sidebar.arrived_s);
-    fixture.chrome.now_s = 400;
+    try std.testing.expectEqual(@as(u32, 30), fixture.chrome.ages.seconds(&agents.slice()[1]));
+    fixture.chrome.now_ns = 400 * std.time.ns_per_s;
     try fixture.paint(projection);
-    try std.testing.expectEqual(@as(u32, 100), fixture.chrome.sidebar.arrived_s);
+    try std.testing.expectEqual(@as(u32, 330), fixture.chrome.ages.seconds(&agents.slice()[1]));
     _ = try agents.replace(.{ .revision = 2, .agents = entries[0..2] });
     try fixture.paint(projection);
-    try std.testing.expectEqual(@as(u32, 400), fixture.chrome.sidebar.arrived_s);
+    try std.testing.expectEqual(@as(u32, 330), fixture.chrome.ages.seconds(&agents.slice()[1]));
     try std.testing.expectEqualSlices(u8, &.{ 1, 0 }, fixture.chrome.sidebar.ordering());
+}
+
+test "a snapshot refresh cannot rewind a working duration already painted" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    var agents: client.AgentSnapshot = .{};
+    var input = entries[0];
+    input.status = .working;
+    input.status_age_s = 5;
+    _ = try agents.replace(.{ .revision = 1, .agents = &.{input} });
+    var projection = fixture.projection();
+    projection.agents = &agents;
+    fixture.chrome.now_ns = 100 * std.time.ns_per_s;
+    try fixture.paint(projection);
+    fixture.chrome.now_ns = 101 * std.time.ns_per_s;
+    try fixture.paint(projection);
+    const visible = try std.testing.allocator.dupe(Quad, fixture.session.renderer.quads.items());
+    defer std.testing.allocator.free(visible);
+
+    _ = try agents.replace(.{ .revision = 2, .agents = &.{input} });
+    try fixture.paint(projection);
+    try std.testing.expectEqualDeep(visible, fixture.session.renderer.quads.items());
 }
 
 test "a warm sidebar repaint with six agents allocates nothing" {
@@ -209,8 +266,12 @@ test "a warm sidebar repaint with six agents allocates nothing" {
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
-    try fixture.paint(projection);
-    const count = fixture.session.renderer.quads.items().len;
+    // Warm the changing seconds as well as the static labels and glyphs.
+    for (0..60) |second| {
+        fixture.chrome.now_ns = second * std.time.ns_per_s;
+        try fixture.paint(projection);
+    }
+
     const atlas = &fixture.session.renderer.atlas.?;
     const version = atlas.version;
     const rasters = atlas.raster_attempts;
@@ -223,11 +284,10 @@ test "a warm sidebar repaint with six agents allocates nothing" {
     defer fixture.session.renderer.quads.allocator = quad_allocator;
     for (0..30) |frame| {
         projection.sidebar_animation_frame = @intCast(frame);
-        fixture.chrome.now_s = @intCast(frame);
+        fixture.chrome.now_ns = (60 + frame) * std.time.ns_per_s;
         try fixture.paint(projection);
     }
 
-    try std.testing.expectEqual(count, fixture.session.renderer.quads.items().len);
     try std.testing.expectEqual(version, atlas.version);
     try std.testing.expectEqual(rasters, atlas.raster_attempts);
     try std.testing.expectEqual(@as(usize, 0), failure.allocations);

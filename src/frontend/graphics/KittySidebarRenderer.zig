@@ -20,10 +20,10 @@ const provider_atlas_id: u32 = 0x80000003;
 const first_provider_placement_id: u32 = 0x80000100;
 const max_provider_placements = 64;
 pub const provider_count = 3;
-pub const provider_source_size = 256;
+pub const provider_source_size = 64;
 pub const provider_source_width = provider_count * provider_source_size;
 const provider_raster_size = 64;
-pub const provider_source_pixels: []const u8 = @import("assets").provider_marks_rgba;
+pub const provider_source_pixels: []const u8 = @import("assets").provider_symbols_rgba;
 // A flat rounded card needs little source resolution. This keeps its RGBA
 // payload plus the provider atlas comfortably inside one media pass even
 // after base64 expansion.
@@ -47,6 +47,7 @@ provider_slot_width: u32 = 0,
 provider_slot_height: u32 = 0,
 provider_atlas_width: u32 = 0,
 provider_atlas_height: u32 = 0,
+provider_foreground: [3]u8 = @splat(255),
 area: RectType = .{},
 provider_marks: [max_provider_placements]SidebarProviderPlacement = undefined,
 provider_mark_count: u8 = 0,
@@ -104,10 +105,15 @@ pub fn prepare(renderer: *KittySidebarRenderer, content: SidebarContent, cell: C
         renderer.provider_slot_height = provider_slot_height;
         renderer.provider_atlas_width = provider_atlas_width;
         renderer.provider_atlas_height = provider_atlas_height;
+    }
+
+    if (resized or !std.meta.eql(renderer.provider_foreground, content.provider_foreground)) {
+        renderer.provider_foreground = content.provider_foreground;
         kitty_sidebar.renderProviderAtlas(.{
             .destination = renderer.provider_atlas,
             .atlas = .{ .width = provider_atlas_width, .height = provider_atlas_height },
             .slot = .{ .width = provider_slot_width, .height = provider_slot_height },
+            .foreground = content.provider_foreground,
         });
         renderer.provider_emitted = false;
         renderer.provider_dirty = content.provider_marks.len != 0;

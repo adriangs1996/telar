@@ -21,14 +21,13 @@ bands: Bands,
 /// Example: `try strip.paint();`
 pub fn paint(strip: TabStrip) !void {
     const canvas = strip.context.canvas;
-    const palette = canvas.theme.palette;
-    try canvas.fillAt(strip.bands.shoulder, palette.panel_bg);
+    try canvas.panelAt(strip.bands.shoulder);
     const area = strip.bands.tab_strip;
     if (area.width <= 0 or area.height <= 0) {
         return;
     }
 
-    try canvas.fillAt(area, palette.panel_bg);
+    try canvas.panelAt(area);
     if (strip.context.projection.status_mode != .normal) {
         return;
     }

@@ -1,7 +1,7 @@
 //! The 38 px band across the window: sidebar toggle, workspace pills, the
 //! selected workspace's location, the configured right slot and the TLS
-//! badge. Painted in `panel_bg` with no line under it; the tab strip below
-//! continues the same surface.
+//! badge. Its background follows the window opacity; the tab strip below
+//! continues the same surface with no line between them.
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Context = @import("Context.zig");
@@ -27,7 +27,7 @@ pub fn paint(bar: TopBar) !void {
     const canvas = bar.context.canvas;
     const palette = canvas.theme.palette;
     const chrome = canvas.chrome;
-    try canvas.fillAt(area, palette.panel_bg);
+    try canvas.panelAt(area);
     const margin = chrome.px(8);
     const gap = chrome.px(8);
     const control_height = @min(area.height, chrome.px(24));

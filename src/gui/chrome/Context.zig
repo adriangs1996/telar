@@ -7,6 +7,7 @@ const PixelButton = @import("PixelButton.zig");
 const Action = @import("action.zig").Action;
 const client = @import("telar-client");
 const core = @import("telar-core");
+const AgentAges = @import("AgentAges.zig");
 const Context = @This();
 
 canvas: *Canvas,
@@ -14,11 +15,21 @@ hits: *HitMap,
 bands: *BandHitMap,
 projection: *const client.Projection,
 hovered: ?Action,
-/// Monotonic seconds when this frame was prepared; ages add it to the
-/// runtime's `status_age_s` since the snapshot arrived.
-now_s: u32 = 0,
+ages: ?*const AgentAges = null,
 /// Placed workspace favicons; `null` in fixtures without a registry.
 favicons: ?*const @import("Favicons.zig") = null,
+
+/// Shares one status clock between cards and pane headers.
+/// Example: `const seconds = context.statusAge(agent);`
+pub fn statusAge(context: *const Context, agent: *const client.Agent) u32 {
+    return if (context.ages) |ages| ages.seconds(agent) else agent.statusAgeSeconds();
+}
+
+/// Keeps a sidebar paint linear by using the card's known snapshot index.
+/// Example: `const seconds = context.statusAgeAt(index);`
+pub fn statusAgeAt(context: *const Context, index: usize) u32 {
+    return if (context.ages) |ages| ages.secondsAt(index) else context.projection.agents.slice()[index].statusAgeSeconds();
+}
 
 /// Paints a semantic control and its matching fixed hit target together.
 /// Example: `try context.button(.{ .area = row, .intent = .toggle_sidebar, .text = "telar" });`

@@ -91,7 +91,7 @@ fn border(decorations: PaneDecorations, view: client.LayoutView) !void {
         .{ .x = content.x + content.w, .y = content.y, .w = (outer.x + outer.w) -| (content.x + content.w), .h = content.h },
     };
     for (bands) |band| {
-        try context.canvas.fill(band, context.canvas.theme.palette.panel_bg);
+        try context.canvas.panel(band);
         try context.hits.add(.{ .area = band, .action = .{ .intent = .{ .focus_pane = view.pane_id } } });
     }
 

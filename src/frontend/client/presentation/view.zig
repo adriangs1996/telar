@@ -167,7 +167,7 @@ fn renderHistoryPalette(context: *ContextType, application: RectType, sources: P
         .now_ms = sources.history.now_ms,
         .enter_runs = sources.history.enter_runs,
         .match_fuzzy = sources.history.match_fuzzy,
-        .loading = sources.history.phase == .loading,
+        .loading = sources.history.initialLoading(),
         .page_offset = sources.history.page_offset,
         .has_more = sources.history.has_more,
         .error_text = sources.history.errorSlice(),

@@ -254,7 +254,7 @@ gui = {
 | Setting | Default | Meaning and bounds |
 | --- | --- | --- |
 | `window.titlebar` | `false` on macOS, `true` on Linux | Show the native titlebar. On macOS it starts hidden so Telar's top bar sits at the window edge; set `true` to restore it. On Wayland it defaults to the compositor decoration and is a request which the compositor may override. Telar's workspace, tab and status bars remain available either way. |
-| `window.background_opacity` | `1` | Background opacity, `0..1`. Text, cursor and cell backgrounds differing from the terminal default retain their own opacity. |
+| `window.background_opacity` | `1` | Background opacity, `0..1`. Below `1`, the sidebar, bars and pane headers share the window's terminal background, regardless of the theme's `panel_bg`. At `1`, panels use `panel_bg`. Text, cursor, controls, modals and cell backgrounds differing from the terminal default retain their own opacity. |
 | `window.background_blur` | `0` | Integer `0..255`: macOS blur radius, with `0` disabling blur. On Wayland any positive value requests compositor blur; its intensity remains compositor-controlled. Has no visible effect at opacity `1`. Legacy `true` means `20`, and `false` means `0`. |
 | `window.padding.x` | `0` | Logical pixels on each horizontal edge, `0..256`, decimals allowed. |
 | `window.padding.y` | `0` | Logical pixels on each vertical edge, `0..256`, decimals allowed. |

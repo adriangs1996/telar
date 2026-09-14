@@ -153,6 +153,13 @@ counts border pixels as PTY pixels. Retained mesh keys already include the
 resolved rectangle, so moving the origin invalidates exactly that geometry.
 Opacity and blur changes do not invalidate cell meshes or the glyph atlas.
 
+Below opacity `1`, `Canvas.panel` and `panelAt` leave the sidebar, workspace
+bar, tab strip, status bar and pane header backgrounds to the window clear.
+This applies to themes with explicit RGB `panel_bg` values as well as
+`default`; no additional fill increases the background alpha. At opacity `1`,
+panels use the theme's `panel_bg`. Control fills, glyphs, cell backgrounds
+differing from the terminal default and covering modals keep their own opacity.
+
 `render/Quad` is an 80-byte `extern struct` of five `vec4` rows: rectangle,
 texture coordinates, straight RGBA fill, shape (corner radius, border width,
 texture selector and one zero reserved float) and straight RGBA border color.

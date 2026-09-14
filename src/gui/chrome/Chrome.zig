@@ -8,6 +8,7 @@ const Action = @import("action.zig").Action;
 const Regions = @import("Regions.zig");
 const Bands = @import("Bands.zig");
 const Sidebar = @import("Sidebar.zig");
+const AgentAges = @import("AgentAges.zig");
 const TopBar = @import("TopBar.zig");
 const TabStrip = @import("TabStrip.zig");
 const StatusBar = @import("StatusBar.zig");
@@ -23,6 +24,7 @@ const Chrome = @This();
 
 maps: GenericPresentedState(HitState) = .{},
 sidebar: Sidebar = .{},
+ages: AgentAges = .{},
 rings: RingFades = .{},
 favicons: Favicons = .{},
 home: HomePrefix = .{},
@@ -31,8 +33,8 @@ gesture_button: ?u8 = null,
 band_gesture: ?u8 = null,
 sidebar_resize_active: bool = false,
 revision: u64 = 0,
-/// Monotonic seconds the driver stamps before each preparation.
-now_s: u32 = 0,
+/// Monotonic time the driver stamps before each preparation.
+now_ns: u64 = 0,
 
 /// Paints after terminal leaves and before modal overlays. No borrowed model
 /// pointer survives preparation; asynchronous consumers own only frame quads.
@@ -45,7 +47,8 @@ pub fn paint(chrome: *Chrome, canvas: *Canvas, projection: client.Projection) !v
     // the model when the request was built.
     pending.regions = Regions.calculate(projection.host_size.cols, projection.host_size.rows);
     pending.bands = Bands.resolve(canvas);
-    var context: Context = .{ .canvas = canvas, .hits = &pending.hits, .bands = &pending.band_hits, .projection = &projection, .hovered = chrome.hovered, .now_s = chrome.now_s, .favicons = &chrome.favicons };
+    chrome.ages.observe(projection.agents, chrome.now_ns);
+    var context: Context = .{ .canvas = canvas, .hits = &pending.hits, .bands = &pending.band_hits, .projection = &projection, .hovered = chrome.hovered, .ages = &chrome.ages, .favicons = &chrome.favicons };
     const top_bar: TopBar = .{ .context = &context, .bands = pending.bands, .home = chrome.home.slice(), .sidebar_visible = canvas.sidebar.visible() };
     try top_bar.paint();
     const strip: TabStrip = .{ .context = &context, .bands = pending.bands };

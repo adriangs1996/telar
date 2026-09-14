@@ -63,7 +63,7 @@ fn chip(header: PaneHeader, storage: []u8) []const u8 {
             .plan => "plan",
             .none, .other => "blocked",
         },
-        .working => workingLabel(storage, agent.statusAgeSeconds()),
+        .working => workingLabel(storage, header.context.statusAge(agent)),
         .done => "done",
         .failed => "failed",
         .ready => "ready",
@@ -75,4 +75,22 @@ fn workingLabel(storage: []u8, seconds: u32) []const u8 {
     var age_storage: [16]u8 = undefined;
     const age = attention.ageLabel(&age_storage, seconds);
     return std.fmt.bufPrint(storage, "working {s}", .{age}) catch "working";
+}
+
+test "pane header duration advances with the card clock between runtime reports" {
+    var agents: client.AgentSnapshot = .{};
+    const input: client.AgentInput = .{ .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 }, .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) }, .pane_index = 1, .provider = .codex, .status = .working, .status_age_s = 5 };
+    _ = try agents.replace(.{ .revision = 1, .agents = &.{input} });
+    var ages: @import("AgentAges.zig") = .{};
+    var context: Context = .{ .canvas = undefined, .hits = undefined, .bands = undefined, .projection = undefined, .hovered = null, .ages = &ages };
+    const header: PaneHeader = .{ .context = &context, .pane = undefined, .agent = &agents.slice()[0], .index = 1 };
+    var storage: [32]u8 = undefined;
+    ages.observe(&agents, 100 * std.time.ns_per_s);
+    try std.testing.expectEqualStrings("working 5s", header.chip(&storage));
+    ages.observe(&agents, 101 * std.time.ns_per_s);
+    try std.testing.expectEqualStrings("working 6s", header.chip(&storage));
+
+    _ = try agents.replace(.{ .revision = 2, .agents = &.{input} });
+    ages.observe(&agents, 101 * std.time.ns_per_s);
+    try std.testing.expectEqualStrings("working 6s", header.chip(&storage));
 }

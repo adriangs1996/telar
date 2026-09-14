@@ -14,6 +14,25 @@ pub const max_command_bytes = 512;
 pub const max_entry_cwd_bytes = 256;
 pub const max_command_storage = 768 * 1024;
 
+test "history distinguishes initial loading from refreshing an empty page" {
+    var state: HistoryPaletteState = .{};
+    state.begin();
+    try std.testing.expect(state.beginPageRequest(1, .global));
+    try std.testing.expect(state.initialLoading());
+    try std.testing.expect(state.acceptPageResult(.{ .request_id = 1, .entries = &.{}, .snapshot_id = 0, .has_more = false, .now_ms = 0 }));
+    try std.testing.expect(!state.initialLoading());
+    state.restartQuery();
+    try std.testing.expect(state.beginPageRequest(2, .global));
+    try std.testing.expect(!state.initialLoading());
+    try std.testing.expect(state.commandAt(0) == null);
+
+    state.begin();
+    try std.testing.expect(state.beginPageRequest(3, .global));
+    try std.testing.expect(state.initialLoading());
+    try std.testing.expect(!state.acceptPageResult(.{ .request_id = 2, .entries = &.{}, .snapshot_id = 0, .has_more = false, .now_ms = 0 }));
+    try std.testing.expect(state.initialLoading());
+}
+
 test "page results commit metadata once and stale replies cannot alter it" {
     var state: HistoryPaletteState = .{};
     try std.testing.expect(state.beginPageRequest(1, .cwd));

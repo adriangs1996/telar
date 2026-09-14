@@ -14,7 +14,7 @@ link: ?*const @import("../input/LinkHit.zig") = null,
 pub fn prepare(scene: *Scene, projection: client.Projection) !client.PresentationCommit {
     const renderer = scene.terminal;
     var commit = try renderer.prepare(projection);
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = scene.theme, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar, .sprites = if (renderer.sprites) |*page| page else null };
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = scene.theme, .background_opacity = renderer.config.window.background_opacity, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar, .sprites = if (renderer.sprites) |*page| page else null };
     if (projection.model) |model| {
         var layout: client.LayoutSnapshot = .{};
         model.layout.snapshot(projection.geometry.area, &layout);

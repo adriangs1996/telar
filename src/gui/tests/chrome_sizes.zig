@@ -28,7 +28,7 @@ test "a label measures narrower at small than at title and paints in its own lin
     const body = try canvas.measure(.{ .text = text, .face = .sans, .size = .body });
     const small = try canvas.measure(.{ .text = text, .face = .sans, .size = .small });
     try std.testing.expect(small < body);
-    try std.testing.expect(body < title);
+    try std.testing.expectEqual(body, title);
     try std.testing.expect(title < try canvas.measure(.{ .text = text, .face = .sans }));
     // Monospace labels ignore the role: they are the terminal grid.
     try std.testing.expectEqual(try canvas.measure(.{ .text = text }), try canvas.measure(.{ .text = text, .size = .small }));

@@ -453,6 +453,10 @@ pub fn prepareGraphics(state: *State, snapshot: *const CenterType, media_idle: b
         .area = state.graphics_plan.sidebar_area,
         .focused_card = state.graphics_plan.focused_card,
         .provider_marks = state.graphics_plan.provider_marks[0..state.graphics_plan.provider_mark_count],
+        .provider_foreground = switch (state.palette().text) {
+            .rgb => |value| value,
+            else => state.theme.terminal.foreground,
+        },
     }, .{ .width = state.cell_width_px, .height = state.cell_height_px });
     var icon_fallback_changed = false;
     state.kitty_icons.prepare(state.graphics_plan.icons.slice()) catch {

@@ -16,6 +16,7 @@ pending_request: u64 = 0,
 entries: [max_history_results]Entry = undefined,
 len: u8 = 0,
 phase: enum { idle, loading, ready, failed } = .idle,
+has_page: bool = false,
 now_ms: i64 = 0,
 enter_runs: bool = false,
 match_fuzzy: bool = true,
@@ -69,6 +70,7 @@ pub fn begin(state: *State) void {
     state.len = 0;
     state.pending_request = 0;
     state.phase = .idle;
+    state.has_page = false;
     state.commands_len = 0;
     state.clearOutput();
     state.error_len = 0;
@@ -117,11 +119,18 @@ pub fn acceptPageResult(state: *State, result: PageResultType) bool {
     }
 
     state.snapshot_id = result.snapshot_id;
+    state.has_page = true;
     state.has_more = result.has_more;
     state.now_ms = result.now_ms;
     state.pending_request = 0;
     state.revision +%= 1;
     return true;
+}
+
+/// Keeps the previous page, including an empty result, visible during refresh.
+/// Example: `if (state.initialLoading()) drawSearching();`.
+pub fn initialLoading(state: *const State) bool {
+    return state.phase == .loading and !state.has_page;
 }
 
 /// Plans an adjacent bounded page; the visible page remains until its reply lands.

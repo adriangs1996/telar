@@ -67,7 +67,7 @@ pub fn render(context: *ContextType, application: RectType, input: HistoryBrowse
     const query_y = footer_y - 1;
     const detail_y = query_y - 1;
     const list: RectType = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = detail_y - inner.y };
-    const selected: ?Entry = if (input.entries.len == 0 or input.loading) null else input.entries[@min(input.selection, input.entries.len - 1)];
+    const selected: ?Entry = if (input.entries.len == 0) null else input.entries[@min(input.selection, input.entries.len - 1)];
     if (input.inspecting and selected != null) {
         if (list.w >= 100) {
             const left: RectType = .{ .x = list.x, .y = list.y, .w = list.w / 2, .h = list.h };
@@ -181,6 +181,23 @@ test "compact geometry follows content and remains inside small terminals" {
     const narrow = modalArea(.{ .w = 24, .h = 8 }, .{ .count = 100, .inspecting = true });
     try std.testing.expect(narrow.x + narrow.w <= 24);
     try std.testing.expect(narrow.y + narrow.h <= 8);
+}
+
+test "history retains result cells and selection while searching" {
+    var buffer = try BufferType.init(std.testing.allocator, 120, 36);
+    defer buffer.deinit();
+    var hits: widget.Hits = .{};
+    var context: ContextType = .{ .buffer = &buffer, .hits = &hits, .palette = &theme_support.default_theme.palette, .hovered = null };
+    var field: picker.Field = .init("zig");
+    const entry: Entry = .{ .id = 1, .pane_id = @enumFromInt(2), .command = "zig build", .cwd = "/work", .started_at_ms = 1000, .duration_ns = 1000000, .exit_code = 0, .status = .completed, .author = .human };
+    var input: HistoryBrowserInput = .{ .field = &field, .entries = &.{entry}, .selection = 0, .scope = "global", .now_ms = 1000 };
+    const result = render(&context, buffer.area(), input);
+    const visible = try std.testing.allocator.dupe(@import("telar-core").Cell, buffer.cells);
+    defer std.testing.allocator.free(visible);
+
+    input.loading = true;
+    try std.testing.expectEqualDeep(result, render(&context, buffer.area(), input));
+    try std.testing.expectEqualDeep(visible, buffer.cells);
 }
 
 test "wrapped inspector clamps scroll even beyond 64 thousand lines" {

@@ -7,6 +7,37 @@ const Overlays = @import("../overlays/Overlays.zig");
 const WrappedLines = @import("../overlays/WrappedLines.zig");
 const thread = @import("../overlays/thread.zig");
 
+test "native history keeps the visible page while a replacement query is pending" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    const history = &fixture.model.history_palette;
+    try history.prepare(std.testing.allocator);
+    const entries = [_]core.HistoryEntry{.{ .id = 9, .pane_id = @enumFromInt(2), .started_at_ms = 1000, .duration_ns = 1000000, .exit_code = 0, .status = .completed, .command = "zig build", .cwd = "/work", .workspace_path = "/work" }};
+    try std.testing.expect(history.beginPageRequest(1, .global));
+    try std.testing.expect(history.acceptPageResult(.{ .request_id = 1, .entries = &entries, .snapshot_id = 9, .has_more = false, .now_ms = 1000 }));
+    fixture.model.name_prompt.begin(.history_palette);
+    try fixture.paint();
+    const visible = try std.testing.allocator.dupe(@import("../render/Quad.zig").Quad, fixture.renderer.quads.items());
+    defer std.testing.allocator.free(visible);
+
+    try std.testing.expect(history.beginPageRequest(2, .global));
+    try fixture.paint();
+    try std.testing.expectEqualDeep(visible, fixture.renderer.quads.items());
+    try std.testing.expect(history.commandAt(0) == null);
+
+    try std.testing.expect(!history.acceptPageResult(.{ .request_id = 1, .entries = &.{}, .snapshot_id = 9, .has_more = false, .now_ms = 1000 }));
+    try fixture.paint();
+    try std.testing.expectEqualDeep(visible, fixture.renderer.quads.items());
+    try std.testing.expect(history.acceptPageResult(.{ .request_id = 2, .entries = &.{}, .snapshot_id = 9, .has_more = false, .now_ms = 1000 }));
+    try fixture.paint();
+    try std.testing.expect(visible.len != fixture.renderer.quads.items().len);
+    const empty = try std.testing.allocator.dupe(@import("../render/Quad.zig").Quad, fixture.renderer.quads.items());
+    defer std.testing.allocator.free(empty);
+    try std.testing.expect(history.beginPageRequest(3, .global));
+    try fixture.paint();
+    try std.testing.expectEqualDeep(empty, fixture.renderer.quads.items());
+}
+
 test "native prompt renders selections and owns its gesture until release" {
     const fixture = try Fixture.init();
     defer fixture.deinit();

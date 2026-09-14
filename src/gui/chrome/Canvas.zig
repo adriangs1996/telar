@@ -22,6 +22,7 @@ quads: *@import("../render/QuadList.zig"),
 metrics: @import("../TerminalMetrics.zig"),
 origin: [2]u32,
 theme: client.ColorTheme,
+background_opacity: f32 = 1,
 /// Band heights already subtracted from the grid by the renderer.
 chrome: ChromeMetrics = .{},
 /// Whole window in device pixels; the bands span it, the grid sits inside.
@@ -38,10 +39,32 @@ pub fn rect(canvas: Canvas, area: core.Rect) Rect {
     return canvas.metrics.rect(canvas.origin, area);
 }
 
+/// Paints a pane band using the same background policy as the window bars.
+/// Example: `try canvas.panel(view.outer.row(0));`
+pub fn panel(canvas: *Canvas, area: core.Rect) !void {
+    if (area.isEmpty()) {
+        return;
+    }
+
+    try canvas.panelAt(canvas.rect(area));
+}
+
+/// Translucent chrome uses the window's single clear background. Painting
+/// another translucent layer here would accumulate opacity over that clear.
+/// Opaque windows retain the theme's panel color.
+/// Example: `try canvas.panelAt(bands.sidebar);`
+pub fn panelAt(canvas: *Canvas, bounds: Rect) !void {
+    if (canvas.background_opacity < 1) {
+        return;
+    }
+
+    try canvas.fillAt(bounds, canvas.theme.palette.panel_bg);
+}
+
 /// Paints a native rectangle, including backgrounds beneath labels. A
 /// `.default` color is the window background, which the clear color already
 /// provides at the configured opacity, so it paints nothing; overlays that
-/// must cover pane content resolve it first with `opaque`.
+/// must cover pane content resolve it first with `covering`.
 /// Example: `try canvas.fill(regions.workbench, canvas.theme.palette.panel_bg);`
 pub fn fill(canvas: *Canvas, area: core.Rect, ink_color: core.Color) !void {
     if (area.isEmpty()) {
@@ -121,13 +144,21 @@ pub fn ringAt(canvas: *Canvas, bounds: Rect, stroke: Ring) !void {
 /// pixel so linear sampling never blurs an exact-size mark.
 /// Example: `try canvas.spriteAt(mark_box, sprite);`
 pub fn spriteAt(canvas: *Canvas, bounds: Rect, sprite: Sprite) !void {
+    try canvas.spriteTintedAt(bounds, .{ .sprite = sprite });
+}
+
+/// Tints and fades a sprite without changing or uploading its pixels.
+/// Example: `try canvas.spriteTintedAt(box, .{ .sprite = mark, .alpha = 0.6 });`
+pub fn spriteTintedAt(canvas: *Canvas, bounds: Rect, paint: @import("SpritePaint.zig")) !void {
     const page = canvas.sprites orelse return;
     if (bounds.width <= 0 or bounds.height <= 0) {
         return;
     }
 
     const snapped: Rect = .{ .x = @floor(bounds.x), .y = @floor(bounds.y), .width = bounds.width, .height = bounds.height };
-    try canvas.quads.pushSprite(snapped, .{ .uv = page.uv(sprite) });
+    var tint = canvas.color(paint.color, .{ 255, 255, 255 });
+    tint.a *= paint.alpha;
+    try canvas.quads.pushSprite(snapped, .{ .uv = page.uv(paint.sprite), .tint = tint });
 }
 
 /// The embedded mark of a built-in provider when the canvas has a page.

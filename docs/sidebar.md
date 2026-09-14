@@ -122,47 +122,50 @@ cell renderer is complete by itself.
 
 Each agent card stays three rows high:
 
-1. workspace name, with the age of the last status change right-aligned;
-2. session title;
-3. last event, with the status icon in its color and the provider mark on
-   the right.
+1. workspace name, with a right-aligned readable state and working duration;
+2. session title in the regular face at body size;
+3. latest event while `working`, otherwise the branch from that agent's
+   workspace snapshot, with a small, dimmed provider symbol on the right.
 
+The third row reads only the existing replicas. Workspace identity selects
+its branch, independent of the focused workspace. Missing Git observations,
+non-repository workspaces and worktree-only locations without a workspace-list
+entry leave the row empty. A working agent with no event also leaves it empty.
+A workspace-list revision can update the branch without an agent revision.
 The card shows no location row (`workspace › tab › pane N`) and no cwd;
 the top bar shows the selected workspace's location instead. The TUI cell
-renderer still draws the previous rows; the entry fields above are already on
-the wire.
+renderer retains its own layout.
 
-The GUI draws the card in device pixels inside the sidebar band
-(`src/gui/chrome/Sidebar.zig`, `AgentCard.zig`). With glyph height `g` from
-the chrome font metrics (`TerminalMetrics.pixel_height`): row height
-`ceil(1.25 g)`, card height `3 rows + 12`, card spacing 3, sidebar margins 8,
-card padding 8 horizontal and 6 vertical, radius 8, provider chip 16. The
-header reads `agents` with `N · M need you` right-aligned, `M` counting
-`blocked` and `failed`. There are no section headers: the list is one array
-of at most 64 replica indices sorted by `agent_attention.lessThan` when the
-snapshot identity (revision, replica, length) changes, never per frame. The
-age is `status_age_s` plus the monotonic seconds since that snapshot was
-first painted, formatted `now`, `3m`, `2h`, `1d`; it refreshes whenever a
-frame is painted. Tokens leave from the right as the card narrows: age, then
-the provider mark, then the last event; the status glyph always stays. The
-working glyph `◌` pulses through six alpha steps between 1.0 and 0.35 over
-17 animation frames (about 2 s at 120 ms per frame). The selected card is
-the focused pane's agent: `surface0` fill and an inner 1px `surface1` ring.
-The provider mark of a built-in provider is the official artwork from the
-embedded sheet, one sprite quad of 16 logical pixels sampled from the RGBA
-page beside the glyph atlas; a custom or unknown provider keeps a rounded
-chip with its glyph. The project slot of the first row shows the workspace's
-favicon (`favicon.png`, then `.telar/icon.png` in the workspace root, PNG
-only) once the client's favicon worker has resolved it, else the generic
-glyph. The image never crosses the wire; the GUI reads, decodes and resizes
-it off the interactive path and keeps at most 64 favicons per page. Hits
-are pixel targets in the band hit map: one `focus_agent` target per
-visible card, clipped to the list like its paint. The wheel scrolls one
-card pitch. The band's last pixel column is the edge line and a 6 px strip
-centred on it is the resize handle.
+The GUI draws cards in device pixels inside the sidebar band
+(`src/gui/chrome/Sidebar.zig`, `AgentCard.zig`). Text uses the `small`, `title`,
+`small` line boxes. The title is body-sized without the pane header's height cap. Insets are 10 horizontal and 8 vertical logical pixels,
+with 4 logical pixels before the title and 2 before the detail. Card spacing
+is 3, sidebar margins 8, radius 8 and provider symbols 14 logical pixels.
+These lengths follow the chrome's display/font ratio before being rounded.
+The header reads `agents`. One array of at most 64 replica indices is sorted by
+`agent_attention.lessThan` when snapshot identity changes, never per frame.
 
-KGP owns two reusable assets: one three-row focused-agent card and an official
-provider-mark atlas. The card is an antialiased rounded rectangle below the
+The top-right state combines an icon with `Working`, `Approval`, `Question`,
+`Review plan`, `Needs input`, `Done`, `Failed` or `Unknown`. Ready agents show
+only their status age. Working duration uses `0s` through `59s`, then `1m`,
+`1h` or `1d`; the same duration is never repeated elsewhere in the card.
+It adds monotonic seconds since the agent snapshot first painted. Narrow
+cards drop the duration, then the state word before clipping the icon;
+project, title and detail fit independently with an ellipsis. The provider
+symbol disappears only when its own box cannot fit.
+
+Only the working glyph pulses through six alpha steps between 1.0 and 0.35
+across 17 animation frames. The state word and duration remain steady.
+The focused pane's card has `surface0` fill and an inner 1px `surface1` ring.
+Built-in providers use the embedded symbol atlas at 60% opacity. OpenAI
+is a white mask tinted with `text`; Claude and Pi retain their source colors. Custom providers keep an unboxed glyph.
+The workspace favicon remains colored and is resolved by the existing worker.
+One clipped `focus_agent` hit target covers each visible card. The wheel
+scrolls one card pitch; the band's last pixel column is its edge and a 6 px
+strip centered on it remains the resize handle.
+
+KGP owns two reusable assets: one three-row focused-agent card and the same
+T3 Code provider atlas as the GUI. The card is an antialiased rounded rectangle below the
 cell layer. Cells keep the same solid fill except at its four corner cells,
 where the KGP alpha edge remains visible. Themes whose focus color is not RGB
 retain the square cell-only fallback.

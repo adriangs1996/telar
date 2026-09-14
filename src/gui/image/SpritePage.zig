@@ -20,11 +20,11 @@ pub const mark_logical: f32 = 16;
 pub const min_cell: u32 = 8;
 pub const max_cell: u32 = 48;
 pub const max_favicons: u16 = 64;
-const provider_slot: u32 = 256;
+const provider_slot: u32 = 64;
 const providers = [_]core.AgentProvider{ .claude, .codex, .pi };
 
 comptime {
-    std.debug.assert(assets.provider_marks_rgba.len == providers.len * provider_slot * provider_slot * 4);
+    std.debug.assert(assets.provider_symbols_rgba.len == providers.len * provider_slot * provider_slot * 4);
     std.debug.assert((side / max_cell) * (side / max_cell) >= providers.len + max_favicons);
 }
 
@@ -51,7 +51,7 @@ pub fn init(allocator: std.mem.Allocator, cell: u32) !SpritePage {
     const scratch = try allocator.alloc(u8, @as(usize, cell) * cell * 4);
     defer allocator.free(scratch);
     for (providers, 0..) |_, index| {
-        const slot: ImageView = .{ .pixels = assets.provider_marks_rgba, .stride = providers.len * provider_slot * 4, .x = @intCast(index * provider_slot), .width = provider_slot, .height = provider_slot };
+        const slot: ImageView = .{ .pixels = assets.provider_symbols_rgba, .stride = providers.len * provider_slot * 4, .x = @intCast(index * provider_slot), .width = provider_slot, .height = provider_slot };
         box_filter.resample(slot, scratch, cell);
         page.provider_marks[index] = try page.add(.{ .pixels = scratch, .stride = cell * 4, .width = cell, .height = cell });
     }
@@ -183,4 +183,30 @@ test "cells follow the display scale inside the bounds" {
     try std.testing.expectEqual(@as(u32, max_cell), cellFor(4));
     try std.testing.expectEqual(@as(u32, min_cell), cellFor(0.1));
     try std.testing.expectError(error.InvalidSpriteCell, SpritePage.init(std.testing.allocator, 4));
+}
+
+test "provider symbols preserve alpha and OpenAI is a tintable white mask" {
+    var page = try SpritePage.init(std.testing.allocator, 32);
+    defer page.deinit();
+    for (providers) |provider| {
+        const sprite = page.providerMark(provider).?;
+        const left = @as(usize, sprite.index) * page.cell;
+        var visible: usize = 0;
+        var transparent: usize = 0;
+        for (0..page.cell) |y| {
+            for (0..page.cell) |x| {
+                const rgba = page.pixels[(y * side + left + x) * 4 ..][0..4];
+                if (provider == .codex) {
+                    try std.testing.expectEqual(rgba[3], rgba[0]);
+                    try std.testing.expectEqual(rgba[3], rgba[1]);
+                    try std.testing.expectEqual(rgba[3], rgba[2]);
+                }
+
+                visible += @intFromBool(rgba[3] > 0);
+                transparent += @intFromBool(rgba[3] == 0);
+            }
+        }
+
+        try std.testing.expect(visible > 0 and transparent > 0);
+    }
 }

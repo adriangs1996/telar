@@ -1,7 +1,6 @@
-//! The agent list: a header with counts and one list of cards ordered by
+//! The agent list: a header and one list of cards ordered by
 //! attention, laid out in device pixels inside the sidebar band. The
-//! sidebar retains only its scroll offset, the order of the last snapshot
-//! and when that snapshot arrived.
+//! sidebar retains only its scroll offset and the order of the last snapshot.
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -30,8 +29,6 @@ step: u16 = 0,
 order: [core.max_agent_snapshot_entries]u8 = undefined,
 order_len: u8 = 0,
 ordered: SnapshotMark = .{},
-/// Monotonic seconds at which the ordered snapshot was first painted.
-arrived_s: u32 = 0,
 
 /// Paints the band, the header, the ordered cards, the footer slot row, the
 /// edge line and the resize handle; retains only the local scroll bound
@@ -47,9 +44,10 @@ pub fn paint(sidebar: *Sidebar, context: *Context, area: Rect) !void {
     const palette = canvas.theme.palette;
     // The band ends at its edge line; the gap past it keeps the window's own
     // background and opacity like the workbench.
-    try canvas.fillAt(.{ .x = area.x, .y = area.y, .width = area.width - 1, .height = area.height }, palette.panel_bg);
+    try canvas.panelAt(.{ .x = area.x, .y = area.y, .width = area.width - 1, .height = area.height });
     try canvas.fillAt(.{ .x = area.x + area.width - 1, .y = area.y, .width = 1, .height = area.height }, palette.surface1);
     const footer = footerArea(canvas.metrics, area);
+    const inset = canvas.chrome.px(margin);
     if (footer.height > 0) {
         const row: SlotRow = .{ .context = context, .slots = &context.projection.bar_state.layout.sidebar_footer };
         try row.paintIn(footer);
@@ -57,13 +55,13 @@ pub fn paint(sidebar: *Sidebar, context: *Context, area: Rect) !void {
 
     sidebar.observe(context);
     const geometry = CardGeometry.derive(canvas.chrome, canvas.metrics);
-    const header: Rect = .{ .x = area.x + margin, .y = area.y + margin, .width = @max(0, area.width - 1 - 2 * margin), .height = canvas.chrome.rowHeight(.body) };
-    const content_bottom = if (footer.height > 0) footer.y - margin else area.y + area.height - margin;
+    const header: Rect = .{ .x = area.x + inset, .y = area.y + inset, .width = @max(0, area.width - 1 - 2 * inset), .height = canvas.chrome.rowHeight(.body) };
+    const content_bottom = if (footer.height > 0) footer.y - inset else area.y + area.height - inset;
     const list: Rect = .{
         .x = header.x,
-        .y = header.y + header.height + header_gap,
+        .y = header.y + header.height + canvas.chrome.px(header_gap),
         .width = header.width,
-        .height = @max(0, content_bottom - (header.y + header.height + header_gap)),
+        .height = @max(0, content_bottom - (header.y + header.height + canvas.chrome.px(header_gap))),
     };
     if (header.width <= 0 or list.height <= 0) {
         sidebar.maximum_scroll = 0;
@@ -128,7 +126,6 @@ fn observe(sidebar: *Sidebar, context: *Context) void {
 
     std.sort.pdq(u8, sidebar.order[0..sidebar.order_len], agents, indexLessThan);
     sidebar.ordered = mark;
-    sidebar.arrived_s = context.now_s;
 }
 
 fn indexLessThan(agents: []const client.Agent, left: u8, right: u8) bool {
@@ -139,22 +136,7 @@ fn paintHeader(context: *Context, header: Rect) !void {
     const canvas = context.canvas;
     const palette = canvas.theme.palette;
     const title: Label = .{ .text = "agents", .color = palette.text, .bold = true, .face = .sans, .size = .body };
-    const title_width = try canvas.measure(title);
     _ = try canvas.textAt(header, title);
-    var buffer: [48]u8 = undefined;
-    const agents = context.projection.agents.slice();
-    var attention: usize = 0;
-    for (agents) |agent| {
-        attention += @intFromBool(client.agent_attention.group(agent.status) == .needs_input);
-    }
-
-    const counts: Label = .{ .text = std.fmt.bufPrint(&buffer, "{d} \u{00b7} {d} need you", .{ agents.len, attention }) catch unreachable, .color = palette.subtext0, .face = .sans, .size = .body };
-    const counts_width = try canvas.measure(counts);
-    if (title_width + CardGeometry.gap + counts_width > header.width) {
-        return;
-    }
-
-    _ = try canvas.textAt(.{ .x = header.x + header.width - counts_width, .y = header.y, .width = counts_width, .height = header.height }, counts);
 }
 
 fn paintList(sidebar: *Sidebar, context: *Context, list: SidebarList) !void {
@@ -163,17 +145,31 @@ fn paintList(sidebar: *Sidebar, context: *Context, list: SidebarList) !void {
     const agents = context.projection.agents.slice();
     const geometry = list.geometry;
     const count: f32 = @floatFromInt(sidebar.order_len);
-    const total = if (sidebar.order_len == 0) 0 else count * geometry.pitch() - CardGeometry.spacing;
+    const total = if (sidebar.order_len == 0) 0 else count * geometry.pitch() - geometry.px(CardGeometry.spacing);
     sidebar.step = @intFromFloat(@min(65535, geometry.pitch()));
     sidebar.maximum_scroll = @intFromFloat(@min(65535, @max(0, total - list.bounds.height)));
     sidebar.scroll = @min(sidebar.scroll, sidebar.maximum_scroll);
     if (sidebar.order_len == 0) {
-        _ = try canvas.textAt(.{ .x = list.bounds.x, .y = list.bounds.y, .width = list.bounds.width, .height = canvas.chrome.rowHeight(.body) }, .{ .text = "No active agents", .color = palette.subtext0, .face = .sans, .size = .body });
+        _ = try canvas.textAt(
+            .{
+                .x = list.bounds.x,
+                .y = list.bounds.y,
+                .width = list.bounds.width,
+                .height = canvas.chrome.rowHeight(.body),
+            },
+            .{
+                .text = "No active agents",
+                .color = palette.subtext0,
+                .face = .sans,
+                .size = .body,
+            },
+        );
         return;
     }
 
     const list_bottom = list.bounds.y + list.bounds.height;
-    const card_width = @max(0, list.bounds.width - scrollbar_width - CardGeometry.spacing);
+    const scrollbar = canvas.chrome.px(scrollbar_width);
+    const card_width = @max(0, list.bounds.width - scrollbar - geometry.px(CardGeometry.spacing));
     for (sidebar.ordering(), 0..) |index, position| {
         const top = list.bounds.y + @as(f32, @floatFromInt(position)) * geometry.pitch() - @as(f32, @floatFromInt(sidebar.scroll));
         if (top + geometry.height() <= list.bounds.y) {
@@ -190,7 +186,7 @@ fn paintList(sidebar: *Sidebar, context: *Context, list: SidebarList) !void {
             .context = context,
             .agent = agent,
             .geometry = geometry,
-            .age_s = agent.statusAgeSeconds() +| (context.now_s -| sidebar.arrived_s),
+            .age_s = context.statusAgeAt(index),
             .project_icon = if (context.favicons) |favicons| favicons.sprite(agent.location.workspace) else null,
         };
         const first = canvas.quads.items().len;
@@ -202,6 +198,6 @@ fn paintList(sidebar: *Sidebar, context: *Context, list: SidebarList) !void {
     if (sidebar.maximum_scroll != 0) {
         const thumb = @max(geometry.small_row, list.bounds.height * list.bounds.height / total);
         const offset = @as(f32, @floatFromInt(sidebar.scroll)) * (list.bounds.height - thumb) / @as(f32, @floatFromInt(sidebar.maximum_scroll));
-        try canvas.fillAt(.{ .x = list.bounds.x + list.bounds.width - scrollbar_width, .y = list.bounds.y + offset, .width = scrollbar_width, .height = thumb }, palette.overlay0);
+        try canvas.fillAt(.{ .x = list.bounds.x + list.bounds.width - scrollbar, .y = list.bounds.y + offset, .width = scrollbar, .height = thumb }, palette.overlay0);
     }
 }

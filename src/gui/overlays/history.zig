@@ -32,7 +32,7 @@ pub fn paint(modal: Modal, projection: client.Projection) !void {
     }
 
     const list = content.splitBottom(3)[0];
-    const selected: ?u16 = if (state.len == 0 or state.phase == .loading) null else @min(prompt.selection(), state.len - 1);
+    const selected: ?u16 = if (state.len == 0) null else @min(prompt.selection(), state.len - 1);
     if (prompt.inspecting() and selected != null) {
         if (list.w >= 100) {
             try rows(modal, projection, list.splitLeft(list.w / 2)[0]);
@@ -71,8 +71,8 @@ pub fn paint(modal: Modal, projection: client.Projection) !void {
 fn rows(modal: Modal, projection: client.Projection, list: core.Rect) !void {
     const state = projection.history;
     const palette = modal.canvas.theme.palette;
-    if (state.phase == .loading or state.len == 0) {
-        try modal.canvas.text(list.row(0), .{ .text = if (state.phase == .loading) "Searching..." else "No matching commands", .color = palette.subtext0 });
+    if (state.len == 0) {
+        try modal.canvas.text(list.row(0), .{ .text = if (state.initialLoading()) "Searching..." else "No matching commands", .color = palette.subtext0 });
         return;
     }
 

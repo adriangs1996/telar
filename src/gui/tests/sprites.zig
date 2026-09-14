@@ -100,7 +100,7 @@ fn agent(provider: core.AgentProvider, pane: u32) client.AgentInput {
     return .{ .key = .{ .pane_id = @enumFromInt(pane), .pane_generation = 1 }, .location = Session.location, .pane_index = 1, .provider = provider, .status = .ready, .status_age_s = 1, .workspace_label = "telar", .session_title = "title", .last_event = "event" };
 }
 
-test "the card draws the sheet mark for the three providers and the chip for a custom one" {
+test "the card draws the sheet mark for the three providers and an unboxed glyph for a custom one" {
     var fixture = try ChromeFixture.init();
     defer fixture.deinit();
     const renderer = &fixture.session.renderer;
@@ -127,6 +127,7 @@ test "the card draws the sheet mark for the three providers and the chip for a c
                 if (item.texture == quad.sprite_texture) {
                     try std.testing.expectEqualSlices(f32, &expected, &.{ item.u0, item.v0, item.u1, item.v1 });
                     try std.testing.expectEqual(@round(canvas.chrome.px(CardGeometry.mark_size)), item.width);
+                    try std.testing.expectEqual(AgentCard.provider_alpha, item.a);
                     found = true;
                 }
             }
@@ -139,7 +140,7 @@ test "the card draws the sheet mark for the three providers and the chip for a c
                 chips += @intFromBool(item.radius == 4 and item.border == 0);
             }
 
-            try std.testing.expectEqual(@as(usize, 1), chips);
+            try std.testing.expectEqual(@as(usize, 0), chips);
         }
     }
 
@@ -153,7 +154,6 @@ test "the card draws the sheet mark for the three providers and the chip for a c
     const card: AgentCard = .{ .context = &context, .agent = &agents.slice()[0], .geometry = geometry, .age_s = 1, .project_icon = icon };
     try card.paint(.{ .x = 100, .y = 100, .width = 300, .height = geometry.height() });
     try std.testing.expectEqual(@as(usize, 2), spriteCount(renderer.quads.items()));
-    try std.testing.expect(try card.level(300) == .full);
 }
 
 test "a warm repaint with sprites shapes rasterizes and allocates nothing" {

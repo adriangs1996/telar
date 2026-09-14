@@ -17,7 +17,7 @@ pub fn paint(bar: StatusBar) !void {
     }
 
     const canvas = bar.context.canvas;
-    try canvas.fillAt(bar.area, canvas.theme.palette.panel_bg);
+    try canvas.panelAt(bar.area);
     const margin = canvas.chrome.px(8);
     const row: Rect = .{ .x = bar.area.x + margin, .y = bar.area.y, .width = @max(0, bar.area.width - 2 * margin), .height = bar.area.height };
     if (bar.context.projection.status_mode == .normal) {

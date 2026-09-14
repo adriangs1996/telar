@@ -1,5 +1,5 @@
-//! One three-row agent card in device pixels: project and age, title, last
-//! event with the status glyph and the provider mark. The card paints only;
+//! One three-row agent card: project and status, a regular-weight title,
+//! then the live event while working or the workspace branch at rest. The card paints only;
 //! the sidebar owns its position, its hit target and its clipping.
 const std = @import("std");
 const core = @import("telar-core");
@@ -11,13 +11,11 @@ const TextFit = @import("TextFit.zig");
 const Label = @import("Label.zig");
 const age_label = @import("age_label.zig");
 const status_glyph = @import("status_glyph.zig");
-const card_degradation = @import("card_degradation.zig");
-const Level = card_degradation.Level;
 const Sprite = @import("../image/Sprite.zig");
 const AgentCard = @This();
 
 pub const project_glyph = "\u{f07b}";
-const elapsed_gap: f32 = 4;
+pub const provider_alpha: f32 = 0.6;
 
 context: *Context,
 agent: *const client.Agent,
@@ -36,17 +34,16 @@ pub fn paint(card: AgentCard, bounds: Rect) !void {
     const palette = canvas.theme.palette;
     const hovered = if (card.context.hovered) |value| std.meta.eql(value, card.action()) else false;
     if (card.selected()) {
-        try canvas.fillRoundedAt(bounds, .{ .radius = CardGeometry.radius, .color = palette.surface0 });
-        try canvas.ringAt(bounds, .{ .width = 1, .radius = CardGeometry.radius, .color = palette.surface1 });
+        try canvas.fillRoundedAt(bounds, .{ .radius = card.geometry.px(CardGeometry.radius), .color = palette.surface0 });
+        try canvas.ringAt(bounds, .{ .width = 1, .radius = card.geometry.px(CardGeometry.radius), .color = palette.surface1 });
     } else if (hovered) {
-        try canvas.fillRoundedAt(bounds, .{ .radius = CardGeometry.radius, .color = palette.surface1 });
+        try canvas.fillRoundedAt(bounds, .{ .radius = card.geometry.px(CardGeometry.radius), .color = palette.surface1 });
     }
 
     const first_row = card.geometry.row(bounds, 0);
-    const tokens = try card.level(first_row.width);
-    try card.paintProject(first_row, tokens);
+    try card.paintProject(first_row);
     try card.paintTitle(card.geometry.row(bounds, 1));
-    try card.paintEvent(card.geometry.row(bounds, 2), tokens);
+    try card.paintDetail(card.geometry.row(bounds, 2));
 }
 
 /// The action a click on the card performs.
@@ -55,19 +52,21 @@ pub fn action(card: AgentCard) @import("action.zig").Action {
     return .{ .intent = .{ .focus_agent = card.agent.key } };
 }
 
-/// Which tokens fit in `width` device pixels of inner card width.
-/// Example: `try std.testing.expectEqual(.no_age, try card.level(120));`
-pub fn level(card: AgentCard, width: f32) !Level {
-    var age_buffer: [age_label.max_bytes]u8 = undefined;
-    const canvas = card.context.canvas;
-    return card_degradation.resolve(.{
-        .available = width,
-        .workspace = card.projectSlot() + 4 + try canvas.measure(.{ .text = card.agent.workspaceLabel(), .face = .sans, .size = .small }),
-        .age = try canvas.measure(.{ .text = age_label.format(card.age_s, &age_buffer), .face = .sans, .size = .small }),
-        .status = try card.statusWidth(),
-        .mark = card.markSide() + CardGeometry.gap,
-        .gap = CardGeometry.gap,
-    });
+/// Borrows the live event or the branch of this agent's own workspace.
+/// Missing Git observations and worktree-only locations have no branch fallback.
+/// Example: `const detail = card.detailText();`
+pub fn detailText(card: AgentCard) []const u8 {
+    if (card.agent.status == .working) {
+        return card.agent.lastEvent();
+    }
+
+    const workspace = switch (card.agent.location.workspace) {
+        .workspace => |id| id,
+        .worktree => return "",
+    };
+    const workspaces = card.context.projection.workspaces;
+    const index = workspaces.indexOf(workspace) orelse return "";
+    return workspaces.branchAt(index);
 }
 
 /// Whether the focused pane of the active tab is this agent's pane.
@@ -82,30 +81,27 @@ pub fn selected(card: AgentCard) bool {
     return std.meta.eql(location, card.agent.location);
 }
 
-fn paintProject(card: AgentCard, row: Rect, tokens: Level) !void {
+fn paintProject(card: AgentCard, row: Rect) !void {
     const canvas = card.context.canvas;
     const palette = canvas.theme.palette;
-    var age_buffer: [age_label.max_bytes]u8 = undefined;
-    var age_width: f32 = 0;
-    if (tokens.shows(.age)) {
-        const age: Label = .{ .text = age_label.format(card.age_s, &age_buffer), .color = palette.subtext0, .face = .sans, .size = .small };
-        age_width = try canvas.measure(age);
-        _ = try canvas.textAt(.{ .x = row.x + row.width - age_width, .y = row.y, .width = age_width, .height = row.height }, age);
-        age_width += CardGeometry.gap;
+    const gap = card.geometry.px(4);
+    const slot = card.projectSlot();
+    const reserved = @min(row.width / 2, slot + gap + card.geometry.px(24));
+    const status_width = try card.paintStatus(.{ .x = row.x + reserved, .y = row.y, .width = row.width - reserved, .height = row.height });
+    const project_width = @max(0, row.width - status_width - card.geometry.px(CardGeometry.gap));
+    if (project_width < slot) {
+        return;
     }
 
-    // The favicon is one sprite quad in a square slot; the generic glyph
-    // takes one monospace cell so the label start never depends on shaping.
-    const slot = card.projectSlot();
     if (card.project_icon) |icon| {
         const side = @min(card.markSide(), row.height);
         try canvas.spriteAt(.{ .x = row.x + (slot - side) / 2, .y = row.y + (row.height - side) / 2, .width = side, .height = side }, icon);
     } else {
-        _ = try canvas.textAt(.{ .x = row.x, .y = row.y, .width = slot, .height = row.height }, .{ .text = project_glyph, .color = palette.subtext0 });
+        _ = try canvas.textAt(.{ .x = row.x, .y = row.y, .width = slot, .height = row.height }, .{ .text = project_glyph, .color = palette.subtext0, .face = .sans, .size = .small });
     }
 
-    const label_x = row.x + slot + 4;
-    const label_width = @max(0, row.width - slot - 4 - age_width);
+    const label_x = row.x + slot + gap;
+    const label_width = @max(0, project_width - slot - gap);
     var buffer: [TextFit.max_bytes]u8 = undefined;
     const fit: TextFit = .{ .canvas = canvas, .width = label_width };
     const label: Label = .{ .text = card.agent.workspaceLabel(), .color = palette.subtext0, .face = .sans, .size = .small };
@@ -114,10 +110,57 @@ fn paintProject(card: AgentCard, row: Rect, tokens: Level) !void {
     _ = try canvas.textAt(.{ .x = label_x, .y = row.y, .width = label_width, .height = row.height }, fitted);
 }
 
+// The top-right slot drops duration, then the word, before clipping its
+// glyph. Only the glyph pulses; the state and the clock remain readable.
+fn paintStatus(card: AgentCard, row: Rect) !f32 {
+    const canvas = card.context.canvas;
+    const state = card.agent.status;
+    const ink = status_glyph.color(canvas.theme.palette, state);
+    const gap = card.geometry.px(4);
+    const word = status_glyph.label(state, card.agent.blockedReason());
+    var age_buffer: [age_label.max_bytes]u8 = undefined;
+    var text_buffer: [32]u8 = undefined;
+    const text = switch (state) {
+        .working => std.fmt.bufPrint(&text_buffer, "{s} {s}", .{ word, age_label.duration(card.age_s, &age_buffer) }) catch unreachable,
+        .ready => age_label.format(card.age_s, &age_buffer),
+        else => word,
+    };
+    var glyph: Label = .{ .text = if (state == .ready) "" else status_glyph.glyph(state, card.agent.blockedReason()), .color = ink, .face = .sans, .size = .small };
+    const glyph_width = if (glyph.text.len == 0) 0 else try canvas.measure(glyph);
+    const glyph_space = if (glyph_width == 0) 0 else glyph_width + gap;
+    var label: Label = .{ .text = text, .color = ink, .face = .sans, .size = .small };
+    var label_width = try canvas.measure(label);
+    if (glyph_space + label_width > row.width) {
+        label.text = word;
+        label_width = try canvas.measure(label);
+    }
+
+    if (glyph_space + label_width > row.width) {
+        label.text = "";
+        label_width = 0;
+    }
+
+    const used = @min(row.width, glyph_width + label_width + if (glyph_width > 0 and label_width > 0) gap else @as(f32, 0));
+    const left = row.x + row.width - used;
+    if (state == .working) {
+        glyph.alpha = status_glyph.pulse(card.context.projection.sidebar_animation_frame);
+    }
+
+    if (glyph_width > 0) {
+        _ = try canvas.textAt(.{ .x = left, .y = row.y, .width = @min(used, glyph_width), .height = row.height }, glyph);
+    }
+
+    if (label_width > 0) {
+        _ = try canvas.textAt(.{ .x = row.x + row.width - label_width, .y = row.y, .width = label_width, .height = row.height }, label);
+    }
+
+    return used;
+}
+
 fn paintTitle(card: AgentCard, row: Rect) !void {
     const canvas = card.context.canvas;
     const text = if (card.agent.sessionTitle().len != 0) card.agent.sessionTitle() else card.agent.displayName();
-    const label: Label = .{ .text = text, .color = canvas.theme.palette.text, .bold = true, .face = .sans, .size = .title };
+    const label: Label = .{ .text = text, .color = canvas.theme.palette.text, .face = .sans, .size = .title };
     var buffer: [TextFit.max_bytes]u8 = undefined;
     const fit: TextFit = .{ .canvas = canvas, .width = row.width };
     var fitted = label;
@@ -125,48 +168,21 @@ fn paintTitle(card: AgentCard, row: Rect) !void {
     _ = try canvas.textAt(row, fitted);
 }
 
-fn paintEvent(card: AgentCard, row: Rect, tokens: Level) !void {
+fn paintDetail(card: AgentCard, row: Rect) !void {
     const canvas = card.context.canvas;
-    const palette = canvas.theme.palette;
-    var right = row.x + row.width;
-    if (tokens.shows(.mark)) {
-        const side = card.markSide();
-        right -= side;
-        try card.paintMark(.{ .x = right, .y = row.y + (row.height - side) / 2, .width = side, .height = side });
-        right -= CardGeometry.gap;
+    const side = card.markSide();
+    var width = row.width;
+    if (side <= row.width) {
+        try card.paintMark(.{ .x = row.x + row.width - side, .y = row.y + (row.height - side) / 2, .width = side, .height = side });
+        width = @max(0, width - side - card.geometry.px(CardGeometry.gap));
     }
 
-    // The elapsed time is its own label so it shares the age's cache entry
-    // and only the glyph pulses.
-    const ink = status_glyph.color(palette, card.agent.status);
-    if (card.agent.status == .working) {
-        var age_buffer: [age_label.max_bytes]u8 = undefined;
-        const elapsed: Label = .{ .text = age_label.format(card.age_s, &age_buffer), .color = ink, .face = .sans, .size = .small };
-        const elapsed_width = try canvas.measure(elapsed);
-        right -= elapsed_width;
-        _ = try canvas.textAt(.{ .x = right, .y = row.y, .width = elapsed_width, .height = row.height }, elapsed);
-        right -= elapsed_gap;
-    }
-
-    var status: Label = .{ .text = status_glyph.glyph(card.agent.status, card.agent.blockedReason()), .color = ink, .face = .sans, .size = .small };
-    if (card.agent.status == .working) {
-        status.alpha = status_glyph.pulse(card.context.projection.sidebar_animation_frame);
-    }
-
-    const status_width = try canvas.measure(status);
-    right -= status_width;
-    _ = try canvas.textAt(.{ .x = right, .y = row.y, .width = status_width, .height = row.height }, status);
-    if (!tokens.shows(.event)) {
-        return;
-    }
-
-    const event_width = @max(0, right - CardGeometry.gap - row.x);
     var buffer: [TextFit.max_bytes]u8 = undefined;
-    const fit: TextFit = .{ .canvas = canvas, .width = event_width };
-    const label: Label = .{ .text = card.agent.lastEvent(), .color = palette.overlay1, .face = .sans, .size = .small };
+    const fit: TextFit = .{ .canvas = canvas, .width = width };
+    const label: Label = .{ .text = card.detailText(), .color = canvas.theme.palette.overlay1, .face = .sans, .size = .small };
     var fitted = label;
     fitted.text = try fit.fit(label, &buffer);
-    _ = try canvas.textAt(.{ .x = row.x, .y = row.y, .width = event_width, .height = row.height }, fitted);
+    _ = try canvas.textAt(.{ .x = row.x, .y = row.y, .width = width, .height = row.height }, fitted);
 }
 
 // Width of the slot before the workspace name: the favicon square when one
@@ -185,21 +201,25 @@ fn markSide(card: AgentCard) f32 {
     return @round(card.context.canvas.chrome.px(CardGeometry.mark_size));
 }
 
-// Built-in providers draw their official artwork from the sprite page; a
-// custom or unknown provider keeps a rounded chip with its glyph.
+// OpenAI follows the theme; the other providers retain their source colors.
+// Custom providers keep their configured glyph without a background.
 fn paintMark(card: AgentCard, chip: Rect) !void {
     const canvas = card.context.canvas;
     const palette = canvas.theme.palette;
     if (canvas.providerMark(card.agent.provider)) |mark| {
-        try canvas.spriteAt(chip, mark);
+        const tint: core.Color = if (card.agent.provider == .codex)
+            (if (palette.text == .default) .{ .rgb = canvas.theme.terminal.foreground } else palette.text)
+        else
+            .default;
+        try canvas.spriteTintedAt(chip, .{ .sprite = mark, .color = tint, .alpha = provider_alpha });
         return;
     }
 
-    try canvas.fillRoundedAt(chip, .{ .radius = 4, .color = palette.surface1 });
     const glyph = card.providerGlyph();
-    const width: f32 = @floatFromInt(@as(u32, core.measure(glyph)) * canvas.metrics.cell_width);
+    const label: Label = .{ .text = glyph, .color = palette.subtext0, .alpha = provider_alpha, .face = .sans, .size = .small };
+    const width = try canvas.measure(label);
     const inset = @max(0, (chip.width - width) / 2);
-    _ = try canvas.textAt(.{ .x = chip.x + inset, .y = chip.y, .width = chip.width - inset, .height = chip.height }, .{ .text = glyph, .color = palette.subtext0 });
+    _ = try canvas.textAt(.{ .x = chip.x + inset, .y = chip.y, .width = chip.width - inset, .height = chip.height }, label);
 }
 
 fn providerGlyph(card: AgentCard) []const u8 {
@@ -209,15 +229,4 @@ fn providerGlyph(card: AgentCard) []const u8 {
 
     const icon = client.Icon.forProvider(card.agent.provider) orelse .provider_unknown;
     return icon.unicodeGlyph();
-}
-
-fn statusWidth(card: AgentCard) !f32 {
-    const canvas = card.context.canvas;
-    const glyph = try canvas.measure(.{ .text = status_glyph.glyph(card.agent.status, card.agent.blockedReason()), .face = .sans, .size = .small });
-    if (card.agent.status != .working) {
-        return glyph;
-    }
-
-    var age_buffer: [age_label.max_bytes]u8 = undefined;
-    return glyph + elapsed_gap + try canvas.measure(.{ .text = age_label.format(card.age_s, &age_buffer), .face = .sans, .size = .small });
 }

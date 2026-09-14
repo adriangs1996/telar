@@ -4,6 +4,24 @@ const std = @import("std");
 const core = @import("telar-core");
 const Palette = @import("telar-client").Palette;
 
+/// A readable state beside the icon; ready cards show their age instead.
+/// Example: `const text = status_glyph.label(.blocked, .permission); // "Approval"`
+pub fn label(status: core.AgentStatus, reason: core.AgentBlockedReason) []const u8 {
+    return switch (status) {
+        .working => "Working",
+        .blocked => switch (reason) {
+            .permission => "Approval",
+            .question => "Question",
+            .plan => "Review plan",
+            .none, .other => "Needs input",
+        },
+        .done => "Done",
+        .failed => "Failed",
+        .ready => "",
+        .unknown => "Unknown",
+    };
+}
+
 /// The status glyph; a blocked agent shows why it waits.
 /// Example: `const text = status_glyph.glyph(.blocked, .permission); // "⚠"`
 pub fn glyph(status: core.AgentStatus, reason: core.AgentBlockedReason) []const u8 {

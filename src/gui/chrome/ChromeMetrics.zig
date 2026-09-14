@@ -17,7 +17,7 @@ pub const logical_pane_header: f32 = 22;
 /// The terminal size the logical heights were designed against.
 pub const reference_font_size: f32 = 15;
 /// Chrome text roles relative to the terminal size.
-pub const title_ratio: f32 = 1.0;
+pub const title_ratio: f32 = 0.87;
 pub const body_ratio: f32 = 0.87;
 pub const small_ratio: f32 = 0.73;
 /// IBM Plex Sans line box per em: hhea ascender 1025 plus descender 275
@@ -157,21 +157,21 @@ test "chrome bands scale with display and font size and round to device pixels" 
 
 test "chrome text sizes follow the terminal size and the chrome scale but never the bands" {
     const base = Metrics.resolve(.{}, 1);
-    try std.testing.expectEqual(@as(u16, 15), base.title);
+    try std.testing.expectEqual(@as(u16, 13), base.title);
     try std.testing.expectEqual(@as(u16, 13), base.body);
     try std.testing.expectEqual(@as(u16, 11), base.small);
-    try std.testing.expectEqual(@as(f32, 20), base.rowHeight(.title));
+    try std.testing.expectEqual(@as(f32, 17), base.rowHeight(.title));
     try std.testing.expectEqual(@as(f32, 15), base.rowHeight(.small));
     try std.testing.expectEqual(@as(?u16, null), base.text(.terminal));
     const retina = Metrics.resolve(.{}, 2);
-    try std.testing.expectEqual(@as(u16, 30), retina.title);
+    try std.testing.expectEqual(@as(u16, 26), retina.title);
     try std.testing.expectEqual(@as(u16, 26), retina.body);
     try std.testing.expectEqual(@as(u16, 22), retina.small);
 
     const larger = Metrics.resolve(.{ .chrome = .{ .scale = 1.5 } }, 1);
     try std.testing.expectEqual(base.top_bar, larger.top_bar);
     try std.testing.expectEqual(base.pane_header, larger.pane_header);
-    try std.testing.expectEqual(@as(u16, 23), larger.title);
+    try std.testing.expectEqual(@as(u16, 20), larger.title);
     try std.testing.expectEqual(@as(u16, 16), larger.body);
     try std.testing.expectEqual(@as(u16, 16), larger.small);
     try std.testing.expect(larger.body * sans_line_ratio <= @as(f32, @floatFromInt(larger.pane_header)));
@@ -179,7 +179,7 @@ test "chrome text sizes follow the terminal size and the chrome scale but never 
     // At scale 2 the title and small roles double; the body stays at the
     // largest size whose line box fits the 22 px pane header.
     const doubled = Metrics.resolve(.{ .chrome = .{ .scale = 2 } }, 1);
-    try std.testing.expectEqual(@as(u16, 30), doubled.title);
+    try std.testing.expectEqual(@as(u16, 26), doubled.title);
     try std.testing.expectEqual(@as(u16, 16), doubled.body);
     try std.testing.expectEqual(@as(u16, 22), doubled.small);
     const smallest = Metrics.resolve(.{ .font = .{ .size = 6 }, .chrome = .{ .scale = 0.5 } }, 1);
