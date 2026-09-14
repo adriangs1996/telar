@@ -336,7 +336,7 @@ fn scroll(gui: *GuiClient, event: Event) !bool {
     }
 
     const pointer = if (event == .scroll) [2]f64{ event.scroll.x, event.scroll.y } else [2]f64{ event.pointer.x, event.pointer.y };
-    if (!@import("../../chrome/Bands.zig").within(gui.chrome.presented().bands.sidebar, pointer[0], pointer[1])) {
+    if (!@import("../Bands.zig").within(gui.chrome.presented().bands.sidebar, pointer[0], pointer[1])) {
         return false;
     }
 

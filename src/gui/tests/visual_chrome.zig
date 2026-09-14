@@ -6,13 +6,13 @@ const client = @import("telar-client");
 const Fixture = @import("ChromeFixture.zig");
 const Session = @import("Session.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
-const Canvas = @import("../chrome/Canvas.zig");
-const Bands = @import("../chrome/Bands.zig");
-const ChromeMetrics = @import("../chrome/ChromeMetrics.zig");
-const TabStrip = @import("../chrome/TabStrip.zig");
-const Overlays = @import("../overlays/Overlays.zig");
-const Notifications = @import("../overlays/Notifications.zig");
-const PaneDecorations = @import("../chrome/PaneDecorations.zig");
+const Canvas = @import("../widgets/Canvas.zig");
+const Bands = @import("../widgets/Bands.zig");
+const ChromeMetrics = @import("../widgets/ChromeMetrics.zig");
+const TabStrip = @import("../widgets/TabStrip.zig");
+const Overlays = @import("../widgets/overlays/Overlays.zig");
+const Notifications = @import("../widgets/overlays/Notifications.zig");
+const PaneDecorations = @import("../widgets/PaneDecorations.zig");
 const Rect = @import("../render/Rect.zig");
 const Quad = @import("../render/Quad.zig").Quad;
 
@@ -214,7 +214,11 @@ test "toasts cap at two and skip a pane already on screen" {
     const renderer = &fixture.session.renderer;
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
     renderer.quads.clear();
-    try overlays.paint(&canvas, fixture.projection());
+    var projection = fixture.projection();
+    var widgets: @import("../widgets/frame_widget.zig").List = .{};
+    try overlays.compose(.{ .canvas = &canvas, .projection = &projection }, &widgets);
+    try widgets.draw(&canvas);
+    overlays.seal();
     try std.testing.expectEqual(@as(usize, Notifications.max_visible * 2), overlays.prepared().notifications.count);
 
     _ = model.dismissNotification(model.notification_center.itemAt(0).?.id, client.transition_duration_ns);
@@ -224,7 +228,11 @@ test "toasts cap at two and skip a pane already on screen" {
     _ = model.publishNotification(client.transition_duration_ns * 3, .{ .title = "Seen", .message = "visible pane", .target = .{ .focus_pane = Session.pane_id } });
     _ = model.advanceNotifications(client.transition_duration_ns * 4);
     renderer.quads.clear();
-    try overlays.paint(&canvas, fixture.projection());
+    projection = fixture.projection();
+    widgets = .{};
+    try overlays.compose(.{ .canvas = &canvas, .projection = &projection }, &widgets);
+    try widgets.draw(&canvas);
+    overlays.seal();
     try std.testing.expectEqual(@as(usize, 2), overlays.prepared().notifications.count);
     try std.testing.expect(Notifications.targetVisible(fixture.projection(), .{ .focus_pane = Session.pane_id }));
     try std.testing.expect(!Notifications.targetVisible(fixture.projection(), .{ .focus_pane = @enumFromInt(999) }));

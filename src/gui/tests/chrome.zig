@@ -3,9 +3,9 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("ChromeFixture.zig");
 const Session = @import("Session.zig");
-const Regions = @import("../chrome/Regions.zig");
-const HitMap = @import("../chrome/HitMap.zig");
-const bar_regions = @import("../chrome/bar_regions.zig");
+const Regions = @import("../widgets/Regions.zig");
+const HitMap = @import("../widgets/HitMap.zig");
+const bar_regions = @import("../widgets/bar_regions.zig");
 
 test "native chrome geometry gives the workbench every grid cell of every host" {
     for ([_]u16{ 1, 2, 3, 10, 40 }) |height| {

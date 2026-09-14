@@ -8,7 +8,7 @@ const Fixture = @import("ChromeFixture.zig");
 const ConfigFixture = @import("ConfigurationFixture.zig");
 const Session = @import("Session.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
-const SidebarBand = @import("../chrome/SidebarBand.zig");
+const SidebarBand = @import("../widgets/SidebarBand.zig");
 const InputHandler = @import("../input/InputHandler.zig");
 
 test {

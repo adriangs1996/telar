@@ -32,8 +32,17 @@ captures the generations and damage of the panes actually composed.
 `frame_widget.zig` declares the frame's tagged union. Add a variant and select it
 in `Composition.render` to introduce a new frame section. Containers may build
 their own concrete widget lists. `Surface`, `Text` and `Sprite` are reusable
-leaves. `Chrome.paint` and `Overlays.paint` remain standalone entrypoints for
-isolated rendering tests; both use their composition and widget draw methods.
+leaves. All GUI widgets and their drawing support live under `gui/widgets`;
+modal and notification widgets live in its `overlays` subdirectory. `Canvas`
+belongs here too. Every drawable component implements `draw(self, canvas)`;
+its geometry and semantic inputs are fields on the widget value. A container
+draws its children through that same method.
+
+`Chrome` and `overlays/Overlays` own retained interaction state and compose
+widget values. They have no drawing entrypoint. `SidebarState` retains scroll
+and snapshot ordering; `Sidebar.draw` borrows it while drawing the actual
+sidebar. Tests use the same compose, draw and seal steps as the scene.
+
 `TopBar` composes the workspace controls and `TabStrip` in one navigation row;
 tabs are no longer a separate frame section. `StatusBar` owns configured bottom
 widgets and mode hints, with space reserved for TLS in every mode.

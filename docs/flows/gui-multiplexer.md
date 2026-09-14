@@ -10,21 +10,31 @@ delivery; it does not reproduce those state transitions.
 `GuiClient.projection()` captures the current model, input mode and workbench
 rectangle. `render/Scene.zig` borrows that projection for one preparation:
 
-1. `TerminalRenderer` appends retained terminal cell meshes and cursors.
-2. The thread surface paints the shared agent header and composer.
-3. `chrome/Chrome.zig` draws bars, workspaces, tabs, the agent sidebar and pane
-   decorations. Each component has its own file and receives a borrowed context.
-4. `overlays/Overlays.zig` paints notifications, prompts, the command
-   palette (`CommandPalette.zig`), history inspection and, for prompts opened
-   outside the native key path, the goto picker and command suggestion.
-5. `TerminalRenderer.seal()` publishes the atlas version after every layer has
-   finished adding glyphs. The presentation commit records the panes represented
-   by terminal and thread surfaces.
+1. `TerminalRenderer.begin()` resets the quad list and prepares retained resources.
+2. `widgets/Composition.render()` builds one bounded `frame_widget.List` from
+   the projection without drawing. It selects terminal and thread panes, the
+   hovered link, navigation, status bar, sidebar, pane decorations, focus,
+   notifications and the active modal. `Chrome.compose` and `Overlays.compose`
+   append their widgets to this list.
+3. `widgets.draw(canvas)` calls each component's `draw(Canvas)` in order.
+   Containers draw their children through the same contract. `TerminalPane`
+   uses the retained terminal cell meshes and cursor through `Canvas.terminal`.
+4. After drawing and control registration succeed, the scene seals the frame
+   and pending hit maps. `TerminalRenderer.seal()` records the atlas version
+   after every widget has finished adding glyphs.
+5. Successful native presentation publishes the matching controls and retires
+   only the pane generations and damage captured by the composition's commit.
+
+All components and drawing support live in `widgets`, with modal and notification
+widgets in `widgets/overlays`. `Context` contains semantic inputs and hit maps;
+the canvas is passed to `draw`. Persistent state such as `SidebarState` survives
+the transient widget values. There is no separate `Chrome.paint` or `Overlays.paint`
+entrypoint.
 
 The chrome around the grid is measured in pixels, not cells.
-`chrome/ChromeMetrics.zig` resolves top navigation (42) and the status bar
+`widgets/ChromeMetrics.zig` resolves top navigation (42) and the status bar
 (26 logical px, scaled by the display and by `gui.font.size`)
-and `chrome/SidebarBand.zig` resolves the sidebar band: `gui.sidebar.width`
+and `widgets/SidebarBand.zig` resolves the sidebar band: `gui.sidebar.width`
 logical pixels (default 284, bounds 220..480) scaled and rounded, clamped so
 the workbench keeps 20 columns after the band and its 8 px gap, and zero
 while the shared model hides the sidebar or the window cannot hold the
@@ -33,10 +43,10 @@ the window height and the band plus its gap from the width before it counts
 cells, so the grid origin sits under navigation and after the band, every
 row is a complete terminal row and every column a complete terminal column.
 A window too short for one row gives the height bands back: navigation
-first, then the status bar. `chrome/Regions.zig` gives the
+first, then the status bar. `widgets/Regions.zig` gives the
 whole grid to the workbench; the column preference the runtime retains in
 the shared layout is TUI-only and the GUI no longer reads it.
-`chrome/Bands.zig` places the pixel bands from the same origin, the sidebar
+`widgets/Bands.zig` places the pixel bands from the same origin, the sidebar
 band running from under navigation to the status bar, so a band never
 overlaps a cell. Both horizontal bars span the full window independently
 of sidebar visibility.
@@ -47,10 +57,12 @@ input. Every terminal leaf is painted, including splits restored from a session.
 
 The top bar holds the sidebar toggle and at most three numbered workspaces
 on the left, with the active workspace centered except at the ends of the
-runtime's list. Equal slots keep their positions while names and selection
-change; a narrow window reduces them to the active workspace. Overflow
+runtime's list. Labels are centered inside equal slots that keep their positions
+while names and selection change; a narrow window reduces them to the active
+workspace. Overflow
 counters select the nearest hidden workspace and aggregate attention dots
-from the hidden range. Global workspace numbers and keyboard intents stay
+from the hidden range. Counters use plain text without a pill background,
+including on hover. Global workspace numbers and keyboard intents stay
 unchanged.
 Native navigation ignores the retained `workspace_list_collapsed` preference;
 only available width can reduce its visible workspace count.
@@ -74,7 +86,7 @@ content and the reserved TLS badge. The `tabs` slot paints nothing because
 tabs are already above. Prefix and copy mode replace the widgets with the
 mode chip and hints, preserving TLS and navigation. The sidebar list uses the
 space below its header down to the bottom inset.
-Attention colours and aggregation come from `chrome/attention.zig` over the
+Attention colours and aggregation come from `widgets/attention.zig` over the
 shared `telar-client.agent_attention` comparator.
 
 The native adapters consume the existing quad frame through Metal on macOS and

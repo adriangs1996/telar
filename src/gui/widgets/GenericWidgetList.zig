@@ -1,6 +1,6 @@
 //! A frame-local heterogeneous list of concrete Zig values. The union passed
 //! to Type supplies draw(Canvas); no native adapter knows its variants.
-const Canvas = @import("../chrome/Canvas.zig");
+const Canvas = @import("Canvas.zig");
 
 /// The storage is bounded at compile time; appending and drawing allocate
 /// nothing. Borrowed model/text fields remain valid until draw returns.

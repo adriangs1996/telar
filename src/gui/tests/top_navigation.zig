@@ -5,6 +5,68 @@ const Fixture = @import("ChromeFixture.zig");
 const Session = @import("Session.zig");
 const Quad = @import("../render/Quad.zig").Quad;
 const Rect = @import("../render/Rect.zig");
+const Canvas = @import("../widgets/Canvas.zig");
+const Label = @import("../widgets/Label.zig");
+
+test "native workspace labels center their text advance and clip long names inside each slot" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    var workspaces: client.WorkspaceListSnapshot = .{};
+    _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
+        .{ .workspace = Session.location.workspace.workspace, .name = "a", .path = "/a", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(9), .name = "a deliberately long workspace name", .path = "/long", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(30), .name = "xy", .path = "/xy", .tab_count = 1 },
+    } });
+    var projection = fixture.projection();
+    projection.workspaces = &workspaces;
+    try fixture.paint(projection);
+    const labels = [_][]const u8{ "1 a", "2 a deliberately long workspace name", "3 xy" };
+    for (labels, 0..) |text, index| {
+        const bounds = fixture.bandTarget(.{ .select_workspace = workspaces.workspaceAt(index) }).?;
+        try expectCenteredLabel(&fixture, bounds, .{ .text = text, .bold = index == 0, .face = .sans, .size = .body });
+    }
+
+    const active = fixture.bandTarget(.{ .select_workspace = Session.location.workspace.workspace }).?;
+    const before_dot = try firstInk(fixture.session.renderer.quads.items(), active);
+    var agents: client.AgentSnapshot = .{};
+    _ = try agents.replace(.{ .revision = 1, .agents = &.{.{ .key = .{ .pane_id = Session.pane_id, .pane_generation = 1 }, .location = Session.location, .pane_index = 1, .provider = .codex, .status = .blocked }} });
+    projection.agents = &agents;
+    try fixture.paint(projection);
+    const with_dot = try firstInk(fixture.session.renderer.quads.items(), active);
+    try std.testing.expectApproxEqAbs(before_dot.x, with_dot.x, 0.01);
+}
+
+test "native workspace overflow counters keep nearest hidden destinations without normal or hover backgrounds" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    var workspaces: client.WorkspaceListSnapshot = .{};
+    _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
+        .{ .workspace = @enumFromInt(4), .name = "one", .path = "/one", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(8), .name = "two", .path = "/two", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(15), .name = "three", .path = "/three", .tab_count = 1 },
+        .{ .workspace = Session.location.workspace.workspace, .name = "four", .path = "/four", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(23), .name = "five", .path = "/five", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(42), .name = "six", .path = "/six", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(99), .name = "seven", .path = "/seven", .tab_count = 1 },
+    } });
+    var projection = fixture.projection();
+    projection.workspaces = &workspaces;
+    for ([_]core.WorkspaceId{ @enumFromInt(8), @enumFromInt(42) }) |id| {
+        for ([_]bool{ false, true }) |hovered| {
+            fixture.chrome.hovered = if (hovered) .{ .intent = .{ .select_workspace = id } } else null;
+            try fixture.paint(projection);
+            const bounds = fixture.bandTarget(.{ .select_workspace = id }).?;
+            _ = try firstInk(fixture.session.renderer.quads.items(), bounds);
+            for (fixture.session.renderer.quads.items()) |quad| {
+                if (quad.x >= bounds.x and quad.y >= bounds.y and quad.x + quad.width <= bounds.x + bounds.width and quad.y + quad.height <= bounds.y + bounds.height) {
+                    try std.testing.expect(!solid(quad));
+                }
+            }
+
+            try std.testing.expectEqualDeep(client.Intent{ .select_workspace = id }, fixture.clickBand(bounds, 0).intent);
+        }
+    }
+}
 
 test "native workspace visibility ignores the inherited collapse flag in wide and narrow windows" {
     var fixture = try Fixture.init();
@@ -267,4 +329,41 @@ fn quadsIn(quads: []const Quad, area: Rect) !std.ArrayList(Quad) {
     }
 
     return result;
+}
+
+fn expectCenteredLabel(fixture: *Fixture, bounds: Rect, label: Label) !void {
+    const renderer = &fixture.session.renderer;
+    const actual = try firstInk(renderer.quads.items(), bounds);
+    var reference = @import("../render/QuadList.zig").init(std.testing.allocator);
+    defer reference.deinit();
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &reference, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
+    const width = try canvas.measure(label);
+    const natural: Rect = .{ .x = 0, .y = bounds.y, .width = width, .height = bounds.height };
+    _ = try canvas.textAt(natural, label);
+    const glyph = try firstInk(reference.items(), natural);
+    const inset = renderer.chrome.px(8);
+    const available = @max(0, bounds.width - 2 * inset);
+    const left = bounds.x + inset + @floor(@max(0, available - width) / 2);
+    try std.testing.expectApproxEqAbs(left + glyph.x, actual.x, 0.01);
+    for (renderer.quads.items()) |quad| {
+        if (!solid(quad) and quad.x >= bounds.x and quad.y >= bounds.y and quad.x + quad.width <= bounds.x + bounds.width and quad.y + quad.height <= bounds.y + bounds.height) {
+            try std.testing.expect(quad.x >= bounds.x + inset);
+            try std.testing.expect(quad.x + quad.width <= bounds.x + bounds.width - inset);
+        }
+    }
+}
+
+fn firstInk(quads: []const Quad, bounds: Rect) !Quad {
+    for (quads) |quad| {
+        if (!solid(quad) and quad.x >= bounds.x and quad.y >= bounds.y and quad.x + quad.width <= bounds.x + bounds.width and quad.y + quad.height <= bounds.y + bounds.height) {
+            return quad;
+        }
+    }
+
+    return error.MissingLabelInk;
+}
+
+fn solid(quad: Quad) bool {
+    const uv = @import("../render/Quad.zig").solid_uv;
+    return quad.u0 == uv[0] and quad.v0 == uv[1] and quad.u1 == uv[2] and quad.v1 == uv[3];
 }

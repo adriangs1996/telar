@@ -137,7 +137,7 @@ the top bar shows the selected workspace's location instead. The TUI cell
 renderer retains its own layout.
 
 The GUI draws cards in device pixels inside the sidebar band
-(`src/gui/chrome/Sidebar.zig`, `AgentCard.zig`). Text uses the `small`, `title`,
+(`src/gui/widgets/Sidebar.zig`, `AgentCard.zig`). Text uses the `small`, `title`,
 `small` line boxes. The title is body-sized without the pane header's height cap. Insets are 10 horizontal and 8 vertical logical pixels,
 with 4 logical pixels before the title and 2 before the detail. Card spacing
 is 3, sidebar margins 8, radius 8 and provider symbols 14 logical pixels.
@@ -192,7 +192,7 @@ it is TUI-only. While visible, the sidebar owns the complete left column.
 The top bar, bottom bar and workbench use the remaining width. Hiding it
 expands all three regions to the full client width.
 
-In the GUI the sidebar is a band of device pixels (`chrome/SidebarBand.zig`)
+In the GUI the sidebar is a band of device pixels (`widgets/SidebarBand.zig`)
 that the renderer takes off the window width before it counts columns, the
 way the top bar, tab strip and status bar come off the height. Its width is
 `gui.sidebar.width` logical pixels (default 284, bounds 220..480) scaled by

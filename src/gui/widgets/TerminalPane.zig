@@ -1,5 +1,5 @@
 //! One visible terminal leaf, borrowed only until its synchronous draw ends.
-const Canvas = @import("../chrome/Canvas.zig");
+const Canvas = @import("Canvas.zig");
 const TerminalPane = @This();
 
 paint: @import("../render/PanePaint.zig"),

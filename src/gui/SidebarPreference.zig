@@ -4,8 +4,8 @@
 //! never persisted; the Lua file is the durable form.
 const std = @import("std");
 const client = @import("telar-client");
-const SidebarBand = @import("chrome/SidebarBand.zig");
-const SidebarRequest = @import("chrome/SidebarRequest.zig");
+const SidebarBand = @import("widgets/SidebarBand.zig");
+const SidebarRequest = @import("widgets/SidebarRequest.zig");
 const Preference = @This();
 
 logical: f32 = client.GuiSidebar.default_width,

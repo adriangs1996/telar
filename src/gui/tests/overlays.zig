@@ -2,10 +2,10 @@ const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("OverlayFixture.zig");
-const Modal = @import("../overlays/Modal.zig");
-const Overlays = @import("../overlays/Overlays.zig");
-const WrappedLines = @import("../overlays/WrappedLines.zig");
-const thread = @import("../overlays/thread.zig");
+const Modal = @import("../widgets/overlays/Modal.zig");
+const Overlays = @import("../widgets/overlays/Overlays.zig");
+const WrappedLines = @import("../widgets/overlays/WrappedLines.zig");
+const ThreadPane = @import("../widgets/ThreadPane.zig");
 
 test "native history keeps the visible page while a replacement query is pending" {
     const fixture = try Fixture.init();
@@ -333,7 +333,7 @@ test "native suggestion states and thread surface stay within their assigned rec
     fixture.renderer.quads.clear();
     var canvas = fixture.canvas();
     const area: core.Rect = .{ .x = 3, .y = 2, .w = 30, .h = 8 };
-    try thread.paint(&canvas, area, .{ .pane_id = @enumFromInt(1), .agent = null, .composer = "a draft\x1b[2J" });
+    try (ThreadPane{ .area = area, .thread = .{ .pane_id = @enumFromInt(1), .agent = null, .composer = "a draft\x1b[2J" } }).draw(&canvas);
     const bounds = canvas.rect(area);
     for (fixture.renderer.quads.items()) |quad| {
         try std.testing.expect(quad.x >= bounds.x and quad.y >= bounds.y);

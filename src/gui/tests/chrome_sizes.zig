@@ -6,17 +6,17 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("CanvasFixture.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
-const ChromeMetrics = @import("../chrome/ChromeMetrics.zig");
-const CardGeometry = @import("../chrome/CardGeometry.zig");
-const Canvas = @import("../chrome/Canvas.zig");
-const Label = @import("../chrome/Label.zig");
-const Size = @import("../chrome/label_size.zig").Size;
+const ChromeMetrics = @import("../widgets/ChromeMetrics.zig");
+const CardGeometry = @import("../widgets/CardGeometry.zig");
+const Canvas = @import("../widgets/Canvas.zig");
+const Label = @import("../widgets/Label.zig");
+const Size = @import("../widgets/label_size.zig").Size;
 const Quad = @import("../render/Quad.zig").Quad;
 
 const roles = [_]Size{ .terminal, .title, .body, .small };
 
 test {
-    _ = @import("../chrome/label_size.zig");
+    _ = @import("../widgets/label_size.zig");
 }
 
 test "a label measures narrower at small than at title and paints in its own line box" {

@@ -1,7 +1,7 @@
 //! Native geometry and hit testing implement the shared chrome port.
 const client = @import("telar-client");
 const GuiClient = @import("../GuiClient.zig");
-const Overlays = @import("../overlays/Overlays.zig");
+const Overlays = @import("../widgets/overlays/Overlays.zig");
 
 /// Example: `app.chrome = chrome.port(app);`
 pub fn port(app: *client.AttachedClient) client.HostChrome {

@@ -3,7 +3,7 @@ const std = @import("std");
 const client = @import("telar-client");
 const GlyphAtlas = @import("../text/GlyphAtlas.zig");
 const QuadList = @import("../render/QuadList.zig");
-const Canvas = @import("../chrome/Canvas.zig");
+const Canvas = @import("../widgets/Canvas.zig");
 const Fixture = @This();
 
 atlas: GlyphAtlas,
@@ -30,6 +30,6 @@ pub fn canvas(fixture: *Fixture) Canvas {
         .origin = .{ 8, 12 },
         .metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 },
         .theme = client.theme_support.default_theme,
-        .chrome = @import("../chrome/ChromeMetrics.zig").resolve(.{}, 1),
+        .chrome = @import("../widgets/ChromeMetrics.zig").resolve(.{}, 1),
     };
 }

@@ -126,7 +126,7 @@ cleanup and prepared raster data. Graphics preparation runs on the independent
 media path and cannot mutate notification semantics.
 
 The native GUI samples a copy of each visible item at `FrameClock.now_ns`.
-`overlays/Notifications` owns four bounded stack-position slots keyed by item
+`widgets/overlays/Notifications` owns four bounded stack-position slots keyed by item
 ID; at most two cards draw. Whole-card translation and opacity never change
 the measured text width. Position changes start from the current sampled
 position. Tiny viewports and absent cards retire their motion slots.

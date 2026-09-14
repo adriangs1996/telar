@@ -1,5 +1,5 @@
 const std = @import("std");
-const Canvas = @import("../chrome/Canvas.zig");
+const Canvas = @import("../widgets/Canvas.zig");
 const GenericWidgetList = @import("../widgets/GenericWidgetList.zig").Type;
 const CanvasFixture = @import("CanvasFixture.zig");
 const Surface = @import("../widgets/Surface.zig");

@@ -1,7 +1,7 @@
 //! Presentation-owned targets plus client-owned transient editor state.
 const std = @import("std");
 const client = @import("telar-client");
-const Canvas = @import("../../chrome/Canvas.zig");
+const Canvas = @import("../Canvas.zig");
 const GenericPresentedState = @import("../../render/GenericPresentedState.zig").Type;
 const Dispatcher = @import("Dispatcher.zig");
 const Editors = @import("Editors.zig");
@@ -67,7 +67,7 @@ pub fn chrome(state: *State, canvas: *Canvas, input: @import("ChromeRegistration
 
 /// Imports modal result rows after their field, preserving painter priority.
 /// Example: `try state.overlays(canvas, &overlays);`
-pub fn overlays(state: *State, canvas: *Canvas, value: *@import("../../overlays/Overlays.zig")) !void {
+pub fn overlays(state: *State, canvas: *Canvas, value: *@import("../overlays/Overlays.zig")) !void {
     const notifications = &value.prepared().notifications;
     for (notifications.hits[0..notifications.count]) |hit| {
         _ = try state.dispatcher.add(hit);

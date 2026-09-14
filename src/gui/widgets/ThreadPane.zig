@@ -1,7 +1,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
-const Canvas = @import("../chrome/Canvas.zig");
+const Canvas = @import("Canvas.zig");
 
 const ThreadPane = @This();
 

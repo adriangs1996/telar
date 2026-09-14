@@ -2,8 +2,8 @@ const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const Renderer = @import("../render/TerminalRenderer.zig");
-const Canvas = @import("../chrome/Canvas.zig");
-const Overlays = @import("../overlays/Overlays.zig");
+const Canvas = @import("../widgets/Canvas.zig");
+const Overlays = @import("../widgets/overlays/Overlays.zig");
 const Fixture = @This();
 
 model: client.Model,
@@ -49,7 +49,11 @@ pub fn prepare(fixture: *Fixture) !void {
     var target = fixture.canvas();
     target.animation = if (fixture.animation) |*clock| clock else null;
     fixture.widgets.begin(fixture.model.name_prompt.active());
-    try fixture.overlays.paint(&target, fixture.projection());
+    const projection_value = fixture.projection();
+    var widgets: @import("../widgets/frame_widget.zig").List = .{};
+    try fixture.overlays.compose(.{ .canvas = &target, .projection = &projection_value }, &widgets);
+    try widgets.draw(&target);
+    fixture.overlays.seal();
     try fixture.widgets.overlays(&target, &fixture.overlays);
     fixture.widgets.seal();
 }

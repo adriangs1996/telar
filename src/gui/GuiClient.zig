@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const host_ports = @import("host_ports.zig");
 const NativeLoop = @import("NativeLoop.zig");
 const NativeInput = @import("NativeInput.zig");
-const Regions = @import("chrome/Regions.zig");
+const Regions = @import("widgets/Regions.zig");
 const Renderer = @import("render/TerminalRenderer.zig");
 const native = @import("native/native.zig");
 const selection = @import("render/copy_selection.zig");
@@ -20,10 +20,10 @@ focused: bool = true,
 widgets: @import("widgets/interaction/State.zig") = .{},
 region: client.Region,
 theme: client.ColorTheme,
-chrome: @import("chrome/Chrome.zig") = .{},
+chrome: @import("widgets/Chrome.zig") = .{},
 /// The sidebar band width preference; the shared model keeps only visibility.
 sidebar: @import("SidebarPreference.zig") = .{},
-overlays: @import("overlays/Overlays.zig") = .{},
+overlays: @import("widgets/overlays/Overlays.zig") = .{},
 lifecycle: client.PresentationLifecycleState = .{},
 graphics_store: @import("graphics_delivery.zig").Store,
 

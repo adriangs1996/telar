@@ -3,10 +3,10 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("ChromeFixture.zig");
 const Session = @import("Session.zig");
-const Regions = @import("../chrome/Regions.zig");
+const Regions = @import("../widgets/Regions.zig");
 const Scene = @import("../render/Scene.zig");
-const Overlays = @import("../overlays/Overlays.zig");
-const Canvas = @import("../chrome/Canvas.zig");
+const Overlays = @import("../widgets/overlays/Overlays.zig");
+const Canvas = @import("../widgets/Canvas.zig");
 
 test "native composed multiplexer scenes keep warm allocation shaping and cell work at zero" {
     var fixture = try Fixture.init();

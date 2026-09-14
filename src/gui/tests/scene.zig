@@ -10,7 +10,7 @@ test "native theme backgrounds share window opacity across bands and pane header
     const projection = fixture.projection();
     const panes = model.activeTabModel().?;
     try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(20), .location = Session.location, .axis = .horizontal, .area = projection.geometry.area });
-    var overlays: @import("../overlays/Overlays.zig") = .{};
+    var overlays: @import("../widgets/overlays/Overlays.zig") = .{};
     var scene: @import("../render/Scene.zig") = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = client.theme_support.builtin(.vesper) };
 
     for ([_]client.theme_support.Builtin{ .vesper, .osaka_jade, .catppuccin, .tokyo_night, .terminal }) |theme| {

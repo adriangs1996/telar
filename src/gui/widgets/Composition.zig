@@ -1,14 +1,14 @@
 //! Owns the frame-local context borrowed by its widget list. Keep this value
 //! and its projection at stable addresses until the list finishes drawing.
 const client = @import("telar-client");
-const Canvas = @import("../chrome/Canvas.zig");
-const Context = @import("../chrome/Context.zig");
+const Canvas = @import("Canvas.zig");
+const Context = @import("Context.zig");
 const frame_widget = @import("frame_widget.zig");
 const copy_selection = @import("../render/copy_selection.zig");
 const Composition = @This();
 
-chrome: *@import("../chrome/Chrome.zig"),
-overlays: *@import("../overlays/Overlays.zig"),
+chrome: *@import("Chrome.zig"),
+overlays: *@import("overlays/Overlays.zig"),
 canvas: *Canvas,
 link: ?*const @import("../input/LinkHit.zig") = null,
 context: Context = undefined,

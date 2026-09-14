@@ -1,12 +1,12 @@
 //! Composes and draws one widget list during a synchronous semantic-model borrow.
 const client = @import("telar-client");
-const Canvas = @import("../chrome/Canvas.zig");
+const Canvas = @import("../widgets/Canvas.zig");
 const Composition = @import("../widgets/Composition.zig");
 const Scene = @This();
 
 terminal: *@import("TerminalRenderer.zig"),
-chrome: *@import("../chrome/Chrome.zig"),
-overlays: *@import("../overlays/Overlays.zig"),
+chrome: *@import("../widgets/Chrome.zig"),
+overlays: *@import("../widgets/overlays/Overlays.zig"),
 theme: client.ColorTheme,
 link: ?*const @import("../input/LinkHit.zig") = null,
 widgets: ?*@import("../widgets/interaction/State.zig") = null,

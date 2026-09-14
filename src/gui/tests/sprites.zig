@@ -89,12 +89,12 @@ test "sprite quads carry the texture selector and plain quads stay on the atlas"
 }
 
 const ChromeFixture = @import("ChromeFixture.zig");
-const Canvas = @import("../chrome/Canvas.zig");
-const Context = @import("../chrome/Context.zig");
-const HitMap = @import("../chrome/HitMap.zig");
-const BandHitMap = @import("../chrome/BandHitMap.zig");
-const AgentCard = @import("../chrome/AgentCard.zig");
-const CardGeometry = @import("../chrome/CardGeometry.zig");
+const Canvas = @import("../widgets/Canvas.zig");
+const Context = @import("../widgets/Context.zig");
+const HitMap = @import("../widgets/HitMap.zig");
+const BandHitMap = @import("../widgets/BandHitMap.zig");
+const AgentCard = @import("../widgets/AgentCard.zig");
+const CardGeometry = @import("../widgets/CardGeometry.zig");
 
 fn agent(provider: core.AgentProvider, pane: u32) client.AgentInput {
     return .{ .key = .{ .pane_id = @enumFromInt(pane), .pane_generation = 1 }, .location = Session.location, .pane_index = 1, .provider = provider, .status = .ready, .status_age_s = 1, .workspace_label = "telar", .session_title = "title", .last_event = "event" };
@@ -111,13 +111,13 @@ test "the card draws the sheet mark for the three providers and an unboxed glyph
     var hits: HitMap = .{};
     var band_hits: BandHitMap = .{};
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .sprites = &renderer.sprites.? };
-    var context: Context = .{ .canvas = &canvas, .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
+    const context: Context = .{ .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
     const geometry = CardGeometry.derive(renderer.chrome, renderer.metrics);
     const page = &renderer.sprites.?;
     for (agents.slice(), 0..) |*entry, index| {
         renderer.quads.clear();
-        const card: AgentCard = .{ .context = &context, .agent = entry, .geometry = geometry, .age_s = 1 };
-        try card.paint(.{ .x = 100, .y = 100, .width = 300, .height = geometry.height() });
+        const card: AgentCard = .{ .context = &context, .bounds = .{ .x = 100, .y = 100, .width = 300, .height = geometry.height() }, .agent = entry, .geometry = geometry, .age_s = 1 };
+        try card.draw(&canvas);
         const quads = renderer.quads.items();
         if (index < 3) {
             try std.testing.expectEqual(@as(usize, 1), spriteCount(quads));
@@ -151,8 +151,8 @@ test "the card draws the sheet mark for the three providers and an unboxed glyph
     defer std.testing.allocator.free(pixels);
     @memset(pixels, 255);
     const icon = try page.addFavicon(.{ .pixels = pixels, .stride = cell * 4, .width = cell, .height = cell });
-    const card: AgentCard = .{ .context = &context, .agent = &agents.slice()[0], .geometry = geometry, .age_s = 1, .project_icon = icon };
-    try card.paint(.{ .x = 100, .y = 100, .width = 300, .height = geometry.height() });
+    const card: AgentCard = .{ .context = &context, .bounds = .{ .x = 100, .y = 100, .width = 300, .height = geometry.height() }, .agent = &agents.slice()[0], .geometry = geometry, .age_s = 1, .project_icon = icon };
+    try card.draw(&canvas);
     try std.testing.expectEqual(@as(usize, 2), spriteCount(renderer.quads.items()));
 }
 
@@ -201,7 +201,7 @@ test "a warm repaint with sprites shapes rasterizes and allocates nothing" {
     try std.testing.expectEqual(@as(usize, 0), failure.allocations);
 }
 
-const Favicons = @import("../chrome/Favicons.zig");
+const Favicons = @import("../widgets/Favicons.zig");
 const png = @import("../image/png.zig");
 const favicon_worker = @import("../image/favicon_worker.zig");
 

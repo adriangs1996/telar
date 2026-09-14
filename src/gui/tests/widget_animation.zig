@@ -3,7 +3,7 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("ChromeFixture.zig");
 const Session = @import("Session.zig");
-const RingFades = @import("../chrome/RingFades.zig");
+const RingFades = @import("../widgets/RingFades.zig");
 const Quad = @import("../render/Quad.zig").Quad;
 
 test "a blocked pane animates without working agents and folds a rejected and late frame" {

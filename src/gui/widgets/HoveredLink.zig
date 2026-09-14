@@ -1,5 +1,5 @@
 //! Transient link affordances share the frame, without invalidating cell meshes.
-const Canvas = @import("../chrome/Canvas.zig");
+const Canvas = @import("Canvas.zig");
 const Hit = @import("../input/LinkHit.zig");
 const client = @import("telar-client");
 const LinkRegions = @import("../render/LinkRegions.zig");

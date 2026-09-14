@@ -4,9 +4,26 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("OverlayFixture.zig");
 const Session = @import("Session.zig");
-const CommandPalette = @import("../overlays/CommandPalette.zig");
-const PaletteHits = @import("../overlays/PaletteHits.zig");
+const CommandPalette = @import("../widgets/overlays/CommandPalette.zig");
+const PaletteHits = @import("../widgets/overlays/PaletteHits.zig");
 const routing = @import("../input/router.zig");
+
+test "palette row clips long hints in narrow and empty widget bounds" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    var canvas = fixture.canvas();
+    var row: @import("../widgets/overlays/PaletteRow.zig") = .{ .icon = ">", .primary = "A long action", .secondary = "Additional detail", .hint = "Shift+Enter" };
+    try row.draw(&canvas);
+    try std.testing.expectEqual(@as(usize, 0), fixture.renderer.quads.items().len);
+
+    for (1..16) |width| {
+        fixture.renderer.quads.clear();
+        row.area = .{ .x = 2, .y = 1, .w = @intCast(width), .h = 1 };
+        try row.draw(&canvas);
+        try std.testing.expect(fixture.renderer.quads.items().len > 0);
+        try quadsInside(fixture, row.area);
+    }
+}
 
 fn populate(fixture: *Fixture) !void {
     _ = try fixture.model.reconcileWorkspaceList(.{ .revision = 1, .entries = &.{

@@ -2,7 +2,7 @@
 //! and selection; provisional IME text belongs to the interaction state.
 const std = @import("std");
 const client = @import("telar-client");
-const Canvas = @import("../chrome/Canvas.zig");
+const Canvas = @import("Canvas.zig");
 const Target = @import("interaction/Target.zig");
 const Rect = @import("../render/Rect.zig");
 const TextField = @This();

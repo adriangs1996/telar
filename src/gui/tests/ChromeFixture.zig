@@ -2,9 +2,9 @@ const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const Session = @import("Session.zig");
-const Chrome = @import("../chrome/Chrome.zig");
-const Canvas = @import("../chrome/Canvas.zig");
-const SidebarBand = @import("../chrome/SidebarBand.zig");
+const Chrome = @import("../widgets/Chrome.zig");
+const Canvas = @import("../widgets/Canvas.zig");
+const SidebarBand = @import("../widgets/SidebarBand.zig");
 const Rect = @import("../render/Rect.zig");
 const Fixture = @This();
 
@@ -73,7 +73,13 @@ pub fn prepare(fixture: *Fixture, projection_value: client.Projection) !void {
     const renderer = &fixture.session.renderer;
     renderer.quads.clear();
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .background_opacity = renderer.config.window.background_opacity, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar, .sprites = if (renderer.sprites) |*page| page else null };
-    try fixture.chrome.paint(&canvas, projection_value);
+    fixture.chrome.animation.begin(fixture.chrome.now_ns);
+    canvas.animation = &fixture.chrome.animation;
+    var context = try fixture.chrome.begin(&canvas, &projection_value);
+    var widgets: @import("../widgets/frame_widget.zig").List = .{};
+    try fixture.chrome.compose(&context, &widgets);
+    try widgets.draw(&canvas);
+    fixture.chrome.seal();
 }
 
 pub fn target(fixture: *Fixture, intent: client.Intent) ?core.Rect {

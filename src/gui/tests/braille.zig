@@ -3,7 +3,7 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Session = @import("Session.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
-const Canvas = @import("../chrome/Canvas.zig");
+const Canvas = @import("../widgets/Canvas.zig");
 const QuadList = @import("../render/QuadList.zig");
 const Quad = @import("../render/Quad.zig").Quad;
 const solid_uv = @import("../render/Quad.zig").solid_uv;
@@ -116,7 +116,7 @@ test "Braille chrome preserves blank columns clipping colors and configured grid
         const bounds = canvas.rect(area);
         const width: f32 = @floatFromInt(renderer.metrics.cell_width);
         const height: f32 = @floatFromInt(renderer.metrics.cell_height);
-        const label = @import("../chrome/Label.zig"){ .text = "\u{2801}\u{2800}\u{2880}", .color = .{ .rgb = .{ 0, 255, 0 } }, .faint = true };
+        const label = @import("../widgets/Label.zig"){ .text = "\u{2801}\u{2800}\u{2880}", .color = .{ .rgb = .{ 0, 255, 0 } }, .faint = true };
         const version = renderer.atlas.?.version;
         quads.clear();
         try canvas.text(area, label);

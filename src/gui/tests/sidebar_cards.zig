@@ -5,20 +5,20 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("ChromeFixture.zig");
 const Session = @import("Session.zig");
-const Canvas = @import("../chrome/Canvas.zig");
-const Context = @import("../chrome/Context.zig");
-const HitMap = @import("../chrome/HitMap.zig");
-const BandHitMap = @import("../chrome/BandHitMap.zig");
-const AgentCard = @import("../chrome/AgentCard.zig");
-const CardGeometry = @import("../chrome/CardGeometry.zig");
-const Sidebar = @import("../chrome/Sidebar.zig");
+const Canvas = @import("../widgets/Canvas.zig");
+const Context = @import("../widgets/Context.zig");
+const HitMap = @import("../widgets/HitMap.zig");
+const BandHitMap = @import("../widgets/BandHitMap.zig");
+const AgentCard = @import("../widgets/AgentCard.zig");
+const CardGeometry = @import("../widgets/CardGeometry.zig");
+const Sidebar = @import("../widgets/Sidebar.zig");
 const Quad = @import("../render/Quad.zig").Quad;
 const Rect = @import("../render/Rect.zig");
 const sprites = @import("sprites.zig");
 
 test {
-    _ = @import("../chrome/age_label.zig");
-    _ = @import("../chrome/status_glyph.zig");
+    _ = @import("../widgets/age_label.zig");
+    _ = @import("../widgets/status_glyph.zig");
     _ = CardGeometry;
 }
 
@@ -89,6 +89,55 @@ test "the sidebar orders six agents by attention and maps one hit per card" {
     try std.testing.expectEqualDeep(client.Intent{ .focus_agent = entries[5].key }, fixture.clickBand(fixture.bandTarget(.{ .focus_agent = entries[5].key }).?, 0).intent);
 }
 
+test "replacement sidebar widgets retain scrolling and clip their own card controls" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    var agents: client.AgentSnapshot = .{};
+    _ = try agents.replace(.{ .revision = 1, .agents = &entries });
+    var projection = fixture.projection();
+    projection.agents = &agents;
+    const renderer = &fixture.session.renderer;
+    var hits: HitMap = .{};
+    var band_hits: BandHitMap = .{};
+    const context: Context = .{ .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
+    var state: @import("../widgets/SidebarState.zig") = .{};
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar };
+    const GenericWidgetList = @import("../widgets/GenericWidgetList.zig").Type;
+    const List = GenericWidgetList(Sidebar, 1);
+    const area: Rect = .{ .x = 0, .y = 0, .width = 284, .height = 160 };
+    {
+        var widgets: List = .{};
+        try widgets.append(.{ .state = &state, .context = &context, .area = area });
+        try widgets.draw(&canvas);
+    }
+
+    const first = band_hits.find(.{ .focus_agent = entries[expected_order[0]].key }).?;
+    try std.testing.expectEqualSlices(u8, &expected_order, state.ordering());
+    try std.testing.expect(state.scrollBy(20));
+    renderer.quads.clear();
+    band_hits = .{};
+    {
+        var widgets: List = .{};
+        try widgets.append(.{ .state = &state, .context = &context, .area = area });
+        try widgets.draw(&canvas);
+    }
+
+    try std.testing.expectEqual(@as(u16, 20), state.scroll);
+    const clipped = band_hits.find(.{ .focus_agent = entries[expected_order[0]].key }).?;
+    try std.testing.expectEqual(first.area.y, clipped.area.y);
+    try std.testing.expectEqual(first.area.height - 20, clipped.area.height);
+    var empty: client.AgentSnapshot = .{};
+    _ = try empty.replace(.{ .revision = 1, .agents = &.{} });
+    projection.agents = &empty;
+    renderer.quads.clear();
+    band_hits = .{};
+    try (Sidebar{ .state = &state, .context = &context, .area = area }).draw(&canvas);
+    try std.testing.expectEqual(@as(usize, 0), state.ordering().len);
+    try std.testing.expectEqual(@as(u16, 0), state.scroll);
+    try std.testing.expectEqual(@as(u16, 0), state.maximum_scroll);
+    try std.testing.expect(band_hits.find(.{ .focus_agent = entries[expected_order[0]].key }) == null);
+}
+
 test "the selected card is the focused pane's agent and carries the fill and ring" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
@@ -127,14 +176,14 @@ test "narrow cards keep status in the first row and clip every token to its card
     var hits: HitMap = .{};
     var band_hits: BandHitMap = .{};
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .sprites = &renderer.sprites.? };
-    var context: Context = .{ .canvas = &canvas, .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
+    const context: Context = .{ .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
     const geometry = CardGeometry.derive(renderer.chrome, renderer.metrics);
-    const card: AgentCard = .{ .context = &context, .agent = &agents.slice()[4], .geometry = geometry, .age_s = 30 };
     projection.sidebar_animation_frame = 9;
     for ([_]f32{ 300, 220, 120, 60, 24, 8, 0 }) |width| {
         renderer.quads.clear();
         const bounds: Rect = .{ .x = 100, .y = 100, .width = width, .height = geometry.height() };
-        try card.paint(bounds);
+        const card: AgentCard = .{ .context = &context, .bounds = bounds, .agent = &agents.slice()[4], .geometry = geometry, .age_s = 30 };
+        try card.draw(&canvas);
         const first = geometry.row(bounds, 0);
         var pulsing = false;
         for (renderer.quads.items()) |item| {
@@ -170,9 +219,8 @@ test "card detail follows working state and the agent workspace across branch-on
     const renderer = &fixture.session.renderer;
     var hits: HitMap = .{};
     var band_hits: BandHitMap = .{};
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome };
-    var context: Context = .{ .canvas = &canvas, .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
-    var card: AgentCard = .{ .context = &context, .agent = undefined, .geometry = CardGeometry.derive(renderer.chrome, renderer.metrics), .age_s = 10 };
+    const context: Context = .{ .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
+    var card: AgentCard = .{ .context = &context, .bounds = .{ .x = 0, .y = 0, .width = 0, .height = 0 }, .agent = undefined, .geometry = CardGeometry.derive(renderer.chrome, renderer.metrics), .age_s = 10 };
     for ([_]core.AgentStatus{ .working, .ready, .done, .blocked, .failed, .unknown }, 1..) |state, revision| {
         input.status = state;
         _ = try agents.replace(.{ .revision = revision, .agents = &.{input} });

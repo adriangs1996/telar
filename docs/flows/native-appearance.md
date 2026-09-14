@@ -163,9 +163,10 @@ differing from the terminal default and covering modals keep their own opacity.
 The top navigation is one 42-logical-pixel band at the reference font size.
 Workspace controls stay on the left, showing at most three consecutive entries
 in runtime order with the active workspace centered except at either end.
-Names share fixed slots, numbers retain their global positions, and narrower
-windows keep the active workspace while reducing the visible group. Hidden
-workspace counters retain attention indicators. Tabs align at the right edge,
+Labels are centered inside fixed slots, numbers retain their global positions,
+and narrower windows keep the active workspace while reducing the visible group. Hidden
+workspace counters have no background, including on hover, and retain their
+navigation targets and attention indicators. Tabs align at the right edge,
 independently of sidebar visibility, and the active tab remains reachable when
 labels overflow. Rounded tops and a neutral outline give tabs their shape;
 the active tab joins the workbench without a permanent accent line. A child's
@@ -205,7 +206,7 @@ beside the atlas; a frame without a page leaves the atlas bound in the sprite
 slot and no quad selects it. `Canvas.spriteAt` draws one cell into a
 device-pixel rectangle, snapped to whole pixels, as one quad with zero shape.
 
-Workspace favicons never cross the wire. `chrome/Favicons` keeps one entry per
+Workspace favicons never cross the wire. `widgets/Favicons` keeps one entry per
 workspace of the list; each preparation places the one landed image into the
 page and asks `controllers/workspaces/favicons` to look up the next wanted
 workspace when the client's `favicon_runner` is bound (the TUI leaves it

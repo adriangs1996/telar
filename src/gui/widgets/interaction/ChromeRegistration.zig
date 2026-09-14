@@ -1,2 +1,2 @@
-chrome: *@import("../../chrome/Chrome.zig"),
+chrome: *@import("../Chrome.zig"),
 projection: *const @import("telar-client").Projection,
