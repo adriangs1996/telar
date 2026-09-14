@@ -31,7 +31,17 @@ pub fn fill(canvas: *Canvas, area: core.Rect, ink_color: core.Color) !void {
         return;
     }
 
-    try canvas.quads.pushRect(canvas.rect(area), canvas.color(ink_color, canvas.theme.terminal.background));
+    try canvas.fillAt(canvas.rect(area), ink_color);
+}
+
+/// `fill` over a device-pixel rectangle, for chrome laid out in pixels.
+/// Example: `try canvas.fillAt(thumb, palette.overlay0);`
+pub fn fillAt(canvas: *Canvas, bounds: Rect, ink_color: core.Color) !void {
+    if (bounds.width <= 0 or bounds.height <= 0) {
+        return;
+    }
+
+    try canvas.quads.pushRect(bounds, canvas.color(ink_color, canvas.theme.terminal.background));
 }
 
 /// Paints a rounded surface; the fragment shader resolves the corners, so it
@@ -42,7 +52,17 @@ pub fn fillRounded(canvas: *Canvas, area: core.Rect, fill_value: RoundedFill) !v
         return;
     }
 
-    try canvas.quads.pushRounded(canvas.rect(area), .{
+    try canvas.fillRoundedAt(canvas.rect(area), fill_value);
+}
+
+/// `fillRounded` over a device-pixel rectangle.
+/// Example: `try canvas.fillRoundedAt(card, .{ .radius = 8, .color = palette.surface0 });`
+pub fn fillRoundedAt(canvas: *Canvas, bounds: Rect, fill_value: RoundedFill) !void {
+    if (bounds.width <= 0 or bounds.height <= 0) {
+        return;
+    }
+
+    try canvas.quads.pushRounded(bounds, .{
         .fill = canvas.color(fill_value.color, canvas.theme.terminal.background),
         .radius = fill_value.radius,
     });
@@ -56,7 +76,17 @@ pub fn ring(canvas: *Canvas, area: core.Rect, stroke: Ring) !void {
         return;
     }
 
-    try canvas.quads.pushRounded(canvas.rect(area), .{
+    try canvas.ringAt(canvas.rect(area), stroke);
+}
+
+/// `ring` over a device-pixel rectangle.
+/// Example: `try canvas.ringAt(card, .{ .width = 1, .radius = 8, .color = palette.surface1 });`
+pub fn ringAt(canvas: *Canvas, bounds: Rect, stroke: Ring) !void {
+    if (bounds.width <= 0 or bounds.height <= 0) {
+        return;
+    }
+
+    try canvas.quads.pushRounded(bounds, .{
         .fill = .{ .r = 0, .g = 0, .b = 0, .a = 0 },
         .radius = stroke.radius,
         .border = stroke.width,
@@ -75,11 +105,22 @@ pub fn text(canvas: *Canvas, area: core.Rect, label: Label) !void {
         return;
     }
 
+    _ = try canvas.textAt(canvas.rect(area.row(0)), label);
+}
+
+/// `text` over a device-pixel rectangle: the natural line box is centered
+/// vertically inside `bounds`, so a row taller or shorter than a cell keeps
+/// its glyphs on one baseline. Returns the painted advance in pixels.
+/// Example: `const width = try canvas.textAt(row, .{ .text = title, .bold = true, .face = .sans });`
+pub fn textAt(canvas: *Canvas, bounds: Rect, label: Label) !f32 {
+    if (bounds.width <= 0 or bounds.height <= 0) {
+        return 0;
+    }
+
     const first = canvas.quads.items().len;
-    const bounds = canvas.rect(area.row(0));
     const ink = canvas.labelInk(label);
     const width = switch (label.face) {
-        .mono => try canvas.monoText(area, label),
+        .mono => try canvas.monoText(bounds, label),
         .sans => @min(bounds.width, try canvas.atlas.place(canvas.run(label, bounds), canvas.quads)),
     };
     if (label.underline and width != 0) {
@@ -91,6 +132,7 @@ pub fn text(canvas: *Canvas, area: core.Rect, label: Label) !void {
     }
 
     canvas.quads.clipFrom(first, bounds);
+    return width;
 }
 
 /// Returns the device-pixel width `text` would paint without clipping, so a
@@ -104,21 +146,21 @@ pub fn measure(canvas: *Canvas, label: Label) !f32 {
     };
 }
 
-fn monoText(canvas: *Canvas, area: core.Rect, label: Label) !f32 {
-    const bounds = canvas.rect(area.row(0));
+fn monoText(canvas: *Canvas, bounds: Rect, label: Label) !f32 {
     const ink = canvas.labelInk(label);
+    const columns: u16 = @intFromFloat(@min(65535, bounds.width / @as(f32, @floatFromInt(canvas.metrics.cell_width))));
     var iterator: core.GraphemeIterator = .{ .bytes = label.text };
     var column: u16 = 0;
-    while (column < area.w) {
+    while (column < columns) {
         const cluster = iterator.next() orelse break;
-        if (cluster.width > area.w - column) {
+        if (cluster.width > columns - column) {
             break;
         }
 
         _ = try canvas.atlas.place(.{
             .text = cluster.bytes,
             .x = bounds.x + @as(f32, @floatFromInt(@as(u32, column) * canvas.metrics.cell_width)),
-            .y = bounds.y + canvas.metrics.baseline,
+            .y = canvas.baselineIn(bounds),
             .pixel_height = canvas.metrics.pixel_height,
             .cell_bounds = canvas.metrics.glyphCell(),
             .color = ink,
@@ -136,7 +178,7 @@ fn run(canvas: *Canvas, label: Label, bounds: Rect) TextRun {
     return .{
         .text = label.text,
         .x = bounds.x,
-        .y = bounds.y + canvas.metrics.baseline,
+        .y = canvas.baselineIn(bounds),
         .pixel_height = canvas.metrics.pixel_height,
         .cell_bounds = canvas.metrics.glyphCell(),
         .color = canvas.labelInk(label),
@@ -146,12 +188,19 @@ fn run(canvas: *Canvas, label: Label, bounds: Rect) TextRun {
     };
 }
 
+// The measured baseline centers the natural line box in one cell; a row of
+// another height shifts it by half the difference so glyphs stay centered.
+fn baselineIn(canvas: Canvas, bounds: Rect) f32 {
+    return bounds.y + canvas.metrics.baseline + (bounds.height - @as(f32, @floatFromInt(canvas.metrics.cell_height))) / 2;
+}
+
 fn labelInk(canvas: Canvas, label: Label) Color {
     var value = canvas.color(label.color, canvas.theme.terminal.foreground);
     if (label.faint) {
         value.a *= 0.5;
     }
 
+    value.a *= label.alpha;
     return value;
 }
 

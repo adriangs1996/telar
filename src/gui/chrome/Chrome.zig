@@ -19,6 +19,8 @@ hovered: ?Action = null,
 gesture_button: ?u8 = null,
 sidebar_resize_active: bool = false,
 revision: u64 = 0,
+/// Monotonic seconds the driver stamps before each preparation.
+now_s: u32 = 0,
 
 /// Paints after terminal leaves and before modal overlays. No borrowed model
 /// pointer survives preparation; asynchronous consumers own only frame quads.
@@ -27,7 +29,7 @@ pub fn paint(chrome: *Chrome, canvas: *Canvas, projection: client.Projection) !v
     const pending = chrome.maps.begin();
     try registerPanes(&pending.hits, projection);
     pending.regions = Regions.calculate(projection.host_size.cols, projection.host_size.rows, .{ .visible = projection.sidebar_visible, .preferred_width = projection.sidebar_width });
-    var context: Context = .{ .canvas = canvas, .hits = &pending.hits, .projection = &projection, .hovered = chrome.hovered };
+    var context: Context = .{ .canvas = canvas, .hits = &pending.hits, .projection = &projection, .hovered = chrome.hovered, .now_s = chrome.now_s };
     const bars: Bars = .{ .context = &context, .regions = pending.regions };
     try bars.paint();
     try chrome.sidebar.paint(&context, pending.regions.sidebar);

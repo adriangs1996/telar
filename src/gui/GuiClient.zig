@@ -250,6 +250,7 @@ pub fn prepare(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.zig"
     }
 
     gui.refreshPointer();
+    gui.chrome.now_s = @intCast(client.monotonic(gui.app.io) / std.time.ns_per_s);
     const projected = gui.projection();
     const observed = gui.observation();
     _ = gui.lifecycle.observe(observed);

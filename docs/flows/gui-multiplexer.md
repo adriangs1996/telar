@@ -54,8 +54,13 @@ router. Some useful default suffixes are:
 
 Chrome hit maps retain stable pane, tab, workspace and agent identities. Pane
 content clicks focus before shared mouse routing; controls consume their own
-gestures. Right-clicking a tab opens its rename prompt. Sidebar scrolling and
-hover advance `chrome.revision`; prefix changes advance the input revision.
+gestures. Right-clicking a tab opens its rename prompt. Sidebar scrolling
+moves one card pitch; scrolling and hover advance `chrome.revision`; prefix
+changes advance the input revision. The sidebar lays its header and cards
+out in device pixels inside its cell column and publishes one cell-based
+`focus_agent` target per card ([sidebar contract](../sidebar.md)).
+`GuiClient.prepare` stamps monotonic seconds on the chrome so card ages add
+the time since the agent snapshot arrived.
 Both enter `PresentationIngress`, so they can request a frame without changing
 terminal cells. Modal gestures cannot fall through to panes behind them.
 
