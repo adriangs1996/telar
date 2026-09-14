@@ -304,7 +304,12 @@ the checking machine.
 With `font.thicken = true`, macOS rasterizes the selected face through CoreText
 and CoreGraphics into the existing glyph atlas. FreeType still supplies metrics
 and HarfBuzz shaping, so toggling optical weight preserves the grid and PTY size.
-Bold and italic use the existing synthesized variants; missing glyphs use the
+Bold and italic use the existing synthesized variants. A grapheme the
+configured font lacks falls back to the embedded JetBrains Mono and Nerd
+Symbols faces, then to an installed system font found automatically through
+CoreText or Fontconfig (monospace preferred, at most eight such faces per
+window, fitted to the cell); nothing configures this. Fallback is monochrome:
+color emoji faces are never selected, so a grapheme only they cover keeps the
 face's replacement glyph. Separate style families, fallback family lists,
 OpenType feature configuration, color emoji and zoom shortcuts are not part of
 this increment. Chrome can derive proportional sizes from `GuiFont.scaledSize`.
