@@ -141,7 +141,7 @@ test "CLI defaults to the configured shell" {
     const cli = try Cli.parse(&args, .empty);
     try std.testing.expect(cli == .run);
     try std.testing.expect(cli.run.command.argv[0] != null);
-    try std.testing.expectEqual(BuiltinType.vesper, cli.run.theme.base);
+    try std.testing.expectEqual(BuiltinType.osaka_jade, cli.run.theme.base);
 }
 
 test "CLI forwards a command without a shell" {

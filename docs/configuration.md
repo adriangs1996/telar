@@ -161,12 +161,15 @@ failures, and transitions from any other state remain silent. Set
 Select a theme once at the root of the configuration:
 
 ```lua
-theme = "vesper"
+theme = "osaka-jade"
 ```
 
 Each preset defines Telar's chrome roles and the native terminal's foreground,
-background, ANSI palette and cursor colors. Built-ins are `vesper`, the default,
-`catppuccin` (Mocha), `tokyo-night`, and `terminal`. The TUI uses the chrome roles
+background, ANSI palette and cursor colors. Built-ins are `osaka-jade` (also
+spelled `osaka_jade` or `osakajade`), the default, `vesper`, `catppuccin`
+(Mocha), `tokyo-night`, and `terminal`. Osaka Jade's `panel_bg` is `default`:
+the chrome takes the terminal background, so the TUI keeps its host background
+and the GUI paints `#111c18`. The TUI uses the chrome roles
 and keeps the host terminal's palette and defaults. The GUI uses the terminal
 colors too; child truecolor and OSC overrides still apply. The `terminal`
 preset uses host-relative chrome roles and a neutral explicit palette in the
@@ -206,7 +209,8 @@ level; declaring both is an error. The earlier `gui.theme` table has moved to
 `theme.terminal`. Likewise, `gui.cursor.color` and `gui.cursor.text_color` move
 to `theme.terminal.cursor_color` and `theme.terminal.cursor_text_color`.
 
-The ANSI data comes from the [Vesper terminal port](https://github.com/mbadolato/iTerm2-Color-Schemes/blob/master/ghostty/Vesper),
+The Osaka Jade ANSI data is the Ghostty Osaka Jade port as recorded in
+`dev/osaka-jade.lua`. The other ANSI data comes from the [Vesper terminal port](https://github.com/mbadolato/iTerm2-Color-Schemes/blob/master/ghostty/Vesper),
 [Catppuccin Mocha](https://github.com/catppuccin/ghostty/blob/main/themes/catppuccin-mocha.conf)
 and [Tokyo Night](https://github.com/folke/tokyonight.nvim/blob/main/extras/ghostty/tokyonight_night).
 Telar retains its orange Vesper cursor with background-colored text.
@@ -225,10 +229,10 @@ telar gui --config examples/gui.lua --profile presentation
 ```
 
 ```lua
-theme = "vesper"
+theme = "osaka-jade"
 gui = {
   window = {
-    titlebar = true,
+    titlebar = false, -- the macOS default; Linux defaults to true
     background_opacity = 0.95,
     background_blur = 20,
     padding = { x = 8, y = 8 },
@@ -247,7 +251,7 @@ gui = {
 
 | Setting | Default | Meaning and bounds |
 | --- | --- | --- |
-| `window.titlebar` | `true` | Show the native titlebar. Set `false` to hide it; Telar's workspace, tab and status bars remain available. On Wayland this is a decoration request which the compositor may override. |
+| `window.titlebar` | `false` on macOS, `true` on Linux | Show the native titlebar. On macOS it starts hidden so Telar's top bar sits at the window edge; set `true` to restore it. On Wayland it defaults to the compositor decoration and is a request which the compositor may override. Telar's workspace, tab and status bars remain available either way. |
 | `window.background_opacity` | `1` | Background opacity, `0..1`. Text, cursor and cell backgrounds differing from the terminal default retain their own opacity. |
 | `window.background_blur` | `0` | Integer `0..255`: macOS blur radius, with `0` disabling blur. On Wayland any positive value requests compositor blur; its intensity remains compositor-controlled. Has no visible effect at opacity `1`. Legacy `true` means `20`, and `false` means `0`. |
 | `window.padding.x` | `0` | Logical pixels on each horizontal edge, `0..256`, decimals allowed. |
@@ -429,9 +433,9 @@ Diagnostics name the entry and the field, for example
 
 ## Bars
 
-`client.bars` controls all three blocks of the bottom bar and the right block
-of the top bar. The bottom bar must contain exactly one `telar.bar.tabs()`
-source. Tabs keep their built-in behavior; configuration can only choose their
+`client.bars` controls all three blocks of the bottom bar, the right block
+of the top bar and the sidebar footer row. The bottom bar must contain exactly
+one `telar.bar.tabs()` source. Tabs keep their built-in behavior; configuration can only choose their
 position. The top bar keeps workspace navigation and the sidebar control under
 Telar's ownership, so only `top.right` exists. The ProxyTLS badge remains
 reserved at the far right whenever interception is active. While the sidebar
@@ -458,12 +462,20 @@ bars = {
       { icon = "provider-codex", text = " telar ", fg = "accent", bold = true },
     }),
   },
+  sidebar_footer = { telar.bar.metrics() },
 }
 ```
 
 When `client.bars` is absent, the bottom bar keeps metrics on the left and tabs
-on the right, and `top.right` is empty. If `bottom` is present, omitted
-positions are empty and one declared position still has to contain the tabs.
+on the right, `top.right` is empty and the sidebar footer shows `metrics`. If
+`bottom` is present, omitted positions are empty and one declared position
+still has to contain the tabs.
+
+`sidebar_footer` is a list of at most three sources laid out left, center and
+right in the last row of the sidebar. It accepts every source except
+`telar.bar.tabs()`; an empty list hides the row. The footer follows the same
+generation, tick and reload rules as the other slots. Only `telar gui` paints
+it today: the TUI sidebar ignores `sidebar_footer` and keeps its cell layout.
 Prefix mode, copy mode and a rename prompt temporarily replace the configured
 bottom row with their own controls.
 

@@ -21,6 +21,7 @@ pub fn execute(handler: *NamePromptHandler, command: name_prompt.Command) !name_
         .changed => .changed,
         .cancelled => .cancelled,
         .removed => .removed,
+        .completion_requested => .completion_requested,
         .submitted => |submission| if (!try handler.effects.submit(
             handler.effects.context,
             submission,

@@ -235,6 +235,60 @@ test "native history paints owned command output and exposes exact inspector scr
     try std.testing.expectEqualDeep(core.Rect{ .w = 5, .h = 2 }, tiny);
 }
 
+test "native new-context form paints both fields, the completion list and the confirmation inside its modal" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    fixture.model.name_prompt.begin(.create_workspace);
+    _ = fixture.model.name_prompt.apply(.{ .insert = "agents" });
+    _ = fixture.model.name_prompt.apply(.tab);
+    _ = fixture.model.name_prompt.apply(.{ .insert = "/work/te" });
+    var result: client.PathCompletionResult = .{};
+    try result.setBase("/work");
+    try result.append("telar");
+    try result.append("tests");
+    fixture.model.path_completion.begin();
+    fixture.model.path_completion.expect(@enumFromInt(1));
+    try std.testing.expect(fixture.model.path_completion.apply(@enumFromInt(1), .{ .query = "/work/te", .result = &result }));
+    _ = fixture.model.name_prompt.apply(.move_down);
+    try fixture.paint();
+
+    const modal = fixture.overlays.presented().modal.?;
+    try std.testing.expectEqual(@as(u16, 16), modal.h);
+    try std.testing.expectEqual(@as(u16, 72), modal.w);
+    var canvas = fixture.canvas();
+    const bounds = canvas.rect(modal);
+    const with_list = fixture.renderer.quads.items().len;
+    for (fixture.renderer.quads.items()) |quad| {
+        try std.testing.expect(quad.x >= bounds.x and quad.y >= bounds.y);
+        try std.testing.expect(quad.x + quad.width <= bounds.x + bounds.width);
+        try std.testing.expect(quad.y + quad.height <= bounds.y + bounds.height);
+    }
+    try std.testing.expect(with_list > 10);
+    const press = fixture.overlays.pointer(.{ .x = 0, .y = 0, .kind = .press }).?;
+    try std.testing.expect(press.consumed);
+    try std.testing.expect(press.intent == .none);
+    _ = fixture.overlays.pointer(.{ .x = 0, .y = 0, .kind = .release });
+
+    fixture.model.name_prompt.requestDirectoryConfirmation();
+    fixture.model.path_completion.invalidate();
+    try fixture.paint();
+    try std.testing.expect(fixture.renderer.quads.items().len < with_list);
+    try std.testing.expectEqualStrings("agents", fixture.model.name_prompt.currentConst().?.field.text());
+    try std.testing.expectEqualStrings("/work/te", fixture.model.name_prompt.currentConst().?.directory.text());
+    try std.testing.expect(fixture.model.name_prompt.currentConst().?.form().?.confirm_create);
+
+    for ([_][2]u16{ .{ 1, 1 }, .{ 12, 4 }, .{ 30, 6 } }) |size| {
+        fixture.size.cols = size[0];
+        fixture.size.rows = size[1];
+        try fixture.paint();
+        const tiny = canvas.rect(fixture.overlays.presented().modal.?);
+        for (fixture.renderer.quads.items()) |quad| {
+            try std.testing.expect(quad.x + quad.width <= tiny.x + tiny.width);
+            try std.testing.expect(quad.y + quad.height <= tiny.y + tiny.height);
+        }
+    }
+}
+
 test "native suggestion states and thread surface stay within their assigned rectangles" {
     const fixture = try Fixture.init();
     defer fixture.deinit();

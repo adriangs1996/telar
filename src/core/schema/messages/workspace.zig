@@ -44,6 +44,7 @@ pub fn encodeCreateWorkspace(buffer: []u8, message: CreateWorkspace) ![]const u8
     try encoder.writeInt(u64, id.raw(message.request_id));
     try codec.encodeSize(&encoder, message.size);
     try encoder.writeSized16(message.name);
+    try encoder.writeByte(@intFromBool(message.create_cwd));
     try launch_mod.encodeLaunch(&encoder, message.launch);
     return encoder.finish();
 }
@@ -53,10 +54,16 @@ pub fn decodeCreateWorkspace(decoder: *DecoderType) !CreateWorkspaceView {
     const size = try codec.decodeSize(decoder);
     const name = try decoder.readSized16();
     try codec.validateTabLabel(name, false);
+    const create_cwd = switch (try decoder.readByte()) {
+        0 => false,
+        1 => true,
+        else => return error.InvalidCreateCwdFlag,
+    };
     return .{
         .request_id = request_id,
         .size = size,
         .name = name,
+        .create_cwd = create_cwd,
         .launch = try launch_mod.decodeLaunch(decoder),
     };
 }

@@ -145,5 +145,6 @@ test "window preferences preserve defaults and profile inheritance with numeric 
     const defaults = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2 }", .source_name = "@defaults.lua", .number = 1 });
     defer defaults.deinit();
     try std.testing.expectEqual(@as(u8, 0), defaults.snapshot.gui.window.background_blur);
-    try std.testing.expect(defaults.snapshot.gui.window.titlebar);
+    try std.testing.expectEqual(@import("GuiWindow.zig").default_titlebar, defaults.snapshot.gui.window.titlebar);
+    try std.testing.expectEqual(@import("builtin").os.tag != .macos, defaults.snapshot.gui.window.titlebar);
 }

@@ -12,11 +12,14 @@ const default_sequence_timeout_ns_module = @import("input/keybind.zig").default_
 const GenerationType = @import("config/Generation.zig");
 const RegistryType = @import("plugins/Registry.zig");
 const TrustStoreType = @import("telar-core").TrustStore;
+const std = @import("std");
 const Options = @This();
 
 arguments: []const []const u8,
 cwd: []const u8,
 endpoint: []const u8,
+/// Process environment used to expand `~` and `$VAR` in typed directories.
+environ: std.process.Environ = .empty,
 prefix: KeyType = default_prefix_module,
 bindings: []const model.ConfiguredBinding = &.{},
 theme: ThemeType = theme_support.default_theme,

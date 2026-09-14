@@ -694,6 +694,8 @@ pub fn render(state: *State, screen: *ScreenType, input: RenderInput) !RenderSta
         .layout = layout,
         .rename_field = view_ops.promptField(input.prompt),
         .rename_kind = view_ops.promptKind(input.prompt),
+        .prompt = input.prompt,
+        .path_completion = input.path_completion,
         .sidebar_snapshot = input.agents,
         .sidebar_state = &state.sidebar,
         .sidebar_transparent = hybrid,

@@ -74,7 +74,7 @@ pub fn begin(state: *State, command: name_prompt.Begin) void {
             .field = .init(rename.label),
         },
         .create_workspace => .{
-            .mode = .create_workspace,
+            .mode = .{ .create_workspace = .{} },
             .field = .init(""),
         },
         .rename_workspace => |rename| .{
@@ -161,6 +161,18 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
             if (prompt.pasting) {
                 return state.editField(.{ .insert = " " });
             }
+            if (prompt.form()) |form_state| {
+                if (prompt.field.text().len == 0 and prompt.directory.text().len == 0) {
+                    return .unchanged;
+                }
+
+                return .{ .submitted = .{
+                    .target = prompt.target(),
+                    .name = prompt.field.text(),
+                    .directory = prompt.directory.text(),
+                    .create_directory = form_state.confirm_create,
+                } };
+            }
             if (prompt.field.text().len == 0 and !name_prompt.selects(prompt.target())) {
                 return .unchanged;
             }
@@ -190,7 +202,7 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
                 return .changed;
             }
 
-            if (!name_prompt.selects(prompt.target()) or prompt.selection() == 0) {
+            if (!(name_prompt.selects(prompt.target()) or directoryFocused(prompt)) or prompt.selection() == 0) {
                 return .unchanged;
             }
 
@@ -210,7 +222,7 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
                 return .changed;
             }
 
-            if (!name_prompt.selects(prompt.target())) {
+            if (!(name_prompt.selects(prompt.target()) or directoryFocused(prompt))) {
                 return .unchanged;
             }
 
@@ -218,13 +230,33 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
             state.revision +%= 1;
             return .changed;
         },
-        .cycle_scope => {
+        .tab => {
+            if (prompt.mode == .create_workspace) {
+                const form_state = &prompt.mode.create_workspace;
+                if (form_state.focus == .directory) {
+                    return .completion_requested;
+                }
+
+                form_state.focus = .directory;
+                state.revision +%= 1;
+                return .changed;
+            }
             if (prompt.target() != .history) {
                 return .unchanged;
             }
 
             prompt.mode.history.scope = prompt.mode.history.scope.next();
             prompt.setSelection(0);
+            state.revision +%= 1;
+            return .changed;
+        },
+        .back_tab => {
+            if (prompt.mode != .create_workspace) {
+                return .unchanged;
+            }
+
+            const form_state = &prompt.mode.create_workspace;
+            form_state.focus = if (form_state.focus == .name) .directory else .name;
             state.revision +%= 1;
             return .changed;
         },
@@ -287,19 +319,50 @@ pub fn finish(state: *State, target: name_prompt.Target) bool {
     return true;
 }
 
+/// Marks the typed directory as missing so the next submit creates it.
+///
+/// ```zig
+/// state.requestDirectoryConfirmation();
+/// ```
+pub fn requestDirectoryConfirmation(state: *State) void {
+    const prompt = state.mutable() orelse return;
+    if (prompt.mode != .create_workspace or prompt.mode.create_workspace.confirm_create) {
+        return;
+    }
+
+    prompt.mode.create_workspace.confirm_create = true;
+    state.revision +%= 1;
+}
+
+/// Replaces the directory text with an accepted completion and keeps the
+/// directory field focused with a fresh selection.
+///
+/// ```zig
+/// state.replaceDirectory("/work/telar/");
+/// ```
+pub fn replaceDirectory(state: *State, text: []const u8) void {
+    const prompt = state.mutable() orelse return;
+    if (prompt.mode != .create_workspace) {
+        return;
+    }
+
+    prompt.directory.setText(text);
+    prompt.mode.create_workspace = .{ .focus = .directory };
+    state.revision +%= 1;
+}
+
+fn directoryFocused(prompt: *const Prompt) bool {
+    return prompt.mode == .create_workspace and prompt.mode.create_workspace.focus == .directory;
+}
+
 fn editField(state: *State, command: name_prompt.Command) name_prompt.Transition {
     const prompt = state.mutable() orelse return .unchanged;
-    const before: FieldPosition = .capture(&prompt.field);
-    switch (command) {
-        .insert => |bytes| if (prompt.pasting) insertPasted(&prompt.field, bytes) else prompt.field.insert(bytes),
-        .backspace => prompt.field.backspace(),
-        .delete => prompt.field.delete(),
-        .move_left => |extend| prompt.field.moveLeft(extend),
-        .move_right => |extend| prompt.field.moveRight(extend),
-        .home => |extend| prompt.field.home(extend),
-        .end => |extend| prompt.field.end(extend),
-        .paste_start, .paste_end, .submit, .submit_alternate, .cancel, .move_up, .move_down, .cycle_scope, .remove_entry, .toggle_inspection, .page_up, .page_down => unreachable,
+    if (directoryFocused(prompt)) {
+        return state.editDirectory(command);
     }
+
+    const before: FieldPosition = .capture(&prompt.field);
+    applyEdit(&prompt.field, prompt.pasting, command);
     if (!before.changed(&prompt.field)) {
         return .unchanged;
     }
@@ -311,9 +374,37 @@ fn editField(state: *State, command: name_prompt.Command) name_prompt.Transition
     return .changed;
 }
 
+fn editDirectory(state: *State, command: name_prompt.Command) name_prompt.Transition {
+    const prompt = state.mutable() orelse return .unchanged;
+    const before: FieldPosition = .capture(&prompt.directory);
+    applyEdit(&prompt.directory, prompt.pasting, command);
+    if (!before.changed(&prompt.directory)) {
+        return .unchanged;
+    }
+
+    if (before.len != prompt.directory.len) {
+        prompt.mode.create_workspace = .{ .focus = .directory };
+    }
+    state.revision +%= 1;
+    return .changed;
+}
+
+fn applyEdit(field: anytype, pasting: bool, command: name_prompt.Command) void {
+    switch (command) {
+        .insert => |bytes| if (pasting) insertPasted(field, bytes) else field.insert(bytes),
+        .backspace => field.backspace(),
+        .delete => field.delete(),
+        .move_left => |extend| field.moveLeft(extend),
+        .move_right => |extend| field.moveRight(extend),
+        .home => |extend| field.home(extend),
+        .end => |extend| field.end(extend),
+        .paste_start, .paste_end, .submit, .submit_alternate, .cancel, .move_up, .move_down, .tab, .back_tab, .remove_entry, .toggle_inspection, .page_up, .page_down => unreachable,
+    }
+}
+
 /// Pasted line breaks are text, not submissions: each CR, LF or CRLF becomes
 /// one space. Typed input never reaches this path.
-fn insertPasted(field: *name_prompt.Field, bytes: []const u8) void {
+fn insertPasted(field: anytype, bytes: []const u8) void {
     var start: usize = 0;
     var index: usize = 0;
     while (index < bytes.len) : (index += 1) {

@@ -24,6 +24,9 @@ pub const Position = enum(u3) {
     bottom_center,
     bottom_right,
     top_right,
+    sidebar_footer_left,
+    sidebar_footer_center,
+    sidebar_footer_right,
 
     pub fn bit(position: Position) u8 {
         return @as(u8, 1) << @intFromEnum(position);

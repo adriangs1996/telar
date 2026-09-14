@@ -288,4 +288,5 @@ pub const hostInput = @import("ports/host_input.zig").port;
 pub const timers = @import("ports/workers.zig").timers;
 pub const barCommands = @import("ports/workers.zig").bars;
 pub const pluginWorkers = @import("ports/workers.zig").plugins;
+pub const pathCompletions = @import("ports/workers.zig").pathCompletions;
 pub const links = @import("ports/services.zig").links;

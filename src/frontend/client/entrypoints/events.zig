@@ -18,6 +18,7 @@ const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
 const sidebar_animations = @import("telar-client").controllers.sidebar_animations;
 const notifications = @import("telar-client").controllers.notifications;
 const bar_updates = @import("telar-client").controllers.bar_updates;
+const path_completions = @import("telar-client").controllers.path_completions;
 const agent_sounds = @import("telar-client").controllers.agent_sounds;
 const client_telemetry = @import("../resources/telemetry.zig");
 const config_reloads = @import("telar-client").controllers.config_reloads;
@@ -144,6 +145,7 @@ fn route(client: *Client, event: TerminalClient.ClientEvent, resources: Resource
         },
         .clipboard_image => |result| try clipboard_images.complete(client, result),
         .link_opened => |result| try link_openings.complete(client, result),
+        .path_completion => |completion| try path_completions.complete(client, completion),
     }
 
     return .keep_running;
@@ -173,6 +175,7 @@ fn pathFor(tag: EventTag) PathType {
         .config_reload,
         .plugin_result,
         .link_opened,
+        .path_completion,
         => .observation,
     };
 }
@@ -202,6 +205,7 @@ test "client event paths preserve interactive media and observation budgets" {
         .config_reload,
         .plugin_result,
         .link_opened,
+        .path_completion,
     };
 
     for (interactive) |tag| {

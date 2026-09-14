@@ -4,9 +4,9 @@ const Diagnostic = @import("Diagnostic.zig");
 const themes = @import("../appearance/theme_support.zig");
 
 test "one theme name supplies chrome terminal palette and cursor defaults" {
-    const names = [_][]const u8{ "vesper", "catppuccin", "tokyo-night", "terminal" };
-    const backgrounds = [_][3]u8{ .{ 16, 16, 16 }, .{ 30, 30, 46 }, .{ 26, 27, 38 }, .{ 24, 24, 27 } };
-    const red = [_][3]u8{ .{ 245, 161, 145 }, .{ 243, 139, 168 }, .{ 247, 118, 142 }, .{ 205, 49, 49 } };
+    const names = [_][]const u8{ "osaka-jade", "vesper", "catppuccin", "tokyo-night", "terminal" };
+    const backgrounds = [_][3]u8{ .{ 0x11, 0x1c, 0x18 }, .{ 16, 16, 16 }, .{ 30, 30, 46 }, .{ 26, 27, 38 }, .{ 24, 24, 27 } };
+    const red = [_][3]u8{ .{ 0xe5, 0x8c, 0x85 }, .{ 245, 161, 145 }, .{ 243, 139, 168 }, .{ 247, 118, 142 }, .{ 205, 49, 49 } };
     for (names, backgrounds, red) |name, background, ansi_red| {
         var buffer: [128]u8 = undefined;
         const source = try std.fmt.bufPrint(&buffer, "return {{ api_version = 2, theme = '{s}' }}", .{name});
@@ -65,6 +65,20 @@ test "CLI theme locking and appearance variants resolve both color groups togeth
     try std.testing.expectEqualDeep(themes.builtin(.vesper), snapshot.resolveTheme(.unknown, null));
     inline for (.{ .unknown, .light, .dark }) |appearance| {
         try std.testing.expectEqualDeep(themes.builtin(.catppuccin), snapshot.resolveTheme(appearance, themes.builtin(.catppuccin)));
+    }
+}
+
+test "the default generation selects Osaka Jade and the Lua spellings agree" {
+    const implicit = try load("return { api_version = 2 }", null);
+    defer implicit.deinit();
+    try std.testing.expectEqualDeep(themes.default_theme, implicit.snapshot.theme);
+    try std.testing.expect(implicit.snapshot.theme.palette.panel_bg == .default);
+    for ([_][]const u8{ "osaka-jade", "osaka_jade", "osakajade" }) |name| {
+        var buffer: [128]u8 = undefined;
+        const source = try std.fmt.bufPrint(&buffer, "return {{ api_version = 2, theme = '{s}' }}", .{name});
+        const generation = try load(source, null);
+        defer generation.deinit();
+        try std.testing.expectEqualDeep(themes.builtin(.osaka_jade), generation.snapshot.theme);
     }
 }
 

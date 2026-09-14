@@ -157,6 +157,7 @@ pub fn frontendOptions(launch: *const Launch) OptionsType {
         .trust_path = launch.trust_path,
         .profile = if (options.profile) |value| std.mem.span(value) else null,
         .editor = client.configuredEditor(launch.process.minimal.environ),
+        .environ = launch.process.minimal.environ,
     };
 }
 

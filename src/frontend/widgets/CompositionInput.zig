@@ -10,6 +10,8 @@ const MetricsType = @import("Metrics.zig");
 const ModeType = @import("telar-client").Mode;
 const WorkspaceListSnapshot = @import("telar-client").WorkspaceListSnapshot;
 const ClientState = @import("telar-client").State;
+const PromptType = @import("telar-client").Prompt;
+const PathCompletionState = @import("telar-client").PathCompletionState;
 const Input = @This();
 
 regions: LayoutRegions,
@@ -18,6 +20,8 @@ model: *const MultiplexerModel,
 layout: *const LayoutSnapshot,
 rename_field: ?*tab_rename.Field,
 rename_kind: tab_rename.Kind,
+prompt: ?*const PromptType = null,
+path_completion: ?*const PathCompletionState = null,
 sidebar_snapshot: *const SnapshotType,
 sidebar_state: *StateType,
 sidebar_transparent: bool,

@@ -27,6 +27,7 @@ pub fn capture(model: *const ModelType, context: Context) Projection {
         .prompt = prompt,
         .history = &model.history_palette,
         .suggestion = &model.suggestion,
+        .path_completion = &model.path_completion,
         .proxy_tls_active = model.proxyTlsActive(),
         .proxy_tls_scope = model.proxyTlsScope(),
         .proxy_system_trusted = model.proxySystemTrusted(),

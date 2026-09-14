@@ -13,6 +13,11 @@ pub fn bars(app: *client.AttachedClient) client.BarCommandRunner {
     return .{ .context = app, .start_fn = startBar };
 }
 
+/// Example: `app.path_completion_runner = workers.pathCompletions(app);`
+pub fn pathCompletions(app: *client.AttachedClient) client.PathCompletionRunner {
+    return .{ .context = app, .start_fn = startPathCompletion };
+}
+
 /// Example: `app.plugin_runner = workers.plugins(app);`
 pub fn plugins(app: *client.AttachedClient) client.PluginWorkerRunner {
     return .{ .context = app, .start_fn = startPlugin };
@@ -46,4 +51,13 @@ fn startPlugin(context: *anyopaque, job: client.PluginActionsJob) !void {
 
 fn executePlugin(io: std.Io, gpa: std.mem.Allocator, job: client.PluginActionsJob) client.PluginActionsCompletion {
     return .{ .execution_id = job.execution_id, .result = client.executeWorker(io, gpa, job.request) };
+}
+
+fn startPathCompletion(context: *anyopaque, job: client.PathCompletionJob) !void {
+    const app: *client.AttachedClient = @ptrCast(@alignCast(context));
+    try GuiClient.of(app).driver.inbox.start(.path_completion, .{ executePathCompletion, .{ app.io, app.gpa, job } });
+}
+
+fn executePathCompletion(io: std.Io, gpa: std.mem.Allocator, job: client.PathCompletionJob) client.PathCompletionCompletion {
+    return .{ .execution_id = job.execution_id, .result = client.runPathCompletion(io, gpa, job) };
 }

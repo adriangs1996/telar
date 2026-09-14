@@ -1124,11 +1124,16 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
 
         fn prepareCreateWorkspaceLaunch(context: *anyopaque, request: CreateWorkspacePrepareLaunch) ![]const u8 {
             const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
-            return launch_cwd_module.resolveLaunchCwd(
+            const cwd = launch_cwd_module.resolveLaunchCwd(
                 &client.session.attachments,
                 request.launch,
                 .any,
-            ) catch error.InvalidLaunchCwd;
+            ) catch return error.InvalidLaunchCwd;
+            if (request.create_cwd and request.launch.cwd_source == null) {
+                launch_cwd_module.createLaunchDirectory(client.application.io, cwd) catch return error.LaunchCwdCreateFailed;
+            }
+
+            return cwd;
         }
 
         fn acquireCreatedWorkspaceGeometry(context: *anyopaque, workspace: WorkspaceLocationType) bool {

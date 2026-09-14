@@ -28,9 +28,11 @@ pub fn createWorkspace(controller: *Controller, request: CreateWorkspaceViewType
         .name = request.name,
         .size = request.size,
         .launch = request.launch,
+        .create_cwd = request.create_cwd,
     }) catch |err| {
         const failure: CreateWorkspaceFailure = switch (err) {
             error.InvalidLaunchCwd => .{ .code = .invalid_request, .message = "cwd source pane is unavailable" },
+            error.LaunchCwdCreateFailed => .{ .code = .spawn_failed, .message = "could not create the working directory" },
             error.WorkspaceCreateFailed => .{ .code = .resource_limit, .message = "could not create workspace" },
             error.GeometryUnavailable => .{ .code = .resource_limit, .message = "workspace geometry is unavailable" },
             error.PaneLimitReached => .{ .code = .resource_limit, .message = "pane limit reached" },

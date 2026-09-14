@@ -64,6 +64,8 @@ pub fn render(context: *ContextType, input: CompositionInput) CompositionOutput 
             .area = input.regions.bottom,
             .field = field,
             .kind = input.rename_kind,
+            .prompt = input.prompt,
+            .path_completion = input.path_completion,
         })
     else switch (input.status_mode) {
         .normal => block: {

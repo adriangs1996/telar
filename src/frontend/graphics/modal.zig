@@ -153,11 +153,15 @@ pub fn optionalAreaEql(a: ?RectType, b: ?RectType) bool {
     return std.meta.eql(a.?, b.?);
 }
 
+// The Kitty frame needs an explicit RGB `panel_bg`; the default Osaka Jade
+// theme inherits the host background, so these tests draw the Vesper chrome.
+const opaque_palette = theme.builtin(.vesper).palette;
+
 test "rounded modal assets are exact-size bounded and transparent outside corners" {
     var renderer = ModalRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    renderer.prepare(.{ .x = 2, .y = 1, .w = 80, .h = 28 }, &theme.default_theme.palette);
+    renderer.prepare(.{ .x = 2, .y = 1, .w = 80, .h = 28 }, &opaque_palette);
 
     try std.testing.expect(renderer.frame_usable);
     try std.testing.expect(renderer.retainedBytes() <= max_cache_bytes);
@@ -195,7 +199,7 @@ test "modal frame transmission ends in eight natural-size placements" {
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     const area: RectType = .{ .x = 2, .y = 1, .w = 40, .h = 12 };
-    renderer.prepare(area, &theme.default_theme.palette);
+    renderer.prepare(area, &opaque_palette);
 
     var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer output.deinit();
@@ -217,15 +221,15 @@ test "closing a stale modal frame leaves no media work behind" {
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     const area: RectType = .{ .x = 2, .y = 1, .w = 40, .h = 12 };
-    renderer.prepare(area, &theme.default_theme.palette);
+    renderer.prepare(area, &opaque_palette);
 
     var initial: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer initial.deinit();
     while (renderer.damaged()) _ = try renderer.write(&initial.writer);
 
     _ = renderer.configure(.{ .support = .supported, .cell_width = 11, .cell_height = 20 });
-    renderer.prepare(area, &theme.default_theme.palette);
-    renderer.prepare(.{}, &theme.default_theme.palette);
+    renderer.prepare(area, &opaque_palette);
+    renderer.prepare(.{}, &opaque_palette);
     var closed: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer closed.deinit();
     _ = try renderer.write(&closed.writer);

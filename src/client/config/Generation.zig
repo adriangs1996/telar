@@ -647,7 +647,7 @@ fn parseBars(generation: *Generation, index: c_int, diagnostic: *DiagnosticType)
         return error.InvalidConfig;
     }
 
-    try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "bottom", "top" }, .path = "config.client.bars" }, diagnostic);
+    try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "bottom", "top", "sidebar_footer" }, .path = "config.client.bars" }, diagnostic);
 
     _ = lua_api.c.lua_getfield(state, absolute, "bottom");
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
@@ -660,6 +660,43 @@ fn parseBars(generation: *Generation, index: c_int, diagnostic: *DiagnosticType)
         try generation.parseTopBar(-1, diagnostic);
     }
     lua_value.pop(state, 1);
+
+    _ = lua_api.c.lua_getfield(state, absolute, "sidebar_footer");
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
+        try generation.parseSidebarFooter(-1, diagnostic);
+    }
+    lua_value.pop(state, 1);
+}
+
+fn parseSidebarFooter(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !void {
+    const state = generation.vm.state;
+    const absolute = lua_api.c.lua_absindex(state, index);
+    if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
+        diagnostic.set("config.client.bars.sidebar_footer must be a list of telar.bar values", .{});
+        return error.InvalidConfig;
+    }
+
+    const count = lua_api.c.lua_rawlen(state, absolute);
+    if (count > generation.snapshot.bars.sidebar_footer.len) {
+        diagnostic.set("config.client.bars.sidebar_footer accepts at most {d} slots", .{generation.snapshot.bars.sidebar_footer.len});
+        return error.InvalidConfig;
+    }
+    try lua_value.ensureArrayOnly(state, .{ .index = absolute, .count = count, .path = "config.client.bars.sidebar_footer" }, diagnostic);
+
+    var parsed: [3]SourceType = .{ .empty, .empty, .empty };
+    for (0..count) |slot_index| {
+        _ = lua_api.c.lua_geti(state, absolute, @intCast(slot_index + 1));
+        defer lua_value.pop(state, 1);
+        const source = try generation.parseBarSource(-1, diagnostic);
+        if (source == .tabs) {
+            diagnostic.set("config.client.bars.sidebar_footer cannot contain tabs", .{});
+            return error.InvalidConfig;
+        }
+
+        parsed[slot_index] = source;
+    }
+
+    generation.snapshot.bars.sidebar_footer = parsed;
 }
 
 fn parseBottomBar(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !void {
