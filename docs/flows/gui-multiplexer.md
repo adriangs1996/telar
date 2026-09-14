@@ -24,13 +24,23 @@ rectangle. `render/Scene.zig` borrows that projection for one preparation:
 The chrome around the grid is measured in pixels, not cells.
 `chrome/ChromeMetrics.zig` resolves the top bar (38), the tab strip (32) and
 the status bar (26 logical px, scaled by the display and by `gui.font.size`)
-and `TerminalRenderer.measure` subtracts them from the window before it
-counts cells, so the grid origin sits under the tab strip and every row is a
-complete terminal row. A window too short for one row gives the bands back:
-status bar first, then the strip, then the top bar. `chrome/Regions.zig` only
-splits that grid between the sidebar column and the workbench, and
-`chrome/Bands.zig` places the pixel bands from the same origin, so a band never
-overlaps a cell. Padding stays outside the grid. `TerminalMetrics.rect()` maps
+and `chrome/SidebarBand.zig` resolves the sidebar band: `gui.sidebar.width`
+logical pixels (default 284, bounds 220..480) scaled and rounded, clamped so
+the workbench keeps 20 columns after the band and its 8 px gap, and zero
+while the shared model hides the sidebar or the window cannot hold the
+narrowest band. `TerminalRenderer.measure` subtracts the height bands from
+the window height and the band plus its gap from the width before it counts
+cells, so the grid origin sits under the tab strip and after the band, every
+row is a complete terminal row and every column a complete terminal column.
+A window too short for one row gives the height bands back: status bar
+first, then the strip, then the top bar. `chrome/Regions.zig` gives the
+whole grid to the workbench; the column preference the runtime retains in
+the shared layout is TUI-only and the GUI no longer reads it.
+`chrome/Bands.zig` places the pixel bands from the same origin, the sidebar
+band running from under the tab strip to the status bar and the strip's
+shoulder covering the band and its gap, so a band never overlaps a cell.
+Padding stays outside the grid; while the band is visible it replaces the
+left padding and the right padding remains. `TerminalMetrics.rect()` maps
 grid rectangles to physical pixels once, using the same origin as pointer
 input. Every terminal leaf is painted, including splits restored from a session.
 
@@ -82,18 +92,27 @@ router. Some useful default suffixes are:
 | `d` | Detach client |
 
 Chrome hit maps retain stable pane, tab, workspace and agent identities. Cell
-controls live in `HitMap`; band controls live in `BandHitMap` in device pixels.
+controls live in `HitMap`; band controls, including every agent card and the
+sidebar resize handle, live in `BandHitMap` in device pixels.
 A pointer sample the grid does not resolve goes to the delivered band targets,
 and a band press keeps its gesture through drag and release even over cells.
+A press on the sidebar's resize handle (a 6 px strip centred on the edge
+line, horizontal resize cursor) turns every drag and the release into a
+`BandCommand` carrying the width under the pointer, which `GuiClient`
+adopts into its `SidebarPreference` without touching the shared model; the
+next preparation measures the grid again and the PTY follows. The
+`resize_sidebar` action does the same in 16 logical px steps from
+`input/InputHandler.zig`. The gap between the band and the grid belongs to
+no target.
 The palette keeps its own bounded hit map of at most 16 visible rows in the
 overlay state; a primary press on a row submits it through the `prompt_row`
 intent. Pane content clicks focus before shared mouse routing; controls
 consume their own gestures. Right-clicking a tab opens its rename prompt.
 Sidebar scrolling moves one card pitch; scrolling and hover advance
 `chrome.revision`; prefix changes advance the input revision. The sidebar
-lays its header and cards out in device pixels inside its cell column and
-publishes one cell-based `focus_agent` target per card
-([sidebar contract](../sidebar.md)). `GuiClient.prepare` stamps monotonic
+lays its header, cards, footer slot row and edge line out in device pixels
+inside its band and publishes one pixel `focus_agent` target per visible
+card ([sidebar contract](../sidebar.md)). `GuiClient.prepare` stamps monotonic
 seconds on the chrome so card ages add the time since the agent snapshot
 arrived.
 Both enter `PresentationIngress`, so they can request a frame without changing
@@ -145,6 +164,7 @@ isolated runtime. It records shell PIDs and `stty size` while navigating splits,
 fullscreen, sidebar, tabs and workspaces, then checks the same session after
 closing and reopening the window. Its pointer clicks are window fractions
 (`0.75` of the width); with the sidebar open they reach the right pane only
-when the workbench spans more than half the window. Screenshots and action logs remain in the
+when the workbench spans more than half the window, which the 284 px band
+leaves on any window wider than about 600 pt. Screenshots and action logs remain in the
 chosen directory. [The Wayland matrix](gui-multiplexer-linux.md) also checks
 configured bindings, tab movement, pane resize and close actions.
