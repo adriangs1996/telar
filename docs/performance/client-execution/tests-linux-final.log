@@ -1,0 +1,669 @@
+.......
+----------------------------------------------------------------------
+Ran 7 tests in 0.001s
+
+OK
+...................
+----------------------------------------------------------------------
+Ran 19 tests in 0.011s
+
+OK
+telar-client module and capability boundaries passed
+test
++- run test
+   +- run parallel test prerequisites
+      +- run test w
+PERF compression_max_turn n=20 p50_ns=23372167 p95_ns=26496345 p99_ns=27363181
+PERF compression_total n=20 p50_ns=23372417 p95_ns=26497011 p99_ns=27363514
+failed command: ./.zig-cache/o/2d9174f808d323e5ede3194fab05b58f/test --cache-dir=./.zig-cache --seed=0xd97b94b9 --listen=-
+
+test
++- run test
+   +- run parallel test prerequisites
+      +- run test w
+[stream] (warn): unknown cursor shape: not-a-cursor
+PERF search_complete n=20 p50_ns=2863552 p95_ns=2946136 p99_ns=2954094
+PERF search_incremental_total n=20 p50_ns=2853593 p95_ns=3141428 p99_ns=3189179
+PERF search_max_turn n=20 p50_ns=101875 p95_ns=201709 p99_ns=205501
+PERF graphics_runtime_stage_4k n=20 p50_ns=8250 p95_ns=9375 p99_ns=10000
+PERF graphics_total_prepare_4k n=20 p50_ns=13864217 p95_ns=15271096 p99_ns=17542396
+PERF metrics_ticks ticks=100 inline_reads=0 scheduled_jobs=1 client_pumps=0
+PERF chunk_framing wire_bytes=279 tls_facing_writes=6
+PERF history_burst queued=32 sqlite_queries=1 elapsed_ns=976378
+failed command: ./.zig-cache/o/b00924e9ac57e510547da3c2d6f92252/test --cache-dir=./.zig-cache --seed=0xd97b94b9 --listen=-
+
+Build Summary: 127/127 steps succeeded; 3291/3291 tests passed
+test success
++- run test 860 pass (860 total) 783ms MaxRSS:46M
+|  +- compile test Debug native success 9s MaxRSS:1G
+|  |  +- WriteFile cached
+|  |  +- compile lib lua Debug native cached 6ms MaxRSS:37M
+|  |  +- compile lib lua Debug native (reused)
+|  |  +- WriteFile  cached
+|  |  +- compile lib simdutf ReleaseFast native cached 7ms MaxRSS:37M
+|  |  +- WriteFile hwy cached
+|  |  +- compile lib highway ReleaseFast native cached 7ms MaxRSS:38M
+|  |  +- compile lib simdutf ReleaseFast native (reused)
+|  |  +- compile lib highway ReleaseFast native (reused)
+|  |  +- options cached
+|  |  +- options cached
+|  |  +- WriteFile props.zig cached
+|  |  |  +- run exe props-unigen cached
+|  |  |  |  +- compile exe props-unigen Debug native cached 4ms MaxRSS:38M
+|  |  |  |     +- run exe uucode_generate (tables.zig) cached
+|  |  |  |        +- compile exe uucode_generate Debug native cached 3ms MaxRSS:38M
+|  |  |  +- run exe symbols-unigen cached
+|  |  |     +- compile exe symbols-unigen Debug native cached 7ms MaxRSS:38M
+|  |  |        +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  |  +- WriteFile props.zig (+2 more reused dependencies)
+|  |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|  +- run python3 success 245ms
+|     +- run python3 success 49ms
++- run python3 success 57ms
++- run exe codestyle success 817ms
+|  +- compile exe codestyle Debug native cached 4ms MaxRSS:38M
++- run test 49 pass (49 total) 19ms MaxRSS:9M
+|  +- compile test Debug native cached 4ms MaxRSS:38M
++- run test 29 pass (29 total) 3s MaxRSS:77M
+   +- compile test Debug native success 12s MaxRSS:1G
+   |  +- WriteFile (reused)
+   |  +- compile lib lua Debug native (reused)
+   |  +- compile lib lua Debug native (reused)
+   |  +- run wayland-scanner (xdg-shell-client-protocol.h) cached
+   |  +- run glslc (quad.vert.inc) cached
+   |  +- run glslc (quad.frag.inc) cached
+   |  +- run wayland-scanner (xdg-shell-protocol.c) cached
+   |  +- WriteFile  (reused)
+   |  +- compile lib simdutf ReleaseFast native (reused)
+   |  +- WriteFile hwy (reused)
+   |  +- compile lib highway ReleaseFast native (reused)
+   |  +- compile lib simdutf ReleaseFast native (reused)
+   |  +- compile lib highway ReleaseFast native (reused)
+   |  +- translate-c wuffs_c.h cached
+   |  |  +- compile exe translate-c Debug native cached 3ms MaxRSS:38M
+   |  |  |  +- options cached
+   |  |  |  +- options cached
+   |  |  |  +- options cached
+   |  |  |  +- run exe generate-def (aarch64.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native cached 2ms MaxRSS:38M
+   |  |  |  +- run exe generate-def (amdgcn.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native (reused)
+   |  |  |  +- run exe generate-def (arm.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native (reused)
+   |  |  |  +- run exe generate-def (bpf.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native (reused)
+   |  |  |  +- run exe generate-def (common.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native (reused)
+   |  |  |  +- run exe generate-def (hexagon.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native (reused)
+   |  |  |  +- run exe generate-def (loongarch.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native (reused)
+   |  |  |  +- run exe generate-def (mips.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native (reused)
+   |  |  |  +- run exe generate-def (neon.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native (reused)
+   |  |  |  +- run exe generate-def (nvptx.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native (reused)
+   |  |  |  +- run exe generate-def (powerpc.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native (reused)
+   |  |  |  +- run exe generate-def (riscv.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native (reused)
+   |  |  |  +- run exe generate-def (s390x.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native (reused)
+   |  |  |  +- run exe generate-def (ve.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native (reused)
+   |  |  |  +- run exe generate-def (wasm.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native (reused)
+   |  |  |  +- run exe generate-def (x86_64.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native (reused)
+   |  |  |  +- run exe generate-def (x86.zig) cached
+   |  |  |  |  +- compile exe generate-def Debug native (reused)
+   |  |  |  +- run exe generate-def (xcore.zig) cached
+   |  |  |     +- compile exe generate-def Debug native (reused)
+   |  |  +- WriteFile wuffs_c.h cached
+   |  +- options (reused)
+   |  +- options (reused)
+   |  +- WriteFile props.zig (+2 more reused dependencies)
+   |  +- WriteFile props.zig (+2 more reused dependencies)
+   |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+   +- run parallel test prerequisites success
+      +- run test 5 pass (5 total) 25ms MaxRSS:14M
+      |  +- compile test Debug native success 2s MaxRSS:410M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 29 pass (29 total) 41ms MaxRSS:12M
+      |  +- compile test Debug native success 2s MaxRSS:418M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 25 pass (25 total) 22ms MaxRSS:15M
+      |  +- compile test Debug native success 2s MaxRSS:415M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 6 pass (6 total) 25ms MaxRSS:11M
+      |  +- compile test Debug native success 1s MaxRSS:408M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 2 pass (2 total) 20ms MaxRSS:14M
+      |  +- compile test Debug native success 2s MaxRSS:412M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 8 pass (8 total) 20ms MaxRSS:10M
+      |  +- compile test Debug native success 1s MaxRSS:411M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 5 pass (5 total) 21ms MaxRSS:10M
+      |  +- compile test Debug native success 1s MaxRSS:412M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 4 pass (4 total) 18ms MaxRSS:16M
+      |  +- compile test Debug native success 1s MaxRSS:419M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 68 pass (68 total) 62ms MaxRSS:19M
+      |  +- compile test Debug native success 3s MaxRSS:577M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 3 pass (3 total) 20ms MaxRSS:12M
+      |  +- compile test Debug native success 2s MaxRSS:436M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 25 pass (25 total) 22ms MaxRSS:15M
+      |  +- compile test Debug native success 2s MaxRSS:427M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 604 pass (604 total) 10s MaxRSS:60M
+      |  +- compile test Debug native success 14s MaxRSS:1G
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 1 pass (1 total) 21ms MaxRSS:13M
+      |  +- compile test Debug native success 2s MaxRSS:435M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 6 pass (6 total) 21ms MaxRSS:10M
+      |  +- compile test Debug native success 2s MaxRSS:410M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 4 pass (4 total) 26ms MaxRSS:10M
+      |  +- compile test Debug native success 2s MaxRSS:406M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 4 pass (4 total) 23ms MaxRSS:13M
+      |  +- compile test Debug native success 2s MaxRSS:406M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 234 pass (234 total) 378ms MaxRSS:33M
+      |  +- compile test Debug native success 6s MaxRSS:843M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 21 pass (21 total) 52ms MaxRSS:14M
+      |  +- compile test Debug native success 6s MaxRSS:769M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 6 pass (6 total) 20ms MaxRSS:14M
+      |  +- compile test Debug native success 1s MaxRSS:410M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 69 pass (69 total) 257ms MaxRSS:19M
+      |  +- compile test Debug native success 9s MaxRSS:888M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 29 pass (29 total) 47ms MaxRSS:16M
+      |  +- compile test Debug native success 2s MaxRSS:436M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 1072 pass (1072 total) 5s MaxRSS:129M
+      |  +- compile test Debug native success 33s MaxRSS:2G
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 5 pass (5 total) 30ms MaxRSS:16M
+      |  +- compile test Debug native success 2s MaxRSS:426M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 116 pass (116 total) 166ms MaxRSS:13M
+      |  +- compile test Debug native success 4s MaxRSS:720M
+      |     +- options cached
+      |     +- WriteFile (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- compile lib lua Debug native (reused)
+      |     +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      |     +- run glslc (quad.vert.inc) (reused)
+      |     +- run glslc (quad.frag.inc) (reused)
+      |     +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- compile lib simdutf ReleaseFast native (reused)
+      |     +- compile lib highway ReleaseFast native (reused)
+      |     +- translate-c wuffs_c.h (+2 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 2 pass (2 total) 2ms MaxRSS:7M
+      |  +- compile test Debug native cached 3ms MaxRSS:38M
+      +- cross success
+         +- compile obj platform-windows-x86_64 Debug x86_64-windows success 176ms MaxRSS:101M
+         |  +- WriteFile cached
+         |  +- compile lib lua-windows-x86_64 Debug x86_64-windows cached 4ms MaxRSS:37M
+         |  +- compile lib lua-windows-x86_64 Debug x86_64-windows (reused)
+         +- compile lib text-rasterizer-windows-x86_64 Debug x86_64-windows cached 17ms MaxRSS:39M
+         +- compile test Debug x86_64-windows success 625ms MaxRSS:144M
+         |  +- WriteFile (reused)
+         |  +- compile lib lua-windows-x86_64 Debug x86_64-windows (reused)
+         |  +- compile lib lua-windows-x86_64 Debug x86_64-windows (reused)
+         +- compile obj platform-linux-x86_64 Debug x86_64-linux-gnu success 86ms MaxRSS:100M
+         |  +- WriteFile cached
+         |  +- compile lib lua-linux-x86_64 Debug x86_64-linux-gnu cached 18ms MaxRSS:37M
+         |  +- compile lib lua-linux-x86_64 Debug x86_64-linux-gnu (reused)
+         +- compile lib text-rasterizer-linux-x86_64 Debug x86_64-linux-gnu cached 30ms MaxRSS:38M
+         +- compile test Debug x86_64-linux-gnu success 545ms MaxRSS:115M
+         |  +- WriteFile (reused)
+         |  +- compile lib lua-linux-x86_64 Debug x86_64-linux-gnu (reused)
+         |  +- compile lib lua-linux-x86_64 Debug x86_64-linux-gnu (reused)
+         +- compile test local-transport-linux-x86_64 Debug x86_64-linux-gnu cached 8ms MaxRSS:38M
+         +- compile obj platform-linux-aarch64 Debug aarch64-linux-gnu success 57ms MaxRSS:101M
+         |  +- WriteFile cached
+         |  +- compile lib lua-linux-aarch64 Debug aarch64-linux-gnu cached 2ms MaxRSS:37M
+         |  +- compile lib lua-linux-aarch64 Debug aarch64-linux-gnu (reused)
+         +- compile lib text-rasterizer-linux-aarch64 Debug aarch64-linux-gnu cached 16ms MaxRSS:39M
+         +- compile test Debug aarch64-linux-gnu success 696ms MaxRSS:142M
+         |  +- WriteFile (reused)
+         |  +- compile lib lua-linux-aarch64 Debug aarch64-linux-gnu (reused)
+         |  +- compile lib lua-linux-aarch64 Debug aarch64-linux-gnu (reused)
+         +- compile test local-transport-linux-aarch64 Debug aarch64-linux-gnu cached 8ms MaxRSS:39M
+test-client success
++- run test (+2 more reused dependencies)
+

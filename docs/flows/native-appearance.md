@@ -153,12 +153,32 @@ counts border pixels as PTY pixels. Retained mesh keys already include the
 resolved rectangle, so moving the origin invalidates exactly that geometry.
 Opacity and blur changes do not invalidate cell meshes or the glyph atlas.
 
-Below opacity `1`, `Canvas.panel` and `panelAt` leave the sidebar, workspace
-bar, tab strip, status bar and pane header backgrounds to the window clear.
+Below opacity `1`, `Canvas.panel` and `panelAt` leave the sidebar, navigation
+bar, status bar and pane header backgrounds to the window clear.
 This applies to themes with explicit RGB `panel_bg` values as well as
 `default`; no additional fill increases the background alpha. At opacity `1`,
 panels use the theme's `panel_bg`. Control fills, glyphs, cell backgrounds
 differing from the terminal default and covering modals keep their own opacity.
+
+The top navigation is one 42-logical-pixel band at the reference font size.
+Workspace controls stay on the left, showing at most three consecutive entries
+in runtime order with the active workspace centered except at either end.
+Names share fixed slots, numbers retain their global positions, and narrower
+windows keep the active workspace while reducing the visible group. Hidden
+workspace counters retain attention indicators. Tabs align at the right edge,
+independently of sidebar visibility, and the active tab remains reachable when
+labels overflow. Rounded tops and a neutral outline give tabs their shape;
+the active tab joins the workbench without a permanent accent line. A child's
+explicit OSC progress request can still add its temporary progress stroke.
+
+The full-width bottom `StatusBar` paints configured widgets through the
+existing `SlotRow` and `SlotPainter`; drawing never invokes Lua or commands.
+Bottom slots keep their alignment and omit `telar.bar.tabs()`. Legacy
+`top.right` content follows the bottom slots before TLS, capped at half of the
+widget width when both groups have visible content. `StatusBar` reserves TLS
+before either group and before the prefix/copy hints that replace them.
+The sidebar contains its header and agent list; configured widgets use the
+bottom status bar.
 
 `render/Quad` is an 80-byte `extern struct` of five `vec4` rows: rectangle,
 texture coordinates, straight RGBA fill, shape (corner radius, border width,

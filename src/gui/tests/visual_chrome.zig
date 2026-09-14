@@ -26,21 +26,20 @@ test "chrome bands leave complete cells below them and share the pointer origin"
         const size = try renderer.measure(.{ .width = 1000, .height = 700, .scale = scale });
         const chrome = ChromeMetrics.resolve(renderer.config, scale);
         try std.testing.expectEqual(chrome, renderer.chrome);
-        try std.testing.expectEqual([2]u32{ 0, chrome.top_bar + chrome.tab_strip }, renderer.origin);
+        try std.testing.expectEqual([2]u32{ 0, chrome.top_bar }, renderer.origin);
         try std.testing.expect(chrome.vertical() + @as(u32, size.rows) * size.cell_height_px <= 700);
         try std.testing.expect(chrome.vertical() + @as(u32, size.rows + 1) * size.cell_height_px > 700);
         var quads = @import("../render/QuadList.zig").init(std.testing.allocator);
         defer quads.deinit();
         const canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = client.theme_support.default_theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
         const bands = Bands.resolve(&canvas);
-        try std.testing.expectEqual(@as(f32, @floatFromInt(renderer.origin[1])), bands.tab_strip.y + bands.tab_strip.height);
-        try std.testing.expectEqual(canvas.rect(.{ .x = 0, .y = 0, .w = 1, .h = 1 }).x, bands.tab_strip.x);
-        try std.testing.expectEqual(bands.shoulder.width, bands.tab_strip.x);
+        try std.testing.expectEqual(@as(f32, @floatFromInt(renderer.origin[1])), bands.top_bar.y + bands.top_bar.height);
+        try std.testing.expectEqual(@as(f32, 0), bands.top_bar.x);
         try std.testing.expectEqual(@as(f32, 0), bands.sidebar.width);
         const grid_bottom = canvas.rect(.{ .x = 0, .y = size.rows - 1, .w = 1, .h = 1 });
         try std.testing.expect(grid_bottom.y + grid_bottom.height <= bands.status_bar.y);
-        try std.testing.expect(!bands.contains(bands.tab_strip.x, @floatFromInt(renderer.origin[1])));
-        try std.testing.expect(bands.contains(bands.tab_strip.x, bands.tab_strip.y));
+        try std.testing.expect(!bands.contains(bands.top_bar.x, @floatFromInt(renderer.origin[1])));
+        try std.testing.expect(bands.contains(bands.top_bar.x, bands.top_bar.y));
     }
 
     // A window too short for a row plus its bands gives the bands back.
@@ -58,7 +57,7 @@ test "tab strip hits keep stable tab identities and the plus creates a tab" {
     _ = try tabs.addCreated(.{ .location = second_location, .position = 1, .label = "editor", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
     _ = tabs.select(Session.location.tab_id);
     try fixture.paint(fixture.projection());
-    const strip = fixture.chrome.presented().bands.tab_strip;
+    const strip = fixture.chrome.presented().bands.top_bar;
     const first = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
     const second = fixture.bandTarget(.{ .select_tab = second_tab }).?;
     try std.testing.expect(first.x < second.x);
@@ -244,7 +243,6 @@ test "warm chrome with rings chips dots and toasts allocates and shapes nothing"
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = Session.location.workspace.workspace, .name = "telar", .path = "/Users/me/sandbox/telar", .branch = "main", .tab_count = 1 },
     } });
-    fixture.chrome.home.set("/Users/me");
     var agents = try blockedAgents(Session.location, .blocked);
     var projection = fixture.projection();
     projection.workspaces = &workspaces;

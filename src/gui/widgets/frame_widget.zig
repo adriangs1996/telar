@@ -2,7 +2,7 @@
 const Canvas = @import("../chrome/Canvas.zig");
 const GenericWidgetList = @import("GenericWidgetList.zig").Type;
 
-pub const capacity = @import("telar-core").max_panes_per_tab + 1 + 5 + 1 + @import("../overlays/Notifications.zig").max_visible + 1;
+pub const capacity = @import("telar-core").max_panes_per_tab + 1 + 4 + 1 + @import("../overlays/Notifications.zig").max_visible + 1;
 pub const List = GenericWidgetList(Widget, capacity);
 
 pub const Widget = union(enum) {
@@ -10,7 +10,6 @@ pub const Widget = union(enum) {
     thread: @import("ThreadPane.zig"),
     link: @import("HoveredLink.zig"),
     top_bar: @import("../chrome/TopBar.zig"),
-    tabs: @import("../chrome/TabStrip.zig"),
     status: @import("../chrome/StatusBar.zig"),
     sidebar: @import("../chrome/SidebarView.zig"),
     panes: @import("../chrome/PaneDecorations.zig"),

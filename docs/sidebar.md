@@ -209,10 +209,10 @@ the window lease holds no data and there is no per-window preference
 store. The PTY sees complete cells only; the band, the gap and trailing
 pixels are chrome.
 
-The band runs from under the tab strip to the status bar. Inside it, at
-margin 8: the header row, the list, and a footer row one terminal cell
-tall where the Lua `bars.sidebar_footer` slots paint through a lent cell
-row; the footer appears once the band is at least five cell rows tall.
+The band runs from under the tab strip to the status bar. Inside its 8 px
+margin, the header precedes the agent list. The list uses the remaining height
+down to the bottom inset. Configured metrics and other widgets belong in the
+bottom status bar.
 
 ## Detector wiring
 

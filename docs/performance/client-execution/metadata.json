@@ -1,0 +1,35 @@
+{
+  "date": "2026-09-13",
+  "base_commit": "d97cfb7681d0728d337e16768292f5a613dabbee",
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83\n",
+  "cpu": "Apple M3",
+  "zig": "0.16.0",
+  "build_flags": [
+    "-Doptimize=ReleaseFast",
+    "-Decho-trace=true",
+    "-Decho-trace-cpu=true"
+  ],
+  "binary_sha256": {
+    "baseline": "e87c41f16a9c9d3c446f324bbb6281588d8daa89cc4dea995bf6a25dadf509e3",
+    "candidate": "26c14eb18f9f1f34765e128a482fc034acfe1c66f3e5db08acef556580dd2e5e"
+  },
+  "excluded_runs": [
+    {
+      "path": "/tmp/telar-s9-before",
+      "reason": "Synthetic key addressed NSWindow instead of terminal view; incomplete TUI capture."
+    },
+    {
+      "path": "/tmp/telar-s9-before2",
+      "reason": "Complete but viewport 3460x2166 differs from later 1760x2166; not included in comparison."
+    }
+  ],
+  "initial_candidate_sha256": "8631aff7e7defdf2a783a63ed6bee36177a39dc0e604f7bc2e54832e3eeb56a6",
+  "diagnostic_binary_sha256": {
+    "baseline": "5a722db2978d80c47f040e008f9868d0bf9ac6b9dc17bce3bed05e14a970ba85",
+    "candidate": "323f11861f9b3ee1e95def0e72505b72d86e8f32c36768e85d464e05d3015f61"
+  },
+  "diagnostic_build_flags": [
+    "-Doptimize=ReleaseFast",
+    "-Ddiagnostics=true"
+  ]
+}

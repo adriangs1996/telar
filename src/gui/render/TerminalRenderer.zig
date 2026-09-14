@@ -149,7 +149,7 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
     });
     renderer.chrome = chrome;
     renderer.sidebar = sidebar;
-    renderer.origin = .{ left, chrome.top_bar + chrome.tab_strip + y };
+    renderer.origin = .{ left, chrome.top_bar + y };
     renderer.viewport = .{ viewport.width, viewport.height };
     const cells = @as(usize, size.cols) * size.rows;
     if (cells > RetainedCells.max_cells) {

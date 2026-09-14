@@ -6,7 +6,6 @@ const Session = @import("Session.zig");
 const Regions = @import("../chrome/Regions.zig");
 const HitMap = @import("../chrome/HitMap.zig");
 const bar_regions = @import("../chrome/bar_regions.zig");
-const Sidebar = @import("../chrome/Sidebar.zig");
 
 test "native chrome geometry gives the workbench every grid cell of every host" {
     for ([_]u16{ 1, 2, 3, 10, 40 }) |height| {
@@ -69,7 +68,7 @@ test "native chrome preserves the resize gesture over cells and clamps scrolling
 test "native agent targets retain generation through scroll and snapshot replacement" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    // Nine rows: header, gap, six list rows and the footer.
+    // A short band forces the cards to scroll below their header.
     try fixture.resize(120, 9);
     var agents: client.AgentSnapshot = .{};
     const entries = [_]client.AgentInput{
@@ -86,7 +85,7 @@ test "native agent targets retain generation through scroll and snapshot replace
     const band = fixture.band();
     _ = fixture.chrome.bandPointer(.{ .kind = .scroll_down, .x = 4, .y = band.y + 4 });
     try std.testing.expect(fixture.chrome.sidebar.step != 0);
-    try std.testing.expectEqual(fixture.chrome.sidebar.step, fixture.chrome.sidebar.scroll);
+    try std.testing.expectEqual(@min(fixture.chrome.sidebar.step, fixture.chrome.sidebar.maximum_scroll), fixture.chrome.sidebar.scroll);
     try fixture.paint(projection);
     try std.testing.expect(fixture.bandTarget(.{ .focus_agent = entries[2].key }) != null);
     try std.testing.expectEqual(@as(u64, 1), agents.revision);
@@ -198,7 +197,7 @@ test "native pane presses focus before forwarding and chrome cancellation releas
     try std.testing.expect(fixture.chrome.hovered == null);
 }
 
-test "native workspace collapse exposes its toggle and tiny bars stay within viewport" {
+test "native workspace visibility follows available width and tiny bars stay within viewport" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var workspaces: client.WorkspaceListSnapshot = .{};
@@ -212,8 +211,10 @@ test "native workspace collapse exposes its toggle and tiny bars stay within vie
         projection.workspaces = &workspaces;
         projection.workspace_list_collapsed = true;
         try fixture.paint(projection);
+        try std.testing.expect(fixture.bandTarget(.toggle_workspace_list) == null);
         if (width > 16) {
-            try std.testing.expect(fixture.bandTarget(.toggle_workspace_list) != null);
+            try std.testing.expect(fixture.bandTarget(.{ .select_workspace = @enumFromInt(1) }) != null);
+            try std.testing.expect(fixture.bandTarget(.{ .select_workspace = @enumFromInt(2) }) != null);
         }
 
         const renderer = &fixture.session.renderer;
@@ -226,7 +227,7 @@ test "native workspace collapse exposes its toggle and tiny bars stay within vie
     }
 }
 
-test "native configured footer segments preserve colors decorations and faint ink" {
+test "native configured bar segments preserve colors decorations and faint ink" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var state: client.State = .{};
@@ -240,7 +241,7 @@ test "native configured footer segments preserve colors decorations and faint in
         .underline = true,
         .strikethrough = true,
     } });
-    state.layout.sidebar_footer = .{ .{ .content = content }, .empty, .empty };
+    state.layout.bottom = .{ .{ .content = content }, .empty, .empty };
     var projection = fixture.projection();
     projection.bar_state = &state;
     try fixture.paint(projection);
@@ -248,9 +249,9 @@ test "native configured footer segments preserve colors decorations and faint in
     var faint_ink = false;
     var underline = false;
     const renderer = &fixture.session.renderer;
-    const footer = Sidebar.footerArea(renderer.metrics, fixture.band());
+    const band = fixture.chrome.presented().bands.status_bar;
     const cell_height: f32 = @floatFromInt(renderer.metrics.cell_height);
-    const row_top = footer.y;
+    const row_top = band.y + @floor((band.height - cell_height) / 2);
     for (renderer.quads.items()) |quad| {
         background = background or (quad.r == 0 and quad.g == 1 and quad.b == 0 and quad.a == 1);
         faint_ink = faint_ink or (quad.r == 1 and quad.g == 0 and quad.b == 0 and quad.a == 0.5);
@@ -260,37 +261,25 @@ test "native configured footer segments preserve colors decorations and faint in
     try std.testing.expect(background and faint_ink and underline);
 }
 
-test "native sidebar footer paints configured slots in its last row inside the band" {
+test "native sidebar ignores configured footer slots" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var state: client.State = .{};
-    var content: client.Content = .{};
-    try content.append(.{ .text = "footer", .style = .{ .background = .{ .value = .{ .rgb = .{ 0, 0, 255 } } } } });
-    state.layout.sidebar_footer = .{ .{ .content = content }, .empty, .metrics };
     var projection = fixture.projection();
     projection.bar_state = &state;
     try fixture.paint(projection);
     const renderer = &fixture.session.renderer;
-    const band = fixture.band();
-    const row = Sidebar.footerArea(renderer.metrics, band);
-    const cell_height: f32 = @floatFromInt(renderer.metrics.cell_height);
-    try std.testing.expectEqual(band.y + band.height - Sidebar.margin - cell_height, row.y);
-    try std.testing.expectEqual(band.width - 1 - 2 * Sidebar.margin, row.width);
-    try std.testing.expect(row.x + row.width < @as(f32, @floatFromInt(renderer.origin[0])));
-    var background = false;
-    for (renderer.quads.items()) |quad| {
-        background = background or (quad.r == 0 and quad.g == 0 and quad.b == 1 and quad.a == 1 and quad.y == row.y and quad.x >= row.x and quad.x < row.x + row.width);
-    }
-    try std.testing.expect(background);
+    const before = try std.testing.allocator.dupe(@import("../render/Quad.zig").Quad, renderer.quads.items());
+    defer std.testing.allocator.free(before);
 
-    const press = fixture.chrome.bandPointer(.{ .kind = .press, .x = row.x + 1, .y = row.y }).?;
-    try std.testing.expect(press.interaction.consumed);
-    try std.testing.expectEqualDeep(client.Intent.none, press.interaction.intent);
-    _ = fixture.chrome.bandPointer(.{ .kind = .release, .x = row.x + 1, .y = row.y });
-    try std.testing.expectEqual(@as(f32, 0), Sidebar.footerArea(renderer.metrics, .{ .x = 0, .y = 0, .width = 284, .height = 4 * cell_height }).height);
+    var content: client.Content = .{};
+    try content.append(.{ .text = "footer", .style = .{ .background = .{ .value = .{ .rgb = .{ 0, 0, 255 } } } } });
+    state.layout.sidebar_footer = .{ .{ .content = content }, .empty, .metrics };
+    try fixture.paint(projection);
+    try std.testing.expectEqualSlices(@import("../render/Quad.zig").Quad, before, renderer.quads.items());
 }
 
-test "native progress remains visible with a single borderless pane" {
+test "native child progress remains visible with a single borderless pane" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const pane = fixture.session.gui.app.model.workspace.findPane(Session.pane_id).?;
@@ -306,18 +295,18 @@ test "native progress remains visible with a single borderless pane" {
     try std.testing.expect(found);
 }
 
-test "native mode hints replace tabs without publishing hidden tab controls" {
+test "native mode hints preserve navigation in the top bar" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var projection = fixture.projection();
     projection.status_mode = .copy;
     try fixture.paint(projection);
-    try std.testing.expect(fixture.bandTarget(.{ .select_tab = Session.location.tab_id }) == null);
+    try std.testing.expect(fixture.bandTarget(.{ .select_tab = Session.location.tab_id }) != null);
     var hints: client.Hints = .{};
     hints.append(.{ .key = try client.parseKey("Ctrl+v"), .label = "split vertically" });
     projection.status_mode = .{ .prefix = hints };
     try fixture.paint(projection);
-    try std.testing.expect(fixture.bandTarget(.{ .select_tab = Session.location.tab_id }) == null);
+    try std.testing.expect(fixture.bandTarget(.{ .select_tab = Session.location.tab_id }) != null);
     projection.status_mode = .normal;
     try fixture.paint(projection);
     try std.testing.expect(fixture.bandTarget(.{ .select_tab = Session.location.tab_id }) != null);

@@ -10,7 +10,6 @@ const Bands = @import("Bands.zig");
 const Sidebar = @import("Sidebar.zig");
 const AgentAges = @import("AgentAges.zig");
 const HitState = @import("HitState.zig");
-const HomePrefix = @import("HomePrefix.zig");
 const RingFades = @import("RingFades.zig");
 const Favicons = @import("Favicons.zig");
 const PointerEvent = @import("../input/PointerEvent.zig");
@@ -18,7 +17,7 @@ const BandCommand = @import("BandCommand.zig");
 const GenericPresentedState = @import("../render/GenericPresentedState.zig").Type;
 const GenericWidgetList = @import("../widgets/GenericWidgetList.zig").Type;
 const Widget = @import("../widgets/chrome_widget.zig").Widget;
-const WidgetList = GenericWidgetList(Widget, 5);
+const WidgetList = GenericWidgetList(Widget, 4);
 const Chrome = @This();
 
 maps: GenericPresentedState(HitState) = .{},
@@ -26,7 +25,6 @@ sidebar: Sidebar = .{},
 ages: AgentAges = .{},
 rings: RingFades = .{},
 favicons: Favicons = .{},
-home: HomePrefix = .{},
 hovered: ?Action = null,
 gesture_button: ?u8 = null,
 band_gesture: ?u8 = null,
@@ -70,8 +68,7 @@ pub fn begin(chrome: *Chrome, canvas: *Canvas, projection: *const client.Project
 /// The caller owns the context through draw. Example: `try chrome.compose(&context, &widgets);`
 pub fn compose(chrome: *Chrome, context: *Context, widgets: anytype) !void {
     const bands = chrome.maps.preparing().bands;
-    try widgets.append(.{ .top_bar = .{ .context = context, .bands = bands, .home = chrome.home.slice(), .sidebar_visible = context.canvas.sidebar.visible() } });
-    try widgets.append(.{ .tabs = .{ .context = context, .bands = bands } });
+    try widgets.append(.{ .top_bar = .{ .context = context, .area = bands.top_bar, .sidebar_visible = context.canvas.sidebar.visible() } });
     try widgets.append(.{ .status = .{ .context = context, .area = bands.status_bar } });
     try widgets.append(.{ .sidebar = .{ .state = &chrome.sidebar, .context = context, .area = bands.sidebar } });
     try widgets.append(.{ .panes = .{ .context = context, .rings = &chrome.rings } });

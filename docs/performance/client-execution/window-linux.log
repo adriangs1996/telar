@@ -1,0 +1,74 @@
+...................
+----------------------------------------------------------------------
+Ran 19 tests in 0.012s
+
+OK
+telar-client module and capability boundaries passed
+test-gui
++- run test w
+[gui_config] (warn): GUI configuration unchanged: config.lua:1: unexpected symbol near <eof>
+[gui_config] (warn): GUI configuration unchanged: cannot prepare GUI font 'Telar-Test-Missing-Family-98a34b1': FontFamilyNotFound
+failed command: ./.zig-cache/o/140efd9042973f6ad1fb6e56890d84b1/test --cache-dir=./.zig-cache --seed=0x595cd5de --listen=-
+
+Build Summary: 27/27 steps succeeded; 898/898 tests passed
+test-client success
++- run test 860 pass (860 total) 922ms MaxRSS:46M
+   +- compile test Debug native success 11s MaxRSS:1G
+   |  +- WriteFile cached
+   |  +- compile lib lua Debug native cached 7ms MaxRSS:37M
+   |  +- compile lib lua Debug native (reused)
+   |  +- WriteFile  cached
+   |  +- compile lib simdutf ReleaseFast native cached 16ms MaxRSS:38M
+   |  +- WriteFile hwy cached
+   |  +- compile lib highway ReleaseFast native cached 17ms MaxRSS:38M
+   |  +- compile lib simdutf ReleaseFast native (reused)
+   |  +- compile lib highway ReleaseFast native (reused)
+   |  +- options cached
+   |  +- options cached
+   |  +- WriteFile props.zig cached
+   |  |  +- run exe props-unigen cached
+   |  |  |  +- compile exe props-unigen Debug native cached 2ms MaxRSS:38M
+   |  |  |     +- run exe uucode_generate (tables.zig) cached
+   |  |  |        +- compile exe uucode_generate Debug native cached 6ms MaxRSS:38M
+   |  |  +- run exe symbols-unigen cached
+   |  |     +- compile exe symbols-unigen Debug native cached 3ms MaxRSS:38M
+   |  |        +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+   |  +- WriteFile props.zig (+2 more reused dependencies)
+   |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+   +- run python3 success 370ms
+      +- run python3 success 54ms
+test-gui success
++- run test 38 pass (38 total) 14s MaxRSS:59M
+   +- compile test Debug native success 6s MaxRSS:734M
+      +- run wayland-scanner (xdg-shell-client-protocol.h) cached
+      +- run glslc (quad.vert.inc) cached
+      +- run glslc (quad.frag.inc) cached
+      +- run wayland-scanner (xdg-shell-protocol.c) cached
+      +- WriteFile (reused)
+      +- compile lib lua Debug native (reused)
+      +- compile lib lua Debug native (reused)
+      +- WriteFile  (reused)
+      +- compile lib simdutf ReleaseFast native (reused)
+      +- WriteFile hwy (reused)
+      +- compile lib highway ReleaseFast native (reused)
+      +- compile lib simdutf ReleaseFast native (reused)
+      +- compile lib highway ReleaseFast native (reused)
+      +- options (reused)
+      +- options (reused)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+
+native Linux: status=0 painted=15 delivered=13 retries=2 failures=0
+native Linux: rejected scene cleanup passed
+Build Summary: 8/8 steps succeeded
+test-gui-window success
++- run exe gui-window-test success 45ms
+   +- compile exe gui-window-test Debug native success 321ms MaxRSS:78M
+   |  +- run wayland-scanner (xdg-shell-client-protocol.h) cached
+   |  +- run glslc (quad.vert.inc) cached
+   |  +- run glslc (quad.frag.inc) cached
+   |  +- run wayland-scanner (xdg-shell-protocol.c) cached
+   +- run exe gui-window-test success 826ms
+      +- compile exe gui-window-test Debug native (+4 more reused dependencies)
+

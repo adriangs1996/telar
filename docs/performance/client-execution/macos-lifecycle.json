@@ -1,0 +1,13 @@
+{
+  "before": "54 97",
+  "after": "48 88",
+  "shell_pid": 99087,
+  "shell_survived": true,
+  "input_ok": true,
+  "reload": {
+    "failed": false,
+    "stage": 7,
+    "appearance_frames": 2,
+    "font_size": "35 67"
+  }
+}

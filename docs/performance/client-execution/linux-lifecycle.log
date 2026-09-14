@@ -1,0 +1,12 @@
+font before: 37 70
+font reloaded: 24 48
+font recovered: 34 63
+before: 37 70
+after: 27 90
+reattached shell PID: 25130
+warning(gui_config): GUI configuration unchanged: cannot prepare GUI font 'Telar-Test-Missing-Family-98a34b1': FontFamilyNotFound
+/private/tmp/telar-s9-linux-native/01-prompt.png
+/private/tmp/telar-s9-linux-native/02-command.png
+/private/tmp/telar-s9-linux-native/02a-reloaded.png
+/private/tmp/telar-s9-linux-native/02b-recovered.png
+/private/tmp/telar-s9-linux-native/03-reattach.png

@@ -9,112 +9,21 @@ local function select_workspace(index)
 	return action.select_workspace({ index = index })
 end
 
+-- Semantic roles follow the active theme, including after a live reload.
 local bar_colors = {
-	blue = "#89b4fa",
-	dim = "#6c7086",
-	green = "#a6e3a1",
-	peach = "#fab387",
-	red = "#f38ba8",
+	accent = "accent",
+	secondary = "subtext0",
+	muted = "overlay1",
+	success = "green",
+	warning = "yellow",
+	danger = "red",
+	info = "teal",
 }
 
 local status_command = {
 	"/bin/sh",
 	"-c",
-	[=[
-set -u
-umask 077
-
-cache="${XDG_CACHE_HOME:-$HOME/.cache}/telar/bar"
-a="$cache/a"
-cx_file="$cache/codex.json"
-cl_file="$cache/claude.json"
-gw_file="$cache/gw"
-out="$cache/status"
-mkdir -p "$cache"
-
-make() {
-  cx="?"
-  cx_max=-1
-  cl="?"
-  cl_max=-1
-  gw=$(sed -n '1p' "$gw_file" 2>/dev/null || printf '%s' -1)
-  bat=$(pmset -g batt 2>/dev/null | grep -Eo '[0-9]+%' | head -1 | tr -d '%')
-  [ -n "$bat" ] || bat=-1
-
-  if [ -s "$cx_file" ]; then
-    cx=$(jq -r '(if type == "array" then ([.[] | select(.provider == "codex" and .usage != null)][0]) else . end) | .usage | [(.primary.usedPercent? | numbers | "5h:\(. | round)%"), (.secondary.usedPercent? | numbers | "7d:\(. | round)%")] | join(" ")' "$cx_file" 2>/dev/null || true)
-    cx_max=$(jq -r '(if type == "array" then ([.[] | select(.provider == "codex" and .usage != null)][0]) else . end) | .usage | [.primary.usedPercent?, .secondary.usedPercent?] | map(select(type == "number")) | max // -1 | floor' "$cx_file" 2>/dev/null || printf '%s' -1)
-    [ -n "$cx" ] || cx="?"
-  fi
-
-  if [ -s "$cl_file" ]; then
-    cl=$(jq -r '([(.five_hour.utilization? | numbers | "5h:\(. | round)%"), (.seven_day.utilization? | numbers | "7d:\(. | round)%")] + [.limits[]? | select(.kind == "weekly_scoped" and .percent != null) | "\((.scope.model.display_name // "M")[0:1]):\(.percent | round)%"]) | unique | join(" ")' "$cl_file" 2>/dev/null || true)
-    cl_max=$(jq -r '([.five_hour.utilization?, .seven_day.utilization?] + [.limits[]? | select(.kind == "weekly_scoped") | .percent?]) | map(select(type == "number")) | max // -1 | floor' "$cl_file" 2>/dev/null || printf '%s' -1)
-    [ -n "$cl" ] || cl="?"
-  fi
-
-  next="$out.$$"
-  printf 'gw=%s|bat=%s|cx=%s|cx_max=%s|cl=%s|cl_max=%s\n' "$gw" "$bat" "$cx" "$cx_max" "$cl" "$cl_max" >"$next"
-  mv "$next" "$out"
-}
-
-now=$(date +%s)
-last=$(sed -n '1p' "$a" 2>/dev/null || true)
-case "$last" in ''|*[!0-9]*) last=0 ;; esac
-
-if [ "$((now - last))" -ge 60 ]; then
-  printf '%s\n' "$now" >"$a"
-  cx_pid=""
-  cl_pid=""
-  cx_tmp=""
-  cl_tmp=""
-
-  cb=$(command -v codexbar 2>/dev/null || true)
-  if [ -n "$cb" ]; then
-    cx_tmp=$(mktemp "$cache/codex.XXXXXX")
-    "$cb" usage --provider codex --format json --web-timeout 7 >"$cx_tmp" 2>/dev/null &
-    cx_pid=$!
-  fi
-
-  token=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null || true)
-  if [ -n "$token" ]; then
-    version=$(claude --version 2>/dev/null | awk '{print $1}' || true)
-    version=${version:-2.0.0}
-    cl_tmp=$(mktemp "$cache/claude.XXXXXX")
-    { printf 'header = "Authorization: Bearer %s"\n' "$token"; printf 'header = "anthropic-beta: oauth-2025-04-20"\nheader = "User-Agent: claude-code/%s"\n' "$version"; } | curl -fsS --max-time 7 "https://api.anthropic.com/api/oauth/usage" --config - -o "$cl_tmp" 2>/dev/null &
-    cl_pid=$!
-  fi
-
-  ( sleep 8; [ -n "$cx_pid" ] && kill "$cx_pid" 2>/dev/null; [ -n "$cl_pid" ] && kill "$cl_pid" 2>/dev/null ) &
-  wd=$!
-  cx_rc=1
-  cl_rc=1
-  [ -z "$cx_pid" ] || { wait "$cx_pid"; cx_rc=$?; }
-  [ -z "$cl_pid" ] || { wait "$cl_pid"; cl_rc=$?; }
-  kill "$wd" 2>/dev/null || true
-  wait "$wd" 2>/dev/null || true
-
-  if [ "$cx_rc" -eq 0 ] && jq -e 'if type == "array" then any(.[]; .provider == "codex" and .usage != null) else .usage != null end' "$cx_tmp" >/dev/null 2>&1; then
-    mv "$cx_tmp" "$cx_file"
-  fi
-  if [ "$cl_rc" -eq 0 ] && jq -e '.five_hour.utilization != null or .seven_day.utilization != null or (.limits | type == "array")' "$cl_tmp" >/dev/null 2>&1; then
-    mv "$cl_tmp" "$cl_file"
-  fi
-  [ -z "$cx_tmp" ] || rm -f "$cx_tmp"
-  [ -z "$cl_tmp" ] || rm -f "$cl_tmp"
-
-  gw=-1
-  root="$HOME/sandbox/gwagent"
-  if [ -f "$root/.gitmodules" ]; then
-    gw=$(git config -f "$root/.gitmodules" --get-regexp '\.path$' 2>/dev/null | awk '{print $2}' | while IFS= read -r sub; do [ ! -e "$root/$sub/.git" ] || [ -z "$(git -C "$root/$sub" status --porcelain 2>/dev/null)" ] || printf 'x\n'; done | wc -l | tr -d ' ')
-  fi
-  printf '%s\n' "$gw" >"$gw_file"
-  make
-fi
-
-[ -s "$out" ] || make
-sed -n '1p' "$out"
-	]=],
+	'exec python3 "${XDG_CONFIG_HOME:-$HOME/.config}/telar/bar/status.py"',
 }
 
 local function status_fields(output)
@@ -131,18 +40,18 @@ local function quota_color(value)
 	local percent = tonumber(value)
 
 	if not percent or percent < 0 then
-		return bar_colors.dim
+		return bar_colors.muted
 	end
 
 	if percent >= 80 then
-		return bar_colors.red
+		return bar_colors.danger
 	end
 
 	if percent >= 50 then
-		return bar_colors.peach
+		return bar_colors.warning
 	end
 
-	return bar_colors.green
+	return bar_colors.success
 end
 
 local function battery_icon(percent)
@@ -194,7 +103,7 @@ local function render_status(ctx)
 				ctx.time.hour,
 				ctx.time.minute
 			),
-			fg = bar_colors.blue,
+			fg = bar_colors.secondary,
 			bold = false,
 		},
 	}
@@ -212,7 +121,7 @@ local function render_status(ctx)
 	if battery then
 		content[#content + 1] = {
 			text = string.format("%s %d%% ", battery_icon(battery), battery),
-			fg = battery <= 20 and bar_colors.red or bar_colors.green,
+			fg = battery <= 20 and bar_colors.danger or bar_colors.success,
 			bold = false,
 		}
 	end
@@ -224,7 +133,7 @@ local function render_status(ctx)
 	if metrics.available then
 		content[#content + 1] = {
 			text = string.format(" %d%% ", metrics.cpu_percent),
-			fg = bar_colors.peach,
+			fg = bar_colors.accent,
 		}
 
 		content[#content + 1] = {
@@ -233,7 +142,7 @@ local function render_status(ctx)
 
 		content[#content + 1] = {
 			text = string.format(" %.1fG ", metrics.memory_used_decigib / 10),
-			fg = "mauve",
+			fg = bar_colors.info,
 		}
 	end
 	return content
@@ -241,6 +150,29 @@ end
 
 return telar.config({
 	api_version = 2,
+
+	theme = require("osaka-jade"),
+
+	gui = {
+		window = {
+			background_opacity = 0.95,
+			background_blur = 20,
+			titlebar = false,
+			padding = { x = 2, y = 0 },
+		},
+		font = {
+			family = "DejaVu Sans Mono",
+			size = 18,
+			line_height = 1.4, -- Ghostty: adjust-cell-height = 40%.
+			letter_spacing = 0,
+			thicken = true,
+			thicken_strength = 255,
+		},
+		cursor = {
+			style = "block",
+			blink = true,
+		},
+	},
 
 	runtime = {
 		engine = {
@@ -254,11 +186,11 @@ return telar.config({
 				"--no-skills",
 				"--no-context-files",
 				"--model",
-				"gpt-5.6-sol",
+				"gpt-6-astra",
 				"--provider",
 				"openai-codex",
 				"--thinking",
-				"medium",
+				"low",
 			},
 			timeout_ms = 20000,
 			idle_timeout_ms = 300000,
@@ -277,7 +209,7 @@ return telar.config({
 				"--ignore-rules",
 				"--skip-git-repo-check",
 				"--model",
-				"gpt-5.6-luna",
+				"gpt-6-astra",
 				"-c",
 				'model_reasoning_effort="low"',
 				"-",
@@ -291,14 +223,6 @@ return telar.config({
 		prefix = "ctrl+s",
 		pane_gaps = false,
 
-		theme = telar.theme({
-			base = "vesper",
-			colors = {
-				-- Let Ghostty provide the background so its opacity still applies.
-				panel_bg = "default",
-			},
-		}),
-
 		sidebar = {
 			visible = true,
 			renderer = "automatic",
@@ -309,7 +233,7 @@ return telar.config({
 				right = telar.bar.command({
 					command = status_command,
 					every_ms = 60000,
-					timeout_ms = 9500,
+					timeout_ms = 2000,
 					render = render_quotas,
 				}),
 			},
@@ -317,7 +241,7 @@ return telar.config({
 				left = telar.bar.command({
 					command = status_command,
 					every_ms = 1000,
-					timeout_ms = 9500,
+					timeout_ms = 2000,
 					render = render_status,
 				}),
 				right = telar.bar.tabs(),
@@ -352,6 +276,7 @@ return telar.config({
 			telar.bind({ "n" }, action.new_tab()),
 			telar.bind({ "r" }, action.rename_tab()),
 			telar.bind({ "X" }, action.close_tab()),
+
 			telar.bind({ "1" }, select_tab(1)),
 			telar.bind({ "2" }, select_tab(2)),
 			telar.bind({ "3" }, select_tab(3)),
@@ -361,6 +286,7 @@ return telar.config({
 			telar.bind({ "7" }, select_tab(7)),
 			telar.bind({ "8" }, select_tab(8)),
 			telar.bind({ "9" }, select_tab(9)),
+
 			telar.bind_global({ "alt+1" }, select_workspace(1)),
 			telar.bind_global({ "alt+2" }, select_workspace(2)),
 			telar.bind_global({ "alt+3" }, select_workspace(3)),
@@ -387,6 +313,9 @@ return telar.config({
 			-- Sidebar
 			telar.bind_global({ "alt+n" }, action.resize_sidebar({ direction = "left" })),
 			telar.bind_global({ "alt+m" }, action.resize_sidebar({ direction = "right" })),
+
+			telar.bind_global({ "ctrl+r" }, "history-palette"),
+			telar.bind_global({ "ctrl+e" }, action.suggest_command()),
 
 			-- Scrolling
 			telar.bind_global({ "alt+-" }, action.scroll_pane({ direction = "up" })),

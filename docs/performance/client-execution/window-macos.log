@@ -1,0 +1,18 @@
+...................
+----------------------------------------------------------------------
+Ran 19 tests in 0.044s
+
+OK
+telar-client module and capability boundaries passed
+native macOS: status=0 painted=7 delivered=6 inputs=4 timer_wakes=1 failures=0
+Build Summary: 9/9 steps succeeded
+test-gui-window success
++- run exe gui-window-test success 2s
+   +- compile exe gui-window-test Debug native success 991ms MaxRSS:163M
+codestyle success
++- run exe codestyle success 2s
+   +- compile exe codestyle Debug native cached 71ms MaxRSS:35M
+check-client-boundaries success
++- run python3 success 440ms
+   +- run python3 success 104ms
+

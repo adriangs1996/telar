@@ -33,6 +33,5 @@ pub fn run(init: std.process.Init, connection: *core.SocketChannel, options: cli
     });
     adopted = true;
     defer app.deinit();
-    app.home = init.minimal.environ.getPosix("HOME") orelse "";
     return app.run("Telar");
 }

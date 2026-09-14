@@ -141,7 +141,7 @@ test "the keyboard resize action moves the band by sixteen logical pixels withou
     try std.testing.expectEqual(@as(f32, 480), gui.sidebar.logical);
 }
 
-test "hiding the sidebar returns its pixels to the grid and the toggle follows the band" {
+test "hiding the sidebar returns its pixels to the grid without moving top navigation" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.paint(fixture.projection());
@@ -149,13 +149,17 @@ test "hiding the sidebar returns its pixels to the grid and the toggle follows t
     const gui = fixture.session.gui;
     const shown = gui.app.model.hostSize();
     try std.testing.expect(fixture.band().width > 0);
-    try std.testing.expectEqual(@as(f32, 292), fixture.chrome.presented().bands.tab_strip.x);
+    const top = fixture.chrome.presented().bands.top_bar;
+    const tab = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
+    const toggle = fixture.bandTarget(.toggle_sidebar).?;
     try fixture.showSidebar(false);
     try fixture.paint(fixture.projection());
     const hidden = gui.app.model.hostSize();
     try std.testing.expectEqual(@as(u32, 0), renderer.sidebar.width);
     try std.testing.expectEqual(@as(f32, 0), fixture.band().width);
-    try std.testing.expectEqual(@as(f32, 0), fixture.chrome.presented().bands.tab_strip.x);
+    try std.testing.expectEqualDeep(top, fixture.chrome.presented().bands.top_bar);
+    try std.testing.expectEqualDeep(tab, fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?);
+    try std.testing.expectEqualDeep(toggle, fixture.bandTarget(.toggle_sidebar).?);
     try std.testing.expect(fixture.resizeHandle() == null);
     try std.testing.expectEqual(shown.rows, hidden.rows);
     try std.testing.expectEqual(shown.cols + 292 / renderer.metrics.cell_width, hidden.cols);

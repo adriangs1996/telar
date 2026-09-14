@@ -1,0 +1,42 @@
+[
+  {
+    "input_sent": 32,
+    "input_while_host_blocked": 32,
+    "input_after_drain": 32,
+    "version": "baseline",
+    "case": "slow-host",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 53.76604199999946,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        88517
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "input_sent": 32,
+    "input_while_host_blocked": 32,
+    "input_after_drain": 32,
+    "version": "candidate",
+    "case": "slow-host",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 51.102541000005886,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        96835
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  }
+]

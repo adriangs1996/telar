@@ -1,0 +1,106 @@
+[
+  {
+    "seconds": 10.319279791,
+    "runtime": {
+      "cpu_percent": 0.09690598765159501,
+      "sampled_peak_rss_bytes": 29966336
+    },
+    "client": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 26443776
+    },
+    "version": "baseline",
+    "case": "idle",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 53.654000000001645,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        85398
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.439585999999998,
+    "runtime": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 30048256
+    },
+    "client": {
+      "cpu_percent": 0.0,
+      "sampled_peak_rss_bytes": 26869760
+    },
+    "version": "candidate",
+    "case": "idle",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 60.08179200000541,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        85678
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.281445415999997,
+    "runtime": {
+      "cpu_percent": 181.88104146231268,
+      "sampled_peak_rss_bytes": 71450624
+    },
+    "client": {
+      "cpu_percent": 14.589388352591925,
+      "sampled_peak_rss_bytes": 27443200
+    },
+    "version": "baseline",
+    "case": "load",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 54.04983300000055,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        85931
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "seconds": 10.286461416999998,
+    "runtime": {
+      "cpu_percent": 186.75032376296525,
+      "sampled_peak_rss_bytes": 71286784
+    },
+    "client": {
+      "cpu_percent": 16.81822280634721,
+      "sampled_peak_rss_bytes": 27574272
+    },
+    "version": "candidate",
+    "case": "load",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 53.54608300000052,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        86781
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  }
+]

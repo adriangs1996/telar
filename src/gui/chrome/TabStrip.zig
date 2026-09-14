@@ -1,14 +1,11 @@
-//! The 32 px strip under the top bar, over the workbench: one label per tab,
-//! the active tab drawn as a rounded-top block in the workbench background
-//! so it reads as connected to the panes below, an attention dot per tab
-//! whose most urgent agent needs the person, and `+` to create a tab. The
-//! shoulder left of the strip continues the sidebar surface.
+//! The right-aligned tab group inside navigation. The active tab always fits
+//! and uses a neutral open-bottom shape, with attention represented by dots.
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Context = @import("Context.zig");
-const Bands = @import("Bands.zig");
 const Rect = @import("../render/Rect.zig");
+const TabSurface = @import("TabSurface.zig");
 const PaneProgress = @import("PaneProgress.zig");
 const attention = @import("attention.zig");
 const TabEntry = @import("TabEntry.zig");
@@ -17,7 +14,7 @@ const Canvas = @import("Canvas.zig");
 const TabStrip = @This();
 
 context: *Context,
-bands: Bands,
+area: Rect,
 
 /// Example: `try strip.draw(canvas);`
 pub fn draw(widget: TabStrip, canvas: *Canvas) !void {
@@ -25,24 +22,19 @@ pub fn draw(widget: TabStrip, canvas: *Canvas) !void {
     context.canvas = canvas;
     var strip = widget;
     strip.context = &context;
-    try canvas.panelAt(strip.bands.shoulder);
-    const area = strip.bands.tab_strip;
+    const area = strip.area;
     if (area.width <= 0 or area.height <= 0) {
-        return;
-    }
-
-    try canvas.panelAt(area);
-    if (strip.context.projection.status_mode != .normal) {
         return;
     }
 
     const collection = strip.context.projection.tabs;
     const chrome = canvas.chrome;
-    const margin = chrome.px(8);
     const gap = chrome.px(2);
-    const plus_width = @min(chrome.px(28), @max(0, area.width - margin));
-    const plus_x = area.x + area.width - margin - plus_width;
-    const control: Rect = .{ .x = 0, .y = area.y + chrome.px(4), .width = 0, .height = @max(0, area.height - chrome.px(4)) };
+    const plus_width = if (area.width >= chrome.px(96 + 28) + gap or collection.count == 0) @min(chrome.px(28), area.width) else 0;
+    const plus_x = area.x + area.width - plus_width;
+    const right = plus_x - (if (plus_width > 0) gap else @as(f32, 0));
+    const inset_y = @min(chrome.px(7), area.height);
+    const control: Rect = .{ .x = 0, .y = area.y + inset_y, .width = 0, .height = @max(0, area.height - inset_y) };
     if (collection.count != 0) {
         var widths: [core.max_tabs_per_workspace]f32 = undefined;
         for (collection.items[0..collection.count], 0..) |*slot, index| {
@@ -53,16 +45,34 @@ pub fn draw(widget: TabStrip, canvas: *Canvas) !void {
             widths[index] = try strip.width(entry, index);
         }
 
-        const available = @max(0, plus_x - gap - (area.x + margin));
+        const available = @max(0, right - area.x);
         const first = firstVisible(collection.active_index, widths[0..collection.count], .{ .available = available, .gap = gap });
-        var x = area.x + margin;
-        for (collection.items[first..collection.count], first..) |*slot, index| {
+        var used: f32 = 0;
+        var end = first;
+        for (collection.items[first..collection.count], first..) |slot, index| {
+            if (slot == null) {
+                continue;
+            }
+
+            const spacing = if (used > 0) gap else @as(f32, 0);
+            const remaining = @max(0, available - used - spacing);
+            if (remaining == 0) {
+                break;
+            }
+
+            widths[index] = @min(widths[index], remaining);
+            used += spacing + widths[index];
+            end = index + 1;
+        }
+
+        var x = right - used;
+        for (collection.items[first..end], first..) |*slot, index| {
             const entry = if (slot.*) |*value| value else continue;
             if (index != first) {
                 x += gap;
             }
 
-            const tab_width = @min(widths[index], @max(0, plus_x - gap - x));
+            const tab_width = @min(widths[index], @max(0, right - x));
             if (tab_width <= 0) {
                 break;
             }
@@ -72,13 +82,15 @@ pub fn draw(widget: TabStrip, canvas: *Canvas) !void {
         }
     }
 
-    try strip.context.pill(.{
-        .area = .{ .x = plus_x, .y = control.y + chrome.px(2), .width = plus_width, .height = @max(0, control.height - chrome.px(6)) },
-        .intent = .create_tab,
-        .text = "+",
-        .radius = chrome.px(6),
-        .inset = chrome.px(9),
-    });
+    if (plus_width > 0) {
+        try strip.context.pill(.{
+            .area = .{ .x = plus_x, .y = control.y + chrome.px(2), .width = plus_width, .height = @max(0, control.height - chrome.px(6)) },
+            .intent = .create_tab,
+            .text = "+",
+            .radius = chrome.px(6),
+            .inset = chrome.px(9),
+        });
+    }
 }
 
 fn tab(strip: TabStrip, entry: TabEntry) !void {
@@ -92,21 +104,16 @@ fn tab(strip: TabStrip, entry: TabEntry) !void {
     const active = index == context.projection.tabs.active_index;
     const action: @import("action.zig").Action = .{ .intent = .{ .select_tab = value.location.tab_id } };
     const hovered = if (context.hovered) |current| std.meta.eql(current, action) else false;
-    if (active) {
-        // Two quads make a rounded top: the rounded head, then the plain body
-        // covering its lower corners down to the workbench edge.
-        const radius = @min(chrome.px(8), bounds.height / 2);
-        try canvas.fillRoundedAt(.{ .x = bounds.x, .y = bounds.y, .width = bounds.width, .height = radius * 2 }, .{ .radius = radius, .color = .default });
-        try canvas.fillAt(.{ .x = bounds.x, .y = bounds.y + radius, .width = bounds.width, .height = @max(0, bounds.height - radius) }, .default);
-    } else if (hovered) {
-        try canvas.fillRoundedAt(.{ .x = bounds.x, .y = bounds.y, .width = bounds.width, .height = @max(0, bounds.height - chrome.px(4)) }, .{ .radius = chrome.px(6), .color = palette.surface1 });
-    }
+    const surface: TabSurface = .{ .bounds = bounds, .active = active, .hovered = hovered };
+    try surface.draw(canvas);
 
     const dot = attention.tabDot(context.projection, palette, value.location);
     var storage: [core.max_tab_label_bytes + 16]u8 = undefined;
+    const dot_space = if (dot != null) chrome.px(Context.dot_diameter + Context.dot_gap) else 0;
+    const label_inset = @min(chrome.px(inset), @max(0, bounds.width - dot_space - chrome.px(16)) / 2);
     var label = bounds;
-    label.x += chrome.px(inset);
-    label.width = @max(0, bounds.width - 2 * chrome.px(inset) - (if (dot != null) chrome.px(Context.dot_diameter + Context.dot_gap) else 0));
+    label.x += label_inset;
+    label.width = @max(0, bounds.width - 2 * label_inset - dot_space);
     _ = try canvas.textAt(label, .{
         .text = text(&storage, value, index),
         .color = if (active) palette.text else if (hovered) palette.text else palette.subtext0,
@@ -134,7 +141,7 @@ fn width(strip: TabStrip, value: *const client.Tab, index: usize) !f32 {
     const measured = try canvas.measure(.{ .text = text(&storage, value, index), .face = .sans, .bold = true, .size = .body });
     const dot = attention.tabDot(strip.context.projection, canvas.theme.palette, value.location);
     const dot_space: f32 = if (dot != null) chrome.px(Context.dot_diameter + Context.dot_gap) else 0;
-    return @ceil(measured + 2 * chrome.px(inset) + dot_space);
+    return @ceil(std.math.clamp(measured + 2 * chrome.px(inset) + dot_space, chrome.px(96), chrome.px(180)));
 }
 
 fn text(storage: []u8, value: *const client.Tab, index: usize) []const u8 {

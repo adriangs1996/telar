@@ -7,7 +7,7 @@ a native drawing callback or a GPU command type.
 
 `Scene.prepare` starts the frame resources, then calls `Composition.render` with
 the borrowed projection. That method returns the complete `frame_widget.List`:
-terminal leaves, thread views, a hovered link, top bar, tabs, status bar, sidebar,
+terminal leaves, thread views, a hovered link, top bar, status bar, sidebar,
 pane decorations, chrome focus, notifications and the selected modal. It emits
 no quads. `Scene` draws the list once through `draw(canvas)` and seals the frame
 and its control registries only after drawing and registration succeed.
@@ -24,8 +24,8 @@ try widgets.draw(&canvas);
 
 `Composition` owns the context borrowed by chrome widgets. Keep it and the
 projection at stable addresses until drawing returns; returning the list does
-not extend either lifetime. The list holds at most 74 widgets, derived from the
-64-pane limit, one link, five chrome sections, one focus indicator, two notices
+not extend either lifetime. The list holds at most 73 widgets, derived from the
+64-pane limit, one link, four chrome sections, one focus indicator, two notices
 and one modal. A frame can contain both terminal and thread leaves. Its commit
 captures the generations and damage of the panes actually composed.
 
@@ -34,6 +34,9 @@ in `Composition.render` to introduce a new frame section. Containers may build
 their own concrete widget lists. `Surface`, `Text` and `Sprite` are reusable
 leaves. `Chrome.paint` and `Overlays.paint` remain standalone entrypoints for
 isolated rendering tests; both use their composition and widget draw methods.
+`TopBar` composes the workspace controls and `TabStrip` in one navigation row;
+tabs are no longer a separate frame section. `StatusBar` owns configured bottom
+widgets and mode hints, with space reserved for TLS in every mode.
 
 ```mermaid
 flowchart LR

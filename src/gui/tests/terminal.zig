@@ -27,7 +27,7 @@ test "native padding scales once and leaves a complete grid when the window shri
         const x: u32 = @intFromFloat(@round(8.5 * scale));
         const y: u32 = @intFromFloat(@round(12 * scale));
         const chrome = renderer.chrome;
-        try std.testing.expectEqual([2]u32{ x, chrome.top_bar + chrome.tab_strip + y }, renderer.origin);
+        try std.testing.expectEqual([2]u32{ x, chrome.top_bar + y }, renderer.origin);
         try std.testing.expectEqual((800 - 2 * x) / size.cell_width_px, size.cols);
         try std.testing.expectEqual((600 - chrome.vertical() - 2 * y) / size.cell_height_px, size.rows);
         try std.testing.expectEqual(chrome.vertical() + 2 * y + @as(u32, size.rows) * size.cell_height_px <= 600, true);

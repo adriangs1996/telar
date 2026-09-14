@@ -1,0 +1,14 @@
+...................
+----------------------------------------------------------------------
+Ran 19 tests in 0.038s
+
+OK
+telar-client module and capability boundaries passed
+Build Summary: 6/6 steps succeeded
+codestyle success
++- run exe codestyle success 2s
+   +- compile exe codestyle Debug native cached 60ms MaxRSS:35M
+check-client-boundaries success
++- run python3 success 346ms
+   +- run python3 success 93ms
+

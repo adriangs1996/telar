@@ -11,14 +11,9 @@ const CardGeometry = @import("CardGeometry.zig");
 const SidebarList = @import("SidebarList.zig");
 const Label = @import("Label.zig");
 const SnapshotMark = @import("SnapshotMark.zig");
-const SlotRow = @import("SlotRow.zig");
 const Layout = @import("../layout/Layout.zig");
 const LayoutItem = @import("../layout/Item.zig");
 const Sidebar = @This();
-
-/// Terminal rows the band needs before the footer row is drawn: the header,
-/// a gap and one card above it.
-const min_footer_rows: f32 = 5;
 
 pub const margin: f32 = 8;
 pub const header_gap: f32 = 6;
@@ -32,7 +27,7 @@ order: [core.max_agent_snapshot_entries]u8 = undefined,
 order_len: u8 = 0,
 ordered: SnapshotMark = .{},
 
-/// Paints the band, the header, the ordered cards, the footer slot row, the
+/// Paints the band, the header, the ordered cards, the
 /// edge line and the resize handle; retains only the local scroll bound
 /// and the snapshot order. Every target goes to the band hit map.
 /// Example: `try sidebar.paint(&context, bands.sidebar);`
@@ -48,16 +43,10 @@ pub fn paint(sidebar: *Sidebar, context: *Context, area: Rect) !void {
     // background and opacity like the workbench.
     try canvas.panelAt(.{ .x = area.x, .y = area.y, .width = area.width - 1, .height = area.height });
     try canvas.fillAt(.{ .x = area.x + area.width - 1, .y = area.y, .width = 1, .height = area.height }, palette.surface1);
-    const footer = footerArea(canvas.metrics, area);
     const inset = canvas.chrome.px(margin);
-    if (footer.height > 0) {
-        const row: SlotRow = .{ .context = context, .slots = &context.projection.bar_state.layout.sidebar_footer };
-        try row.paintIn(footer);
-    }
-
     sidebar.observe(context);
     const geometry = CardGeometry.derive(canvas.chrome, canvas.metrics);
-    const content_bottom = if (footer.height > 0) footer.y - inset else area.y + area.height - inset;
+    const content_bottom = area.y + area.height - inset;
     var rows = [_]LayoutItem{ .{ .height = .{ .fixed = canvas.chrome.rowHeight(.body) } }, .{} };
     try (Layout{
         .area = .{ .x = area.x + inset, .y = area.y + inset, .width = @max(0, area.width - 1 - 2 * inset), .height = @max(0, content_bottom - area.y - inset) },
@@ -74,20 +63,6 @@ pub fn paint(sidebar: *Sidebar, context: *Context, area: Rect) !void {
     }
 
     try context.bands.add(.{ .area = canvas.sidebar.handle(area), .action = .resize_sidebar });
-}
-
-/// The footer row at the bottom of the band, left of the edge line: one
-/// terminal row tall, so the Lua slots paint in cells lent to it. Empty
-/// while the band is too short to keep a header and a card above it.
-/// Example: `const footer = Sidebar.footerArea(canvas.metrics, bands.sidebar);`
-pub fn footerArea(metrics: @import("../TerminalMetrics.zig"), area: Rect) Rect {
-    const row: f32 = @floatFromInt(metrics.cell_height);
-    const cell: f32 = @floatFromInt(metrics.cell_width);
-    if (area.height < min_footer_rows * row or area.width - 1 - 2 * margin < 3 * cell) {
-        return .{ .x = area.x, .y = area.y, .width = 0, .height = 0 };
-    }
-
-    return .{ .x = area.x + margin, .y = area.y + area.height - margin - row, .width = area.width - 1 - 2 * margin, .height = row };
 }
 
 /// Scrolls by one card without a model mutation.

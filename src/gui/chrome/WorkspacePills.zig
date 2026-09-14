@@ -1,8 +1,5 @@
-//! Numbered workspace pills in the top bar. The active one fills with
-//! `accent`; a pill whose workspace holds a blocked or failed agent carries
-//! an attention dot in that agent's status colour. When the pills do not
-//! fit, or the list is collapsed, only the active one and a `+N` counter
-//! remain, as the cell list did.
+//! At most three equal workspace slots, centered on the active workspace in
+//! stable runtime order. Hidden neighbors retain their attention indicators.
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -10,119 +7,142 @@ const Context = @import("Context.zig");
 const Rect = @import("../render/Rect.zig");
 const attention = @import("attention.zig");
 const Label = @import("Label.zig");
+const Layout = @import("../layout/Layout.zig");
+const Item = @import("../layout/Item.zig");
+const WorkspaceWindow = @import("WorkspaceWindow.zig");
 const WorkspacePills = @This();
 
 context: *Context,
 area: Rect,
 
-/// Paints left to right and returns the pixels used.
+/// Logical width of the three-workspace area, independent of label lengths.
+pub const preferred_width: f32 = 320;
+
+/// Paints within the parent's fixed reservation and returns the pixels used.
 /// Example: `const used = try pills.paint();`
 pub fn paint(pills: WorkspacePills) !f32 {
     const projection = pills.context.projection;
     const canvas = pills.context.canvas;
-    if (pills.area.width <= 0) {
+    if (pills.area.width <= 0 or pills.area.height <= 0) {
         return 0;
     }
 
     const snapshot = projection.workspaces;
-    if (snapshot.count == 0) {
-        const fallback = projection.tabs.displayedWorkspaceName();
-        const label: Label = .{ .text = if (fallback.len != 0) fallback else "workspace", .color = canvas.theme.palette.subtext0, .face = .sans, .size = .body };
-        return try canvas.textAt(pills.area, label);
+    const current = (if (activeId(projection)) |id| snapshot.indexOf(id) else null) orelse return pills.paintCurrent();
+    // Native visibility follows available space, including after a reconnect
+    // restores the TUI's collapsed workspace preference.
+    var window = WorkspaceWindow.centered(snapshot.count, current, 3);
+    const gap = canvas.chrome.px(logical_gap);
+    const counter = canvas.chrome.px(counter_width);
+    const minimum = canvas.chrome.px(minimum_width);
+    const visible: f32 = @floatFromInt(window.count);
+    const overflow = if (window.count < window.total) 2 * (counter + gap) else 0;
+    if (pills.area.width < visible * minimum + (visible - 1) * gap + overflow) {
+        window = WorkspaceWindow.centered(snapshot.count, current, 1);
     }
 
-    const active = activeId(projection);
-    const active_index = if (active) |id| snapshot.indexOf(id) else null;
-    const gap = canvas.chrome.px(6);
-    const collapsed = projection.workspace_list_collapsed or try pills.desiredWidth(gap) > pills.area.width;
-    var x = pills.area.x;
-    if (collapsed) {
-        const current = active_index orelse 0;
-        var counter_storage: [32]u8 = undefined;
-        const counter = std.fmt.bufPrint(&counter_storage, "+{d}", .{snapshot.count - 1}) catch unreachable;
-        const counter_width = if (snapshot.count > 1) try pills.pillWidth(counter, null) else 0;
-        const available = @max(0, pills.area.width - counter_width - gap);
-        x += try pills.draw(pills.slot(x, available), current);
-        if (counter_width != 0) {
-            x += gap;
-            try pills.context.pill(.{
-                .area = pills.slot(x, @min(counter_width, pills.area.x + pills.area.width - x)),
-                .intent = .toggle_workspace_list,
-                .text = counter,
-                .inset = canvas.chrome.px(inset),
-            });
-            x += counter_width;
+    const counters = window.count < window.total and pills.area.width >= minimum + 2 * (counter + gap);
+    const offset: usize = if (counters) 1 else 0;
+    const length = window.count + 2 * offset;
+    var children: [5]Item = @splat(.{ .maximum = .{ canvas.chrome.px(maximum_width), 65535 } });
+    if (counters) {
+        children[0] = .{ .width = .{ .fixed = counter } };
+        children[length - 1] = .{ .width = .{ .fixed = counter } };
+    }
+
+    try (Layout{ .area = pills.area, .gap = gap }).resolve(children[0..length]);
+    if (counters) {
+        if (window.previous()) |index| {
+            try pills.drawCounter(children[0].bounds, .{ 0, index + 1 });
         }
-
-        return x - pills.area.x;
     }
 
-    for (0..snapshot.count) |index| {
-        if (index != 0) {
-            x += gap;
+    for (0..window.count) |index| {
+        try pills.draw(children[offset + index].bounds, window.first + index);
+    }
+
+    if (counters) {
+        if (window.next()) |index| {
+            try pills.drawCounter(children[length - 1].bounds, .{ index, snapshot.count });
         }
-
-        x += try pills.draw(pills.slot(x, pills.area.x + pills.area.width - x), index);
     }
 
-    return x - pills.area.x;
+    const last = children[length - 1].bounds;
+    return last.x + last.width - pills.area.x;
 }
 
-fn desiredWidth(pills: WorkspacePills, gap: f32) !f32 {
-    var total: f32 = 0;
-    const projection = pills.context.projection;
-    for (0..projection.workspaces.count) |index| {
-        var storage: [core.max_workspace_name_bytes + 8]u8 = undefined;
-        const dot = pills.dotColor(index);
-        total += try pills.pillWidth(pills.labelText(&storage, index), dot);
-        if (index != 0) {
-            total += gap;
-        }
-    }
-
-    return total;
+fn paintCurrent(pills: WorkspacePills) !f32 {
+    const tabs = pills.context.projection.tabs;
+    const canvas = pills.context.canvas;
+    var storage: [64]u8 = undefined;
+    const name_value = tabs.displayedWorkspaceName();
+    const text = if (name_value.len != 0) name_value else if (tabs.workspace) |location| switch (location) {
+        .workspace => |id| std.fmt.bufPrint(&storage, "workspace {d}", .{@intFromEnum(id)}) catch unreachable,
+        .worktree => |id| std.fmt.bufPrint(&storage, "worktree {d}", .{@intFromEnum(id)}) catch unreachable,
+    } else "workspace";
+    const label: Label = .{ .text = text, .color = canvas.theme.palette.text, .bold = true, .face = .sans, .size = .body };
+    return canvas.textAt(pills.area, label);
 }
 
-// `room` is the slot the pill may occupy; the pill takes what its label needs.
-fn draw(pills: WorkspacePills, room: Rect, index: usize) !f32 {
+fn draw(pills: WorkspacePills, room: Rect, index: usize) !void {
     var storage: [core.max_workspace_name_bytes + 8]u8 = undefined;
     const text = pills.labelText(&storage, index);
-    const dot = pills.dotColor(index);
-    const width = @min(try pills.pillWidth(text, dot), room.width);
-    if (width <= 0) {
-        return 0;
-    }
-
     const id = pills.context.projection.workspaces.workspaceAt(index);
     try pills.context.pill(.{
-        .area = .{ .x = room.x, .y = room.y, .width = width, .height = room.height },
+        .area = room,
         .intent = .{ .select_workspace = id },
         .text = text,
         .active = activeId(pills.context.projection) == id,
         .inset = pills.context.canvas.chrome.px(inset),
-        .dot = dot,
+        .dot = attention.workspaceDot(pills.context.projection, pills.context.canvas.theme.palette, id),
     });
-    return width;
 }
 
-fn slot(pills: WorkspacePills, x: f32, width: f32) Rect {
-    return .{ .x = x, .y = pills.area.y, .width = width, .height = pills.area.height };
+fn drawCounter(pills: WorkspacePills, room: Rect, range: [2]usize) !void {
+    const previous = range[0] == 0;
+    const index = if (previous) range[1] - 1 else range[0];
+    const total = range[1] - range[0];
+    var storage: [16]u8 = undefined;
+    const text = if (previous)
+        std.fmt.bufPrint(&storage, "‹{d}", .{total}) catch unreachable
+    else
+        std.fmt.bufPrint(&storage, "{d}›", .{total}) catch unreachable;
+    try pills.context.pill(.{
+        .area = room,
+        .intent = .{ .select_workspace = pills.context.projection.workspaces.workspaceAt(index) },
+        .text = text,
+        .inset = pills.context.canvas.chrome.px(2),
+        .dot = pills.hiddenDot(range),
+    });
 }
 
-fn pillWidth(pills: WorkspacePills, text: []const u8, dot: ?core.Color) !f32 {
-    const chrome = pills.context.canvas.chrome;
-    const measured = try pills.context.canvas.measure(.{ .text = text, .face = .sans, .size = .body });
-    const dot_space: f32 = if (dot != null) chrome.px(Context.dot_diameter + Context.dot_gap) else 0;
-    return @ceil(measured + 2 * chrome.px(inset) + dot_space);
+fn hiddenDot(pills: WorkspacePills, range: [2]usize) ?core.Color {
+    const projection = pills.context.projection;
+    var urgent: ?*const client.Agent = null;
+    for (projection.agents.slice()) |*agent| {
+        if (!attention.needsInput(agent.status)) {
+            continue;
+        }
+
+        const id = switch (agent.location.workspace) {
+            .workspace => |id| id,
+            .worktree => continue,
+        };
+        const index = projection.workspaces.indexOf(id) orelse continue;
+        if (index < range[0] or index >= range[1]) {
+            continue;
+        }
+
+        if (urgent == null or client.agent_attention.compare(agent, urgent.?) == .lt) {
+            urgent = agent;
+        }
+    }
+
+    return if (urgent) |agent| attention.statusColor(pills.context.canvas.theme.palette, agent.status) else null;
 }
 
 fn labelText(pills: WorkspacePills, storage: []u8, index: usize) []const u8 {
     return std.fmt.bufPrint(storage, "{d} {s}", .{ index + 1, pills.name(index) }) catch unreachable;
-}
-
-fn dotColor(pills: WorkspacePills, index: usize) ?core.Color {
-    const projection = pills.context.projection;
-    return attention.workspaceDot(projection, pills.context.canvas.theme.palette, projection.workspaces.workspaceAt(index));
 }
 
 fn name(pills: WorkspacePills, index: usize) []const u8 {
@@ -147,4 +167,8 @@ pub fn activeId(projection: *const client.Projection) ?core.WorkspaceId {
     };
 }
 
-const inset: f32 = 10;
+const logical_gap: f32 = 6;
+const counter_width: f32 = 40;
+const minimum_width: f32 = 56;
+const maximum_width: f32 = 96;
+const inset: f32 = 8;

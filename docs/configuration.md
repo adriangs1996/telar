@@ -268,7 +268,7 @@ gui = {
 | `cursor.blink` | `true` | Whether the default cursor blinks. An explicit application DECSCUSR style overrides this default; DEC mode 12 can suppress blinking. |
 | `cursor.blink_interval_ms` | `600` | Duration of each visible or hidden phase; integer `100..5000`. |
 | `sidebar.width` | `284` | Width of the native sidebar band in logical pixels; `220..480`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the narrowest band hides it. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. The TUI ignores it: its sidebar stays a column preference retained by the runtime in the shared layout, which the GUI no longer reads. |
-| `chrome.scale` | `1` | Multiplies the native chrome text sizes; `0.5..2`, decimals allowed. The chrome derives three sizes from `font.size` times the display scale: title ×1.0, body ×0.87, small ×0.73, rounded to device pixels and never below 6. The bands (top bar 38, tab strip 32, status bar 26, pane header 22 logical pixels) do not scale with it, so the body size is capped at the largest whose line box fits the pane header: at `font.size = 15` the body stops growing at 16 px (scale ≈ 1.3) while title and small keep growing, reaching 30 and 22 px at scale 2. The terminal grid and the PTY size never change with it; a reload applies it without rebuilding the atlas. |
+| `chrome.scale` | `1` | Multiplies the native chrome text sizes; `0.5..2`, decimals allowed. The chrome derives three sizes from `font.size` times the display scale: title and body ×0.87, small ×0.73, rounded to device pixels and never below 6. The bands (top navigation 42, status bar 26, pane header 22 logical pixels) do not scale with it, so the body size is capped at the largest whose line box fits the pane header: at `font.size = 15` the body stops growing at 16 px (scale ≈ 1.3) while title and small keep growing, reaching 26 and 22 px at scale 2. The terminal grid and the PTY size never change with it; a reload applies it without rebuilding the atlas. |
 
 Padding is applied once at the display scale, then rounded to physical pixels.
 It belongs to the window, outside the terminal grid; PTY pixel sizes contain
@@ -444,14 +444,22 @@ Diagnostics name the entry and the field, for example
 
 ## Bars
 
-`client.bars` controls all three blocks of the bottom bar, the right block
-of the top bar and the sidebar footer row. The bottom bar must contain exactly
-one `telar.bar.tabs()` source. Tabs keep their built-in behavior; configuration can only choose their
-position. The top bar keeps workspace navigation and the sidebar control under
-Telar's ownership, so only `top.right` exists. The ProxyTLS badge remains
-reserved at the far right whenever interception is active. While the sidebar
-is visible, both bars start at its right edge. Hiding the sidebar expands them
-to the full client width.
+`client.bars` declares three bottom slots, a `top.right` slot and the sidebar
+footer row. The shared configuration requires exactly one `telar.bar.tabs()`
+source in `bottom`. The TUI renders tabs in that position and `top.right` beside
+workspace navigation. Its bars start at the workbench edge while the sidebar
+is visible and expand to the full width when it is hidden.
+
+The native app keeps workspace navigation and tabs together in its top bar.
+Its configurable widgets occupy the full-width bottom bar: `bottom.left`,
+`bottom.center` and `bottom.right` retain their order and alignment, while
+`telar.bar.tabs()` leaves its slot empty because the tabs are already above.
+Existing `top.right` content follows those slots, immediately before the
+reserved TLS badge. This keeps existing configurations visible without a reload
+migration. When both groups have content, `top.right` takes at most half the
+available widget width. The remaining slots share the rest and clip on overflow.
+The TLS badge has priority over every widget and remains visible while
+interception is active or Telar's system trust is installed.
 
 ```lua
 bars = {
@@ -473,25 +481,20 @@ bars = {
       { icon = "provider-codex", text = " telar ", fg = "accent", bold = true },
     }),
   },
-  sidebar_footer = { telar.bar.metrics() },
 }
 ```
 
-When `client.bars` is absent, the bottom bar keeps metrics on the left and tabs
-on the right, `top.right` is empty and the sidebar footer shows `metrics`. If
+When `client.bars` is absent, the bottom slots contain metrics on the left and
+tabs on the right and `top.right` is empty. If
 `bottom` is present, omitted positions are empty and one declared position
 still has to contain the tabs.
 
-`sidebar_footer` is a list of at most three sources laid out left, center and
-right in the last row of the sidebar. It accepts every source except
-`telar.bar.tabs()`; an empty list hides the row. The footer follows the same
-generation, tick and reload rules as the other slots. Only `telar gui` paints
-it today: the TUI sidebar ignores `sidebar_footer` and keeps its cell layout.
-Conversely `telar gui` does not paint the `bottom` slots: its status band
-shows only the mode chip and key hints, tabs have their own strip and metrics
-live in the sidebar footer, so `bottom` applies to the TUI alone.
-Prefix mode, copy mode and a rename prompt temporarily replace the configured
-bottom row with their own controls.
+`sidebar_footer` remains accepted for compatibility, with at most three sources
+and no `telar.bar.tabs()`. Neither the GUI nor the TUI displays these slots.
+Place metrics and other visible widgets in `bottom` instead.
+Prefix and copy mode replace the native bottom widgets with the mode chip and
+key hints, preserving TLS and top navigation. The TUI also replaces its bottom
+row during prefix mode, copy mode and a rename prompt.
 
 Each position accepts one source:
 
@@ -728,13 +731,19 @@ pane keeps fullscreen active and focuses the new pane; closing back down to
 one pane does not exit the mode. Toggle again to leave fullscreen and restore
 borderless content when only one pane remains.
 
-`telar.action.toggle_workspace_list()` collapses the top bar's list of open
-workspaces to the active one plus a `+N` counter, and expands it again.
-Clicking the counter expands it too; clicking a workspace name switches to
-it. The telar mark at the left edge of the bar is the sidebar toggle, not a
+In the TUI, `telar.action.toggle_workspace_list()` collapses the top bar's list
+of open workspaces to the active one plus a `+N` counter, and expands it again.
+Clicking `+N` expands it too; clicking a workspace name switches to it.
+The telar mark at the left edge of the bar is the sidebar toggle, not a
 list control. The collapse state belongs to the client layout, and the
 runtime retains it for the same terminal while the server is alive. The default
 binding is `prefix`, then `w`.
+
+The native app ignores that collapse preference, including values restored
+from earlier sessions. It shows up to three consecutive workspaces whenever
+they fit, centered on the active one except at either end. Narrow windows
+show the active workspace. Overflow counters show how many remain hidden and
+select the nearest hidden workspace; global workspace numbers do not change.
 
 `telar.action.notification(options)` publishes a toast through the runtime.
 It accepts a required `title`, optional `body`, `level` (`info`, `success`,

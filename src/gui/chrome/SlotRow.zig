@@ -1,6 +1,5 @@
 //! Lays three Lua-configured bar slots left, centre and right in one cell
-//! row lent to a pixel band: the sidebar footer and the status bar both
-//! paint it through `paintIn`.
+//! row lent to the status bar's pixel band through `paintIn`.
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Context = @import("Context.zig");
@@ -30,7 +29,7 @@ pub fn paint(row: SlotRow, area: core.Rect) !void {
 }
 
 /// `paint` over a pixel band: lends the band one cell row centred in it.
-/// Example: `try row.paintIn(Sidebar.footerArea(canvas.metrics, bands.sidebar));`
+/// Example: `try row.paintIn(bands.status_bar);`
 pub fn paintIn(row: SlotRow, bounds: Rect) !void {
     var lent: LentRow = undefined;
     if (!lent.open(row.context, bounds)) {

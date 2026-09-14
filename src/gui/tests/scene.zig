@@ -21,8 +21,7 @@ test "native theme backgrounds share window opacity across bands and pane header
             const bands = fixture.chrome.prepared().bands;
             const points = [_][2]f32{
                 .{ bands.top_bar.x + bands.top_bar.width - 2, bands.top_bar.y + bands.top_bar.height / 2 },
-                .{ bands.shoulder.x + bands.shoulder.width / 2, bands.shoulder.y + bands.shoulder.height / 2 },
-                .{ bands.tab_strip.x + bands.tab_strip.width - 2, bands.tab_strip.y + bands.tab_strip.height / 2 },
+                .{ bands.top_bar.x + bands.top_bar.width / 2, bands.top_bar.y + 1 },
                 .{ bands.sidebar.x + bands.sidebar.width / 2, bands.sidebar.y + bands.sidebar.height - 40 },
                 .{ bands.status_bar.x + bands.status_bar.width - 2, bands.status_bar.y + bands.status_bar.height / 2 },
             };

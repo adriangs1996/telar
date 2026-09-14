@@ -10,8 +10,7 @@ const Size = @import("label_size.zig").Size;
 const Metrics = @This();
 
 /// Logical heights at the reference font size, from the visual language plan.
-pub const logical_top_bar: f32 = 38;
-pub const logical_tab_strip: f32 = 32;
+pub const logical_top_bar: f32 = 42;
 pub const logical_status_bar: f32 = 26;
 pub const logical_pane_header: f32 = 22;
 /// The terminal size the logical heights were designed against.
@@ -27,7 +26,6 @@ pub const sans_line_ratio: f32 = 1.3;
 pub const min_text_px: u16 = 6;
 
 top_bar: u32 = 0,
-tab_strip: u32 = 0,
 status_bar: u32 = 0,
 pane_header: u32 = 0,
 /// Device pixels per logical chrome pixel, for insets and dots.
@@ -47,7 +45,6 @@ pub fn resolve(config: GuiConfig, scale: f32) Metrics {
     const pane_header = physical(logical_pane_header, ratio);
     return .{
         .top_bar = physical(logical_top_bar, ratio),
-        .tab_strip = physical(logical_tab_strip, ratio),
         .status_bar = physical(logical_status_bar, ratio),
         .pane_header = pane_header,
         .ratio = if (std.math.isFinite(ratio) and ratio > 0) ratio else 1,
@@ -81,22 +78,17 @@ pub fn rowHeight(metrics: Metrics, size: Size) f32 {
     return @ceil(pixels * sans_line_ratio);
 }
 
-/// Gives a tiny window back to the terminal: drops the status bar, then the
-/// tab strip, then the top bar until one cell row fits, the way the cell
-/// regions kept a terminal row in a one-row host.
+/// Gives a tiny window back to the terminal, dropping navigation before the
+/// footer so mode hints and the TLS indicator survive while a cell row fits.
 /// Example: `const chrome = ChromeMetrics.resolve(config, scale).fit(viewport.height, cell_height);`
 pub fn fit(metrics: Metrics, height: u32, cell_height: u32) Metrics {
     var fitted = metrics;
     if (height -| fitted.vertical() < cell_height) {
-        fitted.status_bar = 0;
-    }
-
-    if (height -| fitted.vertical() < cell_height) {
-        fitted.tab_strip = 0;
-    }
-
-    if (height -| fitted.vertical() < cell_height) {
         fitted.top_bar = 0;
+    }
+
+    if (height -| fitted.vertical() < cell_height) {
+        fitted.status_bar = 0;
     }
 
     return fitted;
@@ -105,7 +97,7 @@ pub fn fit(metrics: Metrics, height: u32, cell_height: u32) Metrics {
 /// Pixels reserved above and below the cell grid.
 /// Example: `const rows = (height -| chrome.vertical()) / cell_height;`
 pub fn vertical(metrics: Metrics) u32 {
-    return metrics.top_bar + metrics.tab_strip + metrics.status_bar;
+    return metrics.top_bar + metrics.status_bar;
 }
 
 fn physical(logical: f32, ratio: f32) u32 {
@@ -134,25 +126,24 @@ fn bandText(height: u32) u16 {
 
 test "chrome bands scale with display and font size and round to device pixels" {
     const base = Metrics.resolve(.{}, 1);
-    try std.testing.expectEqual(@as(u32, 38), base.top_bar);
-    try std.testing.expectEqual(@as(u32, 32), base.tab_strip);
+    try std.testing.expectEqual(@as(u32, 42), base.top_bar);
     try std.testing.expectEqual(@as(u32, 26), base.status_bar);
     try std.testing.expectEqual(@as(u32, 22), base.pane_header);
-    try std.testing.expectEqual(@as(u32, 96), base.vertical());
+    try std.testing.expectEqual(@as(u32, 68), base.vertical());
     const retina = Metrics.resolve(.{}, 2);
-    try std.testing.expectEqual(@as(u32, 76), retina.top_bar);
+    try std.testing.expectEqual(@as(u32, 84), retina.top_bar);
     const large = Metrics.resolve(.{ .font = .{ .size = 30 } }, 1);
-    try std.testing.expectEqual(@as(u32, 76), large.top_bar);
+    try std.testing.expectEqual(@as(u32, 84), large.top_bar);
     try std.testing.expectEqual(@as(u32, 44), large.pane_header);
     const odd = Metrics.resolve(.{ .font = .{ .size = 13 } }, 1.5);
-    try std.testing.expectEqual(@as(u32, 49), odd.top_bar);
+    try std.testing.expectEqual(@as(u32, 55), odd.top_bar);
     try std.testing.expectEqual(@as(u32, 0), Metrics.resolve(.{ .font = .{ .size = 0 } }, 1).top_bar);
-    const tiny = base.fit(120, 30);
-    try std.testing.expectEqual(@as(u32, 0), tiny.status_bar);
-    try std.testing.expectEqual(@as(u32, 32), tiny.tab_strip);
-    const one_row = base.fit(60, 30);
+    const tiny = base.fit(80, 30);
+    try std.testing.expectEqual(@as(u32, 26), tiny.status_bar);
+    try std.testing.expectEqual(@as(u32, 0), tiny.top_bar);
+    const one_row = base.fit(50, 30);
     try std.testing.expectEqual(@as(u32, 0), one_row.vertical());
-    try std.testing.expectEqual(@as(u32, 96), base.fit(126, 30).vertical());
+    try std.testing.expectEqual(@as(u32, 68), base.fit(98, 30).vertical());
 }
 
 test "chrome text sizes follow the terminal size and the chrome scale but never the bands" {

@@ -22,45 +22,58 @@ rectangle. `render/Scene.zig` borrows that projection for one preparation:
    by terminal and thread surfaces.
 
 The chrome around the grid is measured in pixels, not cells.
-`chrome/ChromeMetrics.zig` resolves the top bar (38), the tab strip (32) and
-the status bar (26 logical px, scaled by the display and by `gui.font.size`)
+`chrome/ChromeMetrics.zig` resolves top navigation (42) and the status bar
+(26 logical px, scaled by the display and by `gui.font.size`)
 and `chrome/SidebarBand.zig` resolves the sidebar band: `gui.sidebar.width`
 logical pixels (default 284, bounds 220..480) scaled and rounded, clamped so
 the workbench keeps 20 columns after the band and its 8 px gap, and zero
 while the shared model hides the sidebar or the window cannot hold the
 narrowest band. `TerminalRenderer.measure` subtracts the height bands from
 the window height and the band plus its gap from the width before it counts
-cells, so the grid origin sits under the tab strip and after the band, every
+cells, so the grid origin sits under navigation and after the band, every
 row is a complete terminal row and every column a complete terminal column.
-A window too short for one row gives the height bands back: status bar
-first, then the strip, then the top bar. `chrome/Regions.zig` gives the
+A window too short for one row gives the height bands back: navigation
+first, then the status bar. `chrome/Regions.zig` gives the
 whole grid to the workbench; the column preference the runtime retains in
 the shared layout is TUI-only and the GUI no longer reads it.
 `chrome/Bands.zig` places the pixel bands from the same origin, the sidebar
-band running from under the tab strip to the status bar and the strip's
-shoulder covering the band and its gap, so a band never overlaps a cell.
+band running from under navigation to the status bar, so a band never
+overlaps a cell. Both horizontal bars span the full window independently
+of sidebar visibility.
 Padding stays outside the grid; while the band is visible it replaces the
 left padding and the right padding remains. `TerminalMetrics.rect()` maps
 grid rectangles to physical pixels once, using the same origin as pointer
 input. Every terminal leaf is painted, including splits restored from a session.
 
-The top bar holds the sidebar toggle, numbered workspace pills with an
-attention dot when a blocked or failed agent lives in that workspace, the
-selected workspace's location in the monospace face (`▣ ~/path ⎇ branch`,
-branch only when the workspace list replica reports one; a worktree tab shows
-its name because the replica has no entry for it), the configured
-`top_right` slot and the TLS badge. The tab strip under it spans the
-workbench: the active tab is a rounded-top block in the terminal background,
-each tab carries a dot in the status colour of its most urgent agent when that
-agent needs the person, the single-pane progress stroke stays on the active
-tab, and `+` sends the `create_tab` intent. Pane headers fill the border row
+The top bar holds the sidebar toggle and at most three numbered workspaces
+on the left, with the active workspace centered except at the ends of the
+runtime's list. Equal slots keep their positions while names and selection
+change; a narrow window reduces them to the active workspace. Overflow
+counters select the nearest hidden workspace and aggregate attention dots
+from the hidden range. Global workspace numbers and keyboard intents stay
+unchanged.
+Native navigation ignores the retained `workspace_list_collapsed` preference;
+only available width can reduce its visible workspace count.
+When the current location is a worktree or its workspace has not reached the
+list replica yet, the bar shows its current name without assigning another
+workspace's identity. A missing name falls back to the location type and ID.
+
+Tabs align to the far right of that same row. The active tab has rounded
+upper corners and an open lower edge in the terminal background, without a
+permanent accent stripe. Each tab carries a dot in the status colour of its
+most urgent agent when that agent needs the person. Explicit child progress
+can still add its temporary stroke to a single-pane tab, and `+` sends the
+`create_tab` intent. Tab positions do not depend on sidebar visibility.
+Pane headers fill the border row
 with the index, the program name and a status chip; the cwd is no longer
 shown there. Unfocused panes get one dim quad over their content and, while
 their agent is blocked or failed, a two-pixel ring inside the border that fades
-in over the model's animation counter (`RingFades`). The status bar shows the
-mode chip and hints in prefix and copy mode; in normal mode it still lends a
-cell row to the Lua `bottom` slots (`SlotRow`) until they move to the sidebar
-footer, and the `tabs` slot paints nothing because tabs have their strip.
+in over the model's animation counter (`RingFades`). The status bar shows
+configured `bottom` slots through `SlotRow`, followed by legacy `top_right`
+content and the reserved TLS badge. The `tabs` slot paints nothing because
+tabs are already above. Prefix and copy mode replace the widgets with the
+mode chip and hints, preserving TLS and navigation. The sidebar list uses the
+space below its header down to the bottom inset.
 Attention colours and aggregation come from `chrome/attention.zig` over the
 shared `telar-client.agent_attention` comparator.
 
@@ -79,7 +92,7 @@ router. Some useful default suffixes are:
 | Arrow, Shift-arrow | Focus pane, resize pane |
 | `z` | Toggle pane fullscreen |
 | `s`, Alt-left/right | Toggle sidebar, resize sidebar |
-| `w` | Collapse or expand workspace list |
+| `w` | Toggle the TUI workspace-list preference; native visibility follows available width |
 | `N`, `W` | Create or rename workspace |
 | `c`, `T` | Create or rename tab |
 | `n`, `p`, `1`–`9` | Select tab |
@@ -158,6 +171,10 @@ retention still determines which closed sessions remain available to restore.
 bindings, custom prefixes, gesture ownership, prompts, selection, layer ordering,
 hot reload and ACK progress during GPU delivery. `zig build test-gui-window`
 uses the native window implementation and its GPU backend.
+`tests/top_navigation.zig` covers the centered workspace window, stable
+identities, right-aligned tabs with the sidebar shown and hidden, narrow
+windows and conditional child progress. `tests/status_bar.zig` covers widget
+placement, compatibility with existing top slots and TLS priority.
 
 `tools/gui_multiplexer.py BINARY /tmp/NEW-DIRECTORY` drives AppKit against an
 isolated runtime. It records shell PIDs and `stty size` while navigating splits,

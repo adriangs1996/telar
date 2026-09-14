@@ -31,7 +31,7 @@ bars.Layout -> ClientModel.bars
                          |
                Presenter -> composition
                          |
-    top_bar / bottom bar / GUI sidebar footer slots
+             top_bar / bottom bar slots
 ```
 
 Static content becomes a fixed bounded value during configuration parsing.
@@ -54,22 +54,29 @@ budget. Rendering reads fixed values, formats built-in metrics in fixed
 buffers, and allocates nothing.
 
 Configuration may choose bottom left, center and right content, but exactly
-one slot belongs to built-in tabs. It may choose only the top-right content
-and up to three sidebar footer slots (`sidebar_footer_left`, `_center`,
-`_right`), which never hold tabs. The GUI sidebar paints the footer through
-the same `SlotRow` as the bottom bar; the TUI ignores it.
+one slot belongs to built-in tabs in the TUI. It may choose only the top-right content
+and still accepts up to three sidebar footer slots (`sidebar_footer_left`,
+`_center`, `_right`) for compatibility. Neither adapter displays footer slots.
+The native top bar owns workspace navigation and tabs. `StatusBar` paints the
+bottom slots through `SlotRow`, which omits the tabs source. It appends legacy
+`top_right` content before the far-right TLS badge, retaining existing widgets.
+When bottom slots also contain visible content, the legacy slot takes at most
+half of the remaining width. The bottom slots share the rest with their existing
+left, center and right alignment. Prefix and copy mode replace all widgets with
+`ModeBar`; they retain both the TLS badge and the top navigation.
+
 Workspace navigation, the sidebar toggle and the permanent ProxyTLS signal
-remain authoritative Telar UI. Narrow rows reserve a usable tabs region,
-truncate custom content and never let the configurable top-right block cover
-the proxy badge. Its peach shield denotes an exact-host policy, red denotes a
+remain authoritative Telar UI. Narrow TUI rows reserve a usable tabs region.
+Both adapters truncate custom content before it can cover the proxy badge.
+Its peach color denotes an exact-host policy, red denotes a
 suffix or global wildcard, and yellow denotes installed system trust while the
-proxy is off. A visible sidebar owns the complete left column, so
-both bars start at the workbench edge. Hiding it expands them to the full
-client width.
+proxy is off. The native bars span the window. In the TUI, a visible sidebar
+owns the complete left column, so both bars start at the workbench edge.
+Hiding it expands them to the full client width.
 
 ## Bounds and scheduling
 
-- Four configurable positions, with exactly one bottom tabs source.
+- Seven configurable positions, with exactly one bottom tabs source.
 - Sixteen segments and 512 text bytes per rendered position.
 - Bar intervals from 100 ms through one hour, with one replaceable deadline
   worker for the client.
@@ -118,6 +125,8 @@ is replaced.
 - `src/frontend/widgets/bar_layout.zig`, `bar_content.zig` and `top_bar.zig`
   prove collision-free geometry, typed style rendering and permanent safety
   chrome.
+- `src/gui/tests/status_bar.zig` proves native slot ordering, preserved legacy
+  content and TLS priority during overflow, prefix mode and copy mode.
 - `src/frontend/client/tests/configuration.zig` crosses reload, timer, Lua,
   model and presenter boundaries and proves that an old command completion is
   discarded.
