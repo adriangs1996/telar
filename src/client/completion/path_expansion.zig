@@ -1,7 +1,9 @@
 //! Expands a typed working directory into an absolute path without touching
 //! the filesystem: `~` and `~/…` use HOME, `$VAR` and `${VAR}` use the
 //! process environment, and a relative path resolves against the focused
-//! pane's directory. Output is bounded by `max_path_bytes`.
+//! pane's directory. `.` and `..` segments are resolved lexically so the
+//! result is the path the workspace will show, not what was typed. Output
+//! is bounded by `max_path_bytes`.
 
 const std = @import("std");
 const max_path_bytes_module = @import("../model/PathCompletionResult.zig").max_path_bytes;
@@ -68,22 +70,31 @@ pub fn expand(input: ExpansionInput, buffer: *[max_path_bytes]u8) ![]const u8 {
     return collapse(anchored.buffered());
 }
 
-/// Removes repeated separators and a trailing one, keeping "/" for the root.
+/// Normalizes an absolute path in place: repeated separators and `.` vanish,
+/// `..` drops the previous segment (never above the root), and the trailing
+/// separator goes, keeping "/" for the root.
 fn collapse(path: []u8) []const u8 {
     var len: usize = 0;
-    for (path) |byte| {
-        if (byte == '/' and len != 0 and path[len - 1] == '/') {
+    var start: usize = 0;
+    while (start <= path.len) {
+        const end = std.mem.indexOfScalarPos(u8, path, start, '/') orelse path.len;
+        const segment = path[start..end];
+        start = end + 1;
+        if (segment.len == 0 or std.mem.eql(u8, segment, ".")) {
             continue;
         }
 
-        path[len] = byte;
-        len += 1;
-    }
-    if (len > 1 and path[len - 1] == '/') {
-        len -= 1;
+        if (std.mem.eql(u8, segment, "..")) {
+            len = std.mem.lastIndexOfScalar(u8, path[0..len], '/') orelse 0;
+            continue;
+        }
+
+        path[len] = '/';
+        std.mem.copyForwards(u8, path[len + 1 .. len + 1 + segment.len], segment);
+        len += 1 + segment.len;
     }
 
-    return path[0..len];
+    return if (len == 0) path[0..1] else path[0..len];
 }
 
 fn writeChecked(writer: *std.Io.Writer, bytes: []const u8) !void {
@@ -123,6 +134,11 @@ test "expansion resolves home, variables and relative paths against the pane" {
     try std.testing.expectEqualStrings("/work", try expand(.{ .text = "", .environ = environ, .base = "/work" }, &buffer));
     try std.testing.expectEqualStrings("/a/b", try expand(.{ .text = "//a//b/", .environ = environ, .base = "/work" }, &buffer));
     try std.testing.expectEqualStrings("/", try expand(.{ .text = "/", .environ = environ, .base = "/work" }, &buffer));
+    try std.testing.expectEqualStrings("/home/me/sandbox/gwagent", try expand(.{ .text = "../gwagent", .environ = environ, .base = "/home/me/sandbox/telar" }, &buffer));
+    try std.testing.expectEqualStrings("/home/me/sandbox/telar", try expand(.{ .text = "./", .environ = environ, .base = "/home/me/sandbox/telar" }, &buffer));
+    try std.testing.expectEqualStrings("/a/c", try expand(.{ .text = "/a/./b/../c/.", .environ = environ, .base = "/work" }, &buffer));
+    try std.testing.expectEqualStrings("/", try expand(.{ .text = "/../..", .environ = environ, .base = "/work" }, &buffer));
+    try std.testing.expectEqualStrings("/x", try expand(.{ .text = "../../../x", .environ = environ, .base = "/work" }, &buffer));
     try std.testing.expectEqualStrings("/tmp/$", try expand(.{ .text = "/tmp/$", .environ = environ, .base = "/work" }, &buffer));
 
     try std.testing.expectError(error.UnknownVariable, expand(.{ .text = "$MISSING/x", .environ = environ, .base = "/work" }, &buffer));
