@@ -32,10 +32,11 @@ test "chrome bands leave complete cells below them and share the pointer origin"
         var quads = @import("../render/QuadList.zig").init(std.testing.allocator);
         defer quads.deinit();
         const canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = client.theme_support.default_theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
-        const bands = Bands.resolve(&canvas, .{ .x = 10, .y = 0, .w = size.cols - 10, .h = size.rows });
+        const bands = Bands.resolve(&canvas);
         try std.testing.expectEqual(@as(f32, @floatFromInt(renderer.origin[1])), bands.tab_strip.y + bands.tab_strip.height);
-        try std.testing.expectEqual(canvas.rect(.{ .x = 10, .y = 0, .w = 1, .h = 1 }).x, bands.tab_strip.x);
+        try std.testing.expectEqual(canvas.rect(.{ .x = 0, .y = 0, .w = 1, .h = 1 }).x, bands.tab_strip.x);
         try std.testing.expectEqual(bands.shoulder.width, bands.tab_strip.x);
+        try std.testing.expectEqual(@as(f32, 0), bands.sidebar.width);
         const grid_bottom = canvas.rect(.{ .x = 0, .y = size.rows - 1, .w = 1, .h = 1 });
         try std.testing.expect(grid_bottom.y + grid_bottom.height <= bands.status_bar.y);
         try std.testing.expect(!bands.contains(bands.tab_strip.x, @floatFromInt(renderer.origin[1])));
@@ -72,9 +73,9 @@ test "tab strip hits keep stable tab identities and the plus creates a tab" {
 
     // A press keeps the band gesture through a drag over cells until release.
     const press = fixture.chrome.bandPointer(.{ .kind = 6, .code = 1, .x = first.x, .y = first.y }).?;
-    try std.testing.expect(press.consumed and press.intent == .select_tab);
-    try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = 6, .code = 3, .x = 5, .y = 5000 }).?.consumed);
-    try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = 6, .code = 2, .x = 5, .y = 5000 }).?.consumed);
+    try std.testing.expect(press.interaction.consumed and press.interaction.intent == .select_tab);
+    try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = 6, .code = 3, .x = 5, .y = 5000 }).?.interaction.consumed);
+    try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = 6, .code = 2, .x = 5, .y = 5000 }).?.interaction.consumed);
     try std.testing.expect(fixture.chrome.band_gesture == null);
     try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = 6, .code = 6, .x = 5, .y = 5000 }) == null);
     const widths = [_]f32{ 100, 100, 100 };
@@ -248,7 +249,6 @@ test "warm chrome with rings chips dots and toasts allocates and shapes nothing"
     var projection = fixture.projection();
     projection.workspaces = &workspaces;
     projection.agents = &agents;
-    projection.sidebar_visible = true;
     // Warm both animation parities: the sidebar card alternates its glyph.
     for (0..2) |frame| {
         projection.sidebar_animation_frame = @intCast(frame);

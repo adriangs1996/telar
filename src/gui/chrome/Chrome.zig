@@ -17,6 +17,7 @@ const HomePrefix = @import("HomePrefix.zig");
 const RingFades = @import("RingFades.zig");
 const Favicons = @import("Favicons.zig");
 const InputEvent = @import("../native/InputEvent.zig").InputEvent;
+const BandCommand = @import("BandCommand.zig");
 const GenericPresentedState = @import("../render/GenericPresentedState.zig").Type;
 const Chrome = @This();
 
@@ -39,16 +40,19 @@ now_s: u32 = 0,
 pub fn paint(chrome: *Chrome, canvas: *Canvas, projection: client.Projection) !void {
     const pending = chrome.maps.begin();
     try registerPanes(&pending.hits, projection);
-    pending.regions = Regions.calculate(projection.host_size.cols, projection.host_size.rows, .{ .visible = projection.sidebar_visible, .preferred_width = projection.sidebar_width });
-    pending.bands = Bands.resolve(canvas, pending.regions.workbench);
+    // The shared column preference stays with the TUI: the band the
+    // renderer measured is the sidebar here, and its visibility followed
+    // the model when the request was built.
+    pending.regions = Regions.calculate(projection.host_size.cols, projection.host_size.rows);
+    pending.bands = Bands.resolve(canvas);
     var context: Context = .{ .canvas = canvas, .hits = &pending.hits, .bands = &pending.band_hits, .projection = &projection, .hovered = chrome.hovered, .now_s = chrome.now_s, .favicons = &chrome.favicons };
-    const top_bar: TopBar = .{ .context = &context, .bands = pending.bands, .home = chrome.home.slice(), .sidebar_visible = !pending.regions.sidebar.isEmpty() };
+    const top_bar: TopBar = .{ .context = &context, .bands = pending.bands, .home = chrome.home.slice(), .sidebar_visible = canvas.sidebar.visible() };
     try top_bar.paint();
     const strip: TabStrip = .{ .context = &context, .bands = pending.bands };
     try strip.paint();
     const status: StatusBar = .{ .context = &context, .area = pending.bands.status_bar };
     try status.paint();
-    try chrome.sidebar.paint(&context, pending.regions.sidebar);
+    try chrome.sidebar.paint(&context, pending.bands.sidebar);
     const decorations: PaneDecorations = .{ .context = &context, .rings = &chrome.rings };
     try decorations.paint();
     chrome.maps.seal();
@@ -74,8 +78,8 @@ pub fn invalidate(chrome: *Chrome) void {
     chrome.revision +%= 1;
 }
 
-/// Retains chrome gesture ownership through release, even outside its bounds.
-/// Compare `revision` around this call to request a local repaint.
+/// Retains a cell-control gesture through release, even outside its
+/// bounds. Compare `revision` around this call to request a local repaint.
 /// Example: `const command = chrome.pointer(mouse);`
 pub fn pointer(chrome: *Chrome, event: client.Mouse) client.ViewInteractionCommand {
     const visible = chrome.presented();
@@ -87,65 +91,50 @@ pub fn pointer(chrome: *Chrome, event: client.Mouse) client.ViewInteractionComma
                 return .{ .consumed = true };
             }
 
-            const resize = chrome.sidebar_resize_active;
             if (event.kind == .release) {
                 chrome.gesture_button = null;
-                chrome.sidebar_resize_active = false;
                 chrome.invalidate();
             }
-
-            return .{ .consumed = true, .intent = if (resize) .{ .resize_sidebar = event.x +| 1 } else .none };
         }
 
         return .{ .consumed = true };
     }
 
-    if (visible.regions.sidebar.contains(event.x, event.y)) {
-        if (chrome.sidebar.wheel(event.kind)) {
-            chrome.invalidate();
-        }
+    const target = action orelse return .{};
+    if (target == .pane_content) {
+        return .{ .intent = if (event.kind == .press) .{ .focus_pane = target.pane_content } else .none };
     }
 
-    if (action) |target| {
-        if (target == .pane_content) {
-            return .{ .intent = if (event.kind == .press) .{ .focus_pane = target.pane_content } else .none };
-        }
-    }
-
-    const within_chrome = action != null or visible.regions.sidebar.contains(event.x, event.y);
-    if (event.kind != .press or !within_chrome) {
-        return .{ .consumed = within_chrome };
+    if (event.kind != .press) {
+        return .{ .consumed = true };
     }
 
     chrome.gesture_button = event.button & 3;
-    const target = action orelse return .{ .consumed = true };
-    if (target == .resize_sidebar) {
-        chrome.sidebar_resize_active = event.button & 3 == 0;
-        return .{ .consumed = true };
-    }
-
     return .{ .intent = buttonIntent(target.intent, event.button & 3), .consumed = true };
 }
 
 /// Routes a native pointer sample that lands in a chrome band, outside the
 /// cell grid. Returns null when no band and no band gesture owns the sample,
 /// so the caller can map it to cells. A press acquires the gesture until
-/// its release, like `pointer`.
+/// its release; a press on the sidebar's resize handle turns the drag into
+/// widths, and the wheel over the sidebar scrolls its cards.
 /// Example: `if (chrome.bandPointer(event)) |command| return apply(command);`
-pub fn bandPointer(chrome: *Chrome, event: InputEvent) ?client.ViewInteractionCommand {
+pub fn bandPointer(chrome: *Chrome, event: InputEvent) ?BandCommand {
     const visible = chrome.presented();
     const inside = visible.bands.contains(event.x, event.y);
     if (chrome.band_gesture) |button| {
         if (event.code == 2 or event.code == 3) {
+            const resize = chrome.sidebar_resize_active;
             if (event.code == 2 and event.button & 3 == button) {
                 chrome.band_gesture = null;
+                chrome.sidebar_resize_active = false;
                 chrome.invalidate();
             }
 
-            return .{ .consumed = true };
+            return .{ .interaction = .{ .consumed = true }, .sidebar_width = if (resize) edgeWidth(event.x) else null };
         }
 
-        return if (inside) .{ .consumed = true } else null;
+        return if (inside) .{ .interaction = .{ .consumed = true } } else null;
     }
 
     if (!inside) {
@@ -154,22 +143,51 @@ pub fn bandPointer(chrome: *Chrome, event: InputEvent) ?client.ViewInteractionCo
 
     const action = visible.band_hits.at(.{ event.x, event.y });
     chrome.hover(action);
+    if (event.code == 4 or event.code == 5) {
+        if (Bands.within(visible.bands.sidebar, event.x, event.y) and chrome.sidebar.wheel(if (event.code == 4) .scroll_up else .scroll_down)) {
+            chrome.invalidate();
+        }
+
+        return .{ .interaction = .{ .consumed = true } };
+    }
+
     if (event.code != 1) {
-        return .{ .consumed = true };
+        return .{ .interaction = .{ .consumed = true } };
     }
 
     const button: u8 = @intCast(event.button & 3);
     chrome.band_gesture = button;
     chrome.invalidate();
-    const target = action orelse return .{ .consumed = true };
-    return .{ .intent = buttonIntent(target.intent, button), .consumed = true };
+    const target = action orelse return .{ .interaction = .{ .consumed = true } };
+    if (target == .resize_sidebar) {
+        chrome.sidebar_resize_active = button == 0;
+        return .{ .interaction = .{ .consumed = true } };
+    }
+
+    return .{ .interaction = .{ .intent = buttonIntent(target.intent, button), .consumed = true } };
 }
 
-/// The cursor a band point deserves, from the delivered band targets.
+/// The cursor a band point deserves, from the delivered band targets: a
+/// hand over a control and the horizontal resize cursor over the sidebar
+/// edge or while it is being dragged.
 /// Example: `hover.assign(null, chrome.bandShape(event));`
 pub fn bandShape(chrome: *const Chrome, event: InputEvent) @import("telar-core").PointerShape {
+    if (chrome.sidebar_resize_active) {
+        return .col_resize;
+    }
+
     const action = chrome.presented().band_hits.at(.{ event.x, event.y }) orelse return .default;
-    return if (action == .intent and action.intent != .none) .pointer else .default;
+    return switch (action) {
+        .resize_sidebar => .col_resize,
+        .intent => |intent| if (intent != .none) .pointer else .default,
+        .pane_content => .default,
+    };
+}
+
+// The edge line is the band's last pixel column, so the width that puts it
+// under the pointer is the pointer column plus one.
+fn edgeWidth(x: f64) u32 {
+    return @intFromFloat(@max(1, @min(65535, @floor(x) + 1)));
 }
 
 fn buttonIntent(intent: client.Intent, button: u8) client.Intent {

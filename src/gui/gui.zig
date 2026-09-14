@@ -37,6 +37,7 @@ test {
     _ = @import("tests/sprites.zig");
     _ = @import("tests/palette.zig");
     _ = @import("tests/visual_chrome.zig");
+    _ = @import("tests/sidebar_band.zig");
     _ = @import("tests/chrome_sizes.zig");
     _ = @import("TerminalMetrics.zig");
     _ = @import("NativeInput.zig");

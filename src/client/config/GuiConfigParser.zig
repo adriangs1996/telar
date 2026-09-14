@@ -4,6 +4,7 @@ const value = @import("lua_value.zig");
 const Diagnostic = @import("Diagnostic.zig");
 const Config = @import("GuiConfig.zig");
 const Cursor = @import("GuiCursor.zig");
+const Sidebar = @import("GuiSidebar.zig");
 const Parser = @This();
 
 state: *lua.lua_State,
@@ -23,7 +24,7 @@ pub fn parse(parser: Parser, initial: Config) !Config {
         return parser.invalid("gui.theme moved to theme.terminal; select a preset once with theme = 'vesper'");
     }
 
-    try parser.table("config.gui", &.{ "font", "cursor", "window", "chrome" });
+    try parser.table("config.gui", &.{ "font", "cursor", "window", "chrome", "sidebar" });
     var result = initial;
     _ = lua.lua_getfield(parser.state, -1, "font");
     if (lua.lua_type(parser.state, -1) != lua.LUA_TNIL) {
@@ -93,6 +94,19 @@ pub fn parse(parser: Parser, initial: Config) !Config {
         result.chrome = try parser.chrome(result.chrome);
     }
     value.pop(parser.state, 1);
+
+    _ = lua.lua_getfield(parser.state, -1, "sidebar");
+    if (lua.lua_type(parser.state, -1) != lua.LUA_TNIL) {
+        result.sidebar = try parser.sidebar(result.sidebar);
+    }
+    value.pop(parser.state, 1);
+    return result;
+}
+
+fn sidebar(parser: Parser, initial: Sidebar) !Sidebar {
+    try parser.table("config.gui.sidebar", &.{"width"});
+    var result = initial;
+    result.width = @floatCast(try parser.number(.{ "width", Sidebar.min_width, Sidebar.max_width }, result.width));
     return result;
 }
 

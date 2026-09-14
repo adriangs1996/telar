@@ -8,15 +8,13 @@ const HitMap = @import("../chrome/HitMap.zig");
 const bar_regions = @import("../chrome/bar_regions.zig");
 const Sidebar = @import("../chrome/Sidebar.zig");
 
-test "native chrome geometry keeps every grid row for panes and partitions every host" {
+test "native chrome geometry gives the workbench every grid cell of every host" {
     for ([_]u16{ 1, 2, 3, 10, 40 }) |height| {
         for ([_]u16{ 1, 20, 61, 62, 120 }) |width| {
-            const regions = Regions.calculate(width, height, .{ .visible = true, .preferred_width = 73 });
+            const regions = Regions.calculate(width, height);
             try std.testing.expectEqual(height, regions.workbench.h);
-            try std.testing.expect(regions.workbench.w >= 1);
-            try std.testing.expectEqual(width, regions.sidebar.w + regions.workbench.w);
-            try std.testing.expectEqual(height, regions.sidebar.h);
-            try std.testing.expect(regions.sidebar.intersect(regions.workbench).isEmpty());
+            try std.testing.expectEqual(width, regions.workbench.w);
+            try std.testing.expectEqual(regions.full, regions.workbench);
         }
     }
 }
@@ -43,25 +41,28 @@ test "native chrome maps tabs workspaces and sidebar controls to stable identiti
     try std.testing.expectEqual(@as(u64, 1), workspaces.revision);
 }
 
-test "native chrome preserves gesture ownership outside the sidebar and clamps scrolling" {
+test "native chrome preserves the resize gesture over cells and clamps scrolling" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var projection = fixture.projection();
-    projection.sidebar_visible = true;
+    const projection = fixture.projection();
     try fixture.paint(projection);
-    const sidebar = fixture.chrome.presented().regions.sidebar;
-    const press = fixture.chrome.pointer(.{ .x = sidebar.x + sidebar.w - 1, .y = 4, .kind = .press });
-    try std.testing.expect(press.consumed);
+    const handle = fixture.resizeHandle().?;
+    const band = fixture.band();
+    try std.testing.expectEqual(band.width - 1 - 3, handle.x);
+    try std.testing.expectEqual(@as(f32, 6), handle.width);
+    const press = fixture.chrome.bandPointer(.{ .kind = 6, .code = 1, .x = band.width - 1, .y = band.y + 4 }).?;
+    try std.testing.expect(press.interaction.consumed and press.sidebar_width == null);
+    try std.testing.expect(fixture.chrome.sidebar_resize_active);
     try fixture.prepare(projection);
-    const drag = fixture.chrome.pointer(.{ .x = 90, .y = 10, .kind = .drag, .button = 32 });
-    try std.testing.expectEqualDeep(client.Intent{ .resize_sidebar = 91 }, drag.intent);
-    try std.testing.expect(drag.consumed);
+    // The drag crosses into the cells: the band still owns it and asks for the width under the pointer.
+    const drag = fixture.chrome.bandPointer(.{ .kind = 6, .code = 3, .x = 900, .y = band.y + 10 }).?;
+    try std.testing.expectEqual(@as(?u32, 901), drag.sidebar_width);
     fixture.chrome.present(true);
-    const release = fixture.chrome.pointer(.{ .x = 88, .y = 10, .kind = .release });
-    try std.testing.expectEqualDeep(client.Intent{ .resize_sidebar = 89 }, release.intent);
-    try std.testing.expect(fixture.chrome.gesture_button == null);
-    try std.testing.expect(!fixture.chrome.pointer(.{ .x = 90, .y = 10, .kind = .press }).consumed);
-    _ = fixture.chrome.pointer(.{ .x = 2, .y = 4, .kind = .scroll_down });
+    const release = fixture.chrome.bandPointer(.{ .kind = 6, .code = 2, .x = 880.4, .y = band.y + 10 }).?;
+    try std.testing.expectEqual(@as(?u32, 881), release.sidebar_width);
+    try std.testing.expect(fixture.chrome.band_gesture == null and !fixture.chrome.sidebar_resize_active);
+    try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = 6, .code = 1, .x = 900, .y = band.y + 10 }) == null);
+    _ = fixture.chrome.bandPointer(.{ .kind = 6, .code = 5, .x = 2, .y = band.y + 4 });
     try std.testing.expectEqual(@as(u16, 0), fixture.chrome.sidebar.scroll);
 }
 
@@ -79,19 +80,19 @@ test "native agent targets retain generation through scroll and snapshot replace
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
-    projection.sidebar_visible = true;
     try fixture.paint(projection);
-    const first = fixture.target(.{ .focus_agent = entries[0].key }).?;
-    try std.testing.expectEqualDeep(client.Intent{ .focus_agent = entries[0].key }, fixture.click(first, 0).intent);
-    _ = fixture.chrome.pointer(.{ .x = 4, .y = 4, .kind = .scroll_down });
+    const first = fixture.bandTarget(.{ .focus_agent = entries[0].key }).?;
+    try std.testing.expectEqualDeep(client.Intent{ .focus_agent = entries[0].key }, fixture.clickBand(first, 0).intent);
+    const band = fixture.band();
+    _ = fixture.chrome.bandPointer(.{ .kind = 6, .code = 5, .x = 4, .y = band.y + 4 });
     try std.testing.expect(fixture.chrome.sidebar.step != 0);
     try std.testing.expectEqual(fixture.chrome.sidebar.step, fixture.chrome.sidebar.scroll);
     try fixture.paint(projection);
-    try std.testing.expect(fixture.target(.{ .focus_agent = entries[2].key }) != null);
+    try std.testing.expect(fixture.bandTarget(.{ .focus_agent = entries[2].key }) != null);
     try std.testing.expectEqual(@as(u64, 1), agents.revision);
     _ = try agents.replace(.{ .revision = 2, .agents = &.{} });
     try fixture.paint(projection);
-    try std.testing.expect(fixture.target(.{ .focus_agent = entries[0].key }) == null);
+    try std.testing.expect(fixture.bandTarget(.{ .focus_agent = entries[0].key }) == null);
     try std.testing.expectEqual(@as(u16, 0), fixture.chrome.sidebar.scroll);
 }
 
@@ -102,6 +103,7 @@ test "native tabs always retain the active tab when their row overflows" {
     const second_id: core.TabId = @enumFromInt(2);
     _ = try tabs.addCreated(.{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_id }, .position = 1, .label = "long second tab name", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
     _ = tabs.select(second_id);
+    try fixture.showSidebar(false);
     try fixture.resize(12, 4);
     try fixture.paint(fixture.projection());
     try std.testing.expect(fixture.bandTarget(.{ .select_tab = second_id }) != null);
@@ -240,16 +242,15 @@ test "native configured footer segments preserve colors decorations and faint in
     } });
     state.layout.sidebar_footer = .{ .{ .content = content }, .empty, .empty };
     var projection = fixture.projection();
-    projection.sidebar_visible = true;
     projection.bar_state = &state;
     try fixture.paint(projection);
     var background = false;
     var faint_ink = false;
     var underline = false;
     const renderer = &fixture.session.renderer;
-    const footer = Sidebar.footerArea(fixture.chrome.presented().regions.sidebar);
+    const footer = Sidebar.footerArea(renderer.metrics, fixture.band());
     const cell_height: f32 = @floatFromInt(renderer.metrics.cell_height);
-    const row_top = renderer.metrics.rect(renderer.origin, footer).y;
+    const row_top = footer.y;
     for (renderer.quads.items()) |quad| {
         background = background or (quad.r == 0 and quad.g == 1 and quad.b == 0 and quad.a == 1);
         faint_ink = faint_ink or (quad.r == 1 and quad.g == 0 and quad.b == 0 and quad.a == 0.5);
@@ -259,7 +260,7 @@ test "native configured footer segments preserve colors decorations and faint in
     try std.testing.expect(background and faint_ink and underline);
 }
 
-test "native sidebar footer paints configured slots in its last row and stays inside the sidebar" {
+test "native sidebar footer paints configured slots in its last row inside the band" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var state: client.State = .{};
@@ -267,27 +268,26 @@ test "native sidebar footer paints configured slots in its last row and stays in
     try content.append(.{ .text = "footer", .style = .{ .background = .{ .value = .{ .rgb = .{ 0, 0, 255 } } } } });
     state.layout.sidebar_footer = .{ .{ .content = content }, .empty, .metrics };
     var projection = fixture.projection();
-    projection.sidebar_visible = true;
     projection.bar_state = &state;
     try fixture.paint(projection);
-    const regions = fixture.chrome.presented().regions;
-    const footer = Sidebar.footerArea(regions.sidebar);
-    try std.testing.expectEqual(regions.sidebar.y + regions.sidebar.h - 1, footer.y);
-    try std.testing.expectEqual(regions.sidebar.w - 1, footer.w);
-    try std.testing.expect(footer.intersect(regions.workbench).isEmpty());
     const renderer = &fixture.session.renderer;
-    const row = renderer.metrics.rect(renderer.origin, footer);
+    const band = fixture.band();
+    const row = Sidebar.footerArea(renderer.metrics, band);
+    const cell_height: f32 = @floatFromInt(renderer.metrics.cell_height);
+    try std.testing.expectEqual(band.y + band.height - Sidebar.margin - cell_height, row.y);
+    try std.testing.expectEqual(band.width - 1 - 2 * Sidebar.margin, row.width);
+    try std.testing.expect(row.x + row.width < @as(f32, @floatFromInt(renderer.origin[0])));
     var background = false;
     for (renderer.quads.items()) |quad| {
         background = background or (quad.r == 0 and quad.g == 0 and quad.b == 1 and quad.a == 1 and quad.y == row.y and quad.x >= row.x and quad.x < row.x + row.width);
     }
     try std.testing.expect(background);
 
-    const press = fixture.chrome.pointer(.{ .x = footer.x + 1, .y = footer.y, .kind = .press });
-    try std.testing.expect(press.consumed);
-    try std.testing.expectEqualDeep(client.Intent.none, press.intent);
-    _ = fixture.chrome.pointer(.{ .x = footer.x + 1, .y = footer.y, .kind = .release });
-    try std.testing.expect(Sidebar.footerArea(.{ .x = 0, .y = 0, .w = 40, .h = 4 }).isEmpty());
+    const press = fixture.chrome.bandPointer(.{ .kind = 6, .code = 1, .x = row.x + 1, .y = row.y }).?;
+    try std.testing.expect(press.interaction.consumed);
+    try std.testing.expectEqualDeep(client.Intent.none, press.interaction.intent);
+    _ = fixture.chrome.bandPointer(.{ .kind = 6, .code = 2, .x = row.x + 1, .y = row.y });
+    try std.testing.expectEqual(@as(f32, 0), Sidebar.footerArea(renderer.metrics, .{ .x = 0, .y = 0, .width = 284, .height = 4 * cell_height }).height);
 }
 
 test "native progress remains visible with a single borderless pane" {

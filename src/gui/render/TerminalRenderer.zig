@@ -11,6 +11,8 @@ const Rect = @import("Rect.zig");
 const colors = @import("cell_colors.zig");
 const Metrics = @import("../TerminalMetrics.zig");
 const ChromeMetrics = @import("../chrome/ChromeMetrics.zig");
+const SidebarBand = @import("../chrome/SidebarBand.zig");
+const SidebarRequest = @import("../chrome/SidebarRequest.zig");
 const native = @import("../native/native.zig");
 const Renderer = @This();
 const RetainedCells = @import("RetainedCells.zig");
@@ -36,6 +38,11 @@ retained: RetainedCells,
 repainted_cells: usize = 0,
 metrics: Metrics = .{ .cell_width = 1, .cell_height = 1, .baseline = 0, .pixel_height = 15 },
 chrome: ChromeMetrics = .{},
+/// What the next measurement asks of the sidebar band; the host sets it
+/// from the shared visibility and its width preference before measuring.
+sidebar_request: SidebarRequest = .{},
+/// The band the last measurement took off the left of the grid.
+sidebar: SidebarBand = .{},
 scale: f32 = 0,
 origin: [2]u32 = .{ 0, 0 },
 viewport: [2]u32 = .{ 0, 0 },
@@ -126,19 +133,23 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
     }
 
     // Chrome bands come off the window first, in whole device pixels, so
-    // the grid below them holds complete cells and the PTY never sees chrome.
+    // the grid beside and below them holds complete cells and the PTY never
+    // sees chrome. The sidebar band and its gap replace the left padding.
     const chrome = ChromeMetrics.resolve(renderer.config, viewport.scale).fit(viewport.height, renderer.metrics.cell_height);
     const body_height = viewport.height -| chrome.vertical();
     const padding = renderer.config.window.padding;
     const x = @min(@as(u32, @intFromFloat(@round(padding.x * viewport.scale))), (viewport.width -| renderer.metrics.cell_width) / 2);
     const y = @min(@as(u32, @intFromFloat(@round(padding.y * viewport.scale))), (body_height -| renderer.metrics.cell_height) / 2);
+    const sidebar = SidebarBand.resolve(renderer.sidebar_request, .{ .width = viewport.width, .cell_width = renderer.metrics.cell_width, .padding_x = x, .scale = viewport.scale });
+    const left = if (sidebar.visible()) sidebar.reserved() else x;
     const size = try renderer.metrics.measure(.{
-        .width = viewport.width -| (2 * x),
+        .width = viewport.width -| left -| x,
         .height = body_height -| (2 * y),
         .scale = viewport.scale,
     });
     renderer.chrome = chrome;
-    renderer.origin = .{ x, chrome.top_bar + chrome.tab_strip + y };
+    renderer.sidebar = sidebar;
+    renderer.origin = .{ left, chrome.top_bar + chrome.tab_strip + y };
     renderer.viewport = .{ viewport.width, viewport.height };
     const cells = @as(usize, size.cols) * size.rows;
     if (cells > RetainedCells.max_cells) {

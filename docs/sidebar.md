@@ -132,7 +132,7 @@ the top bar shows the selected workspace's location instead. The TUI cell
 renderer still draws the previous rows; the entry fields above are already on
 the wire.
 
-The GUI draws the card in device pixels inside the sidebar's cell column
+The GUI draws the card in device pixels inside the sidebar band
 (`src/gui/chrome/Sidebar.zig`, `AgentCard.zig`). With glyph height `g` from
 the chrome font metrics (`TerminalMetrics.pixel_height`): row height
 `ceil(1.25 g)`, card height `3 rows + 12`, card spacing 3, sidebar margins 8,
@@ -155,10 +155,11 @@ chip with its glyph. The project slot of the first row shows the workspace's
 favicon (`favicon.png`, then `.telar/icon.png` in the workspace root, PNG
 only) once the client's favicon worker has resolved it, else the generic
 glyph. The image never crosses the wire; the GUI reads, decodes and resizes
-it off the interactive path and keeps at most 64 favicons per page. Hits are cell-based: one `focus_agent` target per
-card covering the rows its pixels touch; a boundary row shared by two cards
-belongs to the later one. The wheel scrolls one card pitch. The rightmost
-sidebar column stays the resize border.
+it off the interactive path and keeps at most 64 favicons per page. Hits
+are pixel targets in the band hit map: one `focus_agent` target per
+visible card, clipped to the list like its paint. The wheel scrolls one
+card pitch. The band's last pixel column is the edge line and a 6 px strip
+centred on it is the resize handle.
 
 KGP owns two reusable assets: one three-row focused-agent card and an official
 provider-mark atlas. The card is an antialiased rounded rectangle below the
@@ -173,14 +174,42 @@ raster is capped at 64 KiB. Media failure leaves the cell actions intact.
 
 ## Geometry
 
-The sidebar is visible only when the client can reserve 42 columns for it and
-20 for the workbench. Its default preferred width is 62 columns. Keybindings
-move that preference by two columns, and dragging the rightmost sidebar column
-selects an exact width. Host geometry clamps only the visible width: shrinking
-the terminal does not overwrite the preference, so expanding it restores the
-chosen size. While visible, the sidebar owns the complete left column. The top
-bar, bottom bar and workbench use the remaining width. Hiding it expands all
-three regions to the full client width.
+Visibility is shared: `sidebar_visible` lives in the client model, the
+runtime retains it for reconnecting clients and `toggle_sidebar` flips it
+in both clients. Width is not.
+
+In the TUI the sidebar is a column of cells. It is visible only when the
+client can reserve 42 columns for it and 20 for the workbench. Its default
+preferred width is 42 columns. Keybindings move that preference by two
+columns, and dragging the rightmost sidebar column selects an exact width.
+Host geometry clamps only the visible width: shrinking the terminal does
+not overwrite the preference, so expanding it restores the chosen size.
+The runtime retains this column preference in the client layout replica;
+it is TUI-only. While visible, the sidebar owns the complete left column.
+The top bar, bottom bar and workbench use the remaining width. Hiding it
+expands all three regions to the full client width.
+
+In the GUI the sidebar is a band of device pixels (`chrome/SidebarBand.zig`)
+that the renderer takes off the window width before it counts columns, the
+way the top bar, tab strip and status bar come off the height. Its width is
+`gui.sidebar.width` logical pixels (default 284, bounds 220..480) scaled by
+the display and rounded, and an 8 logical px gap separates the edge line
+from the first cell column. The band is clamped so the workbench keeps at
+least 20 columns after the gap and the right window padding; a window that
+cannot hold the narrowest band beside that workbench hides it. The width is
+a disposable host preference (`SidebarPreference`) seeded from the Lua
+value: `resize_sidebar` moves it by 16 logical px, dragging the edge sets
+the exact width under the pointer, both clamp to the same bounds, and a
+reload that changes `gui.sidebar.width` replaces it while one that does not
+keeps the interactive choice. Nothing persists it outside the Lua file:
+the window lease holds no data and there is no per-window preference
+store. The PTY sees complete cells only; the band, the gap and trailing
+pixels are chrome.
+
+The band runs from under the tab strip to the status bar. Inside it, at
+margin 8: the header row, the list, and a footer row one terminal cell
+tall where the Lua `bars.sidebar_footer` slots paint through a lent cell
+row; the footer appears once the band is at least five cell rows tall.
 
 ## Detector wiring
 

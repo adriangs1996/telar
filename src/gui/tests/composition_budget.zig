@@ -22,9 +22,7 @@ test "native composed multiplexer scenes keep warm allocation shaping and cell w
             model.name_prompt.begin(.goto_picker);
         }
 
-        var projection = fixture.projection();
-        projection.sidebar_visible = true;
-        projection.geometry.area = Regions.calculate(160, 60, .{ .visible = true, .preferred_width = client.default_width }).workbench;
+        const projection = fixture.projection();
         _ = try scene.prepare(projection);
         const calls = renderer.atlas.?.shape_calls;
         const raster_attempts = renderer.atlas.?.raster_attempts;
@@ -110,7 +108,7 @@ fn populateMultiplexer(fixture: *Fixture) !void {
 
     _ = model.workspace.select(Session.location.tab_id);
     const panes = model.activeTabModel().?;
-    const area = Regions.calculate(160, 60, .{ .visible = true, .preferred_width = client.default_width }).workbench;
+    const area = Regions.calculate(160, 60).workbench;
     for (1..8) |index| {
         var layout: client.LayoutSnapshot = .{};
         panes.layout.snapshot(area, &layout);

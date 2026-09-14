@@ -169,8 +169,13 @@ fn bandRoute(app: *client.AttachedClient, event: Event) !void {
         return;
     }
 
+    if (command.sidebar_width) |width| {
+        gui.adoptSidebarWidth(width);
+        return;
+    }
+
     const model = app.model.activeTabModel() orelse return;
-    _ = try client.controllers.view_interactions.apply(app, model, command);
+    _ = try client.controllers.view_interactions.apply(app, model, command.interaction);
 }
 
 /// Closes existing gestures on focus loss, without assigning their releases
