@@ -10,8 +10,8 @@ test "GUI font metrics apply size spacing and display scale once" {
         const size = try renderer.measure(.{ .width = 800, .height = 600, .scale = scale });
         const atlas = &renderer.atlas.?;
         try std.testing.expectEqual(@as(u16, @intFromFloat(20 * scale)), atlas.pixel_height);
-        try std.testing.expectEqual(atlas.cellWidth() + @as(u16, @intFromFloat(2 * scale)), size.cell_width_px);
-        try std.testing.expectEqual(@as(u16, @intFromFloat(@round(@as(f32, @floatFromInt(atlas.lineHeight())) * 1.5))), size.cell_height_px);
+        try std.testing.expectEqual(try atlas.cellWidth(atlas.pixel_height) + @as(u16, @intFromFloat(2 * scale)), size.cell_width_px);
+        try std.testing.expectEqual(@as(u16, @intFromFloat(@round(@as(f32, @floatFromInt(try atlas.lineHeight(atlas.pixel_height))) * 1.5))), size.cell_height_px);
         try std.testing.expectEqual(800 / size.cell_width_px, size.cols);
         try std.testing.expectEqual((600 - renderer.chrome.vertical()) / size.cell_height_px, size.rows);
     }
@@ -82,7 +82,7 @@ test "native font lookup resolves installed faces and fails explicitly for missi
     var atlas = try Atlas.init(std.testing.allocator, .{ .font = source.bytes, .pixel_height = 18, .face_index = source.match.face_index, .postscript = std.mem.sliceTo(&source.match.postscript, 0), .thicken = true });
     defer atlas.deinit();
     try atlas.prepareFallbacks();
-    try std.testing.expect(atlas.cellWidth() > 0);
+    try std.testing.expect(try atlas.cellWidth(atlas.pixel_height) > 0);
 }
 
 test "cursor shapes focus and blink reuse retained ink without changing the atlas" {

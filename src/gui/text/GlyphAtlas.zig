@@ -1,7 +1,10 @@
 //! Rasterizes glyphs on demand into one alpha page the GPU samples, and
 //! turns shaped text into quads. One page serves every size the client
-//! paints at, so a frame samples one texture. Texel (0, 0) stays opaque white
-//! so solid rectangles are quads too. Configured and fallback faces share the page.
+//! paints at, so a frame samples one texture, and every face keeps one
+//! sized instance per height it has painted, so terminal cells and the
+//! three chrome sizes shape and rasterize side by side without invalidating
+//! one another. Texel (0, 0) stays opaque white so solid rectangles are
+//! quads too. Configured and fallback faces share the page.
 const std = @import("std");
 const freetype = @import("freetype");
 const QuadList = @import("../render/QuadList.zig");
@@ -26,6 +29,8 @@ const BoxGrid = @import("BoxGrid.zig");
 const BoxCurve = @import("BoxCurve.zig");
 const BoxCache = @import("BoxCache.zig");
 const Rect = @import("../render/Rect.zig");
+const FontSize = @import("FontSize.zig");
+const LineBox = @import("LineBox.zig");
 
 extern fn FT_GlyphSlot_Embolden(freetype.c.FT_GlyphSlot) void;
 extern fn FT_GlyphSlot_Oblique(freetype.c.FT_GlyphSlot) void;
@@ -48,6 +53,7 @@ shelf_height: u32 = reserved + padding,
 library: freetype.c.FT_Library,
 fonts: FontSet,
 shaping_buffer: *freetype.c.hb_buffer_t,
+/// The terminal cell height: the size fallback glyphs are prepared at.
 pixel_height: u16 = 0,
 shaping_cache: ShapingCache,
 shape_calls: usize = 0,
@@ -90,26 +96,11 @@ pub fn init(allocator: std.mem.Allocator, options: AtlasOptions) !GlyphAtlas {
         .fonts = fonts,
         .shaping_buffer = shaping_buffer,
         .shaping_cache = shaping_cache,
+        .pixel_height = options.pixel_height,
     };
     try atlas.initBoxFallback();
-    try atlas.select(options.pixel_height);
+    try atlas.fonts.primary.select(options.pixel_height);
     return atlas;
-}
-
-/// Makes `pixel_height` the size `ascender`, `lineHeight` and shaping use.
-/// Cheap when it is already selected. Example: `try atlas.select(28);`
-pub fn select(atlas: *GlyphAtlas, pixel_height: u16) !void {
-    if (pixel_height == 0) {
-        return error.InvalidPixelHeight;
-    }
-
-    if (atlas.pixel_height == pixel_height) {
-        return;
-    }
-
-    try atlas.fonts.select(pixel_height);
-    atlas.pixel_height = pixel_height;
-    atlas.shaping_cache.clear();
 }
 
 pub fn deinit(atlas: *GlyphAtlas) void {
@@ -122,19 +113,32 @@ pub fn deinit(atlas: *GlyphAtlas) void {
     atlas.* = undefined;
 }
 
-/// Distance from the baseline up to the top of the tallest glyph at the
-/// selected size, in pixels.
-pub fn ascender(atlas: *const GlyphAtlas) i32 {
-    return round26(atlas.fonts.primary.face.*.size.*.metrics.ascender);
+/// Distance from the baseline up to the top of the configured font's
+/// tallest glyph at `pixel_height`, in pixels.
+/// Example: `const baseline = try atlas.ascender(metrics.pixel_height);`
+pub fn ascender(atlas: *GlyphAtlas, pixel_height: u16) !i32 {
+    return (try atlas.fonts.primary.sized(pixel_height)).ascender();
 }
 
-/// Measures the monospace grid. Example: `const width = atlas.cellWidth();`
-pub fn cellWidth(atlas: *const GlyphAtlas) u16 {
-    return @intCast(@max(1, round26(atlas.fonts.primary.face.*.size.*.metrics.max_advance)));
+/// Measures the monospace grid of the configured font at `pixel_height`.
+/// Example: `const width = try atlas.cellWidth(28);`
+pub fn cellWidth(atlas: *GlyphAtlas, pixel_height: u16) !u16 {
+    return (try atlas.fonts.primary.sized(pixel_height)).maxAdvance();
 }
 
-pub fn lineHeight(atlas: *const GlyphAtlas) u32 {
-    return @intCast(@max(1, round26(atlas.fonts.primary.face.*.size.*.metrics.height)));
+/// The configured font's natural line height at `pixel_height`.
+/// Example: `const height = try atlas.lineHeight(28);`
+pub fn lineHeight(atlas: *GlyphAtlas, pixel_height: u16) !u32 {
+    return (try atlas.fonts.primary.sized(pixel_height)).lineHeight();
+}
+
+/// Vertical metrics of one face at one height, so chrome centres a label's
+/// natural line box in a row of any height. Resident heights allocate
+/// nothing; a new height creates its sized instance once.
+/// Example: `const box = try atlas.lineBox(.sans, chrome.body);`
+pub fn lineBox(atlas: *GlyphAtlas, face: Id, pixel_height: u16) !LineBox {
+    const size = try atlas.fonts.get(face).sized(pixel_height);
+    return .{ .ascender = @floatFromInt(size.ascender()), .height = @floatFromInt(size.lineHeight()) };
 }
 
 /// Shapes one line, rasterizes glyphs the page lacks and appends a quad per
@@ -155,10 +159,8 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
         return atlas.paintBox(run, list);
     }
 
-    if (run.pixel_height == atlas.pixel_height) {
-        if (atlas.shaping_cache.find(.{ .text = run.text, .face = run.face })) |cached| {
-            return atlas.paint(.{ .run = run, .shaped = cached }, list);
-        }
+    if (atlas.shaping_cache.find(shapingKey(run.text, run))) |cached| {
+        return atlas.paint(.{ .run = run, .shaped = cached }, list);
     }
 
     if (!std.unicode.utf8ValidateSlice(run.text)) {
@@ -173,10 +175,7 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
         current.x += advance;
         advance += switch (part.source) {
             .box => try atlas.paintBox(current, list),
-            .font => font: {
-                try atlas.select(run.pixel_height);
-                break :font try atlas.paint(.{ .run = current, .shaped = try atlas.shape(part) }, list);
-            },
+            .font => try atlas.paint(.{ .run = current, .shaped = try atlas.shape(part, run.pixel_height) }, list),
             .braille => |pattern| braille: {
                 current.cell_bounds = try atlas.gridBounds(current);
                 break :braille try pattern.paint(current, list);
@@ -196,10 +195,8 @@ pub fn measure(atlas: *GlyphAtlas, run: TextRun) !f32 {
         return 0;
     }
 
-    if (run.pixel_height == atlas.pixel_height) {
-        if (atlas.shaping_cache.find(.{ .text = run.text, .face = run.face })) |cached| {
-            return atlas.penAdvance(.{ .run = run, .shaped = cached });
-        }
+    if (atlas.shaping_cache.find(shapingKey(run.text, run))) |cached| {
+        return atlas.penAdvance(.{ .run = run, .shaped = cached });
     }
 
     if (!std.unicode.utf8ValidateSlice(run.text)) {
@@ -213,14 +210,15 @@ pub fn measure(atlas: *GlyphAtlas, run: TextRun) !f32 {
         current.text = part.text;
         total += switch (part.source) {
             .box, .braille => (try atlas.gridBounds(current)).width,
-            .font => font: {
-                try atlas.select(run.pixel_height);
-                break :font atlas.penAdvance(.{ .run = current, .shaped = try atlas.shape(part) });
-            },
+            .font => try atlas.penAdvance(.{ .run = current, .shaped = try atlas.shape(part, run.pixel_height) }),
         };
     }
 
     return total;
+}
+
+fn shapingKey(text: []const u8, run: TextRun) ShapingKey {
+    return .{ .text = text, .face = run.face, .pixel_height = run.pixel_height };
 }
 
 fn initBoxFallback(atlas: *GlyphAtlas) !void {
@@ -318,8 +316,7 @@ fn gridBounds(atlas: *GlyphAtlas, run: TextRun) !Rect {
         return bounds;
     }
 
-    try atlas.select(run.pixel_height);
-    return atlas.naturalCellBounds();
+    return atlas.naturalCellBounds(run.pixel_height);
 }
 
 fn paint(atlas: *GlyphAtlas, text: ShapedText, list: *QuadList) !f32 {
@@ -358,9 +355,9 @@ fn paint(atlas: *GlyphAtlas, text: ShapedText, list: *QuadList) !f32 {
 
 // Natural faces advance by their shaped pen; fitted fallback ink advances by
 // the cells it was fitted into.
-fn penAdvance(atlas: *const GlyphAtlas, text: ShapedText) f32 {
+fn penAdvance(atlas: *GlyphAtlas, text: ShapedText) !f32 {
     if (text.shaped.font.fitted()) {
-        return atlas.cellBounds(text).width;
+        return (try atlas.cellBounds(text)).width;
     }
 
     var pen_x: i64 = 0;
@@ -396,21 +393,24 @@ fn transform(atlas: *GlyphAtlas, text: ShapedText) !GlyphTransform {
         pen_x += position.x_advance;
     }
 
-    return GlyphTransform.fit(.{ .x = left, .y = top, .width = right - left, .height = bottom - top }, atlas.cellBounds(text));
+    return GlyphTransform.fit(.{ .x = left, .y = top, .width = right - left, .height = bottom - top }, try atlas.cellBounds(text));
 }
 
-fn cellBounds(atlas: *const GlyphAtlas, text: ShapedText) Rect {
-    var bounds = text.run.cell_bounds orelse atlas.naturalCellBounds();
+fn cellBounds(atlas: *GlyphAtlas, text: ShapedText) !Rect {
+    var bounds = text.run.cell_bounds orelse try atlas.naturalCellBounds(text.run.pixel_height);
     bounds.width *= @floatFromInt(text.shaped.columns);
     return bounds;
 }
 
-fn naturalCellBounds(atlas: *const GlyphAtlas) Rect {
+// The configured font's cell at `pixel_height`, so fallback ink painted at
+// a chrome size fits a cell of that size rather than the terminal's.
+fn naturalCellBounds(atlas: *GlyphAtlas, pixel_height: u16) !Rect {
+    const size = try atlas.fonts.primary.sized(pixel_height);
     return .{
         .x = 0,
-        .y = @floatFromInt(-atlas.ascender()),
-        .width = @floatFromInt(atlas.cellWidth()),
-        .height = @floatFromInt(atlas.lineHeight()),
+        .y = @floatFromInt(-size.ascender()),
+        .width = @floatFromInt(size.maxAdvance()),
+        .height = @floatFromInt(size.lineHeight()),
     };
 }
 
@@ -424,19 +424,21 @@ fn visibleSlot(atlas: *GlyphAtlas, glyph_id: @import("GlyphId.zig"), run: TextRu
 fn slot(atlas: *GlyphAtlas, glyph_id: @import("GlyphId.zig"), run: TextRun) !GlyphSlot {
     const index = glyph_id.index;
     const font = atlas.fonts.get(glyph_id.font);
-    const key = (@as(u64, @intFromEnum(glyph_id.font)) << 50) | (@as(u64, index) << 18) | (@as(u64, atlas.pixel_height) << 2) | @as(u64, @intFromBool(run.bold)) | (@as(u64, @intFromBool(run.italic)) << 1);
-    if (atlas.glyphs.get(key)) |cached| {
+    const glyph_key = (@as(u64, @intFromEnum(glyph_id.font)) << 50) | (@as(u64, index) << 18) | (@as(u64, run.pixel_height) << 2) | @as(u64, @intFromBool(run.bold)) | (@as(u64, @intFromBool(run.italic)) << 1);
+    if (atlas.glyphs.get(glyph_key)) |cached| {
         return cached;
     }
 
-    if (atlas.failed_glyphs.contains(key)) {
+    if (atlas.failed_glyphs.contains(glyph_key)) {
         return error.AtlasFull;
     }
 
     atlas.raster_attempts += 1;
+    try font.select(run.pixel_height);
     if (font.mac_rasterizer) |*rasterizer| {
+        try rasterizer.select(run.pixel_height);
         var glyph = try rasterizer.measure(.{ .index = index, .style = @as(u32, @intFromBool(run.bold)) | (@as(u32, @intFromBool(run.italic)) << 1) });
-        const origin = try atlas.packGlyph(key, .{ glyph.width, glyph.height });
+        const origin = try atlas.packGlyph(glyph_key, .{ glyph.width, glyph.height });
         glyph.x = origin[0];
         glyph.y = origin[1];
         rasterizer.draw(glyph);
@@ -444,7 +446,7 @@ fn slot(atlas: *GlyphAtlas, glyph_id: @import("GlyphId.zig"), run: TextRun) !Gly
             atlas.version +%= 1;
         }
 
-        return atlas.remember(key, glyph);
+        return atlas.remember(glyph_key, glyph);
     }
 
     if (freetype.c.FT_Load_Glyph(font.face, index, freetype.c.FT_LOAD_DEFAULT) != 0) {
@@ -469,7 +471,7 @@ fn slot(atlas: *GlyphAtlas, glyph_id: @import("GlyphId.zig"), run: TextRun) !Gly
         return error.UnsupportedPixelMode;
     }
 
-    const origin = try atlas.packGlyph(key, .{ bitmap.width, bitmap.rows });
+    const origin = try atlas.packGlyph(glyph_key, .{ bitmap.width, bitmap.rows });
     if (bitmap.buffer) |buffer| {
         const pitch: usize = @intCast(@abs(bitmap.pitch));
         for (0..bitmap.rows) |row| {
@@ -481,7 +483,7 @@ fn slot(atlas: *GlyphAtlas, glyph_id: @import("GlyphId.zig"), run: TextRun) !Gly
         atlas.version +%= 1;
     }
 
-    return atlas.remember(key, .{ .index = index, .style = 0, .x = origin[0], .y = origin[1], .width = bitmap.width, .height = bitmap.rows, .left = glyph.*.bitmap_left, .top = glyph.*.bitmap_top });
+    return atlas.remember(glyph_key, .{ .index = index, .style = 0, .x = origin[0], .y = origin[1], .width = bitmap.width, .height = bitmap.rows, .left = glyph.*.bitmap_left, .top = glyph.*.bitmap_top });
 }
 
 fn remember(atlas: *GlyphAtlas, key: u64, glyph: @import("../native/GlyphRaster.zig").GlyphRaster) !GlyphSlot {
@@ -539,10 +541,10 @@ fn pack(atlas: *GlyphAtlas, extent: [2]u32) ![2]u32 {
     return origin;
 }
 
-fn shape(atlas: *GlyphAtlas, run: FontRun) !ShapedRun {
+fn shape(atlas: *GlyphAtlas, run: FontRun, pixel_height: u16) !ShapedRun {
     const text = run.text;
-    const key: ShapingKey = .{ .text = text, .face = run.preferred };
-    if (atlas.shaping_cache.find(key)) |cached| {
+    const shaping_key: ShapingKey = .{ .text = text, .face = run.preferred, .pixel_height = pixel_height };
+    if (atlas.shaping_cache.find(shaping_key)) |cached| {
         return cached;
     }
 
@@ -558,7 +560,9 @@ fn shape(atlas: *GlyphAtlas, run: FontRun) !ShapedRun {
 
     freetype.c.hb_buffer_guess_segment_properties(atlas.shaping_buffer);
     atlas.shape_calls += 1;
-    freetype.c.hb_shape(atlas.fonts.get(run.source.font).shaping_font, atlas.shaping_buffer, null, 0);
+    const face = atlas.fonts.get(run.source.font);
+    try face.select(pixel_height);
+    freetype.c.hb_shape(face.shaping_font, atlas.shaping_buffer, null, 0);
     var glyph_count: c_uint = 0;
     const glyphs = freetype.c.hb_buffer_get_glyph_infos(atlas.shaping_buffer, &glyph_count) orelse return error.ShapingFailed;
     var position_count: c_uint = 0;
@@ -568,14 +572,11 @@ fn shape(atlas: *GlyphAtlas, run: FontRun) !ShapedRun {
     }
 
     const shaped: ShapedRun = .{ .font = run.source.font, .columns = run.columns, .glyphs = glyphs[0..glyph_count], .positions = positions[0..glyph_count] };
-    atlas.shaping_cache.remember(key, shaped);
+    atlas.shaping_cache.remember(shaping_key, shaped);
     return shaped;
 }
 
-fn round26(value: anytype) i32 {
-    const signed: i64 = @intCast(value);
-    return @intCast(if (signed >= 0) (signed + 32) >> 6 else -(((-signed) + 32) >> 6));
-}
+const round26 = FontSize.round26;
 
 test "the page reserves an opaque white block at its origin" {
     var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
@@ -618,7 +619,44 @@ test "the same glyph at another size is rasterized again on the same page" {
     try std.testing.expectEqual(@as(u32, 3), atlas.version);
     try std.testing.expectEqual(@as(u32, 2), atlas.glyphs.count());
     try std.testing.expect(list.items()[1].height > list.items()[0].height);
-    try std.testing.expectEqual(@as(u16, 32), atlas.pixel_height);
+    try std.testing.expectEqual(@as(u16, 16), atlas.pixel_height);
+    try std.testing.expect(try atlas.lineHeight(32) > try atlas.lineHeight(16));
+    try std.testing.expect(try atlas.ascender(32) > try atlas.ascender(16));
+}
+
+test "alternating heights keep both shaping results and every sized face resident" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    defer atlas.deinit();
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    const heights = [_]u16{ 16, 15, 13, 11 };
+    for (heights) |height| {
+        _ = try atlas.place(.{ .text = "agents", .x = 0, .y = 20, .color = .white, .pixel_height = height, .face = .sans }, &list);
+    }
+
+    const calls = atlas.shape_calls;
+    const version = atlas.version;
+    for (0..3) |_| {
+        for (heights) |height| {
+            list.clear();
+            _ = try atlas.place(.{ .text = "agents", .x = 0, .y = 20, .color = .white, .pixel_height = height, .face = .sans }, &list);
+        }
+    }
+
+    try std.testing.expectEqual(calls, atlas.shape_calls);
+    try std.testing.expectEqual(version, atlas.version);
+    try std.testing.expect(try atlas.measure(.{ .text = "agents", .x = 0, .y = 0, .color = .white, .pixel_height = 11, .face = .sans }) < try atlas.measure(.{ .text = "agents", .x = 0, .y = 0, .color = .white, .pixel_height = 15, .face = .sans }));
+    var resident: usize = 0;
+    for (atlas.fonts.sans.sizes) |slot_value| {
+        resident += @intFromBool(slot_value != null);
+    }
+
+    try std.testing.expectEqual(@as(usize, 4), resident);
+    for (heights) |height| {
+        _ = try atlas.fonts.sans.sized(height + 100);
+    }
+
+    try std.testing.expectError(error.TooManyFontSizes, atlas.fonts.sans.sized(200));
 }
 
 test "a page that cannot hold another glyph fails instead of wrapping" {
@@ -804,7 +842,7 @@ test "configured non Nerd font falls back across BMP and supplementary icons wit
     defer source.deinit(std.testing.allocator);
     var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = source.bytes, .pixel_height = 44, .face_index = source.match.face_index, .postscript = std.mem.sliceTo(&source.match.postscript, 0), .thicken = true });
     defer atlas.deinit();
-    const metrics = [3]i64{ atlas.cellWidth(), atlas.lineHeight(), atlas.ascender() };
+    const metrics = [3]i64{ try atlas.cellWidth(44), try atlas.lineHeight(44), try atlas.ascender(44) };
     const texts = [_][]const u8{ "A", "e\u{301}", "\u{f07b}", "\u{e620}", "\u{f4bc}", "\u{f03ff}", "\u{f02db}", "\u{f07b}\u{fe0f}" };
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
@@ -821,15 +859,15 @@ test "configured non Nerd font falls back across BMP and supplementary icons wit
             const advance = try atlas.place(.{ .text = text, .x = 0, .y = 44, .color = .white, .pixel_height = 44, .bold = style & 1 != 0, .italic = style & 2 != 0 }, &list);
             try std.testing.expect(list.items().len > 0);
             if (index >= 2) {
-                try std.testing.expectEqual(@as(f32, @floatFromInt(atlas.cellWidth())), advance);
+                try std.testing.expectEqual(@as(f32, @floatFromInt(try atlas.cellWidth(44))), advance);
                 for (list.items()) |item| {
                     try std.testing.expect(item.x >= -0.001);
                     try std.testing.expect(item.x + item.width <= advance + 0.001);
-                    try std.testing.expect(item.y >= 44 - @as(f32, @floatFromInt(atlas.ascender())) - 0.001);
-                    try std.testing.expect(item.y + item.height <= 44 - @as(f32, @floatFromInt(atlas.ascender())) + @as(f32, @floatFromInt(atlas.lineHeight())) + 0.001);
+                    try std.testing.expect(item.y >= 44 - @as(f32, @floatFromInt(try atlas.ascender(44))) - 0.001);
+                    try std.testing.expect(item.y + item.height <= 44 - @as(f32, @floatFromInt(try atlas.ascender(44))) + @as(f32, @floatFromInt(try atlas.lineHeight(44))) + 0.001);
                 }
 
-                const shaped = atlas.shaping_cache.find(.{ .text = text }).?;
+                const shaped = atlas.shaping_cache.find(.{ .text = text, .pixel_height = 44 }).?;
                 try std.testing.expectEqual(Id.symbols, shaped.font);
                 for (shaped.glyphs) |glyph| {
                     try std.testing.expect(glyph.codepoint != 0);
@@ -838,7 +876,7 @@ test "configured non Nerd font falls back across BMP and supplementary icons wit
         }
     }
 
-    try std.testing.expectEqual(metrics, [3]i64{ atlas.cellWidth(), atlas.lineHeight(), atlas.ascender() });
+    try std.testing.expectEqual(metrics, [3]i64{ try atlas.cellWidth(44), try atlas.lineHeight(44), try atlas.ascender(44) });
     const calls = atlas.shape_calls;
     const rasters = atlas.raster_attempts;
     const version = atlas.version;
@@ -939,7 +977,7 @@ test "mixed primary text and repeated icons use primary cell advances and preser
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
     var run: TextRun = .{ .text = "A\u{f07b}\u{f02db}e\u{301}", .x = 5, .y = 36, .color = .white, .pixel_height = 32 };
-    const width: f32 = @floatFromInt(atlas.cellWidth());
+    const width: f32 = @floatFromInt(try atlas.cellWidth(32));
     const advance = try atlas.place(run, &list);
     try std.testing.expectEqual(width * 4, advance);
     const mixed = try std.testing.allocator.dupe(quad.Quad, list.items());
@@ -1021,8 +1059,9 @@ test "Braille uses natural metrics when callers omit cell bounds" {
     defer list.deinit();
     var run: TextRun = .{ .text = "\u{2801}", .x = 0, .y = 0, .color = .white, .pixel_height = 32 };
     const advance = try atlas.place(run, &list);
-    try std.testing.expectEqual(@as(u16, 32), atlas.pixel_height);
-    try std.testing.expectEqual(@as(f32, @floatFromInt(atlas.cellWidth())), advance);
+    try std.testing.expectEqual(@as(u16, 16), atlas.pixel_height);
+    try std.testing.expectEqual(@as(f32, @floatFromInt(try atlas.cellWidth(32))), advance);
+    try std.testing.expect(try atlas.cellWidth(32) > try atlas.cellWidth(16));
     try std.testing.expectEqual(@as(usize, 1), list.items().len);
     run.pixel_height = 0;
     try std.testing.expectError(error.InvalidPixelHeight, atlas.place(run, &list));

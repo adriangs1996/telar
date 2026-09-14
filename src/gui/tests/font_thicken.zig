@@ -74,7 +74,7 @@ test "font thickening preserves shaping and cell metrics and cached glyphs alloc
         var atlas = try Atlas.init(std.testing.allocator, .{ .font = font, .pixel_height = 36, .thicken = mode != 0, .thicken_strength = if (mode == 1) 0 else 255 });
         defer atlas.deinit();
         try std.testing.expectEqual(builtin.os.tag == .macos and mode != 0, atlas.fonts.primary.mac_rasterizer != null);
-        const current = [3]i64{ atlas.cellWidth(), atlas.lineHeight(), atlas.ascender() };
+        const current = [3]i64{ try atlas.cellWidth(atlas.pixel_height), try atlas.lineHeight(atlas.pixel_height), try atlas.ascender(atlas.pixel_height) };
         if (mode == 0) {
             metrics = current;
         } else {

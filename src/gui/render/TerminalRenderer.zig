@@ -80,9 +80,9 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
         var replacement = try GlyphAtlas.init(renderer.allocator, .{ .font = renderer.font.bytes, .pixel_height = pixel_height, .face_index = renderer.font.match.face_index, .postscript = std.mem.sliceTo(&renderer.font.match.postscript, 0), .thicken = renderer.config.font.thicken, .thicken_strength = renderer.config.font.thicken_strength });
         errdefer replacement.deinit();
         try replacement.prepareFallbacks();
-        const natural_height: f32 = @floatFromInt(replacement.lineHeight());
+        const natural_height: f32 = @floatFromInt(try replacement.lineHeight(pixel_height));
         const height = @round(natural_height * renderer.config.font.line_height);
-        const width = @round(@as(f32, @floatFromInt(replacement.cellWidth())) + renderer.config.font.letter_spacing * viewport.scale);
+        const width = @round(@as(f32, @floatFromInt(try replacement.cellWidth(pixel_height))) + renderer.config.font.letter_spacing * viewport.scale);
         if (height < 1 or height > 65535 or width < 1 or width > 65535) {
             return error.InvalidFontSpacing;
         }
@@ -90,7 +90,7 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
         renderer.metrics = .{
             .cell_width = @intFromFloat(width),
             .cell_height = @intFromFloat(height),
-            .baseline = @as(f32, @floatFromInt(replacement.ascender())) + (height - natural_height) / 2,
+            .baseline = @as(f32, @floatFromInt(try replacement.ascender(pixel_height))) + (height - natural_height) / 2,
             .pixel_height = pixel_height,
         };
         if (renderer.atlas) |*atlas| {
