@@ -9,6 +9,7 @@ const Color = @import("Color.zig");
 const Rect = @import("Rect.zig");
 const colors = @import("cell_colors.zig");
 const Metrics = @import("../TerminalMetrics.zig");
+const ChromeMetrics = @import("../chrome/ChromeMetrics.zig");
 const native = @import("../native/native.zig");
 const Renderer = @This();
 const RetainedCells = @import("RetainedCells.zig");
@@ -27,8 +28,10 @@ cell_quads: QuadList,
 retained: RetainedCells,
 repainted_cells: usize = 0,
 metrics: Metrics = .{ .cell_width = 1, .cell_height = 1, .baseline = 0, .pixel_height = 15 },
+chrome: ChromeMetrics = .{},
 scale: f32 = 0,
 origin: [2]u32 = .{ 0, 0 },
+viewport: [2]u32 = .{ 0, 0 },
 atlas_version: u32 = 0,
 last_page_version: u32 = 0,
 background: Color = .black,
@@ -100,15 +103,21 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
         renderer.last_page_version = 0;
     }
 
+    // Chrome bands come off the window first, in whole device pixels, so
+    // the grid below them holds complete cells and the PTY never sees chrome.
+    const chrome = ChromeMetrics.resolve(renderer.config.font, viewport.scale).fit(viewport.height, renderer.metrics.cell_height);
+    const body_height = viewport.height -| chrome.vertical();
     const padding = renderer.config.window.padding;
     const x = @min(@as(u32, @intFromFloat(@round(padding.x * viewport.scale))), (viewport.width -| renderer.metrics.cell_width) / 2);
-    const y = @min(@as(u32, @intFromFloat(@round(padding.y * viewport.scale))), (viewport.height -| renderer.metrics.cell_height) / 2);
+    const y = @min(@as(u32, @intFromFloat(@round(padding.y * viewport.scale))), (body_height -| renderer.metrics.cell_height) / 2);
     const size = try renderer.metrics.measure(.{
         .width = viewport.width -| (2 * x),
-        .height = viewport.height -| (2 * y),
+        .height = body_height -| (2 * y),
         .scale = viewport.scale,
     });
-    renderer.origin = .{ x, y };
+    renderer.chrome = chrome;
+    renderer.origin = .{ x, chrome.top_bar + chrome.tab_strip + y };
+    renderer.viewport = .{ viewport.width, viewport.height };
     const cells = @as(usize, size.cols) * size.rows;
     if (cells > RetainedCells.max_cells) {
         return error.NativeCellBudgetExceeded;

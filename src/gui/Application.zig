@@ -17,6 +17,9 @@ failure: ?anyerror = null,
 exit_status: ?u8 = null,
 cursor_clock: @import("CursorClock.zig") = .{},
 input_revision: u64 = 0,
+/// The user's home directory, borrowed from the process environment for
+/// path abbreviation in the chrome.
+home: []const u8 = "",
 
 pub fn init(params: client.ClientInit) !Application {
     var renderer = try Renderer.configured(
@@ -129,6 +132,7 @@ fn prepare(app: *Application, viewport: native.Viewport) !u64 {
         params.window_width_px = @as(u32, size.cols) * size.cell_width_px;
         params.window_height_px = @as(u32, size.rows) * size.cell_height_px;
         app.gui = try GuiClient.init(params, &app.driver);
+        app.gui.?.chrome.home.set(app.home);
         try app.gui.?.start(.{
             .foreground = params.options.theme.terminal.foreground,
             .background = params.options.theme.terminal.background,

@@ -5,6 +5,7 @@ const Session = @import("Session.zig");
 const Chrome = @import("../chrome/Chrome.zig");
 const Canvas = @import("../chrome/Canvas.zig");
 const Regions = @import("../chrome/Regions.zig");
+const Rect = @import("../render/Rect.zig");
 const Fixture = @This();
 
 session: *Session,
@@ -25,7 +26,7 @@ pub fn deinit(fixture: *Fixture) void {
 
 pub fn resize(fixture: *Fixture, cols: u16, rows: u16) !void {
     const renderer = &fixture.session.renderer;
-    const size = try renderer.measure(.{ .width = @as(u32, renderer.metrics.cell_width) * cols, .height = @as(u32, renderer.metrics.cell_height) * rows, .scale = 1 });
+    const size = try renderer.measure(.{ .width = @as(u32, renderer.metrics.cell_width) * cols, .height = @as(u32, renderer.metrics.cell_height) * rows + renderer.chrome.vertical(), .scale = 1 });
     try fixture.session.gui.resize(size, renderer.theme);
     try fixture.session.settle();
 }
@@ -44,7 +45,7 @@ pub fn paint(fixture: *Fixture, projection_value: client.Projection) !void {
 pub fn prepare(fixture: *Fixture, projection_value: client.Projection) !void {
     const renderer = &fixture.session.renderer;
     renderer.quads.clear();
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme };
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
     try fixture.chrome.paint(&canvas, projection_value);
 }
 
@@ -57,6 +58,21 @@ pub fn target(fixture: *Fixture, intent: client.Intent) ?core.Rect {
     }
 
     return null;
+}
+
+/// A delivered band control by identity, in device pixels.
+/// Example: `const tab = fixture.bandTarget(.{ .select_tab = id }).?;`
+pub fn bandTarget(fixture: *Fixture, intent: client.Intent) ?Rect {
+    const hit = fixture.chrome.presented().band_hits.find(intent) orelse return null;
+    return hit.area;
+}
+
+/// Presses and releases a band control at its top-left device pixel.
+/// Example: `const command = fixture.clickBand(tab, 0);`
+pub fn clickBand(fixture: *Fixture, area: Rect, button: u32) client.ViewInteractionCommand {
+    const command = fixture.chrome.bandPointer(.{ .kind = 6, .code = 1, .button = button, .x = area.x, .y = area.y }) orelse return .{};
+    _ = fixture.chrome.bandPointer(.{ .kind = 6, .code = 2, .button = button, .x = area.x, .y = area.y });
+    return command;
 }
 
 pub fn click(fixture: *Fixture, area: core.Rect, button: u8) client.ViewInteractionCommand {

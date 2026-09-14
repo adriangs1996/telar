@@ -11,7 +11,7 @@ temp: std.testing.TmpDir,
 path: []const u8,
 trust_path: []const u8,
 
-pub const viewport: @import("../native/native.zig").Viewport = .{ .width = 180, .height = 72, .scale = 1 };
+pub const viewport: @import("../native/native.zig").Viewport = .{ .width = 180, .height = 168, .scale = 1 };
 
 pub fn init(source: []const u8, profile: ?[]const u8) !Fixture {
     const gpa = std.testing.allocator;

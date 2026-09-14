@@ -160,13 +160,13 @@ fn configured(thicken: bool, line_height: f32) !*Session {
     errdefer session.deinit();
     var config: client.GuiConfig = .{ .font = .{ .size = 22, .line_height = line_height, .thicken = thicken, .thicken_strength = 255 } };
     try config.font.family.set("DejaVu Sans Mono");
-    const renderer = Renderer.configured(std.testing.allocator, std.testing.io, .{ .config = config, .viewport = .{ .width = 390, .height = 180, .scale = 1 } }) catch |err| switch (err) {
+    const renderer = Renderer.configured(std.testing.allocator, std.testing.io, .{ .config = config, .viewport = .{ .width = 390, .height = 276, .scale = 1 } }) catch |err| switch (err) {
         error.FontFamilyNotFound => return error.SkipZigTest,
         else => return err,
     };
     session.renderer.deinit();
     session.renderer = renderer;
-    const size = try session.renderer.measure(.{ .width = 390, .height = 180, .scale = 1 });
+    const size = try session.renderer.measure(.{ .width = 390, .height = 276, .scale = 1 });
     try session.gui.resize(size, renderer.theme);
     try session.bootstrap();
     try session.receiveFrame(1);

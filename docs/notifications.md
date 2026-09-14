@@ -91,7 +91,10 @@ only after the whole effect batch passes validation.
 ## Bounds and interaction
 
 Titles are limited to 48 UTF-8 bytes, bodies to 192 bytes, and each client
-keeps at most four notifications. A fifth replaces the oldest. Toasts animate
+keeps at most four notifications. A fifth replaces the oldest. The native GUI
+shows at most two toasts at a time, oldest first, and does not show a toast
+whose target pane is already on screen in the active tab; the others wait
+their turn without losing their duration. Toasts animate
 in and out on a continuous smoothstep curve sampled at the client's frame
 cadence. Their duration is time-based, so dropped frames do not stretch the
 transition; once stable, the client sleeps until the next expiry instead of

@@ -8,11 +8,13 @@ const Session = @import("Session.zig");
 const Canvas = @import("../chrome/Canvas.zig");
 const Context = @import("../chrome/Context.zig");
 const HitMap = @import("../chrome/HitMap.zig");
+const BandHitMap = @import("../chrome/BandHitMap.zig");
 const AgentCard = @import("../chrome/AgentCard.zig");
 const CardGeometry = @import("../chrome/CardGeometry.zig");
 const Sidebar = @import("../chrome/Sidebar.zig");
 const Level = @import("../chrome/card_degradation.zig").Level;
 const Quad = @import("../render/Quad.zig").Quad;
+const Rect = @import("../render/Rect.zig");
 
 test {
     _ = @import("../chrome/age_label.zig");
@@ -34,13 +36,21 @@ const entries = [_]client.AgentInput{
 
 const expected_order = [_]u8{ 5, 2, 4, 1, 3, 0 };
 
-fn roundedCount(quads: []const Quad, radius: f32) usize {
+// Counted inside the sidebar column when one is painted: the active tab and
+// the chips of the pixel chrome round their corners with the same radii.
+fn roundedCount(quads: []const Quad, radius: f32, column: ?Rect) usize {
     var count: usize = 0;
     for (quads) |item| {
-        count += @intFromBool(item.radius == radius and item.border == 0);
+        const inside = if (column) |bounds| item.x >= bounds.x and item.x < bounds.x + bounds.width else true;
+        count += @intFromBool(inside and item.radius == radius and item.border == 0);
     }
 
     return count;
+}
+
+fn sidebarColumn(fixture: *Fixture) Rect {
+    const renderer = &fixture.session.renderer;
+    return renderer.metrics.rect(renderer.origin, fixture.chrome.presented().regions.sidebar);
 }
 
 fn ring(quads: []const Quad) ?Quad {
@@ -92,8 +102,8 @@ test "the selected card is the focused pane's agent and carries the fill and rin
     projection.sidebar_visible = true;
     try fixture.paint(projection);
     const quads = fixture.session.renderer.quads.items();
-    try std.testing.expectEqual(@as(usize, 1), roundedCount(quads, CardGeometry.radius));
-    try std.testing.expectEqual(@as(usize, entries.len), roundedCount(quads, 4));
+    try std.testing.expectEqual(@as(usize, 1), roundedCount(quads, CardGeometry.radius, sidebarColumn(&fixture)));
+    try std.testing.expectEqual(@as(usize, entries.len), roundedCount(quads, 4, sidebarColumn(&fixture)));
     const selected = ring(quads).?;
     const renderer = &fixture.session.renderer;
     const sidebar = fixture.chrome.presented().regions.sidebar;
@@ -106,7 +116,7 @@ test "the selected card is the focused pane's agent and carries the fill and rin
     const hovered = fixture.target(.{ .focus_agent = entries[2].key }).?;
     _ = fixture.chrome.pointer(.{ .x = hovered.x, .y = hovered.y, .kind = .move });
     try fixture.paint(projection);
-    try std.testing.expectEqual(@as(usize, 2), roundedCount(fixture.session.renderer.quads.items(), CardGeometry.radius));
+    try std.testing.expectEqual(@as(usize, 2), roundedCount(fixture.session.renderer.quads.items(), CardGeometry.radius, sidebarColumn(&fixture)));
 }
 
 test "card tokens leave from the right as the card narrows" {
@@ -118,8 +128,9 @@ test "card tokens leave from the right as the card narrows" {
     projection.agents = &agents;
     const renderer = &fixture.session.renderer;
     var hits: HitMap = .{};
+    var band_hits: BandHitMap = .{};
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme };
-    var context: Context = .{ .canvas = &canvas, .hits = &hits, .projection = &projection, .hovered = null };
+    var context: Context = .{ .canvas = &canvas, .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
     const geometry = CardGeometry.derive(renderer.metrics);
     const card: AgentCard = .{ .context = &context, .agent = &agents.slice()[4], .geometry = geometry, .age_s = 30 };
     var widths: [4]f32 = undefined;
@@ -142,7 +153,7 @@ test "card tokens leave from the right as the card narrows" {
         renderer.quads.clear();
         try card.paint(.{ .x = 100, .y = 100, .width = inner + 2 * CardGeometry.padding_x, .height = geometry.height() });
         counts[index] = renderer.quads.items().len;
-        try std.testing.expectEqual(@as(usize, @intFromBool(index < 2)), roundedCount(renderer.quads.items(), 4));
+        try std.testing.expectEqual(@as(usize, @intFromBool(index < 2)), roundedCount(renderer.quads.items(), 4, null));
     }
 
     try std.testing.expect(counts[0] > counts[1]);

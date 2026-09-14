@@ -10,6 +10,8 @@ const Label = @import("Label.zig");
 const RoundedFill = @import("RoundedFill.zig");
 const Ring = @import("Ring.zig");
 const TextRun = @import("../text/TextRun.zig");
+const ChromeMetrics = @import("ChromeMetrics.zig");
+const LabelPlacement = @import("LabelPlacement.zig");
 const Canvas = @This();
 
 atlas: *@import("../text/GlyphAtlas.zig"),
@@ -17,6 +19,10 @@ quads: *@import("../render/QuadList.zig"),
 metrics: @import("../TerminalMetrics.zig"),
 origin: [2]u32,
 theme: client.ColorTheme,
+/// Band heights already subtracted from the grid by the renderer.
+chrome: ChromeMetrics = .{},
+/// Whole window in device pixels; the bands span it, the grid sits inside.
+viewport: [2]u32 = .{ 0, 0 },
 
 /// Converts host grid coordinates including the configured window inset.
 /// Example: `const pixels = canvas.rect(regions.top);`
@@ -55,8 +61,9 @@ pub fn fillRounded(canvas: *Canvas, area: core.Rect, fill_value: RoundedFill) !v
     try canvas.fillRoundedAt(canvas.rect(area), fill_value);
 }
 
-/// `fillRounded` over a device-pixel rectangle.
-/// Example: `try canvas.fillRoundedAt(card, .{ .radius = 8, .color = palette.surface0 });`
+/// `fillRounded` over a device-pixel rectangle. A radius larger than half
+/// the shorter side is clamped, so `999` draws a pill.
+/// Example: `try canvas.fillRoundedAt(pill, .{ .radius = 999, .color = palette.accent });`
 pub fn fillRoundedAt(canvas: *Canvas, bounds: Rect, fill_value: RoundedFill) !void {
     if (bounds.width <= 0 or bounds.height <= 0) {
         return;
@@ -64,7 +71,7 @@ pub fn fillRoundedAt(canvas: *Canvas, bounds: Rect, fill_value: RoundedFill) !vo
 
     try canvas.quads.pushRounded(bounds, .{
         .fill = canvas.color(fill_value.color, canvas.theme.terminal.background),
-        .radius = fill_value.radius,
+        .radius = clampRadius(bounds, fill_value.radius),
     });
 }
 
@@ -79,19 +86,34 @@ pub fn ring(canvas: *Canvas, area: core.Rect, stroke: Ring) !void {
     try canvas.ringAt(canvas.rect(area), stroke);
 }
 
-/// `ring` over a device-pixel rectangle.
-/// Example: `try canvas.ringAt(card, .{ .width = 1, .radius = 8, .color = palette.surface1 });`
+/// `ring` over a device-pixel rectangle; `stroke.alpha` fades the band.
+/// Example: `try canvas.ringAt(inset, .{ .width = 2, .color = palette.yellow, .alpha = 0.5 });`
 pub fn ringAt(canvas: *Canvas, bounds: Rect, stroke: Ring) !void {
     if (bounds.width <= 0 or bounds.height <= 0) {
         return;
     }
 
+    var border_color = canvas.color(stroke.color, canvas.theme.terminal.foreground);
+    border_color.a *= stroke.alpha;
     try canvas.quads.pushRounded(bounds, .{
         .fill = .{ .r = 0, .g = 0, .b = 0, .a = 0 },
-        .radius = stroke.radius,
+        .radius = clampRadius(bounds, stroke.radius),
         .border = stroke.width,
-        .border_color = canvas.color(stroke.color, canvas.theme.terminal.foreground),
+        .border_color = border_color,
     });
+}
+
+/// Fills a device-pixel rectangle with the terminal background at `alpha`,
+/// which dims whatever was painted before it. One quad.
+/// Example: `try canvas.dimAt(content, 0.15);`
+pub fn dimAt(canvas: *Canvas, bounds: Rect, alpha: f32) !void {
+    if (bounds.width <= 0 or bounds.height <= 0) {
+        return;
+    }
+
+    var shade = canvas.color(.default, canvas.theme.terminal.background);
+    shade.a = alpha;
+    try canvas.quads.pushRect(bounds, shade);
 }
 
 /// Monospace labels advance one cell per column and clip at grapheme
@@ -105,30 +127,43 @@ pub fn text(canvas: *Canvas, area: core.Rect, label: Label) !void {
         return;
     }
 
-    _ = try canvas.textAt(canvas.rect(area.row(0)), label);
+    const bounds = canvas.rect(area.row(0));
+    _ = try canvas.paintLabel(.{ .bounds = bounds, .baseline = bounds.y + canvas.metrics.baseline }, label);
 }
 
-/// `text` over a device-pixel rectangle: the natural line box is centered
+/// `text` over a device-pixel rectangle: the natural line box is centred
 /// vertically inside `bounds`, so a row taller or shorter than a cell keeps
-/// its glyphs on one baseline. Returns the painted advance in pixels.
+/// its glyphs on one baseline, clipped at the rectangle's edges. Returns the
+/// painted advance in pixels so a caller can lay out the next token.
 /// Example: `const width = try canvas.textAt(row, .{ .text = title, .bold = true, .face = .sans });`
 pub fn textAt(canvas: *Canvas, bounds: Rect, label: Label) !f32 {
     if (bounds.width <= 0 or bounds.height <= 0) {
         return 0;
     }
 
+    const cell_height: f32 = @floatFromInt(canvas.metrics.cell_height);
+    const baseline = @floor(bounds.y + (bounds.height - cell_height) / 2) + canvas.metrics.baseline;
+    return canvas.paintLabel(.{ .bounds = bounds, .baseline = baseline }, label);
+}
+
+fn paintLabel(canvas: *Canvas, placement: LabelPlacement, label: Label) !f32 {
+    const bounds = placement.bounds;
+    const baseline = placement.baseline;
     const first = canvas.quads.items().len;
     const ink = canvas.labelInk(label);
+    const pen: [2]f32 = .{ bounds.x, baseline };
     const width = switch (label.face) {
-        .mono => try canvas.monoText(bounds, label),
-        .sans => @min(bounds.width, try canvas.atlas.place(canvas.run(label, bounds), canvas.quads)),
+        .mono => try canvas.monoText(placement, label),
+        .sans => @min(bounds.width, try canvas.atlas.place(canvas.run(label, pen), canvas.quads)),
     };
+    const top = baseline - canvas.metrics.baseline;
+    const cell_height: f32 = @floatFromInt(canvas.metrics.cell_height);
     if (label.underline and width != 0) {
-        try canvas.quads.pushRect(.{ .x = bounds.x, .y = bounds.y + bounds.height - 2, .width = width, .height = 1 }, ink);
+        try canvas.quads.pushRect(.{ .x = bounds.x, .y = top + cell_height - 2, .width = width, .height = 1 }, ink);
     }
 
     if (label.strikethrough and width != 0) {
-        try canvas.quads.pushRect(.{ .x = bounds.x, .y = bounds.y + bounds.height * 0.5, .width = width, .height = 1 }, ink);
+        try canvas.quads.pushRect(.{ .x = bounds.x, .y = top + cell_height * 0.5, .width = width, .height = 1 }, ink);
     }
 
     canvas.quads.clipFrom(first, bounds);
@@ -142,13 +177,15 @@ pub fn textAt(canvas: *Canvas, bounds: Rect, label: Label) !f32 {
 pub fn measure(canvas: *Canvas, label: Label) !f32 {
     return switch (label.face) {
         .mono => @floatFromInt(@as(u32, core.measure(label.text)) * canvas.metrics.cell_width),
-        .sans => try canvas.atlas.measure(canvas.run(label, .{ .x = 0, .y = 0, .width = 0, .height = 0 })),
+        .sans => try canvas.atlas.measure(canvas.run(label, .{ 0, 0 })),
     };
 }
 
-fn monoText(canvas: *Canvas, bounds: Rect, label: Label) !f32 {
+fn monoText(canvas: *Canvas, placement: LabelPlacement, label: Label) !f32 {
+    const bounds = placement.bounds;
+    const baseline = placement.baseline;
     const ink = canvas.labelInk(label);
-    const columns: u16 = @intFromFloat(@min(65535, bounds.width / @as(f32, @floatFromInt(canvas.metrics.cell_width))));
+    const columns: u16 = @intFromFloat(@min(65535, @floor(bounds.width / @as(f32, @floatFromInt(canvas.metrics.cell_width)))));
     var iterator: core.GraphemeIterator = .{ .bytes = label.text };
     var column: u16 = 0;
     while (column < columns) {
@@ -160,7 +197,7 @@ fn monoText(canvas: *Canvas, bounds: Rect, label: Label) !f32 {
         _ = try canvas.atlas.place(.{
             .text = cluster.bytes,
             .x = bounds.x + @as(f32, @floatFromInt(@as(u32, column) * canvas.metrics.cell_width)),
-            .y = canvas.baselineIn(bounds),
+            .y = baseline,
             .pixel_height = canvas.metrics.pixel_height,
             .cell_bounds = canvas.metrics.glyphCell(),
             .color = ink,
@@ -174,11 +211,11 @@ fn monoText(canvas: *Canvas, bounds: Rect, label: Label) !f32 {
 }
 
 // Bold sans selects the real SemiBold face, never synthetic emboldening.
-fn run(canvas: *Canvas, label: Label, bounds: Rect) TextRun {
+fn run(canvas: *Canvas, label: Label, pen: [2]f32) TextRun {
     return .{
         .text = label.text,
-        .x = bounds.x,
-        .y = canvas.baselineIn(bounds),
+        .x = pen[0],
+        .y = pen[1],
         .pixel_height = canvas.metrics.pixel_height,
         .cell_bounds = canvas.metrics.glyphCell(),
         .color = canvas.labelInk(label),
@@ -186,12 +223,6 @@ fn run(canvas: *Canvas, label: Label, bounds: Rect) TextRun {
         .italic = label.italic,
         .face = if (label.bold) .sans_semibold else .sans,
     };
-}
-
-// The measured baseline centers the natural line box in one cell; a row of
-// another height shifts it by half the difference so glyphs stay centered.
-fn baselineIn(canvas: Canvas, bounds: Rect) f32 {
-    return bounds.y + canvas.metrics.baseline + (bounds.height - @as(f32, @floatFromInt(canvas.metrics.cell_height))) / 2;
 }
 
 fn labelInk(canvas: Canvas, label: Label) Color {
@@ -221,6 +252,10 @@ pub fn border(canvas: *Canvas, area: core.Rect, ink_color: core.Color) !void {
 
 fn color(canvas: Canvas, value: core.Color, fallback: [3]u8) Color {
     return colors.withPalette(value, Color.rgb(fallback[0], fallback[1], fallback[2]), &canvas.theme.terminal.palette);
+}
+
+fn clampRadius(bounds: Rect, radius: f32) f32 {
+    return @min(radius, @min(bounds.width, bounds.height) / 2);
 }
 
 test "chrome text clips graphemes preserves metrics and reuses the terminal atlas" {

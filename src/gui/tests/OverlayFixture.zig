@@ -34,7 +34,7 @@ pub fn projection(fixture: *Fixture) client.Projection {
 }
 
 pub fn canvas(fixture: *Fixture) Canvas {
-    return .{ .atlas = &fixture.renderer.atlas.?, .quads = &fixture.renderer.quads, .metrics = fixture.renderer.metrics, .origin = fixture.renderer.origin, .theme = client.theme_support.default_theme };
+    return .{ .atlas = &fixture.renderer.atlas.?, .quads = &fixture.renderer.quads, .metrics = fixture.renderer.metrics, .origin = fixture.renderer.origin, .theme = client.theme_support.default_theme, .chrome = fixture.renderer.chrome, .viewport = fixture.renderer.viewport };
 }
 
 pub fn paint(fixture: *Fixture) !void {

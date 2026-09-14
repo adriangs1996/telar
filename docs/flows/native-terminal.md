@@ -51,7 +51,8 @@ budgets, wakeups and shutdown shared with the TUI and headless driver.
    Cmd+V on macOS and Ctrl+Shift+V on Linux read the native clipboard. Application
    multiplexer bindings are not activated without corresponding native UI.
 3. Geometry and detach: window size and font scale determine complete columns,
-   rows and exact cell pixels. `ResizeHostHandler` and the shared resource
+   rows and exact cell pixels, after the chrome bands (`ChromeMetrics`) are
+   taken off the window height. `ResizeHostHandler` and the shared resource
    controllers deliver `pane_resize` through the existing geometry authority.
    Trailing pixels belong to chrome. Closing a window stops GPU consumers, then
    cancels and joins socket tasks before releasing the shared model. It does not
@@ -99,10 +100,12 @@ budgets, wakeups and shutdown shared with the TUI and headless driver.
 
 ## Retained preparation and shaping
 
-`text/ShapingCache` owns 256 entries for the atlas's current font set and size.
+`text/ShapingCache` owns 384 entries for the atlas's current font set and size.
 Entries copy at most 64 UTF-8 bytes and 32 HarfBuzz glyphs/positions, plus the
-source face identity. ASCII has dedicated slots; hash collisions replace
-non-ASCII entries. Longer runs bypass the cache. Font-size changes
+source face identity. Single-byte ASCII for the primary face has 128 dedicated
+slots; every other run hashes into one of 64 four-way sets, so up to four
+colliding labels stay cached and a fifth replaces the set's round-robin
+victim. Longer runs bypass the cache. Font-size changes
 invalidate it, and font replacement creates a new cache. Location and color
 are applied after shaping; bold/italic still select separate rasterized atlas
 slots. Warm hits allocate nothing. The cache belongs to the text renderer,
