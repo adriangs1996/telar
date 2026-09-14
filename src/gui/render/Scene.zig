@@ -43,6 +43,7 @@ pub fn prepare(scene: *Scene, projection: client.Projection) !client.Presentatio
     }
 
     try scene.chrome.paint(&canvas, projection);
+    scene.overlays.scale = renderer.scale;
     try scene.overlays.paint(&canvas, projection);
     renderer.seal();
     return commit;

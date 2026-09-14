@@ -16,6 +16,10 @@ pub fn resolve(gui: *const GuiClient, mouse: client.Mouse, mods: u32) Target {
 
     const overlays = gui.overlays.presented();
     if (gui.app.model.name_prompt.active() or overlays.modal != null) {
+        if (overlays.palette.at(mouse) != null) {
+            return .{ .shape = .pointer };
+        }
+
         return .{ .shape = if (overlays.modal) |area| if (area.inner(1).contains(mouse.x, mouse.y)) .text else .default else .default };
     }
 

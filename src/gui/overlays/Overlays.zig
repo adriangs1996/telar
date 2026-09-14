@@ -8,10 +8,15 @@ const name_prompt = @import("name_prompt.zig");
 const picker = @import("picker.zig");
 const history = @import("history.zig");
 const suggestion = @import("suggestion.zig");
+const CommandPalette = @import("CommandPalette.zig");
 const Overlays = @This();
 
 maps: GenericPresentedState(HitState) = .{},
 gesture: ?u8 = null,
+/// The native keymap, for the palette's bound-key column.
+router: ?*const @import("../input/router.zig").Type = null,
+/// Host scale, so the palette's logical width becomes cells.
+scale: f32 = 1,
 
 /// Prepares native modal chrome and its hit map from one borrowed projection.
 /// Call after panes and permanent chrome, before sealing the frame.
@@ -20,9 +25,18 @@ pub fn paint(overlays: *Overlays, canvas: *Canvas, projection: client.Projection
     const pending = overlays.maps.begin();
     try pending.notifications.paint(canvas, projection);
     const prompt = projection.prompt orelse {
+        pending.palette = .{};
         overlays.maps.seal();
         return;
     };
+    if (prompt.target() == .palette) {
+        const palette: CommandPalette = .{ .canvas = canvas, .projection = projection, .router = overlays.router, .scale = overlays.scale };
+        pending.modal = try palette.paint(&pending.palette);
+        overlays.maps.seal();
+        return;
+    }
+
+    pending.palette = .{};
     const host: core.Rect = .{ .w = projection.host_size.cols, .h = projection.host_size.rows };
     const area = switch (prompt.target()) {
         .history => history.area(projection),
@@ -58,7 +72,8 @@ pub fn presented(overlays: *const Overlays) *const HitState {
 }
 
 /// Consumes modal gestures even outside their rectangle and retains their owner
-/// through release if a prompt closes between pointer events.
+/// through release if a prompt closes between pointer events. A primary
+/// press on a palette row chooses that row.
 /// Example: `if (overlays.pointer(mouse)) |interaction| return interaction;`.
 pub fn pointer(overlays: *Overlays, mouse: client.Mouse) ?client.ViewInteractionCommand {
     const button = mouse.button & 3;
@@ -71,6 +86,11 @@ pub fn pointer(overlays: *Overlays, mouse: client.Mouse) ?client.ViewInteraction
     if (visible.modal != null or captured) {
         if (mouse.kind == .press and overlays.gesture == null) {
             overlays.gesture = button;
+            if (button == 0 and visible.modal != null) {
+                if (visible.palette.at(mouse)) |index| {
+                    return .{ .consumed = true, .intent = .{ .prompt_row = index } };
+                }
+            }
         }
 
         return .{ .consumed = true };
