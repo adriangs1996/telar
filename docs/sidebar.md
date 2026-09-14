@@ -21,6 +21,27 @@ resolves all of them against the same `(pane_id, generation)` immediately
 before encoding. Workspace rename, tab rename, cwd changes, and pane topology
 advance the agent revision.
 
+Three fields describe what the agent wants from the person:
+
+| Field | Bound | Source |
+| --- | --- | --- |
+| `blocked_reason` | `none`, `permission`, `question`, `plan`, `other`; `none` unless the status is `blocked` | The lifecycle report when its hook names one (Claude Code `permission_prompt`, elicitation notifications, `AskUserQuestion` and `ExitPlanMode` tool starts; Codex `PermissionRequest`; Pi dialogs). Without a report, a blocked agent whose last proxy response closed on a tool request while no exchange is open is `permission`; any other blocked state is `other`. |
+| `last_event` | one control-free UTF-8 line of at most 96 bytes | The event line of the lifecycle report the projection follows: the prompt text while blocked, the last tool call (`» Edit src/client/bars/Output.zig`) while working, the first line of the final assistant message when done. Empty while any other evidence decides. |
+| `status_age_s` | `u32` seconds | The runtime clock at encode time minus the last projected status change. It is never part of the revision; the client adds the time since the snapshot arrived. |
+
+A changed reason or event line advances the agent revision like a label. The
+reason and the line are presentation only: they choose an icon and a chip and
+never authorize an answer on the agent's behalf.
+
+## Attention order
+
+`agents/attention.zig` in `telar-client` is the one comparator every surface
+uses for agents: the sidebar list, "next agent that needs me" and toast
+order. Groups from first to last: needs input (`blocked`, `failed`), working,
+ready-unseen (`done`), idle (`ready`), `unknown`. Inside a group the smallest
+`status_age_s` comes first; equal ages fall back to pane id and generation so
+the order is stable across revisions. It is pure and allocation-free.
+
 `agent_snapshots.apply` is the protocol adapter. It maps borrowed wire entries
 to `AgentInput` values and invokes `ApplyAgentSnapshotHandler`.
 `ClientModel.reconcileAgentSnapshot` owns the transaction, while
@@ -101,9 +122,15 @@ cell renderer is complete by itself.
 
 Each agent card stays three rows high:
 
-1. session title, with status width reserved on the right;
-2. `workspace › tab › pane N`;
-3. provider and abbreviated cwd, truncated from the left.
+1. workspace name, with the age of the last status change right-aligned;
+2. session title;
+3. last event, with the status icon in its color and the provider mark on
+   the right.
+
+The card shows no location row (`workspace › tab › pane N`) and no cwd;
+the top bar shows the selected workspace's location instead. The TUI cell
+renderer still draws the previous rows until the sidebar rewrite of the GUI
+visual language plan lands; the entry fields above are already on the wire.
 
 KGP owns two reusable assets: one three-row focused-agent card and an official
 provider-mark atlas. The card is an antialiased rounded rectangle below the
