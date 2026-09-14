@@ -30,6 +30,7 @@ test {
     _ = @import("tests/overlays.zig");
     _ = @import("tests/scene.zig");
     _ = @import("tests/visual_language.zig");
+    _ = @import("tests/visual_chrome.zig");
     _ = @import("TerminalMetrics.zig");
     _ = @import("NativeInput.zig");
     _ = @import("CursorClock.zig");
