@@ -33,8 +33,8 @@ Validated on 2026-09-14 on macOS/Metal (Apple Silicon, scale 2). Branch
 
 | Check | Result |
 | --- | --- |
-| `zig build test` | exit 0 (client 860 + new parser bounds, codestyle included) |
-| `zig build test-gui` | exit 0, 215/215 (210 before this slice + `chrome_sizes.zig`, one reload test, `FontFace` sizes) |
+| `zig build test` | exit 0, codestyle and client boundaries included; the GUI parser test covers the four `gui.chrome.scale` rejections |
+| `zig build test-gui` | exit 0, 216/216 (210 before this slice; `chrome_sizes.zig`, the `ChromeMetrics` text test, the atlas height test, the shaping-cache height test and the reload test) |
 | `zig build test-gui-window` | `status=0 painted=15 delivered=11 discarded=3 inputs=10 repeats=26 pointer_inputs=8 pointer_queries=75 timer_wakes=1 fullscreen=3 failures=0` (one earlier run reported `failures=1` in a cursor/focus check while another window held focus; a direct rerun and the build rerun both passed) |
 | `zig build check-client-boundaries` | passed |
 | `tools/gui_chrome_sizes.py zig-out/bin/telar /tmp/t7` | `stty size` 50x55 at base and at `gui.chrome.scale = 1.5`; same shell survived both windows |
