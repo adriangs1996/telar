@@ -1,11 +1,18 @@
 //! The only primitive the native backend draws: one textured rectangle in
-//! device pixels. Its layout is the wire format of a frame, so it mirrors
-//! `telar_gui_quad` in `macos/window.m` field for field.
+//! device pixels, optionally rounded and outlined. Its layout is the wire
+//! format of a frame, so it mirrors `telar_gui_quad` in `native/telar_gui.h`
+//! field for field and the `Quad` struct of both shaders.
 
 /// Texture coordinates of the opaque white texel every atlas reserves, so a
 /// solid rectangle is a quad like any other.
 pub const solid_uv: [4]f32 = .{ 0.5 / 1024.0, 0.5 / 1024.0, 0.5 / 1024.0, 0.5 / 1024.0 };
 
+/// The fragment shader resolves `radius` and `border` by signed distance in
+/// device pixels. Both zero keeps the plain textured path bit for bit, so a
+/// glyph or a flat fill costs nothing more than before. The band `border`
+/// pixels wide inside the outline takes the border color; the rest of the
+/// shape takes the fill color. Two reserved floats keep the std430 stride of
+/// five `vec4`s; they are always zero.
 pub const Quad = extern struct {
     x: f32,
     y: f32,
@@ -19,4 +26,24 @@ pub const Quad = extern struct {
     g: f32,
     b: f32,
     a: f32,
+    radius: f32 = 0,
+    border: f32 = 0,
+    reserved0: f32 = 0,
+    reserved1: f32 = 0,
+    border_r: f32 = 0,
+    border_g: f32 = 0,
+    border_b: f32 = 0,
+    border_a: f32 = 0,
 };
+
+/// The std430 stride both shaders index the quad buffer with.
+pub const stride: usize = 80;
+
+comptime {
+    const std = @import("std");
+    std.debug.assert(@sizeOf(Quad) == stride);
+    std.debug.assert(@offsetOf(Quad, "u0") == 16);
+    std.debug.assert(@offsetOf(Quad, "r") == 32);
+    std.debug.assert(@offsetOf(Quad, "radius") == 48);
+    std.debug.assert(@offsetOf(Quad, "border_r") == 64);
+}

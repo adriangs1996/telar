@@ -3,6 +3,7 @@
 const std = @import("std");
 const Color = @import("Color.zig");
 const Rect = @import("Rect.zig");
+const RoundedRect = @import("RoundedRect.zig");
 const quad = @import("Quad.zig");
 const Quad = quad.Quad;
 const QuadList = @This();
@@ -64,8 +65,53 @@ pub fn pushRect(list: *QuadList, rect: Rect, color: Color) !void {
     });
 }
 
+/// Appends one rounded or outlined surface; the shader resolves its shape.
+/// Example: `try list.pushRounded(card, .{ .fill = surface, .radius = 8 });`
+pub fn pushRounded(list: *QuadList, rect: Rect, shape: RoundedRect) !void {
+    try list.push(.{
+        .x = rect.x,
+        .y = rect.y,
+        .width = rect.width,
+        .height = rect.height,
+        .u0 = quad.solid_uv[0],
+        .v0 = quad.solid_uv[1],
+        .u1 = quad.solid_uv[2],
+        .v1 = quad.solid_uv[3],
+        .r = shape.fill.r,
+        .g = shape.fill.g,
+        .b = shape.fill.b,
+        .a = shape.fill.a,
+        .radius = shape.radius,
+        .border = shape.border,
+        .border_r = shape.border_color.r,
+        .border_g = shape.border_color.g,
+        .border_b = shape.border_color.b,
+        .border_a = shape.border_color.a,
+    });
+}
+
 pub fn items(list: *const QuadList) []const Quad {
     return list.quads.items;
+}
+
+test "plain rectangles keep zero shape attributes and rounded surfaces carry theirs" {
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    try list.pushRect(.{ .x = 1, .y = 2, .width = 3, .height = 4 }, Color.white);
+    const plain = list.items()[0];
+    try std.testing.expectEqualDeep(Quad{ .x = 1, .y = 2, .width = 3, .height = 4, .u0 = quad.solid_uv[0], .v0 = quad.solid_uv[1], .u1 = quad.solid_uv[2], .v1 = quad.solid_uv[3], .r = 1, .g = 1, .b = 1, .a = 1 }, plain);
+    try std.testing.expectEqual(@as(f32, 0), plain.radius);
+    try std.testing.expectEqual(@as(f32, 0), plain.border);
+    try std.testing.expectEqual(@as(f32, 0), plain.border_a);
+
+    try list.pushRounded(.{ .x = 1, .y = 2, .width = 3, .height = 4 }, .{ .fill = .{ .r = 0, .g = 0, .b = 0, .a = 0 }, .radius = 8, .border = 2, .border_color = Color.white });
+    const ring = list.items()[1];
+    try std.testing.expectEqual(@as(f32, 8), ring.radius);
+    try std.testing.expectEqual(@as(f32, 2), ring.border);
+    try std.testing.expectEqual(@as(f32, 0), ring.a);
+    try std.testing.expectEqual(@as(f32, 1), ring.border_a);
+    try std.testing.expectEqual(plain.u0, ring.u0);
+    try std.testing.expectEqual(@as(usize, 80), @sizeOf(Quad));
 }
 
 test "clear keeps capacity and drops quads" {
@@ -86,12 +132,20 @@ pub fn reserve(list: *QuadList, count: usize) !void {
     list.limit = count;
 }
 
-/// Clips newly appended glyph quads and their texture coordinates together.
+/// Clips newly appended glyph quads and their texture coordinates together
+/// and drops the ones left without area, so overflowing labels cost no quads.
 /// Example: `list.clipFrom(first_glyph, cell_rect);`
 pub fn clipFrom(list: *QuadList, start: usize, clip: Rect) void {
-    for (list.quads.items[start..]) |*item| {
-        item.* = clipQuad(item.*, clip);
+    var kept = start;
+    for (list.quads.items[start..]) |item| {
+        const clipped = clipQuad(item, clip);
+        if (clipped.width > 0 and clipped.height > 0) {
+            list.quads.items[kept] = clipped;
+            kept += 1;
+        }
     }
+
+    list.quads.items.len = kept;
 }
 
 fn clipQuad(original: Quad, clip: Rect) Quad {
@@ -132,6 +186,11 @@ test "clipping a glyph adjusts texture coordinates without leaking into the next
     try std.testing.expectApproxEqAbs(@as(f32, 0.25), clipped.u0, 0.001);
     try std.testing.expectApproxEqAbs(@as(f32, 0.75), clipped.u1, 0.001);
     try std.testing.expectApproxEqAbs(@as(f32, 0.5), clipped.v1, 0.001);
+    try list.push(.{ .x = 30, .y = 2, .width = 5, .height = 5, .u0 = 0, .v0 = 0, .u1 = 1, .v1 = 1, .r = 1, .g = 1, .b = 1, .a = 1 });
+    try list.push(.{ .x = 12, .y = 2, .width = 5, .height = 5, .u0 = 0, .v0 = 0, .u1 = 1, .v1 = 1, .r = 1, .g = 1, .b = 1, .a = 1 });
+    list.clipFrom(1, .{ .x = 10, .y = 0, .width = 10, .height = 7 });
+    try std.testing.expectEqual(@as(usize, 2), list.items().len);
+    try std.testing.expectEqual(@as(f32, 12), list.items()[1].x);
 }
 
 test "pane composition preserves contained texture coordinates and omits outside ink" {

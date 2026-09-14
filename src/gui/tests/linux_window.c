@@ -40,7 +40,7 @@ static struct {
     atomic_uint cursor_shape, cursor_observed, cursor_queries;
     atomic_bool requested, closing;
     uint8_t atlas[4];
-    telar_gui_quad quads[2];
+    telar_gui_quad quads[4];
 } state;
 
 // Test-only interposition exercises retry paths against the real Vulkan backend.
@@ -145,9 +145,14 @@ static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *
         .x = 20, .y = 30, .width = 200, .height = 100, .u0 = 0, .v0 = 0, .u1 = 1, .v1 = 1, .r = 1, .g = .3f, .a = 1};
     state.quads[1] = (telar_gui_quad){
         .x = 40, .y = 50, .width = 40, .height = 60, .u0 = 0, .v0 = 0, .u1 = 1, .v1 = 1, .b = 1, .a = .5f};
+    // A rounded card and an inner ring exercise the signed-distance paths.
+    state.quads[2] = (telar_gui_quad){
+        .x = 40, .y = 140, .width = 200, .height = 100, .u0 = 0, .v0 = 0, .u1 = 1, .v1 = 1, .r = .2f, .g = .4f, .b = .9f, .a = 1, .radius = 8};
+    state.quads[3] = (telar_gui_quad){
+        .x = 60, .y = 260, .width = 200, .height = 100, .u0 = 0, .v0 = 0, .u1 = 1, .v1 = 1, .radius = 8, .border = 2, .border_r = 1, .border_g = .8f, .border_b = .2f, .border_a = 1};
     *frame = (telar_gui_frame){.token = token,
                                .quads = state.quads,
-                               .quad_count = 2,
+                               .quad_count = 4,
                                .atlas = state.atlas,
                                .atlas_side = 2,
                                .atlas_version = token,
