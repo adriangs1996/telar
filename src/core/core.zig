@@ -2,6 +2,7 @@
 
 pub const AcknowledgeAgent = @import("schema/messages/AcknowledgeAgent.zig");
 pub const AgentAttachmentMarkers = @import("schema/types.zig").AgentAttachmentMarkers;
+pub const AgentBlockedReason = @import("schema/types.zig").AgentBlockedReason;
 pub const AgentAuthority = @import("schema/types.zig").AgentAuthority;
 pub const AgentCommandPhase = @import("schema/messages/agent.zig").AgentCommandPhase;
 pub const AgentManifest = @import("AgentManifest.zig");
@@ -313,6 +314,7 @@ pub const max_action_bytes = @import("plugin.zig").max_action_bytes;
 pub const max_agent_cwd_label_bytes = @import("schema/types.zig").max_agent_cwd_label_bytes;
 pub const max_agent_display_name_bytes = @import("schema/types.zig").max_agent_display_name_bytes;
 pub const max_agent_icon_bytes = @import("schema/types.zig").max_agent_icon_bytes;
+pub const max_agent_last_event_bytes = @import("schema/types.zig").max_agent_last_event_bytes;
 pub const max_agent_provider_name_bytes = @import("schema/types.zig").max_agent_provider_name_bytes;
 pub const max_agent_session_file_bytes = @import("schema/types.zig").max_agent_session_file_bytes;
 pub const max_agent_session_reference_bytes = @import("schema/types.zig").max_agent_session_reference_bytes;

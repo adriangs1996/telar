@@ -130,10 +130,14 @@ pub fn encodeReportAgent(buffer: []u8, message: ReportAgent) ![]const u8 {
     try encoder.writeInt(u64, id.raw(message.pane_id));
     try encoder.writeInt(u64, message.pane_generation);
     try codec.validateBytes(message.session_file, types.max_agent_session_file_bytes, true);
+    try validateAgentDisplayText(message.event, types.max_agent_last_event_bytes, true);
+    try validateReportBlockedReason(message.state, message.blocked_reason);
     try encoder.writeByte(@intFromEnum(message.state));
     try encoder.writeSized16(message.session);
     try encoder.writeSized16(message.session_file);
     try encoder.writeByte(@intFromEnum(message.session_file_kind));
+    try encoder.writeByte(@intFromEnum(message.blocked_reason));
+    try encoder.writeSized16(message.event);
     return encoder.finish();
 }
 
@@ -151,6 +155,11 @@ pub fn decodeReportAgent(decoder: *DecoderType) !ReportAgent {
     try codec.validateBytes(session_file, types.max_agent_session_file_bytes, true);
     const session_file_kind = std.enums.fromInt(types.AgentSessionFileKind, try decoder.readByte()) orelse
         return error.InvalidAgentSessionFileKind;
+    const blocked_reason = std.enums.fromInt(types.AgentBlockedReason, try decoder.readByte()) orelse
+        return error.InvalidAgentBlockedReason;
+    const event = try decoder.readSized16();
+    try validateAgentDisplayText(event, types.max_agent_last_event_bytes, true);
+    try validateReportBlockedReason(state, blocked_reason);
     return .{
         .request_id = request_id,
         .pane_id = pane_id,
@@ -159,6 +168,8 @@ pub fn decodeReportAgent(decoder: *DecoderType) !ReportAgent {
         .session = session,
         .session_file = session_file,
         .session_file_kind = session_file_kind,
+        .blocked_reason = blocked_reason,
+        .event = event,
     };
 }
 
@@ -359,8 +370,10 @@ fn encodeAgentSnapshotEntry(encoder: *EncoderType, entry: AgentSnapshotEntry) !v
     try validateAgentDisplayText(entry.provider_name, types.max_agent_provider_name_bytes, true);
     try validateAgentDisplayText(entry.display_name, types.max_agent_display_name_bytes, true);
     try validateAgentDisplayText(entry.icon, types.max_agent_icon_bytes, true);
+    try validateAgentDisplayText(entry.last_event, types.max_agent_last_event_bytes, true);
     try validateAgentProvider(entry.provider);
     try validateAgentTitle(entry);
+    try validateEntryBlockedReason(entry.status, entry.blocked_reason);
     try encoder.writeInt(u64, id.raw(entry.pane_id));
     try encoder.writeInt(u64, entry.pane_generation);
     try codec.encodeTabLocation(encoder, entry.location);
@@ -379,6 +392,9 @@ fn encodeAgentSnapshotEntry(encoder: *EncoderType, entry: AgentSnapshotEntry) !v
     try encoder.writeSized16(entry.icon);
     try encoder.writeByte(@intFromEnum(entry.attachments));
     try encoder.writeByte(@intFromEnum(entry.status));
+    try encoder.writeByte(@intFromEnum(entry.blocked_reason));
+    try encoder.writeSized16(entry.last_event);
+    try encoder.writeInt(u32, entry.status_age_s);
     try encoder.writeByte(@intFromEnum(entry.source));
     try encoder.writeByte(@intFromEnum(entry.authority));
     try encoder.writeByte(entry.confidence);
@@ -411,6 +427,10 @@ pub fn decodeAgentSnapshotEntry(decoder: *DecoderType) !AgentSnapshotEntry {
             return error.InvalidAgentAttachments,
         .status = std.enums.fromInt(types.AgentStatus, try decoder.readByte()) orelse
             return error.InvalidAgentStatus,
+        .blocked_reason = std.enums.fromInt(types.AgentBlockedReason, try decoder.readByte()) orelse
+            return error.InvalidAgentBlockedReason,
+        .last_event = try decoder.readSized16(),
+        .status_age_s = try decoder.readInt(u32),
         .source = std.enums.fromInt(types.AgentSource, try decoder.readByte()) orelse
             return error.InvalidAgentSource,
         .authority = std.enums.fromInt(types.AgentAuthority, try decoder.readByte()) orelse
@@ -435,7 +455,9 @@ pub fn decodeAgentSnapshotEntry(decoder: *DecoderType) !AgentSnapshotEntry {
     try validateAgentDisplayText(entry.provider_name, types.max_agent_provider_name_bytes, true);
     try validateAgentDisplayText(entry.display_name, types.max_agent_display_name_bytes, true);
     try validateAgentDisplayText(entry.icon, types.max_agent_icon_bytes, true);
+    try validateAgentDisplayText(entry.last_event, types.max_agent_last_event_bytes, true);
     try validateAgentTitle(entry);
+    try validateEntryBlockedReason(entry.status, entry.blocked_reason);
     return entry;
 }
 
@@ -459,6 +481,20 @@ fn validateAgentDisplayText(bytes: []const u8, maximum: usize, empty_allowed: bo
     }
     for (bytes) |byte| if (byte < 0x20 or byte == 0x7f)
         return error.InvalidAgentDisplayText;
+}
+
+// A reason without a blocked status would let a stale chip outlive the
+// prompt it described, so both sides of the wire refuse it.
+fn validateEntryBlockedReason(status: types.AgentStatus, reason: types.AgentBlockedReason) !void {
+    if (status != .blocked and reason != .none) {
+        return error.InvalidAgentBlockedReason;
+    }
+}
+
+fn validateReportBlockedReason(state: types.AgentReportState, reason: types.AgentBlockedReason) !void {
+    if (state != .blocked and reason != .none) {
+        return error.InvalidAgentBlockedReason;
+    }
 }
 
 fn validateAgentTitle(entry: AgentSnapshotEntry) !void {

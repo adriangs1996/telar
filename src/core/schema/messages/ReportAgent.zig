@@ -12,3 +12,8 @@ state: types.AgentReportState,
 session: []const u8 = "",
 session_file: []const u8 = "",
 session_file_kind: types.AgentSessionFileKind = .claude_transcript,
+/// Why the agent is blocked; `none` unless `state` is `blocked`.
+blocked_reason: types.AgentBlockedReason = .none,
+/// One line describing the reported moment: the pending prompt, the tool
+/// call that started, or the result summary. Empty when the hook has none.
+event: []const u8 = "",

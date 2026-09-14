@@ -28,6 +28,12 @@ display_name: []const u8 = "",
 icon: []const u8 = "",
 attachments: types.AgentAttachmentMarkers = .none,
 status: types.AgentStatus,
+/// Why the agent is blocked; `none` for every other status.
+blocked_reason: types.AgentBlockedReason = .none,
+/// What the agent last did or asks for, one line; empty when unknown.
+last_event: []const u8 = "",
+/// Seconds since `status` last changed, measured when the entry was encoded.
+status_age_s: u32 = 0,
 source: types.AgentSource,
 authority: types.AgentAuthority,
 confidence: u8,
