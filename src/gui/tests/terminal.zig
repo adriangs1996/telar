@@ -427,6 +427,24 @@ test "warm retained rendering and repeated glyph edits allocate no adapter stora
         try std.testing.expectEqual(@as(usize, 1), renderer.repainted_cells);
     }
 
+    // A grapheme only an installed face covers is discovered on its first
+    // sighting and repaints warm afterwards, whether or not this host has one.
+    renderer.atlas.?.allocator = std.testing.allocator;
+    pane.buffer.cells[2].bytes[0..3].* = "\u{23f5}".*;
+    pane.buffer.cells[2].len = 3;
+    try present(session);
+    renderer.atlas.?.allocator = failing.allocator();
+    const lookups = renderer.atlas.?.fonts.lookups;
+    try std.testing.expectEqual(@as(usize, 1), lookups);
+    for (0..4) |index| {
+        pane.buffer.cells[2].bytes[0..3].* = if (index % 2 == 0) "   ".* else "\u{23f5}".*;
+        pane.buffer.cells[2].len = if (index % 2 == 0) 1 else 3;
+        try present(session);
+        try std.testing.expectEqual(@as(usize, 1), renderer.repainted_cells);
+    }
+
+    try std.testing.expectEqual(lookups, renderer.atlas.?.fonts.lookups);
+
     const shape_calls = renderer.atlas.?.shape_calls;
     for (0..20) |phase| {
         renderer.cursor_on = phase % 2 == 0;

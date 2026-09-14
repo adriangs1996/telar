@@ -21,6 +21,9 @@ test {
     _ = @import("tests/terminal.zig");
     _ = @import("tests/configuration.zig");
     _ = @import("tests/font_thicken.zig");
+    _ = @import("tests/font_fallback.zig");
+    _ = @import("text/font_id.zig");
+    _ = @import("text/GraphemeMisses.zig");
     _ = @import("tests/braille.zig");
     _ = @import("tests/box_drawing.zig");
     _ = @import("tests/italic.zig");

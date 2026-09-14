@@ -41,6 +41,7 @@ pub fn init() !*Session {
     errdefer session.peer.deinit(std.testing.io);
     errdefer session.driver.deinit();
     errdefer session.renderer.deinit();
+    session.renderer.io = std.testing.io;
     const size = try session.renderer.measure(.{ .width = 180, .height = 240, .scale = 1 });
     session.gui = try GuiClient.init(.{
         .gpa = std.testing.allocator,
