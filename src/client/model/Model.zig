@@ -1472,14 +1472,15 @@ pub fn planPaneInput(model: *const Model, target: model_types.PaneInputTarget) ?
 
 /// Applies one attached runtime frame and copy-mode reconciliation as one
 /// client-model commit. Broken patch bases request recovery without
-/// changing state; frames already made stale by detach are ignored.
+/// changing state. Detached or absent panes ignore frames still in flight
+/// when a workspace departure removes their local model.
 ///
 /// ```zig
 /// const outcome = try model.applyPaneFrame(frame);
 /// ```
 pub fn applyPaneFrame(model: *Model, frame: FrameViewType) !model_types.PaneFrameOutcome {
-    const tab = model.workspace.tabForPane(frame.pane_id) orelse return error.UnexpectedPane;
-    const pane = tab.model.find(frame.pane_id) orelse return error.UnexpectedPane;
+    const tab = model.workspace.tabForPane(frame.pane_id) orelse return .detached;
+    const pane = tab.model.find(frame.pane_id) orelse return .detached;
     if (!pane.attached) {
         return .detached;
     }

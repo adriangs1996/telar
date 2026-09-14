@@ -37,6 +37,7 @@ pub fn draw(button: PixelButton, canvas: *Canvas) !void {
     const palette = canvas.theme.palette;
     const action: Action = .{ .intent = button.intent };
     const hovered = button.context.isHovered(action);
+
     if (button.background) {
         const fill: core.Color = if (button.active) palette.accent else if (hovered) palette.surface1 else palette.surface0;
         try canvas.fillRoundedAt(button.area, .{ .radius = button.radius, .color = fill });
@@ -48,6 +49,7 @@ pub fn draw(button: PixelButton, canvas: *Canvas) !void {
     var label_area = button.area;
     label_area.x += inset;
     label_area.width = @max(0, label_area.width - 2 * inset - (if (centered) @as(f32, 0) else dot_space));
+
     const text_label: Label = .{
         .text = button.text,
         .color = if (button.active and button.background) palette.surface_dim else if (button.active or hovered) palette.text else palette.subtext0,
@@ -55,16 +57,34 @@ pub fn draw(button: PixelButton, canvas: *Canvas) !void {
         .face = button.face,
         .size = button.size,
     };
+
     if (button.alignment != .start and label_area.width > 0) {
-        var children = [_]Item{.{ .width = .{ .fixed = @min(label_area.width, try canvas.measure(text_label)) } }};
-        try (Layout{ .area = label_area, .direction = .overlay, .alignment = button.alignment }).resolve(&children);
+        var children = [_]Item{.{
+            .width = .{
+                .fixed = @min(label_area.width, try canvas.measure(text_label)),
+            },
+        }};
+
+        try (Layout{
+            .area = label_area,
+            .direction = .overlay,
+            .alignment = button.alignment,
+        }).resolve(&children);
+
         label_area = children[0].bounds;
     }
 
     _ = try canvas.textAt(label_area, text_label);
+
     if (button.dot) |color| {
-        try (AttentionDot{ .area = button.area, .color = color }).draw(canvas);
+        try (AttentionDot{
+            .area = button.area,
+            .color = color,
+        }).draw(canvas);
     }
 
-    try button.context.bands.add(.{ .area = button.area, .action = action });
+    try button.context.bands.add(.{
+        .area = button.area,
+        .action = action,
+    });
 }

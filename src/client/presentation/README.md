@@ -21,6 +21,10 @@ after validation and application to owned model storage, before host-resource
 effects. Receiving bytes alone, a broken base, failed application or a detached
 frame never produces an ACK.
 
+Workspace departure removes its local pane models without waiting for the
+runtime to consume detach requests. Frames still in flight for absent panes are
+treated as detached: they change no cells or resources and produce no ACK.
+
 A commit includes attachment generations. The model allocates them across
 workspace replacements and reattachments, and filters retired identities at
 completion. Equal wire frame IDs from different attachments cannot clear each

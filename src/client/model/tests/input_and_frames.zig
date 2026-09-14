@@ -314,7 +314,7 @@ test "pane frame application commits screen copy state and one frame revision" {
     try std.testing.expectEqualDeep(VersionType{ .copy = 2, .frame = 1 }, model.version());
 }
 
-test "pane frame application separates stale detach recovery and invalid input" {
+test "pane frame application separates detached panes from patch recovery" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const location: TabLocationType = .{
@@ -349,10 +349,14 @@ test "pane frame application separates stale detach recovery and invalid input" 
     try std.testing.expect(detached == .detached);
     try std.testing.expectEqualDeep(VersionType{}, model.version());
 
-    try std.testing.expectError(error.UnexpectedPane, model.applyPaneFrame(try testingPaneFrame(&encoded, .{
+    pane.attached = true;
+    const absent = try model.applyPaneFrame(try testingPaneFrame(&encoded, .{
         .pane_id = @enumFromInt(9),
         .cells = &[_]CellType{ .{}, .{}, .{}, .{} },
-    })));
+    }));
+    try std.testing.expect(absent == .detached);
+    try std.testing.expectEqual(@as(u64, 3), pane.applied_frame_id);
+    try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
     try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 

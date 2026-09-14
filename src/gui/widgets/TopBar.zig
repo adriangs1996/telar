@@ -55,7 +55,13 @@ pub fn draw(widget: TopBar, canvas: *Canvas) !void {
         },
         .{},
     };
-    try (Layout{ .area = content, .gap = gap, .cross_alignment = .center }).resolve(&children);
+
+    try (Layout{
+        .area = content,
+        .gap = gap,
+        .cross_alignment = .center,
+    }).resolve(&children);
+
     const toggle: PixelButton = .{
         .context = widget.context,
         .area = children[0].bounds,
@@ -67,8 +73,17 @@ pub fn draw(widget: TopBar, canvas: *Canvas) !void {
     };
     try toggle.draw(canvas);
 
-    const workspaces: WorkspacePills = .{ .context = widget.context, .area = children[1].bounds };
+    const workspaces: WorkspacePills = .{
+        .context = widget.context,
+        .area = children[1].bounds,
+    };
+
     try workspaces.draw(canvas);
-    const tabs: TabStrip = .{ .context = widget.context, .area = children[2].bounds };
+
+    const tabs: TabStrip = .{
+        .context = widget.context,
+        .area = children[2].bounds,
+    };
+
     try tabs.draw(canvas);
 }

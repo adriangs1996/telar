@@ -18,6 +18,10 @@ const client_actions = @import("telar-client").controllers.actions;
 const encodePaneExited_module = @import("telar-core").encodePaneExited;
 const support = @import("support.zig");
 const pane_closures = @import("telar-client").controllers.pane_closures;
+const workspace_handoffs = @import("telar-client").controllers.workspace_handoffs;
+const runtime_transport = @import("telar-client").runtime_io;
+const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
+const TabLocationType = @import("telar-core").TabLocation;
 
 test "a patch against an unknown base requests a fresh snapshot" {
     var harness: TestHarness = undefined;
@@ -135,6 +139,133 @@ test "a frame made stale by detach has no state resources or presentation effect
 
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
+}
+
+test "a frame already sent before workspace departure is harmless during handoff" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.request_lifecycle.tracker = .{};
+
+    const cells = [_]CellType{.{}};
+    var payload: [256]u8 = undefined;
+    const snapshot = try encodePaneFrame_module(&payload, .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .frame_id = 8,
+        .base_frame_id = 0,
+        .cols = 1,
+        .rows = 1,
+        .scroll = .{ .total_rows = 1, .offset = 0 },
+        .spans = &.{.{ .start = 0, .cells = &cells }},
+    });
+
+    // The runtime writes this frame before it can observe the client's detach.
+    try harness.peer.send(std.testing.io, snapshot);
+    _ = try workspace_handoffs.requestWorkspace(client, @enumFromInt(2));
+    try harness.settle();
+
+    var buffer: [256]u8 = undefined;
+    const detached = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(detached == .detach_pane);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, detached.detach_pane.pane_id);
+    const opened = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(opened == .open_pane);
+    try std.testing.expect(opened.open_pane.target == .workspace);
+    try std.testing.expectEqual(@as(u64, 2), @intFromEnum(opened.open_pane.target.workspace));
+    try std.testing.expect(client.model.workspaceLocation() == null);
+    const version = client.model.version();
+    const pending_updates = host(client).presenter.pending_updates;
+    const graphics_version = host(client).graphics_store.ingressVersion();
+    const graphics_visible = host(client).graphics_store.paneVisible(TestHarness.bootstrap_pane);
+    const frames = client.telemetry.metrics.frames;
+
+    try runtime_transport.scheduleRead(client);
+    switch (try host(client).inbox.receive()) {
+        .server => |result| try std.testing.expectEqual(
+            @as(?u8, null),
+            try runtime_transport.handleRead(client, result),
+        ),
+        else => return error.UnexpectedEvent,
+    }
+
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
+    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
+    try std.testing.expectEqual(graphics_version, host(client).graphics_store.ingressVersion());
+    try std.testing.expectEqual(graphics_visible, host(client).graphics_store.paneVisible(TestHarness.bootstrap_pane));
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    if (comptime enabled_module) {
+        try std.testing.expectEqual(frames, client.telemetry.metrics.frames);
+    }
+
+    const destination_pane: PaneIdType = @enumFromInt(20);
+    const destination: TabLocationType = .{
+        .workspace = .{ .workspace = @enumFromInt(2) },
+        .tab_id = @enumFromInt(2),
+    };
+    const arrived = try encodePaneOpened_module(&payload, .{
+        .request_id = opened.open_pane.request_id,
+        .pane_id = destination_pane,
+        .location = destination,
+        .created = false,
+    });
+    try harness.peer.send(std.testing.io, arrived);
+    switch (try host(client).inbox.receive()) {
+        .server => |result| try std.testing.expectEqual(
+            @as(?u8, null),
+            try runtime_transport.handleRead(client, result),
+        ),
+        else => return error.UnexpectedEvent,
+    }
+
+    try std.testing.expectEqualDeep(destination.workspace, client.model.workspaceLocation().?);
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
+    const pane = client.model.workspace.findPane(destination_pane).?;
+    try std.testing.expect(pane.attached);
+    try harness.settle();
+    const workspace_snapshot = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(workspace_snapshot == .request_workspace_snapshot);
+    const tab_snapshot = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(tab_snapshot == .request_tab_snapshot);
+    try std.testing.expectEqualDeep(destination, tab_snapshot.request_tab_snapshot.location);
+
+    var destination_cells = [_]CellType{.{}};
+    destination_cells[0].bytes[0] = 'N';
+    const destination_snapshot = try encodePaneFrame_module(&payload, .{
+        .pane_id = destination_pane,
+        .frame_id = 9,
+        .base_frame_id = 0,
+        .cols = 1,
+        .rows = 1,
+        .scroll = .{ .total_rows = 1, .offset = 0 },
+        .spans = &.{.{ .start = 0, .cells = &destination_cells }},
+    });
+    const arrival_version = client.model.version();
+    try harness.peer.send(std.testing.io, destination_snapshot);
+    switch (try host(client).inbox.receive()) {
+        .server => |result| try std.testing.expectEqual(
+            @as(?u8, null),
+            try runtime_transport.handleRead(client, result),
+        ),
+        else => return error.UnexpectedEvent,
+    }
+
+    try std.testing.expectEqual(@as(u64, 9), pane.applied_frame_id);
+    try std.testing.expectEqual(@as(u64, 9), pane.pending_frame_id);
+    try std.testing.expectEqualStrings("N", pane.buffer.cells[0].text());
+    try std.testing.expectEqual(arrival_version.frame + 1, client.model.version().frame);
+    if (comptime enabled_module) {
+        try std.testing.expectEqual(frames + 1, client.telemetry.metrics.frames);
+    }
+
+    try harness.settle();
+    const ack = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(ack == .frame_ack);
+    try std.testing.expectEqual(destination_pane, ack.frame_ack.pane_id);
+    try std.testing.expectEqual(@as(u64, 9), ack.frame_ack.frame_id);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "pane cwd commits before presenter-owned metadata projection" {
