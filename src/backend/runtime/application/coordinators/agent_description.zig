@@ -203,7 +203,7 @@ test "a stale generated result cannot overwrite or persist a manual title" {
     try std.testing.expectEqual(@as(usize, 0), fixture.capture.persisted_count);
     try std.testing.expect(!fixture.state.isPending());
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    try std.testing.expectEqualStrings("Manual title", fixture.agents.snapshot(&entries)[0].session_title);
+    try std.testing.expectEqualStrings("Manual title", fixture.agents.snapshot(&entries, 0)[0].session_title);
 }
 
 test "completion starts the next queued job before one client pump" {

@@ -37,6 +37,7 @@ pub const serve = @import("runtime/instance.zig").serve;
 test {
     _ = @import("agent/Agent.zig");
     _ = @import("agent/description.zig");
+    _ = @import("agent/EventLine.zig");
     _ = @import("agent/evidence_support.zig");
     _ = @import("agent/providers/claude.zig");
     _ = @import("agent/providers/codex.zig");

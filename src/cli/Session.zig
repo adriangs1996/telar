@@ -24,6 +24,7 @@ const encodeRequestPaneFocus_module = @import("telar-core").encodeRequestPaneFoc
 const max_agent_session_reference_bytes_module = @import("telar-core").max_agent_session_reference_bytes;
 const encodeReportAgentSession_module = @import("telar-core").encodeReportAgentSession;
 const max_agent_session_file_bytes_module = @import("telar-core").max_agent_session_file_bytes;
+const max_agent_last_event_bytes_module = @import("telar-core").max_agent_last_event_bytes;
 const encodeReportAgent_module = @import("telar-core").encodeReportAgent;
 const AgentCommandReport = @import("AgentCommandReport.zig");
 const max_history_command_bytes_module = @import("telar-core").max_history_command_bytes;
@@ -231,12 +232,14 @@ pub const AgentReport = @import("AgentReport.zig");
 /// try session.reportAgent(pane, .{ .state = .working });
 /// ```
 pub fn reportAgent(session: *Session, pane: PaneRefType, report: AgentReportType) !void {
-    var send_buffer: [max_agent_session_reference_bytes_module + max_agent_session_file_bytes_module + 64]u8 = undefined;
+    var send_buffer: [max_agent_session_reference_bytes_module + max_agent_session_file_bytes_module + max_agent_last_event_bytes_module + 64]u8 = undefined;
     try session.connection.send(session.io, try encodeReportAgent_module(&send_buffer, .{
         .request_id = session.requestId(),
         .pane_id = try pane_module(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .state = report.state,
+        .blocked_reason = report.blocked_reason,
+        .event = report.event,
         .session = report.session,
         .session_file = report.session_file,
         .session_file_kind = report.session_file_kind,

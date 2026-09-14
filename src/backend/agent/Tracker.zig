@@ -80,7 +80,7 @@ pub fn observeSessionReference(tracker: *Tracker, identity: IdentityType, refere
 /// ```
 pub fn projectedProvider(tracker: *const Tracker, key: PaneKeyType) AgentProviderType {
     const agent = tracker.repository.findConst(key) orelse return .unknown;
-    return agent.snapshot().provider;
+    return agent.snapshot(0).provider;
 }
 
 /// Returns the session reference reported for one exact pane generation.
@@ -299,17 +299,18 @@ pub fn remove(tracker: *Tracker, key: PaneKeyType) bool {
 }
 
 /// Copies the current client projections into caller-owned bounded storage.
+/// `now_ms` dates each entry's status age without touching the revision.
 ///
 /// ```zig
 /// var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-/// const snapshot = tracker.snapshot(&entries);
+/// const snapshot = tracker.snapshot(&entries, now_ms);
 /// ```
-pub fn snapshot(tracker: *const Tracker, entries: *[max_agent_snapshot_entries]AgentSnapshotEntryType) []const AgentSnapshotEntryType {
+pub fn snapshot(tracker: *const Tracker, entries: *[max_agent_snapshot_entries]AgentSnapshotEntryType, now_ms: i64) []const AgentSnapshotEntryType {
     var count: usize = 0;
     var iterator = tracker.repository.constIterator();
 
     while (iterator.next()) |agent| {
-        entries[count] = agent.snapshot();
+        entries[count] = agent.snapshot(now_ms);
         count += 1;
     }
 

@@ -42,6 +42,9 @@ pub fn apply(client: *Client, snapshot: AgentSnapshotViewType) !?AgentSnapshotCo
             .icon = entry.icon,
             .attachments = entry.attachments,
             .status = entry.status,
+            .blocked_reason = entry.blocked_reason,
+            .last_event = entry.last_event,
+            .status_age_s = entry.status_age_s,
         };
         count += 1;
     }

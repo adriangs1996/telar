@@ -310,7 +310,7 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
         .observed_at_ms = 2_000,
     }));
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    const agents = second.application.model.agents.snapshot(&entries);
+    const agents = second.application.model.agents.snapshot(&entries, 0);
     try std.testing.expectEqual(@as(usize, 1), agents.len);
     try std.testing.expectEqualStrings("Investigate proxy lifecycle", agents[0].session_title);
     try std.testing.expectEqual(AgentTitleSourceType.manual, agents[0].title_source);

@@ -25,6 +25,8 @@ pub const max_agent_snapshot_entries = max_panes_per_tab;
 pub const max_agent_workspace_label_bytes = 48;
 pub const max_agent_session_title_bytes = 96;
 pub const max_agent_cwd_label_bytes = 48;
+/// One control-free UTF-8 line naming what an agent last did or asks for.
+pub const max_agent_last_event_bytes = 96;
 /// Path of the file an agent records its session in, as its hooks report it.
 pub const max_agent_session_file_bytes = 1024;
 pub const max_foreground_name_bytes = 48;
@@ -267,6 +269,21 @@ pub const AgentStatus = enum(u8) {
     /// Finished a turn while no client had the pane focused. Clears back to
     /// `ready` once a client acknowledges the agent.
     done = 5,
+};
+
+/// Why a `blocked` agent waits for the person. Presentation only: it picks
+/// the chip icon and text and never authorizes an answer on the agent's
+/// behalf. Every other status carries `none`.
+pub const AgentBlockedReason = enum(u8) {
+    none = 0,
+    /// A tool call waits for approval.
+    permission = 1,
+    /// The agent asked the person something.
+    question = 2,
+    /// A plan waits for approval before execution.
+    plan = 3,
+    /// Blocked for a reason no observation names.
+    other = 4,
 };
 
 /// Audible client-side effects produced by exact runtime-owned agent

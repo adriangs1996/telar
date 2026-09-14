@@ -29,6 +29,8 @@ pub fn Type(comptime Executor: type) type {
             const result = controller.executor.execute(.{
                 .pane = .{ .id = request.pane_id, .generation = request.pane_generation },
                 .state = request.state,
+                .blocked_reason = request.blocked_reason,
+                .event = request.event,
                 .session = request.session,
                 .session_file = .{ .kind = request.session_file_kind, .path = request.session_file },
                 .now_ms = clock.real_ms,

@@ -55,6 +55,7 @@
     "agents/SoundPlayback.zig",
     "agents/SoundPort.zig",
     "agents/SoundSnapshot.zig",
+    "agents/attention.zig",
     "agents/sound_playback_support.zig",
     "appearance/AppearanceThemes.zig",
     "appearance/Overrides.zig",
@@ -607,6 +608,7 @@
     "workspace/workspace_list.zig"
   ],
   "assembly_imports": [
+    "agents/attention.zig",
     "agents/snapshot_support.zig",
     "application/agents/agent_snapshot.zig",
     "application/agents/agent_snapshot_delivery.zig",

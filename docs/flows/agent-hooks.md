@@ -60,9 +60,12 @@ that row in place. A finish without an open row inserts a completed row.
 | `SessionStart` | `ready` + session reference; `session_title`, when present, as title |
 | any event | `transcript_path` rides along as the session file so the runtime can watch it for `/rename` |
 | `UserPromptSubmit` | `working` |
-| `PreToolUse`, `PostToolUse` | `working`; a mapped `Bash` call is also recorded |
-| `Stop` | `ready` (projected as `done` until seen) |
-| `Notification` `permission_prompt`, `elicitation_*`, `agent_needs_input` | `blocked` |
+| `PreToolUse` of `AskUserQuestion` | `blocked`, reason `question`, event: the first question |
+| `PreToolUse` of `ExitPlanMode` | `blocked`, reason `plan` |
+| `PreToolUse`, `PostToolUse` | `working`, event `» <tool> <first known argument>`; a mapped `Bash` call is also recorded |
+| `Stop` | `ready` (projected as `done` until seen), event: the first line of `last_assistant_message` |
+| `Notification` `permission_prompt` | `blocked`, reason `permission`, event: the notification message |
+| `Notification` `elicitation_*`, `agent_needs_input` | `blocked`, reason `question`, event: the notification message |
 | `Notification` `idle_prompt` | `ready` |
 | `SessionEnd` | `exited`: the report is withdrawn, weaker evidence decides |
 | any event with `agent_id` (subagent) | ignored |
@@ -73,8 +76,8 @@ that row in place. A finish without an open row inserts a completed row.
 | `SessionStart` | `ready` + session reference |
 | `SessionStart` with source `compact` | `working` + session reference |
 | `UserPromptSubmit` | `working` |
-| `PermissionRequest` | `blocked` |
-| `PreToolUse`, `PostToolUse` | `working`; a mapped shell call is also recorded |
+| `PermissionRequest` | `blocked`, reason `permission`, event `» <tool> <argument>` |
+| `PreToolUse`, `PostToolUse` | `working`, event `» <tool> <argument>`; a mapped shell call is also recorded |
 | `Stop` | `settling`, projected as `working` until a newer idle composer confirms completion |
 | `Interrupt` | `ready` |
 | `SessionEnd` | `exited`: the report is withdrawn, weaker evidence decides |
@@ -104,8 +107,8 @@ schema.report_agent or schema.report_agent_command
 | `session_info_changed` | the new session name as title; a cleared name as an empty title |
 | `agent_start` | `working` |
 | `agent_settled` | current idle/working state (`ready` projects as `done` until seen) |
-| `ui_prompt_start` | `blocked` |
-| `ui_prompt_end` | `blocked` while another dialog remains, otherwise current idle/working state |
+| `ui_prompt_start` | `blocked`, reason `question` |
+| `ui_prompt_end` | `blocked` (reason `question`) while another dialog remains, otherwise current idle/working state |
 | `state_snapshot` | renews current idle/working/blocked state every 30 seconds while active |
 | `tool_execution_start` | mapped shell tool opens a running command row |
 | `tool_execution_end` | matching command row is completed |
@@ -141,7 +144,10 @@ an unreachable runtime it exits 0, so the agent is unaffected. It sends at
 most one bounded lifecycle request and one bounded command request, then exits.
 
 The runtime keeps the report as `Agent.report`, the first evidence
-`chooseEvidence` consults while it is valid. A `working` or `settling` report expires with
+`chooseEvidence` consults while it is valid. Its reason and event line are
+shown on the agent card only while that report decides the projection; the
+event is one control-free line of at most 96 bytes, cut by `telar hook`
+before it is sent. A `working` or `settling` report expires with
 `working_expiry_ms`, other states with `settled_expiry_ms`; `applyProcess`
 clears it when a different process takes the pane. Sounds follow the same
 transition rule as screen evidence.

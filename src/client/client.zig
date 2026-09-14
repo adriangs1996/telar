@@ -426,6 +426,7 @@ pub const SidebarDirection = @import("input/action.zig").SidebarDirection;
 pub const SidebarLayout = @import("model/SidebarLayout.zig");
 pub const Slot = @import("bars/model.zig").Slot;
 pub const AgentSnapshot = @import("agents/AgentSnapshot.zig");
+pub const agent_attention = @import("agents/attention.zig");
 pub const Source = @import("bars/model.zig").Source;
 pub const Sources = @import("model/Sources.zig");
 pub const Split = @import("connection/Split.zig");
@@ -558,6 +559,7 @@ pub const validateDefaultBindings = @import("config/default_bindings.zig").valid
 pub const wait = @import("resources/deadline_timer.zig").wait;
 
 test {
+    _ = @import("agents/attention.zig");
     _ = @import("agents/snapshot_support.zig");
     _ = @import("agents/sound_playback_support.zig");
     _ = @import("appearance/theme_support.zig");

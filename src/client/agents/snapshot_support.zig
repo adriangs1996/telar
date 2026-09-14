@@ -7,6 +7,7 @@ const std = @import("std");
 const AgentInput = @import("AgentInput.zig");
 const Snapshot = @import("AgentSnapshot.zig");
 const AgentProviderType = @import("telar-core").AgentProvider;
+const AgentBlockedReasonType = @import("telar-core").AgentBlockedReason;
 
 pub fn copyLabel(destination: []u8, source: []const u8) !u8 {
     if (source.len > destination.len) {
@@ -54,6 +55,27 @@ test "snapshots own current agents and ignore stale replacement" {
     try std.testing.expectEqualStrings("Improve sidebar", snapshot.slice()[0].sessionTitle());
     try std.testing.expect(!try snapshot.replace(.{ .revision = 3, .agents = &.{} }));
     try std.testing.expectEqual(@as(u8, 1), snapshot.count);
+}
+
+test "snapshot owns attention fields and their event line" {
+    var snapshot: Snapshot = .{};
+    var event = [_]u8{ 'a', 's', 'k' };
+    var agent = testingAgent();
+    agent.status = .blocked;
+    agent.blocked_reason = .question;
+    agent.last_event = &event;
+    agent.status_age_s = 42;
+
+    _ = try snapshot.replace(.{ .revision = 1, .agents = &.{agent} });
+    event[0] = 'x';
+
+    const stored = snapshot.slice()[0];
+    try std.testing.expectEqual(AgentBlockedReasonType.question, stored.blockedReason());
+    try std.testing.expectEqualStrings("ask", stored.lastEvent());
+    try std.testing.expectEqual(@as(u32, 42), stored.statusAgeSeconds());
+
+    agent.last_event = "two\nlines";
+    try std.testing.expectError(error.InvalidAgentLabel, snapshot.replace(.{ .revision = 2, .agents = &.{agent} }));
 }
 
 test "snapshot owns every display label" {

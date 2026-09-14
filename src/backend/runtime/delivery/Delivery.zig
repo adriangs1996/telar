@@ -264,7 +264,7 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
     {
         var entry_storage: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
         var display_storage: [max_agent_snapshot_entries]AgentDisplayStorage = undefined;
-        const entries = sources.agents.snapshot(&entry_storage);
+        const entries = sources.agents.snapshot(&entry_storage, sources.now_ms);
         var enriched_count: usize = 0;
         for (entries) |entry| {
             const pane = sources.panes.resolveConst(.{

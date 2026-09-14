@@ -82,6 +82,18 @@ pub fn clearExpired(state: *ProxyState, now_ms: i64) bool {
     return true;
 }
 
+/// Reports whether the last response closed without completing the turn
+/// while no exchange stays open: the model asked for a tool and the agent
+/// has not called back yet, which is when a permission prompt is visible.
+///
+/// ```zig
+/// if (state.awaitingToolResult()) reason = .permission;
+/// ```
+pub fn awaitingToolResult(state: *const ProxyState) bool {
+    const evidence = state.evidence orelse return false;
+    return evidence.status == .working and state.active_count == 0;
+}
+
 /// Returns a copy of the latest proxy evidence, if one exists.
 ///
 /// ```zig

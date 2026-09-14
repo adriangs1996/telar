@@ -430,6 +430,8 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .pane_generation = 3,
             .state = .blocked,
             .session = "abc",
+            .blocked_reason = .permission,
+            .event = "Run zig build test?",
         }),
     ));
     helper.add(.{ .name = "report_agent_settling", .direction = .client, .golden_hex = golden.report_agent_settling }, helper.commit(
@@ -831,6 +833,8 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         .icon = "X",
         .attachments = .ordered,
         .status = .working,
+        .last_event = "» Edit src/proxy.zig",
+        .status_age_s = 185,
         .source = .foreground_process,
         .authority = .active,
         .confidence = 95,
@@ -1933,6 +1937,94 @@ test "agent snapshot display fields are bounded and validated before allocation"
         &buffer,
         .{ .revision = 8, .entries = &.{entry} },
     ));
+}
+
+test "agent snapshot attention fields are bounded and tied to the blocked status" {
+    var entry: AgentSnapshotEntryType = .{
+        .pane_id = @enumFromInt(5),
+        .pane_generation = 1,
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(2) },
+            .tab_id = @enumFromInt(4),
+        },
+        .pane_index = 1,
+        .process_id = 42,
+        .session_id = .{0} ** 16,
+        .provider = .claude,
+        .status = .blocked,
+        .blocked_reason = .question,
+        .last_event = "¿Ejecuto zig build test?",
+        .status_age_s = 42,
+        .source = .lifecycle_report,
+        .authority = .active,
+        .confidence = 100,
+        .sequence = 6,
+        .observed_at_ms = 7,
+        .expires_at_ms = 8,
+    };
+    var buffer: [1024]u8 = undefined;
+    const encoded = try agent_module.encodeAgentSnapshot(&buffer, .{ .revision = 1, .entries = &.{entry} });
+    var iterator = (try root.decodeServer(encoded)).agent_snapshot.entries();
+    const decoded = (try iterator.next()).?;
+    try std.testing.expectEqual(types.AgentBlockedReason.question, decoded.blocked_reason);
+    try std.testing.expectEqualStrings("¿Ejecuto zig build test?", decoded.last_event);
+    try std.testing.expectEqual(@as(u32, 42), decoded.status_age_s);
+
+    const event_too_long = [_]u8{'x'} ** (types.max_agent_last_event_bytes + 1);
+    entry.last_event = &event_too_long;
+    try std.testing.expectError(error.InvalidByteString, agent_module.encodeAgentSnapshot(
+        &buffer,
+        .{ .revision = 2, .entries = &.{entry} },
+    ));
+    entry.last_event = "two\nlines";
+    try std.testing.expectError(error.InvalidAgentDisplayText, agent_module.encodeAgentSnapshot(
+        &buffer,
+        .{ .revision = 3, .entries = &.{entry} },
+    ));
+    entry.last_event = "";
+    entry.status = .working;
+    try std.testing.expectError(error.InvalidAgentBlockedReason, agent_module.encodeAgentSnapshot(
+        &buffer,
+        .{ .revision = 4, .entries = &.{entry} },
+    ));
+
+    entry.status = .blocked;
+    entry.last_event = "marker";
+    const valid = try agent_module.encodeAgentSnapshot(&buffer, .{ .revision = 5, .entries = &.{entry} });
+    // The reason byte sits right before the 16-bit length of the event.
+    const reason_offset = std.mem.indexOf(u8, valid, "marker").? - 3;
+    buffer[reason_offset] = 9;
+    try std.testing.expectError(error.InvalidAgentBlockedReason, root.decodeServer(valid));
+}
+
+test "agent reports carry a bounded event and a reason only while blocked" {
+    var buffer: [512]u8 = undefined;
+    const encoded = try agent_module.encodeReportAgent(&buffer, .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .pane_generation = 3,
+        .state = .working,
+        .event = "» Edit src/proxy.zig",
+    });
+    const decoded = (try root.decodeClient(encoded)).report_agent;
+    try std.testing.expectEqual(types.AgentBlockedReason.none, decoded.blocked_reason);
+    try std.testing.expectEqualStrings("» Edit src/proxy.zig", decoded.event);
+
+    try std.testing.expectError(error.InvalidAgentBlockedReason, agent_module.encodeReportAgent(&buffer, .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .pane_generation = 3,
+        .state = .ready,
+        .blocked_reason = .permission,
+    }));
+    try std.testing.expectError(error.InvalidAgentDisplayText, agent_module.encodeReportAgent(&buffer, .{
+        .request_id = @enumFromInt(5),
+        .pane_id = @enumFromInt(5),
+        .pane_generation = 3,
+        .state = .blocked,
+        .blocked_reason = .permission,
+        .event = "tab\there",
+    }));
 }
 
 test "truncated client and server messages are rejected" {

@@ -29,6 +29,7 @@ const SessionTitle = @import("SessionTitle.zig");
 const SessionFileType = @import("SessionFile.zig");
 const AgentSessionFileKind = @import("telar-core").AgentSessionFileKind;
 const CompletionType = @import("Completion.zig");
+const AgentBlockedReasonType = @import("telar-core").AgentBlockedReason;
 
 pub const AcknowledgeResult = enum {
     unknown_agent,
@@ -138,7 +139,7 @@ test "tracker rejects every observation that would exceed repository capacity" {
     try std.testing.expect(!observeTestProxy(&tracker, overflow, testProxy(.anthropic_messages, .request_started, 200)));
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    try std.testing.expectEqual(max_agent_snapshot_entries, tracker.snapshot(&entries).len);
+    try std.testing.expectEqual(max_agent_snapshot_entries, tracker.snapshot(&entries, 0).len);
 }
 
 test "only a confirmed prompt settles model work" {
@@ -157,13 +158,13 @@ test "only a confirmed prompt settles model work" {
         .observed_at_ms = 300,
     }));
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    var snapshot = tracker.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(@as(usize, 1), snapshot.len);
     try std.testing.expectEqual(AgentStatusType.working, snapshot[0].status);
     try std.testing.expectEqual(AgentSourceType.proxy_tls, snapshot[0].source);
 
     try std.testing.expect(observeTestReadyPrompt(&tracker, identity, testReadyPrompt(.claude, 400)));
-    snapshot = tracker.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.done, snapshot[0].status);
     try std.testing.expectEqual(AgentSourceType.screen, snapshot[0].source);
 }
@@ -185,7 +186,7 @@ test "explicit Codex prompt settles working without repetition" {
     }));
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    const snapshot = tracker.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.done, snapshot[0].status);
     try std.testing.expectEqual(AgentSourceType.screen, snapshot[0].source);
 }
@@ -225,7 +226,7 @@ test "Codex Stop stays working until a newer input prompt confirms completion" {
     }));
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    const snapshot = tracker.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.done, snapshot[0].status);
     try std.testing.expectEqual(AgentSourceType.screen, snapshot[0].source);
 }
@@ -363,7 +364,7 @@ test "agent branding alone does not settle working" {
     }));
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    const snapshot = tracker.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.working, snapshot[0].status);
     try std.testing.expectEqual(AgentSourceType.proxy_tls, snapshot[0].source);
 }
@@ -382,7 +383,7 @@ test "screen text cannot register an agent without independent evidence" {
         .observed_at_ms = 100,
     }));
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    const snapshot = tracker.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(@as(usize, 0), snapshot.len);
 }
 
@@ -397,7 +398,7 @@ test "foreground process establishes agent identity without screen branding" {
     }));
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    var snapshot = tracker.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(@as(usize, 1), snapshot.len);
     try std.testing.expectEqual(AgentProviderType.claude, snapshot[0].provider);
     try std.testing.expectEqual(AgentStatusType.ready, snapshot[0].status);
@@ -409,7 +410,7 @@ test "foreground process establishes agent identity without screen branding" {
         .signal = .{ .provider = .unknown, .status = .working, .confidence = 78 },
         .observed_at_ms = 200,
     }));
-    snapshot = tracker.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentProviderType.claude, snapshot[0].provider);
     try std.testing.expectEqual(AgentStatusType.working, snapshot[0].status);
     try std.testing.expectEqual(AgentSourceType.screen, snapshot[0].source);
@@ -426,17 +427,17 @@ test "first working turn starts one generated session title" {
         .observed_at_ms = 100,
     }));
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    var snapshot = tracker.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqualStrings(generic_placeholder_module, snapshot[0].session_title);
     try std.testing.expectEqual(AgentTitleStateType.placeholder, snapshot[0].title_state);
 
     try std.testing.expect(tracker.observeInput(identity.key, "improve the sidebar\r"));
     try std.testing.expect(observeTestReadyPrompt(&tracker, identity, testReadyPrompt(.codex, 150)));
-    snapshot = tracker.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentTitleStateType.placeholder, snapshot[0].title_state);
 
     try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.openai_responses, .request_started, 200)));
-    snapshot = tracker.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentTitleStateType.pending, snapshot[0].title_state);
 
     var job = tracker.nextDescriptionJob().?;
@@ -456,7 +457,7 @@ test "first working turn starts one generated session title" {
     try std.testing.expectEqualStrings("Improve agent sidebar", finished.titleSlice());
     try std.testing.expectEqual(AgentTitleSourceType.generated, finished.source);
     try std.testing.expectEqual(AgentTitleStateType.ready, finished.state);
-    snapshot = tracker.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqualStrings("Improve agent sidebar", snapshot[0].session_title);
     try std.testing.expectEqual(AgentTitleSourceType.generated, snapshot[0].title_source);
     try std.testing.expectEqual(AgentTitleStateType.ready, snapshot[0].title_state);
@@ -487,7 +488,7 @@ test "manual title wins over a late generated result" {
     @memcpy(result.title[0..result.title_len], "Generated title");
     try std.testing.expect(tracker.finishDescription(&result) == null);
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    const snapshot = tracker.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqualStrings("Release audit", snapshot[0].session_title);
     try std.testing.expectEqual(AgentTitleSourceType.manual, snapshot[0].title_source);
 }
@@ -511,7 +512,7 @@ test "description backpressure fails the ninth queued request without retry" {
         try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.openai_responses, .request_started, 200)));
     }
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    const snapshot = tracker.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries, 0);
     var pending: usize = 0;
     var failed: usize = 0;
     for (snapshot) |entry| switch (entry.title_state) {
@@ -544,7 +545,7 @@ test "process identity rejects contradictory screen branding" {
     }));
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    const snapshot = tracker.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentProviderType.claude, snapshot[0].provider);
     try std.testing.expectEqual(AgentSourceType.foreground_process, snapshot[0].source);
 }
@@ -566,7 +567,7 @@ test "foreground process exit removes all evidence for that session" {
     try std.testing.expect(tracker.clearProcess(identity.key));
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries).len);
+    try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries, 0).len);
 }
 
 test "new foreground process replaces prior session evidence" {
@@ -591,7 +592,7 @@ test "new foreground process replaces prior session evidence" {
     }));
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    const snapshot = tracker.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentProviderType.codex, snapshot[0].provider);
     try std.testing.expectEqual(AgentStatusType.unknown, snapshot[0].status);
     try std.testing.expectEqual(AgentSourceType.foreground_process, snapshot[0].source);
@@ -620,7 +621,7 @@ test "confirmed Claude prompt refreshes branded identity" {
     }));
     try std.testing.expect(observeTestReadyPrompt(&tracker, identity, testReadyPrompt(.claude, 200)));
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    const snapshot = tracker.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(@as(usize, 1), snapshot.len);
     try std.testing.expectEqual(AgentProviderType.claude, snapshot[0].provider);
     try std.testing.expectEqual(AgentStatusType.ready, snapshot[0].status);
@@ -643,7 +644,7 @@ test "network work resumes a visibly blocked agent" {
     }));
     try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.anthropic_messages, .request_started, 200)));
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    const snapshot = tracker.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.working, snapshot[0].status);
     try std.testing.expectEqual(AgentAuthorityType.resumed, snapshot[0].authority);
 }
@@ -656,7 +657,7 @@ test "new network work supersedes an older ready prompt" {
     try std.testing.expect(observeTestReadyPrompt(&tracker, identity, testReadyPrompt(.claude, 200)));
     try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.anthropic_messages, .request_started, 300)));
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    const snapshot = tracker.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.working, snapshot[0].status);
     try std.testing.expectEqual(AgentSourceType.proxy_tls, snapshot[0].source);
 }
@@ -688,7 +689,7 @@ test "unmatched proxy responses cannot create agent state" {
     }));
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries).len);
+    try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries, 0).len);
 }
 
 test "a contradictory provider cannot complete another agent's exchange" {
@@ -712,7 +713,7 @@ test "a contradictory provider cannot complete another agent's exchange" {
     }));
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    var snapshot = tracker.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentProviderType.claude, snapshot[0].provider);
     try std.testing.expectEqual(AgentStatusType.working, snapshot[0].status);
 
@@ -723,7 +724,7 @@ test "a contradictory provider cannot complete another agent's exchange" {
         .exchange = exchange,
         .observed_at_ms = 300,
     }));
-    snapshot = tracker.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentProviderType.claude, snapshot[0].provider);
     try std.testing.expectEqual(AgentStatusType.done, snapshot[0].status);
 }
@@ -749,7 +750,7 @@ test "transport completion without provider turn completion remains working" {
     }));
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    const snapshot = tracker.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(@as(usize, 1), snapshot.len);
     try std.testing.expectEqual(AgentStatusType.working, snapshot[0].status);
     try std.testing.expectEqual(AgentSourceType.proxy_tls, snapshot[0].source);
@@ -777,7 +778,7 @@ test "provider turn completion projects ready and ignores later transport comple
     }));
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    var snapshot = tracker.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.done, snapshot[0].status);
     try std.testing.expectEqual(AgentSourceType.proxy_tls, snapshot[0].source);
     try std.testing.expectEqual(@as(u8, 99), snapshot[0].confidence);
@@ -790,7 +791,7 @@ test "provider turn completion projects ready and ignores later transport comple
         .exchange = exchange,
         .observed_at_ms = 300,
     }));
-    snapshot = tracker.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.done, snapshot[0].status);
     try std.testing.expectEqual(@as(i64, 200), snapshot[0].observed_at_ms);
 }
@@ -819,7 +820,7 @@ test "all concurrent model exchanges must complete before ready" {
         .observed_at_ms = 200,
     }));
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    var snapshot = tracker.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.working, snapshot[0].status);
 
     try std.testing.expect(tracker.observeProxy(.{
@@ -829,7 +830,7 @@ test "all concurrent model exchanges must complete before ready" {
         .exchange = second,
         .observed_at_ms = 300,
     }));
-    snapshot = tracker.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.done, snapshot[0].status);
 }
 
@@ -862,7 +863,7 @@ test "new model work supersedes a completed response" {
     }));
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    const snapshot = tracker.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.working, snapshot[0].status);
     try std.testing.expectEqual(@as(i64, 300), snapshot[0].observed_at_ms);
 }
@@ -874,7 +875,7 @@ test "expired agent evidence is removed" {
     try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.openai_responses, .response_finished, 100)));
     try std.testing.expect(tracker.expire(100 + types.settled_expiry_ms));
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries).len);
+    try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries, 0).len);
 }
 
 test "expiration removes every adjacent stale aggregate" {
@@ -889,7 +890,7 @@ test "expiration removes every adjacent stale aggregate" {
     try std.testing.expect(tracker.expire(100 + types.settled_expiry_ms));
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries).len);
+    try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries, 0).len);
 }
 
 test "a bare shell prompt is not Claude identity" {
@@ -901,7 +902,7 @@ test "a bare shell prompt is not Claude identity" {
         .observed_at_ms = 100,
     }));
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries).len);
+    try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries, 0).len);
 }
 
 test "completed HTTP2 streams do not settle the agent turn" {
@@ -932,7 +933,7 @@ test "completed HTTP2 streams do not settle the agent turn" {
     });
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    var snapshot = tracker.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.working, snapshot[0].status);
     _ = tracker.observeProxy(.{
         .identity = identity,
@@ -941,11 +942,11 @@ test "completed HTTP2 streams do not settle the agent turn" {
         .exchange = second,
         .observed_at_ms = 300,
     });
-    snapshot = tracker.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.working, snapshot[0].status);
 
     try std.testing.expect(observeTestReadyPrompt(&tracker, identity, testReadyPrompt(.codex, 400)));
-    snapshot = tracker.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.done, snapshot[0].status);
 }
 
@@ -970,7 +971,7 @@ test "sequential model requests stay working until a confirmed prompt" {
     }));
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    var snapshot = tracker.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.working, snapshot[0].status);
 
     try std.testing.expect(tracker.observeProxy(.{
@@ -987,11 +988,11 @@ test "sequential model requests stay working until a confirmed prompt" {
         .exchange = second,
         .observed_at_ms = 400,
     }));
-    snapshot = tracker.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.working, snapshot[0].status);
 
     try std.testing.expect(observeTestReadyPrompt(&tracker, identity, testReadyPrompt(.claude, 500)));
-    snapshot = tracker.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.done, snapshot[0].status);
     try std.testing.expectEqual(AgentSourceType.screen, snapshot[0].source);
 }
@@ -1062,7 +1063,7 @@ test "a restored title waits for the resumed agent and skips title generation" {
     try std.testing.expect(tracker.observeProcess(.{ .identity = identity, .provider = .claude, .process_id = 43, .observed_at_ms = 100 }));
 
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    const snapshot = tracker.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqualStrings("Investigate proxy lifecycle", snapshot[0].session_title);
     try std.testing.expectEqual(AgentTitleSourceType.generated, snapshot[0].title_source);
     try std.testing.expectEqual(AgentTitleStateType.ready, snapshot[0].title_state);
@@ -1170,7 +1171,7 @@ test "lifecycle reports outrank screen and proxy evidence until they expire" {
 
     try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = 300 }));
     var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
-    var snapshot = tracker.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.working, snapshot[0].status);
     try std.testing.expectEqual(AgentSourceType.lifecycle_report, snapshot[0].source);
     try std.testing.expectEqual(AgentProviderType.claude, snapshot[0].provider);
@@ -1179,13 +1180,13 @@ test "lifecycle reports outrank screen and proxy evidence until they expire" {
     try std.testing.expectEqual(AgentStatusType.done, tracker.projectedStatus(identity.key).?);
 
     try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .exited, .observed_at_ms = 500 }));
-    snapshot = tracker.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentStatusType.blocked, snapshot[0].status);
     try std.testing.expectEqual(AgentSourceType.screen, snapshot[0].source);
 
     try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = 600 }));
     _ = tracker.expire(600 + types.working_expiry_ms + 1);
-    snapshot = tracker.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries, 0);
     try std.testing.expectEqual(AgentSourceType.screen, snapshot[0].source);
 }
 
@@ -1220,4 +1221,97 @@ test "Pi model completion followed by local tools is not an agent completion" {
     try std.testing.expectEqual(AgentStatusType.working, tracker.projectedStatus(identity.key).?);
     _ = tracker.expire(300 + types.working_expiry_ms);
     try std.testing.expectEqual(AgentStatusType.unknown, tracker.projectedStatus(identity.key).?);
+}
+
+test "a blocked report names its reason and event and the proxy names permission without one" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
+    try std.testing.expect(tracker.observeProcess(.{ .identity = identity, .provider = .claude, .process_id = 42, .observed_at_ms = 100 }));
+
+    try std.testing.expect(tracker.observeReport(.{
+        .identity = identity,
+        .state = .blocked,
+        .blocked_reason = .question,
+        .event = "Which database?",
+        .observed_at_ms = 200,
+    }));
+    var snapshot = tracker.snapshot(&entries, 200);
+    try std.testing.expectEqual(AgentStatusType.blocked, snapshot[0].status);
+    try std.testing.expectEqual(AgentBlockedReasonType.question, snapshot[0].blocked_reason);
+    try std.testing.expectEqualStrings("Which database?", snapshot[0].last_event);
+
+    // A working report replaces the question with the tool call.
+    try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .working, .event = "» Edit src/proxy.zig", .observed_at_ms = 300 }));
+    snapshot = tracker.snapshot(&entries, 300);
+    try std.testing.expectEqual(AgentBlockedReasonType.none, snapshot[0].blocked_reason);
+    try std.testing.expectEqualStrings("» Edit src/proxy.zig", snapshot[0].last_event);
+
+    // Without a report, a response that closed on a tool request and a
+    // visible prompt is a permission prompt.
+    try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .exited, .observed_at_ms = 400 }));
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 1, .stream_id = 1 };
+    _ = tracker.observeProxy(.{ .identity = identity, .dialect = .anthropic_messages, .phase = .request_started, .exchange = exchange, .observed_at_ms = 500 });
+    _ = tracker.observeProxy(.{ .identity = identity, .dialect = .anthropic_messages, .phase = .response_finished, .exchange = exchange, .observed_at_ms = 600 });
+    try std.testing.expect(tracker.observeScreen(.{
+        .identity = identity,
+        .signal = .{ .provider = .claude, .status = .blocked, .confidence = 88, .identity_confirmed = true },
+        .observed_at_ms = 700,
+    }));
+    snapshot = tracker.snapshot(&entries, 700);
+    try std.testing.expectEqual(AgentStatusType.blocked, snapshot[0].status);
+    try std.testing.expectEqual(AgentBlockedReasonType.permission, snapshot[0].blocked_reason);
+    try std.testing.expectEqualStrings("", snapshot[0].last_event);
+
+    // A blocked screen with no proxy story has no named reason.
+    _ = tracker.expire(600 + types.working_expiry_ms + 1);
+    try std.testing.expect(tracker.observeScreen(.{
+        .identity = identity,
+        .signal = .{ .provider = .claude, .status = .blocked, .confidence = 88, .identity_confirmed = true },
+        .observed_at_ms = 600 + types.working_expiry_ms + 2,
+    }));
+    snapshot = tracker.snapshot(&entries, 600 + types.working_expiry_ms + 2);
+    try std.testing.expectEqual(AgentStatusType.blocked, snapshot[0].status);
+    try std.testing.expectEqual(AgentBlockedReasonType.other, snapshot[0].blocked_reason);
+}
+
+test "the status age follows the last status change and never advances the revision" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
+    try std.testing.expect(tracker.observeProcess(.{ .identity = identity, .provider = .claude, .process_id = 42, .observed_at_ms = 1_000 }));
+    try std.testing.expectEqual(@as(u32, 0), tracker.snapshot(&entries, 500)[0].status_age_s);
+    try std.testing.expectEqual(@as(u32, 4), tracker.snapshot(&entries, 5_999)[0].status_age_s);
+
+    const revision = tracker.revision;
+    try std.testing.expectEqual(@as(u32, 60), tracker.snapshot(&entries, 61_000)[0].status_age_s);
+    try std.testing.expectEqual(revision, tracker.revision);
+
+    // Renewing the same status keeps the original change time; a new one
+    // restarts it.
+    try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = 10_000 }));
+    try std.testing.expectEqual(@as(u32, 5), tracker.snapshot(&entries, 15_000)[0].status_age_s);
+    _ = tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = 20_000 });
+    try std.testing.expectEqual(@as(u32, 15), tracker.snapshot(&entries, 25_000)[0].status_age_s);
+    try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .ready, .observed_at_ms = 30_000 }));
+    try std.testing.expectEqual(AgentStatusType.done, tracker.projectedStatus(identity.key).?);
+    try std.testing.expectEqual(@as(u32, 1), tracker.snapshot(&entries, 31_000)[0].status_age_s);
+}
+
+test "a changed event line advances the revision like a label and clears with its report" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
+    _ = tracker.observeProcess(.{ .identity = identity, .provider = .claude, .process_id = 42, .observed_at_ms = 100 });
+    _ = tracker.observeReport(.{ .identity = identity, .state = .working, .event = "» Read a.zig", .observed_at_ms = 200 });
+
+    // Same timestamp and status: only the event line differs, and that alone
+    // republishes the projection.
+    const revision = tracker.revision;
+    try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .working, .event = "» Edit b.zig", .observed_at_ms = 200 }));
+    try std.testing.expect(tracker.revision > revision);
+    try std.testing.expectEqualStrings("» Edit b.zig", tracker.snapshot(&entries, 400)[0].last_event);
+
+    _ = tracker.expire(400 + types.working_expiry_ms + 1);
+    try std.testing.expectEqualStrings("", tracker.snapshot(&entries, 400 + types.working_expiry_ms + 1)[0].last_event);
 }
