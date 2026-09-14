@@ -81,7 +81,8 @@ test "native agent targets retain generation through scroll and snapshot replace
     const first = fixture.target(.{ .focus_agent = entries[0].key }).?;
     try std.testing.expectEqualDeep(client.Intent{ .focus_agent = entries[0].key }, fixture.click(first, 0).intent);
     _ = fixture.chrome.pointer(.{ .x = 4, .y = 4, .kind = .scroll_down });
-    try std.testing.expectEqual(@as(u16, 3), fixture.chrome.sidebar.scroll);
+    try std.testing.expect(fixture.chrome.sidebar.step != 0);
+    try std.testing.expectEqual(fixture.chrome.sidebar.step, fixture.chrome.sidebar.scroll);
     try fixture.paint(projection);
     try std.testing.expect(fixture.target(.{ .focus_agent = entries[2].key }) != null);
     try std.testing.expectEqual(@as(u64, 1), agents.revision);
