@@ -119,6 +119,7 @@ pub fn apply(reload: *Reload, gui: *GuiClient, renderer: *Renderer) !bool {
             reload.retired = renderer.*;
             renderer.* = replacement;
             renderer.atlas_version = reload.retired.?.atlas_version;
+            renderer.sprites_version = reload.retired.?.sprites_version;
             reload.prepared = null;
         }
 

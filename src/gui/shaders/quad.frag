@@ -1,5 +1,8 @@
 #version 450
 layout(set = 0, binding = 1) uniform sampler2D atlas;
+// Premultiplied RGBA cells sampled linearly; the tint's alpha fades a sprite
+// and its RGB multiplies the artwork.
+layout(set = 0, binding = 2) uniform sampler2D sprites;
 
 layout(location = 0) in vec2 in_uv;
 layout(location = 1) in vec4 in_color;
@@ -7,6 +10,7 @@ layout(location = 2) in vec2 in_local;
 layout(location = 3) flat in vec2 in_size;
 layout(location = 4) flat in vec2 in_shape;
 layout(location = 5) flat in vec4 in_border_color;
+layout(location = 6) flat in float in_texture;
 layout(location = 0) out vec4 out_color;
 
 // Signed distance from the pixel center to the rounded rectangle outline, in
@@ -19,6 +23,15 @@ float rounded_distance(vec2 local, vec2 size, float radius) {
 }
 
 void main() {
+    if (in_texture > 0.5) {
+        // The blend state expects straight alpha, so the premultiplied texel
+        // is divided back before the tint applies.
+        vec4 texel = texture(sprites, in_uv);
+        vec3 straight = texel.a > 0.0 ? texel.rgb / texel.a : vec3(0.0);
+        out_color = vec4(straight * in_color.rgb, texel.a * in_color.a);
+        return;
+    }
+
     float coverage = texture(atlas, in_uv).r;
     if (in_shape.x == 0.0 && in_shape.y == 0.0) {
         out_color = vec4(in_color.rgb, in_color.a * coverage);

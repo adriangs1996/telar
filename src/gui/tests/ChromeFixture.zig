@@ -45,7 +45,7 @@ pub fn paint(fixture: *Fixture, projection_value: client.Projection) !void {
 pub fn prepare(fixture: *Fixture, projection_value: client.Projection) !void {
     const renderer = &fixture.session.renderer;
     renderer.quads.clear();
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport, .sprites = if (renderer.sprites) |*page| page else null };
     try fixture.chrome.paint(&canvas, projection_value);
 }
 

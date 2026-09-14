@@ -20,8 +20,8 @@ test "plain fills keep the textured quad path bit for bit" {
     try std.testing.expectEqual(bounds.width, plain.width);
     try std.testing.expectEqual(@as(f32, 0), plain.radius);
     try std.testing.expectEqual(@as(f32, 0), plain.border);
-    try std.testing.expectEqual(@as(f32, 0), plain.reserved0);
-    try std.testing.expectEqual(@as(f32, 0), plain.reserved1);
+    try std.testing.expectEqual(@as(f32, 0), plain.texture);
+    try std.testing.expectEqual(@as(f32, 0), plain.reserved);
     try std.testing.expectEqual(@as(f32, 0), plain.border_a);
     var reference = QuadList.init(std.testing.allocator);
     defer reference.deinit();

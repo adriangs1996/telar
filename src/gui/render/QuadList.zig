@@ -4,6 +4,7 @@ const std = @import("std");
 const Color = @import("Color.zig");
 const Rect = @import("Rect.zig");
 const RoundedRect = @import("RoundedRect.zig");
+const SpriteQuad = @import("SpriteQuad.zig");
 const quad = @import("Quad.zig");
 const Quad = quad.Quad;
 const QuadList = @This();
@@ -90,6 +91,27 @@ pub fn pushRounded(list: *QuadList, rect: Rect, shape: RoundedRect) !void {
     });
 }
 
+/// Appends one cell of the RGBA sprite page scaled into `rect`; the tint's
+/// alpha fades it and its RGB multiplies the artwork, white keeps it as is.
+/// Example: `try list.pushSprite(box, page.uv(mark), Color.white);`
+pub fn pushSprite(list: *QuadList, rect: Rect, sprite: SpriteQuad) !void {
+    try list.push(.{
+        .x = rect.x,
+        .y = rect.y,
+        .width = rect.width,
+        .height = rect.height,
+        .u0 = sprite.uv[0],
+        .v0 = sprite.uv[1],
+        .u1 = sprite.uv[2],
+        .v1 = sprite.uv[3],
+        .r = sprite.tint.r,
+        .g = sprite.tint.g,
+        .b = sprite.tint.b,
+        .a = sprite.tint.a,
+        .texture = quad.sprite_texture,
+    });
+}
+
 pub fn items(list: *const QuadList) []const Quad {
     return list.quads.items;
 }
@@ -112,6 +134,16 @@ test "plain rectangles keep zero shape attributes and rounded surfaces carry the
     try std.testing.expectEqual(@as(f32, 1), ring.border_a);
     try std.testing.expectEqual(plain.u0, ring.u0);
     try std.testing.expectEqual(@as(usize, 80), @sizeOf(Quad));
+    try std.testing.expectEqual(@as(f32, 0), plain.texture);
+    try std.testing.expectEqual(@as(f32, 0), ring.texture);
+
+    try list.pushSprite(.{ .x = 1, .y = 2, .width = 3, .height = 4 }, .{ .uv = .{ 0.25, 0.5, 0.75, 1 }, .tint = Color.white });
+    const sprite = list.items()[2];
+    try std.testing.expectEqual(quad.sprite_texture, sprite.texture);
+    try std.testing.expectEqual(@as(f32, 0.25), sprite.u0);
+    try std.testing.expectEqual(@as(f32, 1), sprite.v1);
+    try std.testing.expectEqual(@as(f32, 0), sprite.radius);
+    try std.testing.expectEqual(@as(f32, 0), sprite.border);
 }
 
 test "clear keeps capacity and drops quads" {

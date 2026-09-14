@@ -4,6 +4,7 @@ const client = @import("telar-client");
 const core = @import("telar-core");
 const FontSource = @import("../text/FontSource.zig");
 const GlyphAtlas = @import("../text/GlyphAtlas.zig");
+const SpritePage = @import("../image/SpritePage.zig");
 const QuadList = @import("QuadList.zig");
 const Color = @import("Color.zig");
 const Rect = @import("Rect.zig");
@@ -23,6 +24,9 @@ config: client.GuiConfig = .{},
 theme: client.TerminalTheme = client.theme_support.default_theme.terminal,
 font: FontSource = .{},
 atlas: ?GlyphAtlas = null,
+/// Built with the atlas for the same display scale; favicons land in it
+/// between frames and bump its version the way glyphs bump the atlas.
+sprites: ?SpritePage = null,
 quads: QuadList,
 cell_quads: QuadList,
 retained: RetainedCells,
@@ -34,6 +38,8 @@ origin: [2]u32 = .{ 0, 0 },
 viewport: [2]u32 = .{ 0, 0 },
 atlas_version: u32 = 0,
 last_page_version: u32 = 0,
+sprites_version: u32 = 0,
+last_sprites_version: u32 = 0,
 background: Color = .black,
 foreground: Color = .white,
 last_theme: ?client.TerminalTheme = null,
@@ -61,6 +67,10 @@ pub fn deinit(renderer: *Renderer) void {
         atlas.deinit();
     }
 
+    if (renderer.sprites) |*sprites| {
+        sprites.deinit();
+    }
+
     renderer.font.deinit(renderer.allocator);
 
     renderer.quads.deinit();
@@ -80,6 +90,8 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
         var replacement = try GlyphAtlas.init(renderer.allocator, .{ .font = renderer.font.bytes, .pixel_height = pixel_height, .face_index = renderer.font.match.face_index, .postscript = std.mem.sliceTo(&renderer.font.match.postscript, 0), .thicken = renderer.config.font.thicken, .thicken_strength = renderer.config.font.thicken_strength });
         errdefer replacement.deinit();
         try replacement.prepareFallbacks();
+        var sprites = try SpritePage.init(renderer.allocator, SpritePage.cellFor(viewport.scale));
+        errdefer sprites.deinit();
         const natural_height: f32 = @floatFromInt(replacement.lineHeight());
         const height = @round(natural_height * renderer.config.font.line_height);
         const width = @round(@as(f32, @floatFromInt(replacement.cellWidth())) + renderer.config.font.letter_spacing * viewport.scale);
@@ -97,10 +109,16 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
             atlas.deinit();
         }
 
+        if (renderer.sprites) |*page| {
+            page.deinit();
+        }
+
         renderer.retained.invalidate();
         renderer.atlas = replacement;
+        renderer.sprites = sprites;
         renderer.scale = viewport.scale;
         renderer.last_page_version = 0;
+        renderer.last_sprites_version = 0;
     }
 
     // Chrome bands come off the window first, in whole device pixels, so
@@ -160,13 +178,21 @@ pub fn prepare(renderer: *Renderer, projection: client.Projection) !client.Prese
     return commit;
 }
 
-/// Seals the atlas after terminal cells, native chrome and overlays share it.
+/// Seals the atlas and the sprite page after terminal cells, native chrome
+/// and overlays share them; each frame version advances only when its page
+/// changed, so the backend uploads once per change and never on a warm frame.
 /// Example: `renderer.seal();`
 pub fn seal(renderer: *Renderer) void {
     const page_version = renderer.atlas.?.version;
     if (renderer.last_page_version != page_version) {
         renderer.last_page_version = page_version;
         renderer.atlas_version +%= 1;
+    }
+
+    const sprites_version = if (renderer.sprites) |page| page.version else 0;
+    if (renderer.last_sprites_version != sprites_version) {
+        renderer.last_sprites_version = sprites_version;
+        renderer.sprites_version +%= 1;
     }
 }
 
@@ -320,6 +346,9 @@ pub fn frame(renderer: *const Renderer, token: u64) native.Frame {
         .atlas = if (renderer.atlas) |atlas| atlas.pixels.ptr else null,
         .atlas_side = GlyphAtlas.side,
         .atlas_version = renderer.atlas_version,
+        .sprites = if (renderer.sprites) |page| page.pixels.ptr else null,
+        .sprites_side = if (renderer.sprites != null) SpritePage.side else 0,
+        .sprites_version = renderer.sprites_version,
         .background = .{ renderer.background.r, renderer.background.g, renderer.background.b, renderer.config.window.background_opacity },
         .background_blur = renderer.config.window.background_blur,
         .titlebar = @intFromBool(renderer.config.window.titlebar),

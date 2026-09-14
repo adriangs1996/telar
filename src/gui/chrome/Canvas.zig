@@ -12,6 +12,8 @@ const Ring = @import("Ring.zig");
 const TextRun = @import("../text/TextRun.zig");
 const ChromeMetrics = @import("ChromeMetrics.zig");
 const LabelPlacement = @import("LabelPlacement.zig");
+const SpritePage = @import("../image/SpritePage.zig");
+const Sprite = @import("../image/Sprite.zig");
 const Canvas = @This();
 
 atlas: *@import("../text/GlyphAtlas.zig"),
@@ -23,6 +25,9 @@ theme: client.ColorTheme,
 chrome: ChromeMetrics = .{},
 /// Whole window in device pixels; the bands span it, the grid sits inside.
 viewport: [2]u32 = .{ 0, 0 },
+/// The RGBA sprite page of the renderer; `null` while a fixture has none,
+/// in which case `spriteAt` draws nothing and `providerMark` finds nothing.
+sprites: ?*const SpritePage = null,
 
 /// Converts host grid coordinates including the configured window inset.
 /// Example: `const pixels = canvas.rect(regions.top);`
@@ -101,6 +106,29 @@ pub fn ringAt(canvas: *Canvas, bounds: Rect, stroke: Ring) !void {
         .border = stroke.width,
         .border_color = border_color,
     });
+}
+
+/// Draws one sprite cell scaled into `bounds` with linear sampling: the page
+/// cell is sized for the display scale, so an on-grid box samples one texel
+/// per pixel and any residual ratio is a bilinear average of premultiplied
+/// texels. One quad, no shape. The top-left corner is snapped to a whole
+/// pixel so linear sampling never blurs an exact-size mark.
+/// Example: `try canvas.spriteAt(mark_box, sprite);`
+pub fn spriteAt(canvas: *Canvas, bounds: Rect, sprite: Sprite) !void {
+    const page = canvas.sprites orelse return;
+    if (bounds.width <= 0 or bounds.height <= 0) {
+        return;
+    }
+
+    const snapped: Rect = .{ .x = @floor(bounds.x), .y = @floor(bounds.y), .width = bounds.width, .height = bounds.height };
+    try canvas.quads.pushSprite(snapped, .{ .uv = page.uv(sprite) });
+}
+
+/// The embedded mark of a built-in provider when the canvas has a page.
+/// Example: `if (canvas.providerMark(agent.provider)) |mark| ...`
+pub fn providerMark(canvas: *const Canvas, provider: core.AgentProvider) ?Sprite {
+    const page = canvas.sprites orelse return null;
+    return page.providerMark(provider);
 }
 
 /// Fills a device-pixel rectangle with the terminal background at `alpha`,

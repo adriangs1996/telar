@@ -211,11 +211,14 @@ static void draw(id view, SEL selector, id drawable) {
     }
 }
 static const uint8_t pixels[] = {255,255,255,255};
-// A plain quad, a rounded card and an inner ring exercise every fragment path.
-static const telar_gui_quad quads[3] = {
+// A 2x2 premultiplied RGBA sprite page: red, green, blue and half-transparent white.
+static const uint8_t sprite_pixels[] = {255,0,0,255, 0,255,0,255, 0,0,255,255, 128,128,128,128};
+// A plain quad, a rounded card, an inner ring and a sprite exercise every fragment path.
+static const telar_gui_quad quads[4] = {
     {20,20,200,100,0,0,1,1,0,1,0,1},
     {40,140,200,100,0,0,1,1,.2f,.4f,.9f,1,8,0,0,0,0,0,0,0},
     {60,260,200,100,0,0,1,1,0,0,0,0,8,2,0,0,1,.8f,.2f,1},
+    {300,20,64,64,0,0,1,1,1,1,1,1,0,0,1,0,0,0,0,0},
 };
 static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *frame) {
     (void)context;
@@ -231,7 +234,7 @@ static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *
     CAMetalLayer *layer = (CAMetalLayer *)terminal_view(NSApp.windows.firstObject.contentView).layer;
     if (layer && (viewport.width != (uint32_t)layer.drawableSize.width ||
                   viewport.height != (uint32_t)layer.drawableSize.height)) failed++;
-    *frame = (telar_gui_frame){.token = ++paints, .quads = quads, .quad_count = 3, .atlas = pixels, .atlas_side = 2, .atlas_version = 1, .background = {.2f,.3f,.4f,appearance_phase == 2 ? 1 : .5f}, .background_blur = appearance_phase == 0 ? 40 : appearance_phase == 1 || appearance_phase == 4 ? 80 : 0, .titlebar = appearance_phase != 1 && appearance_phase != 4};
+    *frame = (telar_gui_frame){.token = ++paints, .quads = quads, .quad_count = 4, .atlas = pixels, .atlas_side = 2, .atlas_version = 1, .sprites = sprite_pixels, .sprites_side = 2, .sprites_version = 1, .background = {.2f,.3f,.4f,appearance_phase == 2 ? 1 : .5f}, .background_blur = appearance_phase == 0 ? 40 : appearance_phase == 1 || appearance_phase == 4 ? 80 : 0, .titlebar = appearance_phase != 1 && appearance_phase != 4};
 }
 static int pump(void *context) {
     (void)context;

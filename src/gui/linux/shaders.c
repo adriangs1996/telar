@@ -5,6 +5,7 @@ _Static_assert(sizeof(telar_gui_quad) == 80, "GLSL std430 Quad stride");
 _Static_assert(offsetof(telar_gui_quad, u0) == 16, "GLSL Quad UV offset");
 _Static_assert(offsetof(telar_gui_quad, r) == 32, "GLSL Quad color offset");
 _Static_assert(offsetof(telar_gui_quad, radius) == 48, "GLSL Quad shape offset");
+_Static_assert(offsetof(telar_gui_quad, texture) == 56, "GLSL Quad texture selector offset");
 _Static_assert(offsetof(telar_gui_quad, border_r) == 64, "GLSL Quad border color offset");
 
 const uint32_t telar_gui_quad_vert_spv[] =
