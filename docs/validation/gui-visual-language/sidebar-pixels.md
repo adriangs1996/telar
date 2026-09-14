@@ -31,10 +31,10 @@ edge and padding commits).
 | Check | Result |
 | --- | --- |
 | `zig build test` | exit 0; `3383/3385 tests passed (2 skipped)`, codestyle and boundary checks included |
-| `zig build test-gui` | exit 0; 263/263 (243 before this branch; new: `tests/sidebar_band.zig`, `SidebarBand`, `SidebarPreference` unit tests) |
+| `zig build test-gui` | exit 0; 263/263 (new: `tests/sidebar_band.zig`, `SidebarBand`, `SidebarPreference` unit tests) |
 | `zig build test-gui-window` | `status=0 painted=16 delivered=12 discarded=3 inputs=10 repeats=26 pointer_inputs=8 pointer_queries=53 timer_wakes=1 fullscreen=3 failures=0` |
 | `zig build check-client-boundaries` | passed |
-| `tools/gui_multiplexer.py zig-out/bin/telar /tmp/pxsb` | passed: 15 receipts, five shells, fullscreen and reconnect; the focused left pane records `64×67` with the sidebar off and `64×51` with it on, 16 columns of a half-width pane, that is 32 columns of 18 px at the 2x display for the 292 logical px of band and gap ([records](sidebar-pixels-macos-multiplexer.json), [splits](sidebar-pixels-splits.png)) |
+| `tools/gui_multiplexer.py zig-out/bin/telar /tmp/pxsb` | passed: 15 receipts, five shells, fullscreen and reconnect; the focused left pane records `64×67` with the sidebar off and `64×51` with it on, 16 columns of a half-width pane, that is 32 columns of about 18 px at the 2x display for the 292 logical px of band and gap ([records](sidebar-pixels-macos-multiplexer.json), [splits](sidebar-pixels-splits.png)) |
 | `tools/gui_sprites.py zig-out/bin/telar /tmp/pxsp` | three stand-in agents in three splits: the cards, the header `agents · 3 · 0 need you`, the sheet marks, the selected card, the footer `CPU / MEM` slots and the edge line all sit inside the band, the tab strip starts after the gap ([capture](sidebar-pixels-cards.png)) |
 
 The unit tests check the band at scale 1 and 2, clamping at 220 and 480
