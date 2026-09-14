@@ -13,6 +13,7 @@ const quad = @import("../render/Quad.zig");
 test {
     _ = SpritePage;
     _ = @import("../image/box_filter.zig");
+    _ = @import("../image/png.zig");
 }
 
 /// Quads sampling the sprite page.
