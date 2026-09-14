@@ -165,6 +165,7 @@ pub fn chooseRow(client: *Client, index: u16) !void {
 /// One semantic host event the prompt can interpret. Pasted text arrives as
 /// bounded slices between the paste markers; the adapter decodes bytes.
 pub const Input = union(enum) {
+    command: ModelNamePromptCommand,
     key: KeyType,
     paste_start,
     paste_end,
@@ -514,6 +515,7 @@ fn dispatchInput(use_case: *NamePromptHandlerType, input: Input) !ApplicationInp
 /// not interpret produce no command.
 fn commandFor(input: Input) ?ModelNamePromptCommand {
     return switch (input) {
+        .command => |command| command,
         .paste_start => .paste_start,
         .paste_end => .paste_end,
         .paste_text => |text| .{ .insert = text },

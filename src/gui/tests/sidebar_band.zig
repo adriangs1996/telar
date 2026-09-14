@@ -81,11 +81,11 @@ test "a pointer on a card focuses its agent and a pointer in the gap hits nothin
     try std.testing.expectEqualDeep(client.Intent{ .focus_agent = agents_input[1].key }, fixture.clickBand(card, 0).intent);
     const renderer = &fixture.session.renderer;
     const gap_x: f64 = @floatFromInt(renderer.sidebar.width + 2);
-    try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = 6, .code = 1, .x = gap_x, .y = card.y }) == null);
-    try std.testing.expect(fixture.session.gui.input.pointer.geometry.resolve(.{ .kind = 6, .code = 1, .x = gap_x, .y = card.y }) == null);
+    try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = .press, .x = gap_x, .y = card.y }) == null);
+    try std.testing.expect(fixture.session.gui.input.pointer.geometry.resolve(.{ .kind = .press, .x = gap_x, .y = card.y }) == null);
     try std.testing.expect(fixture.chrome.band_gesture == null);
     const first_cell: f64 = @floatFromInt(renderer.origin[0]);
-    try std.testing.expect(fixture.session.gui.input.pointer.geometry.resolve(.{ .kind = 6, .code = 1, .x = first_cell, .y = card.y }) != null);
+    try std.testing.expect(fixture.session.gui.input.pointer.geometry.resolve(.{ .kind = .press, .x = first_cell, .y = card.y }) != null);
 }
 
 test "dragging the edge sets the exact width and the grid follows on the next measurement" {
@@ -98,10 +98,10 @@ test "dragging the edge sets the exact width and the grid follows on the next me
     const before = gui.app.model.hostSize();
     const band = fixture.band();
     const handle = fixture.resizeHandle().?;
-    _ = fixture.chrome.bandPointer(.{ .kind = 6, .code = 1, .x = handle.x + 2, .y = band.y + 30 });
-    const drag = fixture.chrome.bandPointer(.{ .kind = 6, .code = 3, .x = 339, .y = band.y + 40 }).?;
+    _ = fixture.chrome.bandPointer(.{ .kind = .press, .x = handle.x + 2, .y = band.y + 30 });
+    const drag = fixture.chrome.bandPointer(.{ .kind = .drag, .x = 339, .y = band.y + 40 }).?;
     gui.adoptSidebarWidth(drag.sidebar_width.?);
-    const release = fixture.chrome.bandPointer(.{ .kind = 6, .code = 2, .x = 339, .y = band.y + 40 }).?;
+    const release = fixture.chrome.bandPointer(.{ .kind = .release, .x = 339, .y = band.y + 40 }).?;
     gui.adoptSidebarWidth(release.sidebar_width.?);
     try std.testing.expectEqual(@as(f32, 340), gui.sidebar.logical);
     try fixture.measure(.{ .width = renderer.viewport[0], .height = renderer.viewport[1], .scale = 1 });

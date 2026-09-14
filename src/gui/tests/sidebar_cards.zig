@@ -111,7 +111,7 @@ test "the selected card is the focused pane's agent and carries the fill and rin
     try std.testing.expectEqual(geometry.height(), selected.height);
     try std.testing.expectEqual(bounds.x + Sidebar.margin, selected.x);
     const hovered = fixture.bandTarget(.{ .focus_agent = entries[2].key }).?;
-    _ = fixture.chrome.bandPointer(.{ .kind = 6, .code = 6, .x = hovered.x, .y = hovered.y });
+    _ = fixture.chrome.bandPointer(.{ .kind = .move, .x = hovered.x, .y = hovered.y });
     try fixture.paint(projection);
     try std.testing.expectEqual(@as(usize, 2), roundedCount(fixture.session.renderer.quads.items(), CardGeometry.radius, sidebarColumn(&fixture)));
 }
@@ -195,20 +195,20 @@ test "card detail follows working state and the agent workspace across branch-on
     try std.testing.expectEqualStrings("", card.detailText());
 }
 
-test "the working pulse steps the status alpha from the animation frame" {
+test "the working pulse samples the status alpha from presentation time" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var agents: client.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
-    projection.sidebar_animation_frame = 0;
+    fixture.chrome.now_ns = 0;
     try fixture.paint(projection);
     for (fixture.session.renderer.quads.items()) |item| {
         try std.testing.expect(item.a == 1 or item.a == 0 or item.a == AgentCard.provider_alpha);
     }
 
-    projection.sidebar_animation_frame = 9;
+    fixture.chrome.now_ns = 9 * 120 * std.time.ns_per_ms;
     try fixture.paint(projection);
     var dimmed: usize = 0;
     for (fixture.session.renderer.quads.items()) |item| {
@@ -283,7 +283,6 @@ test "a warm sidebar repaint with six agents allocates nothing" {
     fixture.session.renderer.quads.allocator = failure.allocator();
     defer fixture.session.renderer.quads.allocator = quad_allocator;
     for (0..30) |frame| {
-        projection.sidebar_animation_frame = @intCast(frame);
         fixture.chrome.now_ns = (60 + frame) * std.time.ns_per_s;
         try fixture.paint(projection);
     }

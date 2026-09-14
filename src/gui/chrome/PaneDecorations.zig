@@ -16,6 +16,7 @@ const FullscreenStrip = @import("FullscreenStrip.zig");
 const RingFades = @import("RingFades.zig");
 const RingSpec = @import("RingSpec.zig");
 const attention = @import("attention.zig");
+const Canvas = @import("Canvas.zig");
 const PaneDecorations = @This();
 
 pub const dim_alpha: f32 = 0.15;
@@ -28,18 +29,25 @@ context: *Context,
 rings: *RingFades,
 
 /// Uses the same immutable pane geometry as terminal painting and input routing.
-/// Example: `try decorations.paint();`
-pub fn paint(decorations: PaneDecorations) !void {
+/// Example: `try decorations.draw(canvas);`
+pub fn draw(decorations: PaneDecorations, canvas: *Canvas) !void {
+    var context = decorations.context.*;
+    context.canvas = canvas;
+    var prepared = decorations;
+    prepared.context = &context;
+    try prepared.paint();
+}
+
+fn paint(decorations: PaneDecorations) !void {
     const context = decorations.context;
     const projection = context.projection;
     const model = projection.model orelse return;
-    const advanced = decorations.rings.begin(projection.sidebar_animation_frame);
+    decorations.rings.begin();
     defer decorations.rings.end();
     if (!model.layout.hasBorders()) {
         return;
     }
 
-    const animated = projection.agents.hasWorkingAgent();
     var layout: client.LayoutSnapshot = .{};
     model.layout.snapshot(projection.geometry.area, &layout);
     for (layout.views()) |view| {
@@ -61,7 +69,7 @@ pub fn paint(decorations: PaneDecorations) !void {
             try context.canvas.dimAt(context.canvas.rect(view.content), dim_alpha);
             if (agent) |value| {
                 if (attention.needsInput(value.status)) {
-                    try decorations.ring(.{ .view = view, .status = value.status, .motion = .{ .advanced = advanced, .animated = animated } });
+                    try decorations.ring(.{ .view = view, .status = value.status, .key = .{ .pane_id = pane.id, .pane_generation = pane.attachment_generation } });
                 }
             }
         }
@@ -76,7 +84,7 @@ fn ring(decorations: PaneDecorations, spec: RingSpec) !void {
         .width = canvas.chrome.px(ring_width),
         .radius = @max(0, canvas.chrome.px(frame_radius) - 1),
         .color = attention.statusColor(canvas.theme.palette, spec.status),
-        .alpha = decorations.rings.alpha(spec.view.pane_id, spec.motion),
+        .alpha = if (canvas.animation) |clock| decorations.rings.alpha(spec.key, clock) else 1,
     });
 }
 

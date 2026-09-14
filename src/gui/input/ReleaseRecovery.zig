@@ -1,6 +1,6 @@
 //! Native key identities are keycode + 1, bounded by both hosts' 256-key tables.
 const std = @import("std");
-const Key = @import("telar-client").Key;
+const Key = @import("KeyInput.zig");
 const Recovery = @This();
 
 pub const capacity = 256;

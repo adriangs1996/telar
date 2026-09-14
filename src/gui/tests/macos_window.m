@@ -12,6 +12,8 @@
 #include <string.h>
 #include <math.h>
 
+int telar_test_host_input(NSView *host);
+
 static int paints, delivered, discarded, inputs, failed;
 static BOOL injecting, close_in_flight, closed_in_flight;
 static IMP original_draw;
@@ -357,6 +359,7 @@ int main(void) {
             [(TelarTextInputView *)view releasePressedKeys];
             verify_keyboard((TelarTextInputView *)view);
             verify_pointer((TelarView *)view);
+            failed += telar_test_host_input(view);
             appearance_phase = 1;
             [window setContentSize:NSMakeSize(640, 360)];
             int burst_start = paints;

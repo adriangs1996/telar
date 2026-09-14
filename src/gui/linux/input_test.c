@@ -16,9 +16,11 @@ static int test_clock_gettime(clockid_t clock, struct timespec *time) {
 static telar_gui_input events[32];
 static uint8_t text[32][8];
 static size_t count;
+static bool refuse_input;
 
 static int capture(void *context, telar_gui_input event) {
     (void)context;
+    if (refuse_input) return 0;
     assert(count < sizeof events / sizeof *events);
     assert(event.len <= sizeof text[0]);
     events[count] = event;
@@ -60,6 +62,38 @@ static void verify_repeat(telar_input *self, uint32_t key, telar_gui_input expec
     assert(events[3].physical == key + 1 && self->held_keys[key].physical == 0);
 }
 
+static void verify_clipboard_resume(telar_input *self) {
+    int fds[2];
+    assert(pipe(fds) == 0);
+    assert(telar_clipboard_reader_begin(&self->reader, fds[0], 91, test_time_ms));
+    self->read_target = 17;
+    self->read_generation = 8;
+    assert(write(fds[1], "pasted", 6) == 6);
+    close(fds[1]);
+    count = 0;
+    refuse_input = true;
+    telar_input_dispatch(self);
+    assert(self->reader.ready && count == 0 && telar_input_timeout(self) == -1);
+    // The window pumps client progress, then retries completions independently
+    // of key repeat and descriptor readiness.
+    refuse_input = false;
+    telar_input_services(self);
+    assert(count == 1 && events[0].kind == 9 && events[0].request_id == 91);
+    assert(events[0].target_id == 17 && events[0].generation == 8 && events[0].len == 6);
+    assert(!self->reader.pending && telar_input_timeout(self) == -1);
+    telar_input_services(self);
+    assert(count == 1);
+    self->result_pending = true;
+    self->result = (telar_gui_input){.kind = 9, .code = 1, .request_id = 92};
+    refuse_input = true;
+    telar_input_services(self);
+    assert(count == 1 && self->result_pending && telar_input_timeout(self) == -1);
+    refuse_input = false;
+    telar_input_services(self);
+    telar_input_services(self);
+    assert(count == 2 && events[1].request_id == 92 && !self->result_pending);
+}
+
 int main(void) {
     telar_gui_callbacks callbacks = {.input = capture};
     telar_input *self = telar_input_create(NULL, &callbacks);
@@ -80,8 +114,8 @@ int main(void) {
     xkb_mod_index_t logo = xkb_keymap_mod_get_index(self->keymap, XKB_MOD_NAME_LOGO);
     assert(logo < 32);
     modifiers(self, NULL, 0, (1u << ctrl) | (1u << logo), 0, 0, 0);
-    // Super is exposed to pointer hover without widening the keyboard ABI.
-    verify_repeat(self, 36, (telar_gui_input){.kind = 4, .code = 'j', .mods = 4});
+    // Super remains available to Zig shortcut routing on keyboard and pointer.
+    verify_repeat(self, 36, (telar_gui_input){.kind = 4, .code = 'j', .mods = 12});
     modifiers(self, NULL, 0, 0, 0, 0, 0);
 
     count = 0;
@@ -104,6 +138,7 @@ int main(void) {
     assert(count == 1);
     keyboard_key(self, NULL, 4, 0, 36, WL_KEYBOARD_KEY_STATE_RELEASED);
     assert(count == 2 && events[1].phase == 3);
+    verify_clipboard_resume(self);
     telar_input_destroy(self);
     puts("native Wayland keyboard: delay, rate, repeat, release, focus and disabled repeat passed");
     return 0;

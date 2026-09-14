@@ -45,6 +45,10 @@ fn handler(client: *Client) SidebarAnimationHandlerType {
 
 fn schedule(raw_context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
+    if (client.timers.animation_clock == .host) {
+        return;
+    }
+
     const scheduler = &client.sidebar_animation_scheduler;
     if (scheduler.pending) {
         return;

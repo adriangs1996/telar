@@ -63,12 +63,8 @@ Font Name "Plex"; the release's `LICENSE.txt` is copied verbatim as
 `IBMPlexSans-OFL.txt`. Only native chrome labels use these faces; terminal
 cells never select them.
 
-`provider-marks-768x256.rgba` is the reproducible KGP provider atlas. Its three
-256 x 256 RGBA slots contain official PNG assets in Claude, Codex, Pi order.
-The atlas SHA-256 is
-`2e2236e04ef2b1be9fa3da8fb63522fd969a90ad00710d098b0ac00f970279e0`.
-`tools/build_provider_atlas.py` rebuilds it with Pillow 12.2.0 and Lanczos
-resampling.
+The original app icons below are retained as source assets. Both adapters now
+embed the T3 Code provider atlas described below.
 
 `Claude.png` was downloaded on 2026-08-26 from the Apple touch icon linked by
 Anthropic's official Claude download page. It is a 256 x 256 RGBA PNG with
@@ -100,14 +96,6 @@ reproducible with librsvg 2.62.3:
 rsvg-convert -w 256 -h 256 -f png -o Pi.png Pi.svg
 ```
 
-At runtime the TUI downsamples the atlas's checked-in 256 px source slots
-with premultiplied-alpha bilinear filtering. It centers the square artwork
-inside slots that match the terminal cell aspect ratio, so a two-column by
-two-row placement never stretches either logo. The GUI box-filters the same
-three slots into the first cells of its RGBA sprite page
-(`src/gui/image/SpritePage.zig`) at 16 logical pixels for the display scale
-and premultiplies them on upload; the sidebar card samples them linearly.
-
 Official sources and usage terms:
 
 - <https://claude.ai/download>
@@ -138,3 +126,35 @@ rsvg-convert -w 64 -h 64 -f png -o telar-mark-64.png telar-mark.svg
 box-filters it into the icon atlas at cell size, sixteen premultiplied-alpha
 bilinear taps per pixel, and keeps its alpha so the host composes it over
 whatever it paints behind the bar.
+
+## Sidebar provider symbols
+
+`provider-symbols-192x64.rgba` contains three 64 × 64 RGBA symbols in
+Claude, OpenAI, Pi order. Its SHA-256 is
+`e2cec9fa09ee6ae7f47dccf770f75f3e574f2e1e95a95d263278aa432378135d`.
+Both adapters embed this 49,152-byte atlas. The GUI box-filters the symbols
+into its existing sprite page, premultiplies them, and draws them at 60%
+opacity. OpenAI follows the theme's `text` color; Claude and Pi retain their
+source colors. Tint and opacity are quad attributes; changing selection or theme does not rebuild
+or upload the symbols. Workspace favicons retain their own colors.
+
+The TUI resamples the same 64 px slots with premultiplied-alpha bilinear
+filtering and centers each symbol inside the terminal cell aspect ratio.
+OpenAI follows the sidebar foreground. A foreground change rebuilds and
+retransmits the existing atlas without reallocating it; an unchanged frame
+does neither. Terminals without KGP retain the existing cell glyphs.
+
+`Claude-symbol.svg` and `OpenAI-symbol.svg` preserve the path and viewBox of
+`ClaudeAI` and `OpenAI` in
+[T3 Code's Icons.tsx](https://github.com/pingdotgg/t3code/blob/9375c779707fb95c06670db6da87441720b2d2e2/apps/web/src/components/Icons.tsx),
+retrieved on 2026-09-14. The retrieved file SHA-256 is
+`d5e70eeecb8d930c4976f1d302b401c90ac0d78cc2becb4d23e522a7ed8b2354`.
+OpenAI uses white for tinting and Claude retains its orange fill. The complete
+upstream MIT notice is in `T3-Icons-LICENSE.txt`. `Pi-symbol.svg` matches `PiAgentIcon` in the same
+revision, including its black background and 160-unit corner radius.
+
+Regenerate with librsvg 2.62.3 and Pillow 12.2.0:
+
+```sh
+uv run --no-project --with pillow==12.2.0 python tools/build_provider_symbols.py
+```

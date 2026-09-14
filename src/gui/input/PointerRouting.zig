@@ -5,7 +5,7 @@ const client = @import("telar-client");
 const Geometry = @import("PointerGeometry.zig");
 const Capture = @import("PointerCapture.zig");
 const Sample = @import("PointerSample.zig");
-const Event = @import("../native/InputEvent.zig").InputEvent;
+const Event = @import("PointerEvent.zig");
 const Routing = @This();
 const GuiClient = @import("../GuiClient.zig");
 
@@ -30,9 +30,7 @@ pub fn configure(pointer: *Routing, origin: [2]u32, size: core.TerminalSize) voi
 
 /// Example: `queue.push(pointer.sample(event));`
 pub fn sample(pointer: *const Routing, event: Event) Sample {
-    var owned = event;
-    owned.text = null;
-    return .{ .event = owned, .geometry_revision = pointer.revision, .gesture_revision = pointer.gesture_revision };
+    return .{ .event = event, .geometry_revision = pointer.revision, .gesture_revision = pointer.gesture_revision };
 }
 
 /// Invalidates queued gesture starts while an ordered cancellation waits for
@@ -46,16 +44,16 @@ pub fn invalidateGestures(pointer: *Routing) void {
 /// Example: `try pointer.apply(app, sample);`
 pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !void {
     const event = value.event;
-    if (event.code == 7) {
+    if (event.kind == .leave) {
         pointer.hover.clear();
         pointer.link_gesture.cancel();
         GuiClient.of(app).chrome.leavePointer();
         return;
     }
 
-    const retained = event.code == 2 or event.code == 3;
-    const button: usize = event.button;
-    if (event.code == 1 and pointer.owners[button] == .shared) {
+    const retained = event.kind == .release or event.kind == .drag;
+    const button: usize = @intFromEnum(event.button);
+    if (event.kind == .press and pointer.owners[button] == .shared) {
         pointer.owners[button] = .discarded;
     }
 
@@ -64,18 +62,18 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
     }
 
     pointer.hover.observe(event);
-    if (event.code != 6) {
+    if (event.kind != .move) {
         pointer.hover.dirty = true;
     }
 
     pointer.hover.refresh(GuiClient.of(app));
 
-    if (event.code == 6 and pointer.owners[0] == .link) {
+    if (event.kind == .move and pointer.owners[0] == .link) {
         pointer.link_gesture.validate(pointer.hover.link, app.model.version());
         return;
     }
 
-    const begins = event.code == 1 or event.code == 4 or event.code == 5;
+    const begins = event.kind == .press or event.kind == .scroll_up or event.kind == .scroll_down;
     if (begins and (value.gesture_revision != pointer.gesture_revision or !geometryMatches(app))) {
         return;
     }
@@ -89,7 +87,7 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
         try bandRoute(app, event);
         return;
     };
-    if (event.code <= 3) {
+    if (event.kind == .press or event.retained()) {
         pointer.last[button] = mouse;
     }
 
@@ -97,18 +95,18 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
         switch (pointer.owners[button]) {
             .child => |*capture| {
                 try capture.deliver(app, mouse);
-                if (event.code == 2) {
+                if (event.kind == .release) {
                     pointer.owners[button] = .shared;
                 }
 
                 return;
             },
             .link => {
-                if (event.code == 3) {
+                if (event.kind == .drag) {
                     pointer.link_gesture.cancel();
                 }
 
-                if (event.code == 2) {
+                if (event.kind == .release) {
                     pointer.owners[button] = .shared;
                     pointer.hover.dirty = true;
                     pointer.hover.refresh(GuiClient.of(app));
@@ -122,7 +120,7 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
                 return;
             },
             .discarded => {
-                if (event.code == 2) {
+                if (event.kind == .release) {
                     pointer.owners[button] = .shared;
                 }
 
@@ -133,10 +131,10 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
     }
 
     const outcome = try client.controllers.pointer_routing.apply(app, mouse);
-    if (event.code <= 5) {
+    if (event.interruptsKeys()) {
         pointer.hover.dirty = true;
     }
-    if (event.code == 1) {
+    if (event.kind == .press) {
         pointer.owners[button] = switch (outcome) {
             .view, .copy_mode => .shared,
             .link => .link,
@@ -158,7 +156,7 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
 fn bandRoute(app: *client.AttachedClient, event: Event) !void {
     const gui = GuiClient.of(app);
     const command = gui.chrome.bandPointer(event) orelse {
-        if (event.code == 6) {
+        if (event.kind == .move) {
             gui.chrome.leavePointer();
         }
 
@@ -209,7 +207,9 @@ pub fn cancel(pointer: *Routing, app: *client.AttachedClient) !void {
     }
 }
 
-fn geometryMatches(app: *client.AttachedClient) bool {
+/// New widget and terminal gestures share the same delivered geometry guard.
+/// Example: `if (!PointerRouting.geometryMatches(app)) return;`
+pub fn geometryMatches(app: *client.AttachedClient) bool {
     const delivered = app.presentation.deliveredGeometry() orelse return false;
     const projection = client.capture(&app.model, .{ .geometry = app.geometry() });
     const current = client.Geometry.capture(projection);

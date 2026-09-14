@@ -1,0 +1,15 @@
+pub const TextContext = extern struct {
+    target_id: u64 = 0,
+    generation: u64 = 0,
+    revision: u64 = 0,
+    enabled: u32 = 0,
+    composition_active: u32 = 0,
+    text: ?[*]const u8 = null,
+    len: usize = 0,
+    selection_start: u32 = 0,
+    selection_end: u32 = 0,
+    x: f64 = 0,
+    y: f64 = 0,
+    width: f64 = 0,
+    height: f64 = 0,
+};

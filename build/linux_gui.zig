@@ -8,12 +8,15 @@ const c_flags = @import("c_flags.zig");
 pub fn add(b: *std.Build, gui: *std.Build.Module, disable_coverage: bool) void {
     const flags = c_flags.forCoverage(b, &.{"-std=c11"}, disable_coverage);
     addCursorSources(b, gui, flags);
+    addTextInput(b, gui);
     addProtocol(b, gui, "stable/xdg-shell/xdg-shell");
     addProtocol(b, gui, "staging/ext-background-effect/ext-background-effect-v1");
     addProtocol(b, gui, "unstable/xdg-decoration/xdg-decoration-unstable-v1");
     gui.addCSourceFiles(.{
         .files = &.{
             "src/gui/linux/window.c",
+            "src/gui/linux/accessibility.c",
+            "src/gui/linux/accessible.c",
             "src/gui/linux/background_effect.c",
             "src/gui/linux/decoration.c",
             "src/gui/linux/input.c",
@@ -37,12 +40,55 @@ pub fn add(b: *std.Build, gui: *std.Build.Module, disable_coverage: bool) void {
     gui.linkSystemLibrary("fontconfig", .{});
     gui.linkSystemLibrary("wayland-client", .{});
     gui.linkSystemLibrary("vulkan", .{});
+    gui.linkSystemLibrary("atk", .{});
+    gui.linkSystemLibrary("atk-bridge-2.0", .{});
+    gui.linkSystemLibrary("gio-2.0", .{});
 }
 
 /// Cursor requests and retained fallback images, also used by native input tests.
 /// Example: linux_gui.addCursor(b, keyboard_module).
 pub fn addCursor(b: *std.Build, module: *std.Build.Module) void {
     addCursorSources(b, module, &.{"-std=c11"});
+}
+
+/// Shares the Wayland IME and asynchronous clipboard reader with input tests.
+/// Example: `linux_gui.addTextInput(b, keyboard_module);`
+pub fn addTextInput(b: *std.Build, module: *std.Build.Module) void {
+    module.linkSystemLibrary("glib-2.0", .{});
+    addProtocol(b, module, "unstable/text-input/text-input-unstable-v3");
+    module.addCSourceFiles(.{
+        .files = &.{ "src/gui/linux/text_input.c", "src/gui/linux/clipboard_reader.c" },
+        .flags = &.{"-std=c11"},
+    });
+}
+
+/// Verifies IME serials and bounded clipboard reads without a compositor.
+/// Example: `linux_gui.addHostInputTests(b, options);`
+pub fn addHostInputTests(b: *std.Build, options: std.Build.Module.CreateOptions) void {
+    const ime = b.createModule(options);
+    addProtocol(b, ime, "unstable/text-input/text-input-unstable-v3");
+    ime.addCSourceFile(.{ .file = b.path("src/gui/linux/text_input_test.c"), .flags = &.{"-std=c11"} });
+    ime.linkSystemLibrary("wayland-client", .{});
+    ime.linkSystemLibrary("glib-2.0", .{});
+    const ime_test = b.addExecutable(.{ .name = "gui-ime-test", .root_module = ime });
+    b.step("test-gui-ime", "Verify Wayland text composition, byte ranges, serials and focus").dependOn(&b.addRunArtifact(ime_test).step);
+    const clipboard = b.createModule(options);
+    clipboard.addCSourceFiles(.{ .files = &.{ "src/gui/linux/clipboard_reader.c", "src/gui/linux/clipboard_reader_test.c" }, .flags = &.{"-std=c11"} });
+    clipboard.linkSystemLibrary("wayland-client", .{});
+    clipboard.linkSystemLibrary("glib-2.0", .{});
+    const read_test = b.addExecutable(.{ .name = "gui-clipboard-reader-test", .root_module = clipboard });
+    b.step("test-gui-clipboard-reader", "Verify bounded asynchronous clipboard request ownership and cancellation").dependOn(&b.addRunArtifact(read_test).step);
+    const accessibility = b.createModule(options);
+    accessibility.addCSourceFiles(.{ .files = &.{ "src/gui/linux/accessibility_test.c", "src/gui/linux/accessible.c" }, .flags = &.{"-std=c11"} });
+    accessibility.linkSystemLibrary("atk", .{});
+    accessibility.linkSystemLibrary("atk-bridge-2.0", .{});
+    accessibility.linkSystemLibrary("gio-2.0", .{});
+    const accessibility_test = b.addExecutable(.{ .name = "gui-accessibility-test", .root_module = accessibility });
+    b.step("test-gui-accessibility", "Verify accessible text, generations and bounded worker actions").dependOn(&b.addRunArtifact(accessibility_test).step);
+    const probe = b.addSystemCommand(&.{ "dbus-run-session", "--", "python3" });
+    probe.addFileArg(b.path("src/gui/linux/accessibility_probe.py"));
+    probe.addArtifactArg(accessibility_test);
+    b.step("test-gui-accessibility-bus", "Verify real AT-SPI discovery, text and edit actions over D-Bus").dependOn(&probe.step);
 }
 
 fn addCursorSources(b: *std.Build, module: *std.Build.Module, flags: []const []const u8) void {

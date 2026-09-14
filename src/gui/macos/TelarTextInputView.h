@@ -14,4 +14,8 @@ typedef BOOL (^TelarInputHandler)(telar_gui_input event);
 - (void)releasePressedKeys;
 // Subclasses use the same bounded semantic admission, e.g. [self sendInput:event].
 - (BOOL)sendInput:(telar_gui_input)event;
+// Refresh the synchronous Cocoa mirror from the current Zig editing owner.
+- (void)refreshTextContext;
+// -1 preserves the mirror while admitted input is still awaiting Zig dispatch.
+- (int)copyTextContext:(telar_gui_text_context *)output;
 @end

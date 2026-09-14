@@ -28,7 +28,8 @@ headers before building with Zig 0.16.0:
 
 ```sh
 sudo pacman -Syu --needed base-devel sqlite libnghttp2 brotli \
-  wayland wayland-protocols libxkbcommon vulkan-headers vulkan-icd-loader shaderc fontconfig ttf-dejavu
+  wayland wayland-protocols libxkbcommon vulkan-headers vulkan-icd-loader shaderc \
+  fontconfig ttf-dejavu at-spi2-core glib2
 zig build
 zig build test
 ```

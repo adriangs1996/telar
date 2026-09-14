@@ -1,0 +1,28 @@
+/private/tmp/telar-widgets-e2e-final/default/01-initial.png
+[default] initial prompt and configured name prompts
+/private/tmp/telar-widgets-e2e-final/default/02-sidebar-collapsed.png
+[default] sidebar keyboard and pointer toggle/resize
+/private/tmp/telar-widgets-e2e-final/default/03-pane-fullscreen.png
+/private/tmp/telar-widgets-e2e-final/default/04-splits.png
+[default] horizontal/vertical splits, directional focus, resize and pane fullscreen
+[default] tab creation, rename, positions, next/previous and reordering
+/private/tmp/telar-widgets-e2e-final/default/05-workspaces.png
+[default] workspace creation/rename, goto targets, pane close and tab close
+/private/tmp/telar-widgets-e2e-final/default/06-before-detach.png
+/private/tmp/telar-widgets-e2e-final/default/07-reattached.png
+[default] detach/reattach preserves five shell PIDs, pane generations, tabs, workspaces and split sizes
+[default] Vulkan core and synchronization validation clean
+/private/tmp/telar-widgets-e2e-final/configured/01-initial.png
+[configured] initial prompt and configured name prompts
+/private/tmp/telar-widgets-e2e-final/configured/02-sidebar-collapsed.png
+[configured] sidebar keyboard and pointer toggle/resize
+/private/tmp/telar-widgets-e2e-final/configured/03-pane-fullscreen.png
+/private/tmp/telar-widgets-e2e-final/configured/04-splits.png
+[configured] horizontal/vertical splits, directional focus, resize and pane fullscreen
+[configured] tab creation, rename, positions, next/previous and reordering
+/private/tmp/telar-widgets-e2e-final/configured/05-workspaces.png
+[configured] workspace creation/rename, goto targets, pane close and tab close
+/private/tmp/telar-widgets-e2e-final/configured/06-before-detach.png
+/private/tmp/telar-widgets-e2e-final/configured/07-reattached.png
+[configured] detach/reattach preserves five shell PIDs, pane generations, tabs, workspaces and split sizes
+[configured] Vulkan core and synchronization validation clean

@@ -45,6 +45,10 @@ tools/vm/vm.py stop
 tools/vm/vm.py build
 tools/vm/vm.py test --summary all
 
+# Native input protocol, clipboard ownership and AT-SPI accessibility checks.
+tools/vm/vm.py build test-gui-ime test-gui-clipboard-reader test-gui-pointer test-gui-keyboard
+tools/vm/vm.py build test-gui-accessibility test-gui-accessibility-bus
+
 # Sync, build and run the terminal client in your terminal.
 tools/vm/vm.py run --no-config
 
@@ -73,7 +77,8 @@ is enough to develop and verify the native client's Linux backend; it says
 nothing about frame rate on real hardware. The backend's build needs
 `wayland-scanner`, the `xdg-shell` and `ext-background-effect-v1` protocols,
 the Vulkan headers and loader,
-Fontconfig headers for installed font lookup, and `glslc` to compile the GLSL
+Fontconfig headers for installed font lookup, ATK/AT-SPI and GLib headers for
+the accessibility bridge, and `glslc` to compile the GLSL
 shaders as build dependencies. Provisioning
 installs them along with the Vulkan validation layer. The native renderer
 requires Vulkan 1.3, dynamic rendering, Synchronization2 and
@@ -101,3 +106,16 @@ Use `--reload` instead to generate a watched config, change the font and PTY
 grid, reject an unavailable font, and recover without replacing the shell.
 The test saves screenshots of the changed and recovered appearance and checks
 Vulkan validation output.
+
+`test-gui-ime` drives the text-input-v3 protocol listeners with controlled
+serials, composition batches and UTF-8 ranges. `test-gui-clipboard-reader`
+checks bounded nonblocking reads, cancellation and result retention.
+Clipboard reads retain at most 64 KiB, consume at most 16 KiB or 16 read
+attempts per window-loop turn, and expire after five seconds without extending
+the deadline for partial progress. Invalid UTF-8 completes as unavailable.
+`test-gui-accessibility` checks semantic objects, byte-to-character ranges and
+the bounded action queue. `test-gui-accessibility-bus` starts an isolated D-Bus
+session and uses `pyatspi` to discover Telar, read its text and send editing,
+clipboard, focus and button actions through the real AT-SPI bridge.
+Provisioning installs `python3-pyatspi`, `gobject-introspection` and
+`dbus-daemon` for this test.

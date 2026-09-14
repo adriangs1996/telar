@@ -244,6 +244,7 @@ pub const FocusPaneHandler = @import("application/panes/FocusPaneHandler.zig");
 pub const GenericBinding = @import("input/GenericBinding.zig").Type;
 pub const GenericCatalog = @import("attachments/GenericCatalog.zig").Type;
 pub const GenericField = @import("input/GenericField.zig").Type;
+pub const GenericTable = @import("input/GenericTable.zig").Type;
 pub const GenericKeymap = @import("input/GenericKeymap.zig").Type;
 pub const GenericResourceStore = @import("graphics/GenericResourceStore.zig").Type;
 pub const GenericRouter = @import("input/GenericRouter.zig").Type;

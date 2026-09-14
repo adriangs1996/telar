@@ -3,6 +3,7 @@ const core = @import("telar-core");
 const Modal = @import("Modal.zig");
 const EditorView = @import("EditorView.zig");
 const CompletionRows = @import("CompletionRows.zig");
+const TextField = @import("../widgets/TextField.zig");
 
 pub const create_hints = "tab complete · ↑↓ choose · enter create · esc cancel";
 pub const create_confirmation = "Directory does not exist · enter creates it · esc cancel";
@@ -39,17 +40,17 @@ pub fn paintCreateForm(modal: Modal, projection: client.Projection) !void {
     if (content.h < 4) {
         const row = content.row(0);
         if (form.focus == .name) {
-            try modal.editor(row, EditorView.capture(&prompt.field, row.w, true));
+            try TextField.fromPrompt(&prompt, modal.canvas.rect(row), .name).draw(modal.canvas);
         } else {
-            try modal.editor(row, EditorView.capture(&prompt.directory, row.w, true));
+            try TextField.fromPrompt(&prompt, modal.canvas.rect(row), .directory).draw(modal.canvas);
         }
         return;
     }
 
     try modal.line(0, .{ .text = "Name", .color = palette.subtext0, .face = .sans, .size = .body });
-    try modal.editor(content.row(1), EditorView.capture(&prompt.field, content.w, form.focus == .name));
+    try TextField.fromPrompt(&prompt, modal.canvas.rect(content.row(1)), .name).draw(modal.canvas);
     try modal.line(2, .{ .text = "Working directory", .color = palette.subtext0, .face = .sans, .size = .body });
-    try modal.editor(content.row(3), EditorView.capture(&prompt.directory, content.w, form.focus == .directory));
+    try TextField.fromPrompt(&prompt, modal.canvas.rect(content.row(3)), .directory).draw(modal.canvas);
 
     const footer: []const u8 = if (form.confirm_create) create_confirmation else create_hints;
     if (content.h > 5) {
@@ -59,7 +60,6 @@ pub fn paintCreateForm(modal: Modal, projection: client.Projection) !void {
     const rows = content.splitTop(@min(content.h, 5))[1].splitBottom(1)[0];
     try paintCompletions(modal, rows, .{ .entries = projection.path_completion.entries(), .selected = prompt.selection(), .active = form.focus == .directory });
 }
-
 
 fn paintCompletions(modal: Modal, rows: core.Rect, input: CompletionRows) !void {
     const palette = modal.canvas.theme.palette;

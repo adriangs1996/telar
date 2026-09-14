@@ -7,4 +7,7 @@ pub const Callbacks = extern struct {
     wake_fd: c_int,
     wakeup_after: ?*const fn (?*anyopaque) callconv(.c) u32 = null,
     pointer_shape: ?*const fn (?*anyopaque) callconv(.c) u32 = null,
+    text_context: ?*const fn (?*anyopaque, *native.TextContext) callconv(.c) c_int = null,
+    host_request: ?*const fn (?*anyopaque, *native.HostRequest) callconv(.c) c_int = null,
+    accessibility: ?*const fn (?*anyopaque, *native.AccessibilityTree) callconv(.c) c_int = null,
 };

@@ -2,6 +2,8 @@
 #include "input.h"
 #include "pointer.h"
 #include "clipboard.h"
+#include "clipboard_reader.h"
+#include "text_input.h"
 #include <xkbcommon/xkbcommon.h>
 #include <xkbcommon/xkbcommon-compose.h>
 #include <errno.h>
@@ -15,7 +17,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#define PASTE_LIMIT TELAR_CLIPBOARD_LIMIT
 #define OFFER_LIMIT 16
 struct offer { struct wl_data_offer *handle; bool utf8, plain; };
 struct telar_input {
@@ -25,6 +26,7 @@ struct telar_input {
     struct wl_keyboard *keyboard;
     telar_pointer *pointer;
     telar_clipboard *clipboard;
+    telar_text_input *text_input;
     uint32_t selection_serial, seat_global, manager_global;
     void *window_context;
     void (*toggle_fullscreen)(void *);
@@ -38,9 +40,10 @@ struct telar_input {
     struct xkb_state *state;
     struct xkb_compose_table *compose_table;
     struct xkb_compose_state *compose;
-    int paste_fd;
-    uint8_t paste[PASTE_LIMIT];
-    size_t paste_len;
+    telar_clipboard_reader reader;
+    uint64_t read_target, read_generation;
+    bool result_pending;
+    telar_gui_input result;
     int32_t repeat_rate, repeat_delay;
     uint32_t repeat_key;
     int64_t repeat_at;
@@ -58,19 +61,22 @@ static bool emit(telar_input *self, telar_gui_input event) {
     return accepted;
 }
 
-static void begin_paste(telar_input *self) {
-    if (self->selection == NULL || self->paste_fd >= 0) return;
+static bool begin_read(telar_input *self, const telar_gui_host_request *request) {
+    if (self->selection == NULL || self->reader.pending) return false;
     const char *mime = self->selection->utf8 ? "text/plain;charset=utf-8" : self->selection->plain ? "text/plain" : NULL;
-    if (mime == NULL) return;
+    if (mime == NULL) return false;
     int fds[2];
-    if (pipe(fds) != 0) return;
-    fcntl(fds[0], F_SETFD, FD_CLOEXEC);
-    fcntl(fds[1], F_SETFD, FD_CLOEXEC);
-    fcntl(fds[0], F_SETFL, O_NONBLOCK);
+    if (pipe(fds) != 0) return false;
+    if (fcntl(fds[1], F_SETFD, FD_CLOEXEC) != 0 || !telar_clipboard_reader_begin(&self->reader, fds[0], request->request_id, now_ms())) {
+        close(fds[0]);
+        close(fds[1]);
+        return false;
+    }
     wl_data_offer_receive(self->selection->handle, mime, fds[1]);
     close(fds[1]);
-    self->paste_fd = fds[0];
-    self->paste_len = 0;
+    self->read_target = request->target_id;
+    self->read_generation = request->generation;
+    return true;
 }
 
 static void emit_key(telar_input *self, uint32_t key, telar_gui_input event) {
@@ -97,7 +103,8 @@ static void send_key(telar_input *self, uint32_t key, uint32_t phase) {
     xkb_keysym_t sym = xkb_state_key_get_one_sym(self->state, key + 8);
     uint32_t mods = (xkb_state_mod_name_is_active(self->state, XKB_MOD_NAME_SHIFT, XKB_STATE_MODS_EFFECTIVE) > 0 ? 1 : 0) |
                     (xkb_state_mod_name_is_active(self->state, XKB_MOD_NAME_ALT, XKB_STATE_MODS_EFFECTIVE) > 0 ? 2 : 0) |
-                    (xkb_state_mod_name_is_active(self->state, XKB_MOD_NAME_CTRL, XKB_STATE_MODS_EFFECTIVE) > 0 ? 4 : 0);
+                    (xkb_state_mod_name_is_active(self->state, XKB_MOD_NAME_CTRL, XKB_STATE_MODS_EFFECTIVE) > 0 ? 4 : 0) |
+                    (xkb_state_mod_name_is_active(self->state, XKB_MOD_NAME_LOGO, XKB_STATE_MODS_EFFECTIVE) > 0 ? 8 : 0);
     if (sym == XKB_KEY_F11 && mods == 0) {
         if (phase == 1 && self->toggle_fullscreen != NULL) {
             self->toggle_fullscreen(self->window_context);
@@ -106,10 +113,6 @@ static void send_key(telar_input *self, uint32_t key, uint32_t phase) {
         return;
     }
 
-    if ((mods & 5) == 5 && (sym == XKB_KEY_v || sym == XKB_KEY_V)) {
-        if (phase == 1) begin_paste(self);
-        return;
-    }
     uint32_t code = 0;
     switch (sym) {
         case XKB_KEY_Return: case XKB_KEY_KP_Enter: code = 1; break;
@@ -130,7 +133,7 @@ static void send_key(telar_input *self, uint32_t key, uint32_t phase) {
         emit_key(self, key, (telar_gui_input){.kind = 3, .code = code, .mods = mods, .phase = phase});
         return;
     }
-    if (mods & (2 | 4)) {
+    if (mods & (2 | 4 | 8)) {
         uint32_t scalar = xkb_keysym_to_utf32(sym);
         if (scalar >= 32) emit_key(self, key, (telar_gui_input){.kind = 4, .code = scalar, .mods = mods, .phase = phase});
         return;
@@ -201,6 +204,7 @@ static void keyboard_leave(void *data, struct wl_keyboard *keyboard, uint32_t se
     }
 
     self->selection_serial = 0;
+    telar_clipboard_reader_cancel(&self->reader);
     emit(self, (telar_gui_input){.kind = 5, .code = 0, .phase = 1});
     if (self->compose != NULL) xkb_compose_state_reset(self->compose);
 }
@@ -305,15 +309,22 @@ telar_input *telar_input_create(void *context, const telar_gui_callbacks *callba
     if (self == NULL) return NULL;
     self->context = context;
     self->callbacks = *callbacks;
-    self->paste_fd = -1;
+    telar_clipboard_reader_init(&self->reader);
+    self->text_input = telar_text_input_create(context, callbacks);
+    if (self->text_input == NULL) {
+        free(self);
+        return NULL;
+    }
     self->pointer = telar_pointer_create(context, callbacks);
     if (self->pointer == NULL) {
+        telar_text_input_destroy(self->text_input);
         free(self);
         return NULL;
     }
 
     self->clipboard = telar_clipboard_create();
     if (self->clipboard == NULL) {
+        telar_text_input_destroy(self->text_input);
         telar_pointer_destroy(self->pointer);
         free(self);
         return NULL;
@@ -321,6 +332,7 @@ telar_input *telar_input_create(void *context, const telar_gui_callbacks *callba
 
     self->xkb = xkb_context_new(0);
     if (self->xkb == NULL) {
+        telar_text_input_destroy(self->text_input);
         telar_clipboard_destroy(self->clipboard);
         telar_pointer_destroy(self->pointer);
         free(self);
@@ -348,11 +360,13 @@ void telar_input_fullscreen(telar_input *self, void *context, void (*toggle)(voi
 }
 
 void telar_input_global(telar_input *self, const telar_registry_global *global) {
+    telar_text_input_global(self->text_input, global);
     telar_pointer_global(self->pointer, global);
     if (!strcmp(global->interface, wl_seat_interface.name) && self->seat == NULL) {
-        self->seat = wl_registry_bind(global->registry, global->name, &wl_seat_interface, global->version < 5 ? global->version : 5);
+        self->seat = wl_registry_bind(global->registry, global->name, &wl_seat_interface, global->version < 8 ? global->version : 8);
         self->seat_global = global->name;
         wl_seat_add_listener(self->seat, &seat_listener, self);
+        telar_text_input_seat(self->text_input, self->seat);
     } else if (!strcmp(global->interface, wl_data_device_manager_interface.name) && self->manager == NULL) {
         self->manager = wl_registry_bind(global->registry, global->name, &wl_data_device_manager_interface, 1);
         self->manager_global = global->name;
@@ -362,6 +376,7 @@ void telar_input_global(telar_input *self, const telar_registry_global *global) 
 }
 
 void telar_input_remove(telar_input *self, uint32_t name) {
+    telar_text_input_remove(self->text_input, name);
     telar_pointer_remove(self->pointer, name);
     bool seat_removed = self->seat != NULL && self->seat_global == name;
     bool manager_removed = self->manager != NULL && self->manager_global == name;
@@ -375,13 +390,10 @@ void telar_input_remove(telar_input *self, uint32_t name) {
     }
 
     selection(self, NULL, NULL);
-    if (self->paste_fd >= 0) {
-        close(self->paste_fd);
-        self->paste_fd = -1;
-        self->paste_len = 0;
-    }
+    telar_clipboard_reader_cancel(&self->reader);
 
     if (seat_removed) {
+        telar_text_input_seat(self->text_input, NULL);
         capabilities(self, self->seat, 0);
         self->selection_serial = 0;
         if (wl_seat_get_version(self->seat) >= WL_SEAT_RELEASE_SINCE_VERSION) {
@@ -403,38 +415,58 @@ void telar_input_pointer_update(telar_input *self) {
     telar_pointer_update(self->pointer);
 }
 
-int telar_input_fd(telar_input *self) { return self->paste_fd; }
+static void deliver_read(telar_input *self) {
+    if (!self->reader.ready) return;
+    uint32_t status = self->reader.status == TELAR_CLIPBOARD_READ_OK ? 0 : self->reader.status == TELAR_CLIPBOARD_READ_TOO_LARGE ? 2 : self->reader.status == TELAR_CLIPBOARD_READ_CANCELLED ? 3 : 1;
+    bool legacy = self->reader.request_id == 0;
+    telar_gui_input event = {.kind = legacy ? 2 : 9, .phase = 1, .code = status,
+        .text = self->reader.bytes, .len = self->reader.len, .request_id = self->reader.request_id,
+        .target_id = self->read_target, .generation = self->read_generation};
+    if ((legacy && status != 0) || emit(self, event)) telar_clipboard_reader_release(&self->reader);
+}
+
+void telar_input_services(telar_input *self) {
+    telar_text_input_update(self->text_input);
+    deliver_read(self);
+    if (self->result_pending) {
+        if (!emit(self, self->result)) return;
+        self->result_pending = false;
+    }
+    if (self->callbacks.host_request == NULL) return;
+    for (unsigned count = 0; count < 16; count++) {
+        telar_gui_host_request request = {0};
+        if (!self->callbacks.host_request(self->context, &request)) return;
+        telar_gui_input result = {.kind = 9, .code = 1, .request_id = request.request_id, .target_id = request.target_id, .generation = request.generation};
+        if (request.kind == 1 && begin_read(self, &request)) continue;
+        if (request.kind == 2) result.code = request.len > TELAR_CLIPBOARD_LIMIT ? 2 : telar_input_clipboard(self, request.text, request.len) == 0 ? 0 : 1;
+        if (!emit(self, result)) {
+            self->result = result;
+            self->result_pending = true;
+            return;
+        }
+    }
+}
+
+int telar_input_fd(telar_input *self) { return self->reader.fd; }
 int telar_input_timeout(telar_input *self) {
-    if (self->repeat_at == 0) return -1;
+    int read_wait = telar_clipboard_reader_timeout(&self->reader, now_ms());
+    if (self->repeat_at == 0) return read_wait;
     int64_t wait = self->repeat_at - now_ms();
-    return wait <= 0 ? 0 : wait > 10000 ? 10000 : (int)wait;
+    int repeat_wait = wait <= 0 ? 0 : wait > 10000 ? 10000 : (int)wait;
+    return read_wait < 0 || repeat_wait < read_wait ? repeat_wait : read_wait;
 }
 void telar_input_dispatch(telar_input *self) {
     if (self->repeat_at != 0 && now_ms() >= self->repeat_at) {
         send_key(self, self->repeat_key, 2);
         self->repeat_at = now_ms() + 1000 / self->repeat_rate;
     }
-    if (self->paste_fd < 0) return;
-    uint8_t chunk[4096];
-    for (;;) {
-        ssize_t len = read(self->paste_fd, chunk, sizeof chunk);
-        if (len < 0 && errno == EINTR) continue;
-        if (len < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) return;
-        if (len > 0 && (size_t)len <= PASTE_LIMIT - self->paste_len) {
-            memcpy(self->paste + self->paste_len, chunk, (size_t)len);
-            self->paste_len += (size_t)len;
-            continue;
-        }
-        if (len == 0) emit(self, (telar_gui_input){.kind = 2, .phase = 1, .text = self->paste, .len = self->paste_len});
-        else fprintf(stderr, "telar gui: clipboard transfer failed or exceeded 64 KiB\n");
-        close(self->paste_fd);
-        self->paste_fd = -1;
-        return;
-    }
+    telar_clipboard_reader_dispatch(&self->reader, now_ms());
+    deliver_read(self);
 }
 void telar_input_destroy(telar_input *self) {
     if (self == NULL) return;
-    if (self->paste_fd >= 0) close(self->paste_fd);
+    telar_clipboard_reader_release(&self->reader);
+    telar_text_input_destroy(self->text_input);
     for (size_t i = 0; i < OFFER_LIMIT; i++) if (self->offers[i].handle != NULL) wl_data_offer_destroy(self->offers[i].handle);
     telar_clipboard_destroy(self->clipboard);
     if (self->device != NULL) wl_data_device_destroy(self->device);

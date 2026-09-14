@@ -97,8 +97,8 @@ pub fn bandTarget(fixture: *Fixture, intent: client.Intent) ?Rect {
 /// Presses and releases a band control at its top-left device pixel.
 /// Example: `const command = fixture.clickBand(tab, 0);`
 pub fn clickBand(fixture: *Fixture, area: Rect, button: u32) client.ViewInteractionCommand {
-    const command = fixture.chrome.bandPointer(.{ .kind = 6, .code = 1, .button = button, .x = area.x, .y = area.y }) orelse return .{};
-    _ = fixture.chrome.bandPointer(.{ .kind = 6, .code = 2, .button = button, .x = area.x, .y = area.y });
+    const command = fixture.chrome.bandPointer(.{ .kind = .press, .button = @enumFromInt(button), .x = area.x, .y = area.y }) orelse return .{};
+    _ = fixture.chrome.bandPointer(.{ .kind = .release, .button = @enumFromInt(button), .x = area.x, .y = area.y });
     return command.interaction;
 }
 

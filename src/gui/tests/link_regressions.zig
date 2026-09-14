@@ -112,13 +112,11 @@ test "native pointer refreshes after resize ownership ends without a model or GP
             break hit.area;
         }
     } else return error.MissingSidebarDivider;
-    _ = gui.chrome.bandPointer(.{ .kind = 6, .code = 1, .x = divider.x + 1, .y = divider.y + 1 });
+    _ = gui.chrome.bandPointer(.{ .kind = .press, .x = divider.x + 1, .y = divider.y + 1 });
     try std.testing.expect(gui.chrome.sidebar_resize_active);
     // The pointer moves over pane text while the band owns the drag.
     var moved = fixture.event(6);
     moved.mods = 0;
-    moved.x += @floatFromInt(session.renderer.origin[0]);
-    moved.y += @floatFromInt(session.renderer.origin[1]);
     try fixture.send(moved);
     try std.testing.expectEqual(.col_resize, gui.input.pointer.hover.shape);
 
@@ -197,8 +195,8 @@ test "native displayed link previews consume hidden URL clicks until replacement
     const preview = gui.input.pointer.hover.shown_preview.?;
     const size = gui.app.model.hostSize();
     var pointer = fixture.event(6);
-    pointer.x = @as(f64, @floatFromInt(preview.x + 2)) * size.cell_width_px + 1;
-    pointer.y = @as(f64, @floatFromInt(preview.y)) * size.cell_height_px + 1;
+    pointer.x = @as(f64, @floatFromInt(preview.x + 2)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[0])) + 1;
+    pointer.y = @as(f64, @floatFromInt(preview.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[1])) + 1;
     try fixture.send(pointer);
     try std.testing.expect(gui.input.pointer.hover.link == null);
     try std.testing.expectEqual(.default, gui.input.pointer.hover.shape);
@@ -246,8 +244,8 @@ test "native preview coverage survives pointer leave failed presentation and lat
     const size = gui.app.model.hostSize();
     var pointer = fixture.event(1);
     pointer.mods = 0;
-    pointer.x = @as(f64, @floatFromInt(preview.x)) * size.cell_width_px + 1;
-    pointer.y = @as(f64, @floatFromInt(preview.y)) * size.cell_height_px + 1;
+    pointer.x = @as(f64, @floatFromInt(preview.x)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[0])) + 1;
+    pointer.y = @as(f64, @floatFromInt(preview.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[1])) + 1;
     try fixture.send(pointer);
     try fixture.present();
     try std.testing.expect(gui.input.pointer.hover.shown_preview == null);
@@ -283,8 +281,8 @@ test "native hover computes absolute rows without adding the host offset to hist
     try std.testing.expect(view.content.y > pane.buffer.h);
     const size = gui.app.model.hostSize();
     var pointer = fixture.event(6);
-    pointer.x = @as(f64, @floatFromInt(view.content.x + 2)) * size.cell_width_px + 1;
-    pointer.y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + 1;
+    pointer.x = @as(f64, @floatFromInt(view.content.x + 2)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[0])) + 1;
+    pointer.y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[1])) + 1;
     try fixture.send(pointer);
     try std.testing.expectEqualStrings("https://b.c", gui.input.pointer.hover.link.?.match.target.uri());
     try std.testing.expectEqual(pane.scroll.offset, gui.input.pointer.hover.link.?.match.start.y);

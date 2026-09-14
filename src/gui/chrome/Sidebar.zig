@@ -12,6 +12,8 @@ const SidebarList = @import("SidebarList.zig");
 const Label = @import("Label.zig");
 const SnapshotMark = @import("SnapshotMark.zig");
 const SlotRow = @import("SlotRow.zig");
+const Layout = @import("../layout/Layout.zig");
+const LayoutItem = @import("../layout/Item.zig");
 const Sidebar = @This();
 
 /// Terminal rows the band needs before the footer row is drawn: the header,
@@ -55,14 +57,15 @@ pub fn paint(sidebar: *Sidebar, context: *Context, area: Rect) !void {
 
     sidebar.observe(context);
     const geometry = CardGeometry.derive(canvas.chrome, canvas.metrics);
-    const header: Rect = .{ .x = area.x + inset, .y = area.y + inset, .width = @max(0, area.width - 1 - 2 * inset), .height = canvas.chrome.rowHeight(.body) };
     const content_bottom = if (footer.height > 0) footer.y - inset else area.y + area.height - inset;
-    const list: Rect = .{
-        .x = header.x,
-        .y = header.y + header.height + canvas.chrome.px(header_gap),
-        .width = header.width,
-        .height = @max(0, content_bottom - (header.y + header.height + canvas.chrome.px(header_gap))),
-    };
+    var rows = [_]LayoutItem{ .{ .height = .{ .fixed = canvas.chrome.rowHeight(.body) } }, .{} };
+    try (Layout{
+        .area = .{ .x = area.x + inset, .y = area.y + inset, .width = @max(0, area.width - 1 - 2 * inset), .height = @max(0, content_bottom - area.y - inset) },
+        .direction = .column,
+        .gap = canvas.chrome.px(header_gap),
+    }).resolve(&rows);
+    const header = rows[0].bounds;
+    const list = rows[1].bounds;
     if (header.width <= 0 or list.height <= 0) {
         sidebar.maximum_scroll = 0;
     } else {
@@ -95,6 +98,18 @@ pub fn wheel(sidebar: *Sidebar, kind: client.Mouse.Kind) bool {
         .scroll_down => @min(sidebar.scroll +| sidebar.step, sidebar.maximum_scroll),
         else => sidebar.scroll,
     };
+    if (next == sidebar.scroll) {
+        return false;
+    }
+
+    sidebar.scroll = next;
+    return true;
+}
+
+/// Applies precise vertical movement while retaining the delivered scroll cap.
+/// Example: `if (sidebar.scrollBy(delta_pixels)) chrome.invalidate();`
+pub fn scrollBy(sidebar: *Sidebar, delta: f64) bool {
+    const next: u16 = @intFromFloat(@max(0, @min(@as(f64, @floatFromInt(sidebar.maximum_scroll)), @as(f64, @floatFromInt(sidebar.scroll)) + delta)));
     if (next == sidebar.scroll) {
         return false;
     }

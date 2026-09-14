@@ -1,0 +1,39 @@
+SpiRegistry daemon is running with well-known name - org.a11y.atspi.Registry
+AT-SPI transport, UTF-8 ranges and window-thread actions passed
+telar gui: native input capacity exceeded or input unavailable
+telar gui: native input capacity exceeded or input unavailable
+native Wayland keyboard: delay, rate, repeat, release, focus and disabled repeat passed
+Wayland clipboard reader: request identity, complete ownership, bounds, backpressure, deadline and cancellation passed
+Wayland IME: buffered composition, atomic replacement, serial identity, caret, UTF-8 bounds and focus passed
+native Wayland cursor: shapes, serial, leave, modifiers, fallback, scaling and retained idle passed
+Build Summary: 29/29 steps succeeded
+test-gui-ime success
++- run exe gui-ime-test success 604us
+   +- compile exe gui-ime-test Debug native success 116ms MaxRSS:83M
+      +- run wayland-scanner (text-input-unstable-v3-client-protocol.h) cached
+      +- run wayland-scanner (text-input-unstable-v3-protocol.c) cached
+test-gui-clipboard-reader success
++- run exe gui-clipboard-reader-test success 939us
+   +- compile exe gui-clipboard-reader-test Debug native success 98ms MaxRSS:74M
+test-gui-pointer success
++- run exe gui-pointer-test success 680us
+   +- compile exe gui-pointer-test Debug native success 97ms MaxRSS:81M
+      +- run wayland-scanner (cursor-shape-v1-client-protocol.h) cached
+      +- run wayland-scanner (tablet-unstable-v2-client-protocol.h) cached
+      +- run wayland-scanner (cursor-shape-v1-protocol.c) cached
+      +- run wayland-scanner (tablet-unstable-v2-protocol.c) cached
+test-gui-keyboard success
++- run exe gui-keyboard-test success 3ms
+   +- compile exe gui-keyboard-test Debug native success 294ms MaxRSS:79M
+      +- run wayland-scanner (cursor-shape-v1-client-protocol.h) cached
+      +- run wayland-scanner (tablet-unstable-v2-client-protocol.h) cached
+      +- run wayland-scanner (text-input-unstable-v3-client-protocol.h) cached
+      +- run wayland-scanner (cursor-shape-v1-protocol.c) cached
+      +- run wayland-scanner (tablet-unstable-v2-protocol.c) cached
+      +- run wayland-scanner (text-input-unstable-v3-protocol.c) cached
+test-gui-accessibility success
++- run exe gui-accessibility-test success 3ms
+   +- compile exe gui-accessibility-test Debug native success 231ms MaxRSS:94M
+test-gui-accessibility-bus success
++- run dbus-run-session success 155ms
+   +- compile exe gui-accessibility-test Debug native (reused)

@@ -310,11 +310,44 @@ static void verify_legacy(void) {
     telar_pointer_destroy(self);
 }
 
+static void verify_scroll(void) {
+    telar_pointer *self = create(true);
+    event_count = 0;
+    axis_source(self, self->handle, WL_POINTER_AXIS_SOURCE_FINGER);
+    axis(self, self->handle, 1, WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_double(0.25));
+    axis(self, self->handle, 1, WL_POINTER_AXIS_HORIZONTAL_SCROLL, wl_fixed_from_double(-0.5));
+    assert(event_count == 0);
+    frame(self, self->handle);
+    assert(event_count == 1 && events[0].kind == 8 && events[0].precise == 1 && events[0].scroll_phase == 1);
+    assert(events[0].delta_y == 0.25 && events[0].delta_x == -0.5);
+    axis(self, self->handle, 2, WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_double(0.125));
+    frame(self, self->handle);
+    assert(event_count == 2 && events[1].scroll_phase == 2 && events[1].delta_y == 0.125);
+    axis_stop(self, self->handle, 3, WL_POINTER_AXIS_VERTICAL_SCROLL);
+    frame(self, self->handle);
+    assert(events[2].scroll_phase == 2); // The other axis still belongs to the gesture.
+    axis_stop(self, self->handle, 4, WL_POINTER_AXIS_HORIZONTAL_SCROLL);
+    frame(self, self->handle);
+    assert(events[3].scroll_phase == 3 && self->active_axes == 0);
+    axis_source(self, self->handle, WL_POINTER_AXIS_SOURCE_WHEEL);
+    axis(self, self->handle, 5, WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_int(10));
+    axis_value120(self, self->handle, WL_POINTER_AXIS_VERTICAL_SCROLL, 30);
+    frame(self, self->handle);
+    assert(events[4].precise == 0 && events[4].delta_y == 0.25 && events[4].scroll_phase == 0);
+    axis_source(self, self->handle, WL_POINTER_AXIS_SOURCE_FINGER);
+    axis(self, self->handle, 6, WL_POINTER_AXIS_HORIZONTAL_SCROLL, wl_fixed_from_int(1));
+    frame(self, self->handle);
+    leave(self, self->handle, 0, NULL);
+    assert(events[6].kind == 8 && events[6].scroll_phase == 4 && self->active_axes == 0);
+    telar_pointer_destroy(self);
+}
+
 int main(void) {
     assert(setenv("XCURSOR_SIZE", "24", 1) == 0);
     verify_protocol();
     verify_fallback();
     verify_legacy();
+    verify_scroll();
     for (size_t i = 0; i < proxy_count; i++) {
         assert(!proxies[i].alive);
     }

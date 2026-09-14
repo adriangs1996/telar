@@ -5,7 +5,7 @@ const GuiClient = @import("../GuiClient.zig");
 
 /// Example: `app.timers = workers.timers(app);`
 pub fn timers(app: *client.AttachedClient) client.HostTimers {
-    return .{ .context = app, .arm_fn = arm };
+    return .{ .context = app, .arm_fn = arm, .animation_clock = .host };
 }
 
 /// Example: `app.bar_runner = workers.bars(app);`

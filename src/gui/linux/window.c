@@ -14,6 +14,7 @@
 #include "frame_clock.h"
 #include "frame_worker.h"
 #include "input.h"
+#include "accessibility.h"
 #include "renderer.h"
 #include "xdg-shell-client-protocol.h"
 
@@ -29,6 +30,7 @@ typedef struct {
     void *context;
     telar_gui_callbacks callbacks;
     telar_input *input;
+    telar_accessibility *accessibility;
     telar_frame_worker *worker;
     bool dirty, in_flight;
     telar_frame_clock clock;
@@ -193,6 +195,7 @@ static void destroy(window *self) {
     }
     telar_frame_clock_cancel(&self->clock);
     telar_frame_worker_destroy(self->worker);
+    telar_accessibility_destroy(self->accessibility);
     telar_input_destroy(self->input);
     if (self->renderer != NULL) {
         telar_renderer_destroy(self->renderer);
@@ -282,6 +285,7 @@ int telar_gui_run(const char *title, void *context, const telar_gui_callbacks *c
     wl_surface_commit(self.surface);
 
     active_window = &self;
+    self.accessibility = telar_accessibility_create(context, callbacks);
     while (!self.closing) {
         while (wl_display_prepare_read(self.display) != 0) {
             if (wl_display_dispatch_pending(self.display) == -1) {
@@ -302,6 +306,9 @@ int telar_gui_run(const char *title, void *context, const telar_gui_callbacks *c
         if (result > 0 || self.background.dirty) {
             self.dirty = true;
         }
+        telar_accessibility_dispatch(self.accessibility);
+        telar_input_services(self.input);
+        telar_accessibility_update(self.accessibility);
         draw(&self);
         telar_input_pointer_update(self.input);
         if (self.closing) {
@@ -333,8 +340,9 @@ int telar_gui_run(const char *title, void *context, const telar_gui_callbacks *c
             {callbacks->wake_fd, POLLIN, 0},
             {telar_input_fd(self.input), POLLIN, 0},
             {self.worker != NULL ? telar_frame_worker_fd(self.worker) : -1, POLLIN, 0},
+            {telar_accessibility_fd(self.accessibility), POLLIN, 0},
         };
-        int ready = poll(fds, 4, timeout);
+        int ready = poll(fds, sizeof fds / sizeof *fds, timeout);
         if (ready < 0) {
             wl_display_cancel_read(self.display);
             if (errno == EINTR) {

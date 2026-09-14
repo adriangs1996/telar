@@ -6,6 +6,8 @@ const HostTimers = @This();
 
 context: *anyopaque,
 arm_fn: *const fn (*anyopaque, timers.Kind, *SchedulerType) anyerror!void,
+/// Hosts with a presentation clock schedule only their visible animations.
+animation_clock: timers.AnimationClock = .model,
 
 /// Example: `.schedule => try client.timers.arm(.notification, scheduler),`.
 pub fn arm(port: HostTimers, kind: timers.Kind, scheduler: *SchedulerType) !void {

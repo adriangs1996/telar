@@ -5,21 +5,26 @@
 const Context = @import("Context.zig");
 const Rect = @import("../render/Rect.zig");
 const ModeBar = @import("ModeBar.zig");
+const Canvas = @import("Canvas.zig");
+const Layout = @import("../layout/Layout.zig");
 const StatusBar = @This();
 
 context: *Context,
 area: Rect,
 
-/// Example: `try status.paint();`
-pub fn paint(bar: StatusBar) !void {
+/// Example: `try status.draw(canvas);`
+pub fn draw(widget: StatusBar, canvas: *Canvas) !void {
+    var context = widget.context.*;
+    context.canvas = canvas;
+    var bar = widget;
+    bar.context = &context;
     if (bar.area.width <= 0 or bar.area.height <= 0) {
         return;
     }
 
-    const canvas = bar.context.canvas;
     try canvas.panelAt(bar.area);
     const margin = canvas.chrome.px(8);
-    const row: Rect = .{ .x = bar.area.x + margin, .y = bar.area.y, .width = @max(0, bar.area.width - 2 * margin), .height = bar.area.height };
+    const row = (Layout{ .area = bar.area, .padding = .{ .left = margin, .right = margin } }).content();
     if (bar.context.projection.status_mode == .normal) {
         return;
     }

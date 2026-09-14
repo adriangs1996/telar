@@ -12,7 +12,8 @@ sudo dnf install -y --setopt=install_weak_deps=False \
     sqlite-devel libnghttp2-devel brotli-devel pkgconf just ncurses fontconfig fontconfig-devel dejavu-sans-mono-fonts \
     sway foot mesa-dri-drivers mesa-vulkan-drivers vulkan-loader vulkan-tools \
     wayland-devel wayland-protocols-devel libxkbcommon-devel grim wtype wl-clipboard \
-    vulkan-headers vulkan-loader-devel vulkan-validation-layers glslc
+    vulkan-headers vulkan-loader-devel vulkan-validation-layers glslc \
+    atk-devel at-spi2-core-devel at-spi2-atk-devel python3-pyatspi dbus-daemon gobject-introspection
 
 version=0.16.0
 case $(uname -m) in

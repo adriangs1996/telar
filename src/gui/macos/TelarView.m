@@ -2,11 +2,15 @@
 #import "TelarMetalRenderer.h"
 #import "TelarWindowBackground.h"
 #import "TelarWindow.h"
+#import "TelarHostServices.h"
+#import "TelarAccessibility.h"
 #import <QuartzCore/CADisplayLink.h>
 #include <string.h>
 
 @implementation TelarView {
   TelarMetalRenderer *renderer;
+  TelarHostServices *host_services;
+  TelarAccessibility *accessibility;
   void *context;
   telar_gui_callbacks callbacks;
   dispatch_source_t wake_source;
@@ -32,6 +36,8 @@
 
   context = render_context;
   callbacks = *callback_table;
+  host_services = [[TelarHostServices alloc] initWithContext:context callbacks:&callbacks pasteboard:NSPasteboard.generalPasteboard];
+  accessibility = [[TelarAccessibility alloc] initWithView:self context:context callbacks:&callbacks];
   __weak TelarView *weak = self;
 
   renderer = [[TelarMetalRenderer alloc]
@@ -236,6 +242,8 @@
 
 - (void)windowWillClose:(NSNotification *)notification {
   closed = YES;
+  [host_services stop];
+  [accessibility stop];
   if (animation_source != nil) {
     dispatch_source_cancel(animation_source);
   }
@@ -292,12 +300,26 @@
     [self.window close];
     return;
   }
+  [host_services drain];
+  [self refreshTextContext];
+  [accessibility refresh];
   [self refreshPointerCursor];
   if (dirty || result > 0) {
     [self requestDraw];
   }
   [self scheduleWake];
 }
+
+- (int)copyTextContext:(telar_gui_text_context *)output {
+  return !closed && callbacks.text_context != NULL ? callbacks.text_context(context, output) : 0;
+}
+
+- (BOOL)isAccessibilityElement { return YES; }
+- (NSAccessibilityRole)accessibilityRole { return NSAccessibilityGroupRole; }
+- (NSString *)accessibilityLabel { return self.window.title; }
+- (NSArray *)accessibilityChildren { return [accessibility children]; }
+- (id)accessibilityFocusedUIElement { return [accessibility focusedElement] ?: self; }
+- (id)accessibilityHitTest:(NSPoint)point { return [accessibility hitTest:point] ?: self; }
 
 - (uint32_t)desiredPointerShape {
   return !closed && callbacks.pointer_shape != NULL ? callbacks.pointer_shape(context) : 0;

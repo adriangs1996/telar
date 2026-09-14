@@ -143,7 +143,8 @@ fn paintStatus(card: AgentCard, row: Rect) !f32 {
     const used = @min(row.width, glyph_width + label_width + if (glyph_width > 0 and label_width > 0) gap else @as(f32, 0));
     const left = row.x + row.width - used;
     if (state == .working) {
-        glyph.alpha = status_glyph.pulse(card.context.projection.sidebar_animation_frame);
+        const frame: u8 = if (canvas.animation) |clock| @truncate(clock.step(120 * std.time.ns_per_ms)) else card.context.projection.sidebar_animation_frame;
+        glyph.alpha = status_glyph.pulse(frame);
     }
 
     if (glyph_width > 0) {

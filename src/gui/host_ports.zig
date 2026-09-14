@@ -245,10 +245,11 @@ fn removePromptAttachments(_: *anyopaque, _: AttachmentTargetType) ?bool {
 fn resizePresenter(_: *anyopaque, _: u16, _: u16) !void {}
 
 fn setClipboard(context: *anyopaque, bytes: []const u8) !void {
-    _ = context;
-    if (native.telar_gui_clipboard(bytes.ptr, bytes.len) != 0) {
-        std.log.warn("native clipboard update was not applied: clipboard unavailable", .{});
-    }
+    const client: *Client = @ptrCast(@alignCast(context));
+    host(client).requestClipboardWrite(bytes) catch |err| switch (err) {
+        error.HostRequestsFull, error.ClipboardTooLarge, error.InvalidUtf8 => std.log.warn("native clipboard update was not admitted: {s}", .{@errorName(err)}),
+        else => return err,
+    };
 }
 
 fn setPaneGraphicsVisible(context: *anyopaque, pane_id: PaneIdType, visible: bool) !void {

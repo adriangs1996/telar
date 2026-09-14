@@ -37,6 +37,13 @@ pub fn Type(comptime Value: type) type {
             return &state.slots[state.current ^ 1];
         }
 
+        /// Mutates only the unsealed replacement while its frame is prepared.
+        /// Example: `try state.preparing().add(target);`
+        pub fn preparing(state: *State) *Value {
+            @import("std").debug.assert(!state.sealed);
+            return &state.slots[state.current ^ 1];
+        }
+
         pub fn presented(state: *const State) *const Value {
             return &state.slots[state.current];
         }

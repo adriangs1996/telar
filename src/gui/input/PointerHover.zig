@@ -3,7 +3,7 @@ const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const GuiClient = @import("../GuiClient.zig");
-const Event = @import("../native/InputEvent.zig").InputEvent;
+const Event = @import("PointerEvent.zig");
 const Hit = @import("LinkHit.zig");
 const Stamp = @import("HoverStamp.zig");
 const Hover = @This();
@@ -22,13 +22,12 @@ dirty: bool = true,
 /// Copies native coordinates for re-evaluation after output, resize or modifiers.
 /// Example: `hover.observe(event);`
 pub fn observe(hover: *Hover, event: Event) void {
-    if (event.code == 7) {
+    if (event.kind == .leave) {
         hover.clear();
         return;
     }
 
     hover.event = event;
-    hover.event.?.text = null;
 }
 
 /// Reuses the cached cell until model state or delivered controls change.
@@ -41,7 +40,7 @@ pub fn refresh(hover: *Hover, gui: *const GuiClient) void {
 
     const event = hover.event orelse return;
     var moved = event;
-    moved.code = 6;
+    moved.kind = .move;
     const mouse = gui.input.pointer.geometry.resolve(moved) orelse {
         hover.assign(null, gui.chrome.bandShape(moved));
         hover.cached = null;

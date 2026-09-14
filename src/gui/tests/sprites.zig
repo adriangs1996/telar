@@ -160,7 +160,14 @@ test "a warm repaint with sprites shapes rasterizes and allocates nothing" {
     var fixture = try ChromeFixture.init();
     defer fixture.deinit();
     var agents: client.AgentSnapshot = .{};
-    _ = try agents.replace(.{ .revision = 1, .agents = &.{ agent(.claude, 51), agent(.codex, 52), agent(.pi, 53), agent(.unknown, 54) } });
+    var inputs = [_]client.AgentInput{ agent(.claude, 51), agent(.codex, 52), agent(.pi, 53), agent(.unknown, 54) };
+    for (&inputs) |*input| {
+        input.status = .working;
+        // Keep the elapsed label stable while exercising every opacity step.
+        input.status_age_s = 120;
+    }
+
+    _ = try agents.replace(.{ .revision = 1, .agents = &inputs });
     var projection = fixture.projection();
     projection.agents = &agents;
     try fixture.paint(projection);
@@ -181,7 +188,7 @@ test "a warm repaint with sprites shapes rasterizes and allocates nothing" {
     renderer.quads.allocator = failure.allocator();
     defer renderer.quads.allocator = quad_allocator;
     for (0..30) |frame| {
-        projection.sidebar_animation_frame = @intCast(frame);
+        fixture.chrome.now_ns = frame * 120 * std.time.ns_per_ms;
         try fixture.paint(projection);
         renderer.seal();
     }

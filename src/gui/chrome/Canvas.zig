@@ -17,12 +17,16 @@ const SpritePage = @import("../image/SpritePage.zig");
 const Sprite = @import("../image/Sprite.zig");
 const Canvas = @This();
 
+widgets: ?*@import("../widgets/interaction/State.zig") = null,
+
 atlas: *@import("../text/GlyphAtlas.zig"),
 quads: *@import("../render/QuadList.zig"),
 metrics: @import("../TerminalMetrics.zig"),
 origin: [2]u32,
 theme: client.ColorTheme,
 background_opacity: f32 = 1,
+/// Shared presentation time and next wake request; null for static consumers.
+animation: ?*@import("../animation/FrameClock.zig") = null,
 /// Band heights already subtracted from the grid by the renderer.
 chrome: ChromeMetrics = .{},
 /// Whole window in device pixels; the bands span it, the grid sits inside.

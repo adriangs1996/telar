@@ -76,6 +76,9 @@ pub fn run(app: *Application, title: [*:0]const u8) !u8 {
         .wake_fd = app.driver.fds[0],
         .wakeup_after = wakeupAfter,
         .pointer_shape = pointerShape,
+        .text_context = textContext,
+        .host_request = hostRequest,
+        .accessibility = accessibility,
     };
     const result = native.telar_gui_run(title, app, &callbacks);
     if (app.failure) |err| {
@@ -181,7 +184,9 @@ fn pump(context: ?*anyopaque) callconv(.c) c_int {
             return 0;
         }
 
+        const animation_due = gui.chrome.animation.requestPreparation(now_ns);
         return @intFromBool(gui.lifecycle.needsPreparation() or
+            animation_due or
             app.driver.configuration.pending or
             app.renderer.cursor_on != app.cursor_clock.shown(now_ns) or app.renderer.focused != app.cursor_clock.focused);
     }
@@ -199,9 +204,10 @@ fn complete(context: ?*anyopaque, token: u64, delivered: c_int) callconv(.c) voi
 
 fn input(context: ?*anyopaque, event: native.InputEvent) callconv(.c) c_int {
     const app = from(context);
-    if (event.kind == 5) {
+    const decoded = @import("native/decode_input.zig").decode(event) catch return 0;
+    if (decoded == .focus) {
         // Losing focus must release gestures even if focus returns before drain.
-        app.driver.inbox.post(.{ .focus = event.code != 0 }) catch |err| {
+        app.driver.inbox.post(.{ .focus = decoded.focus }) catch |err| {
             app.fail(err);
             return 0;
         };
@@ -210,7 +216,7 @@ fn input(context: ?*anyopaque, event: native.InputEvent) callconv(.c) c_int {
 
     core.mark(app.params.io, .client_input);
     const gui = app.gui orelse return 0;
-    gui.input.accept(event) catch return 0;
+    gui.input.acceptEvent(decoded) catch return 0;
     app.driver.inbox.notify(.input_ready) catch |err| {
         app.fail(err);
         return 0;
@@ -224,12 +230,35 @@ fn now(app: *const Application) u64 {
 
 fn wakeupAfter(context: ?*anyopaque) callconv(.c) u32 {
     const app = from(context);
-    return app.cursor_clock.wakeupAfter(app.now());
+    const now_ns = app.now();
+    const widgets = if (app.gui) |gui| if (gui.lifecycle.active == null) gui.chrome.animation.wakeupAfter(now_ns) else 0 else 0;
+    return @import("animation/FrameClock.zig").earliest(app.cursor_clock.wakeupAfter(now_ns), widgets);
 }
 
 fn pointerShape(context: ?*anyopaque) callconv(.c) u32 {
     const gui = from(context).gui orelse return 0;
     return @intFromEnum(gui.input.pointer.hover.shape);
+}
+
+fn textContext(context: ?*anyopaque, out: *native.TextContext) callconv(.c) c_int {
+    out.* = .{};
+    const gui = from(context).gui orelse return 0;
+    if (gui.input.len != 0) {
+        return -1;
+    }
+
+    return @intFromBool(gui.widgetTextContext(out));
+}
+
+fn hostRequest(context: ?*anyopaque, out: *native.HostRequest) callconv(.c) c_int {
+    const gui = from(context).gui orelse return 0;
+    return @intFromBool(gui.host.next(out));
+}
+
+fn accessibility(context: ?*anyopaque, out: *native.AccessibilityTree) callconv(.c) c_int {
+    out.* = .{};
+    const gui = from(context).gui orelse return 0;
+    return @intFromBool(gui.widgetAccessibility(out));
 }
 
 fn fail(app: *Application, err: anyerror) void {

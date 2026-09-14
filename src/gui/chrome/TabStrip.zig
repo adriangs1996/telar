@@ -13,14 +13,18 @@ const PaneProgress = @import("PaneProgress.zig");
 const attention = @import("attention.zig");
 const TabEntry = @import("TabEntry.zig");
 const StripFit = @import("StripFit.zig");
+const Canvas = @import("Canvas.zig");
 const TabStrip = @This();
 
 context: *Context,
 bands: Bands,
 
-/// Example: `try strip.paint();`
-pub fn paint(strip: TabStrip) !void {
-    const canvas = strip.context.canvas;
+/// Example: `try strip.draw(canvas);`
+pub fn draw(widget: TabStrip, canvas: *Canvas) !void {
+    var context = widget.context.*;
+    context.canvas = canvas;
+    var strip = widget;
+    strip.context = &context;
     try canvas.panelAt(strip.bands.shoulder);
     const area = strip.bands.tab_strip;
     if (area.width <= 0 or area.height <= 0) {

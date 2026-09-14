@@ -10,6 +10,9 @@ const Rect = @import("../render/Rect.zig");
 const WorkspacePills = @import("WorkspacePills.zig");
 const Location = @import("Location.zig");
 const SlotPainter = @import("SlotPainter.zig");
+const Canvas = @import("Canvas.zig");
+const Layout = @import("../layout/Layout.zig");
+const LayoutItem = @import("../layout/Item.zig");
 const TopBar = @This();
 
 context: *Context,
@@ -17,21 +20,26 @@ bands: Bands,
 home: []const u8,
 sidebar_visible: bool,
 
-/// Example: `try top_bar.paint();`
-pub fn paint(bar: TopBar) !void {
+/// Example: `try top_bar.draw(canvas);`
+pub fn draw(widget: TopBar, canvas: *Canvas) !void {
+    var context = widget.context.*;
+    context.canvas = canvas;
+    var bar = widget;
+    bar.context = &context;
     const area = bar.bands.top_bar;
     if (area.width <= 0 or area.height <= 0) {
         return;
     }
 
-    const canvas = bar.context.canvas;
     const palette = canvas.theme.palette;
     const chrome = canvas.chrome;
     try canvas.panelAt(area);
     const margin = chrome.px(8);
     const gap = chrome.px(8);
     const control_height = @min(area.height, chrome.px(24));
-    const row: Rect = .{ .x = area.x + margin, .y = area.y + @floor((area.height - control_height) / 2), .width = @max(0, area.width - 2 * margin), .height = control_height };
+    var rows = [_]LayoutItem{.{ .height = .{ .fixed = control_height } }};
+    try (Layout{ .area = area, .padding = .{ .left = margin, .right = margin }, .cross_alignment = .center }).resolve(&rows);
+    const row = rows[0].bounds;
     var left = row.x;
     const toggle_width = @min(row.width, chrome.px(30));
     try bar.context.pill(.{

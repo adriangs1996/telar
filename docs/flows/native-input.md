@@ -5,6 +5,68 @@ ABI. The native callback copies committed text, paste chunks, semantic keys and
 pointer samples into `NativeInput`; its readiness notification enters the shared
 inbox. Only the window-thread consumer changes the client model.
 
+`native/decode_input.zig` is the checked boundary between that C ABI and
+`input/event.zig`. The Zig union distinguishes committed text, paste, key
+press/repeat/release, pointer gestures, precise scroll, host focus, composition,
+clipboard results and accessibility actions. Coordinates and precise scroll
+use physical pixels from the content top-left. Nonprecise deltas use lines;
+positive deltas move right and down. Scroll phase and momentum phase are separate.
+Native numeric tags do not enter widget or pointer routing.
+
+Text borrows native UTF-8 bytes only until admission. Ordinary committed scalars
+remain `TextCommit` entries until dispatch. Targeted commits retain the complete
+text and replacement range as one event. The input ring stores indices into
+bounded payload slots rather than embedding a large buffer in every entry.
+Focus remains an ordered inbox message, so lost-and-regained focus still cancels
+held gestures. Ordinary input runs through the delivered widget registry before
+the shared terminal fallback.
+
+`widgets/interaction/Dispatcher` owns keyboard focus, hover, captures and physical
+key leases. Drawing registers owned semantic targets against pixel rectangles;
+a matching successful presentation publishes those targets. Their IDs survive
+reordering, while an explicit generation distinguishes successive editors.
+A disappeared target cannot regain an old held gesture. Modal layers restrict
+new input without stealing releases already owned by a terminal pane.
+
+The `text_context` callback publishes a focused widget's current committed UTF-8
+text, selection anchor/head, identity and caret rectangle. Selection endpoints
+retain direction; the second endpoint is the active cursor. Composition is provisional client
+state until a commit becomes a shared prompt edit command. While admitted input
+awaits dispatch, the callback returns -1 and the native cache stays intact. Once
+the queue drains, `composition_active` tells the host whether to preserve or
+discard its marked text. This also synchronizes cancellation by clicking within
+the same field or invoking an accessibility action. Native ranges cross
+the ABI as UTF-8 byte offsets, with `UINT32_MAX` meaning no replacement range.
+AppKit converts to/from UTF-16 for `NSTextInputClient`; Wayland uses
+`text-input-v3` when available. A Wayland commit and its surrounding deletion
+enter Zig atomically as one replacement. Sent context serials retain their
+original identity, so a delayed batch cannot edit a different field. XKB compose
+continues when the compositor does not expose the text-input protocol.
+
+`host/Services` provides four outstanding clipboard requests. Writes own up to
+64 KiB; reads return an owned result with request ID, target ID and generation.
+`host_request` drains requests on the window thread. Native helpers copy the
+request before asynchronous work and retry completion admission on backpressure.
+AppKit clipboard access runs on the main run loop and its string API materializes
+the system value before its size can be checked. Telar limits the admitted payload
+to 64 KiB, but cannot impose that limit on AppKit's internal allocation. Wayland
+reads incrementally from a nonblocking pipe under the same limit and a deadline.
+Zig rejects unknown, duplicate or mismatched results. A cut keeps its selection
+until the matching write succeeds and the editor still has the captured revision;
+failure or intervening edits retire the request without deleting text. A terminal paste captures
+its attachment before reading, checks that destination before starting delivery,
+and streams through the existing pane-paste path. Widgets request clipboard
+operations and opening links through Zig services.
+
+The `accessibility` callback publishes roles, labels, values, bounds, focus,
+selection and action bits from the delivered widget registry. AppKit exposes
+retained `NSAccessibility` elements. Linux publishes ATK/AT-SPI objects from a
+separate accessibility loop; snapshots and queued actions cross that thread
+boundary as owned data. Accessibility actions enter Zig with the original node
+identity and generation. Partial text edits also carry the expected text revision;
+Zig rejects a stale range instead of reconstructing a whole value from an old
+native snapshot. No platform callback mutates the model directly.
+
 `input/router.zig` instantiates the shared key router without an escape decoder.
 It resolves the same configured prefix, built-in actions and Lua/plugin bindings
 as the TUI. `input/InputHandler.zig` delegates keys and actions to the shared
@@ -70,8 +132,14 @@ table for the hosts' 256 keycode identities and a FIFO of their arrival order;
 duplicate releases share one entry. Recovery rejects new presses until these
 releases finish through the existing router and outbox budget. Another key press
 therefore cannot overtake the release of its previous physical lease.
-The input path performs no escape parsing, I/O, allocation
-or plugin work before an explicit binding is matched. Socket backpressure pauses
+Whole targeted text, composition and accessibility payloads use eight 4 KiB
+slots. Clipboard results use two 64 KiB slots. An exhausted pool rejects admission
+before changing the queue; native clipboard helpers retain completion for retry.
+Composition cancellation uses an ordinary value entry independent of payload
+slots, or the reserved recovery slot if the ring is full.
+Scroll fallback emits one terminal step per drain iteration so transport
+backpressure still bounds work. The input path performs no escape parsing,
+allocation or plugin work before an explicit binding is matched. Socket backpressure pauses
 drain, and transport completion resumes it.
 
 Proof lives in `src/gui/tests/navigation.zig`, the input capability tests and
@@ -116,8 +184,8 @@ runtime's [terminal command history observer](terminal-command-history.md).
 
 Pointer ABI kind 6 uses codes 1/2/3 for press/release/drag, 4/5 for vertical
 scroll, 6 for hover and 7 for leave. Pointer modifiers are Shift=1, Alt=2,
-Control=4 and Super/Command=8. Keyboard modifiers keep their existing three-bit
-contract. `PointerGeometry` removes Super before encoding child mouse reports,
+Control=4 and Super/Command=8. Keyboard events also preserve Super/Command; `KeyInput.terminalKey` converts
+to the shared terminal protocol only after GUI shortcuts have been handled. `PointerGeometry` removes Super before encoding child mouse reports,
 so it cannot become an SGR motion bit. Hover and leave preserve keyboard prefixes.
 
 The optional `pointer_shape` callback returns the existing core `PointerShape`

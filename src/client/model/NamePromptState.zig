@@ -8,6 +8,7 @@ const State = @This();
 
 value: ?Prompt = null,
 revision: u64 = 0,
+generation: u64 = 0,
 
 /// Reconciles search scope, selection and scroll after a history transition.
 /// Example: `state.updateHistory(.{ .selection = 0, .reset_scroll = true });`.
@@ -68,6 +69,7 @@ pub fn takeHistoryPage(state: *State) @FieldType(History, "page_requested") {
 /// prompt.begin(.create_workspace);
 /// ```
 pub fn begin(state: *State, command: name_prompt.Begin) void {
+    state.generation += 1;
     state.value = switch (command) {
         .rename_tab => |rename| .{
             .mode = .{ .rename_tab = rename.tab_id },
@@ -102,6 +104,7 @@ pub fn begin(state: *State, command: name_prompt.Begin) void {
             .field = .init(&[_]u8{prefix.byte()}),
         },
     };
+    state.value.?.generation = state.generation;
     state.revision +%= 1;
 }
 
@@ -161,6 +164,30 @@ pub fn version(state: *const State) u64 {
 pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition {
     const prompt = state.mutable() orelse return .unchanged;
     switch (command) {
+        .focus_field => |focus| {
+            if (prompt.mode != .create_workspace or prompt.mode.create_workspace.focus == focus) {
+                return .unchanged;
+            }
+
+            prompt.mode.create_workspace.focus = focus;
+            state.revision +%= 1;
+            return .changed;
+        },
+        .replace_range => |replacement| {
+            const changed = if (directoryFocused(prompt)) prompt.directory.replace(replacement.range, replacement.text) else prompt.field.replace(replacement.range, replacement.text);
+            if (!changed) {
+                return .unchanged;
+            }
+
+            if (directoryFocused(prompt)) {
+                prompt.mode.create_workspace = .{ .focus = .directory };
+            } else if (name_prompt.selects(prompt.target())) {
+                prompt.setSelection(0);
+            }
+
+            state.revision +%= 1;
+            return .changed;
+        },
         .paste_start => {
             if (prompt.pasting) {
                 return .unchanged;
@@ -319,6 +346,8 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
         .move_right,
         .home,
         .end,
+        .select_range,
+        .select_all,
         => return state.editField(command),
     }
 }
@@ -418,7 +447,9 @@ fn applyEdit(field: anytype, pasting: bool, command: name_prompt.Command) void {
         .move_right => |extend| field.moveRight(extend),
         .home => |extend| field.home(extend),
         .end => |extend| field.end(extend),
-        .paste_start, .paste_end, .submit, .submit_alternate, .cancel, .move_up, .move_down, .tab, .back_tab, .remove_entry, .toggle_inspection, .page_up, .page_down => unreachable,
+        .select_range => |range| _ = field.selectRange(range),
+        .select_all => field.selectAll(),
+        .focus_field, .replace_range, .paste_start, .paste_end, .submit, .submit_alternate, .cancel, .move_up, .move_down, .tab, .back_tab, .remove_entry, .toggle_inspection, .page_up, .page_down => unreachable,
     }
 }
 

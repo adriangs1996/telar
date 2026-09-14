@@ -1,0 +1,53 @@
+const client = @import("telar-client");
+const Action = @import("Target.zig").Action;
+
+/// Borrows semantic names only until registry registration copies them.
+/// Example: `const label = labels.forAction(&projection, action);`
+pub fn forAction(projection: *const client.Projection, action: Action) []const u8 {
+    return switch (action) {
+        .resize_sidebar => "Resize sidebar",
+        .custom => "Agents",
+        .text_field => |field| if (field == .name) "Name or query" else "Working directory",
+        .intent => |intent| switch (intent) {
+            .toggle_sidebar => "Toggle sidebar",
+            .toggle_workspace_list => "Toggle workspace list",
+            .create_tab => "Create tab",
+            .select_tab, .rename_tab => |id| blk: {
+                for (projection.tabs.items[0..projection.tabs.count]) |*slot| {
+                    if (slot.*) |*tab| {
+                        if (tab.location.tab_id == id) {
+                            break :blk tab.labelSlice();
+                        }
+                    }
+                }
+
+                break :blk "Tab";
+            },
+            .select_workspace => |id| blk: {
+                if (projection.workspaces.indexOf(id)) |index| {
+                    break :blk projection.workspaces.nameAt(index);
+                }
+
+                break :blk "Workspace";
+            },
+            .focus_agent => |key| blk: {
+                for (projection.agents.slice()) |*agent| {
+                    if (std.meta.eql(agent.key, key)) {
+                        break :blk agent.displayName();
+                    }
+                }
+
+                break :blk "Agent";
+            },
+            .focus_pane => "Terminal pane",
+            .resize_sidebar => "Resize sidebar",
+            .notification_activate => "Open notification",
+            .notification_dismiss => "Dismiss notification",
+            .attachment_dismiss => "Dismiss attachment",
+            .prompt_row => "Choose result",
+            .none => "",
+        },
+    };
+}
+
+const std = @import("std");

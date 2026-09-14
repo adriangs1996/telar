@@ -1,0 +1,45 @@
+//! Owned input semantics for one delivered widget. No projection, text slice,
+//! Canvas or widget pointer crosses the presentation boundary.
+const Target = @This();
+
+id: @import("Id.zig") = .{},
+namespace: u64 = 0,
+bounds: @import("../../render/Rect.zig"),
+action: Action,
+layer: u8 = 0,
+focusable: bool = true,
+enabled: bool = true,
+accepts_pointer: bool = true,
+role: u8 = 2,
+label: [128]u8 = undefined,
+label_len: u8 = 0,
+/// Editors with a domain-specific Tab action can opt out of traversal.
+traverse_tab: bool = true,
+
+pub const Field = enum { name, directory };
+pub const Action = union(enum) {
+    intent: @import("telar-client").Intent,
+    text_field: Field,
+    resize_sidebar,
+    custom: u64,
+};
+
+/// Half-open device pixels shared with drawing.
+/// Example: `if (target.contains(.{ pointer.x, pointer.y })) ...`
+pub fn contains(target: Target, point: [2]f64) bool {
+    return point[0] >= target.bounds.x and point[1] >= target.bounds.y and point[0] < @as(f64, target.bounds.x) + target.bounds.width and point[1] < @as(f64, target.bounds.y) + target.bounds.height;
+}
+
+/// Copies a short accessible label, preserving UTF-8 boundaries.
+/// Example: `const target = value.labelled("Create tab");`
+pub fn labelled(target: Target, text: []const u8) Target {
+    var result = target;
+    var len = @min(text.len, result.label.len);
+    while (len > 0 and len < text.len and text[len] & 0xc0 == 0x80) {
+        len -= 1;
+    }
+
+    @memcpy(result.label[0..len], text[0..len]);
+    result.label_len = @intCast(len);
+    return result;
+}

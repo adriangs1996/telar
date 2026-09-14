@@ -1,3 +1,3 @@
-//! The fade progress of one pane's attention ring.
-pane_id: @import("telar-core").PaneId,
-steps: u8,
+//! One attachment's attention transition; never borrows a pane or model.
+key: @import("telar-client").AgentKey,
+transition: @import("../animation/Transition.zig"),

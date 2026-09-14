@@ -21,7 +21,7 @@ pub fn init() !*Fixture {
     fixture.text("https://a.b");
     session.gui.app.link_opener = .{ .context = fixture, .open = open };
     try fixture.present();
-    session.gui.input.setGeometry(.{ 0, 0 }, session.gui.app.model.hostSize());
+    session.gui.input.setGeometry(session.renderer.origin, session.gui.app.model.hostSize());
     return fixture;
 }
 
@@ -50,7 +50,7 @@ pub fn event(fixture: *Fixture, code: u32) Event {
     const gui = fixture.session.gui;
     const view = gui.app.model.activeTabModel().?.viewForPane(Session.pane_id, gui.region.area).?;
     const size = gui.app.model.hostSize();
-    return .{ .kind = 6, .code = code, .mods = @import("../input/hover_target.zig").link_modifier, .x = @as(f64, @floatFromInt(view.content.x + 2)) * size.cell_width_px + 1, .y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + 1 };
+    return .{ .kind = 6, .code = code, .mods = @import("../input/hover_target.zig").link_modifier, .x = @as(f64, @floatFromInt(view.content.x + 2)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[0])) + 1, .y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[1])) + 1 };
 }
 
 pub fn send(fixture: *Fixture, value: Event) !void {

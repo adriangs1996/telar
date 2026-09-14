@@ -10,8 +10,8 @@ struct telar_pointer {
     struct wl_pointer *handle;
     telar_cursor *cursor;
     bool entered;
-    double x, y, axis, remainder;
-    int32_t discrete;
+    double x, y, axis[2], discrete[2], value120[2];
+    uint32_t axis_source, axis_seen, axis_stopped, active_axes;
     uint32_t mods, buttons;
 };
 
@@ -45,8 +45,11 @@ static void leave(void *data, struct wl_pointer *handle, uint32_t serial, struct
     (void)handle; (void)serial; (void)surface;
     telar_pointer *self = data;
     release_buttons(self);
-    self->axis = self->remainder = 0;
-    self->discrete = 0;
+    if (self->active_axes != 0) {
+        self->callbacks.input(self->context, (telar_gui_input){.kind = 8, .x = self->x, .y = self->y, .mods = self->mods, .precise = 1, .scroll_phase = 4});
+    }
+    self->axis[0] = self->axis[1] = self->discrete[0] = self->discrete[1] = self->value120[0] = self->value120[1] = 0;
+    self->axis_seen = self->axis_stopped = self->active_axes = 0;
     if (self->entered) {
         emit(self, 7, 0);
     }
@@ -96,54 +99,64 @@ static void button(void *data, struct wl_pointer *handle, uint32_t serial, uint3
 static void frame(void *data, struct wl_pointer *handle) {
     (void)handle;
     telar_pointer *self = data;
-    double delta = self->discrete != 0 ? self->discrete : self->axis / 10;
-    self->remainder = fmax(-32, fmin(32, self->remainder + delta));
-    self->axis = 0;
-    self->discrete = 0;
-    while (fabs(self->remainder) >= 1) {
-        bool up = self->remainder < 0;
-        if (!emit(self, up ? 4 : 5, 0)) {
-            self->remainder = 0;
-            return;
-        }
-
-        self->remainder += up ? 1 : -1;
+    if (self->axis_seen == 0 && self->axis_stopped == 0) return;
+    bool precise = self->axis_source == WL_POINTER_AXIS_SOURCE_FINGER || self->axis_source == WL_POINTER_AXIS_SOURCE_CONTINUOUS;
+    bool was_active = self->active_axes != 0;
+    double delta[2];
+    for (unsigned axis = 0; axis < 2; axis++) {
+        delta[axis] = precise ? self->axis[axis] : self->value120[axis] != 0 ? self->value120[axis] / 120.0 : self->discrete[axis] != 0 ? self->discrete[axis] : self->axis[axis] / 10.0;
+        self->axis[axis] = self->discrete[axis] = self->value120[axis] = 0;
     }
+    self->active_axes = precise ? (self->active_axes | self->axis_seen) & ~self->axis_stopped : 0;
+    uint32_t phase = precise ? (self->active_axes == 0 ? 3 : was_active ? 2 : 1) : 0;
+    self->callbacks.input(self->context, (telar_gui_input){.kind = 8, .x = self->x, .y = self->y,
+        .mods = self->mods, .delta_x = delta[WL_POINTER_AXIS_HORIZONTAL_SCROLL], .delta_y = delta[WL_POINTER_AXIS_VERTICAL_SCROLL],
+        .precise = precise, .scroll_phase = phase});
+    self->axis_seen = self->axis_stopped = 0;
 }
 
 static void axis(void *data, struct wl_pointer *handle, uint32_t time, uint32_t direction, wl_fixed_t value) {
     (void)time;
     telar_pointer *self = data;
-    if (direction != WL_POINTER_AXIS_VERTICAL_SCROLL) {
+    if (direction > WL_POINTER_AXIS_HORIZONTAL_SCROLL) {
         return;
     }
 
-    self->axis += wl_fixed_to_double(value);
+    self->axis[direction] += wl_fixed_to_double(value);
+    self->axis_seen |= 1u << direction;
     if (wl_pointer_get_version(handle) < WL_POINTER_FRAME_SINCE_VERSION) {
         frame(data, handle);
     }
 }
 
 static void axis_source(void *data, struct wl_pointer *handle, uint32_t source) {
-    (void)data; (void)handle; (void)source;
+    (void)handle;
+    ((telar_pointer *)data)->axis_source = source;
 }
 
 static void axis_stop(void *data, struct wl_pointer *handle, uint32_t time, uint32_t direction) {
-    (void)data; (void)handle; (void)time; (void)direction;
+    (void)handle; (void)time;
+    if (direction <= WL_POINTER_AXIS_HORIZONTAL_SCROLL) ((telar_pointer *)data)->axis_stopped |= 1u << direction;
 }
 
 static void axis_discrete(void *data, struct wl_pointer *handle, uint32_t direction, int32_t discrete) {
     (void)handle;
     telar_pointer *self = data;
-    if (direction == WL_POINTER_AXIS_VERTICAL_SCROLL) {
-        self->discrete = (int32_t)fmax(-32, fmin(32, (double)self->discrete + discrete));
+    if (direction <= WL_POINTER_AXIS_HORIZONTAL_SCROLL) {
+        self->discrete[direction] += discrete;
     }
+}
+
+static void axis_value120(void *data, struct wl_pointer *handle, uint32_t direction, int32_t value) {
+    (void)handle;
+    if (direction <= WL_POINTER_AXIS_HORIZONTAL_SCROLL) ((telar_pointer *)data)->value120[direction] += value;
 }
 
 static const struct wl_pointer_listener listener = {
     .enter = enter, .leave = leave, .motion = motion, .button = button,
     .axis = axis, .frame = frame, .axis_source = axis_source,
     .axis_stop = axis_stop, .axis_discrete = axis_discrete,
+    .axis_value120 = axis_value120,
 };
 
 telar_pointer *telar_pointer_create(void *context, const telar_gui_callbacks *callbacks) {

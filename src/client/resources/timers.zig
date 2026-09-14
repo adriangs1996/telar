@@ -8,3 +8,5 @@ pub const Kind = enum {
     notification,
     sidebar_animation,
 };
+/// Chooses who schedules visual updates; model ticks remain the TUI default.
+pub const AnimationClock = enum { model, host };

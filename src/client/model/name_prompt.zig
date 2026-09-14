@@ -78,6 +78,10 @@ pub const HistoryScope = enum(u8) {
 };
 
 pub const Command = union(enum) {
+    focus_field: WorkspaceForm.Focus,
+    select_range: [2]u32,
+    select_all,
+    replace_range: @import("FieldReplacement.zig"),
     paste_start,
     paste_end,
     insert: []const u8,

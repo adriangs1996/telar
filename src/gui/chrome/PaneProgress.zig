@@ -1,4 +1,5 @@
 const core = @import("telar-core");
+const std = @import("std");
 const client = @import("telar-client");
 const Context = @import("Context.zig");
 const Rect = @import("../render/Rect.zig");
@@ -38,7 +39,8 @@ pub fn paintPixels(progress: Progress, area: Rect) !void {
         else => palette.teal,
     };
     if (progress.pane.progress_state == .indeterminate) {
-        const frame: f32 = @floatFromInt(progress.context.projection.sidebar_animation_frame);
+        const step: u8 = if (canvas.animation) |clock| @truncate(clock.step(120 * std.time.ns_per_ms)) else progress.context.projection.sidebar_animation_frame;
+        const frame: f32 = @floatFromInt(step);
         const phase = if (frame < 128) frame else 255 - frame;
         const thumb = @min(bounds.width, @as(f32, @floatFromInt(canvas.metrics.cell_width)));
         bounds.x += (bounds.width - thumb) * phase / 127;

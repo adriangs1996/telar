@@ -1,0 +1,147 @@
+...................
+----------------------------------------------------------------------
+Ran 19 tests in 0.012s
+
+OK
+telar-client module and capability boundaries passed
+test-gui
++- run test w
+[gui_config] (warn): GUI configuration unchanged: config.lua:1: unexpected symbol near <eof>
+[gui_config] (warn): GUI configuration unchanged: cannot prepare GUI font 'Telar-Test-Missing-Family-98a34b1': FontFamilyNotFound
+[gui_config] (warn): GUI configuration unchanged: gui.background_blur must be a number in 0..255
+failed command: ./.zig-cache/o/9c713ab6db3efc4349546c07c584dc47/test --cache-dir=./.zig-cache --seed=0x31197711 --listen=-
+
+Build Summary: 68/68 steps succeeded; 1214/1215 tests passed (1 skipped)
+install success
++- install telar success
+|  +- compile exe telar Debug native success 17s MaxRSS:1G
+|     +- WriteFile  cached
+|     +- compile lib simdutf ReleaseFast native cached 31ms MaxRSS:37M
+|     +- WriteFile hwy cached
+|     +- compile lib highway ReleaseFast native cached 16ms MaxRSS:39M
+|     +- compile lib simdutf ReleaseFast native (reused)
+|     +- compile lib highway ReleaseFast native (reused)
+|     +- options cached
+|     +- run wayland-scanner (cursor-shape-v1-client-protocol.h) cached
+|     +- run wayland-scanner (tablet-unstable-v2-client-protocol.h) cached
+|     +- run wayland-scanner (text-input-unstable-v3-client-protocol.h) cached
+|     +- run wayland-scanner (xdg-shell-client-protocol.h) cached
+|     +- run wayland-scanner (ext-background-effect-v1-client-protocol.h) cached
+|     +- run wayland-scanner (xdg-decoration-unstable-v1-client-protocol.h) cached
+|     +- run glslc (quad.vert.inc) cached
+|     +- run glslc (quad.frag.inc) cached
+|     +- run wayland-scanner (cursor-shape-v1-protocol.c) cached
+|     +- run wayland-scanner (tablet-unstable-v2-protocol.c) cached
+|     +- run wayland-scanner (text-input-unstable-v3-protocol.c) cached
+|     +- run wayland-scanner (xdg-shell-protocol.c) cached
+|     +- run wayland-scanner (ext-background-effect-v1-protocol.c) cached
+|     +- run wayland-scanner (xdg-decoration-unstable-v1-protocol.c) cached
+|     +- WriteFile cached
+|     +- compile lib lua Debug native cached 18ms MaxRSS:37M
+|     +- compile lib lua Debug native (reused)
+|     +- options cached
+|     +- options cached
+|     +- WriteFile props.zig cached
+|     |  +- run exe props-unigen cached
+|     |  |  +- compile exe props-unigen Debug native cached 6ms MaxRSS:38M
+|     |  |     +- run exe uucode_generate (tables.zig) cached
+|     |  |        +- compile exe uucode_generate Debug native cached 8ms MaxRSS:38M
+|     |  +- run exe symbols-unigen cached
+|     |     +- compile exe symbols-unigen Debug native cached 4ms MaxRSS:38M
+|     |        +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+|     +- WriteFile props.zig (+2 more reused dependencies)
+|     +- translate-c wuffs_c.h cached
+|     |  +- compile exe translate-c Debug native cached 7ms MaxRSS:38M
+|     |  |  +- options cached
+|     |  |  +- options cached
+|     |  |  +- options cached
+|     |  |  +- run exe generate-def (aarch64.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native cached 3ms MaxRSS:38M
+|     |  |  +- run exe generate-def (amdgcn.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native (reused)
+|     |  |  +- run exe generate-def (arm.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native (reused)
+|     |  |  +- run exe generate-def (bpf.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native (reused)
+|     |  |  +- run exe generate-def (common.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native (reused)
+|     |  |  +- run exe generate-def (hexagon.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native (reused)
+|     |  |  +- run exe generate-def (loongarch.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native (reused)
+|     |  |  +- run exe generate-def (mips.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native (reused)
+|     |  |  +- run exe generate-def (neon.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native (reused)
+|     |  |  +- run exe generate-def (nvptx.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native (reused)
+|     |  |  +- run exe generate-def (powerpc.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native (reused)
+|     |  |  +- run exe generate-def (riscv.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native (reused)
+|     |  |  +- run exe generate-def (s390x.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native (reused)
+|     |  |  +- run exe generate-def (ve.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native (reused)
+|     |  |  +- run exe generate-def (wasm.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native (reused)
+|     |  |  +- run exe generate-def (x86_64.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native (reused)
+|     |  |  +- run exe generate-def (x86.zig) cached
+|     |  |  |  +- compile exe generate-def Debug native (reused)
+|     |  |  +- run exe generate-def (xcore.zig) cached
+|     |  |     +- compile exe generate-def Debug native (reused)
+|     |  +- WriteFile wuffs_c.h cached
+|     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
++- install packaging/linux/telar.desktop to share/applications/telar.desktop cached
++- install packaging/linux/telar.png to share/icons/hicolor/512x512/apps/telar.png cached
+test-gui success
++- run test 313 pass, 1 skip (314 total) 32s MaxRSS:100M
+   +- compile test Debug native success 7s MaxRSS:1G
+      +- run wayland-scanner (cursor-shape-v1-client-protocol.h) (reused)
+      +- run wayland-scanner (tablet-unstable-v2-client-protocol.h) (reused)
+      +- run wayland-scanner (text-input-unstable-v3-client-protocol.h) (reused)
+      +- run wayland-scanner (xdg-shell-client-protocol.h) (reused)
+      +- run wayland-scanner (ext-background-effect-v1-client-protocol.h) (reused)
+      +- run wayland-scanner (xdg-decoration-unstable-v1-client-protocol.h) (reused)
+      +- run glslc (quad.vert.inc) (reused)
+      +- run glslc (quad.frag.inc) (reused)
+      +- run wayland-scanner (cursor-shape-v1-protocol.c) (reused)
+      +- run wayland-scanner (tablet-unstable-v2-protocol.c) (reused)
+      +- run wayland-scanner (text-input-unstable-v3-protocol.c) (reused)
+      +- run wayland-scanner (xdg-shell-protocol.c) (reused)
+      +- run wayland-scanner (ext-background-effect-v1-protocol.c) (reused)
+      +- run wayland-scanner (xdg-decoration-unstable-v1-protocol.c) (reused)
+      +- WriteFile (reused)
+      +- compile lib lua Debug native (reused)
+      +- compile lib lua Debug native (reused)
+      +- WriteFile  (reused)
+      +- compile lib simdutf ReleaseFast native (reused)
+      +- WriteFile hwy (reused)
+      +- compile lib highway ReleaseFast native (reused)
+      +- compile lib simdutf ReleaseFast native (reused)
+      +- compile lib highway ReleaseFast native (reused)
+      +- options (reused)
+      +- options (reused)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+test-client success
++- run test 901 pass (901 total) 1s MaxRSS:45M
+   +- compile test Debug native success 9s MaxRSS:1G
+   |  +- WriteFile (reused)
+   |  +- compile lib lua Debug native (reused)
+   |  +- compile lib lua Debug native (reused)
+   |  +- WriteFile  (reused)
+   |  +- compile lib simdutf ReleaseFast native (reused)
+   |  +- WriteFile hwy (reused)
+   |  +- compile lib highway ReleaseFast native (reused)
+   |  +- compile lib simdutf ReleaseFast native (reused)
+   |  +- compile lib highway ReleaseFast native (reused)
+   |  +- options (reused)
+   |  +- options (reused)
+   |  +- WriteFile props.zig (+2 more reused dependencies)
+   |  +- WriteFile props.zig (+2 more reused dependencies)
+   |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+   +- run python3 success 409ms
+      +- run python3 success 74ms

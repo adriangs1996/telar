@@ -141,15 +141,12 @@ fn paintField(palette: CommandPalette, row: core.Rect, prompt: client.Prompt) !v
     const colors = canvas.theme.palette;
     var field = prompt.field;
     const view = field.view(row.w);
-    try canvas.fill(row, colors.surface0);
-    try canvas.text(row, .{ .text = view.text, .color = colors.text });
+    try @import("../widgets/TextField.zig").fromPrompt(&prompt, canvas.rect(row), .name).draw(canvas);
     if (!view.clipped_left and view.text.len != 0 and client.command_palette.Prefix.parse(view.text[0]) != null) {
         const cell = row.splitLeft(1)[0];
         try canvas.fill(cell, colors.surface0);
         try canvas.text(cell, .{ .text = view.text[0..1], .color = colors.accent, .bold = true });
     }
-
-    try canvas.border(.{ .x = row.x + @min(view.cursor, row.w - 1), .y = row.y, .w = 1, .h = 1 }, colors.accent);
 }
 
 fn paintPickerRow(palette: CommandPalette, row: core.Rect, item: client.ModelGotoPickerItem) !void {

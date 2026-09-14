@@ -68,6 +68,7 @@ class Window:
         self.steps = []
         self.logs = []
         self.pointer = None
+        self.sidebar_width = 284
 
     def guest(self, script, *arguments, input_text=None, timeout=20):
         return ssh(ENVIRONMENT + script, self.state, self.binary, *arguments,
@@ -89,11 +90,12 @@ return telar.config({
   },
   gui = {
     font = { family = "DejaVu Sans Mono", size = 16 },
+    sidebar = { width = %d },
     cursor = { blink = false },
     window = { padding = { x = 0, y = 0 } },
   },
 })
-''' % custom
+''' % (custom, self.sidebar_width)
         self.guest('umask 077; cat > "$state/config.lua"; "$binary" config check "$state/config.lua"',
                    input_text=source)
         self.launch()
@@ -248,12 +250,19 @@ def check(condition, message):
         raise AssertionError(message)
 
 
-def pointer_drag(window, start, end):
-    window.focus()
+def pointer_output(window):
     outputs = json.loads(window.guest("swaymsg -r -t get_outputs"))
     outputs = [output for output in outputs if output.get("active")]
     check(len(outputs) == 1, "The VM pointer probe requires one active output")
-    bounds = outputs[0]["rect"]
+    output = outputs[0]
+    check(output.get("scale") == 1 and output.get("transform") == "normal",
+          "The VM pointer probe requires output scale 1 and no rotation")
+    return output["rect"]
+
+
+def pointer_drag(window, start, end):
+    window.focus()
+    bounds = pointer_output(window)
 
     def move(point):
         events = []
@@ -294,13 +303,22 @@ def sidebar(window, first):
     window.action("w")
 
     node = next(node for node in nodes(window.tree()) if node.get("pid") == window.pid)
-    rect = node["rect"]
+    outer, content = node["rect"], node["window_rect"]
+    rect = {"x": outer["x"] + content["x"], "y": outer["y"] + content["y"],
+            "width": content["width"], "height": content["height"]}
+    pointer_output(window)
     cell = rect["width"] // hidden["cols"]
-    if not cell or rect["width"] - cell * hidden["cols"] >= cell:
-        window.pointer = "skipped: Sway window does not expose an exact unpadded cell grid"
-        window.step("sidebar keyboard toggle and resize")
-        return
-    x = rect["x"] + (hidden["cols"] - first["cols"]) * cell - max(1, cell // 2)
+    check(cell > 0 and rect["width"] - cell * hidden["cols"] < cell,
+          "Sway content does not expose the configured unpadded cell grid")
+    # SidebarBand keeps an 8px gap and at least 20 workbench columns. Use
+    # the configured pixel edge: PTY column deltas also include that gap and
+    # the remainder discarded when the workbench fits complete cells.
+    maximum = min(480, rect["width"] - 8 - 20 * cell)
+    check(window.sidebar_width + max(3 * cell, 3 * 16) <= maximum,
+          "The test window would clamp the sidebar's keyboard or pointer resize")
+    check((rect["width"] - window.sidebar_width - 8) // cell == first["cols"],
+          "The initial PTY does not match the configured sidebar pixel width")
+    x = rect["x"] + window.sidebar_width - 1
     y = rect["y"] + rect["height"] // 2
     pointer_drag(window, (x, y), (x + 3 * cell, y))
     dragged = window.same_pane(first, "sidebar-dragged")

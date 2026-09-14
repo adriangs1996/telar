@@ -38,8 +38,7 @@ pub fn field(modal: Modal, area: core.Rect, prompt: client.Prompt) !void {
         return;
     }
 
-    var editor_field = prompt.field;
-    try modal.editor(area, EditorView.capture(&editor_field, area.w, true));
+    try @import("../widgets/TextField.zig").fromPrompt(&prompt, modal.canvas.rect(area), .name).draw(modal.canvas);
 }
 
 /// Paints one captured field; only a focused one shows its cursor.

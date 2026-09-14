@@ -7,4 +7,4 @@ pub const nerd_icons: []const u8 = @embedFile("TelarNerdIcons-Regular.ttf");
 pub const plex_sans: []const u8 = @embedFile("IBMPlexSans-Regular.ttf");
 pub const plex_sans_semibold: []const u8 = @embedFile("IBMPlexSans-SemiBold.ttf");
 pub const telar_mark_64_rgba: []const u8 = @embedFile("telar-mark-64.rgba");
-pub const provider_marks_rgba: []const u8 = @embedFile("provider-marks-768x256.rgba");
+pub const provider_symbols_rgba: []const u8 = @embedFile("provider-symbols-192x64.rgba");

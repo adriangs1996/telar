@@ -192,10 +192,10 @@ test "native focus loss releases an acquired child mouse gesture" {
     const token = try session.gui.prepare(&session.renderer);
     try session.gui.complete(token, true);
     try session.settle();
-    session.gui.input.setGeometry(.{ 0, 0 }, app.model.hostSize());
+    session.gui.input.setGeometry(session.renderer.origin, app.model.hostSize());
     const view = model.viewForPane(pane.id, session.gui.region.area).?;
-    const x = @as(f64, @floatFromInt(view.content.x)) * app.model.hostSize().cell_width_px + 1;
-    const y = @as(f64, @floatFromInt(view.content.y)) * app.model.hostSize().cell_height_px + 1;
+    const x = @as(f64, @floatFromInt(view.content.x)) * app.model.hostSize().cell_width_px + @as(f64, @floatFromInt(session.renderer.origin[0])) + 1;
+    const y = @as(f64, @floatFromInt(view.content.y)) * app.model.hostSize().cell_height_px + @as(f64, @floatFromInt(session.renderer.origin[1])) + 1;
     try session.gui.input.accept(.{ .kind = 6, .code = 1, .x = x, .y = y });
     try session.gui.input.drain(app);
     try session.settle();
@@ -260,7 +260,7 @@ test "native saturated mouse release cancels captured owners and admits a fresh 
     try input.accept(press);
     try drainInput(session);
     try std.testing.expect(input.pointer.owners[0] == .child);
-    _ = gui.chrome.bandPointer(.{ .kind = 6, .code = 1, .button = 2, .x = 1, .y = 1 });
+    _ = gui.chrome.bandPointer(.{ .kind = .press, .button = .right, .x = 1, .y = 1 });
     gui.app.model.name_prompt.begin(.create_workspace);
     const token = try gui.prepare(&session.renderer);
     try gui.complete(token, true);
@@ -325,14 +325,14 @@ fn prepareMouse(session: *Session) !void {
     const token = try session.gui.prepare(&session.renderer);
     try session.gui.complete(token, true);
     try session.settle();
-    session.gui.input.setGeometry(.{ 0, 0 }, session.gui.app.model.hostSize());
+    session.gui.input.setGeometry(session.renderer.origin, session.gui.app.model.hostSize());
 }
 
 fn pointerPress(session: *Session) @import("../native/native.zig").InputEvent {
     const model = session.gui.app.model.activeTabModel().?;
     const view = model.viewForPane(Session.pane_id, session.gui.region.area).?;
     const size = session.gui.app.model.hostSize();
-    return .{ .kind = 6, .code = 1, .x = @as(f64, @floatFromInt(view.content.x)) * size.cell_width_px + 1, .y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + 1 };
+    return .{ .kind = 6, .code = 1, .x = @as(f64, @floatFromInt(view.content.x)) * size.cell_width_px + @as(f64, @floatFromInt(session.renderer.origin[0])) + 1, .y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(session.renderer.origin[1])) + 1 };
 }
 
 fn saturate(input: *NativeInput) !void {

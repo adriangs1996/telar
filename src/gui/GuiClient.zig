@@ -14,8 +14,10 @@ const GuiClient = @This();
 app: client.AttachedClient,
 driver: *NativeLoop,
 input: NativeInput = .{},
+host: @import("host/Services.zig") = .{},
 input_revision: u64 = 0,
 focused: bool = true,
+widgets: @import("widgets/interaction/State.zig") = .{},
 region: client.Region,
 theme: client.ColorTheme,
 chrome: @import("chrome/Chrome.zig") = .{},
@@ -41,8 +43,10 @@ pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
     gui.driver = driver;
     driver.configuration.inbox = &driver.inbox;
     gui.input = input;
+    gui.host = .{};
     gui.input_revision = 0;
     gui.focused = true;
+    gui.widgets = .{};
     gui.theme = params.options.theme;
     gui.region = .{ .area = .{}, .revision = 0 };
     gui.resizeRegion(params.host_size.cols, params.host_size.rows);
@@ -138,10 +142,36 @@ pub fn inputReady(gui: *GuiClient) !void {
     }
 }
 
+/// A clipboard response retains the widget that requested it across focus
+/// changes. Example: `try gui.requestClipboardRead(id, generation);`
+pub fn requestClipboardRead(gui: *GuiClient, target_id: u64, generation: u64) !void {
+    _ = try gui.host.read(.{ .target_id = target_id, .generation = generation });
+    native.telar_gui_wake(gui.driver.fds[1]);
+}
+
+/// Copies selected UTF-8 before the native host drains the request.
+/// Example: `try gui.requestClipboardWrite(selection);`
+pub fn requestClipboardWrite(gui: *GuiClient, bytes: []const u8) !void {
+    _ = try gui.host.write(bytes);
+    native.telar_gui_wake(gui.driver.fds[1]);
+}
+
+/// The editor can commit a cut only after the matching native write succeeds.
+/// Example: `const request = try gui.requestClipboardWriteOwned(owner, bytes);`
+pub fn requestClipboardWriteOwned(gui: *GuiClient, owner: @import("host/Owner.zig"), bytes: []const u8) !u64 {
+    const request = try gui.host.writeOwned(owner, bytes);
+    native.telar_gui_wake(gui.driver.fds[1]);
+    return request;
+}
+
 /// Example: `try gui.focus(true);`
 pub fn focus(gui: *GuiClient, focused: bool) !void {
     gui.focused = focused;
     gui.input_revision +%= 1;
+    _ = gui.widgets.dispatcher.route(.{ .focus = focused });
+    if (!focused) {
+        gui.widgets.preedit.clear();
+    }
     if (!focused) {
         gui.input.pointer.hover.clear();
         gui.input.pointer.link_gesture.cancel();
@@ -245,6 +275,7 @@ pub fn complete(gui: *GuiClient, token: u64, delivered: bool) !void {
 
     gui.chrome.present(delivered);
     gui.overlays.present(delivered);
+    gui.widgets.present(delivered);
     gui.input.pointer.hover.present(delivered);
     const delivery = gui.lifecycle.complete(@enumFromInt(token), if (delivered) .delivered else .failed) orelse return;
     var handler: client.DeliverPresentationHandler = .{
@@ -286,7 +317,7 @@ pub fn prepare(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.zig"
     const projected = gui.projection();
     const observed = gui.observation();
     _ = gui.lifecycle.observe(observed);
-    var scene: @import("render/Scene.zig") = .{ .terminal = renderer, .chrome = &gui.chrome, .overlays = &gui.overlays, .theme = gui.theme, .link = if (gui.input.pointer.hover.link) |*hit| hit else null };
+    var scene: @import("render/Scene.zig") = .{ .terminal = renderer, .chrome = &gui.chrome, .overlays = &gui.overlays, .theme = gui.theme, .link = if (gui.input.pointer.hover.link) |*hit| hit else null, .widgets = &gui.widgets };
     const commit = try scene.prepare(projected);
     const token = try gui.lifecycle.begin(.{ .observation = observed, .commit = commit, .geometry = client.Geometry.capture(projected) });
     gui.input.pointer.hover.prepare();
@@ -334,5 +365,38 @@ pub fn observation(gui: *const GuiClient) client.Observation {
 }
 
 fn ingress(gui: *const GuiClient) client.PresentationIngress {
-    return .{ .input_routing = gui.input.presentation_revision, .view_interaction = gui.chrome.revision +% gui.input.pointer.hover.revision };
+    return .{ .input_routing = gui.input.presentation_revision, .view_interaction = gui.chrome.revision +% gui.input.pointer.hover.revision +% gui.widgets.dispatcher.revision };
+}
+
+/// Routes delivered widget targets before falling back to terminal input.
+/// Example: `if (try gui.widgetInput(event)) return;`
+pub fn widgetInput(gui: *GuiClient, event: @import("input/event.zig").Event) !bool {
+    return @import("widgets/interaction/routing.zig").apply(gui, event);
+}
+
+/// Example: `const captured = try gui.beginWidgetPaste();`
+pub fn beginWidgetPaste(gui: *GuiClient) !bool {
+    return @import("widgets/interaction/routing.zig").beginPaste(gui);
+}
+
+/// Example: `try gui.widgetPaste(bytes);`
+pub fn widgetPaste(gui: *GuiClient, bytes: []const u8) !void {
+    try @import("widgets/interaction/routing.zig").paste(gui, bytes);
+}
+
+/// Example: `try gui.endWidgetPaste();`
+pub fn endWidgetPaste(gui: *GuiClient) !void {
+    try @import("widgets/interaction/routing.zig").endPaste(gui);
+}
+
+/// Publishes current editing state with the delivered caret geometry.
+/// Example: `if (gui.widgetTextContext(&context)) publish(context);`
+pub fn widgetTextContext(gui: *GuiClient, output: *native.TextContext) bool {
+    return @import("widgets/interaction/host_context.zig").text(gui, output);
+}
+
+/// Publishes owned widget semantics using delivered geometry.
+/// Example: `if (gui.widgetAccessibility(&tree)) publish(tree);`
+pub fn widgetAccessibility(gui: *GuiClient, output: *native.AccessibilityTree) bool {
+    return @import("widgets/interaction/host_context.zig").accessibility(gui, output);
 }

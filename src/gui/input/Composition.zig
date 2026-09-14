@@ -1,0 +1,8 @@
+target_id: u64,
+generation: u64,
+text: []const u8 = "",
+selection_start: u32 = 0,
+selection_end: u32 = 0,
+replacement_start: u32 = @import("std").math.maxInt(u32),
+replacement_end: u32 = @import("std").math.maxInt(u32),
+cancel: bool = false,

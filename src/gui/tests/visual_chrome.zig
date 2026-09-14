@@ -72,12 +72,12 @@ test "tab strip hits keep stable tab identities and the plus creates a tab" {
     try std.testing.expect(fixture.chrome.band_gesture == null);
 
     // A press keeps the band gesture through a drag over cells until release.
-    const press = fixture.chrome.bandPointer(.{ .kind = 6, .code = 1, .x = first.x, .y = first.y }).?;
+    const press = fixture.chrome.bandPointer(.{ .kind = .press, .x = first.x, .y = first.y }).?;
     try std.testing.expect(press.interaction.consumed and press.interaction.intent == .select_tab);
-    try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = 6, .code = 3, .x = 5, .y = 5000 }).?.interaction.consumed);
-    try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = 6, .code = 2, .x = 5, .y = 5000 }).?.interaction.consumed);
+    try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = .drag, .x = 5, .y = 5000 }).?.interaction.consumed);
+    try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = .release, .x = 5, .y = 5000 }).?.interaction.consumed);
     try std.testing.expect(fixture.chrome.band_gesture == null);
-    try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = 6, .code = 6, .x = 5, .y = 5000 }) == null);
+    try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = .move, .x = 5, .y = 5000 }) == null);
     const widths = [_]f32{ 100, 100, 100 };
     try std.testing.expectEqual(@as(usize, 1), TabStrip.firstVisible(2, &widths, .{ .available = 210, .gap = 5 }));
     try std.testing.expectEqual(@as(usize, 0), TabStrip.firstVisible(2, &widths, .{ .available = 310, .gap = 5 }));
@@ -249,9 +249,9 @@ test "warm chrome with rings chips dots and toasts allocates and shapes nothing"
     var projection = fixture.projection();
     projection.workspaces = &workspaces;
     projection.agents = &agents;
-    // Warm both animation parities: the sidebar card alternates its glyph.
-    for (0..2) |frame| {
-        projection.sidebar_animation_frame = @intCast(frame);
+    // Warm a full pulse and attention transition before checking retained work.
+    for (0..17) |frame| {
+        fixture.chrome.now_ns = frame * 120 * std.time.ns_per_ms;
         try fixture.paint(projection);
     }
 
@@ -266,8 +266,8 @@ test "warm chrome with rings chips dots and toasts allocates and shapes nothing"
     const quad_allocator = fixture.session.renderer.quads.allocator;
     fixture.session.renderer.quads.allocator = failure.allocator();
     defer fixture.session.renderer.quads.allocator = quad_allocator;
-    for (0..60) |frame| {
-        projection.sidebar_animation_frame = @intCast(frame);
+    for (17..77) |frame| {
+        fixture.chrome.now_ns = frame * 120 * std.time.ns_per_ms;
         try fixture.paint(projection);
     }
 

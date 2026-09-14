@@ -59,6 +59,55 @@ pub fn Type(comptime capacity: usize) type {
             f.anchor = f.head;
         }
 
+        /// Rejects ranges inside UTF-8 scalars before changing selection.
+        /// Example: `_ = field.selectRange(.{ 0, 4 });`
+        pub fn selectRange(f: *Self, range: [2]u32) bool {
+            if (!f.boundary(range[0]) or !f.boundary(range[1])) {
+                return false;
+            }
+
+            const changed = f.anchor != range[0] or f.head != range[1];
+            f.anchor = range[0];
+            f.head = range[1];
+            return changed;
+        }
+
+        /// Replaces one range atomically. Invalid UTF-8, offsets and capacity
+        /// failure leave both text and selection untouched.
+        /// Example: `_ = field.replace(.{ 0, 4 }, "name");`
+        pub fn replace(f: *Self, range: [2]u32, bytes: []const u8) bool {
+            const start: usize = range[0];
+            const finish: usize = range[1];
+            if (start > finish or !f.boundary(start) or !f.boundary(finish) or !std.unicode.utf8ValidateSlice(bytes)) {
+                return false;
+            }
+
+            const remaining = f.len - (finish - start);
+            if (bytes.len > capacity - remaining) {
+                return false;
+            }
+
+            const changed = !std.mem.eql(u8, f.bytes[start..finish], bytes) or f.head != start + bytes.len or f.anchor != start + bytes.len;
+            var copy: [capacity]u8 = undefined;
+            @memcpy(copy[0..bytes.len], bytes);
+            if (bytes.len > finish - start) {
+                std.mem.copyBackwards(u8, f.bytes[start + bytes.len ..][0 .. f.len - finish], f.bytes[finish..f.len]);
+            } else {
+                std.mem.copyForwards(u8, f.bytes[start + bytes.len ..][0 .. f.len - finish], f.bytes[finish..f.len]);
+            }
+
+            @memcpy(f.bytes[start..][0..bytes.len], copy[0..bytes.len]);
+            f.len = remaining + bytes.len;
+            f.head = start + bytes.len;
+            f.anchor = f.head;
+            f.scroll = @min(f.scroll, f.head);
+            return changed;
+        }
+
+        fn boundary(f: *const Self, at: usize) bool {
+            return at <= f.len and (at == f.len or f.bytes[at] & 0xc0 != 0x80);
+        }
+
         pub fn selectAll(f: *Self) void {
             f.anchor = 0;
             f.head = f.len;
@@ -73,17 +122,7 @@ pub fn Type(comptime capacity: usize) type {
         /// One path for a keystroke and for a paste, because they are the same
         /// operation and splitting them is how the two drift apart.
         pub fn insert(f: *Self, input: []const u8) void {
-            _ = f.deleteSelection();
-            if (f.len + input.len > capacity) {
-                return;
-            }
-
-            const tail = f.len - f.head;
-            std.mem.copyBackwards(u8, f.bytes[f.head + input.len ..][0..tail], f.bytes[f.head..][0..tail]);
-            @memcpy(f.bytes[f.head..][0..input.len], input);
-            f.len += input.len;
-            f.head += input.len;
-            f.anchor = f.head;
+            _ = f.replace(.{ @intCast(@min(f.head, f.anchor)), @intCast(@max(f.head, f.anchor)) }, input);
         }
 
         /// Deletes the selection, or the cluster before the cursor.

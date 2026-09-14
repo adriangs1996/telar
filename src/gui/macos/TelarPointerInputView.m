@@ -11,7 +11,6 @@ static uint32_t pointer_modifiers(NSEventModifierFlags flags) {
 
 @implementation TelarPointerInputView {
   NSTrackingArea *pointer_tracking;
-  double scroll_remainder;
   BOOL pointer_inside;
   telar_gui_input last_pointer;
 }
@@ -57,7 +56,6 @@ static uint32_t pointer_modifiers(NSEventModifierFlags flags) {
 }
 
 - (void)resetPointer {
-  scroll_remainder = 0;
   if (!pointer_inside) {
     return;
   }
@@ -132,7 +130,6 @@ static uint32_t pointer_modifiers(NSEventModifierFlags flags) {
 }
 
 - (void)mouseExited:(NSEvent *)event {
-  scroll_remainder = 0;
   [self sendPointer:event code:7];
 }
 
@@ -181,25 +178,27 @@ static uint32_t pointer_modifiers(NSEventModifierFlags flags) {
   [self sendPointer:event code:6];
 }
 
-- (void)scrollWheel:(NSEvent *)event {
-  if (event.phase == NSEventPhaseBegan) {
-    scroll_remainder = 0;
-  }
-
-  double delta = event.scrollingDeltaY;
-  if (event.hasPreciseScrollingDeltas) {
-    delta /= 10.0;
-  }
-
-  scroll_remainder = fmax(-32, fmin(32, scroll_remainder + delta));
-  while (fabs(scroll_remainder) >= 1) {
-    BOOL up = scroll_remainder > 0;
-    if (![self sendPointer:event code:up ? 4 : 5]) {
-      scroll_remainder = 0;
-      return;
-    }
-
-    scroll_remainder += up ? -1 : 1;
-  }
+static uint32_t scroll_phase(NSEventPhase phase) {
+  if (phase & NSEventPhaseCancelled) return 4;
+  if (phase & NSEventPhaseEnded) return 3;
+  if (phase & (NSEventPhaseBegan | NSEventPhaseMayBegin)) return 1;
+  if (phase & (NSEventPhaseChanged | NSEventPhaseStationary)) return 2;
+  return 0;
 }
+
+- (void)scrollWheel:(NSEvent *)event {
+  NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
+  telar_gui_input input = [self pointerAtPoint:point];
+  input.kind = 8;
+  input.code = 0;
+  input.mods = pointer_modifiers(event.modifierFlags);
+  input.precise = event.hasPreciseScrollingDeltas;
+  const double scale = input.precise && self.window != nil ? self.window.backingScaleFactor : 1;
+  input.delta_x = -event.scrollingDeltaX * scale;
+  input.delta_y = -event.scrollingDeltaY * scale;
+  input.scroll_phase = scroll_phase(event.phase);
+  input.momentum_phase = scroll_phase(event.momentumPhase);
+  [self sendInput:input];
+}
+
 @end

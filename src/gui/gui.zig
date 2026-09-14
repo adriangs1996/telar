@@ -11,8 +11,25 @@ pub const TextRun = @import("text/TextRun.zig");
 pub const cell_colors = @import("render/cell_colors.zig");
 pub const run = @import("run.zig").run;
 pub const quad = @import("render/Quad.zig");
+pub const Canvas = @import("chrome/Canvas.zig");
+pub const Layout = @import("layout/Layout.zig");
+pub const LayoutItem = @import("layout/Item.zig");
+pub const GenericWidgetList = @import("widgets/GenericWidgetList.zig").Type;
+pub const InputEvent = @import("input/event.zig").Event;
+pub const PointerEvent = @import("input/PointerEvent.zig");
+pub const TextInput = @import("input/TextInput.zig");
 
 test {
+    _ = @import("tests/widget_interaction.zig");
+    _ = Layout;
+    _ = @import("input/GenericEventPool.zig");
+    _ = @import("host/Services.zig");
+    _ = @import("tests/widgets.zig");
+    _ = @import("tests/widget_animation.zig");
+    _ = @import("tests/host_input.zig");
+    _ = @import("animation/FrameClock.zig");
+    _ = @import("animation/Transition.zig");
+    _ = @import("native/decode_input.zig");
     _ = @import("tests/links.zig");
     _ = @import("tests/link_metadata.zig");
     _ = @import("tests/link_regressions.zig");

@@ -50,19 +50,19 @@ test "native chrome preserves the resize gesture over cells and clamps scrolling
     const band = fixture.band();
     try std.testing.expectEqual(band.width - 1 - 3, handle.x);
     try std.testing.expectEqual(@as(f32, 6), handle.width);
-    const press = fixture.chrome.bandPointer(.{ .kind = 6, .code = 1, .x = band.width - 1, .y = band.y + 4 }).?;
+    const press = fixture.chrome.bandPointer(.{ .kind = .press, .x = band.width - 1, .y = band.y + 4 }).?;
     try std.testing.expect(press.interaction.consumed and press.sidebar_width == null);
     try std.testing.expect(fixture.chrome.sidebar_resize_active);
     try fixture.prepare(projection);
     // The drag crosses into the cells: the band still owns it and asks for the width under the pointer.
-    const drag = fixture.chrome.bandPointer(.{ .kind = 6, .code = 3, .x = 900, .y = band.y + 10 }).?;
+    const drag = fixture.chrome.bandPointer(.{ .kind = .drag, .x = 900, .y = band.y + 10 }).?;
     try std.testing.expectEqual(@as(?u32, 901), drag.sidebar_width);
     fixture.chrome.present(true);
-    const release = fixture.chrome.bandPointer(.{ .kind = 6, .code = 2, .x = 880.4, .y = band.y + 10 }).?;
+    const release = fixture.chrome.bandPointer(.{ .kind = .release, .x = 880.4, .y = band.y + 10 }).?;
     try std.testing.expectEqual(@as(?u32, 881), release.sidebar_width);
     try std.testing.expect(fixture.chrome.band_gesture == null and !fixture.chrome.sidebar_resize_active);
-    try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = 6, .code = 1, .x = 900, .y = band.y + 10 }) == null);
-    _ = fixture.chrome.bandPointer(.{ .kind = 6, .code = 5, .x = 2, .y = band.y + 4 });
+    try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = .press, .x = 900, .y = band.y + 10 }) == null);
+    _ = fixture.chrome.bandPointer(.{ .kind = .scroll_down, .x = 2, .y = band.y + 4 });
     try std.testing.expectEqual(@as(u16, 0), fixture.chrome.sidebar.scroll);
 }
 
@@ -84,7 +84,7 @@ test "native agent targets retain generation through scroll and snapshot replace
     const first = fixture.bandTarget(.{ .focus_agent = entries[0].key }).?;
     try std.testing.expectEqualDeep(client.Intent{ .focus_agent = entries[0].key }, fixture.clickBand(first, 0).intent);
     const band = fixture.band();
-    _ = fixture.chrome.bandPointer(.{ .kind = 6, .code = 5, .x = 4, .y = band.y + 4 });
+    _ = fixture.chrome.bandPointer(.{ .kind = .scroll_down, .x = 4, .y = band.y + 4 });
     try std.testing.expect(fixture.chrome.sidebar.step != 0);
     try std.testing.expectEqual(fixture.chrome.sidebar.step, fixture.chrome.sidebar.scroll);
     try fixture.paint(projection);
@@ -191,7 +191,7 @@ test "native pane presses focus before forwarding and chrome cancellation releas
     try std.testing.expect(!wheel.consumed);
     try std.testing.expect(wheel.intent == .none);
     const logo = fixture.bandTarget(.toggle_sidebar).?;
-    _ = fixture.chrome.bandPointer(.{ .kind = 6, .code = 1, .x = logo.x, .y = logo.y });
+    _ = fixture.chrome.bandPointer(.{ .kind = .press, .x = logo.x, .y = logo.y });
     try std.testing.expect(fixture.chrome.band_gesture != null);
     fixture.chrome.cancelPointer();
     try std.testing.expect(fixture.chrome.band_gesture == null);
@@ -283,10 +283,10 @@ test "native sidebar footer paints configured slots in its last row inside the b
     }
     try std.testing.expect(background);
 
-    const press = fixture.chrome.bandPointer(.{ .kind = 6, .code = 1, .x = row.x + 1, .y = row.y }).?;
+    const press = fixture.chrome.bandPointer(.{ .kind = .press, .x = row.x + 1, .y = row.y }).?;
     try std.testing.expect(press.interaction.consumed);
     try std.testing.expectEqualDeep(client.Intent.none, press.interaction.intent);
-    _ = fixture.chrome.bandPointer(.{ .kind = 6, .code = 2, .x = row.x + 1, .y = row.y });
+    _ = fixture.chrome.bandPointer(.{ .kind = .release, .x = row.x + 1, .y = row.y });
     try std.testing.expectEqual(@as(f32, 0), Sidebar.footerArea(renderer.metrics, .{ .x = 0, .y = 0, .width = 284, .height = 4 * cell_height }).height);
 }
 

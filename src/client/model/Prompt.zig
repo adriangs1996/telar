@@ -7,6 +7,9 @@ const WorkspaceForm = @import("WorkspaceForm.zig");
 const command_palette = @import("command_palette.zig");
 const Prompt = @This();
 
+/// Stable for one opening, unlike the revision advanced by every edit.
+generation: u64 = 0,
+
 mode: union(enum) {
     rename_tab: TabIdType,
     create_workspace: WorkspaceForm,
