@@ -43,8 +43,10 @@ pub fn paint(sidebar: *Sidebar, context: *Context, area: core.Rect) !void {
 
     const canvas = context.canvas;
     const palette = canvas.theme.palette;
-    try canvas.fill(area, palette.panel_bg);
     const separator: core.Rect = .{ .x = area.x + area.w - 1, .y = area.y, .w = 1, .h = area.h };
+    // The resize column stays unpainted past the edge line, so the padding
+    // keeps the window's own background and opacity like the workbench.
+    try canvas.fill(.{ .x = area.x, .y = area.y, .w = area.w - 1, .h = area.h }, palette.panel_bg);
     // The line sits at the left of the resize column so the rest of that
     // column is padding between the edge and the workbench cells.
     const edge = canvas.rect(separator);
