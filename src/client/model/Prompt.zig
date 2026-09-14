@@ -4,6 +4,7 @@ const copy_mode_module = @import("../input/copy_mode.zig");
 const History = @import("History.zig");
 const name_prompt = @import("name_prompt.zig");
 const WorkspaceForm = @import("WorkspaceForm.zig");
+const command_palette = @import("command_palette.zig");
 const Prompt = @This();
 
 mode: union(enum) {
@@ -14,6 +15,7 @@ mode: union(enum) {
     goto: struct { selection: u16 = 0 },
     history: History,
     suggest,
+    palette: struct { selection: u16 = 0 },
 },
 field: name_prompt.Field,
 /// Working directory of the new-context form; unused by other targets.
@@ -30,6 +32,7 @@ pub fn target(prompt: *const Prompt) name_prompt.Target {
         .goto => .goto,
         .history => .history,
         .suggest => .suggest,
+        .palette => .palette,
     };
 }
 
@@ -39,8 +42,22 @@ pub fn selection(prompt: *const Prompt) u16 {
         .goto => |picker| picker.selection,
         .history => |history| history.selection,
         .create_workspace => |form_state| form_state.selection,
+        .palette => |palette| palette.selection,
         else => 0,
     };
+}
+
+/// Which list the palette field currently drives; `.goto` for every other
+/// target so callers can treat the plain picker and `@` alike.
+/// Example: `if (prompt.paletteMode() == .actions) listActions();`.
+pub fn paletteMode(prompt: *const Prompt) command_palette.Prefix {
+    return if (prompt.mode == .palette) command_palette.prefixOf(prompt.field.text()) else .goto;
+}
+
+/// The palette text without its prefix byte; the whole field otherwise.
+/// Example: `collect(sources, prompt.paletteQuery(), &results);`.
+pub fn paletteQuery(prompt: *const Prompt) []const u8 {
+    return if (prompt.mode == .palette) command_palette.query(prompt.field.text()) else prompt.field.text();
 }
 
 /// The new-context form state, or null for every other target.
@@ -69,6 +86,7 @@ pub fn setSelection(prompt: *Prompt, selected: u16) void {
         .goto => |*picker| picker.selection = selected,
         .history => |*history| history.selection = selected,
         .create_workspace => |*form_state| form_state.selection = selected,
+        .palette => |*palette| palette.selection = selected,
         else => {},
     }
 }

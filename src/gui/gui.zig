@@ -31,6 +31,7 @@ test {
     _ = @import("tests/scene.zig");
     _ = @import("tests/visual_language.zig");
     _ = @import("tests/sidebar_cards.zig");
+    _ = @import("tests/palette.zig");
     _ = @import("TerminalMetrics.zig");
     _ = @import("NativeInput.zig");
     _ = @import("CursorClock.zig");

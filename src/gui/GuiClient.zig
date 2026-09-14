@@ -43,7 +43,7 @@ pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
     gui.region = .{ .area = .{}, .revision = 0 };
     gui.resizeRegion(params.host_size.cols, params.host_size.rows);
     gui.chrome = .{};
-    gui.overlays = .{};
+    gui.overlays = .{ .router = &gui.input.router };
     gui.lifecycle = .{};
     gui.graphics_store = .init(params.gpa);
     gui.app.sound_port = host_ports.sound(&gui.app);

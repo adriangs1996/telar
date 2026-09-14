@@ -97,7 +97,27 @@ pub fn begin(state: *State, command: name_prompt.Begin) void {
             .mode = .suggest,
             .field = .init(""),
         },
+        .palette => |prefix| .{
+            .mode = .{ .palette = .{} },
+            .field = .init(&[_]u8{prefix.byte()}),
+        },
     };
+    state.revision +%= 1;
+}
+
+/// Moves a list selection to one exact row, as a pointer press does; the
+/// controller clamps it against the current result set afterwards.
+///
+/// ```zig
+/// state.select(row);
+/// ```
+pub fn select(state: *State, index: u16) void {
+    const prompt = state.mutable() orelse return;
+    if (!name_prompt.selects(prompt.target()) or prompt.selection() == index) {
+        return;
+    }
+
+    prompt.setSelection(index);
     state.revision +%= 1;
 }
 

@@ -19,9 +19,22 @@ pub fn key(handler: *Handler, value: client.Key) !void {
     _ = try client.controllers.key_routing.apply(handler.app, .{ .key = value });
 }
 
+/// The goto and suggest keys open the native palette already prefixed;
+/// every other action keeps the shared routing. Copy mode retires first,
+/// as the shared native action policy does.
 /// Example: `const control = try handler.action(.new_tab);`
 pub fn action(handler: *Handler, value: client.Action) !client.Control {
-    return client.controllers.action_routing.apply(handler.app, value);
+    const prefix: client.command_palette.Prefix = switch (value) {
+        .goto_picker => .goto,
+        .suggest_command => .suggest,
+        else => return client.controllers.action_routing.apply(handler.app, value),
+    };
+    if (handler.app.model.copyModeActive()) {
+        _ = try client.controllers.copy_modes.leave(handler.app);
+    }
+
+    _ = client.controllers.name_prompts.beginPalette(handler.app, prefix);
+    return .continue_routing;
 }
 
 /// Example: `const policy = handler.repeatPolicy(action);`
