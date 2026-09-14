@@ -7,6 +7,9 @@ const Color = @import("../render/Color.zig");
 const Rect = @import("../render/Rect.zig");
 const colors = @import("../render/cell_colors.zig");
 const Label = @import("Label.zig");
+const RoundedFill = @import("RoundedFill.zig");
+const Ring = @import("Ring.zig");
+const TextRun = @import("../text/TextRun.zig");
 const Canvas = @This();
 
 atlas: *@import("../text/GlyphAtlas.zig"),
@@ -31,9 +34,42 @@ pub fn fill(canvas: *Canvas, area: core.Rect, ink_color: core.Color) !void {
     try canvas.quads.pushRect(canvas.rect(area), canvas.color(ink_color, canvas.theme.terminal.background));
 }
 
-/// Uses the shared grapheme widths for clipping, hit targets and letter spacing.
-/// Cached glyphs bypass shaping and rasterization after warmup.
-/// Example: `try canvas.text(area, .{ .text = "Workspace", .bold = true });`
+/// Paints a rounded surface; the fragment shader resolves the corners, so it
+/// costs one quad like `fill`. Radius is in device pixels.
+/// Example: `try canvas.fillRounded(card, .{ .radius = 8, .color = palette.surface0 });`
+pub fn fillRounded(canvas: *Canvas, area: core.Rect, fill_value: RoundedFill) !void {
+    if (area.isEmpty()) {
+        return;
+    }
+
+    try canvas.quads.pushRounded(canvas.rect(area), .{
+        .fill = canvas.color(fill_value.color, canvas.theme.terminal.background),
+        .radius = fill_value.radius,
+    });
+}
+
+/// Strokes a band of `width` device pixels inside the area's outline and
+/// leaves the interior transparent. One quad, like `fill`.
+/// Example: `try canvas.ring(pane.outer, .{ .width = 2, .color = palette.yellow });`
+pub fn ring(canvas: *Canvas, area: core.Rect, stroke: Ring) !void {
+    if (area.isEmpty()) {
+        return;
+    }
+
+    try canvas.quads.pushRounded(canvas.rect(area), .{
+        .fill = .{ .r = 0, .g = 0, .b = 0, .a = 0 },
+        .radius = stroke.radius,
+        .border = stroke.width,
+        .border_color = canvas.color(stroke.color, canvas.theme.terminal.foreground),
+    });
+}
+
+/// Monospace labels advance one cell per column and clip at grapheme
+/// boundaries; sans labels shape as one HarfBuzz run with proportional
+/// advances and clip at the area's pixel edge, so callers measure first when
+/// they need whole tokens. Cached glyphs bypass shaping and rasterization
+/// after warmup.
+/// Example: `try canvas.text(area, .{ .text = "Workspace", .bold = true, .face = .sans });`
 pub fn text(canvas: *Canvas, area: core.Rect, label: Label) !void {
     if (area.isEmpty()) {
         return;
@@ -41,10 +77,36 @@ pub fn text(canvas: *Canvas, area: core.Rect, label: Label) !void {
 
     const first = canvas.quads.items().len;
     const bounds = canvas.rect(area.row(0));
-    var ink = canvas.color(label.color, canvas.theme.terminal.foreground);
-    if (label.faint) {
-        ink.a *= 0.5;
+    const ink = canvas.labelInk(label);
+    const width = switch (label.face) {
+        .mono => try canvas.monoText(area, label),
+        .sans => @min(bounds.width, try canvas.atlas.place(canvas.run(label, bounds), canvas.quads)),
+    };
+    if (label.underline and width != 0) {
+        try canvas.quads.pushRect(.{ .x = bounds.x, .y = bounds.y + bounds.height - 2, .width = width, .height = 1 }, ink);
     }
+
+    if (label.strikethrough and width != 0) {
+        try canvas.quads.pushRect(.{ .x = bounds.x, .y = bounds.y + bounds.height * 0.5, .width = width, .height = 1 }, ink);
+    }
+
+    canvas.quads.clipFrom(first, bounds);
+}
+
+/// Returns the device-pixel width `text` would paint without clipping, so a
+/// caller can right-align or drop tokens before painting. Warm sans labels
+/// only read the shaping cache; monospace labels count cells.
+/// Example: `const width = try canvas.measure(.{ .text = "hace 3m", .face = .sans });`
+pub fn measure(canvas: *Canvas, label: Label) !f32 {
+    return switch (label.face) {
+        .mono => @floatFromInt(@as(u32, core.measure(label.text)) * canvas.metrics.cell_width),
+        .sans => try canvas.atlas.measure(canvas.run(label, .{ .x = 0, .y = 0, .width = 0, .height = 0 })),
+    };
+}
+
+fn monoText(canvas: *Canvas, area: core.Rect, label: Label) !f32 {
+    const bounds = canvas.rect(area.row(0));
+    const ink = canvas.labelInk(label);
     var iterator: core.GraphemeIterator = .{ .bytes = label.text };
     var column: u16 = 0;
     while (column < area.w) {
@@ -66,16 +128,31 @@ pub fn text(canvas: *Canvas, area: core.Rect, label: Label) !void {
         column += cluster.width;
     }
 
-    const width: f32 = @floatFromInt(@as(u32, column) * canvas.metrics.cell_width);
-    if (label.underline and width != 0) {
-        try canvas.quads.pushRect(.{ .x = bounds.x, .y = bounds.y + bounds.height - 2, .width = width, .height = 1 }, ink);
+    return @floatFromInt(@as(u32, column) * canvas.metrics.cell_width);
+}
+
+// Bold sans selects the real SemiBold face, never synthetic emboldening.
+fn run(canvas: *Canvas, label: Label, bounds: Rect) TextRun {
+    return .{
+        .text = label.text,
+        .x = bounds.x,
+        .y = bounds.y + canvas.metrics.baseline,
+        .pixel_height = canvas.metrics.pixel_height,
+        .cell_bounds = canvas.metrics.glyphCell(),
+        .color = canvas.labelInk(label),
+        .bold = false,
+        .italic = label.italic,
+        .face = if (label.bold) .sans_semibold else .sans,
+    };
+}
+
+fn labelInk(canvas: Canvas, label: Label) Color {
+    var value = canvas.color(label.color, canvas.theme.terminal.foreground);
+    if (label.faint) {
+        value.a *= 0.5;
     }
 
-    if (label.strikethrough and width != 0) {
-        try canvas.quads.pushRect(.{ .x = bounds.x, .y = bounds.y + bounds.height * 0.5, .width = width, .height = 1 }, ink);
-    }
-
-    canvas.quads.clipFrom(first, bounds);
+    return value;
 }
 
 /// Outlines a region with pixel strokes rather than terminal border glyphs.
