@@ -60,9 +60,9 @@ pub fn paint(sidebar: *Sidebar, context: *Context, area: core.Rect) !void {
         return;
     }
 
-    const geometry = CardGeometry.derive(canvas.metrics);
+    const geometry = CardGeometry.derive(canvas.chrome, canvas.metrics);
     const bounds = canvas.rect(content);
-    const header: Rect = .{ .x = bounds.x + margin, .y = bounds.y + margin, .width = @max(0, bounds.width - 2 * margin), .height = geometry.row_height };
+    const header: Rect = .{ .x = bounds.x + margin, .y = bounds.y + margin, .width = @max(0, bounds.width - 2 * margin), .height = canvas.chrome.rowHeight(.body) };
     try paintHeader(context, header);
     const list: Rect = .{
         .x = header.x,
@@ -134,7 +134,7 @@ fn indexLessThan(agents: []const client.Agent, left: u8, right: u8) bool {
 fn paintHeader(context: *Context, header: Rect) !void {
     const canvas = context.canvas;
     const palette = canvas.theme.palette;
-    const title: Label = .{ .text = "agents", .color = palette.text, .bold = true, .face = .sans };
+    const title: Label = .{ .text = "agents", .color = palette.text, .bold = true, .face = .sans, .size = .body };
     const title_width = try canvas.measure(title);
     _ = try canvas.textAt(header, title);
     var buffer: [48]u8 = undefined;
@@ -144,7 +144,7 @@ fn paintHeader(context: *Context, header: Rect) !void {
         attention += @intFromBool(client.agent_attention.group(agent.status) == .needs_input);
     }
 
-    const counts: Label = .{ .text = std.fmt.bufPrint(&buffer, "{d} \u{00b7} {d} need you", .{ agents.len, attention }) catch unreachable, .color = palette.subtext0, .face = .sans };
+    const counts: Label = .{ .text = std.fmt.bufPrint(&buffer, "{d} \u{00b7} {d} need you", .{ agents.len, attention }) catch unreachable, .color = palette.subtext0, .face = .sans, .size = .body };
     const counts_width = try canvas.measure(counts);
     if (title_width + CardGeometry.gap + counts_width > header.width) {
         return;
@@ -164,7 +164,7 @@ fn paintList(sidebar: *Sidebar, context: *Context, list: SidebarList) !void {
     sidebar.maximum_scroll = @intFromFloat(@min(65535, @max(0, total - list.bounds.height)));
     sidebar.scroll = @min(sidebar.scroll, sidebar.maximum_scroll);
     if (sidebar.order_len == 0) {
-        _ = try canvas.textAt(.{ .x = list.bounds.x, .y = list.bounds.y, .width = list.bounds.width, .height = geometry.row_height }, .{ .text = "No active agents", .color = palette.subtext0, .face = .sans });
+        _ = try canvas.textAt(.{ .x = list.bounds.x, .y = list.bounds.y, .width = list.bounds.width, .height = canvas.chrome.rowHeight(.body) }, .{ .text = "No active agents", .color = palette.subtext0, .face = .sans, .size = .body });
         return;
     }
 
@@ -195,7 +195,7 @@ fn paintList(sidebar: *Sidebar, context: *Context, list: SidebarList) !void {
     }
 
     if (sidebar.maximum_scroll != 0) {
-        const thumb = @max(geometry.row_height, list.bounds.height * list.bounds.height / total);
+        const thumb = @max(geometry.small_row, list.bounds.height * list.bounds.height / total);
         const offset = @as(f32, @floatFromInt(sidebar.scroll)) * (list.bounds.height - thumb) / @as(f32, @floatFromInt(sidebar.maximum_scroll));
         try canvas.fillAt(.{ .x = list.bounds.x + list.bounds.width - scrollbar_width, .y = list.bounds.y + offset, .width = scrollbar_width, .height = thumb }, palette.overlay0);
     }

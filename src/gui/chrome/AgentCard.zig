@@ -61,8 +61,8 @@ pub fn level(card: AgentCard, width: f32) !Level {
     const canvas = card.context.canvas;
     return card_degradation.resolve(.{
         .available = width,
-        .workspace = card.geometry.glyph_width + 4 + try canvas.measure(.{ .text = card.agent.workspaceLabel(), .face = .sans }),
-        .age = try canvas.measure(.{ .text = age_label.format(card.age_s, &age_buffer), .face = .sans }),
+        .workspace = card.geometry.glyph_width + 4 + try canvas.measure(.{ .text = card.agent.workspaceLabel(), .face = .sans, .size = .small }),
+        .age = try canvas.measure(.{ .text = age_label.format(card.age_s, &age_buffer), .face = .sans, .size = .small }),
         .status = try card.statusWidth(),
         .mark = CardGeometry.mark_size + CardGeometry.gap,
         .gap = CardGeometry.gap,
@@ -87,7 +87,7 @@ fn paintProject(card: AgentCard, row: Rect, tokens: Level) !void {
     var age_buffer: [age_label.max_bytes]u8 = undefined;
     var age_width: f32 = 0;
     if (tokens.shows(.age)) {
-        const age: Label = .{ .text = age_label.format(card.age_s, &age_buffer), .color = palette.subtext0, .face = .sans };
+        const age: Label = .{ .text = age_label.format(card.age_s, &age_buffer), .color = palette.subtext0, .face = .sans, .size = .small };
         age_width = try canvas.measure(age);
         _ = try canvas.textAt(.{ .x = row.x + row.width - age_width, .y = row.y, .width = age_width, .height = row.height }, age);
         age_width += CardGeometry.gap;
@@ -101,7 +101,7 @@ fn paintProject(card: AgentCard, row: Rect, tokens: Level) !void {
     const label_width = @max(0, row.width - glyph_width - 4 - age_width);
     var buffer: [TextFit.max_bytes]u8 = undefined;
     const fit: TextFit = .{ .canvas = canvas, .width = label_width };
-    const label: Label = .{ .text = card.agent.workspaceLabel(), .color = palette.subtext0, .face = .sans };
+    const label: Label = .{ .text = card.agent.workspaceLabel(), .color = palette.subtext0, .face = .sans, .size = .small };
     var fitted = label;
     fitted.text = try fit.fit(label, &buffer);
     _ = try canvas.textAt(.{ .x = label_x, .y = row.y, .width = label_width, .height = row.height }, fitted);
@@ -110,7 +110,7 @@ fn paintProject(card: AgentCard, row: Rect, tokens: Level) !void {
 fn paintTitle(card: AgentCard, row: Rect) !void {
     const canvas = card.context.canvas;
     const text = if (card.agent.sessionTitle().len != 0) card.agent.sessionTitle() else card.agent.displayName();
-    const label: Label = .{ .text = text, .color = canvas.theme.palette.text, .bold = true, .face = .sans };
+    const label: Label = .{ .text = text, .color = canvas.theme.palette.text, .bold = true, .face = .sans, .size = .title };
     var buffer: [TextFit.max_bytes]u8 = undefined;
     const fit: TextFit = .{ .canvas = canvas, .width = row.width };
     var fitted = label;
@@ -133,14 +133,14 @@ fn paintEvent(card: AgentCard, row: Rect, tokens: Level) !void {
     const ink = status_glyph.color(palette, card.agent.status);
     if (card.agent.status == .working) {
         var age_buffer: [age_label.max_bytes]u8 = undefined;
-        const elapsed: Label = .{ .text = age_label.format(card.age_s, &age_buffer), .color = ink, .face = .sans };
+        const elapsed: Label = .{ .text = age_label.format(card.age_s, &age_buffer), .color = ink, .face = .sans, .size = .small };
         const elapsed_width = try canvas.measure(elapsed);
         right -= elapsed_width;
         _ = try canvas.textAt(.{ .x = right, .y = row.y, .width = elapsed_width, .height = row.height }, elapsed);
         right -= elapsed_gap;
     }
 
-    var status: Label = .{ .text = status_glyph.glyph(card.agent.status, card.agent.blockedReason()), .color = ink, .face = .sans };
+    var status: Label = .{ .text = status_glyph.glyph(card.agent.status, card.agent.blockedReason()), .color = ink, .face = .sans, .size = .small };
     if (card.agent.status == .working) {
         status.alpha = status_glyph.pulse(card.context.projection.sidebar_animation_frame);
     }
@@ -155,7 +155,7 @@ fn paintEvent(card: AgentCard, row: Rect, tokens: Level) !void {
     const event_width = @max(0, right - CardGeometry.gap - row.x);
     var buffer: [TextFit.max_bytes]u8 = undefined;
     const fit: TextFit = .{ .canvas = canvas, .width = event_width };
-    const label: Label = .{ .text = card.agent.lastEvent(), .color = palette.overlay1, .face = .sans };
+    const label: Label = .{ .text = card.agent.lastEvent(), .color = palette.overlay1, .face = .sans, .size = .small };
     var fitted = label;
     fitted.text = try fit.fit(label, &buffer);
     _ = try canvas.textAt(.{ .x = row.x, .y = row.y, .width = event_width, .height = row.height }, fitted);
@@ -184,11 +184,11 @@ fn providerGlyph(card: AgentCard) []const u8 {
 
 fn statusWidth(card: AgentCard) !f32 {
     const canvas = card.context.canvas;
-    const glyph = try canvas.measure(.{ .text = status_glyph.glyph(card.agent.status, card.agent.blockedReason()), .face = .sans });
+    const glyph = try canvas.measure(.{ .text = status_glyph.glyph(card.agent.status, card.agent.blockedReason()), .face = .sans, .size = .small });
     if (card.agent.status != .working) {
         return glyph;
     }
 
     var age_buffer: [age_label.max_bytes]u8 = undefined;
-    return glyph + elapsed_gap + try canvas.measure(.{ .text = age_label.format(card.age_s, &age_buffer), .face = .sans });
+    return glyph + elapsed_gap + try canvas.measure(.{ .text = age_label.format(card.age_s, &age_buffer), .face = .sans, .size = .small });
 }

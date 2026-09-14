@@ -109,6 +109,7 @@ fn tab(strip: TabStrip, entry: TabEntry) !void {
         .color = if (active) palette.text else if (hovered) palette.text else palette.subtext0,
         .bold = active,
         .face = .sans,
+        .size = .body,
     });
     if (dot) |color| {
         try context.dot(bounds, color);
@@ -127,7 +128,7 @@ fn width(strip: TabStrip, value: *const client.Tab, index: usize) !f32 {
     var storage: [core.max_tab_label_bytes + 16]u8 = undefined;
     const canvas = strip.context.canvas;
     const chrome = canvas.chrome;
-    const measured = try canvas.measure(.{ .text = text(&storage, value, index), .face = .sans, .bold = true });
+    const measured = try canvas.measure(.{ .text = text(&storage, value, index), .face = .sans, .bold = true, .size = .body });
     const dot = attention.tabDot(strip.context.projection, canvas.theme.palette, value.location);
     const dot_space: f32 = if (dot != null) chrome.px(Context.dot_diameter + Context.dot_gap) else 0;
     return @ceil(measured + 2 * chrome.px(inset) + dot_space);

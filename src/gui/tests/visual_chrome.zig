@@ -24,7 +24,7 @@ test "chrome bands leave complete cells below them and share the pointer origin"
     defer renderer.deinit();
     for ([_]f32{ 1, 2 }) |scale| {
         const size = try renderer.measure(.{ .width = 1000, .height = 700, .scale = scale });
-        const chrome = ChromeMetrics.resolve(renderer.config.font, scale);
+        const chrome = ChromeMetrics.resolve(renderer.config, scale);
         try std.testing.expectEqual(chrome, renderer.chrome);
         try std.testing.expectEqual([2]u32{ 0, chrome.top_bar + chrome.tab_strip }, renderer.origin);
         try std.testing.expect(chrome.vertical() + @as(u32, size.rows) * size.cell_height_px <= 700);

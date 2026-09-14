@@ -105,7 +105,7 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
 
     // Chrome bands come off the window first, in whole device pixels, so
     // the grid below them holds complete cells and the PTY never sees chrome.
-    const chrome = ChromeMetrics.resolve(renderer.config.font, viewport.scale).fit(viewport.height, renderer.metrics.cell_height);
+    const chrome = ChromeMetrics.resolve(renderer.config, viewport.scale).fit(viewport.height, renderer.metrics.cell_height);
     const body_height = viewport.height -| chrome.vertical();
     const padding = renderer.config.window.padding;
     const x = @min(@as(u32, @intFromFloat(@round(padding.x * viewport.scale))), (viewport.width -| renderer.metrics.cell_width) / 2);

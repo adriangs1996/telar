@@ -10,6 +10,7 @@ const Label = @import("Label.zig");
 const RoundedFill = @import("RoundedFill.zig");
 const Ring = @import("Ring.zig");
 const TextRun = @import("../text/TextRun.zig");
+const LineBox = @import("../text/LineBox.zig");
 const ChromeMetrics = @import("ChromeMetrics.zig");
 const LabelPlacement = @import("LabelPlacement.zig");
 const Canvas = @This();
@@ -118,32 +119,32 @@ pub fn dimAt(canvas: *Canvas, bounds: Rect, alpha: f32) !void {
 
 /// Monospace labels advance one cell per column and clip at grapheme
 /// boundaries; sans labels shape as one HarfBuzz run with proportional
-/// advances and clip at the area's pixel edge, so callers measure first when
-/// they need whole tokens. Cached glyphs bypass shaping and rasterization
-/// after warmup.
-/// Example: `try canvas.text(area, .{ .text = "Workspace", .bold = true, .face = .sans });`
+/// advances at the label's size role and clip at the area's pixel edge, so
+/// callers measure first when they need whole tokens. Cached glyphs bypass
+/// shaping and rasterization after warmup.
+/// Example: `try canvas.text(area, .{ .text = "Workspace", .bold = true, .face = .sans, .size = .body });`
 pub fn text(canvas: *Canvas, area: core.Rect, label: Label) !void {
     if (area.isEmpty()) {
         return;
     }
 
-    const bounds = canvas.rect(area.row(0));
-    _ = try canvas.paintLabel(.{ .bounds = bounds, .baseline = bounds.y + canvas.metrics.baseline }, label);
+    _ = try canvas.textAt(canvas.rect(area.row(0)), label);
 }
 
-/// `text` over a device-pixel rectangle: the natural line box is centred
-/// vertically inside `bounds`, so a row taller or shorter than a cell keeps
-/// its glyphs on one baseline, clipped at the rectangle's edges. Returns the
-/// painted advance in pixels so a caller can lay out the next token.
-/// Example: `const width = try canvas.textAt(row, .{ .text = title, .bold = true, .face = .sans });`
+/// `text` over a device-pixel rectangle: the label's natural line box is
+/// centred vertically inside `bounds`, so a row taller or shorter than the
+/// box keeps its glyphs on one baseline, clipped at the rectangle's edges.
+/// Returns the painted advance in pixels so a caller can lay out the next
+/// token.
+/// Example: `const width = try canvas.textAt(row, .{ .text = title, .bold = true, .face = .sans, .size = .title });`
 pub fn textAt(canvas: *Canvas, bounds: Rect, label: Label) !f32 {
     if (bounds.width <= 0 or bounds.height <= 0) {
         return 0;
     }
 
-    const cell_height: f32 = @floatFromInt(canvas.metrics.cell_height);
-    const baseline = @floor(bounds.y + (bounds.height - cell_height) / 2) + canvas.metrics.baseline;
-    return canvas.paintLabel(.{ .bounds = bounds, .baseline = baseline }, label);
+    const line = try canvas.lineBox(label);
+    const baseline = @floor(bounds.y + (bounds.height - line.height) / 2) + line.ascender;
+    return canvas.paintLabel(.{ .bounds = bounds, .baseline = baseline, .line = line }, label);
 }
 
 fn paintLabel(canvas: *Canvas, placement: LabelPlacement, label: Label) !f32 {
@@ -156,18 +157,28 @@ fn paintLabel(canvas: *Canvas, placement: LabelPlacement, label: Label) !f32 {
         .mono => try canvas.monoText(placement, label),
         .sans => @min(bounds.width, try canvas.atlas.place(canvas.run(label, pen), canvas.quads)),
     };
-    const top = baseline - canvas.metrics.baseline;
-    const cell_height: f32 = @floatFromInt(canvas.metrics.cell_height);
+    const top = baseline - placement.line.ascender;
     if (label.underline and width != 0) {
-        try canvas.quads.pushRect(.{ .x = bounds.x, .y = top + cell_height - 2, .width = width, .height = 1 }, ink);
+        try canvas.quads.pushRect(.{ .x = bounds.x, .y = top + placement.line.height - 2, .width = width, .height = 1 }, ink);
     }
 
     if (label.strikethrough and width != 0) {
-        try canvas.quads.pushRect(.{ .x = bounds.x, .y = top + cell_height * 0.5, .width = width, .height = 1 }, ink);
+        try canvas.quads.pushRect(.{ .x = bounds.x, .y = top + placement.line.height * 0.5, .width = width, .height = 1 }, ink);
     }
 
     canvas.quads.clipFrom(first, bounds);
     return width;
+}
+
+// A terminal-sized or monospace label sits in the cell box, so it shares a
+// baseline with the cells beside it; a sized sans label uses Plex's own box.
+fn lineBox(canvas: *Canvas, label: Label) !LineBox {
+    const pixel_height = canvas.chrome.text(label.size);
+    if (label.face == .mono or pixel_height == null) {
+        return .{ .ascender = canvas.metrics.baseline, .height = @floatFromInt(canvas.metrics.cell_height) };
+    }
+
+    return canvas.atlas.lineBox(if (label.bold) .sans_semibold else .sans, pixel_height.?);
 }
 
 /// Returns the device-pixel width `text` would paint without clipping, so a
@@ -210,14 +221,17 @@ fn monoText(canvas: *Canvas, placement: LabelPlacement, label: Label) !f32 {
     return @floatFromInt(@as(u32, column) * canvas.metrics.cell_width);
 }
 
-// Bold sans selects the real SemiBold face, never synthetic emboldening.
+// Bold sans selects the real SemiBold face, never synthetic emboldening. A
+// sized label lets fallback glyphs fit a cell of its own height rather
+// than the terminal's.
 fn run(canvas: *Canvas, label: Label, pen: [2]f32) TextRun {
+    const sized = canvas.chrome.text(label.size);
     return .{
         .text = label.text,
         .x = pen[0],
         .y = pen[1],
-        .pixel_height = canvas.metrics.pixel_height,
-        .cell_bounds = canvas.metrics.glyphCell(),
+        .pixel_height = sized orelse canvas.metrics.pixel_height,
+        .cell_bounds = if (sized == null) canvas.metrics.glyphCell() else null,
         .color = canvas.labelInk(label),
         .bold = false,
         .italic = label.italic,

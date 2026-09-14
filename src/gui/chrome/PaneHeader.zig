@@ -32,18 +32,18 @@ pub fn paint(header: PaneHeader, row: Rect) !void {
     const index_text = std.fmt.bufPrint(&index_storage, "{d}", .{header.index}) catch unreachable;
     var x = band.x;
     const end = band.x + band.width;
-    x += try canvas.textAt(.{ .x = x, .y = band.y, .width = @max(0, end - x), .height = band.height }, .{ .text = index_text, .color = palette.text, .bold = true, .face = .sans });
+    x += try canvas.textAt(.{ .x = x, .y = band.y, .width = @max(0, end - x), .height = band.height }, .{ .text = index_text, .color = palette.text, .bold = true, .face = .sans, .size = .body });
     x += chrome.px(6);
     const name = header.pane.foregroundName();
     var chip_storage: [32]u8 = undefined;
     const chip_text = header.chip(&chip_storage);
     var chip_width: f32 = 0;
     if (chip_text.len != 0) {
-        chip_width = @ceil(try canvas.measure(.{ .text = chip_text, .face = .sans }) + 2 * chrome.px(6));
+        chip_width = @ceil(try canvas.measure(.{ .text = chip_text, .face = .sans, .size = .body }) + 2 * chrome.px(6));
     }
 
     const name_width = @max(0, end - x - (if (chip_width != 0) chip_width + chrome.px(8) else 0));
-    _ = try canvas.textAt(.{ .x = x, .y = band.y, .width = name_width, .height = band.height }, .{ .text = if (name.len == 0) "shell" else name, .color = palette.subtext0, .face = .sans });
+    _ = try canvas.textAt(.{ .x = x, .y = band.y, .width = name_width, .height = band.height }, .{ .text = if (name.len == 0) "shell" else name, .color = palette.subtext0, .face = .sans, .size = .body });
     if (chip_width == 0 or chip_width > band.width) {
         return;
     }
@@ -51,7 +51,7 @@ pub fn paint(header: PaneHeader, row: Rect) !void {
     const chip_height = @min(band.height, chrome.px(16));
     const chip_bounds: Rect = .{ .x = end - chip_width, .y = band.y + @floor((band.height - chip_height) / 2), .width = chip_width, .height = chip_height };
     try canvas.fillRoundedAt(chip_bounds, .{ .radius = chrome.px(4), .color = attention.statusColor(palette, header.agent.?.status) });
-    _ = try canvas.textAt(.{ .x = chip_bounds.x + chrome.px(6), .y = band.y, .width = chip_width - 2 * chrome.px(6), .height = band.height }, .{ .text = chip_text, .color = palette.surface_dim, .face = .sans });
+    _ = try canvas.textAt(.{ .x = chip_bounds.x + chrome.px(6), .y = band.y, .width = chip_width - 2 * chrome.px(6), .height = band.height }, .{ .text = chip_text, .color = palette.surface_dim, .face = .sans, .size = .body });
 }
 
 fn chip(header: PaneHeader, storage: []u8) []const u8 {

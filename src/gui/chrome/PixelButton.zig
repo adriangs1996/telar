@@ -9,6 +9,7 @@ active: bool = false,
 radius: f32 = 999,
 bold: bool = false,
 face: @import("label_face.zig").Face = .sans,
+size: @import("label_size.zig").Size = .body,
 /// Horizontal inset of the label inside the control, in device pixels.
 inset: f32 = 0,
 /// An attention dot painted at the trailing edge in this color, if any.

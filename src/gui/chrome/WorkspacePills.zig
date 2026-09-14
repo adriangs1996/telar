@@ -27,7 +27,7 @@ pub fn paint(pills: WorkspacePills) !f32 {
     const snapshot = projection.workspaces;
     if (snapshot.count == 0) {
         const fallback = projection.tabs.displayedWorkspaceName();
-        const label: Label = .{ .text = if (fallback.len != 0) fallback else "workspace", .color = canvas.theme.palette.subtext0, .face = .sans };
+        const label: Label = .{ .text = if (fallback.len != 0) fallback else "workspace", .color = canvas.theme.palette.subtext0, .face = .sans, .size = .body };
         return try canvas.textAt(pills.area, label);
     }
 
@@ -111,7 +111,7 @@ fn slot(pills: WorkspacePills, x: f32, width: f32) Rect {
 
 fn pillWidth(pills: WorkspacePills, text: []const u8, dot: ?core.Color) !f32 {
     const chrome = pills.context.canvas.chrome;
-    const measured = try pills.context.canvas.measure(.{ .text = text, .face = .sans });
+    const measured = try pills.context.canvas.measure(.{ .text = text, .face = .sans, .size = .body });
     const dot_space: f32 = if (dot != null) chrome.px(Context.dot_diameter + Context.dot_gap) else 0;
     return @ceil(measured + 2 * chrome.px(inset) + dot_space);
 }
