@@ -312,22 +312,38 @@ test "the favicon worker decodes a workspace favicon.png into the sprite cell" {
 }
 
 test "a workspace favicon reaches the card one frame after the worker completes" {
+    const gpa = std.testing.allocator;
+    const samples = [_]u8{ 255, 0, 0, 255 } ** 64;
+    const bytes = try png.encodeForTest(gpa, .{ .header = .{ .width = 8, .height = 8, .color = .rgba }, .filter = 1 }, &samples);
+    defer gpa.free(bytes);
+    try expectFaviconCard(".telar/icon.png", bytes);
+}
+
+test "the reported root favicon.ico reaches the agent card through the worker inbox" {
+    try expectFaviconCard("favicon.ico", @embedFile("../image/testdata/telar.ico"));
+}
+
+test "a 16-bit RGB workspace favicon reaches the agent card through the worker inbox" {
+    const gpa = std.testing.allocator;
+    const samples = [_]u8{ 255, 255, 128, 32, 0, 64 } ** 64;
+    const bytes = try png.encodeForTest(gpa, .{ .header = .{ .width = 8, .height = 8, .color = .rgb, .depth = 16 }, .filter = 4 }, &samples);
+    defer gpa.free(bytes);
+    try expectFaviconCard("favicon.png", bytes);
+}
+
+fn expectFaviconCard(name: []const u8, bytes: []const u8) !void {
     var fixture = try ChromeFixture.init();
     defer fixture.deinit();
     const session = fixture.session;
     const gui = session.gui;
     const renderer = &session.renderer;
     const io = std.testing.io;
-    const gpa = std.testing.allocator;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
     var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const root = root_buffer[0..try temp.dir.realPath(io, &root_buffer)];
-    const samples = [_]u8{ 255, 0, 0, 255 } ** 64;
-    const bytes = try png.encodeForTest(gpa, .{ .header = .{ .width = 8, .height = 8, .color = .rgba }, .filter = 1 }, &samples);
-    defer gpa.free(bytes);
     try temp.dir.createDirPath(io, ".telar");
-    try temp.dir.writeFile(io, .{ .sub_path = ".telar/icon.png", .data = bytes });
+    try temp.dir.writeFile(io, .{ .sub_path = name, .data = bytes });
     const workspace = Session.location.workspace.workspace;
     _ = try gui.app.model.workspace_list_snapshot.replace(.{ .revision = 1, .entries = &.{.{ .workspace = workspace, .name = "telar", .path = root, .tab_count = 1 }} });
 

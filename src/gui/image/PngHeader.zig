@@ -1,5 +1,5 @@
-//! The validated IHDR of a PNG the decoder supports: 8-bit, non-interlaced,
-//! RGB, RGBA or palette.
+//! The validated IHDR: non-interlaced RGB/RGBA at 8 or 16 bits per sample,
+//! or an 8-bit palette.
 const PngHeader = @This();
 
 pub const ColorType = enum(u8) {
@@ -11,15 +11,18 @@ pub const ColorType = enum(u8) {
 width: u32,
 height: u32,
 color: ColorType,
+depth: u8 = 8,
 
 /// Bytes per source pixel: the filter distance.
 /// Example: `const bpp = header.bytesPerPixel();`
 pub fn bytesPerPixel(header: PngHeader) u8 {
-    return switch (header.color) {
+    const channels: u8 = switch (header.color) {
         .rgb => 3,
         .palette => 1,
         .rgba => 4,
     };
+
+    return channels * (header.depth / 8);
 }
 
 /// Bytes of one unfiltered scanline, without the filter byte.

@@ -1,5 +1,5 @@
-//! A bounded PNG decoder for workspace favicons: 8-bit, non-interlaced,
-//! colour types 2 (RGB), 6 (RGBA) and 3 (palette with optional tRNS),
+//! A bounded PNG decoder for workspace favicons: non-interlaced 8/16-bit
+//! RGB and RGBA, and 8-bit palette images with optional tRNS,
 //! inflated by `std.compress.flate` and unfiltered row by row. Every
 //! dimension is checked against `PngLimits` before a buffer is allocated,
 //! and the inflated stream may not exceed the exact scanline size, so a
@@ -9,7 +9,7 @@ const std = @import("std");
 const flate = std.compress.flate;
 const PngHeader = @import("PngHeader.zig");
 const PngPalette = @import("PngPalette.zig");
-const PngImage = @import("PngImage.zig");
+const DecodedImage = @import("DecodedImage.zig");
 const PngLimits = @import("PngLimits.zig");
 const PngChunk = @import("PngChunk.zig");
 const PngExpansion = @import("PngExpansion.zig");
@@ -27,7 +27,7 @@ const signature = "\x89PNG\r\n\x1a\n";
 
 /// Decodes `bytes` into straight RGBA. The caller owns the result.
 /// Example: `var image = try png.decode(gpa, bytes, .{}); defer image.deinit(gpa);`
-pub fn decode(allocator: std.mem.Allocator, bytes: []const u8, limits: PngLimits) Error!PngImage {
+pub fn decode(allocator: std.mem.Allocator, bytes: []const u8, limits: PngLimits) Error!DecodedImage {
     if (bytes.len < signature.len + 25 or !std.mem.eql(u8, bytes[0..signature.len], signature)) {
         return error.NotPng;
     }
@@ -123,11 +123,11 @@ fn parseHeader(data: []const u8, limits: PngLimits) Error!PngHeader {
         else => return error.UnsupportedPng,
     };
     const interlace = data[12];
-    if (depth != 8 or interlace != 0 or data[10] != 0 or data[11] != 0) {
+    if ((depth != 8 and depth != 16) or (color == .palette and depth != 8) or interlace != 0 or data[10] != 0 or data[11] != 0) {
         return error.UnsupportedPng;
     }
 
-    return .{ .width = width, .height = height, .color = color };
+    return .{ .width = width, .height = height, .color = color, .depth = depth };
 }
 
 fn parsePalette(palette: *PngPalette, data: []const u8) Error!void {
@@ -163,16 +163,30 @@ fn collectImageData(bytes: []const u8, idat: []u8) Error!void {
     }
 }
 
-// Inflates exactly `raw.len` bytes: a stream that would write more fails
-// on the fixed writer, so a decompression bomb stops at the scanline bound.
+// Read exactly the scanlines, then require EOF. A bounded history window
+// lets the decoder consume empty final blocks after filling the pixel buffer.
 fn inflate(idat: []const u8, raw: []u8) Error!void {
     var input = std.Io.Reader.fixed(idat);
-    var decompress = flate.Decompress.init(&input, .zlib, &.{});
-    var output = std.Io.Writer.fixed(raw);
-    _ = decompress.reader.streamRemaining(&output) catch return error.InvalidPngData;
-    if (output.end != raw.len) {
+    var window: [flate.max_window_len]u8 = undefined;
+    var decompress = flate.Decompress.init(&input, .zlib, &window);
+    decompress.reader.readSliceAll(raw) catch return error.InvalidPngData;
+    var extra: [1]u8 = undefined;
+    const trailing = decompress.reader.readSliceShort(&extra) catch return error.InvalidPngData;
+    if (trailing != 0) {
         return error.InvalidPngData;
     }
+}
+
+test "inflation consumes empty final stored blocks and enforces the exact output size" {
+    // Two stored DEFLATE blocks: four bytes, then an empty final block.
+    const compressed = "\x78\x01\x00\x04\x00\xfb\xffabcd\x01\x00\x00\xff\xff\x03\xd8\x01\x8b";
+    var raw: [4]u8 = undefined;
+    try inflate(compressed, &raw);
+    try std.testing.expectEqualStrings("abcd", &raw);
+    try std.testing.expectError(error.InvalidPngData, inflate(compressed, raw[0..3]));
+    var longer: [5]u8 = undefined;
+    try std.testing.expectError(error.InvalidPngData, inflate(compressed, &longer));
+    try std.testing.expectError(error.InvalidPngData, inflate(compressed[0 .. compressed.len - 5], &raw));
 }
 
 fn unfilter(raw: []u8, header: PngHeader) Error!void {
@@ -227,6 +241,18 @@ fn expand(raw: []const u8, header: PngHeader, out: PngExpansion) Error!void {
     for (0..header.height) |row| {
         const line = raw[row * (stride + 1) + 1 ..][0..stride];
         const destination = out.pixels[row * width * 4 ..][0 .. width * 4];
+        if (header.depth == 16) {
+            // PNG samples are big-endian. Retain their high byte for RGBA8;
+            // filtering has already reconstructed both bytes of each sample.
+            const bpp = header.bytesPerPixel();
+            for (0..width) |x| {
+                const source = line[x * bpp ..][0..bpp];
+                destination[x * 4 ..][0..4].* = .{ source[0], source[2], source[4], if (header.color == .rgba) source[6] else 255 };
+            }
+
+            continue;
+        }
+
         switch (header.color) {
             .rgba => @memcpy(destination, line),
             .rgb => for (0..width) |x| {
@@ -301,7 +327,7 @@ pub fn encodeForTest(allocator: std.mem.Allocator, spec: PngTestSpec, samples: [
     var ihdr: [13]u8 = undefined;
     std.mem.writeInt(u32, ihdr[0..4], spec.header.width, .big);
     std.mem.writeInt(u32, ihdr[4..8], spec.header.height, .big);
-    ihdr[8] = spec.depth;
+    ihdr[8] = spec.depth orelse spec.header.depth;
     ihdr[9] = @intFromEnum(spec.header.color);
     ihdr[10] = 0;
     ihdr[11] = 0;
@@ -324,6 +350,38 @@ pub fn encodeForTest(allocator: std.mem.Allocator, spec: PngTestSpec, samples: [
 }
 
 const rgba_samples = [_]u8{ 255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 0, 10, 20, 30, 40 } ++ [_]u8{ 1, 2, 3, 4, 250, 240, 230, 220, 100, 100, 100, 100, 0, 0, 0, 255 };
+
+test "16-bit RGB and RGBA reconstruct all filters before reducing samples to RGBA8" {
+    const allocator = std.testing.allocator;
+    const rgba = [_]u8{ 255, 1, 0, 255, 128, 13, 64, 7, 0, 255, 255, 0, 32, 129, 0, 255 } ++
+        [_]u8{ 10, 200, 20, 100, 30, 50, 255, 255, 1, 128, 2, 64, 3, 32, 128, 0 };
+    const rgb = [_]u8{ 255, 1, 0, 255, 128, 13, 0, 255, 255, 0, 32, 129 } ++
+        [_]u8{ 10, 200, 20, 100, 30, 50, 1, 128, 2, 64, 3, 32 };
+    const expected_rgba = [_]u8{ 255, 0, 128, 64, 0, 255, 32, 0, 10, 20, 30, 255, 1, 2, 3, 128 };
+    const expected_rgb = [_]u8{ 255, 0, 128, 255, 0, 255, 32, 255, 10, 20, 30, 255, 1, 2, 3, 255 };
+    for ([_]PngHeader.ColorType{ .rgb, .rgba }) |color| {
+        for (0..5) |filter| {
+            const samples: []const u8 = if (color == .rgba) &rgba else &rgb;
+            const bytes = try encodeForTest(allocator, .{ .header = .{ .width = 2, .height = 2, .color = color, .depth = 16 }, .filter = @intCast(filter) }, samples);
+            defer allocator.free(bytes);
+            var image = try decode(allocator, bytes, .{});
+            defer image.deinit(allocator);
+            try std.testing.expectEqualSlices(u8, if (color == .rgba) &expected_rgba else &expected_rgb, image.pixels);
+            try std.testing.expectError(error.PngTooLarge, decode(allocator, bytes, .{ .max_pixels = 3 }));
+        }
+    }
+}
+
+test "16-bit PNG rejects short scanlines and invalid palette depth" {
+    const allocator = std.testing.allocator;
+    const short = try encodeForTest(allocator, .{ .header = .{ .width = 2, .height = 2, .color = .rgba }, .depth = 16 }, rgba_samples[0..16]);
+    defer allocator.free(short);
+    try std.testing.expectError(error.InvalidPngData, decode(allocator, short, .{}));
+
+    const palette = try encodeForTest(allocator, .{ .header = .{ .width = 2, .height = 2, .color = .palette }, .depth = 16 }, &.{ 0, 0, 0, 0 });
+    defer allocator.free(palette);
+    try std.testing.expectError(error.UnsupportedPng, decode(allocator, palette, .{}));
+}
 
 test "decodes an RGBA image with the Paeth filter and an RGB image with the Sub filter" {
     const allocator = std.testing.allocator;
@@ -368,13 +426,13 @@ test "decodes every filter type and a palette with transparency" {
     try std.testing.expectEqualSlices(u8, &.{ 10, 20, 30, 255, 40, 50, 60, 128, 70, 80, 90, 255, 40, 50, 60, 128 }, image.pixels);
 }
 
-test "rejects interlaced, oversized, deep, corrupt and non-PNG input without allocating pixels" {
+test "rejects interlaced, oversized, invalid-depth, corrupt and non-PNG input without allocating pixels" {
     const allocator = std.testing.allocator;
     const interlaced = try encodeForTest(allocator, .{ .header = .{ .width = 2, .height = 2, .color = .rgba }, .interlace = 1 }, rgba_samples[0..16]);
     defer allocator.free(interlaced);
     try std.testing.expectError(error.UnsupportedPng, decode(allocator, interlaced, .{}));
 
-    const deep = try encodeForTest(allocator, .{ .header = .{ .width = 2, .height = 2, .color = .rgba }, .depth = 16 }, rgba_samples[0..16]);
+    const deep = try encodeForTest(allocator, .{ .header = .{ .width = 2, .height = 2, .color = .rgba }, .depth = 4 }, rgba_samples[0..16]);
     defer allocator.free(deep);
     try std.testing.expectError(error.UnsupportedPng, decode(allocator, deep, .{}));
 

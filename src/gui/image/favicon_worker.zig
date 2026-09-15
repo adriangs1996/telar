@@ -1,9 +1,10 @@
 //! The favicon job as the GUI runs it on an inbox task: the shared client
-//! reads the bounded file, the GUI decodes the PNG and box-filters it into
+//! reads the bounded file, the GUI decodes PNG or ICO and box-filters it into
 //! one sprite cell. Allocates freely; it never touches the interactive path.
 const std = @import("std");
 const client = @import("telar-client");
 const png = @import("png.zig");
+const ico = @import("ico.zig");
 const box_filter = @import("box_filter.zig");
 
 /// Example: `try inbox.start(.favicon, .{ favicon_worker.execute, .{ io, gpa, job } });`
@@ -19,7 +20,7 @@ fn run(io: std.Io, gpa: std.mem.Allocator, job: client.FaviconJob) !*client.Favi
     const buffer = try gpa.alloc(u8, client.favicon_lookup.max_file_bytes);
     defer gpa.free(buffer);
     const bytes = try client.favicon_lookup.read(io, job.cwdSlice(), buffer);
-    var image = try png.decode(gpa, bytes, .{});
+    var image = if (std.mem.startsWith(u8, bytes, "\x00\x00\x01\x00")) try ico.decode(gpa, bytes, job.cell) else try png.decode(gpa, bytes, .{});
     defer image.deinit(gpa);
     const out = try gpa.create(client.FaviconImage);
     errdefer gpa.destroy(out);

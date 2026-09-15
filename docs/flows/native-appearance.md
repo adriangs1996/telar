@@ -211,15 +211,37 @@ workspace of the list; each preparation places the one landed image into the
 page and asks `controllers/workspaces/favicons` to look up the next wanted
 workspace when the client's `favicon_runner` is bound (the TUI leaves it
 unset). The GUI job runs on an inbox task: the shared `favicon_lookup` reads
-`favicon.png` then `.telar/icon.png` under the workspace root (regular files,
-256 KiB at most), `image/png` decodes 8-bit non-interlaced RGB, RGBA or
-palette files under `PngLimits` (4096 px a side, 1 Mi pixels) into a fixed
-scanline buffer, and `image/box_filter` area-averages the result into one
+`favicon.png`, `favicon.ico`, then `.telar/icon.png` under the workspace root (regular files,
+1 MiB at most). `image/ico` inspects at most 64 directory entries without
+allocation and selects the smallest supported image covering the sprite cell,
+or the largest available if all are smaller. ICO payloads support PNG and
+uncompressed 32-bit BITMAPINFOHEADER images, bounded to 256 x 256 pixels.
+The bitmap decoder reverses bottom-up BGRA rows and preserves alpha, using
+the padded AND mask when every alpha byte is zero, following the
+[ICO alpha convention](https://devblogs.microsoft.com/oldnewthing/20101021-00/?p=12483).
+SVG and other ICO bitmap encodings are unsupported.
+`image/png` decodes non-interlaced RGB/RGBA at 8 or 16 bits per sample and
+8-bit palette files under `PngLimits` (4096 px a side, 1 Mi pixels) into a
+bounded scanline buffer. Filtering reconstructs every sample byte before
+16-bit samples reduce to their high byte for RGBA8 output. The raw scanlines
+use at most 8 MiB plus 4096 filter bytes; decoded pixels use at most 4 MiB.
+Inflation uses a separate 64 KiB history window and requires EOF after the
+exact scanline length, accepting empty final DEFLATE blocks while rejecting
+short or excess output.
+`image/box_filter` area-averages the result into one
 cell. One lookup is in flight at a time; a completion for another execution
 is released unread, a missing file is silent and an unusable one logs once
 under the `favicons` scope. A full sheet or a failed lookup keeps the generic
 glyph. A page rebuilt for another scale forgets its placements, so the
 lookups run again at the new cell size.
+
+`zig build test-gui` covers the reported multi-resolution ICO fixture through
+file lookup, worker inbox completion, sprite placement and the agent card's
+texture reference. Decoder tests cover size selection, row orientation,
+alpha/mask handling, embedded PNGs, truncated inputs, invalid offsets and
+allocation failure, plus 16-bit RGB/RGBA through all five PNG filters and
+worker-to-card delivery. `zig build test-client` covers lookup precedence,
+files above the former 256 KiB limit, and the 1 MiB file bound.
 
 `native.Frame` carries straight RGBA background, a numeric blur radius and
 titlebar visibility. These values cross only the in-process native ABI; they
