@@ -124,7 +124,6 @@ pub fn init(initialization: Initialization) !Application {
 pub fn shutdownStep(application: *Application, step: application_namespace.ShutdownStep) void {
     switch (step) {
         .stop_client_connections => {
-            application_namespace.SessionCheckpoint.writeNow(application);
             for (&application.clients.items) |*slot| {
                 if (slot.*) |session| {
                     session.connection.shutdown(application.io);
@@ -137,6 +136,10 @@ pub fn shutdownStep(application: *Application, step: application_namespace.Shutd
             }
         },
         .stop_panes => application.model.panes.shutdown(),
+        .persist_session => {
+            application.session.discardJoinedWrite();
+            application_namespace.SessionCheckpoint.writeNow(application);
+        },
         .destroy_pending_admission => {
             if (application.client_admission.pendingConnection()) |pending| {
                 pending.deinit(application.io);

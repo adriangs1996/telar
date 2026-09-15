@@ -259,6 +259,7 @@ test {
     _ = @import("runtime/runtime_tests.zig");
     _ = @import("runtime/tests/acknowledge_agent_test.zig");
     _ = @import("runtime/tests/cell_projection_test.zig");
+    _ = @import("runtime/tests/checkpoint_shutdown_test.zig");
     _ = @import("runtime/tests/close_pane_test.zig");
     _ = @import("runtime/tests/close_tab_test.zig");
     _ = @import("runtime/tests/copy_selection_test.zig");

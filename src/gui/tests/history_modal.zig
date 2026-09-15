@@ -397,7 +397,7 @@ test "native history warm frames reuse shaping for long paths and every result s
     try std.testing.expect(history.beginPageRequest(2, .global));
     try std.testing.expect(history.acceptPageResult(.{ .request_id = 2, .entries = &long_entries, .snapshot_id = 9, .has_more = false, .now_ms = 2000 }));
     _ = fixture.model.name_prompt.apply(.{ .insert = "zig" });
-    for (0..4) |phase| {
+    for (0..5) |phase| {
         switch (phase) {
             1 => _ = fixture.model.name_prompt.apply(.toggle_inspection),
             2 => {
@@ -409,9 +409,11 @@ test "native history warm frames reuse shaping for long paths and every result s
                 history.begin();
                 try std.testing.expect(history.beginPageRequest(4, .global));
             },
+            4 => history.setError("Could not load the command history because its observation worker is temporarily unavailable. Try searching again after the current request completes."),
             else => {},
         }
 
+        try fixture.paint();
         try fixture.paint();
         const calls = fixture.renderer.atlas.?.shape_calls;
         const version = fixture.renderer.atlas.?.version;
@@ -422,7 +424,6 @@ test "native history warm frames reuse shaping for long paths and every result s
         defer fixture.renderer.quads.allocator = std.testing.allocator;
         for (0..8) |_| {
             try fixture.paint();
-            std.debug.print("history warm phase={d} calls={d} initial={d}\n", .{ phase, fixture.renderer.atlas.?.shape_calls, calls });
         }
 
         try std.testing.expectEqual(calls, fixture.renderer.atlas.?.shape_calls);

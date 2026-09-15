@@ -22,6 +22,8 @@ const StatsType = @import("../../../../history/Stats.zig");
 const TrackerType = @import("../../../../agent/Tracker.zig");
 const AgentSoundType = @import("telar-core").AgentSound;
 const sound_module = @import("../../../../agent/sound.zig");
+const ResumeSession = @import("../../../../agent/ResumeSession.zig");
+const SessionReference = @import("../../../../agent/SessionReference.zig");
 
 pub const Step = enum {
     sound,
@@ -191,6 +193,68 @@ test "shell foreground removes the agent and ignores screen readiness" {
     try std.testing.expect(fixture.agents.projectedStatus(identity.key) == null);
     try std.testing.expect(capture.sound == null);
     try expectMetrics(&fixture.metrics, .{ .inspections = 1, .misses = 1 });
+}
+
+test "shell startup observations preserve a queued resume until the agent starts" {
+    var fixture: PaneFixtureType = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    var panes: PaneStore = .{};
+    try beginFixtureObservation(&fixture, &panes);
+    var capture: ObservationCapture = .{};
+    var coordinator = testCoordinator(&capture, &fixture, &panes);
+    const key = fixture.pane.key();
+    const session = try ResumeSession.init(.claude, try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 0));
+    try std.testing.expect(fixture.agents.restoreSession(key, session));
+    const shell_id = std.math.cast(u32, fixture.pane.session.processId()).?;
+
+    try coordinator.handle(.{
+        .pane = key,
+        .stats = .{},
+        .process_probe = .{ .cache = processCache(.unknown, shell_id, "sh"), .changed = true },
+    });
+    try std.testing.expect(fixture.agents.awaitingResume(key));
+    try std.testing.expect(fixture.agents.resumeSession(key).?.eql(session));
+    try std.testing.expect(fixture.agents.projectedStatus(key) == null);
+
+    for ([_]CacheType{
+        processCache(.unknown, nonShellProcessId(fixture.pane), "git"),
+        processCache(.unknown, shell_id, "sh"),
+    }) |cache| {
+        queueFollowUp(&fixture);
+        try std.testing.expect(fixture.pane.beginHistoryObservation() != null);
+        capture = .{};
+        try coordinator.handle(.{
+            .pane = key,
+            .stats = .{},
+            .process_probe = .{ .cache = cache, .changed = true },
+        });
+        try std.testing.expect(fixture.agents.awaitingResume(key));
+        try std.testing.expect(fixture.agents.resumeSession(key).?.eql(session));
+        try std.testing.expect(fixture.agents.projectedStatus(key) == null);
+    }
+
+    queueFollowUp(&fixture);
+    try std.testing.expect(fixture.pane.beginHistoryObservation() != null);
+    capture = .{};
+    try coordinator.handle(.{
+        .pane = key,
+        .stats = .{},
+        .process_probe = .{ .cache = processCache(.claude, nonShellProcessId(fixture.pane), "Claude Code"), .changed = true },
+    });
+    try std.testing.expect(!fixture.agents.awaitingResume(key));
+    try std.testing.expect(fixture.agents.resumeSession(key).?.eql(session));
+
+    queueFollowUp(&fixture);
+    try std.testing.expect(fixture.pane.beginHistoryObservation() != null);
+    capture = .{};
+    try coordinator.handle(.{
+        .pane = key,
+        .stats = .{},
+        .process_probe = .{ .cache = processCache(.unknown, shell_id, "sh"), .changed = true },
+    });
+    try std.testing.expect(fixture.agents.resumeSession(key) == null);
+    try std.testing.expect(fixture.agents.projectedStatus(key) == null);
 }
 
 test "an unknown non-shell process clears previous process evidence" {
@@ -435,4 +499,32 @@ test "sounds are restricted to working-to-ready and working-to-blocked transitio
     try std.testing.expect(sound_module.soundForTransition(.ready, .ready) == null);
     try std.testing.expect(sound_module.soundForTransition(.blocked, .ready) == null);
     try std.testing.expect(sound_module.soundForTransition(.working, .failed) == null);
+}
+
+test "a pane-root agent keeps its resumed session and receives screen observations" {
+    var fixture: PaneFixtureType = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    var panes: PaneStore = .{};
+    try beginFixtureObservation(&fixture, &panes);
+    var capture: ObservationCapture = .{};
+    var coordinator = testCoordinator(&capture, &fixture, &panes);
+    const key = fixture.pane.key();
+    const session = try ResumeSession.init(.codex, try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 0));
+    try std.testing.expect(fixture.agents.restoreSession(key, session));
+    const root_id = std.math.cast(u32, fixture.pane.session.processId()).?;
+
+    try coordinator.handle(.{
+        .pane = key,
+        .stats = .{ .agent_observation = .{
+            .observed_at_ms = std.Io.Timestamp.now(std.testing.io, .real).toMilliseconds() + 1000,
+            .signal = .{ .provider = .codex, .status = .working, .confidence = 100, .identity_confirmed = true },
+        } },
+        .process_probe = .{ .cache = processCache(.codex, root_id, "Codex"), .changed = true, .inspected = true },
+    });
+
+    try std.testing.expect(!fixture.agents.awaitingResume(key));
+    try std.testing.expect(fixture.agents.resumeSession(key).?.eql(session));
+    try std.testing.expectEqual(AgentProviderType.codex, fixture.agents.projectedProvider(key));
+    try std.testing.expectEqual(AgentStatusType.working, fixture.agents.projectedStatus(key).?);
 }

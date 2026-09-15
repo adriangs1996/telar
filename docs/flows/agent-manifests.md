@@ -51,6 +51,19 @@ delivery attaches the presentation, next to the workspace and tab labels it
 already adds. That keeps manifest data out of the checkpoint and out of the
 projection's hot path.
 
+Process identification treats an agent launched as the pane's root command
+the same as an agent launched by its shell. Matching the root PID never
+discards a recognized provider. Unknown process groups have at most six
+acquisition attempts, allowing interpreter startup to reveal the agent without
+changing its process group. Known identities and exhausted acquisition windows
+remain cached until the group changes. Retry counters alone do not publish an
+identity change. All native inspection stays in the observation worker.
+
+`process/process.zig` tests direct Claude Code, Codex and Pi roots, bounded
+acquisition and an interpreter becoming an agent in the same process group.
+`runtime/entrypoints/events/pane/observation.zig` verifies that root-agent
+evidence retains its typed resume session and allows screen status updates.
+
 ## Table
 
 `core.agent_manifest.Table` holds at most `schema.max_agent_manifests`

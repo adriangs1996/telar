@@ -26,7 +26,7 @@ pub const max_process_args_bytes = 16 * 1024;
 /// retry window because process metadata can lag just behind terminal control.
 ///
 /// ```zig
-/// const result = probe(.{ .process_group_id = pgid, .shell_pid = shell_pid, .previous = previous, .manifests = manifests });
+/// const result = probe(.{ .process_group_id = pgid, .previous = previous, .manifests = manifests });
 /// ```
 pub fn probe(input: ProbeInput) Probe {
     return probeWith(input, identifyProcessGroup);
@@ -34,22 +34,11 @@ pub fn probe(input: ProbeInput) Probe {
 
 fn probeWith(input: ProbeInput, comptime identify: fn (*const Table, u32) Identification) Probe {
     const process_group_id = input.process_group_id;
-    const shell_pid = input.shell_pid;
     const previous = input.previous;
 
     const native_pgid = process_group_id orelse return .{ .cache = previous };
     const pgid = std.math.cast(u32, native_pgid) orelse return .{ .cache = previous };
-    const shell = std.math.cast(u32, shell_pid) orelse 0;
 
-    if (pgid == shell) {
-        if (previous.process_group_id == pgid and previous.foreground_name_len != 0) {
-            return .{ .cache = previous };
-        }
-        const identification = identify(input.manifests, pgid);
-        var next: Cache = .{ .process_group_id = pgid };
-        next.setName(identification.slice());
-        return .{ .cache = next, .changed = !sameCache(previous, next) };
-    }
     if (previous.process_group_id == pgid and
         (previous.provider != .unknown or previous.attempts >= max_acquisition_attempts))
     {
@@ -71,20 +60,21 @@ fn probeWith(input: ProbeInput, comptime identify: fn (*const Table, u32) Identi
     next.setName(identification.slice());
     return .{
         .cache = next,
-        .changed = !sameCache(previous, next),
+        .changed = !sameIdentity(previous, next),
         .inspected = true,
     };
 }
 
+/// A recognized pane-root agent keeps agent authority even when its process
+/// group matches the root PID. Example: `if (shellForeground(cache, root_pid)) expireProgress();`.
 pub fn shellForeground(cache: Cache, shell_pid: std.c.pid_t) bool {
     const shell = std.math.cast(u32, shell_pid) orelse return false;
-    return cache.process_group_id == shell;
+    return cache.provider == .unknown and cache.process_group_id == shell;
 }
 
-fn sameCache(left: Cache, right: Cache) bool {
+fn sameIdentity(left: Cache, right: Cache) bool {
     return left.process_group_id == right.process_group_id and
         left.provider == right.provider and
-        left.attempts == right.attempts and
         std.mem.eql(u8, left.name(), right.name());
 }
 
@@ -446,29 +436,28 @@ test "process acquisition is bounded and cached" {
     const shell: std.c.pid_t = 10;
     const shell_probe = probeWith(.{
         .process_group_id = 10,
-        .shell_pid = shell,
         .previous = .{ .process_group_id = 20, .provider = .claude },
     }, Fake.unknown);
     try std.testing.expect(shell_probe.changed);
     try std.testing.expect(shellForeground(shell_probe.cache, shell));
     try std.testing.expectEqual(AgentProviderType.unknown, shell_probe.cache.provider);
 
-    const identified = probeWith(.{ .process_group_id = 20, .shell_pid = shell, .previous = .{} }, Fake.claude);
+    const identified = probeWith(.{ .process_group_id = 20, .previous = .{} }, Fake.claude);
     try std.testing.expect(identified.changed);
     try std.testing.expect(identified.inspected);
     try std.testing.expectEqual(AgentProviderType.claude, identified.cache.provider);
     try std.testing.expectEqualStrings("Claude Code", identified.cache.name());
-    const cached = probeWith(.{ .process_group_id = 20, .shell_pid = shell, .previous = identified.cache }, Fake.unknown);
+    const cached = probeWith(.{ .process_group_id = 20, .previous = identified.cache }, Fake.unknown);
     try std.testing.expect(!cached.changed);
     try std.testing.expect(!cached.inspected);
 
     var acquiring: Cache = .{};
     for (0..max_acquisition_attempts) |_| {
-        const attempt = probeWith(.{ .process_group_id = 30, .shell_pid = shell, .previous = acquiring }, Fake.unknown);
+        const attempt = probeWith(.{ .process_group_id = 30, .previous = acquiring }, Fake.unknown);
         try std.testing.expect(attempt.inspected);
         acquiring = attempt.cache;
     }
-    const stable = probeWith(.{ .process_group_id = 30, .shell_pid = shell, .previous = acquiring }, Fake.claude);
+    const stable = probeWith(.{ .process_group_id = 30, .previous = acquiring }, Fake.claude);
     try std.testing.expect(!stable.changed);
     try std.testing.expect(!stable.inspected);
 }
@@ -478,4 +467,57 @@ test "foreground names are bounded application labels" {
     try std.testing.expectEqualStrings("Pi", applicationName(&builtin_table_module, .pi, "node"));
     try std.testing.expectEqualStrings("zsh", applicationName(&builtin_table_module, .unknown, "/bin/zsh"));
     try std.testing.expectEqualStrings("", applicationName(&builtin_table_module, .unknown, "bad\x1bname"));
+}
+
+test "direct pane-root agents retain provider evidence instead of becoming shells" {
+    const Fake = struct {
+        fn identify(table: *const Table, pid: u32) Identification {
+            const provider: AgentProviderType = switch (pid) {
+                10 => .claude,
+                11 => .codex,
+                else => .pi,
+            };
+            return .init(table, provider, "node");
+        }
+
+        fn unexpected(_: *const Table, _: u32) Identification {
+            unreachable;
+        }
+    };
+
+    for ([_]std.c.pid_t{ 10, 11, 12 }) |root_pid| {
+        const detected = probeWith(.{ .process_group_id = root_pid, .previous = .init("node") }, Fake.identify);
+        try std.testing.expect(detected.cache.provider != .unknown);
+        try std.testing.expect(detected.changed);
+        try std.testing.expect(detected.inspected);
+        try std.testing.expect(!shellForeground(detected.cache, root_pid));
+        const cached = probeWith(.{ .process_group_id = root_pid, .previous = detected.cache }, Fake.unexpected);
+        try std.testing.expect(!cached.inspected);
+        try std.testing.expect(!cached.changed);
+        try std.testing.expectEqualDeep(detected.cache, cached.cache);
+    }
+}
+
+test "pane-root acquisition can recognize an agent after exec in the same process group" {
+    const Fake = struct {
+        fn starting(table: *const Table, _: u32) Identification {
+            return .init(table, .unknown, "node");
+        }
+
+        fn ready(table: *const Table, _: u32) Identification {
+            return .init(table, .codex, "codex");
+        }
+    };
+
+    const root_pid: std.c.pid_t = 10;
+    const starting = probeWith(.{ .process_group_id = root_pid, .previous = .init("node") }, Fake.starting);
+    try std.testing.expectEqual(AgentProviderType.unknown, starting.cache.provider);
+    const retry = probeWith(.{ .process_group_id = root_pid, .previous = starting.cache }, Fake.starting);
+    try std.testing.expect(retry.inspected);
+    try std.testing.expect(!retry.changed);
+    try std.testing.expectEqual(starting.cache.attempts + 1, retry.cache.attempts);
+    const ready = probeWith(.{ .process_group_id = root_pid, .previous = retry.cache }, Fake.ready);
+    try std.testing.expectEqual(AgentProviderType.codex, ready.cache.provider);
+    try std.testing.expect(ready.inspected);
+    try std.testing.expect(!shellForeground(ready.cache, root_pid));
 }

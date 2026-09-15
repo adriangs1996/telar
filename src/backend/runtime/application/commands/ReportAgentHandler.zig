@@ -4,6 +4,7 @@ const ReportAgent = @import("ReportAgent.zig");
 const ReportAgentResult = @import("ReportAgentResult.zig");
 const SessionReferenceType = @import("../../../agent/SessionReference.zig");
 const agent_identity = @import("../coordinators/agent_identity.zig");
+const std = @import("std");
 const ReportAgentHandler = @This();
 
 panes: *const PaneStoreType,
@@ -27,7 +28,7 @@ pub fn execute(handler: *ReportAgentHandler, command: ReportAgent) ReportAgentRe
         SessionReferenceType.init(command.session, command.now_ms) catch return .{ .outcome = .invalid_session };
     const identity = agent_identity.fromPane(pane);
     const previous = handler.agents.projectedStatus(identity.key);
-    const had_session = handler.agents.sessionReference(identity.key) != null;
+    const previous_session = handler.agents.sessionReference(identity.key);
 
     const changed = handler.agents.observeReport(.{
         .identity = identity,
@@ -40,11 +41,47 @@ pub fn execute(handler: *ReportAgentHandler, command: ReportAgent) ReportAgentRe
         .session_file = command.session_file,
     });
     const current = handler.agents.projectedStatus(identity.key);
+    const current_session = handler.agents.sessionReference(identity.key);
 
     return .{
         .outcome = if (changed) .applied else .unchanged,
         .previous = previous,
         .current = current,
-        .session_recorded = session != null and !had_session,
+        .session_recorded = if (current_session) |recorded|
+            if (previous_session) |previous_reference| !std.mem.eql(u8, recorded.slice(), previous_reference.slice()) else true
+        else
+            false,
     };
+}
+
+test "lifecycle reports persist every changed session reference and ignore repeats" {
+    const PaneFixture = @import("../../tests/PaneFixture.zig");
+    var fixture: PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    var panes: PaneStoreType = .{};
+    try panes.insert(fixture.pane);
+    var handler: ReportAgentHandler = .{ .panes = &panes, .agents = &fixture.agents };
+    var command: ReportAgent = .{
+        .pane = fixture.pane.key(),
+        .state = .ready,
+        .session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000",
+        .now_ms = 1_000,
+    };
+
+    try std.testing.expect(handler.execute(command).session_recorded);
+    command.now_ms += 1;
+    try std.testing.expect(!handler.execute(command).session_recorded);
+    command.session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0001";
+    command.now_ms += 1;
+    try std.testing.expect(handler.execute(command).session_recorded);
+    try std.testing.expectEqualStrings(command.session, fixture.agents.sessionReference(command.pane).?.slice());
+
+    command.session = "";
+    command.now_ms += 1;
+    try std.testing.expect(!handler.execute(command).session_recorded);
+    command.session = "invalid reference";
+    const invalid = handler.execute(command);
+    try std.testing.expectEqual(.invalid_session, invalid.outcome);
+    try std.testing.expect(!invalid.session_recorded);
 }

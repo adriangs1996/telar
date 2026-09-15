@@ -1074,6 +1074,77 @@ test "a restored title waits for the resumed agent and skips title generation" {
     try std.testing.expect(tracker.nextDescriptionJob() == null);
 }
 
+test "a pending resume survives observation ticks without inventing an active agent" {
+    const ResumeSession = @import("ResumeSession.zig");
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    const reference = try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 0);
+    const session = try ResumeSession.init(.claude, reference);
+    const title = try SessionTitle.init("Keep resume metadata", .manual);
+    try std.testing.expect(tracker.restoreSession(identity.key, session));
+    try std.testing.expect(tracker.restoreTitle(identity.key, title));
+
+    _ = tracker.expire(10_000);
+    var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
+    try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries, 10_000).len);
+    try std.testing.expect(tracker.hasRestoredSession(session));
+    try std.testing.expect(tracker.resumeSession(identity.key).?.eql(session));
+    try std.testing.expectEqualStrings(title.slice(), tracker.checkpointTitle(identity.key).?.slice());
+    try std.testing.expect(tracker.resumeSession(.{ .id = identity.key.id, .generation = identity.key.generation + 1 }) == null);
+
+    try std.testing.expect(tracker.observeProcess(.{ .identity = identity, .provider = .claude, .process_id = 43, .observed_at_ms = 11_000 }));
+    try std.testing.expect(!tracker.hasRestoredSession(session));
+    try std.testing.expect(tracker.resumeSession(identity.key).?.eql(session));
+    try std.testing.expectEqualStrings(title.slice(), tracker.durableTitle(identity.key).?.slice());
+    try std.testing.expect(tracker.remove(identity.key));
+    try std.testing.expect(tracker.resumeSession(identity.key) == null);
+}
+
+test "a pending resume is discarded for another provider or a different reported session" {
+    const ResumeSession = @import("ResumeSession.zig");
+    const identity = try testIdentity();
+    const reference = try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 0);
+    const session = try ResumeSession.init(.claude, reference);
+    const title = try SessionTitle.init("Old session", .manual);
+
+    var other_provider: Tracker = .{};
+    try std.testing.expect(other_provider.restoreSession(identity.key, session));
+    try std.testing.expect(other_provider.restoreTitle(identity.key, title));
+    try std.testing.expect(other_provider.observeReport(.{ .identity = identity, .state = .ready, .observed_at_ms = 99, .session = reference }));
+    try std.testing.expect(other_provider.durableTitle(identity.key) == null);
+    try std.testing.expect(other_provider.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = 43, .observed_at_ms = 100 }));
+    try std.testing.expect(other_provider.resumeSession(identity.key) == null);
+    try std.testing.expect(other_provider.durableTitle(identity.key) == null);
+
+    var other_session: Tracker = .{};
+    try std.testing.expect(other_session.restoreSession(identity.key, session));
+    try std.testing.expect(other_session.restoreTitle(identity.key, title));
+    try std.testing.expect(other_session.observeReport(.{ .identity = identity, .state = .ready, .observed_at_ms = 99 }));
+    try std.testing.expect(other_session.durableTitle(identity.key) == null);
+    const replacement = try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0001", 100);
+    try std.testing.expect(other_session.observeSessionReference(identity, replacement));
+    try std.testing.expect(!other_session.hasRestoredSession(session));
+    try std.testing.expect(other_session.durableTitle(identity.key) == null);
+    try std.testing.expect(other_session.observeProcess(.{ .identity = identity, .provider = .claude, .process_id = 43, .observed_at_ms = 101 }));
+    try std.testing.expectEqualStrings(replacement.slice(), other_session.resumeSession(identity.key).?.reference.slice());
+}
+
+test "a proxy provider guess cannot authorize resume for a reported session" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    const reference = try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 100);
+    try std.testing.expect(tracker.observeSessionReference(identity, reference));
+    try std.testing.expect(tracker.observeProxy(.{
+        .identity = identity,
+        .dialect = .anthropic_messages,
+        .phase = .request_started,
+        .exchange = .{ .protocol = .http11, .connection_id = 1, .stream_id = 0 },
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expectEqual(AgentProviderType.claude, tracker.projectedProvider(identity.key));
+    try std.testing.expect(tracker.resumeSession(identity.key) == null);
+}
+
 test "an agent title outranks generated titles, never clears a manual one and is durable" {
     var tracker: Tracker = .{};
     const identity = try testIdentity();

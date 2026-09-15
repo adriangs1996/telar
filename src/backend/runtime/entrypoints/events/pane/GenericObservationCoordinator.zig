@@ -121,6 +121,10 @@ pub fn Type(comptime Context: type, comptime port: GenericObservationRuntimePort
             }
 
             if (reconciliation.transition.shell_foreground) {
+                if (coordinator.resources.agents.awaitingResume(reconciliation.pane.key())) {
+                    return;
+                }
+
                 _ = coordinator.resources.agents.remove(reconciliation.pane.key());
                 return;
             }

@@ -122,6 +122,23 @@ pub fn encodeWorkspaceSnapshot(buffer: []u8, message: WorkspaceSnapshot) ![]cons
         try encoder.writeInt(u16, tab.position);
         try encoder.writeInt(u16, tab.pane_count);
         try encoder.writeSized16(tab.label);
+        if (tab.foregrounds.len > tab.pane_count) {
+            return error.TooManyPanes;
+        }
+
+        try encoder.writeInt(u16, @intCast(tab.foregrounds.len));
+        for (tab.foregrounds, 0..) |foreground, foreground_index| {
+            try codec.validatePaneId(foreground.pane_id);
+            try codec.validateBytes(foreground.name, types.max_foreground_name_bytes, false);
+            for (tab.foregrounds[0..foreground_index]) |previous| {
+                if (previous.pane_id == foreground.pane_id) {
+                    return error.DuplicatePane;
+                }
+            }
+
+            try encoder.writeInt(u64, id.raw(foreground.pane_id));
+            try encoder.writeSized16(foreground.name);
+        }
     }
     return encoder.finish();
 }
@@ -149,6 +166,23 @@ pub fn decodeWorkspaceSnapshot(decoder: *DecoderType) !WorkspaceSnapshotView {
         }
         const label = try decoder.readSized16();
         try codec.validateTabLabel(label, true);
+        const foreground_count = try decoder.readInt(u16);
+        if (foreground_count > pane_count) {
+            return error.TooManyPanes;
+        }
+
+        var seen_panes: [types.max_panes_per_tab]id.PaneId = undefined;
+        for (0..foreground_count) |foreground_index| {
+            const pane_id = try id.pane(try decoder.readInt(u64));
+            try codec.validateBytes(try decoder.readSized16(), types.max_foreground_name_bytes, false);
+            for (seen_panes[0..foreground_index]) |previous| {
+                if (previous == pane_id) {
+                    return error.DuplicatePane;
+                }
+            }
+
+            seen_panes[foreground_index] = pane_id;
+        }
         for (seen[0..index]) |previous| if (previous == tab_id) return error.DuplicateTab;
         seen[index] = tab_id;
     }

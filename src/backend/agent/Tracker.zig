@@ -1,5 +1,6 @@
 const RepositoryType = @import("Repository.zig");
-const RestoredTitlesType = @import("RestoredTitles.zig");
+const RestoredAgents = @import("RestoredAgents.zig");
+const ResumeSession = @import("ResumeSession.zig");
 const WatchesType = @import("Watches.zig");
 const ReportObservationType = @import("ReportObservation.zig");
 const IdentityType = @import("Identity.zig");
@@ -25,7 +26,7 @@ const description = @import("description.zig");
 const Tracker = @This();
 
 repository: RepositoryType = .{},
-restored_titles: RestoredTitlesType = .{},
+restored_agents: RestoredAgents = .{},
 watches: WatchesType = .{},
 revision: u64 = 1,
 sequence: u64 = 0,
@@ -37,6 +38,10 @@ sequence: u64 = 0,
 /// _ = tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = now_ms });
 /// ```
 pub fn observeReport(tracker: *Tracker, observation: ReportObservationType) bool {
+    if (observation.session) |session| {
+        tracker.supersedeRestoredSession(observation.identity.key, session);
+    }
+
     const agent = tracker.ensure(observation.identity) orelse return false;
     var changed = false;
     if (observation.session) |session| {
@@ -69,8 +74,44 @@ pub fn observeReport(tracker: *Tracker, observation: ReportObservationType) bool
 /// if (tracker.observeSessionReference(identity, reference)) noteSessionChange();
 /// ```
 pub fn observeSessionReference(tracker: *Tracker, identity: IdentityType, reference: SessionReferenceType) bool {
+    tracker.supersedeRestoredSession(identity.key, reference);
     const agent = tracker.ensure(identity) orelse return false;
     return agent.applySessionReference(reference);
+}
+
+/// Returns durable resume data from an observed process or a pending restore,
+/// never from screen or proxy provider guesses.
+/// Example: `const session = tracker.resumeSession(key) orelse return;`.
+pub fn resumeSession(tracker: *const Tracker, key: PaneKeyType) ?ResumeSession {
+    if (tracker.repository.findConst(key)) |agent| {
+        if (agent.session_reference) |reference| {
+            if (agent.process) |process| {
+                return ResumeSession.init(process.provider, reference) catch null;
+            }
+        }
+    }
+
+    const pending = tracker.restored_agents.get(key) orelse return null;
+    return pending.session;
+}
+
+/// Retains a validated resume until matching process evidence arrives.
+/// Example: `_ = tracker.restoreSession(key, session);`.
+pub fn restoreSession(tracker: *Tracker, key: PaneKeyType, session: ResumeSession) bool {
+    return tracker.restored_agents.putSession(key, session);
+}
+
+/// Detects duplicate resume attempts during the startup restore pass.
+/// Example: `if (tracker.hasRestoredSession(session)) return;`.
+pub fn hasRestoredSession(tracker: *const Tracker, session: ResumeSession) bool {
+    return tracker.restored_agents.containsSession(session);
+}
+
+/// Distinguishes a starting resume from an observed foreground agent.
+/// Example: `if (tracker.awaitingResume(key)) return;`.
+pub fn awaitingResume(tracker: *const Tracker, key: PaneKeyType) bool {
+    const pending = tracker.restored_agents.get(key) orelse return false;
+    return pending.session != null;
 }
 
 /// Returns the provider currently projected for one exact pane generation.
@@ -104,6 +145,19 @@ pub fn durableTitle(tracker: *const Tracker, key: PaneKeyType) ?SessionTitleType
     return agent.durableTitle();
 }
 
+/// Preserves a title across checkpoints while its resumed process starts.
+/// Example: `const title = tracker.checkpointTitle(key);`.
+pub fn checkpointTitle(tracker: *const Tracker, key: PaneKeyType) ?SessionTitleType {
+    if (tracker.repository.findConst(key)) |agent| {
+        if (agent.durableTitle()) |title| {
+            return title;
+        }
+    }
+
+    const pending = tracker.restored_agents.get(key) orelse return null;
+    return pending.title;
+}
+
 /// Holds a checkpointed title for a restored pane generation until the
 /// resumed agent is observed; that aggregate starts with the title ready.
 /// Returns `false` when the bounded store is full.
@@ -112,13 +166,19 @@ pub fn durableTitle(tracker: *const Tracker, key: PaneKeyType) ?SessionTitleType
 /// _ = tracker.restoreTitle(pane.key(), title);
 /// ```
 pub fn restoreTitle(tracker: *Tracker, key: PaneKeyType, title: SessionTitleType) bool {
+    if (tracker.restored_agents.get(key)) |pending| {
+        if (pending.session != null) {
+            return tracker.restored_agents.putTitle(key, title);
+        }
+    }
+
     if (tracker.repository.find(key)) |agent| {
         agent.restoreTitle(title);
         tracker.bumpRevision();
         return true;
     }
 
-    return tracker.restored_titles.put(key, title);
+    return tracker.restored_agents.putTitle(key, title);
 }
 
 /// Marks one exact agent generation as seen and republishes a `done`
@@ -156,10 +216,36 @@ pub fn observeProcess(tracker: *Tracker, observation: ProcessObservationType) bo
         return false;
     }
 
+    if (tracker.restored_agents.get(observation.identity.key)) |pending| {
+        if (pending.session) |session| {
+            if (session.provider != observation.provider) {
+                _ = tracker.restored_agents.take(observation.identity.key);
+                if (tracker.repository.find(observation.identity.key)) |previous| {
+                    previous.retire();
+                    _ = tracker.removeStored(observation.identity.key);
+                }
+            }
+        }
+    }
+
     const agent = tracker.ensure(observation.identity) orelse return false;
 
     if (!agent.applyProcess(observation)) {
         return false;
+    }
+
+    if (tracker.restored_agents.take(observation.identity.key)) |pending| {
+        if (pending.session) |session| {
+            if (agent.session_reference == null) {
+                _ = agent.applySessionReference(session.reference);
+            }
+        }
+
+        if (pending.title) |title| {
+            if (agent.durableTitle() == null) {
+                agent.restoreTitle(title);
+            }
+        }
     }
 
     return tracker.reproject(agent, observation.observed_at_ms);
@@ -292,7 +378,7 @@ pub fn expire(tracker: *Tracker, now_ms: i64) bool {
 /// _ = tracker.remove(pane_key);
 /// ```
 pub fn remove(tracker: *Tracker, key: PaneKeyType) bool {
-    _ = tracker.restored_titles.take(key);
+    _ = tracker.restored_agents.take(key);
     const agent = tracker.repository.find(key) orelse return false;
     agent.retire();
     return tracker.removeStored(key);
@@ -482,11 +568,25 @@ fn ensure(tracker: *Tracker, identity: IdentityType) ?*Agent {
     }
 
     const agent = tracker.repository.insert(Agent.init(identity)) orelse return null;
-    if (tracker.restored_titles.take(identity.key)) |title| {
-        agent.restoreTitle(title);
+    if (tracker.restored_agents.get(identity.key)) |pending| {
+        if (pending.session == null) {
+            if (pending.title) |title| {
+                agent.restoreTitle(title);
+            }
+
+            _ = tracker.restored_agents.take(identity.key);
+        }
     }
 
     return agent;
+}
+
+fn supersedeRestoredSession(tracker: *Tracker, key: PaneKeyType, reference: SessionReferenceType) void {
+    const pending = tracker.restored_agents.get(key) orelse return;
+    const session = pending.session orelse return;
+    if (!std.mem.eql(u8, session.reference.slice(), reference.slice())) {
+        _ = tracker.restored_agents.take(key);
+    }
 }
 
 fn removeStored(tracker: *Tracker, key: PaneKeyType) bool {

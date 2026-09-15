@@ -35,6 +35,18 @@ pub fn Type(comptime Application: type, comptime dependencies: GenericProjection
         /// try PaneProjectionEvents.handleObserved(&application, event);
         /// ```
         pub fn handleObserved(application: *Application, event: ObservationCompletion) !void {
+            const previous = application.model.agents.resumeSession(event.pane);
+            defer {
+                const current = application.model.agents.resumeSession(event.pane);
+                const changed = if (previous) |before|
+                    if (current) |after| !before.eql(after) else true
+                else
+                    current != null;
+                if (changed) {
+                    application.noteSessionChange();
+                }
+            }
+
             var coordinator = paneObservationCoordinator(application);
             try coordinator.handle(event);
         }
@@ -101,7 +113,6 @@ pub fn Type(comptime Application: type, comptime dependencies: GenericProjection
             var stats: StatsType = .{};
             const process_probe = agent_process.probe(.{
                 .process_group_id = work.pane.session.foregroundProcessGroup(),
-                .shell_pid = work.pane.session.processId(),
                 .previous = work.process_cache,
                 .manifests = work.pane.manifests,
             });

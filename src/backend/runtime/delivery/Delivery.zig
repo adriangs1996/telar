@@ -35,6 +35,8 @@ const Completion = @import("Completion.zig");
 const enabled_module = @import("telar-core").enabled;
 const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
 const PreparedType = @import("../attachment/Prepared.zig");
+const ForegroundProjection = @import("ForegroundProjection.zig");
+const encodePaneForeground = @import("telar-core").encodePaneForeground;
 const Delivery = @This();
 
 send_buffer: []u8,
@@ -52,6 +54,7 @@ agent_revision_sent: u64 = 0,
 agent_snapshot_requested: bool = false,
 system_metrics_revision_sent: u64 = 0,
 workspace_list_revision_sent: u64 = 0,
+foregrounds_sent: [max_panes_per_tab]?ForegroundProjection = @splat(null),
 clipboard_storage: [max_clipboard_bytes_module]u8 = undefined,
 clipboard_len: u32 = 0,
 clipboard_pane: PaneIdType = .invalid,
@@ -344,6 +347,12 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
         return prepared;
     }
 
+    if (delivery.runtime_state_requested) {
+        if (try delivery.prepareForeground(preparation)) |prepared| {
+            return prepared;
+        }
+    }
+
     if (try delivery.prepareAttachment(preparation, .title)) |prepared| {
         return prepared;
     }
@@ -431,6 +440,7 @@ pub fn commit(delivery: *Delivery, operation: Commit) void {
         },
         .system_metrics_revision => |revision| delivery.system_metrics_revision_sent = revision,
         .workspace_list_revision => |revision| delivery.workspace_list_revision_sent = revision,
+        .foreground => |projection| delivery.foregrounds_sent[projection.slot] = projection,
         .attachment => |work| {
             const attachment = attachments.at(work.index) orelse unreachable;
             const effect = attachment.commitPrepared(work.prepared);
@@ -478,6 +488,33 @@ pub fn complete(delivery: *Delivery, result: anyerror!void) Completion {
 }
 
 const Lane = enum { cwd, foreground, title, progress, cells, exit, graphics };
+
+fn prepareForeground(delivery: *Delivery, preparation: Preparation) !?Prepared {
+    for (preparation.sources.panes.items, 0..) |slot, index| {
+        const pane = slot orelse continue;
+        if (!pane.launch_state.discoverable() or pane.close_requested or pane.exit != null) {
+            continue;
+        }
+
+        if (preparation.attachments.find(pane.id) != null) {
+            continue;
+        }
+
+        const projection: ForegroundProjection = .{ .slot = index, .key = pane.key(), .revision = pane.foreground_revision };
+        if (delivery.foregrounds_sent[index]) |previous| {
+            if (std.meta.eql(previous, projection)) {
+                continue;
+            }
+        }
+
+        return delivery.stage(try encodePaneForeground(delivery.send_buffer, .{
+            .pane_id = pane.id,
+            .name = pane.agent_process_cache.name(),
+        }), .{ .foreground = projection });
+    }
+
+    return null;
+}
 
 fn prepareAttachment(delivery: *Delivery, preparation: Preparation, lane: Lane) !?Prepared {
     const attachments = preparation.attachments;

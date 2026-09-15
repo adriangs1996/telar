@@ -65,9 +65,9 @@ pub fn startWrite(state: *State, owned: OwnedWrite, scheduler: anytype) !void {
 /// state.completeWrite(result);
 /// ```
 pub fn completeWrite(state: *State, result: anyerror!void) void {
-    const owned = state.pending orelse return;
-    state.pending = null;
-    owned.allocator.free(owned.job.buffer);
+    if (!state.releaseWrite()) {
+        return;
+    }
 
     if (result) |_| {
         state.writes += 1;
@@ -75,4 +75,21 @@ pub fn completeWrite(state: *State, result: anyerror!void) void {
         state.failures += 1;
         state.dirty = true;
     }
+}
+
+/// Releases a write whose worker has been joined and whose completion was
+/// discarded during shutdown. Its outcome is unknown; the final write must
+/// replace it before the model is destroyed.
+/// Example: `state.discardJoinedWrite();` after `select.cancelDiscard()`.
+pub fn discardJoinedWrite(state: *State) void {
+    if (state.releaseWrite()) {
+        state.dirty = true;
+    }
+}
+
+fn releaseWrite(state: *State) bool {
+    const owned = state.pending orelse return false;
+    state.pending = null;
+    owned.allocator.free(owned.job.buffer);
+    return true;
 }

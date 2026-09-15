@@ -6,7 +6,7 @@
 //! without being an aggregate of its own, so it waits here keyed by the exact
 //! pane generation and is consumed by the first aggregate created for it.
 
-const RestoredTitles = @import("RestoredTitles.zig");
+const RestoredAgents = @import("RestoredAgents.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
 const pane_module = @import("telar-core").pane;
 const SessionTitle = @import("SessionTitle.zig");
@@ -16,30 +16,30 @@ const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entr
 const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
 
 test "restored titles wait for their exact pane generation and are consumed once" {
-    var titles: RestoredTitles = .{};
+    var titles: RestoredAgents = .{};
     const key: PaneKey = .{ .id = try pane_module(4), .generation = 2 };
     const first = try SessionTitle.init("Fix the proxy", .generated);
     const second = try SessionTitle.init("Fix the proxy again", .manual);
 
-    try std.testing.expect(titles.put(key, first));
-    try std.testing.expect(titles.put(key, second));
+    try std.testing.expect(titles.putTitle(key, first));
+    try std.testing.expect(titles.putTitle(key, second));
     try std.testing.expect(titles.take(.{ .id = key.id, .generation = 3 }) == null);
-    const taken = titles.take(key).?;
+    const taken = titles.take(key).?.title.?;
     try std.testing.expectEqualStrings("Fix the proxy again", taken.slice());
     try std.testing.expectEqual(AgentTitleSourceType.manual, taken.source);
     try std.testing.expect(titles.take(key) == null);
 }
 
 test "restored titles refuse to grow past the agent record bound" {
-    var titles: RestoredTitles = .{};
+    var titles: RestoredAgents = .{};
     const title = try SessionTitle.init("Bounded", .generated);
     var index: u32 = 1;
 
     while (index <= max_agent_snapshot_entries) : (index += 1) {
-        try std.testing.expect(titles.put(.{ .id = try pane_module(index), .generation = 1 }, title));
+        try std.testing.expect(titles.putTitle(.{ .id = try pane_module(index), .generation = 1 }, title));
     }
 
-    try std.testing.expect(!titles.put(.{ .id = try pane_module(index), .generation = 1 }, title));
+    try std.testing.expect(!titles.putTitle(.{ .id = try pane_module(index), .generation = 1 }, title));
 }
 
 test "session titles accept only durable sources and printable text" {

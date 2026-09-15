@@ -30,6 +30,7 @@ pub const ShutdownStep = enum {
     stop_client_connections,
     stop_pending_admission,
     stop_panes,
+    persist_session,
     destroy_pending_admission,
     release_client_actor_claims,
     destroy_client_sessions,

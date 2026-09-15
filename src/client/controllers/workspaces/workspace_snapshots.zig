@@ -14,6 +14,8 @@ const TabIdType = @import("telar-core").TabId;
 const PaneIdType = @import("telar-core").PaneId;
 const active_pane_resources = @import("../panes/active_pane_resources.zig");
 const TabLocationType = @import("telar-core").TabLocation;
+const PaneForeground = @import("telar-core").PaneForeground;
+const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
 
 /// Consumes one correlated response and applies its canonical workspace state.
 ///
@@ -33,6 +35,7 @@ pub fn apply(client: *Client, snapshot: WorkspaceSnapshotViewType) !void {
     }
 
     var tabs: [max_tabs_per_workspace]WorkspaceTabInputType = undefined;
+    var foregrounds: [max_tabs_per_workspace][max_panes_per_tab]PaneForeground = undefined;
     var tab_count: usize = 0;
     var iterator = snapshot.tabs();
     while (try iterator.next()) |tab| {
@@ -40,10 +43,22 @@ pub fn apply(client: *Client, snapshot: WorkspaceSnapshotViewType) !void {
             return error.TooManyTabs;
         }
 
+        var names = tab.foregrounds();
+        var name_count: usize = 0;
+        while (try names.next()) |foreground| {
+            if (name_count == max_panes_per_tab) {
+                return error.TooManyPanes;
+            }
+
+            foregrounds[tab_count][name_count] = foreground;
+            name_count += 1;
+        }
+
         tabs[tab_count] = .{
             .tab_id = tab.tab_id,
             .pane_count = tab.pane_count,
             .label = tab.label,
+            .foregrounds = foregrounds[tab_count][0..name_count],
         };
         tab_count += 1;
     }

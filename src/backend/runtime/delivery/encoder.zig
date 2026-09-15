@@ -6,6 +6,7 @@ const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
 const PaneDescriptorType = @import("telar-core").PaneDescriptor;
 const max_tabs_per_workspace = @import("telar-core").max_tabs_per_workspace;
 const TabDescriptorType = @import("telar-core").TabDescriptor;
+const PaneForeground = @import("telar-core").PaneForeground;
 const max_history_results = @import("telar-core").max_history_results;
 const HistoryEntryType = @import("telar-core").HistoryEntry;
 const max_pane_text_bytes_module = @import("telar-core").max_pane_text_bytes;
@@ -62,6 +63,7 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
 
     var descriptor_storage: [max_panes_per_tab]PaneDescriptorType = undefined;
     var tab_storage: [max_tabs_per_workspace]TabDescriptorType = undefined;
+    var foreground_storage: [max_panes_per_tab]PaneForeground = undefined;
     var history_storage: [max_history_results]HistoryEntryType = undefined;
     var text_storage: [max_pane_text_bytes_module]u8 = undefined;
     return switch (response.*) {
@@ -86,11 +88,25 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
                     .code = .workspace_not_found,
                     .message = "workspace closed before its snapshot was sent",
                 });
+            var foreground_count: usize = 0;
             for (descriptor_snapshot.tabs) |*tab| {
-                tab.pane_count = panes.countAt(.{
+                const descriptors = panes.descriptorsAt(.{
                     .workspace = snapshot.workspace,
                     .tab_id = tab.tab_id,
-                });
+                }, &descriptor_storage);
+                tab.pane_count = @intCast(descriptors.len);
+                const start = foreground_count;
+                for (descriptors) |descriptor| {
+                    const pane = panes.resolveControlConst(.{ .id = descriptor.pane_id, .generation = 0 }).?;
+                    const name = pane.agent_process_cache.name();
+                    foreground_storage[foreground_count] = .{
+                        .pane_id = pane.id,
+                        .name = if (name.len == 0) "shell" else name,
+                    };
+                    foreground_count += 1;
+                }
+
+                tab.foregrounds = foreground_storage[start..foreground_count];
             }
             break :payload try encodeWorkspaceSnapshot_module(buffer, .{
                 .request_id = snapshot.request_id,

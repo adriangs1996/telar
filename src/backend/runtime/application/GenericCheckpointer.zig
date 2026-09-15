@@ -19,13 +19,17 @@ const PaneRecordType = @import("../../persistence/PaneRecord.zig");
 const EncoderType = @import("telar-core").Encoder;
 const ArgumentIteratorType = @import("../../persistence/ArgumentIterator.zig");
 const TerminalSizeType = @import("telar-core").TerminalSize;
+const LaunchView = @import("telar-core").LaunchView;
 const SessionTitleType = @import("../../agent/SessionTitle.zig");
+const ResumeSession = @import("../../agent/ResumeSession.zig");
+const SessionReference = @import("../../agent/SessionReference.zig");
 const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
 const LayoutRecordType = @import("../../persistence/LayoutRecord.zig");
 const decodeClient_module = @import("telar-core").decodeClient;
 const PersistenceEncoder = @import("../../persistence/Encoder.zig");
 const raw_module = @import("telar-core").raw;
 const max_client_layout_wire_bytes_module = @import("telar-core").max_client_layout_wire_bytes;
+const max_panes = @import("telar-core").max_panes_per_tab;
 
 /// Binds checkpointing to one application type. `Application` provides
 /// `io`, `gpa`, `session`, `model`, `select`, `workspaceRepository()`,
@@ -76,8 +80,8 @@ pub fn Type(comptime Application: type) type {
             application.session.completeWrite(result);
         }
 
-        /// Writes the current shape synchronously. Used at shutdown, after
-        /// client connections stop and before panes are torn down.
+        /// Writes the current shape synchronously. Used at shutdown after
+        /// actors are joined and before the canonical model is destroyed.
         ///
         /// ```zig
         /// SessionCheckpoint.writeNow(&application);
@@ -129,15 +133,23 @@ pub fn Type(comptime Application: type) type {
 
         fn validate(bytes: []const u8) !void {
             var reader = try ReaderType.init(bytes);
-            while (try reader.next()) |_| {}
+            var pane_count: usize = 0;
+            while (try reader.next()) |record| {
+                if (record == .pane) {
+                    pane_count += 1;
+                    if (pane_count > max_panes) {
+                        return error.InvalidCheckpoint;
+                    }
+                }
+            }
         }
 
         fn apply(application: *Application, bytes: []const u8) !void {
             var reader = try ReaderType.init(bytes);
             var repository = application.workspaceRepository();
             const panes = &application.model.panes;
-            var layout_sources_ready = false;
-            _ = &layout_sources_ready;
+            var pane_records: [max_panes]PaneRecordType = undefined;
+            var pane_count: usize = 0;
 
             while (try reader.next()) |record| switch (record) {
                 .workspace => |workspace| {
@@ -157,14 +169,35 @@ pub fn Type(comptime Application: type) type {
                         .tab_id = try tab_module(tab.tab_id),
                     }, tab.label) catch continue;
                 },
-                .pane => |pane| restorePane(application, reader.counters, pane) catch continue,
-                .layout => |layout| restoreLayout(application, layout) catch continue,
+                .pane => |pane| {
+                    pane_records[pane_count] = pane;
+                    pane_count += 1;
+                },
+                .layout => {},
             };
+
+            // Reused slots serialize newer identities before older live panes.
+            // Restored key reservation must still advance monotonically.
+            std.mem.sort(PaneRecordType, pane_records[0..pane_count], {}, paneIdLessThan);
+            for (pane_records[0..pane_count]) |pane| {
+                restorePane(application, reader.counters, pane) catch continue;
+            }
 
             panes.advanceCounters(reader.counters.next_pane_id, reader.counters.next_pane_generation);
             application.model.workspaces.next_workspace_id = @max(application.model.workspaces.next_workspace_id, reader.counters.next_workspace_id);
             application.model.workspaces.next_tab_id = @max(application.model.workspaces.next_tab_id, reader.counters.next_tab_id);
             dropEmptyTabs(application);
+
+            reader = try ReaderType.init(bytes);
+            while (try reader.next()) |record| {
+                if (record == .layout) {
+                    restoreLayout(application, record.layout) catch continue;
+                }
+            }
+        }
+
+        fn paneIdLessThan(_: void, left: PaneRecordType, right: PaneRecordType) bool {
+            return left.pane_id < right.pane_id;
         }
 
         /// Retires every restored tab that came back without a pane, through
@@ -214,11 +247,28 @@ pub fn Type(comptime Application: type) type {
 
             var argument_buffer: [checkpoint.max_launch_bytes + 2 * checkpoint.max_launch_arguments]u8 = undefined;
             var encoder = EncoderType.init(&argument_buffer);
+            const resumable = resumeForPane(application, record);
             var arguments = ArgumentIteratorType.init(record.arguments);
+            const executable = arguments.next() orelse return error.InvalidLaunch;
+            try encoder.writeSized16(executable);
             while (arguments.next()) |argument| {
                 try encoder.writeSized16(argument);
             }
-            const encoded_arguments = encoder.finish();
+
+            const original_launch: LaunchView = .{
+                .cwd = record.cwd,
+                .argument_count = record.argument_count,
+                .encoded_arguments = encoder.finish(),
+                .environment_mode = .inherit_runtime,
+                .environment_count = 0,
+                .encoded_environment = "",
+            };
+            var direct_buffer: [checkpoint.max_launch_bytes + 2 * checkpoint.max_launch_arguments]u8 = undefined;
+            var direct_encoder = EncoderType.init(&direct_buffer);
+            const direct_count = if (resumable) |session|
+                try session_checkpoint.directResumeArguments(&direct_encoder, executable, session)
+            else
+                null;
             const size: TerminalSizeType = .{
                 .cols = if (record.cols == 0) 80 else record.cols,
                 .rows = if (record.rows == 0) 24 else record.rows,
@@ -230,8 +280,8 @@ pub fn Type(comptime Application: type) type {
                 .size = size,
                 .launch = .{
                     .cwd = record.cwd,
-                    .argument_count = record.argument_count,
-                    .encoded_arguments = encoded_arguments,
+                    .argument_count = direct_count orelse record.argument_count,
+                    .encoded_arguments = if (direct_count != null) direct_encoder.finish() else original_launch.encoded_arguments,
                     .environment_mode = .inherit_runtime,
                     .environment_count = 0,
                     .encoded_environment = "",
@@ -239,18 +289,39 @@ pub fn Type(comptime Application: type) type {
                 .launch_cwd = record.cwd,
                 .workspace_path = workspace_path,
             });
+            pane.launch_record.capture(original_launch);
             application.session.restored_panes +|= 1;
 
-            if (application.session.resume_agents) {
-                var command_buffer: [session_checkpoint.max_resume_command_bytes]u8 = undefined;
-                if (session_checkpoint.resumeCommand(&command_buffer, @enumFromInt(record.agent_provider), record.agent_session)) |command| {
+            if (resumable) |session| {
+                if (direct_count == null) {
+                    var command_buffer: [session_checkpoint.max_resume_command_bytes]u8 = undefined;
+                    const command = session_checkpoint.resumeCommand(&command_buffer, session.provider, session.reference.slice()).?;
                     try application.queueRestoredInput(pane, command);
-                    application.session.resumed_agents +|= 1;
-                    if (restoredTitle(record)) |title| {
-                        application.restoreAgentTitle(pane, title);
-                    }
+                }
+
+                if (!application.model.agents.restoreSession(pane.key(), session)) {
+                    return error.AgentCapacityExceeded;
+                }
+
+                application.session.resumed_agents +|= 1;
+                if (restoredTitle(record)) |title| {
+                    application.restoreAgentTitle(pane, title);
                 }
             }
+        }
+
+        fn resumeForPane(application: *Application, record: PaneRecordType) ?ResumeSession {
+            if (!application.session.resume_agents) {
+                return null;
+            }
+
+            const reference = SessionReference.init(record.agent_session, 0) catch return null;
+            const session = ResumeSession.init(@enumFromInt(record.agent_provider), reference) catch return null;
+            if (application.model.agents.hasRestoredSession(session)) {
+                return null;
+            }
+
+            return session;
         }
 
         /// The title travels only with a session the runtime actually resumes;
@@ -333,9 +404,8 @@ pub fn Type(comptime Application: type) type {
                 if (!pane.launch_record.restorable()) {
                     continue;
                 }
-                const reference = application.model.agents.sessionReference(pane.key());
-                const projected = application.model.agents.projectedProvider(pane.key());
-                const title = if (reference != null) application.model.agents.durableTitle(pane.key()) else null;
+                const resumable = application.model.agents.resumeSession(pane.key());
+                const title = if (resumable != null) application.model.agents.checkpointTitle(pane.key()) else null;
                 try encoder.pane(.{
                     .pane_id = raw_module(pane.id),
                     .workspace_id = raw_module(pane.location.workspace.workspace),
@@ -345,8 +415,8 @@ pub fn Type(comptime Application: type) type {
                     .rows = pane.size.rows,
                     .arguments = pane.launch_record.slice(),
                     .argument_count = pane.launch_record.count,
-                    .agent_provider = if (reference != null) @intFromEnum(projected) else 0,
-                    .agent_session = if (reference) |value| value.slice() else "",
+                    .agent_provider = if (resumable) |session| @intFromEnum(session.provider) else 0,
+                    .agent_session = if (resumable) |session| session.reference.slice() else "",
                     .agent_title = if (title) |value| value.slice() else "",
                     .agent_title_source = if (title) |value| @intFromEnum(value.source) else 0,
                 });
@@ -371,4 +441,36 @@ pub fn Type(comptime Application: type) type {
             return @intCast(std.Io.Timestamp.now(application.io, .awake).toNanoseconds());
         }
     };
+}
+
+test "checkpoint pane records fit the bounded restore storage before application" {
+    const Checkpointer = Type(void);
+    var buffer: [16384]u8 = undefined;
+    for ([_]usize{ max_panes, max_panes + 1 }) |count| {
+        var encoder = try PersistenceEncoder.init(&buffer, .{
+            .next_workspace_id = 2,
+            .next_tab_id = 2,
+            .next_pane_id = count + 1,
+            .next_pane_generation = count + 1,
+        });
+        for (0..count) |index| {
+            try encoder.pane(.{
+                .pane_id = index + 1,
+                .workspace_id = 1,
+                .tab_id = 1,
+                .cwd = "/",
+                .cols = 80,
+                .rows = 24,
+                .arguments = "/bin/sh\x00",
+                .argument_count = 1,
+            });
+        }
+
+        const bytes = try encoder.finish();
+        if (count <= max_panes) {
+            try Checkpointer.validate(bytes);
+        } else {
+            try std.testing.expectError(error.InvalidCheckpoint, Checkpointer.validate(bytes));
+        }
+    }
 }

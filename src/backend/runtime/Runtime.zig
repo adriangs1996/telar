@@ -44,7 +44,13 @@ pub fn start(runtime: *Runtime, initialization: InitializationType, comptime fai
     errdefer runtime.loop.cancel();
 
     runtime.application = try runtime.composeApplication(initialization.options);
-    errdefer runtime.application.model.client_layouts.deinit();
+    errdefer {
+        runtime.application.shutdownStep(.stop_panes);
+        runtime.loop.cancel();
+        runtime.application.shutdownStep(.destroy_panes);
+        runtime.application.shutdownStep(.destroy_workspaces);
+    }
+
     runtime.application.restoreSession();
     try runtime.scheduleInitialEvents();
 

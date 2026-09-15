@@ -89,6 +89,19 @@ Reports that arrive after retirement are ignored. Reconnection creates fresh
 runtime attachment cursors, which publish the runtime's current CWD and
 foreground revisions again.
 
+Workspace snapshots include foreground metadata for inactive tabs before
+their panes attach. Each tab owns a bounded fallback name for its client-local
+focused pane. Runtime-state subscribers receive foreground updates for
+unattached panes through a separate delivery cursor keyed by slot, pane
+identity, generation and revision. This cursor coalesces changes and schedules
+no cells or geometry. Attached panes retain their attachment cursor so a new
+attachment always receives bootstrap metadata, even if an earlier global
+report arrived before its local pane existed.
+
+The shared model applies unattached reports only when their pane ID matches a
+tab's foreground identity in the current workspace. Both GUI and TUI derive
+automatic tab text and icons through `Tab.labelSlice()` and `Tab.labelIcon()`.
+
 ## Proof
 
 - `src/frontend/workspace/multiplexer.zig` proves bounded CWD display names,
@@ -102,3 +115,9 @@ foreground revisions again.
   presenter.
 - `src/backend/runtime/attachment/` proves per-client delivery cursors for
   both runtime-owned facts.
+- `src/backend/runtime/tests/workspace_snapshot_test.zig` proves workspace
+  delivery includes distinct foreground names without attachments.
+- `src/backend/runtime/tests/runtime_state_test.zig` proves unattached
+  foreground updates, coalescing and attachment bootstrap.
+- `src/client/model/tests/tabs.zig` proves fresh workspace arrival, workspace
+  return, independent client focus, owned names and untouched manual labels.

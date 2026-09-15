@@ -684,7 +684,10 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     const descriptors = [_]TabDescriptorType{
-        .{ .tab_id = @enumFromInt(3), .position = 0, .pane_count = 2, .label = "" },
+        .{ .tab_id = @enumFromInt(3), .position = 0, .pane_count = 2, .label = "", .foregrounds = &.{
+            .{ .pane_id = @enumFromInt(5), .name = "nvim" },
+            .{ .pane_id = @enumFromInt(6), .name = "codex" },
+        } },
         .{ .tab_id = @enumFromInt(4), .position = 1, .pane_count = 1, .label = "logs" },
     };
     helper.add(.{ .name = "workspace_snapshot", .direction = .server, .golden_hex = golden.workspace_snapshot }, helper.commit(
@@ -1117,7 +1120,7 @@ test "a workspace snapshot with zero tabs round trips" {
     try std.testing.expectEqualStrings("telar", decoded.name);
     try std.testing.expectEqual(@as(u16, 0), decoded.tab_count);
     var tabs = decoded.tabs();
-    try std.testing.expectEqual(@as(?TabDescriptorType, null), tabs.next());
+    try std.testing.expect((try tabs.next()) == null);
 }
 
 test "placements with a zero virtual id are rejected on both sides" {
@@ -1544,7 +1547,10 @@ test "tab lifecycle server messages preserve automatic and explicit labels" {
     const workspace: types.WorkspaceLocation = .{ .workspace = @enumFromInt(7) };
     const location: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(3) };
     const descriptors = [_]TabDescriptorType{
-        .{ .tab_id = @enumFromInt(3), .position = 0, .pane_count = 2, .label = "" },
+        .{ .tab_id = @enumFromInt(3), .position = 0, .pane_count = 2, .label = "", .foregrounds = &.{
+            .{ .pane_id = @enumFromInt(5), .name = "nvim" },
+            .{ .pane_id = @enumFromInt(6), .name = "codex" },
+        } },
         .{ .tab_id = @enumFromInt(4), .position = 1, .pane_count = 1, .label = "logs" },
     };
 
@@ -1556,8 +1562,19 @@ test "tab lifecycle server messages preserve automatic and explicit labels" {
     }))).workspace_snapshot;
     try std.testing.expectEqualStrings("telar", snapshot.name);
     var tabs = snapshot.tabs();
-    try std.testing.expectEqualDeep(descriptors[0], (try tabs.next()).?);
-    try std.testing.expectEqualDeep(descriptors[1], (try tabs.next()).?);
+    for (descriptors) |descriptor| {
+        const decoded = (try tabs.next()).?;
+        try std.testing.expectEqual(descriptor.tab_id, decoded.tab_id);
+        try std.testing.expectEqual(descriptor.position, decoded.position);
+        try std.testing.expectEqual(descriptor.pane_count, decoded.pane_count);
+        try std.testing.expectEqualStrings(descriptor.label, decoded.label);
+        var names = decoded.foregrounds();
+        for (descriptor.foregrounds) |foreground| {
+            try std.testing.expectEqualDeep(foreground, (try names.next()).?);
+        }
+
+        try std.testing.expect((try names.next()) == null);
+    }
     try std.testing.expect((try tabs.next()) == null);
 
     const created = (try root.decodeServer(try tab_module.encodeTabCreated(&buffer, .{

@@ -358,6 +358,26 @@ pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !void
             try tabs_ops.validateLabel(descriptor.label);
         }
 
+        if (descriptor.foregrounds.len > descriptor.pane_count) {
+            return error.TooManyPanes;
+        }
+
+        for (descriptor.foregrounds, 0..) |foreground, foreground_index| {
+            if (foreground.pane_id == .invalid) {
+                return error.InvalidPaneId;
+            }
+
+            if (foreground.name.len == 0 or foreground.name.len > @import("telar-core").max_foreground_name_bytes or std.mem.findScalar(u8, foreground.name, 0) != null) {
+                return error.InvalidForegroundName;
+            }
+
+            for (descriptor.foregrounds[0..foreground_index]) |previous| {
+                if (previous.pane_id == foreground.pane_id) {
+                    return error.DuplicatePane;
+                }
+            }
+        }
+
         for (snapshot.tabs[0..index]) |previous| {
             if (previous.tab_id == descriptor.tab_id) {
                 return error.DuplicateTab;

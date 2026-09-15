@@ -48,6 +48,12 @@ than a borrowed snapshot. The runtime encoder reads the latest workspace and
 pane state when it sends `schema.workspace_snapshot`, so queued work cannot
 preserve an obsolete list.
 
+Each tab descriptor also carries the bounded foreground names of its live
+panes, keyed by pane ID. This metadata uses the runtime's observation cache
+and requires no PTY attachment or cell snapshot. The wire accepts at most 64
+names per tab, each at most 48 bytes, and validates IDs, counts and duplicates
+before returning a decoded snapshot.
+
 ## Client commit
 
 `workspace_snapshots.apply` consumes the matching `rename_workspace` or
@@ -56,6 +62,14 @@ translates the wire descriptors into a fixed array of domain tab inputs. Slice
 order carries canonical position, so request IDs, encoded bytes and protocol
 positions stop at the controller. Names and labels are borrowed only during
 the synchronous call; the workspace model copies them before it returns.
+
+Automatic labels use the focused pane in the client's current or retained
+layout. Without a retained focus, they use the first canonical pane. The tab
+keeps only that pane ID and a fixed foreground-name buffer while its terminal
+models are absent. Returning to a workspace therefore names inactive tabs
+immediately, including changes observed while the client was elsewhere.
+Canonical manual labels remain separate. No hidden pane attaches merely to
+name its tab.
 
 The controller does not mutate tabs, release resources or request a frame.
 
@@ -67,6 +81,13 @@ retained tab layouts, then classifies the committed result:
 - Changed membership, order or tab labels increment `tabs_revision` once.
 - Losing the active tab increments `active_tab_revision` once.
 - An identical snapshot changes no revision.
+
+Runtime-state subscribers also receive `pane_foreground` changes for panes
+without attachments. `ClientModel.updatePaneMetadata` resolves these reports
+against the tab's retained foreground identity when no pane model exists.
+Reports for another workspace and exact repeats are ignored. On subsequent
+attachment, the attachment's own metadata cursor bootstraps every pane,
+including panes whose global foreground report arrived before local creation.
 
 The reconciliation captures those three revisions, the current pane revision
 and the active tab's exact `snapshot_loaded` state. Delivery rejects the commit

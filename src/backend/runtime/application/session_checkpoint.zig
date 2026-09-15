@@ -15,6 +15,9 @@ const first_custom_agent_provider_module = @import("telar-core").first_custom_ag
 const State = @import("State.zig");
 const TestingScheduler = @import("TestingScheduler.zig");
 const OwnedWrite = @import("OwnedWrite.zig");
+const ResumeSession = @import("../../agent/ResumeSession.zig");
+const SessionReference = @import("../../agent/SessionReference.zig");
+const Encoder = @import("telar-core").Encoder;
 
 pub const debounce_ns: u64 = 500 * std.time.ns_per_ms;
 pub const snapshot_bytes = 1024 * 1024;
@@ -62,9 +65,8 @@ pub const max_resume_command_bytes = 32 + max_agent_session_reference_bytes_modu
 /// const line = resumeCommand(&buffer, .claude, session) orelse return;
 /// ```
 pub fn resumeCommand(buffer: *[max_resume_command_bytes]u8, provider: AgentProviderType, session: []const u8) ?[]const u8 {
-    if (!isUuid(session)) {
-        return null;
-    }
+    const reference = SessionReference.init(session, 0) catch return null;
+    _ = ResumeSession.init(provider, reference) catch return null;
     const template = root_module.of(provider).resume_prefix orelse return null;
     const len = template.len + session.len + 1;
     if (len > buffer.len) {
@@ -76,21 +78,26 @@ pub fn resumeCommand(buffer: *[max_resume_command_bytes]u8, provider: AgentProvi
     return buffer[0..len];
 }
 
-fn isUuid(value: []const u8) bool {
-    if (value.len != 36) {
-        return false;
+/// Rebuilds fixed resume argv only when the original executable is the same
+/// built-in agent. Shells keep their argv and receive the shell resume line.
+/// Example: `const count = try directResumeArguments(&encoder, executable, session);`.
+pub fn directResumeArguments(encoder: *Encoder, executable: []const u8, session: ResumeSession) !?u16 {
+    const prefix = root_module.of(session.provider).resume_prefix orelse return null;
+    var words = std.mem.tokenizeScalar(u8, prefix, ' ');
+    const command = words.next() orelse return null;
+    if (!std.mem.eql(u8, std.fs.path.basename(executable), command)) {
+        return null;
     }
-    for (value, 0..) |byte, index| {
-        const dash = index == 8 or index == 13 or index == 18 or index == 23;
-        if (dash) {
-            if (byte != '-') {
-                return false;
-            }
-        } else if (!std.ascii.isHex(byte)) {
-            return false;
-        }
+
+    try encoder.writeSized16(executable);
+    var count: u16 = 1;
+    while (words.next()) |word| {
+        try encoder.writeSized16(word);
+        count += 1;
     }
-    return true;
+
+    try encoder.writeSized16(session.reference.slice());
+    return count + 1;
 }
 
 test "resume commands exist only for built-in providers and UUID references" {

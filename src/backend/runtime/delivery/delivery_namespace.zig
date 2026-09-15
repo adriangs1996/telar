@@ -23,6 +23,7 @@ const workspace_module = @import("telar-core").workspace;
 const Sources = @import("Sources.zig");
 const ReaderType = @import("../../workspace/Reader.zig");
 const decodeServer_module = @import("telar-core").decodeServer;
+const ForegroundProjection = @import("ForegroundProjection.zig");
 
 pub const Effect = union(enum) {
     stopping,
@@ -39,6 +40,7 @@ pub const Effect = union(enum) {
     agent_revision: u64,
     system_metrics_revision: u64,
     workspace_list_revision: u64,
+    foreground: ForegroundProjection,
     attachment: AttachmentWork,
 };
 

@@ -8,6 +8,96 @@ const PaneIdType = @import("telar-core").PaneId;
 const TerminalSizeType = @import("telar-core").TerminalSize;
 const WorkspaceSnapshotInput = @import("../../workspace/WorkspaceSnapshotInput.zig");
 
+test "fresh workspace snapshots name inactive automatic tabs before pane attachment" {
+    var model = ModelType.init(std.testing.allocator, true);
+    defer model.deinit();
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const first: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const second: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    var name = "codex".*;
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
+    const snapshot: WorkspaceSnapshotInput = .{
+        .workspace = workspace,
+        .name = "project",
+        .tabs = &.{
+            .{ .tab_id = first.tab_id, .pane_count = 1, .label = "", .foregrounds = &.{.{ .pane_id = @enumFromInt(1), .name = "zsh" }} },
+            .{ .tab_id = second.tab_id, .pane_count = 1, .label = "", .foregrounds = &.{.{ .pane_id = @enumFromInt(2), .name = &name }} },
+            .{ .tab_id = @enumFromInt(3), .pane_count = 1, .label = "logs", .foregrounds = &.{.{ .pane_id = @enumFromInt(3), .name = "tail" }} },
+        },
+    };
+    _ = try model.reconcileWorkspace(snapshot);
+    const inactive = model.workspace.find(second.tab_id).?;
+    try std.testing.expectEqualStrings("codex", inactive.labelSlice());
+    try std.testing.expectEqual(@import("../../layout/icons.zig").Icon.provider_codex, inactive.labelIcon().?);
+    try std.testing.expectEqualStrings("", inactive.canonicalLabel());
+    try std.testing.expectEqual(@as(usize, 0), inactive.model.pane_count);
+    try std.testing.expect(!inactive.snapshot_loaded);
+    try std.testing.expectEqualDeep(first, model.activeTabLocation().?);
+    const version = model.version();
+    _ = try model.reconcileWorkspace(snapshot);
+    try std.testing.expectEqualDeep(version, model.version());
+    @memset(&name, 'x');
+    try std.testing.expectEqualStrings("codex", inactive.labelSlice());
+
+    const changed = (try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(2), .name = "claude" } })).?;
+    try std.testing.expect(changed.display_changed);
+    try std.testing.expectEqualStrings("claude", inactive.labelSlice());
+    try std.testing.expectEqual(@as(usize, 0), inactive.model.pane_count);
+    try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(2), .name = "claude" } })) == null);
+    try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(3), .name = "nvim" } })) == null);
+    try std.testing.expectEqualStrings("logs", model.workspace.find(@enumFromInt(3)).?.labelSlice());
+    try std.testing.expect(model.workspace.find(@enumFromInt(3)).?.labelIcon() == null);
+
+    _ = model.departWorkspace();
+    try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(2), .name = "git" } })) == null);
+}
+
+test "workspace return names inactive tabs using each client's saved pane focus" {
+    var model = ModelType.init(std.testing.allocator, true);
+    defer model.deinit();
+    const fresh = try std.testing.allocator.create(ModelType);
+    defer std.testing.allocator.destroy(fresh);
+    fresh.* = .init(std.testing.allocator, true);
+    defer fresh.deinit();
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const first: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const second: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const size: TerminalSizeType = .{ .cols = 40, .rows = 10 };
+    const area = @import("telar-core").Rect{ .w = 40, .h = 10 };
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = size });
+    _ = try model.reconcileTab(.{ .location = first, .panes = &.{@enumFromInt(1)} }, area);
+    const inactive = try model.workspace.addCreated(.{ .location = second, .position = 1, .label = "", .root_pane_id = @enumFromInt(2) }, size);
+    try inactive.model.split(.{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(3), .location = second, .axis = .horizontal, .area = area });
+    _ = try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(3), .name = "codex" } });
+    try std.testing.expect(model.workspace.select(first.tab_id));
+    _ = model.departWorkspace();
+    _ = try model.arriveWorkspace(.{ .pane_id = @enumFromInt(1), .location = first, .size = size });
+    try fresh.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = size });
+    const snapshot: WorkspaceSnapshotInput = .{
+        .workspace = workspace,
+        .name = "project",
+        .tabs = &.{
+            .{ .tab_id = first.tab_id, .pane_count = 1, .label = "", .foregrounds = &.{.{ .pane_id = @enumFromInt(1), .name = "zsh" }} },
+            .{ .tab_id = second.tab_id, .pane_count = 2, .label = "", .foregrounds = &.{
+                .{ .pane_id = @enumFromInt(2), .name = "nvim" },
+                .{ .pane_id = @enumFromInt(3), .name = "claude" },
+            } },
+        },
+    };
+    _ = try model.reconcileWorkspace(snapshot);
+    _ = try fresh.reconcileWorkspace(snapshot);
+    try std.testing.expectEqualStrings("claude", model.workspace.find(second.tab_id).?.labelSlice());
+    try std.testing.expectEqualStrings("nvim", fresh.workspace.find(second.tab_id).?.labelSlice());
+    try std.testing.expectEqual(@as(usize, 0), model.workspace.find(second.tab_id).?.model.pane_count);
+    try std.testing.expectEqual(@as(usize, 0), fresh.workspace.find(second.tab_id).?.model.pane_count);
+
+    _ = try model.selectTab(.{ .tab_id = second.tab_id });
+    _ = try model.reconcileTab(.{ .location = second, .panes = &.{ @enumFromInt(2), @enumFromInt(3) } }, area);
+    try std.testing.expectEqualStrings("claude", model.workspace.find(second.tab_id).?.labelSlice());
+    _ = try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(3), .name = "git" } });
+    try std.testing.expectEqualStrings("git", model.workspace.find(second.tab_id).?.labelSlice());
+}
+
 test "inactive automatic tabs publish foreground changes without changing canonical snapshots" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();

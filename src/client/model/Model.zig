@@ -1554,11 +1554,29 @@ pub fn updatePaneMetadata(model: *Model, command: model_types.PaneMetadataComman
         .foreground => |foreground| foreground.pane_id,
         .title => |title| title.pane_id,
     };
-    const tab = model.workspace.tabForPane(pane_id) orelse return null;
+    const tab = model.workspace.tabForPane(pane_id) orelse fallback: {
+        if (command != .foreground) {
+            return null;
+        }
+
+        var tabs = model.workspace.tabIterator();
+        while (tabs.next()) |candidate| {
+            if (candidate.foreground_pane == pane_id) {
+                break :fallback candidate;
+            }
+        }
+
+        return null;
+    };
     const kind = std.meta.activeTag(command);
-    const change = switch (command) {
+    const change: multiplexer_module.MetadataChange = switch (command) {
         .cwd => |cwd| try tab.model.setPaneCwd(cwd.pane_id, cwd.path),
-        .foreground => |foreground| tab.model.setPaneForeground(foreground.pane_id, foreground.name),
+        .foreground => |foreground| if (tab.model.find(foreground.pane_id) != null)
+            tab.model.setPaneForeground(foreground.pane_id, foreground.name)
+        else if (tab.applyForegroundReport(.{ .pane_id = foreground.pane_id, .name = foreground.name }))
+            .display_changed
+        else
+            .unchanged,
         .title => |title| try tab.model.setPaneTitle(title.pane_id, title.title),
     };
     if (change == .unchanged) {
@@ -2229,6 +2247,20 @@ pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !Work
     }
 
     try model.workspace.reconcileWorkspace(snapshot);
+    for (snapshot.tabs) |descriptor| {
+        const tab = model.workspace.find(descriptor.tab_id).?;
+        for (descriptor.foregrounds) |foreground| {
+            if (tab.model.find(foreground.pane_id) != null) {
+                _ = try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = foreground.pane_id, .name = foreground.name } });
+            }
+        }
+
+        const saved_focus = if (model.saved_layouts.find(tab.location)) |saved| saved.pane_id else null;
+        if (tab.applyForegroundSnapshot(descriptor.foregrounds, saved_focus)) {
+            reconciliation.tabs_changed = true;
+        }
+    }
+
     reconciliation.active = model.activeTabLocation() orelse return error.WorkspaceHasNoTabs;
     reconciliation.active_tab_changed = !std.meta.eql(previous_active, reconciliation.active);
 
