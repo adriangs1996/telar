@@ -17,7 +17,6 @@ const SnapshotType = @import("../Snapshot.zig");
 const CredentialType = @import("../Credential.zig");
 const identity = @import("../identity.zig");
 const Pane = @import("Pane.zig");
-const TransformerType = @import("../Transformer.zig");
 const Service = @This();
 
 io: std.Io,
@@ -238,14 +237,4 @@ pub fn unregisterCredential(service: *Service, credential: *const CredentialType
 /// ```
 pub fn unregisterPane(service: *Service, pane: Pane) void {
     service.credentials.removePane(service.io, .{ .id = pane.id, .generation = pane.generation });
-}
-
-/// Register before `run` starts. The immutable pipeline can later be
-/// backed by a bounded worker without giving it access to tunnel state.
-///
-/// ```zig
-/// try service.addTransformer(transformer);
-/// ```
-pub fn addTransformer(service: *Service, transformer: TransformerType) !void {
-    return service.configuration.add(service.io, transformer);
 }

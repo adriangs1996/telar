@@ -13,6 +13,7 @@ hovered: ?Action,
 ages: ?*const AgentAges = null,
 /// Placed workspace favicons; `null` in fixtures without a registry.
 favicons: ?*const @import("Favicons.zig") = null,
+progress: ?*@import("ProgressMotions.zig") = null,
 
 /// Shares one status clock between cards and pane headers.
 /// Example: `const seconds = context.statusAge(agent);`

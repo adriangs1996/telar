@@ -1,7 +1,6 @@
 //! Native geometry and hit testing implement the shared chrome port.
 const client = @import("telar-client");
 const GuiClient = @import("../GuiClient.zig");
-const Overlays = @import("../widgets/overlays/Overlays.zig");
 
 /// Example: `app.chrome = chrome.port(app);`
 pub fn port(app: *client.AttachedClient) client.HostChrome {
@@ -99,5 +98,6 @@ fn region(context: *anyopaque) client.Region {
 }
 
 fn inspectionScrollLimit(context: *anyopaque) ?u32 {
-    return Overlays.inspectionScrollLimit(host(context).projection());
+    const gui = host(context);
+    return gui.overlays.inspectionScrollLimit(gui.projection());
 }

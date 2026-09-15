@@ -10,7 +10,6 @@ const CompleteClipboardImageHandlerType = @import("../../application/input/Compl
 const ClipboardCaptureType = @import("../../model/ClipboardCapture.zig");
 const CaptureRequestType = @import("../../attachments/CaptureRequest.zig");
 const markerPolicy_module = @import("../../application/input/attachment_prompt.zig").markerPolicy;
-const CaptureType = @import("../../attachments/Capture.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 const ApplicationInputClipboardImageCompletionOutcome = @import("../../application/input/clipboard_image.zig").CompletionOutcome;
 const DeliverClipboardImageCompletionHandlerType = @import("../../application/input/DeliverClipboardImageCompletionHandler.zig");

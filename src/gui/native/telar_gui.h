@@ -155,6 +155,5 @@ int telar_gui_pipe(int *fds);
 void telar_gui_wake(int fd);
 void telar_gui_drain(int fd);
 void telar_gui_close_pipe(int *fds);
-int telar_gui_clipboard(const uint8_t *bytes, size_t len);
 void telar_gui_local_time(uint16_t *output);
 #endif

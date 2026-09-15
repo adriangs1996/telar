@@ -6,7 +6,6 @@ const core = @import("telar-core");
 const GuiClient = @import("../../GuiClient.zig");
 const Event = @import("../../input/event.zig").Event;
 const Key = @import("../../input/KeyInput.zig");
-const Pointer = @import("../../input/PointerEvent.zig");
 const Id = @import("Id.zig");
 const Target = @import("Target.zig");
 const FieldView = @import("FieldView.zig");
@@ -82,6 +81,10 @@ pub fn apply(gui: *GuiClient, event: Event) !bool {
         }
     }
 
+    if (try @import("tab_drag.zig").apply(gui, event, result.target)) {
+        return true;
+    }
+
     const target = result.target orelse return result.consumed;
     if (!eligible(gui, target)) {
         return true;
@@ -97,6 +100,19 @@ pub fn apply(gui: *GuiClient, event: Event) !bool {
                 }
 
                 try dispatchIntent(gui, value);
+            }
+        },
+        .complete_path => {
+            if (target.enabled) {
+                try scrollDirectory(gui, target, event);
+                if (buttonActivated(event, target)) {
+                    try activateControl(gui, target);
+                }
+            }
+        },
+        .prompt, .history => {
+            if (target.enabled and buttonActivated(event, target)) {
+                try activateControl(gui, target);
             }
         },
         .resize_sidebar => {
@@ -324,6 +340,70 @@ fn activated(event: Event) bool {
     };
 }
 
+fn buttonActivated(event: Event, target: Target) bool {
+    return switch (event) {
+        .pointer => |pointer| pointer.kind == .release and pointer.button == .left and target.contains(.{ pointer.x, pointer.y }),
+        .key => activated(event),
+        else => false,
+    };
+}
+
+fn scrollDirectory(gui: *GuiClient, target: Target, event: Event) !void {
+    const pointer_scroll = event == .pointer and (event.pointer.kind == .scroll_up or event.pointer.kind == .scroll_down);
+    if (event != .scroll and !pointer_scroll) {
+        return;
+    }
+
+    const completion = &gui.app.model.path_completion;
+    if (completion.version() != target.action.complete_path.revision or completion.pending != .none) {
+        return;
+    }
+
+    const remainder = &gui.widgets.directory_scroll_remainder;
+    if (event == .scroll and (event.scroll.phase == .begin or event.scroll.phase == .cancel)) {
+        remainder.* = 0;
+    }
+    if (event == .scroll and event.scroll.phase == .cancel) {
+        return;
+    }
+
+    remainder.* += if (event == .scroll) event.scroll.delta_y / (if (event.scroll.precise) @max(1, @as(f64, target.bounds.height)) else 1) else if (event.pointer.kind == .scroll_up) -1 else 1;
+    const steps: usize = @intFromFloat(@min(64, @abs(@trunc(remainder.*))));
+    const forward = remainder.* > 0;
+    remainder.* -= @trunc(remainder.*);
+    for (0..steps) |_| {
+        try command(gui, if (forward) .move_down else .move_up);
+    }
+}
+
+fn activateControl(gui: *GuiClient, target: Target) !void {
+    gui.widgets.cancelComposition();
+    switch (target.action) {
+        .prompt => |action| try command(gui, if (action == .submit) .submit else .cancel),
+        .complete_path => |choice| try client.controllers.name_prompts.chooseDirectory(&gui.app, choice.index, choice.revision),
+        .history => |action| {
+            const prompt = gui.app.model.name_prompt.currentConst() orelse return;
+            if (prompt.target() != .history) {
+                return;
+            }
+
+            switch (action) {
+                .select => |choice| try client.controllers.name_prompts.selectHistoryRow(&gui.app, choice.index, choice.revision),
+                .submit => |choice| {
+                    const history = &gui.app.model.history_palette;
+                    if (history.phase == .ready and history.version() == choice.revision and prompt.selection() == choice.index) {
+                        try command(gui, .submit);
+                    }
+                },
+                .cycle_scope => try command(gui, .tab),
+                .toggle_inspection => try command(gui, .toggle_inspection),
+            }
+        },
+        .intent => |intent| try dispatchIntent(gui, intent),
+        else => {},
+    }
+}
+
 fn dispatchIntent(gui: *GuiClient, intent: client.Intent) !void {
     const model = gui.app.model.activeTabModel() orelse return;
     _ = try client.controllers.view_interactions.apply(&gui.app, model, .{ .intent = intent, .consumed = true });
@@ -331,8 +411,8 @@ fn dispatchIntent(gui: *GuiClient, intent: client.Intent) !void {
 }
 
 fn scroll(gui: *GuiClient, event: Event) !bool {
-    if (gui.app.model.name_prompt.active()) {
-        return false;
+    if (gui.app.model.name_prompt.currentConst()) |prompt| {
+        return if (prompt.target() == .history) try scrollHistory(gui, event) else false;
     }
 
     const pointer = if (event == .scroll) [2]f64{ event.scroll.x, event.scroll.y } else [2]f64{ event.pointer.x, event.pointer.y };
@@ -359,6 +439,85 @@ fn scroll(gui: *GuiClient, event: Event) !bool {
     return true;
 }
 
+fn scrollHistory(gui: *GuiClient, event: Event) !bool {
+    const prompt = gui.app.model.name_prompt.currentConst() orelse return true;
+    const state = &gui.widgets;
+    const history = &gui.app.model.history_palette;
+    if (history.phase != .ready) {
+        state.history_scroll_remainder = 0;
+        return true;
+    }
+
+    const bounds = gui.overlays.presented().native_modal orelse return true;
+    const pointer = if (event == .scroll) [2]f64{ event.scroll.x, event.scroll.y } else [2]f64{ event.pointer.x, event.pointer.y };
+    if (!@import("../Bands.zig").within(bounds, pointer[0], pointer[1])) {
+        return true;
+    }
+
+    var delivered = false;
+    var line_height: f64 = @floatFromInt(@max(1, gui.input.pointer.geometry.size.cell_height_px));
+    const registry = state.dispatcher.maps.presented();
+    for (registry.targets[0..registry.len]) |target| {
+        if (target.id.generation != prompt.generation) {
+            continue;
+        }
+
+        if (target.action == .text_field) {
+            delivered = true;
+        }
+
+        if (target.action == .history and target.action.history == .select) {
+            if (target.action.history.select.revision != history.version()) {
+                return true;
+            }
+
+            if (!prompt.inspecting()) {
+                line_height = @max(1, target.bounds.height);
+            }
+        }
+    }
+
+    if (!delivered) {
+        return true;
+    }
+
+    if (state.history_scroll_generation != prompt.generation or state.history_scroll_inspecting != prompt.inspecting() or (event == .scroll and (event.scroll.phase == .begin or event.scroll.phase == .cancel))) {
+        state.history_scroll_remainder = 0;
+        state.history_scroll_generation = prompt.generation;
+        state.history_scroll_inspecting = prompt.inspecting();
+    }
+
+    if (event == .scroll and event.scroll.phase == .cancel) {
+        return true;
+    }
+
+    const delta = if (event == .scroll) event.scroll.delta_y / (if (event.scroll.precise) line_height else 1) else if (event.pointer.kind == .scroll_up) @as(f64, -1) else @as(f64, 1);
+    if (!std.math.isFinite(delta)) {
+        return true;
+    }
+
+    state.history_scroll_remainder += std.math.clamp(delta, -32, 32);
+    const lines: i16 = @intFromFloat(std.math.clamp(@trunc(state.history_scroll_remainder), -32, 32));
+    state.history_scroll_remainder -= @floatFromInt(lines);
+    if (lines == 0) {
+        return true;
+    }
+
+    if (prompt.inspecting()) {
+        try client.controllers.name_prompts.scrollHistoryInspection(&gui.app, lines);
+    } else {
+        for (0..@abs(lines)) |_| {
+            if (history.phase != .ready) {
+                break;
+            }
+
+            try command(gui, if (lines < 0) .move_up else .move_down);
+        }
+    }
+
+    return true;
+}
+
 fn accessibility(gui: *GuiClient, value: @import("../../input/AccessibilityAction.zig")) !void {
     const target = gui.widgets.dispatcher.maps.presented().find(.{ .target_id = value.target_id, .generation = value.generation }) orelse return;
     if (!target.enabled or target.layer < gui.widgets.dispatcher.maps.presented().modal_layer or !eligible(gui, target)) {
@@ -374,8 +533,8 @@ fn accessibility(gui: *GuiClient, value: @import("../../input/AccessibilityActio
             _ = gui.widgets.dispatcher.focus(target.id);
             try focus(gui, target);
         },
-        .press => if (target.action == .intent) {
-            try dispatchIntent(gui, target.action.intent);
+        .press => if (target.activatable()) {
+            try activateControl(gui, target);
         },
         .set_value, .set_selection => {
             const current = field(gui, target) orelse return;

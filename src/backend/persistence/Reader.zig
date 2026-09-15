@@ -63,7 +63,7 @@ pub fn next(reader: *Reader) !?checkpoint.Record {
             }
             const first_tab_id = try reader.inner.readInt(u64);
             const first_tab_label = try reader.inner.readSized16();
-            if (first_tab_label.len == 0 or first_tab_label.len > max_tab_label_bytes_module) {
+            if ((reader.version < 3 and first_tab_label.len == 0) or first_tab_label.len > max_tab_label_bytes_module) {
                 return error.InvalidCheckpoint;
             }
             return .{ .workspace = .{
@@ -78,7 +78,7 @@ pub fn next(reader: *Reader) !?checkpoint.Record {
             const workspace_id = try reader.inner.readInt(u64);
             const tab_id = try reader.inner.readInt(u64);
             const label = try reader.inner.readSized16();
-            if (label.len == 0 or label.len > max_tab_label_bytes_module) {
+            if ((reader.version < 3 and label.len == 0) or label.len > max_tab_label_bytes_module) {
                 return error.InvalidCheckpoint;
             }
             return .{ .tab = .{ .workspace_id = workspace_id, .tab_id = tab_id, .label = label } };

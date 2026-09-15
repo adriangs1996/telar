@@ -1,5 +1,6 @@
 const std = @import("std");
 const AgentProviderType = @import("telar-core").AgentProvider;
+const builtin_table_module = @import("telar-core").builtin_table;
 
 pub const Theme = enum {
     unicode,
@@ -42,6 +43,9 @@ pub const Icon = enum {
     provider_claude,
     provider_codex,
     provider_pi,
+    app_terminal,
+    app_editor,
+    app_git,
     agent_unknown,
     agent_working_0,
     agent_working_1,
@@ -72,6 +76,32 @@ pub const Icon = enum {
         };
     }
 
+    /// Selects a foreground application's mark using built-in agent identities
+    /// and common terminal tools. Example: const icon = Icon.forApplication("nvim");
+    pub fn forApplication(name: []const u8) Icon {
+        if (builtin_table_module.providerFromExecutable(name)) |provider| {
+            return Icon.forProvider(provider) orelse .app_terminal;
+        }
+
+        for (builtin_table_module.slice()) |*manifest| {
+            if (std.mem.eql(u8, name, manifest.displayName())) {
+                return Icon.forProvider(manifest.provider) orelse .app_terminal;
+            }
+        }
+
+        inline for (.{ "nvim", "vim", "vi" }) |editor| {
+            if (std.mem.eql(u8, name, editor)) {
+                return .app_editor;
+            }
+        }
+
+        if (std.mem.eql(u8, name, "git") or std.mem.eql(u8, name, "lazygit")) {
+            return .app_git;
+        }
+
+        return .app_terminal;
+    }
+
     pub fn unicodeGlyph(icon: Icon) []const u8 {
         return switch (icon) {
             .sidebar_collapse => "\u{25c0}",
@@ -90,6 +120,9 @@ pub const Icon = enum {
             .provider_claude => "\u{2733}",
             .provider_codex => "\u{25c6}",
             .provider_pi => "\u{03c0}",
+            .app_terminal => ">",
+            .app_editor => "\u{270e}",
+            .app_git => "\u{2387}",
             .agent_working_0 => "\u{25d0}",
             .agent_working_1 => "\u{25d3}",
             .agent_working_2 => "\u{25d1}",
@@ -121,6 +154,9 @@ pub const Icon = enum {
             .provider_claude => "\u{ec20}", // cod-robot
             .provider_codex => "\u{ea85}", // cod-terminal
             .provider_pi => "\u{f03ff}", // md-pi
+            .app_terminal => "\u{ea85}", // cod-terminal
+            .app_editor => "\u{e62b}", // custom-vim
+            .app_git => "\u{e702}", // dev-git
             .agent_working_0 => "\u{ee06}", // extra-progress-spinner-1
             .agent_working_1 => "\u{ee07}", // extra-progress-spinner-2
             .agent_working_2 => "\u{ee08}", // extra-progress-spinner-3
@@ -155,6 +191,9 @@ pub const Icon = enum {
             .provider_claude => "A",
             .provider_codex => "X",
             .provider_pi => "P",
+            .app_terminal => ">",
+            .app_editor => "E",
+            .app_git => "G",
             .agent_working_0,
             .agent_working_1,
             .agent_working_2,
@@ -170,3 +209,20 @@ pub const Icon = enum {
         };
     }
 };
+
+test "foreground application icons accept runtime display names and executable aliases" {
+    inline for (.{
+        .{ "Claude Code", Icon.provider_claude },
+        .{ "claude", Icon.provider_claude },
+        .{ "Codex", Icon.provider_codex },
+        .{ "codex", Icon.provider_codex },
+        .{ "Pi", Icon.provider_pi },
+        .{ "pi", Icon.provider_pi },
+        .{ "nvim", Icon.app_editor },
+        .{ "git", Icon.app_git },
+        .{ "zsh", Icon.app_terminal },
+        .{ "unknown", Icon.app_terminal },
+    }) |example| {
+        try std.testing.expectEqual(example[1], Icon.forApplication(example[0]));
+    }
+}

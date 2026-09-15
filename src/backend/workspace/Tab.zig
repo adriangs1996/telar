@@ -8,7 +8,11 @@ label_len: u8 = 0,
 
 pub fn init(id: TabIdType, label: []const u8) !Tab {
     var tab: Tab = .{ .id = id };
-    try tab.rename(label);
+
+    if (label.len != 0) {
+        try tab.rename(label);
+    }
+
     return tab;
 }
 

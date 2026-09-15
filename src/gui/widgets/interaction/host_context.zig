@@ -1,6 +1,5 @@
 //! Synchronous semantic snapshots. Native adapters copy borrowed bytes before
 //! returning; only their platform caches persist beyond this call.
-const std = @import("std");
 const client = @import("telar-client");
 const GuiClient = @import("../../GuiClient.zig");
 const native = @import("../../native/native.zig");
@@ -60,7 +59,7 @@ pub fn accessibility(gui: *GuiClient, output: *native.AccessibilityTree) bool {
             .generation = target.id.generation,
             .role = target.role,
             .flags = @as(u32, @intFromBool(target.enabled)) | (if (focused) @as(u32, 2) else 0) | (if (target.layer != 0) @as(u32, 32) else 0),
-            .actions = (if (target.focusable) @as(u32, 2) else 0) | (if (target.action == .intent) @as(u32, 1) else 0),
+            .actions = (if (target.focusable) @as(u32, 2) else 0) | (if (target.activatable()) @as(u32, 1) else 0),
             .x = target.bounds.x,
             .y = target.bounds.y,
             .width = target.bounds.width,

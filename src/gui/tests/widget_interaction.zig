@@ -1,4 +1,5 @@
 const std = @import("std");
+const core = @import("telar-core");
 const client = @import("telar-client");
 const Dispatcher = @import("../widgets/interaction/Dispatcher.zig");
 const Target = @import("../widgets/interaction/Target.zig");
@@ -431,4 +432,231 @@ test "accessibility widget focus cancels terminal prefix without transferring it
     try send(session, .{ .text = .{ .bytes = "c" } });
     try session.settle();
     try std.testing.expectEqualStrings("c", session.input[0..session.input_len]);
+}
+
+fn promptControl(session: *Session, label: []const u8) !Target {
+    const registry = session.gui.widgets.dispatcher.maps.presented();
+    for (registry.targets[0..registry.len]) |target| {
+        if (std.mem.eql(u8, label, target.label[0..target.label_len])) {
+            return target;
+        }
+    }
+
+    return error.MissingControl;
+}
+
+fn click(session: *Session, target: Target) !void {
+    try send(session, .{ .pointer = .{ .kind = .press, .x = target.bounds.x + 1, .y = target.bounds.y + 1 } });
+    try send(session, .{ .pointer = .{ .kind = .release, .x = target.bounds.x + 1, .y = target.bounds.y + 1 } });
+}
+
+test "context actions require an enabled delivered button and release inside its bounds" {
+    const session = try initSession();
+    defer session.deinit();
+    const gui = session.gui;
+    gui.app.model.name_prompt.begin(.create_workspace);
+    try publish(session);
+    const create = try promptControl(session, "Create context");
+    try std.testing.expect(!create.enabled);
+    try click(session, create);
+    try std.testing.expect(gui.app.model.name_prompt.active());
+    const cancel = try promptControl(session, "Cancel");
+    const name = try editorTarget(session, .name);
+    try send(session, .{ .pointer = .{ .kind = .press, .x = cancel.bounds.x + 1, .y = cancel.bounds.y + 1 } });
+    try std.testing.expect(gui.app.model.name_prompt.active());
+    try std.testing.expect(name.id.eql(gui.widgets.dispatcher.focused.?));
+    try send(session, .{ .pointer = .{ .kind = .release, .x = 0, .y = 0 } });
+    try std.testing.expect(gui.app.model.name_prompt.active());
+    try click(session, cancel);
+    try std.testing.expect(!gui.app.model.name_prompt.active());
+    try std.testing.expectEqual(@as(usize, 0), session.input_len);
+}
+
+test "context folder clicks complete without submitting and reject stale listings" {
+    const session = try initSession();
+    defer session.deinit();
+    const gui = session.gui;
+    gui.app.path_completion_runner = .{ .context = session, .start_fn = ignorePathCompletion };
+    gui.app.model.name_prompt.begin(.create_workspace);
+    _ = gui.app.model.name_prompt.apply(.tab);
+    _ = gui.app.model.name_prompt.apply(.{ .insert = "/work/te" });
+    _ = gui.app.path_completions.want("/work/te");
+    var result: client.PathCompletionResult = .{};
+    try result.setBase("/work");
+    try result.append("telar");
+    try result.append("tests");
+    gui.app.model.path_completion.begin();
+    gui.app.model.path_completion.expect(@enumFromInt(1));
+    try std.testing.expect(gui.app.model.path_completion.apply(@enumFromInt(1), .{ .query = "/work/te", .result = &result }));
+    try publish(session);
+    const folder = try promptControl(session, "tests");
+    try click(session, folder);
+    try std.testing.expect(gui.app.model.name_prompt.active());
+    try std.testing.expectEqualStrings("/work/tests/", gui.app.model.name_prompt.currentConst().?.directory.text());
+    gui.app.model.name_prompt.replaceDirectory("/different/");
+    gui.app.model.path_completion.invalidate();
+    try click(session, folder);
+    try std.testing.expectEqualStrings("/different/", gui.app.model.name_prompt.currentConst().?.directory.text());
+    try std.testing.expectEqual(@as(usize, 0), session.input_len);
+}
+
+fn ignorePathCompletion(_: *anyopaque, _: client.PathCompletionJob) !void {}
+
+test "context controls reject retired generations and expose native press actions" {
+    const session = try initSession();
+    defer session.deinit();
+    const gui = session.gui;
+    gui.app.model.name_prompt.begin(.create_workspace);
+    try publish(session);
+    const cancel = try promptControl(session, "Cancel");
+    var tree: native.AccessibilityTree = .{};
+    try std.testing.expect(gui.widgetAccessibility(&tree));
+    var found = false;
+    for (tree.nodes.?[0..tree.count]) |node| {
+        if (node.id == cancel.id.target_id) {
+            found = true;
+            try std.testing.expect(node.actions & 1 != 0);
+        }
+    }
+    try std.testing.expect(found);
+    gui.app.model.name_prompt.begin(.create_workspace);
+    try send(session, .{ .accessibility = .{ .target_id = cancel.id.target_id, .generation = cancel.id.generation, .action = .press } });
+    try std.testing.expect(gui.app.model.name_prompt.active());
+    try publish(session);
+    const current = try promptControl(session, "Close new context");
+    try send(session, .{ .accessibility = .{ .target_id = current.id.target_id, .generation = current.id.generation, .action = .press } });
+    try std.testing.expect(!gui.app.model.name_prompt.active());
+}
+
+test "context field padding shares exact pointer and native caret geometry" {
+    const session = try initSession();
+    defer session.deinit();
+    const gui = session.gui;
+    gui.app.model.name_prompt.begin(.create_workspace);
+    _ = gui.app.model.name_prompt.apply(.{ .insert = "abc界" });
+    try publish(session);
+    const target = try editorTarget(session, .name);
+    const geometry = gui.widgets.editors.presented().find(target.id).?;
+    try std.testing.expect(geometry.bounds.x > target.bounds.x);
+    try std.testing.expect(geometry.bounds.y > target.bounds.y);
+    try send(session, .{ .pointer = .{ .kind = .press, .x = geometry.bounds.x + geometry.cell_width * 2, .y = geometry.bounds.y + 1 } });
+    try send(session, .{ .pointer = .{ .kind = .release, .x = geometry.bounds.x + geometry.cell_width * 2, .y = geometry.bounds.y + 1 } });
+    try std.testing.expectEqual(@as(usize, 2), gui.app.model.name_prompt.currentConst().?.field.head);
+    var context: native.TextContext = .{};
+    try std.testing.expect(gui.widgetTextContext(&context));
+    try std.testing.expectApproxEqAbs(geometry.bounds.x + geometry.cell_width * 2, context.x, 0.01);
+    try send(session, .{ .composition = .{ .target_id = target.id.target_id, .generation = target.id.generation, .text = "é", .selection_start = 2, .selection_end = 2 } });
+    try std.testing.expect(gui.widgetTextContext(&context));
+    try std.testing.expectApproxEqAbs(geometry.bounds.x + geometry.cell_width * 3, context.x, 0.01);
+    try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "é" } });
+    try std.testing.expectEqualStrings("abéc界", gui.app.model.name_prompt.currentConst().?.field.text());
+}
+
+test "context folder scrolling accumulates precise deltas and clamps at the last entry" {
+    const session = try initSession();
+    defer session.deinit();
+    const gui = session.gui;
+    gui.app.model.name_prompt.begin(.create_workspace);
+    _ = gui.app.model.name_prompt.apply(.tab);
+    var result: client.PathCompletionResult = .{};
+    for ([_][]const u8{ "api", "dashboard", "docs", "mobile", "platform", "web" }) |name| {
+        try result.append(name);
+    }
+    gui.app.model.path_completion.begin();
+    gui.app.model.path_completion.expect(@enumFromInt(1));
+    try std.testing.expect(gui.app.model.path_completion.apply(@enumFromInt(1), .{ .query = "/work/", .result = &result }));
+    try publish(session);
+    const row = try promptControl(session, "api");
+    const scroll_event: @import("../input/ScrollEvent.zig") = .{ .x = row.bounds.x + 1, .y = row.bounds.y + 1, .delta_y = row.bounds.height * 0.6, .precise = true };
+    try send(session, .{ .scroll = scroll_event });
+    try std.testing.expectEqual(@as(u16, 0), gui.app.model.name_prompt.currentConst().?.selection());
+    try send(session, .{ .scroll = scroll_event });
+    try std.testing.expectEqual(@as(u16, 1), gui.app.model.name_prompt.currentConst().?.selection());
+    try send(session, .{ .scroll = .{ .x = row.bounds.x + 1, .y = row.bounds.y + 1, .delta_y = 10000 } });
+    try std.testing.expectEqual(@as(u16, 5), gui.app.model.name_prompt.currentConst().?.selection());
+    try publish(session);
+    _ = try promptControl(session, "web");
+    try std.testing.expectEqual(@as(usize, 0), session.input_len);
+}
+
+fn tabTarget(session: *Session, tab_id: core.TabId) !Target {
+    const registry = session.gui.widgets.dispatcher.maps.presented();
+    for (registry.targets[0..registry.len]) |target| {
+        if (target.action == .intent and target.action.intent == .select_tab and target.action.intent.select_tab == tab_id) {
+            return target;
+        }
+    }
+
+    return error.MissingTab;
+}
+
+fn addDragTabs(session: *Session) !void {
+    const model = &session.gui.app.model;
+    for (2..4) |id| {
+        _ = try model.createTab(.{ .created = .{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(id) }, .position = @intCast(id - 1), .label = "tab", .root_pane_id = @enumFromInt(id * 10) }, .size = model.hostSize() });
+    }
+    _ = client.request_lifecycle.consume(&session.gui.app, @enumFromInt(3));
+    try publish(session);
+}
+
+test "native tab drag sends one anchored move after release and waits for runtime order" {
+    const session = try initSession();
+    defer session.deinit();
+    try addDragTabs(session);
+    const third: core.TabId = @enumFromInt(3);
+    const source = try tabTarget(session, third);
+    const target = try tabTarget(session, Session.location.tab_id);
+    const y = source.bounds.y + source.bounds.height / 2;
+    try send(session, .{ .pointer = .{ .kind = .press, .x = source.bounds.x + 10, .y = y } });
+    try send(session, .{ .pointer = .{ .kind = .drag, .x = target.bounds.x + 2, .y = y } });
+    try std.testing.expectEqual(@as(?usize, 2), session.gui.app.model.workspace.indexOf(third));
+    try std.testing.expectEqual(@as(usize, 0), session.input_len);
+    try std.testing.expectEqual(Session.location.tab_id, session.gui.widgets.tab_drag.destination.?.relative_to.?);
+    const size = try session.gui.measure(&session.renderer, .{ .width = 800, .height = 600, .scale = 1 });
+    try session.gui.resize(size, session.renderer.theme);
+    try publish(session);
+    try std.testing.expect(session.gui.widgets.tab_drag.source != null);
+    const lifted = try tabTarget(session, third);
+    try std.testing.expect(lifted.bounds.y < source.bounds.y);
+    try std.testing.expect(lifted.bounds.x < source.bounds.x);
+    try send(session, .{ .pointer = .{ .kind = .drag, .x = target.bounds.x + 2, .y = y } });
+    try std.testing.expectEqual(Session.location.tab_id, session.gui.widgets.tab_drag.destination.?.relative_to.?);
+    const failed = try session.gui.prepare(&session.renderer);
+    try session.gui.complete(failed, false);
+    try send(session, .{ .pointer = .{ .kind = .release, .x = target.bounds.x + 2, .y = y } });
+    _ = try session.gui.pump();
+    const request = (try core.decodeClient(session.pending.?)).move_tab;
+    try std.testing.expectEqual(third, request.location.tab_id);
+    try std.testing.expectEqual(Session.location.tab_id, request.relative_to.?);
+    try std.testing.expectEqual(core.TabMoveDirection.previous, request.direction);
+    try std.testing.expectEqual(@as(?usize, 2), session.gui.app.model.workspace.indexOf(third));
+    try session.settle();
+    _ = try client.controllers.tab_moves.apply(&session.gui.app, .{ .request_id = request.request_id, .location = request.location, .position = 0 });
+    try std.testing.expectEqual(@as(?usize, 0), session.gui.app.model.workspace.indexOf(third));
+    try std.testing.expectEqual(@as(usize, 0), session.input_len);
+}
+
+test "native tab drag cancels on Escape focus loss and outside drops without pane input" {
+    const session = try initSession();
+    defer session.deinit();
+    try addDragTabs(session);
+    const source = try tabTarget(session, @enumFromInt(3));
+    const target = try tabTarget(session, Session.location.tab_id);
+    const y = source.bounds.y + source.bounds.height / 2;
+    const cancellations = [_]Event{ .{ .key = .{ .code = .escape } }, .{ .focus = false }, .{ .pointer = .{ .kind = .drag, .x = 500, .y = 200 } } };
+    for (cancellations) |cancel| {
+        try session.gui.focus(true);
+        try send(session, .{ .pointer = .{ .kind = .press, .x = source.bounds.x + 10, .y = y } });
+        try send(session, .{ .pointer = .{ .kind = .drag, .x = target.bounds.x + 2, .y = y } });
+        if (cancel == .focus) {
+            try session.gui.focus(cancel.focus);
+        } else {
+            try send(session, cancel);
+        }
+        try send(session, .{ .pointer = .{ .kind = .release, .x = 500, .y = 200 } });
+        try session.settle();
+        try std.testing.expectEqual(@as(usize, 0), session.input_len);
+        try std.testing.expectEqual(@as(?usize, 2), session.gui.app.model.workspace.indexOf(@enumFromInt(3)));
+        try std.testing.expect(!client.request_lifecycle.has(&session.gui.app, .tab_operation));
+    }
 }

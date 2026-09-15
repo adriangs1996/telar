@@ -42,9 +42,8 @@ test "native theme backgrounds share window opacity across bands and pane header
     scene.theme = client.theme_support.builtin(.vesper);
     model.name_prompt.begin(.create_workspace);
     _ = try scene.prepare(fixture.projection());
-    const modal = overlays.prepared().modal.?;
-    const interior = renderer.metrics.rect(renderer.origin, .{ .x = modal.x + modal.w - 3, .y = modal.y + 2, .w = 1, .h = 1 });
-    try std.testing.expectEqual(@as(f32, 1), try backgroundAlpha(renderer, .{ interior.x + interior.width / 2, interior.y + interior.height / 2 }));
+    const modal = overlays.prepared().native_modal.?;
+    try std.testing.expectEqual(@as(f32, 1), try backgroundAlpha(renderer, .{ modal.x + modal.width / 2, modal.y + 10 }));
 }
 
 // Samples blank interiors, away from glyphs, rounded corners and frame strokes.

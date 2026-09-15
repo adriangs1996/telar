@@ -44,10 +44,6 @@ typedef struct {
     bool failed;
 } window;
 
-// One native window is active in the GUI process; clipboard callbacks run
-// on that same event thread and cannot retain this borrowed stack address.
-static window *active_window;
-
 static const uint32_t default_width = 800;
 static const uint32_t default_height = 480;
 
@@ -190,9 +186,6 @@ static const struct xdg_toplevel_listener toplevel_listener = {
 };
 
 static void destroy(window *self) {
-    if (active_window == self) {
-        active_window = NULL;
-    }
     telar_frame_clock_cancel(&self->clock);
     telar_frame_worker_destroy(self->worker);
     telar_accessibility_destroy(self->accessibility);
@@ -284,7 +277,6 @@ int telar_gui_run(const char *title, void *context, const telar_gui_callbacks *c
     xdg_toplevel_set_min_size(self.toplevel, 320, 200);
     wl_surface_commit(self.surface);
 
-    active_window = &self;
     self.accessibility = telar_accessibility_create(context, callbacks);
     while (!self.closing) {
         while (wl_display_prepare_read(self.display) != 0) {
@@ -394,12 +386,4 @@ int telar_gui_run(const char *title, void *context, const telar_gui_callbacks *c
     int status = self.failed ? -1 : 0;
     destroy(&self);
     return status;
-}
-
-int telar_gui_clipboard(const uint8_t *bytes, size_t len) {
-    if (active_window == NULL) {
-        return -1;
-    }
-
-    return telar_input_clipboard(active_window->input, bytes, len);
 }

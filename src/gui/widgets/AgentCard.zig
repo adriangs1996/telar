@@ -97,7 +97,7 @@ fn drawProject(card: AgentCard, canvas: *Canvas, row: Rect) !void {
         const side = @min(card.markSide(canvas), row.height);
         try canvas.spriteAt(.{ .x = row.x + (slot - side) / 2, .y = row.y + (row.height - side) / 2, .width = side, .height = side }, icon);
     } else {
-        _ = try canvas.textAt(.{ .x = row.x, .y = row.y, .width = slot, .height = row.height }, .{ .text = project_glyph, .color = palette.subtext0, .face = .sans, .size = .small });
+        try canvas.iconAt(.{ .x = row.x, .y = row.y, .width = slot, .height = row.height }, .{ .text = project_glyph, .color = palette.subtext0, .face = .sans, .size = .small });
     }
 
     const label_x = row.x + slot + gap;
@@ -115,7 +115,7 @@ fn drawProject(card: AgentCard, canvas: *Canvas, row: Rect) !void {
 fn drawStatus(card: AgentCard, canvas: *Canvas, row: Rect) !f32 {
     const state = card.agent.status;
     const ink = status_glyph.color(canvas.theme.palette, state);
-    const gap = card.geometry.px(4);
+    const gap = card.geometry.px(6);
     const word = status_glyph.label(state, card.agent.blockedReason());
     var age_buffer: [age_label.max_bytes]u8 = undefined;
     var text_buffer: [32]u8 = undefined;
@@ -124,8 +124,8 @@ fn drawStatus(card: AgentCard, canvas: *Canvas, row: Rect) !f32 {
         .ready => age_label.format(card.age_s, &age_buffer),
         else => word,
     };
-    var glyph: Label = .{ .text = if (state == .ready) "" else status_glyph.glyph(state, card.agent.blockedReason()), .color = ink, .face = .sans, .size = .small };
-    const glyph_width = if (glyph.text.len == 0) 0 else try canvas.measure(glyph);
+    var glyph: Label = .{ .text = if (state == .ready) "" else status_glyph.glyph(state, card.agent.blockedReason()), .color = ink, .face = .sans, .size = .title };
+    const glyph_width = if (glyph.text.len == 0) 0 else canvas.iconSize(glyph);
     const glyph_space = if (glyph_width == 0) 0 else glyph_width + gap;
     var label: Label = .{ .text = text, .color = ink, .face = .sans, .size = .small };
     var label_width = try canvas.measure(label);
@@ -147,7 +147,7 @@ fn drawStatus(card: AgentCard, canvas: *Canvas, row: Rect) !f32 {
     }
 
     if (glyph_width > 0) {
-        _ = try canvas.textAt(.{ .x = left, .y = row.y, .width = @min(used, glyph_width), .height = row.height }, glyph);
+        try canvas.iconAt(.{ .x = left, .y = row.y, .width = @min(used, glyph_width), .height = row.height }, glyph);
     }
 
     if (label_width > 0) {
@@ -184,13 +184,13 @@ fn drawDetail(card: AgentCard, canvas: *Canvas, row: Rect) !void {
 }
 
 // Width of the slot before the workspace name: the favicon square when one
-// is resolved, else one monospace cell for the generic glyph.
+// is resolved, else the generic icon's text-relative square.
 fn projectSlot(card: AgentCard, canvas: *const Canvas) f32 {
     if (card.project_icon != null) {
         return @max(card.geometry.glyph_width, card.markSide(canvas));
     }
 
-    return card.geometry.glyph_width;
+    return canvas.iconSize(.{ .text = project_glyph, .size = .small });
 }
 
 // The mark and the favicon are `CardGeometry.mark_size` logical pixels, the

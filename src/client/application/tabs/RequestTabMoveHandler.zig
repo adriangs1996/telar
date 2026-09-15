@@ -21,10 +21,22 @@ pub fn execute(handler: *RequestTabMoveHandler, request: RequestTabMove) !bool {
         return false;
     }
 
-    const location = handler.model.activeTabLocation() orelse return false;
+    const location = request.location orelse handler.model.activeTabLocation() orelse return false;
+    const workspace = handler.model.workspace.workspace orelse return false;
+    if (!@import("std").meta.eql(workspace, location.workspace) or handler.model.workspace.indexOf(location.tab_id) == null) {
+        return false;
+    }
+
+    if (request.relative_to) |anchor| {
+        if (anchor == location.tab_id or handler.model.workspace.indexOf(anchor) == null) {
+            return false;
+        }
+    }
+
     try handler.effects.send(handler.effects.context, .{
         .location = location,
         .direction = request.direction,
+        .relative_to = request.relative_to,
     });
 
     return true;

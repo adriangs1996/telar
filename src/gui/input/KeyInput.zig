@@ -14,8 +14,3 @@ generation: u64 = 0,
 pub fn terminalKey(key: Input) Key {
     return .{ .code = key.code, .mods = .{ .shift = key.mods.shift, .alt = key.mods.alt, .ctrl = key.mods.ctrl }, .phase = key.phase, .physical = key.physical, .kitty = key.kitty };
 }
-
-/// Example: `const input = KeyInput.fromTerminal(recovered);`
-pub fn fromTerminal(key: Key) Input {
-    return .{ .code = key.code, .mods = .{ .shift = key.mods.shift, .alt = key.mods.alt, .ctrl = key.mods.ctrl }, .phase = key.phase, .physical = key.physical, .kitty = key.kitty };
-}

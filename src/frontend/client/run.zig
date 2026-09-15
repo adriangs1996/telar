@@ -8,7 +8,6 @@ const Options = @import("telar-client").Options;
 const HeapType = @import("telar-core").Heap;
 const platform = @import("../platform/platform.zig");
 const sequences = @import("../platform/sequences.zig");
-const Client = @import("telar-client").AttachedClient;
 const host_resizes = @import("controllers/host/host_resizes.zig");
 const client_startup = @import("controllers/session/client_startup.zig");
 const client_events = @import("entrypoints/events.zig");
@@ -19,7 +18,7 @@ pub fn run(init: std.process.Init, connection: *SocketChannelType, options: Opti
     var heap = HeapType.init(init.gpa);
     const gpa = heap.allocator();
 
-    // `Client.init` adopts the configuration generation, plugin registry and
+    // `TerminalClient.init` adopts the configuration generation, plugin registry and
     // trust store carried by `options`; until it succeeds they are still this
     // function's to free.
     var options_owned = true;

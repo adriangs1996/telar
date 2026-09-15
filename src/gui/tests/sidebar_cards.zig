@@ -190,7 +190,7 @@ test "narrow cards keep status in the first row and clip every token to its card
             try std.testing.expect(item.x >= bounds.x and item.y >= bounds.y);
             try std.testing.expect(item.x + item.width <= bounds.x + bounds.width + 0.001);
             try std.testing.expect(item.y + item.height <= bounds.y + bounds.height + 0.001);
-            if (@abs(item.a - 0.35) < 0.001) {
+            if (@abs(item.a - 0.65) < 0.001) {
                 try std.testing.expect(item.y >= first.y and item.y + item.height <= first.y + first.height);
                 pulsing = true;
             }
@@ -260,7 +260,7 @@ test "the working pulse samples the status alpha from presentation time" {
     try fixture.paint(projection);
     var dimmed: usize = 0;
     for (fixture.session.renderer.quads.items()) |item| {
-        dimmed += @intFromBool(@abs(item.a - 0.35) < 0.001);
+        dimmed += @intFromBool(@abs(item.a - 0.65) < 0.001);
     }
 
     try std.testing.expect(dimmed > 0);

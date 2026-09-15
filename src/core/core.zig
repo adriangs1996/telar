@@ -184,6 +184,7 @@ pub const TabDescriptor = @import("schema/TabDescriptor.zig");
 pub const TabId = @import("schema/id.zig").TabId;
 pub const TabLocation = @import("schema/TabLocation.zig");
 pub const TabMoveDirection = @import("schema/types.zig").TabMoveDirection;
+pub const TabMoveTarget = @import("schema/TabMoveTarget.zig");
 pub const TabMoved = @import("schema/messages/TabMoved.zig");
 pub const TabRenamed = @import("schema/messages/TabRenamed.zig");
 pub const TabSnapshotView = @import("schema/messages/TabSnapshotView.zig");

@@ -52,6 +52,13 @@ pub fn Type(comptime T: type) type {
                         try encoder.writeInt(u64, id.raw(workspace_id));
                     }
                 },
+                ?id.TabId => {
+                    try encoder.writeByte(@intFromBool(value != null));
+                    if (value) |tab_id| {
+                        _ = try id.tab(id.raw(tab_id));
+                        try encoder.writeInt(u64, id.raw(tab_id));
+                    }
+                },
                 TabLocationType => try codec.encodeTabLocation(encoder, value),
                 types.WorkspaceLocation => try codec.encodeWorkspaceLocation(encoder, value),
                 TerminalSizeType => {
@@ -77,6 +84,10 @@ pub fn Type(comptime T: type) type {
                 id.PaneId => try id.pane(try decoder.readInt(u64)),
                 ?id.WorkspaceId => if (try decoder.readBool())
                     try id.workspace(try decoder.readInt(u64))
+                else
+                    null,
+                ?id.TabId => if (try decoder.readBool())
+                    try id.tab(try decoder.readInt(u64))
                 else
                     null,
                 TabLocationType => try codec.decodeTabLocation(decoder),

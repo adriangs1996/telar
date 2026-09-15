@@ -117,7 +117,7 @@ pub fn encodeWorkspaceSnapshot(buffer: []u8, message: WorkspaceSnapshot) ![]cons
         if (tab.pane_count > types.max_panes_per_tab) {
             return error.TooManyPanes;
         }
-        try codec.validateTabLabel(tab.label, false);
+        try codec.validateTabLabel(tab.label, true);
         try encoder.writeInt(u64, id.raw(tab.tab_id));
         try encoder.writeInt(u16, tab.position);
         try encoder.writeInt(u16, tab.pane_count);
@@ -148,7 +148,7 @@ pub fn decodeWorkspaceSnapshot(decoder: *DecoderType) !WorkspaceSnapshotView {
             return error.TooManyPanes;
         }
         const label = try decoder.readSized16();
-        try codec.validateTabLabel(label, false);
+        try codec.validateTabLabel(label, true);
         for (seen[0..index]) |previous| if (previous == tab_id) return error.DuplicateTab;
         seen[index] = tab_id;
     }

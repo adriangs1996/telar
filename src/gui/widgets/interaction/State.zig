@@ -1,6 +1,4 @@
 //! Presentation-owned targets plus client-owned transient editor state.
-const std = @import("std");
-const client = @import("telar-client");
 const Canvas = @import("../Canvas.zig");
 const GenericPresentedState = @import("../../render/GenericPresentedState.zig").Type;
 const Dispatcher = @import("Dispatcher.zig");
@@ -11,6 +9,13 @@ const Id = @import("Id.zig");
 const State = @This();
 
 dispatcher: Dispatcher = .{},
+tab_drag: @import("telar-client").TabDrag = .{},
+tab_drag_step: f64 = 4,
+tab_drop_slots: @import("TabDropSlots.zig") = .{},
+tab_motions: @import("../TabMotions.zig") = .{},
+tab_pointer: [2]f64 = .{ 0, 0 },
+tab_grab_offset: f64 = 0,
+tab_drop_pending: ?@import("telar-client").TabMoveIntent = null,
 editors: GenericPresentedState(Editors) = .{},
 preedit: Preedit = .{},
 prompt_generation: u64 = 0,
@@ -20,6 +25,10 @@ paste_buffer: @import("PasteBuffer.zig") = .{},
 paste_selection: [2]u32 = .{ 0, 0 },
 paste_revision: u64 = 0,
 sidebar_scroll_remainder: f64 = 0,
+directory_scroll_remainder: f64 = 0,
+history_scroll_remainder: f64 = 0,
+history_scroll_generation: u64 = 0,
+history_scroll_inspecting: bool = false,
 native_nodes: [@import("Registry.zig").capacity]@import("../../native/native.zig").AccessibilityNode = undefined,
 pending_cuts: [4]?@import("PendingCut.zig") = @splat(null),
 
@@ -41,6 +50,7 @@ pub fn begin(state: *State, modal: bool) void {
 /// Imports existing chrome's semantic controls with their exact rectangles.
 /// Example: `try state.chrome(canvas, &chrome);`
 pub fn chrome(state: *State, canvas: *Canvas, input: @import("ChromeRegistration.zig")) !void {
+    state.tab_drag_step = canvas.chrome.px(4);
     const value = input.chrome;
     if (value.prepared().bands.sidebar.width > 0) {
         _ = try state.dispatcher.add((Target{ .bounds = value.prepared().bands.sidebar, .action = .{ .custom = 1 }, .namespace = 1, .focusable = false, .role = 6 }).labelled("Agents"));

@@ -17,7 +17,7 @@ pub fn width(painter: SlotPainter) u16 {
     return switch (painter.slot.*) {
         .empty, .tabs => 0,
         .metrics => MetricsLabel.init(painter.metrics).width(),
-        .content => |*content| content.width(),
+        .content => |*content| BarContent.columns(content),
     };
 }
 

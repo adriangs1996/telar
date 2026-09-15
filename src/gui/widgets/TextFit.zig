@@ -1,6 +1,5 @@
 //! Fits one label into a pixel width with a trailing ellipsis. Prefix widths
 //! come from `Canvas.measure`, so warm labels only read the shaping cache.
-const std = @import("std");
 const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const Label = @import("Label.zig");

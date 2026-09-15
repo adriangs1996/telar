@@ -167,6 +167,9 @@ pub fn requestClipboardWriteOwned(gui: *GuiClient, owner: @import("host/Owner.zi
 /// Example: `try gui.focus(true);`
 pub fn focus(gui: *GuiClient, focused: bool) !void {
     gui.focused = focused;
+    if (!focused) {
+        gui.widgets.tab_drag.cancel();
+    }
     gui.input_revision +%= 1;
     _ = gui.widgets.dispatcher.route(.{ .focus = focused });
     if (!focused) {
@@ -230,8 +233,13 @@ pub fn resizeRegion(gui: *GuiClient, cols: u16, rows: u16) void {
 /// PTY with `resize`.
 /// Example: `const size = try gui.measure(&renderer, viewport);`
 pub fn measure(gui: *GuiClient, renderer: *Renderer, viewport: native.Viewport) !core.TerminalSize {
+    const viewport_changed = !std.meta.eql(renderer.viewport, [2]u32{ viewport.width, viewport.height }) or renderer.scale != viewport.scale;
     renderer.sidebar_request = gui.sidebar.request(gui.app.model.sidebarVisible());
     const size = try renderer.measure(viewport);
+    if (viewport_changed or !std.meta.eql(size, gui.app.model.hostSize()) or gui.widgets.tab_drag_step != renderer.chrome.px(4)) {
+        gui.widgets.tab_drag.cancel();
+    }
+
     gui.sidebar.observe(renderer.sidebar);
     return size;
 }
@@ -307,6 +315,10 @@ pub fn applyGraphics(gui: *GuiClient, command: client.ApplicationPanesPaneGraphi
 /// Borrows the projection synchronously and seals only the rendered pane frames.
 /// Example: `const token = try gui.prepare(&renderer);`
 pub fn prepare(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.zig")) !u64 {
+    gui.widgets.tab_drag.validate(&gui.app.model);
+    if (!client.request_lifecycle.has(&gui.app, .tab_operation)) {
+        gui.widgets.tab_drop_pending = null;
+    }
     if (gui.lifecycle.active != null) {
         return error.PresentationBusy;
     }

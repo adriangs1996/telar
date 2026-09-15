@@ -2208,7 +2208,7 @@ pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !Work
         } else {
             const current = &model.workspace.items[index].?;
             if (current.location.tab_id != descriptor.tab_id or
-                !std.mem.eql(u8, current.labelSlice(), descriptor.label))
+                !std.mem.eql(u8, current.canonicalLabel(), descriptor.label))
             {
                 reconciliation.tabs_changed = true;
             }

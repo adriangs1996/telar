@@ -10,6 +10,7 @@ size: TerminalSizeType,
 name: [max_tab_label_bytes_module]u8 = undefined,
 name_len: u8,
 launch: LaunchType,
+create_cwd: bool,
 
 pub fn view(value: *const OwnedCreateWorkspace, cwd: []const u8) CreateWorkspaceType {
     var launch = value.launch;
@@ -20,5 +21,6 @@ pub fn view(value: *const OwnedCreateWorkspace, cwd: []const u8) CreateWorkspace
         .size = value.size,
         .name = value.name[0..value.name_len],
         .launch = launch,
+        .create_cwd = value.create_cwd,
     };
 }

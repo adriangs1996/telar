@@ -1,7 +1,6 @@
 //! Multi-pane client state and composition.
 
 const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
-const GenericSlotIndex = @import("telar-core").GenericSlotIndex;
 const CopyProjection = @import("telar-client").CopyProjection;
 const PaneIdType = @import("telar-core").PaneId;
 const ViewType = @import("telar-client").CopyModeView;
@@ -40,9 +39,6 @@ const SpanType = @import("telar-core").Span;
 const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
 const decodeServer_module = @import("telar-core").decodeServer;
 const term = @import("../presentation/screen_support.zig");
-
-const pane_index_capacity = max_panes_per_tab * 2;
-const PaneIndex = GenericSlotIndex(pane_index_capacity);
 
 pub fn copyView(copy: ?CopyProjection, pane_id: PaneIdType) ?ViewType {
     const projection = copy orelse return null;

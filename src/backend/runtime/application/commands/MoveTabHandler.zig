@@ -19,7 +19,7 @@ pub fn execute(handler: *MoveTabHandler, command: MoveTab) !TabMoved {
     const moved = try commands.moveTab(
         handler.workspaces,
         command.location,
-        command.direction,
+        .{ .direction = command.direction, .relative_to = command.relative_to },
     );
 
     handler.events.publish(handler.events.context, moved);

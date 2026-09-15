@@ -12,7 +12,7 @@ generation: u64 = 0,
 
 /// Reconciles search scope, selection and scroll after a history transition.
 /// Example: `state.updateHistory(.{ .selection = 0, .reset_scroll = true });`.
-pub fn updateHistory(state: *State, update: struct { scope: ?name_prompt.HistoryScope = null, selection: ?u16 = null, reset_scroll: bool = false, scroll_limit: ?u32 = null }) void {
+pub fn updateHistory(state: *State, update: struct { scope: ?name_prompt.HistoryScope = null, selection: ?u16 = null, reset_scroll: bool = false, scroll_by: i16 = 0, scroll_limit: ?u32 = null }) void {
     const prompt = state.mutable() orelse return;
     if (prompt.mode != .history) {
         return;
@@ -30,6 +30,10 @@ pub fn updateHistory(state: *State, update: struct { scope: ?name_prompt.History
 
     if (update.reset_scroll) {
         history.detail_scroll = 0;
+    }
+
+    if (history.inspecting) {
+        history.detail_scroll = if (update.scroll_by < 0) history.detail_scroll -| @as(u32, @abs(update.scroll_by)) else history.detail_scroll +| @as(u32, @intCast(update.scroll_by));
     }
 
     if (update.scroll_limit) |limit| {
@@ -116,7 +120,7 @@ pub fn begin(state: *State, command: name_prompt.Begin) void {
 /// ```
 pub fn select(state: *State, index: u16) void {
     const prompt = state.mutable() orelse return;
-    if (!name_prompt.selects(prompt.target()) or prompt.selection() == index) {
+    if (!(name_prompt.selects(prompt.target()) or directoryFocused(prompt)) or prompt.selection() == index) {
         return;
     }
 

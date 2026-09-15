@@ -19,6 +19,65 @@ static uint64_t frame_token;
 static telar_gui_quad rules[256];
 static unsigned rule_count;
 
+static id find_control(NSArray *children, NSString *label) {
+    for (id child in children) {
+        if ([[child accessibilityLabel] isEqualToString:label]) return child;
+        id found = find_control([child accessibilityChildren], label);
+        if (found != nil) return found;
+    }
+    return nil;
+}
+
+static void click_control(NSView *view, NSString *label) {
+    id control = find_control([view accessibilityChildren], label);
+    if (control == nil) {
+        fprintf(stderr, "Missing native control: %s\n", label.UTF8String);
+        abort();
+    }
+    NSRect frame = [control accessibilityFrame];
+    NSPoint location = [view.window convertPointFromScreen:NSMakePoint(NSMidX(frame), NSMidY(frame))];
+    for (NSNumber *type in @[@(NSEventTypeLeftMouseDown), @(NSEventTypeLeftMouseUp)]) {
+        NSEvent *event = [NSEvent mouseEventWithType:type.unsignedIntegerValue location:location
+            modifierFlags:0 timestamp:0 windowNumber:view.window.windowNumber context:nil
+            eventNumber:0 clickCount:1 pressure:1];
+        if (type.unsignedIntegerValue == NSEventTypeLeftMouseDown) [view mouseDown:event];
+        else [view mouseUp:event];
+    }
+}
+
+static void capture_region(NSRect bounds, NSString *path) {
+    if (NSIsEmptyRect(bounds)) abort();
+    bounds = NSInsetRect(bounds, -36, -36);
+    CGFloat top = NSScreen.screens.firstObject.frame.size.height - NSMaxY(bounds);
+    NSString *region = [NSString stringWithFormat:@"%.0f,%.0f,%.0f,%.0f", bounds.origin.x, top, bounds.size.width, bounds.size.height];
+    NSTask *task = [NSTask new];
+    task.executableURL = [NSURL fileURLWithPath:@"/usr/sbin/screencapture"];
+    task.arguments = @[@"-x", @"-R", region, path];
+    [task launchAndReturnError:nil];
+    [task waitUntilExit];
+    if (task.terminationStatus != 0) abort();
+}
+
+static void capture_controls(NSView *view, NSString *path) {
+    NSRect bounds = NSZeroRect;
+    for (id child in [view accessibilityChildren]) bounds = NSUnionRect(bounds, [child accessibilityFrame]);
+    capture_region(bounds, path);
+}
+
+static void check_tabs(NSView *view, NSDictionary *action) {
+    CGFloat previous = -CGFLOAT_MAX;
+    NSRect bounds = NSZeroRect;
+    for (NSString *label in action[@"tab_order"]) {
+        id control = find_control([view accessibilityChildren], label);
+        if (control == nil) abort();
+        NSRect frame = [control accessibilityFrame];
+        if (NSMinX(frame) <= previous) abort();
+        previous = NSMinX(frame);
+        bounds = NSUnionRect(bounds, frame);
+    }
+    if (action[@"capture_tabs"]) capture_region(bounds, action[@"capture_tabs"]);
+}
+
 static NSEventModifierFlags modifiers(NSDictionary *action) {
     NSEventModifierFlags flags = 0;
     if ([action[@"ctrl"] boolValue]) flags |= NSEventModifierFlagControl;
@@ -103,13 +162,29 @@ static void send_pointer(NSView *view, NSDictionary *action) {
         return;
     }
 
-    NSArray *cell = action[@"cell"];
-    if (!marker_valid || cell.count != 2) abort();
-    const CGFloat scale = view.window.backingScaleFactor;
-    NSPoint local = NSMakePoint((marker.x + ([cell[0] doubleValue] + .5) * marker.width) / scale,
-                               (marker.y + ([cell[1] doubleValue] + .5) * marker.height) / scale);
-    if (!view.isFlipped) local.y = view.bounds.size.height - local.y;
-    const NSPoint location = [view convertPoint:local toView:nil];
+    static NSPoint saved_location;
+    static BOOL saved_location_valid = NO;
+    NSPoint location;
+    if (action[@"control"]) {
+        id control = find_control([view accessibilityChildren], action[@"control"]);
+        if (control == nil) abort();
+        NSRect frame = [control accessibilityFrame];
+        CGFloat fraction = action[@"fraction"] ? [action[@"fraction"] doubleValue] : .5;
+        location = [view.window convertPointFromScreen:NSMakePoint(NSMinX(frame) + frame.size.width * fraction, NSMidY(frame))];
+    } else if ([action[@"reuse_pointer"] boolValue]) {
+        if (!saved_location_valid) abort();
+        location = saved_location;
+    } else {
+        NSArray *cell = action[@"cell"];
+        if (!marker_valid || cell.count != 2) abort();
+        const CGFloat scale = view.window.backingScaleFactor;
+        NSPoint local = NSMakePoint((marker.x + ([cell[0] doubleValue] + .5) * marker.width) / scale,
+                                   (marker.y + ([cell[1] doubleValue] + .5) * marker.height) / scale);
+        if (!view.isFlipped) local.y = view.bounds.size.height - local.y;
+        location = [view convertPoint:local toView:nil];
+    }
+    saved_location = location;
+    saved_location_valid = YES;
     NSDictionary *types = @{@"enter": @(NSEventTypeMouseEntered), @"leave": @(NSEventTypeMouseExited),
         @"move": @(NSEventTypeMouseMoved), @"press": @(NSEventTypeLeftMouseDown),
         @"drag": @(NSEventTypeLeftMouseDragged), @"release": @(NSEventTypeLeftMouseUp)};
@@ -187,6 +262,14 @@ __attribute__((constructor)) static void install(void) {
             fprintf(stderr, "GUI action %lu: %s\n", (unsigned long)index, [action.description UTF8String]);
             if (action[@"key"]) send_key(view, action);
             if (action[@"text"]) [(id<NSTextInputClient>)view insertText:action[@"text"] replacementRange:NSMakeRange(NSNotFound, 0)];
+            if (action[@"click_label"]) click_control(view, action[@"click_label"]);
+            if (action[@"expect_value"]) {
+                NSDictionary *expected = action[@"expect_value"];
+                id control = find_control([view accessibilityChildren], expected[@"label"]);
+                if (control == nil || ![[control accessibilityValue] isEqual:expected[@"value"]]) abort();
+            }
+            if (action[@"capture_controls"]) capture_controls(view, action[@"capture_controls"]);
+            if (action[@"tab_order"]) check_tabs(view, action);
             if (action[@"pointer"]) send_pointer(view, action);
             if (action[@"click"]) {
                 NSArray *point = action[@"click"];

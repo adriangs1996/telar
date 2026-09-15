@@ -289,7 +289,9 @@ test "native child progress remains visible with a single borderless pane" {
     const renderer = &fixture.session.renderer;
     var found = false;
     for (renderer.quads.items()) |quad| {
-        found = found or (quad.height == 2 and quad.y == pixels.y + pixels.height - 2 and quad.width == pixels.width / 2);
+        if (quad.radius > 0 and quad.border > 0 and quad.width == quad.height and quad.x >= pixels.x and quad.x + quad.width <= pixels.x + pixels.width and quad.y >= pixels.y and quad.y + quad.height <= pixels.y + pixels.height) {
+            found = true;
+        }
     }
 
     try std.testing.expect(found);

@@ -27,6 +27,7 @@ pub fn moveTab(controller: *Controller, request: MoveTabType) !void {
     const moved = controller.move_tab.execute(.{
         .location = request.location,
         .direction = request.direction,
+        .relative_to = request.relative_to,
     }) catch |err| {
         switch (err) {
             error.WorkspaceNotFound => try controller.queueFailure(request.request_id, .{

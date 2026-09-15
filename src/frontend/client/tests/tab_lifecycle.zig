@@ -1163,3 +1163,57 @@ test "resync forgets the final workspace before exiting" {
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
 }
+
+test "TUI tab drag emits one anchored move on release and never forwards the gesture" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const app = harness.client;
+    _ = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
+    const third = try harness.addTab(@enumFromInt(3), @enumFromInt(30));
+    try harness.allowTabSelection();
+    host(app).view.dirty = true;
+    host(app).view.interaction_revision +%= 1;
+    try presentation_lifecycle.observe(app);
+    try harness.settleModelPresentation();
+    const hits = host(app).view.tab_drag.hits.registered();
+    try std.testing.expectEqual(@as(usize, 3), hits.len);
+    const first = hits[0].rect;
+    const last = hits[2].rect;
+    var handler: InputHandler = .{ .client = app };
+    try handler.mouse(.{ .kind = .press, .x = last.x + 2, .y = last.y });
+    try handler.mouse(.{ .kind = .drag, .x = first.x, .y = first.y });
+    try std.testing.expectEqual(@as(?usize, 2), app.model.workspace.indexOf(third.tab_id));
+    try std.testing.expectEqual(@as(usize, 0), app.runtime_transport.outbox.len);
+    try std.testing.expectEqual(TestHarness.bootstrap_location.tab_id, host(app).view.tab_drag.gesture.destination.?.relative_to.?);
+    try handler.mouse(.{ .kind = .release, .x = first.x, .y = first.y });
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const request = (try harness.nextClientMessage(&buffer)).move_tab;
+    try std.testing.expectEqualDeep(third, request.location);
+    try std.testing.expectEqual(TestHarness.bootstrap_location.tab_id, request.relative_to.?);
+    try std.testing.expectEqual(TabMoveDirectionType.previous, request.direction);
+    try std.testing.expectEqual(@as(?usize, 2), app.model.workspace.indexOf(third.tab_id));
+    _ = try tab_moves.apply(app, .{ .request_id = request.request_id, .location = third, .position = 0 });
+    try std.testing.expectEqual(@as(?usize, 0), app.model.workspace.indexOf(third.tab_id));
+    try std.testing.expect(!host(app).view.tab_drag.gesture.captured);
+}
+
+test "TUI tab drag cancellation consumes releases outside the tab strip" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const app = harness.client;
+    const rect = host(app).view.tab_drag.hits.registered()[0].rect;
+    var handler: InputHandler = .{ .client = app };
+    try handler.mouse(.{ .kind = .press, .x = rect.x, .y = rect.y });
+    try handler.key(.{ .code = .escape, .physical = .{ .value = 53 } });
+    try handler.mouse(.{ .kind = .drag, .x = 45, .y = 10 });
+    try handler.mouse(.{ .kind = .release, .x = 45, .y = 10 });
+    try handler.key(.{ .code = .escape, .phase = .release, .physical = .{ .value = 53 } });
+    try std.testing.expect(!host(app).view.tab_drag.gesture.captured);
+    try std.testing.expectEqual(@as(usize, 0), app.runtime_transport.outbox.len);
+    try std.testing.expect(!app.runtime_transport.outbox.inFlight());
+}

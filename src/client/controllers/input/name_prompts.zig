@@ -162,6 +162,40 @@ pub fn chooseRow(client: *Client, index: u16) !void {
     _ = try handleInput(client, .{ .key = .{ .code = .enter } });
 }
 
+/// Selects a command from a delivered history page without pasting or running
+/// it. Example: `try selectHistoryRow(client, index, page_revision);`.
+pub fn selectHistoryRow(client: *Client, index: u16, revision: u64) !void {
+    const use_case: @import("../../application/input/HistoryBrowserHandler.zig") = .{ .model = &client.model };
+    if (!use_case.select(index, revision)) {
+        return;
+    }
+
+    try history_palettes.refreshInspection(client);
+}
+
+/// Scrolls output by logical lines and reapplies the adapter's exact bound.
+/// Example: `try scrollHistoryInspection(client, 1);`.
+pub fn scrollHistoryInspection(client: *Client, lines: i16) !void {
+    const use_case: @import("../../application/input/HistoryBrowserHandler.zig") = .{ .model = &client.model };
+    use_case.scrollInspection(lines);
+    try history_palettes.refreshInspection(client);
+}
+
+/// Accepts a directory row only while its landed listing is still current.
+/// Clicking a folder completes the path without submitting the context form.
+/// Example: `try chooseDirectory(client, index, listing_revision);`
+pub fn chooseDirectory(client: *Client, index: u16, revision: u64) !void {
+    const prompt = client.model.name_prompt.currentConst() orelse return;
+    const completion = &client.model.path_completion;
+    if (prompt.form() == null or completion.version() != revision or completion.pending != .none or index >= completion.entries().len) {
+        return;
+    }
+
+    _ = try handleInput(client, .{ .command = .{ .focus_field = .directory } });
+    client.model.name_prompt.select(index);
+    _ = try handleInput(client, .{ .command = .tab });
+}
+
 /// One semantic host event the prompt can interpret. Pasted text arrives as
 /// bounded slices between the paste markers; the adapter decodes bytes.
 pub const Input = union(enum) {

@@ -293,7 +293,7 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
     try std.testing.expectEqual(@as(u16, 2), second.application.session.restored_panes);
     try std.testing.expectEqual(@as(u16, 0), second.application.session.dropped_tabs);
     try std.testing.expectEqualStrings("core", reader.workspaceName(ensured.location.workspace).?);
-    try std.testing.expectEqualStrings("main", reader.tabLabel(ensured.location).?);
+    try std.testing.expectEqualStrings("", reader.tabLabel(ensured.location).?);
     try std.testing.expectEqualStrings("logs", reader.tabLabel(.{ .workspace = ensured.location.workspace, .tab_id = logs_tab }).?);
     const restored = second.application.model.panes.find(pane_id).?;
     try std.testing.expect(restored.generation > pane_generation);

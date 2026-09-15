@@ -53,20 +53,20 @@ pub fn color(palette: Palette, status: core.AgentStatus) core.Color {
     };
 }
 
-/// Alpha of the working glyph: six steps between 1.0 and 0.35 across 17
+/// Alpha of the working glyph: six steps between 1.0 and 0.65 across 17
 /// animation frames of 120 ms, so one pulse lasts about two seconds.
 /// Example: `label.alpha = status_glyph.pulse(frame);`
 pub fn pulse(frame: u8) f32 {
     const step: f32 = @floatFromInt((@as(u32, frame) % 17) * 6 / 17);
     const distance = @abs(step - 3);
-    return 0.35 + 0.65 * distance / 3;
+    return 0.65 + 0.35 * distance / 3;
 }
 
 test "the pulse visits six alpha steps and never leaves its range" {
     var seen: [6]bool = @splat(false);
     for (0..255) |frame| {
         const alpha = pulse(@intCast(frame));
-        try std.testing.expect(alpha >= 0.35 and alpha <= 1.0);
+        try std.testing.expect(alpha >= 0.65 and alpha <= 1.0);
         const step = (@as(u32, @intCast(frame)) % 17) * 6 / 17;
         seen[step] = true;
     }
@@ -76,5 +76,5 @@ test "the pulse visits six alpha steps and never leaves its range" {
     }
 
     try std.testing.expectEqual(@as(f32, 1), pulse(0));
-    try std.testing.expectApproxEqAbs(@as(f32, 0.35), pulse(9), 0.0001);
+    try std.testing.expectApproxEqAbs(@as(f32, 0.65), pulse(9), 0.0001);
 }

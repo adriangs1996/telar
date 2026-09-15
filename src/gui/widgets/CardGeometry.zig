@@ -12,7 +12,6 @@ pub const spacing: f32 = 3;
 pub const radius: f32 = 8;
 pub const gap: f32 = 6;
 pub const mark_size: f32 = 14;
-pub const rows = 3;
 
 /// The context and event rows, at the `small` role.
 small_row: f32,

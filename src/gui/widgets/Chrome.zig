@@ -5,7 +5,6 @@ const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
 const HitMap = @import("HitMap.zig");
 const Action = @import("action.zig").Action;
-const Regions = @import("Regions.zig");
 const Bands = @import("Bands.zig");
 const SidebarState = @import("SidebarState.zig");
 const AgentAges = @import("AgentAges.zig");
@@ -21,6 +20,7 @@ maps: GenericPresentedState(HitState) = .{},
 sidebar: SidebarState = .{},
 ages: AgentAges = .{},
 rings: RingFades = .{},
+progress: @import("ProgressMotions.zig") = .{},
 favicons: Favicons = .{},
 hovered: ?Action = null,
 gesture_button: ?u8 = null,
@@ -37,10 +37,10 @@ animation: @import("../animation/FrameClock.zig") = .{},
 pub fn begin(chrome: *Chrome, canvas: *Canvas, projection: *const client.Projection) !Context {
     const pending = chrome.maps.begin();
     try registerPanes(&pending.hits, projection.*);
-    pending.regions = Regions.calculate(projection.host_size.cols, projection.host_size.rows);
     pending.bands = Bands.resolve(canvas);
     chrome.ages.observe(projection.agents, chrome.now_ns);
-    return .{ .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = chrome.hovered, .ages = &chrome.ages, .favicons = &chrome.favicons };
+    chrome.progress.begin();
+    return .{ .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = chrome.hovered, .ages = &chrome.ages, .favicons = &chrome.favicons, .progress = &chrome.progress };
 }
 
 /// Appends the permanent chrome in painter order without emitting quads.
@@ -56,6 +56,7 @@ pub fn compose(chrome: *Chrome, context: *Context, widgets: anytype) !void {
 /// Seals hit records only after every composed widget has drawn successfully.
 /// Example: `chrome.seal();`
 pub fn seal(chrome: *Chrome) void {
+    chrome.progress.end();
     chrome.maps.seal();
 }
 

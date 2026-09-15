@@ -77,10 +77,6 @@ pub fn branchAt(snapshot: *const Snapshot, index: usize) []const u8 {
     return entry.branch[0..entry.branch_len];
 }
 
-pub fn dirtyAt(snapshot: *const Snapshot, index: usize) bool {
-    return snapshot.entries[index].dirty;
-}
-
 /// Returns one display name borrowed from the snapshot.
 ///
 /// ```zig

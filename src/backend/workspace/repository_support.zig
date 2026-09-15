@@ -13,6 +13,7 @@ const state_mod = @import("state_support.zig");
 const WorkspaceListEntryType = @import("telar-core").WorkspaceListEntry;
 const max_tabs_per_workspace_module = @import("telar-core").max_tabs_per_workspace;
 const TabDescriptorType = @import("telar-core").TabDescriptor;
+const TabLocationType = @import("telar-core").TabLocation;
 const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
 
 test "Git probes reserve one workspace, reject stale results and recover after removal" {
@@ -74,6 +75,42 @@ test "repository ensures stable path identity and owns aggregate storage" {
     unknown_tab.tab_id = try tab_module(999);
     try std.testing.expect(!reader_value.contains(unknown_tab));
     try std.testing.expectEqual(@as(usize, 2), reader_value.count());
+}
+
+test "checkpoint restoration preserves automatic labels and explicit former defaults" {
+    var state: State = .{};
+    var repository = Repository.init(&state, std.testing.allocator);
+    defer repository.deinit();
+    const initial = try repository.restoreWorkspace(.{
+        .id = @enumFromInt(1),
+        .path = "/work/telar",
+        .explicit_name = null,
+        .first_tab_id = @enumFromInt(1),
+        .first_tab_label = "",
+    });
+    const automatic: TabLocationType = .{
+        .workspace = initial.workspace,
+        .tab_id = @enumFromInt(2),
+    };
+    const explicit: TabLocationType = .{
+        .workspace = initial.workspace,
+        .tab_id = @enumFromInt(3),
+    };
+    try repository.restoreTab(automatic, "");
+    try repository.restoreTab(explicit, "tab 3");
+    const legacy = try repository.restoreWorkspace(.{
+        .id = @enumFromInt(2),
+        .path = "/work/legacy",
+        .explicit_name = null,
+        .first_tab_id = @enumFromInt(4),
+        .first_tab_label = "main",
+    });
+
+    const reader = repository.reader();
+    try std.testing.expectEqualStrings("", reader.tabLabel(initial).?);
+    try std.testing.expectEqualStrings("", reader.tabLabel(automatic).?);
+    try std.testing.expectEqualStrings("tab 3", reader.tabLabel(explicit).?);
+    try std.testing.expectEqualStrings("main", reader.tabLabel(legacy).?);
 }
 
 test "workspace proposals stay invisible and preserve identities on rollback" {
@@ -181,7 +218,7 @@ test "reader creates bounded list and tab projections" {
     const snapshot = reader_value.descriptors(location.workspace, &descriptors).?;
     try std.testing.expectEqualStrings("agents", snapshot.name);
     try std.testing.expectEqual(@as(usize, 1), snapshot.tabs.len);
-    try std.testing.expectEqualStrings("main", snapshot.tabs[0].label);
+    try std.testing.expectEqualStrings("", snapshot.tabs[0].label);
 }
 
 test "failed insertion preserves repository identities and revision" {

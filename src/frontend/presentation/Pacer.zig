@@ -89,10 +89,6 @@ pub fn noteThrottled(p: *Pacer) void {
     p.stats.throttled += 1;
 }
 
-pub fn noteDropped(p: *Pacer, n: usize) void {
-    p.stats.dropped += n;
-}
-
 fn inputRecent(p: *const Pacer, now: u64) bool {
     const input = p.last_input_ns orelse return false;
     return p.input_frames_left != 0 and now -| input < p.input_grace;

@@ -58,6 +58,7 @@ geometry_state: StateType,
 theme: ThemeType,
 icon_theme: ClientTheme,
 hits: context_support.Hits = .{},
+tab_drag: @import("TabDrag.zig") = .{},
 sidebar_requested: bool = true,
 sidebar_preferred_width: u16 = default_width,
 sidebar_resize_active: bool = false,
@@ -134,6 +135,8 @@ pub fn deinit(self: *State) void {
 }
 
 pub fn resize(state: *State, width: u16, height: u16) !void {
+    state.tab_drag.gesture.cancel();
+    state.tab_drag.hits.clear();
     if (state.scratch.w != width or state.scratch.h != height) {
         try state.scratch.resize(width, height);
     }
@@ -229,6 +232,7 @@ pub fn invalidate(state: *State) void {
 /// view.clearHover();
 /// ```
 pub fn clearHover(state: *State) void {
+    state.tab_drag.gesture.cancel();
     const had_pointer = state.pointer_position != null;
     state.pointer_position = null;
     state.pointer_content = .{};
@@ -638,6 +642,7 @@ fn renderDiagnosticBanner(state: *State, screen: *ScreenType, diagnostic: ?[]con
 }
 
 pub fn render(state: *State, screen: *ScreenType, input: RenderInput) !RenderStats {
+    defer state.renderTabInsertion(screen);
     // Resolve against rebuilt hits on chrome/layout changes, and against
     // current pane metadata even when cell/chrome rendering is a no-op.
     defer screen.mouse_pointer = state.mousePointerShape(input);
@@ -917,4 +922,17 @@ fn panePointerShape(state: *State, input: RenderInput, pane_id: PaneIdType) Poin
     }
 
     return pane.pointer_shape;
+}
+
+fn renderTabInsertion(state: *State, screen: *ScreenType) void {
+    const target = state.tab_drag.gesture.destination orelse return;
+    for (state.hits.registered()) |hit| {
+        if (hit.action != .select_tab or hit.action.select_tab != target.relative_to) {
+            continue;
+        }
+
+        const x = if (target.direction == .previous) hit.rect.x else hit.rect.x + hit.rect.w -| 1;
+        _ = screen.back.writeTruncated(hit.rect, .{ .point = .{ .x = x, .y = hit.rect.y }, .text = "▏", .max_width = 1, .style = .{ .fg = state.palette().accent, .bg = state.palette().panel_bg, .flags = .{ .bold = true } } });
+        return;
+    }
 }

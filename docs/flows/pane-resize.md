@@ -70,6 +70,13 @@ attachments and geometry-lease rejection. The handler applies or defers an
 authorized PTY resize and then synchronizes observation, media and the client
 cell projection. The protocol has no success reply.
 
+The resized attachment requests a full cell snapshot. That snapshot respects
+the child's synchronized-output block just like an incremental frame: a
+deferred attempt keeps the snapshot pending and publishes no partial redraw.
+Closing the block, reaching its existing hold deadline, or finishing PTY output
+releases the pending frame. Runtime maintenance retries delivery even when no
+new child output arrives.
+
 Neither the use case nor the adapter invalidates `View` or requests a draw.
 After the event, `presentation_lifecycle.observe` lets `Presenter` observe the pane
 revision and schedule one paced frame.
@@ -103,3 +110,5 @@ rollback because the `pane_resize` protocol has no acknowledgement.
   substituted runtime socket.
 - `src/backend/runtime/tests/pane_resize_test.zig` proves lease checks and runtime
   synchronization order.
+- `src/backend/runtime/tests/cell_projection_test.zig` proves that resize snapshots
+  wait for synchronized redraw completion and still recover on expiry or EOF.

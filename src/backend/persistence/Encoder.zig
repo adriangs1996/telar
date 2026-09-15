@@ -32,7 +32,7 @@ pub fn init(buffer: []u8, counters: Counters) !Encoder {
 pub fn workspace(encoder: *Encoder, record: WorkspaceRecord) !void {
     try checkpoint.validatePath(record.path);
     try encoder.inner.writeByte(@intFromEnum(checkpoint.Kind.workspace));
-    if (record.first_tab_label.len == 0 or record.first_tab_label.len > max_tab_label_bytes_module or record.name.len > max_tab_label_bytes_module) {
+    if (record.first_tab_label.len > max_tab_label_bytes_module or record.name.len > max_tab_label_bytes_module) {
         return error.InvalidCheckpoint;
     }
     try encoder.inner.writeInt(u64, record.id);

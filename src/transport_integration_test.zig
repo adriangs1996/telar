@@ -1793,7 +1793,7 @@ test "a reconnect restores tab order labels and pane membership" {
             try std.testing.expectEqual(agents.tab_id, first_tab.tab_id);
             try std.testing.expectEqualStrings("agents", first_tab.label);
             try std.testing.expectEqual(primary.tab_id, second_tab.tab_id);
-            try std.testing.expectEqualStrings("main", second_tab.label);
+            try std.testing.expectEqualStrings("", second_tab.label);
             try std.testing.expectEqual(@as(u16, 1), first_tab.pane_count);
             try std.testing.expectEqual(@as(u16, 1), second_tab.pane_count);
             break;

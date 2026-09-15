@@ -75,10 +75,6 @@ pub fn enqueue(delivery: *Delivery, response: response_queue.PendingResponse) !v
     try delivery.responses.push(response);
 }
 
-pub fn publishOrResync(delivery: *Delivery, response: response_queue.PendingResponse) void {
-    delivery.responses.pushOrDrop(response);
-}
-
 pub fn requestWorkspaceResync(delivery: *Delivery, workspace: WorkspaceLocationType, previous_workspace: ?WorkspaceIdType) void {
     delivery.responses.resync_workspace = workspace;
     delivery.responses.resync_previous_workspace = previous_workspace;
@@ -131,18 +127,6 @@ pub fn stopping(delivery: *const Delivery) bool {
         .in_flight => |completion| completion.stopping_delivered,
         .ready, .closed => false,
     };
-}
-
-pub fn queueDepth(delivery: *const Delivery) usize {
-    return delivery.responses.len;
-}
-
-pub fn queueHighWater(delivery: *const Delivery) usize {
-    return delivery.responses.high_water;
-}
-
-pub fn queueDropped(delivery: *const Delivery) u64 {
-    return delivery.responses.dropped;
 }
 
 /// Replaces the pending clipboard message only when `bytes` fits the wire

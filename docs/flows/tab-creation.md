@@ -27,9 +27,17 @@ workspace identity and cwd source. Planning does not mutate the tab collection
 or advance a model version.
 
 The adapter adds the workbench size and launch configuration. An empty label
-asks the runtime workspace aggregate to generate the canonical tab label. The
-outbox copies a supplied label and launch cwd into bounded storage before the
-input event returns. A local delivery failure leaves the model unchanged.
+keeps the canonical tab label empty, marking automatic naming. Each client
+derives its displayed name and icon from the foreground application in its
+focused pane. An explicit label always wins, including a user-chosen `main` or
+`tab 45`. The outbox copies a supplied label and launch cwd into bounded storage
+before the input event returns. A local delivery failure leaves the model
+unchanged.
+
+The first tab of a new workspace uses the same empty marker. Creation events,
+workspace snapshots and checkpoints preserve it. Checkpoint version 3 permits
+empty labels; restored non-empty labels from earlier versions retain their
+names because those versions did not record whether a name was user-chosen.
 
 The continuation retains the requested workspace and terminal size. Those are
 the facts needed to validate and apply the eventual response; it retains no

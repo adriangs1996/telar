@@ -12,6 +12,7 @@ pub fn quads(cells: usize) usize {
     const link_preview = @min(cells, 100);
     const link_spans = cells;
     const chrome_bands = (core.max_workspace_list_entries + core.max_tabs_per_workspace) * (2 + 32) + 512;
-    const pane_decorations = core.max_panes_per_tab * (Mesh.capacity + 64);
+    // Header glyphs and attention plus one capsule with a 64-segment arc.
+    const pane_decorations = core.max_panes_per_tab * (Mesh.capacity + 64 + 96);
     return (cells + modal + notifications + link_preview) * Mesh.capacity + link_spans + pane_decorations + chrome_bands + 1024;
 }

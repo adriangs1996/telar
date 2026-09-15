@@ -100,7 +100,7 @@ pub fn bootstrap(model: *Model, root: RootTab) !void {
 pub fn replaceWithRoot(model: *Model, root: RootTab) !void {
     var tab = Tab.init(model.gpa, .{
         .location = root.location,
-        .label = "main",
+        .label = "",
         .pane_gaps = model.pane_gaps,
     });
     errdefer tab.deinit();
@@ -354,7 +354,10 @@ pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !void
             return error.TooManyPanes;
         }
 
-        try tabs_ops.validateLabel(descriptor.label);
+        if (descriptor.label.len != 0) {
+            try tabs_ops.validateLabel(descriptor.label);
+        }
+
         for (snapshot.tabs[0..index]) |previous| {
             if (previous.tab_id == descriptor.tab_id) {
                 return error.DuplicateTab;
@@ -492,7 +495,7 @@ pub fn applyLabel(model: *Model, tab_id: TabIdType, label: []const u8) !tabs_ops
     const tab = model.find(tab_id) orelse return error.TabNotFound;
     try tabs_ops.validateLabel(label);
 
-    if (std.mem.eql(u8, tab.labelSlice(), label)) {
+    if (std.mem.eql(u8, tab.canonicalLabel(), label)) {
         return .unchanged;
     }
 

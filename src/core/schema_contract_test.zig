@@ -684,7 +684,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     const descriptors = [_]TabDescriptorType{
-        .{ .tab_id = @enumFromInt(3), .position = 0, .pane_count = 2, .label = "main" },
+        .{ .tab_id = @enumFromInt(3), .position = 0, .pane_count = 2, .label = "" },
         .{ .tab_id = @enumFromInt(4), .position = 1, .pane_count = 1, .label = "logs" },
     };
     helper.add(.{ .name = "workspace_snapshot", .direction = .server, .golden_hex = golden.workspace_snapshot }, helper.commit(
@@ -700,7 +700,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .request_id = @enumFromInt(51),
             .location = location,
             .position = 1,
-            .label = "logs",
+            .label = "",
             .root_pane_id = @enumFromInt(9),
         }),
     ));
@@ -1539,12 +1539,12 @@ test "tab lifecycle client messages round trip" {
     try std.testing.expectEqual(types.TabMoveDirection.previous, moved.direction);
 }
 
-test "tab lifecycle server messages round trip" {
+test "tab lifecycle server messages preserve automatic and explicit labels" {
     var buffer: [4096]u8 = undefined;
     const workspace: types.WorkspaceLocation = .{ .workspace = @enumFromInt(7) };
     const location: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(3) };
     const descriptors = [_]TabDescriptorType{
-        .{ .tab_id = @enumFromInt(3), .position = 0, .pane_count = 2, .label = "main" },
+        .{ .tab_id = @enumFromInt(3), .position = 0, .pane_count = 2, .label = "" },
         .{ .tab_id = @enumFromInt(4), .position = 1, .pane_count = 1, .label = "logs" },
     };
 
@@ -1568,6 +1568,15 @@ test "tab lifecycle server messages round trip" {
         .root_pane_id = @enumFromInt(9),
     }))).tab_created;
     try std.testing.expectEqualStrings("logs", created.label);
+
+    const automatic = (try root.decodeServer(try tab_module.encodeTabCreated(&buffer, .{
+        .request_id = @enumFromInt(55),
+        .location = location,
+        .position = 2,
+        .label = "",
+        .root_pane_id = @enumFromInt(10),
+    }))).tab_created;
+    try std.testing.expectEqualStrings("", automatic.label);
 
     const renamed = (try root.decodeServer(try tab_module.encodeTabRenamed(&buffer, .{
         .request_id = @enumFromInt(52),
@@ -2224,4 +2233,21 @@ test "a frame past the body budget reports FrameTooLarge, not a full buffer" {
         .spans = spans,
         .text_metadata = metadata_builder.finish(.complete),
     }));
+}
+
+test "anchored tab moves round trip and reject invalid anchor identities" {
+    var buffer: [128]u8 = undefined;
+    const request: @import("schema/messages/MoveTab.zig") = .{
+        .request_id = @enumFromInt(42),
+        .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(3) },
+        .direction = .next,
+        .relative_to = @enumFromInt(7),
+    };
+    const encoded = try tab_module.encodeMoveTab(&buffer, request);
+    try std.testing.expectEqualDeep(request, (try root.decodeClient(encoded)).move_tab);
+    @memset(buffer[encoded.len - 8 .. encoded.len], 0);
+    try std.testing.expectError(error.InvalidTabId, root.decodeClient(buffer[0..encoded.len]));
+    var invalid = request;
+    invalid.relative_to = .invalid;
+    try std.testing.expectError(error.InvalidTabId, tab_module.encodeMoveTab(&buffer, invalid));
 }

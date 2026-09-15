@@ -32,5 +32,7 @@ together with fontconfig, so individual fonts do not need to be patched.
 | Weather Icons          | https://github.com/erikflowers/weather-icons          | 2.0.10          | OFL 1.1     |
 
 Telar embeds `SymbolsNerdFontMono-Regular.ttf` for GUI font fallback. Its TUI
-also embeds a subset whose selected glyphs come from Codicons, extraglyphs,
-Font Awesome, and Octicons.
+also embeds a subset whose selected glyphs come from Codicons, Devicons,
+extraglyphs, Font Awesome, MaterialDesign, Octicons, and Seti and original.
+The foreground application icons add `dev-git` (Devicons) and `custom-vim`
+(Seti and original), both under the MIT licenses listed above.

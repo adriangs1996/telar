@@ -12,6 +12,10 @@ label: OwnedTabLabel,
 /// const event = try TabRenamed.init(location, "server");
 /// ```
 pub fn init(location: TabLocationType, label: []const u8) !TabRenamed {
+    if (label.len == 0) {
+        return error.InvalidTabLabel;
+    }
+
     return .{
         .location = location,
         .label = try .init(label),

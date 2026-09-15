@@ -70,6 +70,8 @@ pub fn presentNow(client: *Client) !void {
 
 fn deliver(client: *Client, token: TokenType) !void {
     const delivery = host(client).presenter.presentation_state.complete(token, .delivered) orelse return;
+    const geometry = client.presentation.deliveredGeometry();
+    host(client).view.tab_drag.present(&host(client).view.hits, if (geometry) |value| if (value.location) |location| location.workspace else null else null);
     var use_case: DeliverPresentationHandlerType = .{
         .model = &client.model,
         .effects = deliveryEffects(client),

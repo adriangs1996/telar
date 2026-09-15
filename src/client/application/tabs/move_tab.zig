@@ -120,3 +120,46 @@ test "tab move confirmation rejects invalid canonical state without mutation" {
     try std.testing.expectEqual(@as(?usize, 1), testing.model.workspace.indexOf(testing.second.tab_id));
     try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
+
+test "pointer tab moves use their captured identity and reject stale workspaces and anchors" {
+    var testing = try MoveTabTestingModel.init();
+    defer testing.deinit();
+    var capture: MoveTabRequestCapture = .{};
+    var handler: RequestTabMoveHandler = .{ .model = testing.model, .gate = capture.gate(), .effects = capture.effects() };
+    try std.testing.expect(try handler.execute(.{ .location = testing.first, .direction = .next, .relative_to = testing.second.tab_id }));
+    try std.testing.expectEqualDeep(testing.first, capture.intent.?.location);
+    try std.testing.expectEqual(testing.second.tab_id, capture.intent.?.relative_to.?);
+    try std.testing.expectEqualDeep(testing.second, testing.model.activeTabLocation().?);
+    var stale = testing.first;
+    stale.workspace.workspace = @enumFromInt(9);
+    try std.testing.expect(!try handler.execute(.{ .location = stale, .direction = .next, .relative_to = testing.second.tab_id }));
+    try std.testing.expect(!try handler.execute(.{ .location = testing.first, .direction = .next, .relative_to = @enumFromInt(99) }));
+    try std.testing.expectEqual(@as(usize, 1), capture.calls);
+}
+
+test "tab drag threshold outside drops and cancellation never create a move" {
+    const TabDrag = @import("TabDrag.zig");
+    var testing = try MoveTabTestingModel.init();
+    defer testing.deinit();
+    var drag: TabDrag = .{};
+    const target: @import("telar-core").TabMoveTarget = .{ .relative_to = testing.first.tab_id, .direction = .previous };
+    drag.begin(testing.second, .{ 10, 10 });
+    drag.update(.{ 10.5, 10.5 }, target);
+    try std.testing.expect(drag.finish() == null);
+    drag.begin(testing.second, .{ 10, 10 });
+    drag.update(.{ 4, 10 }, target);
+    drag.update(.{ 4, 20 }, null);
+    try std.testing.expect(drag.finish() == null);
+    drag.begin(testing.second, .{ 10, 10 });
+    drag.update(.{ 4, 10 }, target);
+    drag.cancel();
+    try std.testing.expect(drag.captured);
+    drag.update(.{ 4, 10 }, target);
+    try std.testing.expect(drag.finish() == null);
+    try std.testing.expect(!drag.captured);
+    drag.begin(testing.second, .{ 10, 10 });
+    _ = testing.model.departWorkspace();
+    drag.validate(testing.model);
+    drag.update(.{ 4, 10 }, target);
+    try std.testing.expect(drag.finish() == null);
+}

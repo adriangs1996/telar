@@ -8,10 +8,19 @@ pub fn forAction(projection: *const client.Projection, action: Action) []const u
         .resize_sidebar => "Resize sidebar",
         .custom => "Agents",
         .text_field => |field| if (field == .name) "Name or query" else "Working directory",
+        .prompt => |prompt_action| if (prompt_action == .submit) "Create context" else "Cancel",
+        .complete_path => "Choose folder",
+        .history => |action_value| switch (action_value) {
+            .select => "Select command",
+            .submit => "Use selected command",
+            .cycle_scope => "Change history scope",
+            .toggle_inspection => "Inspect command",
+        },
         .intent => |intent| switch (intent) {
             .toggle_sidebar => "Toggle sidebar",
             .toggle_workspace_list => "Toggle workspace list",
             .create_tab => "Create tab",
+            .move_tab => "Move tab",
             .select_tab, .rename_tab => |id| blk: {
                 for (projection.tabs.items[0..projection.tabs.count]) |*slot| {
                     if (slot.*) |*tab| {

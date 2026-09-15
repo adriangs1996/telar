@@ -43,11 +43,13 @@ test "TabCreated owns its canonical label and position" {
 
 test "TabCreated rejects labels it cannot own" {
     const location = try testingLocation();
-
-    try std.testing.expectError(error.InvalidTabLabel, TabCreated.init(location, 1, ""));
-
     const oversized: [max_tab_label_bytes_module + 1]u8 = @splat('x');
     try std.testing.expectError(error.InvalidTabLabel, TabCreated.init(location, 1, &oversized));
+}
+
+test "TabCreated preserves the automatic label marker" {
+    const event = try TabCreated.init(try testingLocation(), 1, "");
+    try std.testing.expectEqualStrings("", event.labelSlice());
 }
 
 test "TabRemoved represents tab-only and whole-workspace removals" {

@@ -29,23 +29,38 @@ pub fn compose(input: @import("OverlayComposition.zig"), pending: *@import("HitS
     }
 
     const host: core.Rect = .{ .w = input.projection.host_size.cols, .h = input.projection.host_size.rows };
+    if (prompt.target() == .create_workspace) {
+        const layout = try @import("WorkspaceFormLayout.zig").measure(input.canvas, input.projection);
+        pending.modal = host;
+        pending.native_modal = layout.bounds;
+        try widgets.append(.{ .modal = .{ .workspace_form = .{ .layout = layout, .projection = input.projection } } });
+        return;
+    }
+
+    if (prompt.target() == .history) {
+        const metrics = @import("HistoryModalMetrics.zig").fromCanvas(input.canvas);
+        var layout = @import("HistoryModalLayout.zig").measure(metrics, prompt.inspecting());
+        const offset = @min(input.canvas.chrome.px(12), @max(0, layout.viewport.height - layout.bounds.y - layout.bounds.height));
+        layout.offsetY(offset * (1 - input.history_reveal));
+        pending.modal = host;
+        pending.native_modal = layout.bounds;
+        try widgets.append(.{ .modal = .{ .history = .{ .layout = layout, .projection = input.projection, .reveal = input.history_reveal } } });
+        return;
+    }
+
     const area = switch (prompt.target()) {
-        .history => @import("HistoryModal.zig").preferredArea(input.projection.*),
         .goto => Modal.bounds(host, .{ .w = 84, .h = 18 }),
         .suggest => Modal.bounds(host, .{ .w = 84, .h = 9 }),
-        .create_workspace => Modal.bounds(host, .{ .w = 72, .h = 16 }),
         else => Modal.bounds(host, .{ .w = 64, .h = 7 }),
     };
     pending.modal = area;
     const widget: Widget = switch (prompt.target()) {
         .goto => .{ .picker = .{ .area = area, .projection = input.projection } },
-        .history => .{ .history = .{ .area = area, .projection = input.projection } },
         .suggest => .{ .suggestion = .{ .area = area, .projection = input.projection } },
-        .create_workspace => .{ .workspace_form = .{ .area = area, .projection = input.projection } },
         .rename_tab => .{ .name_prompt = .{ .area = area, .prompt = prompt, .title = "Rename tab" } },
         .rename_workspace => .{ .name_prompt = .{ .area = area, .prompt = prompt, .title = "Rename workspace" } },
         .copy_search => |direction| .{ .name_prompt = .{ .area = area, .prompt = prompt, .title = if (direction == .forward) "Search forward" else "Search backward" } },
-        .palette => unreachable,
+        .palette, .create_workspace, .history => unreachable,
     };
     try widgets.append(.{ .modal = widget });
 }

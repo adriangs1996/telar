@@ -276,16 +276,6 @@ fn isolatedInverse(buffer: *const BufferType, at: Position) bool {
     return !left_inverse and !right_inverse;
 }
 
-fn knownExtension(extension: []const u8) bool {
-    for (extensions) |known| {
-        if (std.mem.eql(u8, known, extension)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 pub fn cellAt(buffer: *const BufferType, x: u16, y: u16) *const CellType {
     return &buffer.cells[@as(usize, y) * buffer.w + x];
 }

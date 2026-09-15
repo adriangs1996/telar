@@ -14,7 +14,6 @@ const DiagnosticType = @import("telar-client").Diagnostic;
 const GenerationType = @import("telar-client").Generation;
 const RegistryType = @import("telar-client").Registry;
 const TrustStoreType = @import("telar-core").TrustStore;
-const host_inputs = @import("../controllers/input/host_inputs.zig");
 const ActionType = @import("telar-client").Action;
 const config_reloads = @import("telar-client").controllers.config_reloads;
 const CallbackContextType = @import("telar-client").CallbackContext;
@@ -269,7 +268,6 @@ pub fn installTestingPlugin(client: *Client) !TestingPlugin {
         .manifest = manifest,
         .digest = digest,
         .root_len = 0,
-        .entry_len = 0,
     };
     registry.count = 1;
     client.plugin_registry = registry;

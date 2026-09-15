@@ -24,6 +24,19 @@ pub fn restart(handler: Handler) void {
     handler.model.name_prompt.updateHistory(.{ .selection = 0, .reset_scroll = true });
 }
 
+/// Selects a row only from the currently landed page, leaving submission to
+/// an explicit action. Example: `_ = handler.select(index, page_revision);`.
+pub fn select(handler: Handler, index: u16, revision: u64) bool {
+    const prompt = handler.model.name_prompt.currentConst() orelse return false;
+    const palette = &handler.model.history_palette;
+    if (prompt.target() != .history or palette.phase != .ready or palette.version() != revision or index >= palette.len) {
+        return false;
+    }
+
+    handler.model.name_prompt.updateHistory(.{ .selection = index, .reset_scroll = true });
+    return true;
+}
+
 /// Reserves a request before delivery and makes previous rows non-actionable.
 /// Example: `if (!handler.requestPage(id, .global)) return;`.
 pub fn requestPage(handler: Handler, id: u64, scope: HistoryScopeType) bool {
@@ -108,6 +121,14 @@ pub fn nextRead(handler: Handler) ?ReadType {
 /// Example: `handler.constrainInspection(limit);`.
 pub fn constrainInspection(handler: Handler, limit: u32) void {
     handler.model.name_prompt.updateHistory(.{ .scroll_limit = limit });
+}
+
+/// Native scrolling changes only the current inspector, never its selection.
+/// Example: `handler.scrollInspection(1);`.
+pub fn scrollInspection(handler: Handler, lines: i16) void {
+    if (handler.model.history_palette.phase == .ready) {
+        handler.model.name_prompt.updateHistory(.{ .scroll_by = lines });
+    }
 }
 
 /// Correlates each admitted detail request with its selected history entry.

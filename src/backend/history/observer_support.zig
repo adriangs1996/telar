@@ -48,7 +48,6 @@ pub const Event = union(enum) {
         clock: ClockType,
         exit_code: i32,
     },
-    interrupt: ClockType,
 };
 
 pub const Observer = @import("Observer.zig");

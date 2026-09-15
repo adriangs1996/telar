@@ -76,6 +76,10 @@ fn applyIntent(raw_context: *anyopaque, intent: IntentType) !IntentOutcomeType {
                 .area = client.geometry().area,
             });
         },
+        .move_tab => |move| {
+            var use_case = @import("../tabs/tab_moves.zig").requestHandler(client);
+            _ = try use_case.execute(.{ .location = move.location, .direction = move.direction, .relative_to = move.relative_to });
+        },
         .rename_tab => |tab_id| _ = name_prompts.beginTabRename(client, tab_id),
         .create_tab => {
             var use_case = tab_creations.requestHandler(client);

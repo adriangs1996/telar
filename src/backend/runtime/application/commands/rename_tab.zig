@@ -82,7 +82,7 @@ test "RenameTabHandler rejects invalid targets and labels without effects" {
         .label = "missing",
     }));
 
-    try std.testing.expectEqualStrings("main", workspaces.reader().tabLabel(location).?);
+    try std.testing.expectEqualStrings("", workspaces.reader().tabLabel(location).?);
     try std.testing.expectEqual(revision, workspaces.reader().revision());
     try std.testing.expectEqual(@as(usize, 0), capture.count);
     try std.testing.expect(capture.last == null);

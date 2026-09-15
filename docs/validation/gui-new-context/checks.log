@@ -1,0 +1,65 @@
+...................
+----------------------------------------------------------------------
+Ran 19 tests in 0.169s
+
+OK
+telar-client module and capability boundaries passed
+test-gui
++- run test w
+[gui_config] (warn): GUI configuration unchanged: config.lua:1: unexpected symbol near <eof>
+[gui_config] (warn): GUI configuration unchanged: cannot prepare GUI font 'Telar-Test-Missing-Family-98a34b1': FontFamilyNotFound
+[gui_config] (warn): GUI configuration unchanged: gui.background_blur must be a number in 0..255
+failed command: ./.zig-cache/o/4c7a0a1f71bf833493691c3cb72cc481/test --cache-dir=./.zig-cache --seed=0x3e4de24f --listen=-
+
+Build Summary: 28/28 steps succeeded; 1248/1248 tests passed
+test-gui success
++- run test 346 pass (346 total) 35s MaxRSS:143M
+   +- compile test Debug native success 12s MaxRSS:671M
+      +- WriteFile cached
+      +- compile lib lua Debug native cached 77ms MaxRSS:34M
+      +- compile lib lua Debug native (reused)
+      +- WriteFile  cached
+      +- compile lib simdutf ReleaseFast aarch64-macos.13.0 cached 63ms MaxRSS:34M
+      |  +- WriteFile libc.txt cached
+      +- WriteFile hwy cached
+      +- compile lib highway ReleaseFast aarch64-macos.13.0 cached 56ms MaxRSS:35M
+      |  +- WriteFile libc.txt (reused)
+      +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- options cached
+      +- options cached
+      +- WriteFile props.zig cached
+      |  +- run exe props-unigen cached
+      |  |  +- compile exe props-unigen Debug native cached 174ms MaxRSS:35M
+      |  |     +- run exe uucode_generate (tables.zig) cached
+      |  |        +- compile exe uucode_generate Debug native cached 98ms MaxRSS:35M
+      |  +- run exe symbols-unigen cached
+      |     +- compile exe symbols-unigen Debug native cached 177ms MaxRSS:35M
+      |        +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+test-client success
++- run test 902 pass (902 total) 1s MaxRSS:43M
+   +- compile test Debug native success 13s MaxRSS:810M
+   |  +- WriteFile (reused)
+   |  +- compile lib lua Debug native (reused)
+   |  +- compile lib lua Debug native (reused)
+   |  +- WriteFile  (reused)
+   |  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+   |  +- WriteFile hwy (reused)
+   |  +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+   |  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+   |  +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+   |  +- options (reused)
+   |  +- options (reused)
+   |  +- WriteFile props.zig (+2 more reused dependencies)
+   |  +- WriteFile props.zig (+2 more reused dependencies)
+   |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+   +- run python3 success 550ms
+      +- run python3 success 609ms
+check-client-boundaries success
++- run python3 (+1 more reused dependencies)
+codestyle success
++- run exe codestyle success 5s
+   +- compile exe codestyle Debug native cached 144ms MaxRSS:35M
+

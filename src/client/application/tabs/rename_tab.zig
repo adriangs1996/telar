@@ -119,7 +119,7 @@ test "tab rename request propagates delivery failure without mutation" {
     }));
 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
-    try std.testing.expectEqualStrings("main", testing.model.workspace.find(testing.first.tab_id).?.labelSlice());
+    try std.testing.expectEqualStrings("shell", testing.model.workspace.find(testing.first.tab_id).?.labelSlice());
     try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 

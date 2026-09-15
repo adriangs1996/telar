@@ -6,6 +6,7 @@ const FrameViewType = @import("telar-core").FrameView;
 const std = @import("std");
 const decodeServer_module = @import("telar-core").decodeServer;
 const enabled_module = @import("telar-core").enabled;
+const ResizeHarness = @import("ResizeHarness.zig");
 
 fn prepareFrame(fixture: *PaneFixture, attachment: *Attachment, buffer: []u8) !FrameViewType {
     const prepared = (try attachment.prepareNextCells(.{
@@ -26,6 +27,117 @@ fn establishBaseline(fixture: *PaneFixture, attachment: *Attachment, buffer: []u
     const received_at_ns = attachment.cells.outstanding.?.sent_ns +| 1;
 
     try std.testing.expect(attachment.cells.acknowledge(frame.frame_id, received_at_ns) != null);
+}
+
+fn beginResizedRedraw(fixture: *PaneFixture, cols: u16, buffer: []u8) !*Attachment {
+    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    _ = try fixture.pane.ingest(std.testing.io, "before");
+    try establishBaseline(fixture, attachment, buffer);
+
+    var size = PaneFixture.initial_size;
+    size.cols = cols;
+    var harness: ResizeHarness = undefined;
+    harness.init(&fixture.attachments, size);
+    _ = try harness.handler.execute(.{ .pane_id = fixture.pane.id, .size = size });
+    _ = try fixture.pane.ingest(std.testing.io, "\x1b[?2026h\x1b[2J\x1b[H");
+
+    return attachment;
+}
+
+test "resizing a pane holds its snapshot until synchronized redraw completes" {
+    for ([_]u16{ 12, 30 }) |cols| {
+        var fixture: PaneFixture = .{};
+        try fixture.init();
+        defer fixture.deinit();
+
+        var buffer: [16 * 1024]u8 = undefined;
+        const attachment = try beginResizedRedraw(&fixture, cols, &buffer);
+
+        try std.testing.expect(fixture.pane.terminal.modes.get(.synchronized_output));
+        try std.testing.expect(attachment.cells.snapshot_pending);
+        try std.testing.expect((try attachment.prepareNextCells(.{
+            .io = std.testing.io,
+            .buffer = &buffer,
+            .metrics = &fixture.metrics,
+        })) == null);
+        try std.testing.expect(attachment.cells.snapshot_pending);
+        try std.testing.expect(!attachment.cells.hasOutstanding());
+
+        _ = try fixture.pane.ingest(std.testing.io, "after\x1b[?2026l");
+        const frame = try prepareFrame(&fixture, attachment, &buffer);
+
+        try std.testing.expectEqual(@as(u64, 0), frame.base_frame_id);
+        try std.testing.expectEqual(cols, frame.cols);
+        try std.testing.expectEqual(PaneFixture.initial_size.rows, frame.rows);
+        try std.testing.expect(!attachment.cells.snapshot_pending);
+        var spans = frame.spans();
+        const span = (try spans.next()).?;
+        try std.testing.expectEqual(@as(u32, 0), span.start);
+        try std.testing.expectEqual(@as(u32, cols) * PaneFixture.initial_size.rows, span.cell_count);
+        var cells = span.cells();
+        for ("after") |byte| {
+            const cell = (try cells.next()).?;
+            try std.testing.expectEqualStrings(&.{byte}, cell.text());
+        }
+
+        try std.testing.expect((try spans.next()) == null);
+    }
+}
+
+test "a resized snapshot escapes an unfinished synchronized redraw after its deadline" {
+    var fixture: PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+
+    var buffer: [16 * 1024]u8 = undefined;
+    const attachment = try beginResizedRedraw(&fixture, 30, &buffer);
+
+    try std.testing.expect((try attachment.prepareNextCells(.{
+        .io = std.testing.io,
+        .buffer = &buffer,
+        .metrics = &fixture.metrics,
+    })) == null);
+    const started = fixture.pane.sync_hold_started_ns.?;
+    fixture.pane.sync_hold_started_ns = started -| @import("../../pane/pane_namespace.zig").max_sync_hold_ns;
+    const frame = try prepareFrame(&fixture, attachment, &buffer);
+
+    try std.testing.expect(fixture.pane.terminal.modes.get(.synchronized_output));
+    try std.testing.expectEqual(@as(u64, 0), frame.base_frame_id);
+    try std.testing.expectEqual(@as(u16, 30), frame.cols);
+    try std.testing.expect(!attachment.cells.snapshot_pending);
+}
+
+test "a resized snapshot completes before pane exit with synchronized redraw unfinished" {
+    var fixture: PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+
+    var buffer: [16 * 1024]u8 = undefined;
+    const attachment = try beginResizedRedraw(&fixture, 30, &buffer);
+    _ = try fixture.pane.ingest(std.testing.io, "final");
+
+    try std.testing.expect((try attachment.prepareNextCells(.{
+        .io = std.testing.io,
+        .buffer = &buffer,
+        .metrics = &fixture.metrics,
+    })) == null);
+    fixture.pane.output_done = true;
+    fixture.pane.exit = .{ .exited = 0 };
+    const frame = try prepareFrame(&fixture, attachment, &buffer);
+
+    try std.testing.expectEqual(@as(u64, 0), frame.base_frame_id);
+    try std.testing.expectEqual(@as(u16, 30), frame.cols);
+    try std.testing.expect(!attachment.cells.snapshot_pending);
+    var spans = frame.spans();
+    var cells = (try spans.next()).?.cells();
+    for ("final") |byte| {
+        const cell = (try cells.next()).?;
+        try std.testing.expectEqualStrings(&.{byte}, cell.text());
+    }
+
+    try std.testing.expect((try attachment.prepareExit(&buffer)) == null);
+    try std.testing.expect(attachment.cells.acknowledge(frame.frame_id, attachment.cells.outstanding.?.sent_ns +| 1) != null);
+    try std.testing.expect((try attachment.prepareExit(&buffer)) != null);
 }
 
 test "a no-op projection advances its observed revision and is not prepared twice" {

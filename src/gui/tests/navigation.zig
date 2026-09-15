@@ -32,7 +32,7 @@ test "native rename prompt receives pasted text without leaking to the child" {
     try session.gui.input.accept(.{ .kind = 2, .text = text.ptr, .len = text.len });
     try session.gui.input.drain(&session.gui.app);
     try session.settle();
-    try std.testing.expectEqualStrings("main" ++ text, session.gui.app.model.name_prompt.currentConst().?.field.text());
+    try std.testing.expectEqualStrings("shell" ++ text, session.gui.app.model.name_prompt.currentConst().?.field.text());
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }
 

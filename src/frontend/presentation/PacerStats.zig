@@ -8,5 +8,3 @@ throttled: u64 = 0,
 /// Messages that were folded into a frame rather than getting one of
 /// their own. This is the number the throttle exists to produce.
 absorbed: u64 = 0,
-/// Messages dropped as superseded.
-dropped: u64 = 0,

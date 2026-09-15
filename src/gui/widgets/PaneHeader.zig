@@ -4,12 +4,12 @@
 //! covers a terminal row; `ChromeMetrics.pane_header` caps the text band
 //! inside it. The cwd no longer appears here; the top bar shows location.
 const std = @import("std");
-const core = @import("telar-core");
 const client = @import("telar-client");
 const Context = @import("Context.zig");
 const Rect = @import("../render/Rect.zig");
 const attention = @import("attention.zig");
 const Canvas = @import("Canvas.zig");
+const PaneProgress = @import("PaneProgress.zig");
 const PaneHeader = @This();
 
 context: *const Context,
@@ -29,14 +29,10 @@ pub fn draw(header: PaneHeader, canvas: *Canvas) !void {
         return;
     }
 
-    const band: Rect = .{ .x = row.x + chrome.px(8), .y = row.y, .width = @max(0, row.width - 2 * chrome.px(8)), .height = band_height };
+    var band: Rect = .{ .x = row.x + chrome.px(8), .y = row.y, .width = @max(0, row.width - 2 * chrome.px(8)), .height = band_height };
     var index_storage: [8]u8 = undefined;
     const index_text = std.fmt.bufPrint(&index_storage, "{d}", .{header.index}) catch unreachable;
-    var x = band.x;
-    const end = band.x + band.width;
-    x += try canvas.textAt(.{ .x = x, .y = band.y, .width = @max(0, end - x), .height = band.height }, .{ .text = index_text, .color = palette.text, .bold = true, .face = .sans, .size = .body });
-    x += chrome.px(6);
-    const name = header.pane.foregroundName();
+    const index_width = try canvas.measure(.{ .text = index_text, .bold = true, .face = .sans, .size = .body });
     var chip_storage: [32]u8 = undefined;
     const chip_text = header.chip(&chip_storage);
     var chip_width: f32 = 0;
@@ -44,9 +40,32 @@ pub fn draw(header: PaneHeader, canvas: *Canvas) !void {
         chip_width = @ceil(try canvas.measure(.{ .text = chip_text, .face = .sans, .size = .body }) + 2 * chrome.px(6));
     }
 
+    var progress: PaneProgress = .{ .pane = header.pane, .area = band, .motions = header.context.progress };
+    var progress_width = try progress.width(canvas);
+    const reserved = index_width + chip_width + chrome.px(12);
+    if (progress_width > @min(band.width / 2, @max(0, band.width - reserved))) {
+        progress.compact = true;
+        progress_width = try progress.width(canvas);
+    }
+
+    const attention_width = if (header.agent) |agent| (if (attention.needsInput(agent.status)) chip_width else 0) else 0;
+    if (progress_width > 0 and progress_width + index_width + attention_width + chrome.px(12) <= band.width) {
+        try progress.draw(canvas);
+        band.width = @max(0, band.width - progress_width - chrome.px(6));
+    }
+
+    var x = band.x;
+    const end = band.x + band.width;
+    x += try canvas.textAt(.{ .x = x, .y = band.y, .width = @max(0, end - x), .height = band.height }, .{ .text = index_text, .color = palette.text, .bold = true, .face = .sans, .size = .body });
+    x += chrome.px(6);
+    const name = header.pane.foregroundName();
+    if (chip_width > end - x) {
+        chip_width = 0;
+    }
+
     const name_width = @max(0, end - x - (if (chip_width != 0) chip_width + chrome.px(8) else 0));
     _ = try canvas.textAt(.{ .x = x, .y = band.y, .width = name_width, .height = band.height }, .{ .text = if (name.len == 0) "shell" else name, .color = palette.subtext0, .face = .sans, .size = .body });
-    if (chip_width == 0 or chip_width > band.width) {
+    if (chip_width == 0) {
         return;
     }
 

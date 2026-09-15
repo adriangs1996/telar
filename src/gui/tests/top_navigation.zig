@@ -272,7 +272,7 @@ test "native active tab remains reachable after long preceding labels at narrow 
     }
 }
 
-test "native selected tab has a rounded surface and only explicit child progress adds a stripe" {
+test "native selected tab preserves its rounded surface and hosts an explicit child progress ring" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.paint(fixture.projection());
@@ -287,36 +287,33 @@ test "native selected tab has a rounded surface and only explicit child progress
     }
 
     try std.testing.expect(rounded);
+    try std.testing.expect(progressRing(renderer.quads.items(), selected) == null);
     var before = try quadsIn(renderer.quads.items(), top);
     defer before.deinit(std.testing.allocator);
     const pane = fixture.session.gui.app.model.workspace.findPane(Session.pane_id).?;
     _ = pane.setProgress(.{ .pane_id = Session.pane_id, .state = .set, .percent = 50 });
     try fixture.paint(fixture.projection());
-    var after = try quadsIn(renderer.quads.items(), top);
-    defer after.deinit(std.testing.allocator);
-    try std.testing.expectEqual(before.items.len + 1, after.items.len);
-    var original: usize = 0;
-    var added: ?Quad = null;
-    for (after.items) |quad| {
-        if (original < before.items.len and std.meta.eql(before.items[original], quad)) {
-            original += 1;
-        } else {
-            try std.testing.expect(added == null);
-            added = quad;
-        }
-    }
-
-    try std.testing.expectEqual(before.items.len, original);
-    const progress = added orelse return error.MissingProgress;
-    try std.testing.expectEqual(@as(f32, 2), progress.height);
-    try std.testing.expectEqual(selected.width / 2, progress.width);
-    try std.testing.expectEqual(selected.x, progress.x);
-    try std.testing.expectEqual(selected.y + selected.height - progress.height, progress.y);
+    const progress = progressRing(renderer.quads.items(), selected) orelse return error.MissingProgress;
+    try std.testing.expect(progress.width > 2);
+    try std.testing.expectApproxEqAbs(selected.y + selected.height / 2, progress.y + progress.height / 2, 0.001);
+    try std.testing.expectEqualDeep(client.Intent{ .select_tab = Session.location.tab_id }, fixture.clickBand(selected, 0).intent);
     _ = pane.setProgress(.{ .pane_id = Session.pane_id, .state = .remove });
+    fixture.chrome.hovered = null;
     try fixture.paint(fixture.projection());
+    try std.testing.expect(progressRing(renderer.quads.items(), selected) == null);
     var restored = try quadsIn(renderer.quads.items(), top);
     defer restored.deinit(std.testing.allocator);
     try std.testing.expectEqualDeep(before.items, restored.items);
+}
+
+fn progressRing(quads: []const Quad, area: Rect) ?Quad {
+    for (quads) |quad| {
+        if (quad.radius > 0 and quad.border > 0 and quad.width == quad.height and quad.x >= area.x and quad.x + quad.width <= area.x + area.width and quad.y >= area.y and quad.y + quad.height <= area.y + area.height) {
+            return quad;
+        }
+    }
+
+    return null;
 }
 
 fn quadsIn(quads: []const Quad, area: Rect) !std.ArrayList(Quad) {
@@ -366,4 +363,41 @@ fn firstInk(quads: []const Quad, bounds: Rect) !Quad {
 fn solid(quad: Quad) bool {
     const uv = @import("../render/Quad.zig").solid_uv;
     return quad.u0 == uv[0] and quad.v0 == uv[1] and quad.u1 == uv[2] and quad.v1 == uv[3];
+}
+
+test "native automatic tabs show the foreground application mark and preserve manual titles" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    const tabs = &fixture.session.gui.app.model.workspace;
+    const tab = tabs.find(Session.location.tab_id).?;
+    tab.setLabel("");
+    const pane = tab.model.find(Session.pane_id).?;
+    _ = pane.setForegroundName("codex");
+    try fixture.paint(fixture.projection());
+    try std.testing.expectEqualStrings("codex", tab.labelSlice());
+    const bounds = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
+    try std.testing.expect(hasApplicationMark(fixture.session.renderer.quads.items(), bounds));
+
+    // Choosing the same text explicitly still disables automatic naming.
+    _ = try tabs.applyLabel(Session.location.tab_id, "codex");
+    _ = pane.setForegroundName("nvim");
+    try fixture.paint(fixture.projection());
+    try std.testing.expectEqualStrings("codex", tab.labelSlice());
+    try std.testing.expect(!hasApplicationMark(fixture.session.renderer.quads.items(), fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?));
+
+    tab.setLabel("");
+    try fixture.paint(fixture.projection());
+    try std.testing.expectEqualStrings("nvim", tab.labelSlice());
+    try std.testing.expect(tab.labelIcon() != null);
+    try std.testing.expect(fixture.bandTarget(.{ .select_tab = Session.location.tab_id }) != null);
+}
+
+fn hasApplicationMark(quads: []const Quad, bounds: Rect) bool {
+    for (quads) |quad| {
+        if (quad.texture == @import("../render/Quad.zig").sprite_texture and quad.x >= bounds.x and quad.y >= bounds.y and quad.x + quad.width <= bounds.x + bounds.width and quad.y + quad.height <= bounds.y + bounds.height) {
+            return true;
+        }
+    }
+
+    return false;
 }

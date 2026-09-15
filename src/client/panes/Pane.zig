@@ -20,6 +20,7 @@ const pane_support = @import("pane_support.zig");
 const PaneProgressType = @import("telar-core").PaneProgress;
 const max_pane_title_bytes_module = @import("telar-core").max_pane_title_bytes;
 const Pane = @This();
+const IconType = @import("../layout/icons.zig").Icon;
 
 gpa: std.mem.Allocator,
 id: PaneIdType,
@@ -192,6 +193,15 @@ pub fn setForegroundName(pane: *Pane, name: []const u8) bool {
 
 pub fn foregroundName(pane: *const Pane) []const u8 {
     return pane.foreground_name[0..pane.foreground_name_len];
+}
+
+pub fn applicationLabel(pane: *const Pane) []const u8 {
+    const name = pane.foregroundName();
+    return if (name.len != 0) name else "shell";
+}
+
+pub fn applicationIcon(pane: *const Pane) IconType {
+    return IconType.forApplication(pane.foregroundName());
 }
 
 /// Replaces a semantic progress report without allocation. Example: _ = pane.setProgress(progress);

@@ -229,6 +229,7 @@
     "application/tabs/TabCloseIntent.zig",
     "application/tabs/TabCreationIntent.zig",
     "application/tabs/TabMoveIntent.zig",
+    "application/tabs/TabDrag.zig",
     "application/tabs/TabRenameIntent.zig",
     "application/tabs/close_tab.zig",
     "application/tabs/tab_attachment_retirement.zig",

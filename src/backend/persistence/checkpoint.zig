@@ -20,8 +20,9 @@ const Counters = @import("Counters.zig");
 const EncoderType = @import("telar-core").Encoder;
 
 pub const magic: *const [8]u8 = "TELARCKP";
-/// Version 2 added the agent title to pane records; version 1 files still read.
-pub const version: u16 = 2;
+/// Version 2 added pane titles; version 3 permits automatic tab labels.
+/// Older labels remain explicit because their naming intent was not recorded.
+pub const version: u16 = 3;
 pub const oldest_readable_version: u16 = 1;
 pub const max_file_bytes = 4 * 1024 * 1024;
 pub const max_launch_arguments = 32;
@@ -116,6 +117,47 @@ test "checkpoint records round trip through the file encoding" {
     const layout = (try reader.next()).?.layout;
     try std.testing.expectEqual(@as(u64, 42), layout.identity);
     try std.testing.expectEqualStrings("\x1a\x01", layout.payload);
+    try std.testing.expect(try reader.next() == null);
+}
+
+test "checkpoint labels distinguish automatic tabs from explicit former defaults" {
+    var buffer: [4096]u8 = undefined;
+    var encoder = try Encoder.init(&buffer, .{
+        .next_workspace_id = 3,
+        .next_tab_id = 5,
+        .next_pane_id = 1,
+        .next_pane_generation = 1,
+    });
+    try encoder.workspace(.{ .id = 1, .path = "/work/automatic", .name = "", .first_tab_id = 1, .first_tab_label = "" });
+    try encoder.workspace(.{ .id = 2, .path = "/work/explicit", .name = "", .first_tab_id = 2, .first_tab_label = "main" });
+    try encoder.tab(.{ .workspace_id = 1, .tab_id = 3, .label = "" });
+    try encoder.tab(.{ .workspace_id = 2, .tab_id = 4, .label = "tab 4" });
+    var reader = try Reader.init(try encoder.finish());
+
+    try std.testing.expectEqualStrings("", (try reader.next()).?.workspace.first_tab_label);
+    try std.testing.expectEqualStrings("main", (try reader.next()).?.workspace.first_tab_label);
+    try std.testing.expectEqualStrings("", (try reader.next()).?.tab.label);
+    try std.testing.expectEqualStrings("tab 4", (try reader.next()).?.tab.label);
+    try std.testing.expect(try reader.next() == null);
+}
+
+test "version 2 checkpoints retain former default labels as explicit" {
+    var buffer: [512]u8 = undefined;
+    var encoder = try Encoder.init(&buffer, .{
+        .next_workspace_id = 2,
+        .next_tab_id = 3,
+        .next_pane_id = 1,
+        .next_pane_generation = 1,
+    });
+    try encoder.workspace(.{ .id = 1, .path = "/work/legacy", .name = "", .first_tab_id = 1, .first_tab_label = "main" });
+    try encoder.tab(.{ .workspace_id = 1, .tab_id = 2, .label = "tab 2" });
+    const bytes = try encoder.finish();
+    std.mem.writeInt(u16, buffer[magic.len..][0..2], 2, .little);
+    var reader = try Reader.init(bytes);
+
+    try std.testing.expectEqual(@as(u16, 2), reader.version);
+    try std.testing.expectEqualStrings("main", (try reader.next()).?.workspace.first_tab_label);
+    try std.testing.expectEqualStrings("tab 2", (try reader.next()).?.tab.label);
     try std.testing.expect(try reader.next() == null);
 }
 

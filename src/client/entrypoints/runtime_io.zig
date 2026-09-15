@@ -13,8 +13,6 @@ const CreateWorkspaceType = @import("telar-core").CreateWorkspace;
 const CreateTabType = @import("telar-core").CreateTab;
 const ShowNotificationType = @import("telar-core").ShowNotification;
 const ClientLayoutUpdateType = @import("telar-core").ClientLayoutUpdate;
-const std = @import("std");
-const RuntimeTransportState = @import("../connection/RuntimeTransportState.zig");
 const RuntimeMessage = @import("../connection/RuntimeMessage.zig");
 const enabled_module = @import("telar-core").enabled;
 

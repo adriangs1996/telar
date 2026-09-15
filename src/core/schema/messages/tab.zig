@@ -140,7 +140,7 @@ pub fn decodeTabSnapshot(decoder: *DecoderType) !TabSnapshotView {
 pub fn encodeTabCreated(buffer: []u8, message: TabCreated) ![]const u8 {
     try codec.validateRequestId(message.request_id);
     try codec.validatePaneId(message.root_pane_id);
-    try codec.validateTabLabel(message.label, false);
+    try codec.validateTabLabel(message.label, true);
     var encoder = EncoderType.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.tab_created));
     try encoder.writeInt(u64, id.raw(message.request_id));
@@ -156,7 +156,7 @@ pub fn decodeTabCreated(decoder: *DecoderType) !TabCreated {
     const location = try codec.decodeTabLocation(decoder);
     const position = try decoder.readInt(u16);
     const label = try decoder.readSized16();
-    try codec.validateTabLabel(label, false);
+    try codec.validateTabLabel(label, true);
     return .{
         .request_id = request_id,
         .location = location,

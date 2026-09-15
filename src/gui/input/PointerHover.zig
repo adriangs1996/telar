@@ -39,6 +39,20 @@ pub fn refresh(hover: *Hover, gui: *const GuiClient) void {
     }
 
     const event = hover.event orelse return;
+    if (gui.widgets.tab_drag.dragging and gui.widgets.tab_drag.source != null) {
+        hover.assign(null, .grabbing);
+        hover.cached = null;
+        return;
+    }
+
+    if (gui.overlays.presented().native_modal != null) {
+        const target = gui.widgets.dispatcher.maps.presented().at(.{ event.x, event.y });
+        const shape: core.PointerShape = if (target) |control| if (control.action == .text_field) .text else if (control.enabled and control.activatable()) .pointer else .default else .default;
+        hover.assign(null, shape);
+        hover.cached = null;
+        return;
+    }
+
     if (!gui.app.model.name_prompt.active() and gui.overlays.presented().modal == null) {
         if (gui.overlays.presented().notifications.at(.{ event.x, event.y })) |target| {
             hover.assign(null, if (target.enabled) .pointer else .default);

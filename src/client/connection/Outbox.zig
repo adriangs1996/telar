@@ -210,6 +210,7 @@ pub fn pushCreateWorkspace(outbox: *Outbox, request: CreateWorkspaceType) !void 
         .size = request.size,
         .name_len = @intCast(request.name.len),
         .launch = request.launch,
+        .create_cwd = request.create_cwd,
     };
     @memcpy(owned.name[0..request.name.len], request.name);
     try outbox.append(.{ .create_workspace = owned });

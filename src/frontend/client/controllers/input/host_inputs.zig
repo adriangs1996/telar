@@ -15,7 +15,6 @@ const mark_module = @import("telar-core").mark;
 const Chunk = @import("Chunk.zig");
 const InputHandler = @import("../../resources/InputHandler.zig");
 const monotonic_module = @import("telar-client").monotonic;
-const wait_module = @import("telar-client").wait;
 const parseKey_module = @import("telar-client").parseKey;
 const default_prefix_module = @import("telar-client").default_prefix;
 const State = @import("State.zig");

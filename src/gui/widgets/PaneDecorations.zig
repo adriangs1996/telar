@@ -11,7 +11,6 @@ const client = @import("telar-client");
 const Context = @import("Context.zig");
 const Rect = @import("../render/Rect.zig");
 const PaneHeader = @import("PaneHeader.zig");
-const PaneProgress = @import("PaneProgress.zig");
 const FullscreenStrip = @import("FullscreenStrip.zig");
 const RingFades = @import("RingFades.zig");
 const RingSpec = @import("RingSpec.zig");
@@ -55,8 +54,6 @@ pub fn draw(decorations: PaneDecorations, canvas: *Canvas) !void {
             try header.draw(canvas);
         }
 
-        const progress: PaneProgress = .{ .pane = pane, .area = canvas.rect(view.outer), .animation_frame = projection.sidebar_animation_frame };
-        try progress.draw(canvas);
         if (!view.focused) {
             try canvas.dimAt(canvas.rect(view.content), dim_alpha);
             if (agent) |value| {

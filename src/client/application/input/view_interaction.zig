@@ -19,6 +19,7 @@ pub const Intent = union(enum) {
     toggle_workspace_list,
     focus_agent: AgentKeyType,
     select_tab: TabIdType,
+    move_tab: @import("../tabs/TabMoveIntent.zig"),
     focus_pane: PaneIdType,
     rename_tab: TabIdType,
     /// The strip's `+` control: the same request the `create_tab` action sends.

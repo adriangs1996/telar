@@ -20,6 +20,7 @@ const action_routing = @import("telar-client").controllers.action_routing;
 const ControlType = @import("telar-client").Control;
 
 const InputHandler = @This();
+const tab_drag = @import("../controllers/input/tab_drag.zig");
 
 client: *Client,
 
@@ -38,6 +39,14 @@ pub fn capturesKeys(handler: *const InputHandler) bool {
 /// try handler.forward(bytes);
 /// ```
 pub fn forward(handler: *InputHandler, bytes: []const u8) !void {
+    if (@import("std").mem.eql(u8, bytes, "\x1b[O")) {
+        _ = tab_drag.cancel(handler.client);
+    }
+
+    if (@import("std").mem.eql(u8, bytes, "\x1b") and tab_drag.cancel(handler.client)) {
+        return;
+    }
+
     _ = try key_routing.apply(handler.client, .{ .bytes = bytes });
 }
 
@@ -47,6 +56,27 @@ pub fn forward(handler: *InputHandler, bytes: []const u8) !void {
 /// try handler.key(pressed);
 /// ```
 pub fn key(handler: *InputHandler, value: KeyType) !void {
+    const escape_key = &host(handler.client).view.tab_drag.escape_key;
+    if (value.physical) |physical| {
+        if (escape_key.*) |owner| {
+            if (owner.eql(physical)) {
+                if (value.phase == .release) {
+                    escape_key.* = null;
+                }
+
+                return;
+            }
+        }
+    }
+
+    if (value.code == .escape and tab_drag.cancel(handler.client)) {
+        if (value.phase == .press) {
+            escape_key.* = value.physical;
+        }
+
+        return;
+    }
+
     _ = try key_routing.apply(handler.client, .{ .key = value });
 }
 
@@ -63,6 +93,10 @@ pub fn pasteEnd(handler: *InputHandler) !void {
 }
 
 pub fn mouse(handler: *InputHandler, event: MouseType) !void {
+    if (try tab_drag.retained(handler.client, event)) {
+        return;
+    }
+
     _ = try pointer_routing.apply(handler.client, event);
 }
 

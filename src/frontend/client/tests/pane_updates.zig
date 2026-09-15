@@ -22,6 +22,7 @@ const workspace_handoffs = @import("telar-client").controllers.workspace_handoff
 const runtime_transport = @import("telar-client").runtime_io;
 const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
 const TabLocationType = @import("telar-core").TabLocation;
+const IconType = @import("telar-client").Icon;
 
 test "a patch against an unknown base requests a fresh snapshot" {
     var harness: TestHarness = undefined;
@@ -324,7 +325,7 @@ test "pane cwd commits before presenter-owned metadata projection" {
     try std.testing.expectEqualDeep(presented_version, client.model.version());
 }
 
-test "pane foreground reaches presentation only after version observation" {
+test "pane foreground and focus update automatic tab labels through presentation" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
@@ -353,12 +354,14 @@ test "pane foreground reaches presentation only after version observation" {
     try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
     try std.testing.expect(!host(client).view.dirty);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try expectBootstrapTab(&harness, "shell", .app_terminal);
 
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, host(client).presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expect(!host(client).view.dirty);
     try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
+    try expectBootstrapTab(&harness, "Claude Code", .provider_claude);
 
     const presented_version = client.model.version();
     const presented_updates = host(client).presenter.pending_updates;
@@ -370,6 +373,54 @@ test "pane foreground reaches presentation only after version observation" {
 
     try std.testing.expectEqualDeep(presented_version, client.model.version());
     try std.testing.expectEqual(presented_updates, host(client).presenter.pending_updates);
+
+    const second_pane: PaneIdType = @enumFromInt(11);
+    _ = try client.model.commitPaneSplit(.{
+        .split = .{
+            .target_pane = TestHarness.bootstrap_pane,
+            .location = TestHarness.bootstrap_location,
+            .axis = .horizontal,
+            .area = host(client).view.workbench(),
+        },
+        .new_pane = second_pane,
+    });
+    const next_foreground = try encodePaneForeground_module(&payload, .{ .pane_id = second_pane, .name = "git" });
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(next_foreground));
+    try presentation_lifecycle.observe(client);
+    try harness.settleModelPresentation();
+    try expectBootstrapTab(&harness, "git", .app_git);
+
+    try std.testing.expect(client.model.focusPane(.{
+        .target = .{ .pane_id = TestHarness.bootstrap_pane },
+        .area = host(client).view.workbench(),
+    }) != null);
+    try presentation_lifecycle.observe(client);
+    try harness.settleModelPresentation();
+    try expectBootstrapTab(&harness, "Claude Code", .provider_claude);
+}
+
+fn expectBootstrapTab(harness: *const TestHarness, name: []const u8, icon: IconType) !void {
+    const terminal = host(harness.client);
+    const screen = &terminal.presenter.screen;
+    for (terminal.view.hits.registered()) |entry| {
+        if (entry.action != .select_tab or entry.action.select_tab != TestHarness.bootstrap_location.tab_id) {
+            continue;
+        }
+
+        var storage: [512]u8 = undefined;
+        var writer = std.Io.Writer.fixed(&storage);
+        for (entry.rect.x..entry.rect.x + entry.rect.w) |column| {
+            const cell = screen.front.cells[@as(usize, entry.rect.y) * screen.front.w + column];
+            try writer.writeAll(cell.text());
+        }
+
+        var expected_storage: [128]u8 = undefined;
+        const expected = try std.fmt.bufPrint(&expected_storage, " 1:{s} {s} ", .{ icon.unicodeGlyph(), name });
+        try std.testing.expectEqualStrings(expected, writer.buffered());
+        return;
+    }
+
+    return error.TestTabMissing;
 }
 
 test "close pane request waits for the authoritative exit before committing" {

@@ -329,7 +329,16 @@ fn setWorkspaceListCollapsed(context: *anyopaque, collapsed: bool) void {
 fn pointer(context: *anyopaque, event: MouseType) ViewInteractionCommandType {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    return host(client).view.handleMouse(event);
+    if (@import("../controllers/input/tab_drag.zig").press(client, event)) |interaction| {
+        return interaction;
+    }
+
+    const interaction = host(client).view.handleMouse(event);
+    if (interaction.intent == .select_tab or interaction.intent == .rename_tab) {
+        return .{ .consumed = true };
+    }
+
+    return interaction;
 }
 
 /// Example: `client.attachment_catalog = host_ports.attachmentCatalog(client);`.

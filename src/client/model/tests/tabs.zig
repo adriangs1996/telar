@@ -6,6 +6,47 @@ const types = @import("../types.zig");
 const VersionType = @import("../Version.zig");
 const PaneIdType = @import("telar-core").PaneId;
 const TerminalSizeType = @import("telar-core").TerminalSize;
+const WorkspaceSnapshotInput = @import("../../workspace/WorkspaceSnapshotInput.zig");
+
+test "inactive automatic tabs publish foreground changes without changing canonical snapshots" {
+    var model = ModelType.init(std.testing.allocator, true);
+    defer model.deinit();
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const first: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const second: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const pane: PaneIdType = @enumFromInt(1);
+    try model.workspace.bootstrap(.{ .pane_id = pane, .location = first, .size = .{ .cols = 20, .rows = 5 } });
+    _ = try model.workspace.addCreated(.{
+        .location = second,
+        .position = 1,
+        .label = "",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 20, .rows = 5 });
+    const snapshot: WorkspaceSnapshotInput = .{
+        .workspace = workspace,
+        .name = "project",
+        .tabs = &.{
+            .{ .tab_id = first.tab_id, .pane_count = 1, .label = "" },
+            .{ .tab_id = second.tab_id, .pane_count = 1, .label = "" },
+        },
+    };
+    _ = try model.reconcileWorkspace(snapshot);
+    const before = model.version();
+
+    _ = (try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = pane, .name = "nvim" } })).?;
+    try std.testing.expectEqualDeep(second, model.activeTabLocation().?);
+    try std.testing.expectEqualStrings("nvim", model.workspace.find(first.tab_id).?.labelSlice());
+    try std.testing.expectEqual(before.pane_foreground + 1, model.version().pane_foreground);
+    try std.testing.expectEqual(before.pane_metadata + 1, model.version().pane_metadata);
+    const foreground_version = model.version();
+
+    const repeated = try model.reconcileWorkspace(snapshot);
+    try std.testing.expect(!repeated.tabs_changed);
+    try std.testing.expectEqualDeep(foreground_version, model.version());
+    try std.testing.expectEqualStrings("nvim", model.workspace.find(first.tab_id).?.labelSlice());
+    try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = pane, .name = "nvim" } })) == null);
+    try std.testing.expectEqualDeep(foreground_version, model.version());
+}
 
 test "tab position commits version semantic changes only" {
     var model = ModelType.init(std.testing.allocator, true);
@@ -127,7 +168,7 @@ test "rejected tab renames preserve labels and revisions" {
         .label = "",
     }));
 
-    try std.testing.expectEqualStrings("main", model.workspace.activeConst().?.labelSlice());
+    try std.testing.expectEqualStrings("shell", model.workspace.activeConst().?.labelSlice());
     try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 

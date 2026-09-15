@@ -10,9 +10,8 @@ const ObservationType = @import("Observation.zig");
 const WorkspaceRenamedType = @import("WorkspaceRenamed.zig");
 const TabIdType = @import("telar-core").TabId;
 const TabCreatedType = @import("TabCreated.zig");
-const raw_module = @import("telar-core").raw;
 const TabRenamedType = @import("TabRenamed.zig");
-const TabMoveDirectionType = @import("telar-core").TabMoveDirection;
+const TabMoveTarget = @import("telar-core").TabMoveTarget;
 const TabMovedType = @import("TabMoved.zig");
 const TabDescriptorType = @import("telar-core").TabDescriptor;
 const Workspace = @This();
@@ -44,7 +43,7 @@ pub fn init(options: InitType) !Workspace {
         _ = try workspace.rename(name_value);
     }
 
-    _ = try workspace.appendTab(try Tab.init(options.default_tab_id, "main"));
+    _ = try workspace.appendTab(try Tab.init(options.default_tab_id, ""));
     return workspace;
 }
 
@@ -136,22 +135,17 @@ pub fn containsTab(workspace: *const Workspace, tab_id: TabIdType) bool {
 }
 
 /// Adds one tab after validating its label and returns an owned event for
-/// the caller's transaction boundary. An empty requested label is replaced
-/// with the stable `tab <id>` default used by the runtime.
+/// the caller's transaction boundary. An empty label keeps the tab automatic;
+/// each client derives its displayed name from its foreground application.
 ///
 /// ```zig
 /// const created = try workspace.createTab(tab_id, "logs");
 /// ```
-pub fn createTab(workspace: *Workspace, tab_id: TabIdType, requested_label: []const u8) !TabCreatedType {
+pub fn createTab(workspace: *Workspace, tab_id: TabIdType, label: []const u8) !TabCreatedType {
     if (workspace.tab_count == workspace.tabs.len) {
         return error.TabLimitReached;
     }
 
-    var generated_label: [max_tab_label_bytes_module]u8 = undefined;
-    const label = if (requested_label.len == 0)
-        try std.fmt.bufPrint(&generated_label, "tab {d}", .{raw_module(tab_id)})
-    else
-        requested_label;
     const position = try workspace.appendTab(try Tab.init(tab_id, label));
 
     return TabCreatedType.init(.{
@@ -194,18 +188,27 @@ pub fn removeTab(workspace: *Workspace, tab_id: TabIdType) bool {
 /// Moving beyond either edge succeeds at the existing edge position.
 ///
 /// ```zig
-/// const moved = workspace.moveTab(tab_id, .previous) orelse return;
+/// const moved = workspace.moveTab(tab_id, .{ .direction = .previous }) orelse return;
 /// ```
-pub fn moveTab(workspace: *Workspace, tab_id: TabIdType, direction: TabMoveDirectionType) ?TabMovedType {
+pub fn moveTab(workspace: *Workspace, tab_id: TabIdType, destination: TabMoveTarget) ?TabMovedType {
     const index = workspace.tabIndex(tab_id) orelse return null;
-    const target = switch (direction) {
-        .previous => if (index == 0) index else index - 1,
-        .next => if (index + 1 == workspace.tab_count) index else index + 1,
+    const target = if (destination.relative_to) |anchor| blk: {
+        const anchor_index = workspace.tabIndex(anchor) orelse return null;
+        break :blk destination.positionRelativeTo(index, anchor_index);
+    } else switch (destination.direction) {
+        .previous => index -| 1,
+        .next => @min(index + 1, workspace.tab_count - 1),
     };
 
-    if (target != index) {
-        std.mem.swap(?Tab, &workspace.tabs[index], &workspace.tabs[target]);
+    const moved = workspace.tabs[index];
+    var cursor = index;
+    while (cursor < target) : (cursor += 1) {
+        workspace.tabs[cursor] = workspace.tabs[cursor + 1];
     }
+    while (cursor > target) : (cursor -= 1) {
+        workspace.tabs[cursor] = workspace.tabs[cursor - 1];
+    }
+    workspace.tabs[target] = moved;
 
     return .{
         .location = .{

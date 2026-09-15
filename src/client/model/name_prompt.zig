@@ -351,6 +351,8 @@ test "the new-context form moves focus with tab and edits only the focused field
 test "the new-context form selects completions in the directory field and resets on edits" {
     var state: NamePromptState = .{};
     state.begin(.create_workspace);
+    state.select(3);
+    try std.testing.expectEqual(@as(u16, 0), state.currentConst().?.selection());
     try std.testing.expect(state.apply(.move_down) == .unchanged);
     _ = state.apply(.tab);
     try std.testing.expect(state.apply(.move_up) == .unchanged);
@@ -359,6 +361,8 @@ test "the new-context form selects completions in the directory field and resets
     try std.testing.expectEqual(@as(u16, 2), state.currentConst().?.selection());
     try std.testing.expect(state.apply(.move_up) == .changed);
     try std.testing.expectEqual(@as(u16, 1), state.currentConst().?.selection());
+    state.select(4);
+    try std.testing.expectEqual(@as(u16, 4), state.currentConst().?.selection());
 
     try std.testing.expect(state.apply(.{ .insert = "t" }) == .changed);
     try std.testing.expectEqual(@as(u16, 0), state.currentConst().?.selection());

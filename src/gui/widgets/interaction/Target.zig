@@ -17,12 +17,24 @@ label_len: u8 = 0,
 traverse_tab: bool = true,
 
 pub const Field = enum { name, directory };
+pub const PromptAction = enum { submit, cancel };
 pub const Action = union(enum) {
     intent: @import("telar-client").Intent,
     text_field: Field,
+    prompt: PromptAction,
+    complete_path: @import("PathCompletionChoice.zig"),
+    history: @import("history_action.zig").Action,
     resize_sidebar,
     custom: u64,
 };
+
+/// Example: `if (target.activatable()) exposePressAction();`
+pub fn activatable(target: Target) bool {
+    return switch (target.action) {
+        .intent, .prompt, .complete_path, .history => true,
+        else => false,
+    };
+}
 
 /// Half-open device pixels shared with drawing.
 /// Example: `if (target.contains(.{ pointer.x, pointer.y })) ...`

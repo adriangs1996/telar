@@ -251,6 +251,18 @@ test "queued workspace creation owns name and cwd bytes until encoding" {
     try std.testing.expectEqual(pane_id, decoded.create_workspace.launch.cwd_source.?);
 }
 
+test "workspace directory creation consent survives the queued wire request" {
+    for ([_]bool{ false, true }) |confirmed| {
+        var outbox: Outbox = .{};
+        try outbox.pushCreateWorkspace(.{ .request_id = @enumFromInt(2), .size = .{ .cols = 80, .rows = 24 }, .name = "agents", .launch = .{ .cwd = "/work/new-project", .arguments = &.{"/bin/sh"} }, .create_cwd = confirmed });
+        var buffer: [512]u8 = undefined;
+        const decoded = try decodeClient_module((try outbox.beginSend(&buffer)).?);
+        try std.testing.expectEqual(confirmed, decoded.create_workspace.create_cwd);
+        try std.testing.expectEqualStrings("/work/new-project", decoded.create_workspace.launch.cwd);
+        try std.testing.expect(decoded.create_workspace.launch.cwd_source == null);
+    }
+}
+
 test "queued tab creation owns label and cwd bytes until encoding" {
     var outbox: Outbox = .{};
     const pane_id: PaneIdType = @enumFromInt(1);

@@ -26,7 +26,6 @@ const host_ports = @import("resources/host_ports.zig");
 const presentation_lifecycle = @import("presentation/presentation_lifecycle.zig");
 
 pub const InputRouter = host_inputs.Router;
-pub const InputChunk = @import("controllers/input/Chunk.zig");
 pub const Options = OptionsType;
 pub const AppearanceThemes = @import("telar-client").AppearanceThemes;
 

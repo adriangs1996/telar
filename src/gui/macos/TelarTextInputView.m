@@ -375,18 +375,3 @@
 }
 
 @end
-
-int telar_gui_clipboard(const uint8_t *bytes, size_t len) {
-  NSString *text = [[NSString alloc] initWithBytes:bytes
-                                            length:len
-                                          encoding:NSUTF8StringEncoding];
-  if (text == nil) {
-    return -1;
-  }
-
-  [NSPasteboard.generalPasteboard clearContents];
-  return [NSPasteboard.generalPasteboard setString:text
-                                           forType:NSPasteboardTypeString]
-             ? 0
-             : -1;
-}

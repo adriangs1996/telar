@@ -33,11 +33,13 @@ test "Controller maps a move request and queues the canonical result" {
         .request_id = request_id,
         .location = requested_location,
         .direction = .next,
+        .relative_to = try tab_module(4),
     });
 
     try std.testing.expectEqual(@as(usize, 1), move_stub.call_count);
     try std.testing.expectEqualDeep(requested_location, move_stub.last_command.?.location);
     try std.testing.expectEqual(TabMoveDirectionType.next, move_stub.last_command.?.direction);
+    try std.testing.expectEqual(try tab_module(4), move_stub.last_command.?.relative_to.?);
     const response = responses.peek().?;
     try std.testing.expect(response.* == .tab_moved);
     try std.testing.expectEqual(request_id, response.tab_moved.request_id);

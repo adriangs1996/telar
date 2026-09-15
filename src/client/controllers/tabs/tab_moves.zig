@@ -76,6 +76,7 @@ fn sendMove(context: *anyopaque, intent: TabMoveIntentType) !void {
             .request_id = request_id,
             .location = intent.location,
             .direction = intent.direction,
+            .relative_to = intent.relative_to,
         } },
     });
 }

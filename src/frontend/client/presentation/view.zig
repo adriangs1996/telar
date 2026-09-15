@@ -1240,8 +1240,8 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
         .force = true,
     });
 
-    // Tabs anchor to the right edge: " 1:main ", one empty cell and
-    // " 2:logs " occupy the last seventeen columns of the bottom row.
+    // Tabs anchor to the right edge: the automatic shell label and icon,
+    // one empty cell and " 2:logs " occupy the last twenty columns.
     const click = term.Event.Mouse{ .x = 65, .y = 23, .kind = .press };
     const interaction = state.handleMouse(click);
     try std.testing.expectEqualDeep(
@@ -1306,8 +1306,8 @@ test "tab bar marks the tab whose pane is fullscreen" {
         .force = true,
     });
 
-    // " 1:main ", one empty cell and " 2:logs ⛶ " fill the last nineteen
-    // columns; the marker sits inside the second tab's click target.
+    // The shell label includes its icon. The fullscreen marker still sits
+    // inside the second tab's click target.
     const bottom_row: usize = 29 * 100;
     try std.testing.expectEqualStrings(" ", screen.back.cells[bottom_row + 89].text());
     try std.testing.expectEqualStrings("\u{26f6}", screen.back.cells[bottom_row + 98].text());

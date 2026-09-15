@@ -193,7 +193,10 @@ pub fn restoreWorkspace(repository: *Repository, request: RestoreType) !TabLocat
         .default_tab_id = request.first_tab_id,
         .explicit_name = request.explicit_name,
     });
-    _ = try workspace.renameTab(request.first_tab_id, request.first_tab_label);
+
+    if (request.first_tab_label.len != 0) {
+        _ = try workspace.renameTab(request.first_tab_id, request.first_tab_label);
+    }
 
     for (&repository.state.items) |*slot| {
         if (slot.* != null) {

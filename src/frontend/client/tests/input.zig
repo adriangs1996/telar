@@ -446,7 +446,7 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
 
     const prompt = client.model.name_prompt.currentConst().?;
     try std.testing.expect(!prompt.pasting);
-    try std.testing.expectEqualStrings("main one ", prompt.field.text());
+    try std.testing.expectEqualStrings("shell one ", prompt.field.text());
     try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 

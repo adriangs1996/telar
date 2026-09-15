@@ -497,7 +497,7 @@ test "workspace reconciliation versions semantic dimensions independently" {
         .workspace = workspace,
         .name = "project",
         .tabs = &.{
-            .{ .tab_id = first.tab_id, .pane_count = 1, .label = "main" },
+            .{ .tab_id = first.tab_id, .pane_count = 1, .label = "" },
             .{ .tab_id = second.tab_id, .pane_count = 1, .label = "logs" },
         },
     };
@@ -520,7 +520,7 @@ test "workspace reconciliation versions semantic dimensions independently" {
         .name = "project",
         .tabs = &.{
             .{ .tab_id = second.tab_id, .pane_count = 1, .label = "server" },
-            .{ .tab_id = first.tab_id, .pane_count = 1, .label = "main" },
+            .{ .tab_id = first.tab_id, .pane_count = 1, .label = "" },
         },
     };
     const tabs_change = try model.reconcileWorkspace(reordered);
@@ -536,7 +536,7 @@ test "workspace reconciliation versions semantic dimensions independently" {
         .workspace = workspace,
         .name = "project",
         .tabs = &.{
-            .{ .tab_id = first.tab_id, .pane_count = 1, .label = "main" },
+            .{ .tab_id = first.tab_id, .pane_count = 1, .label = "" },
         },
     };
     const active_change = try model.reconcileWorkspace(removed);

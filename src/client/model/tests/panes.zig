@@ -24,6 +24,9 @@ test "pane focus resolves identity and direction through one visible revision" {
     const area: RectType = .{ .w = 80, .h = 24 };
     try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
+    _ = model.workspace.active().?.model.setPaneForeground(first, "nvim");
+    _ = model.workspace.active().?.model.setPaneForeground(second, "codex");
+    try std.testing.expectEqualStrings("codex", model.workspace.activeConst().?.labelSlice());
 
     const directional = model.focusPane(.{
         .target = .{ .direction = .left },
@@ -36,6 +39,7 @@ test "pane focus resolves identity and direction through one visible revision" {
     try std.testing.expect(!directional.geometry_changed);
     try std.testing.expectEqual(@as(u64, 1), directional.panes_revision);
     try std.testing.expectEqual(@as(u64, 1), model.version().panes);
+    try std.testing.expectEqualStrings("nvim", model.workspace.activeConst().?.labelSlice());
 
     try std.testing.expect(model.workspace.active().?.model.toggleFullscreen());
     const identified = model.focusPane(.{
@@ -47,6 +51,7 @@ test "pane focus resolves identity and direction through one visible revision" {
     try std.testing.expectEqual(second, identified.focused);
     try std.testing.expect(identified.geometry_changed);
     try std.testing.expectEqual(@as(u64, 2), identified.panes_revision);
+    try std.testing.expectEqualStrings("codex", model.workspace.activeConst().?.labelSlice());
     try std.testing.expect((model.focusPane(.{
         .target = .{ .pane_id = second },
         .area = area,

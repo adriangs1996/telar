@@ -145,7 +145,8 @@ pub fn prepareProgress(attachment: *Attachment, buffer: []u8) !?PreparedType {
 }
 
 /// Prepares one snapshot or incremental cell frame while preserving the
-/// outstanding-frame and ingest single-flight rules.
+/// outstanding-frame and ingest single-flight rules. A snapshot deferred
+/// by synchronized output remains pending for the next delivery attempt.
 ///
 /// ```zig
 /// const prepared = try attachment.prepareNextCells(.{ .io = io, .buffer = buffer, .metrics = metrics });
@@ -164,7 +165,7 @@ pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparationTyp
             .force_snapshot = true,
             .metrics = preparation.metrics,
         })) orelse
-            unreachable;
+            return null;
         attachment.cells.snapshot_pending = false;
         return .{ .bytes = payload, .effect = .cells };
     }

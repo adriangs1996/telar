@@ -5,6 +5,7 @@ const PaneLabel = @import("PaneLabel.zig");
 const Strip = @import("Strip.zig");
 const Canvas = @import("Canvas.zig");
 const Button = @import("Button.zig");
+const PaneProgress = @import("PaneProgress.zig");
 const FullscreenStrip = @This();
 
 context: *const Context,
@@ -14,9 +15,23 @@ area: core.Rect,
 /// Fullscreen hides terminal leaves, but every pane remains directly reachable.
 /// Example: `try strip.draw(canvas);`
 pub fn draw(fullscreen: FullscreenStrip, canvas: *Canvas) !void {
-    const area = fullscreen.area;
+    var area = fullscreen.area;
     if (area.isEmpty()) {
         return;
+    }
+
+    if (fullscreen.model.focusedPaneConst()) |pane| {
+        var progress: PaneProgress = .{ .pane = pane, .area = canvas.rect(area), .motions = fullscreen.context.progress };
+        if (try progress.width(canvas) > progress.area.width / 2) {
+            progress.compact = true;
+        }
+
+        const width = try progress.width(canvas);
+        if (width > 0 and width + canvas.chrome.px(6) + 6 * @as(f32, @floatFromInt(canvas.metrics.cell_width)) <= progress.area.width) {
+            try progress.draw(canvas);
+            const columns: u16 = @intFromFloat(@min(65535, @ceil((width + canvas.chrome.px(6)) / @as(f32, @floatFromInt(canvas.metrics.cell_width)))));
+            area.w -|= columns;
+        }
     }
 
     var identities: [core.max_panes_per_tab]core.PaneId = undefined;

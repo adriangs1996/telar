@@ -116,6 +116,35 @@ pub fn items(list: *const QuadList) []const Quad {
     return list.quads.items;
 }
 
+/// Fits newly painted ink inside a box, preserving aspect ratio and centering
+/// both axes. Example: `list.fitFrom(first_icon_quad, icon_box);`
+pub fn fitFrom(list: *QuadList, start: usize, bounds: Rect) void {
+    var left = std.math.inf(f32);
+    var top = std.math.inf(f32);
+    var right = -std.math.inf(f32);
+    var bottom = -std.math.inf(f32);
+    for (list.items()[start..]) |item| {
+        left = @min(left, item.x);
+        top = @min(top, item.y);
+        right = @max(right, item.x + item.width);
+        bottom = @max(bottom, item.y + item.height);
+    }
+
+    if (right <= left or bottom <= top) {
+        return;
+    }
+
+    const scale = @min(bounds.width / (right - left), bounds.height / (bottom - top));
+    const x = bounds.x + (bounds.width - (right - left) * scale) / 2;
+    const y = bounds.y + (bounds.height - (bottom - top) * scale) / 2;
+    for (list.quads.items[start..]) |*item| {
+        item.x = x + (item.x - left) * scale;
+        item.y = y + (item.y - top) * scale;
+        item.width *= scale;
+        item.height *= scale;
+    }
+}
+
 /// Fades a composed widget, including glyphs, sprites and rounded borders.
 /// Example: `list.fadeFrom(first_card_quad, opacity);`
 pub fn fadeFrom(list: *QuadList, start: usize, opacity: f32) void {

@@ -237,6 +237,7 @@ fn pointer(dispatcher: *Dispatcher, event: Pointer) Route {
         if (dispatcher.captures[button]) |id| {
             if (event.kind == .release) {
                 dispatcher.captures[button] = null;
+                dispatcher.revision +%= 1;
             }
 
             return .{ .consumed = true, .target = registry.find(id) };
@@ -265,6 +266,7 @@ fn pointer(dispatcher: *Dispatcher, event: Pointer) Route {
         dispatcher.discarded[button] = false;
         if (target) |value| {
             dispatcher.captures[button] = value.id;
+            dispatcher.revision +%= 1;
             if (value.enabled and value.focusable) {
                 changed = dispatcher.focus(value.id);
             }

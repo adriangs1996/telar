@@ -6,3 +6,4 @@ const MoveTab = @This();
 request_id: id.RequestId,
 location: TabLocationType,
 direction: types.TabMoveDirection,
+relative_to: ?id.TabId = null,

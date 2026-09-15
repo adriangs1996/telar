@@ -149,10 +149,8 @@ pub fn loadPackage(context: LoadContext, configured_path: []const u8) !Package {
         .manifest = manifest,
         .digest = try digestPackage(gpa, io, root),
         .root_len = @intCast(root.len),
-        .entry_len = @intCast(entry.len),
     };
     @memcpy(package.root_bytes[0..root.len], root);
-    @memcpy(package.entry_bytes[0..entry.len], entry);
     return package;
 }
 
@@ -403,7 +401,6 @@ test "privileged plugin effects require a digest-bound capability grant" {
         .manifest = manifest,
         .digest = digest,
         .root_len = 0,
-        .entry_len = 0,
     };
     registry.count = 1;
     var batch: EffectBatchType = .{};
@@ -474,7 +471,6 @@ test "plugin notification effects require the notifications capability" {
         .manifest = manifest,
         .digest = digest,
         .root_len = 0,
-        .entry_len = 0,
     };
     registry.count = 1;
     var batch: EffectBatchType = .{};
@@ -520,7 +516,6 @@ test "configured plugin actions resolve before the keymap becomes active" {
         .manifest = manifest,
         .digest = @splat(1),
         .root_len = 0,
-        .entry_len = 0,
     };
     registry.count = 1;
     const binding = try model.ConfiguredBinding.parse(

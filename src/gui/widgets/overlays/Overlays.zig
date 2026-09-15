@@ -6,6 +6,7 @@ const Overlays = @This();
 
 maps: GenericPresentedState(HitState) = .{},
 notifications: @import("Notifications.zig") = .{},
+history_motion: @import("ModalMotion.zig") = .{},
 gesture: ?u8 = null,
 /// The native keymap, for the palette's bound-key column.
 router: ?*const @import("../../input/router.zig").Type = null,
@@ -17,6 +18,7 @@ scale: f32 = 1,
 /// Example: `try overlays.compose(input, &widgets);`
 pub fn compose(overlays: *Overlays, input: @import("OverlayComposition.zig"), widgets: anytype) !void {
     const pending = overlays.maps.begin();
+    pending.history_metrics = .fromCanvas(input.canvas);
     const cards = try overlays.notifications.prepare(input.canvas, input.projection.*);
     for (cards.storage[0..cards.len]) |value| {
         var card = value;
@@ -27,6 +29,8 @@ pub fn compose(overlays: *Overlays, input: @import("OverlayComposition.zig"), wi
     var modal_input = input;
     modal_input.router = overlays.router;
     modal_input.scale = overlays.scale;
+    const history_generation = if (input.projection.prompt) |prompt| if (prompt.target() == .history) prompt.generation else null else null;
+    modal_input.history_reveal = overlays.history_motion.sample(history_generation, input.canvas.animation);
     try @import("modal_widget.zig").compose(modal_input, pending, widgets);
 }
 
@@ -85,7 +89,7 @@ pub fn cancelPointer(overlays: *Overlays) void {
 }
 
 /// Exposes the native inspector's wrapping to the shared prompt controller.
-/// Example: `const limit = Overlays.inspectionScrollLimit(projection);`.
-pub fn inspectionScrollLimit(projection: client.Projection) ?u32 {
-    return HistoryModal.inspectionScrollLimit(projection);
+/// Example: `const limit = overlays.inspectionScrollLimit(projection);`.
+pub fn inspectionScrollLimit(overlays: *const Overlays, projection: client.Projection) ?u32 {
+    return HistoryModal.inspectionScrollLimit(projection, overlays.presented().history_metrics orelse return null);
 }

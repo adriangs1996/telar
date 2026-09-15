@@ -1,6 +1,6 @@
 //! Bounded, owned shaping results for one font set at every height it
-//! paints. Single-byte ASCII requested for the primary face has
-//! collision-free slots; every other run hashes into a four-way set, so up
+//! paints. The first height of each primary ASCII character has a dedicated
+//! slot; other heights and runs hash into a four-way set, so up
 //! to four labels sharing a hash stay cached together instead of evicting
 //! one another every frame. A fifth replaces the set's oldest. Long runs
 //! bypass the cache. Entries include the requested and the resolved face
@@ -46,14 +46,17 @@ const Slot = union(enum) {
     set: usize,
 };
 
-fn slotFor(key: Key) ?Slot {
+fn slotFor(cache: *const Cache, key: Key) ?Slot {
     const text = key.text;
     if (text.len == 0 or text.len > Entry.max_bytes) {
         return null;
     }
 
     if (text.len == 1 and text[0] < ascii_capacity and key.face == .primary) {
-        return .{ .dedicated = text[0] };
+        const entry = &cache.entries[text[0]];
+        if (entry.len == 0 or entry.pixel_height == key.pixel_height) {
+            return .{ .dedicated = text[0] };
+        }
     }
 
     return .{ .set = std.hash.Wyhash.hash(seed(key), text) % sets };
@@ -77,7 +80,7 @@ fn setEntries(cache: *Cache, set: usize) []Entry {
 /// Borrows until the next insertion or clear.
 /// Example: `const hit = cache.find(.{ .text = text, .face = .sans });`
 pub fn find(cache: *Cache, key: Key) ?ShapedRun {
-    switch (slotFor(key) orelse return null) {
+    switch (cache.slotFor(key) orelse return null) {
         .dedicated => |index| {
             const entry = &cache.entries[index];
             return if (matches(entry, key)) entry.view() else null;
@@ -100,7 +103,7 @@ pub fn remember(cache: *Cache, key: Key, shaped: ShapedRun) void {
         return;
     }
 
-    const entry = switch (slotFor(key) orelse return) {
+    const entry = switch (cache.slotFor(key) orelse return) {
         .dedicated => |index| &cache.entries[index],
         .set => |set| cache.victim(set, key),
     };
@@ -140,14 +143,14 @@ fn victim(cache: *Cache, set: usize, key: Key) *Entry {
 test "colliding labels share a set instead of evicting one another" {
     var cache = try Cache.init(std.testing.allocator);
     defer cache.deinit(std.testing.allocator);
-    const set = slotFor(.{ .text = "1 agents", .face = .sans }).?.set;
+    const set = cache.slotFor(.{ .text = "1 agents", .face = .sans }).?.set;
     var found: [5][]const u8 = undefined;
     var count: usize = 0;
     var storage: [5][8]u8 = undefined;
     var attempt: u32 = 0;
     while (count < found.len) : (attempt += 1) {
         const text = std.fmt.bufPrint(&storage[count], "x{d}", .{attempt}) catch unreachable;
-        if (slotFor(.{ .text = text, .face = .sans }).?.set == set) {
+        if (cache.slotFor(.{ .text = text, .face = .sans }).?.set == set) {
             found[count] = text;
             count += 1;
         }
@@ -203,4 +206,33 @@ test "one label at three heights keeps three entries and a height mismatch misse
     cache.remember(.{ .text = "a", .face = .primary, .pixel_height = 16 }, shaped);
     try std.testing.expect(cache.find(.{ .text = "a", .face = .primary, .pixel_height = 16 }) != null);
     try std.testing.expect(cache.find(.{ .text = "a", .face = .primary, .pixel_height = 15 }) == null);
+}
+
+test "primary ASCII retains alternating editor and terminal heights without eviction" {
+    var cache = try Cache.init(std.testing.allocator);
+    defer cache.deinit(std.testing.allocator);
+    const shaped: ShapedRun = .{ .font = .primary, .columns = 1, .glyphs = &.{}, .positions = &.{} };
+    for ([_]u16{ 13, 15, 20 }) |height| {
+        for ("zig", 0..) |_, index| {
+            cache.remember(.{ .text = "zig"[index..][0..1], .face = .primary, .pixel_height = height }, shaped);
+        }
+    }
+
+    for (0..8) |_| {
+        for ([_]u16{ 20, 15, 13 }) |height| {
+            for ("zig", 0..) |_, index| {
+                const key: Key = .{ .text = "zig"[index..][0..1], .face = .primary, .pixel_height = height };
+                try std.testing.expect(cache.find(key) != null);
+                cache.remember(key, shaped);
+                try std.testing.expectEqual(height == 13, cache.slotFor(key).? == .dedicated);
+            }
+        }
+    }
+
+    cache.clear();
+    const replacement: Key = .{ .text = "z", .face = .primary, .pixel_height = 20 };
+    try std.testing.expect(cache.find(replacement) == null);
+    try std.testing.expect(cache.find(.{ .text = "z", .face = .primary, .pixel_height = 13 }) == null);
+    cache.remember(replacement, shaped);
+    try std.testing.expect(cache.slotFor(replacement).? == .dedicated);
 }

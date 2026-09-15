@@ -4,3 +4,4 @@ const TabMoveIntent = @This();
 
 location: TabLocationType,
 direction: TabMoveDirectionType,
+relative_to: ?@import("telar-core").TabId = null,

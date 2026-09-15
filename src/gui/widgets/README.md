@@ -69,6 +69,20 @@ flowchart LR
 
 ## Layout and drawing
 
+The new-context form uses `overlays/WorkspaceFormLayout` and `DialogSurface`.
+Its width, fields and folder rows follow chrome pixel metrics. The fields keep
+their position while directory results arrive; at most four rows are visible,
+with wheel/trackpad and arrow-key navigation. Small windows keep the active
+editor and the form actions. Other modals still use their existing layouts.
+
+`TextField.form_control` adds padding, rounded chrome and a thin caret. The
+delivered editor geometry describes the inset text area at its own font size,
+so pointer selection and native IME queries use the same coordinates. Context
+buttons activate on release inside their delivered bounds. Folder targets carry
+the prompt generation and listing revision; a stale click cannot accept a newer
+result. The shared controllers continue to own completion and submission.
+These controls use bounded frame storage and require no runtime UI state.
+
 `layout/Layout.zig` resolves caller-owned `Item` arrays in device pixels. A child
 uses fixed, measured-content or fill sizes, with minimum and maximum bounds.
 Containers provide rows, columns, overlays, padding, gaps and alignment. Nest a
@@ -176,7 +190,45 @@ Metal, Vulkan or platform-specific control implementation.
 See [native input](../../../docs/flows/native-input.md) for limits, ownership and
 host validation commands.
 
+## Command history
+
+`HistoryModal` uses a pixel layout, `DialogSurface`, a native search field and
+rounded result rows. Commands and captured output retain their terminal font;
+headings, scope and secondary metadata use the chrome typography. The layout
+stays fixed while queries replace a page and adapts to the viewport and font
+metrics. A wide inspector shares the dialog with the list; a narrow one uses
+the available result area.
+
+A row click selects without submitting. Rows and the primary action carry the
+delivered history revision, so a replaced or pending page cannot run an unseen
+command. Scope, inspection and submission use the shared history controllers.
+The search field retains keyboard and IME focus. The TUI keeps its own layout.
+
+The inspector's wrapped line count uses the same native layout as painting.
+Its metrics travel with `HitState`, so failed presentations preserve the
+visible geometry's scroll bound.
+
 ## Animation and invalidation
+
+Child progress uses `PaneProgress` capsules in pane headers and a compact ring
+in the active tab for a single pane. Fullscreen keeps the indicator beside the
+pane selector. Percentages ease between reports over 240 ms; unknown progress
+uses a rotating arc sampled from the presentation clock at 60 Hz. Pause and
+error have distinct marks and stop animation. Removing progress clears the
+indicator immediately, since removal can also mean interruption.
+
+`Chrome.progress` retains bounded `ProgressMotions` by pane ID and attachment
+generation. Only painted indicators renew their entries and deadlines; hidden,
+removed and reattached panes cannot inherit a previous animation. `ProgressRing`
+uses at most 66 rounded quads with a precomputed circle, without font shaping,
+texture uploads or frame-time allocation. The frame budget reserves space for
+one capsule per visible pane. The runtime and TUI keep their progress protocol.
+
+History opens with a 220 ms cubic ease-out, fading in while moving up twelve
+logical pixels. `Overlays` retains one `ModalMotion` keyed by prompt generation;
+edits, query results and toggling details do not restart it. Painting and input
+registration use the same shifted rectangles. Closing or finishing the entrance
+leaves no animation deadline.
 
 During scene preparation, `Canvas.animation` exposes a `FrameClock` with one
 monotonic timestamp and one earliest requested deadline. A sprite can choose

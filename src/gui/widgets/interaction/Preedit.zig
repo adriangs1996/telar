@@ -2,7 +2,6 @@
 //! modified until commit, so cancellation cannot lose the prior selection.
 const std = @import("std");
 const Id = @import("Id.zig");
-const Composition = @import("../../input/Composition.zig");
 const Preedit = @This();
 
 pub const capacity = 4096;

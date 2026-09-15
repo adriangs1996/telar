@@ -128,10 +128,6 @@ pub fn queueShellExit(observer: *Observer, clock: ClockType, exit_code: i32) voi
     observer.pushControl(.{ .shell_exit = .{ .clock = clock, .exit_code = exit_code } });
 }
 
-pub fn queueInterrupt(observer: *Observer, clock: ClockType) void {
-    observer.pushControl(.{ .interrupt = clock });
-}
-
 pub fn hasPending(observer: *const Observer) bool {
     return observer.worker == null and observer.batches[observer.active].event_count != 0;
 }
@@ -220,7 +216,6 @@ pub fn processSealed(observer: *Observer, processing: Processing, sink: anytype)
             .clock = exit.clock,
             .exit_code = exit.exit_code,
         }, sink),
-        .interrupt => |clock| observer.tracker.interrupt(clock, sink),
     };
     // Input, resize, and a worker's delivery time cannot make an old
     // screen newer than a lifecycle report. Nor is a partial VT frame a

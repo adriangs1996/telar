@@ -17,6 +17,7 @@ const PaneSnapshot = @import("PaneSnapshot.zig");
 const RectType = @import("telar-core").Rect;
 const LayoutType = @import("WorkspaceLayout.zig");
 const LayoutSnapshot = @import("LayoutSnapshot.zig");
+const IconType = @import("../layout/icons.zig").Icon;
 
 pub const PositionChange = enum {
     unchanged,
@@ -91,6 +92,79 @@ test "canonical tab labels distinguish changes and reject invalid values" {
     try std.testing.expectError(error.InvalidUtf8, model.applyLabel(location.tab_id, &invalid_utf8));
     try std.testing.expectError(error.TabNotFound, model.applyLabel(@enumFromInt(9), "missing"));
     try std.testing.expectEqualStrings("server", model.activeConst().?.labelSlice());
+}
+
+test "automatic tab labels follow foreground focus until explicitly renamed" {
+    var model = TabsModel.init(std.testing.allocator);
+    defer model.deinit();
+    const location: TabLocationType = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const first: PaneIdType = @enumFromInt(1);
+    const second: PaneIdType = @enumFromInt(2);
+    try model.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 40, .rows = 10 } });
+    const tab = model.active().?;
+
+    try std.testing.expect(tab.isAutomatic());
+    try std.testing.expectEqualStrings("", tab.canonicalLabel());
+    try std.testing.expectEqualStrings("shell", tab.labelSlice());
+    try std.testing.expectEqual(IconType.app_terminal, tab.labelIcon().?);
+
+    _ = tab.model.setPaneForeground(first, "zsh");
+    try std.testing.expectEqualStrings("zsh", tab.labelSlice());
+    _ = tab.model.setPaneForeground(first, "nvim");
+    try std.testing.expectEqualStrings("nvim", tab.labelSlice());
+    try std.testing.expectEqual(IconType.app_editor, tab.labelIcon().?);
+    try tab.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
+    _ = tab.model.setPaneForeground(second, "codex");
+    try std.testing.expectEqualStrings("codex", tab.labelSlice());
+    try std.testing.expectEqual(IconType.provider_codex, tab.labelIcon().?);
+    try std.testing.expect(tab.model.focusPane(first));
+    try std.testing.expectEqualStrings("nvim", tab.labelSlice());
+
+    try std.testing.expectEqual(LabelChange.changed, try model.applyLabel(location.tab_id, "nvim"));
+    try std.testing.expect(!tab.isAutomatic());
+    try std.testing.expectEqualStrings("nvim", tab.canonicalLabel());
+    try std.testing.expect(tab.labelIcon() == null);
+    _ = tab.model.setPaneForeground(first, "git");
+    try std.testing.expectEqualStrings("nvim", tab.labelSlice());
+    try std.testing.expect(tab.model.focusPane(second));
+    try std.testing.expectEqualStrings("nvim", tab.labelSlice());
+}
+
+test "automatic and manual tab labels survive canonical workspace snapshots" {
+    var model = TabsModel.init(std.testing.allocator);
+    defer model.deinit();
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const first: TabIdType = @enumFromInt(1);
+    const second: TabIdType = @enumFromInt(2);
+    const pane: PaneIdType = @enumFromInt(1);
+    try model.bootstrap(.{ .pane_id = pane, .location = .{ .workspace = workspace, .tab_id = first }, .size = .{ .cols = 20, .rows = 5 } });
+    _ = try model.addCreated(.{
+        .location = .{ .workspace = workspace, .tab_id = second },
+        .position = 1,
+        .label = "",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 20, .rows = 5 });
+    try std.testing.expect(model.activeConst().?.isAutomatic());
+    _ = model.find(first).?.model.setPaneForeground(pane, "claude");
+    const snapshot: WorkspaceSnapshotInput = .{
+        .workspace = workspace,
+        .name = "project",
+        .tabs = &.{
+            .{ .tab_id = first, .pane_count = 1, .label = "" },
+            .{ .tab_id = second, .pane_count = 1, .label = "tab 45" },
+        },
+    };
+    try model.reconcileWorkspace(snapshot);
+    try model.reconcileWorkspace(snapshot);
+
+    try std.testing.expect(model.find(first).?.isAutomatic());
+    try std.testing.expectEqualStrings("claude", model.find(first).?.labelSlice());
+    try std.testing.expectEqual(IconType.provider_claude, model.find(first).?.labelIcon().?);
+    try std.testing.expect(!model.find(second).?.isAutomatic());
+    try std.testing.expectEqualStrings("tab 45", model.find(second).?.labelSlice());
 }
 
 test "failed tab construction does not publish a shifted slot" {
@@ -347,7 +421,7 @@ test "workspace reconciliation rejects malformed snapshots before mutation" {
     const invalid_label: WorkspaceSnapshotInput = .{
         .workspace = workspace,
         .name = "project",
-        .tabs = &.{.{ .tab_id = root_tab, .pane_count = 1, .label = "" }},
+        .tabs = &.{.{ .tab_id = root_tab, .pane_count = 1, .label = "bad\nlabel" }},
     };
     try std.testing.expectError(error.InvalidTabLabel, model.reconcileWorkspace(invalid_label));
 

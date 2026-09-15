@@ -6,7 +6,6 @@
 
 const std = @import("std");
 const Client = @import("../../AttachedClient.zig");
-const JobType = @import("../../completion/FaviconJob.zig");
 const CompletionType = @import("../../completion/FaviconCompletion.zig");
 const ImageType = @import("../../completion/FaviconImage.zig");
 const RequestType = @import("FaviconRequest.zig");

@@ -6,7 +6,6 @@
 const std = @import("std");
 const Client = @import("../../AttachedClient.zig");
 const path_expansion = @import("../../completion/path_expansion.zig");
-const JobType = @import("../../completion/PathCompletionJob.zig");
 const CompletionType = @import("../../completion/PathCompletionCompletion.zig");
 const ResultType = @import("../../model/PathCompletionResult.zig");
 

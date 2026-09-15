@@ -223,7 +223,8 @@ fn scrollState(value: anytype) ScrollType {
 }
 
 /// Encodes the next cell projection without allocating and retains the
-/// exact baseline needed to acknowledge it later.
+/// exact baseline needed to acknowledge it later. Snapshots and patches
+/// wait for synchronized redraw completion or expiry while output is live.
 ///
 /// ```zig
 /// const payload = try sync.prepare(.{ .io = io, .buffer = buffer, .pane = pane, .force_snapshot = false, .metrics = metrics });
@@ -235,7 +236,7 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
     const force_snapshot = preparation.force_snapshot;
     const metrics = preparation.metrics;
 
-    if (!force_snapshot and pane.holdFrames(io)) {
+    if (!pane.output_done and pane.holdFrames(io)) {
         return null;
     }
     const started = now_module(io);

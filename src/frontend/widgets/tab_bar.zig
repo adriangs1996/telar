@@ -2,9 +2,6 @@
 
 const ContextType = @import("Context.zig");
 const TabBarInput = @import("TabBarInput.zig");
-const std = @import("std");
-const raw_module = @import("telar-core").raw;
-const measure_module = @import("telar-core").measure;
 const RectType = @import("telar-core").Rect;
 const Label = @import("Label.zig");
 const StyleType = @import("telar-core").Style;
@@ -19,15 +16,12 @@ pub const fullscreen_marker_width: u16 = 2;
 pub fn render(context: *ContextType, input: TabBarInput) void {
     if (input.tabs) |collection| {
         renderCollection(context, input, collection);
-    } else if (input.model.location) |location| {
-        var tab_buffer: [32]u8 = undefined;
-        const label = std.fmt.bufPrint(&tab_buffer, " tab {d} ", .{
-            raw_module(location.tab_id),
-        }) catch " tab ";
-        const width = @min(measure_module(label), input.area.w);
+    } else if (input.model.location) |_| {
+        const label = Label.initModel(input.model);
+        const width = @min(label.width(), input.area.w);
         const x = alignedStart(input, width);
         const rect: RectType = .{ .x = x, .y = input.area.y, .w = width, .h = 1 };
-        _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = x, .y = input.area.y }, .text = label, .max_width = width, .style = activeStyle(context) });
+        label.draw(context, .{ .rect = rect, .style = activeStyle(context) });
     }
 }
 
@@ -46,7 +40,7 @@ pub fn desiredWidth(input: TabBarInput) u16 {
         return total;
     }
     if (input.model.location) |_| {
-        return 32;
+        return Label.initModel(input.model).width();
     }
 
     return 0;

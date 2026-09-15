@@ -98,7 +98,7 @@ test "CreateTabHandler commits state before publishing and attaching" {
     try std.testing.expectEqualStrings("logs", workspaces.reader().tabLabel(result.created.location).?);
 }
 
-test "CreateTabHandler returns the aggregate generated label" {
+test "CreateTabHandler preserves automatic labels through commit and publication" {
     var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
@@ -119,9 +119,9 @@ test "CreateTabHandler returns the aggregate generated label" {
 
     const result = try handler.execute(testingCommand(initial.workspace, ""));
 
-    try std.testing.expectEqualStrings("tab 2", result.created.labelSlice());
-    try std.testing.expectEqualStrings("tab 2", events.last.?.labelSlice());
-    try std.testing.expectEqualStrings("tab 2", workspaces.reader().tabLabel(result.created.location).?);
+    try std.testing.expectEqualStrings("", result.created.labelSlice());
+    try std.testing.expectEqualStrings("", events.last.?.labelSlice());
+    try std.testing.expectEqualStrings("", workspaces.reader().tabLabel(result.created.location).?);
 }
 
 test "CreateTabHandler rejects missing workspaces before client effects" {
@@ -289,7 +289,7 @@ fn expectLaunchFailure(spawn_failure: anyerror, command_failure: anyerror) !void
     try std.testing.expectEqual(@as(usize, 1), workspaces.reader().totalTabs());
     try std.testing.expect(workspaces.reader().contains(initial));
     try std.testing.expect(!workspaces.reader().contains(rejected));
-    try std.testing.expectEqualStrings("main", workspaces.reader().tabLabel(initial).?);
+    try std.testing.expectEqualStrings("", workspaces.reader().tabLabel(initial).?);
     try std.testing.expectEqual(initial_revision, workspaces.reader().revision());
     try std.testing.expectEqual(@as(u64, 2), raw_module(try workspaces.nextTabId()));
     try std.testing.expectEqual(@as(usize, 1), client.prepare_count);

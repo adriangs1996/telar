@@ -5,7 +5,7 @@ bytes: [max_tab_label_bytes_module]u8 = undefined,
 len: u8,
 
 pub fn init(label: []const u8) !OwnedTabLabel {
-    if (label.len == 0 or label.len > max_tab_label_bytes_module) {
+    if (label.len > max_tab_label_bytes_module) {
         return error.InvalidTabLabel;
     }
 

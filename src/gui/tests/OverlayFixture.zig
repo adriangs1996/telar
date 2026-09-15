@@ -47,9 +47,11 @@ pub fn paint(fixture: *Fixture) !void {
 pub fn prepare(fixture: *Fixture) !void {
     fixture.renderer.quads.clear();
     var target = fixture.canvas();
+    target.widgets = &fixture.widgets;
     target.animation = if (fixture.animation) |*clock| clock else null;
     fixture.widgets.begin(fixture.model.name_prompt.active());
     const projection_value = fixture.projection();
+    fixture.widgets.prompt_generation = if (projection_value.prompt) |prompt| prompt.generation else 0;
     var widgets: @import("../widgets/frame_widget.zig").List = .{};
     try fixture.overlays.compose(.{ .canvas = &target, .projection = &projection_value }, &widgets);
     try widgets.draw(&target);

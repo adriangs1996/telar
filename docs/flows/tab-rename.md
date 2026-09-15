@@ -4,6 +4,13 @@ The runtime owns the canonical tab label. The client edits a bounded candidate,
 sends it with a stable tab identity, then changes its replica only after the
 runtime confirms the label.
 
+An empty canonical label selects automatic naming: each client displays its
+focused pane's foreground application and icon. A rename always supplies a
+non-empty canonical label and disables automatic naming. Renaming to the same
+text currently displayed is still a change when the previous canonical label
+was empty. Reconciliation compares `Tab.canonicalLabel()`, while prompts and
+navigation display `Tab.labelSlice()`.
+
 This is an interactive flow. Labels must contain between one and
 `schema.max_tab_label_bytes` bytes, valid UTF-8 and no control bytes. The prompt,
 outbox and runtime response queue use fixed storage. The continuation retains

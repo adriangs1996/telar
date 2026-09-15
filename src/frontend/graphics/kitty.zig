@@ -23,10 +23,6 @@ const max_chunks_per_image_module = @import("telar-core").max_chunks_per_image;
 const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
 const ShmNameType = @import("telar-core").ShmName;
 
-const native = @cImport({
-    @cInclude("sys/stat.h");
-});
-
 /// Whether this client build can map POSIX shared memory the runtime names.
 /// The client declares it to the runtime explicitly; nothing is assumed.
 pub fn clientSupportsSharedMemory() bool {
