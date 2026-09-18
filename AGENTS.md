@@ -55,13 +55,13 @@ client behavior; neither common package imports a host adapter. Backend and
 frontend never import each other, and `telar-gui` never imports
 `telar-frontend`: what both adapters embed lives in the `assets` module. `src/main.zig` selects a CLI entrypoint.
 
-| Package | Owns |
-| --- | --- |
-| `telar-core` | cells, buffers, geometry and wire values shared across processes |
-| `telar-backend` | children, PTYs, terminal emulation, history and runtime authority |
-| `telar-client` | disposable model, handlers, input policy, configuration, plugins, local transport, resource retention and presentation contracts |
-| `telar-frontend` | TUI assembly, host terminal, decoder, compositor, diff, pacing and Kitty delivery |
-| `telar-gui` | native chrome: glyph atlas and quad frames drawn by a Metal backend on macOS and a Wayland/Vulkan backend on Linux |
+| Package          | Owns                                                                                                                             |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `telar-core`     | cells, buffers, geometry and wire values shared across processes                                                                 |
+| `telar-backend`  | children, PTYs, terminal emulation, history and runtime authority                                                                |
+| `telar-client`   | disposable model, handlers, input policy, configuration, plugins, local transport, resource retention and presentation contracts |
+| `telar-frontend` | TUI assembly, host terminal, decoder, compositor, diff, pacing and Kitty delivery                                                |
+| `telar-gui`      | native chrome: glyph atlas and quad frames drawn by a Metal backend on macOS and a Wayland/Vulkan backend on Linux               |
 
 Each package has an explicit module entrypoint in `build.zig`. Put a type in
 core only when both processes need it. Each connection owns independent client
@@ -214,3 +214,30 @@ pub fn observeProxy(store: *Store, observation: ProxyObservation) bool {}
 - Every change should preserve or improve the code architecture. Follow Single Responsability Principle
   and express the semantics of what is being done with functions and structs that encapsulate
   their state and their state mutations.
+
+- DO NOT INLINE IMPORT calls:
+
+```zig
+// Bad
+const a: @import("path/to/type/A") = .{};
+const b = @import("path/to/some/module").foo();
+
+// Good
+const A = @import("path/to/type/A");
+const module = @import("path/to/some/module");
+
+const a: A = .{}
+const b = module.foo();
+```
+
+- DO NOT USE MAGIC CONSTANTS, always replace them with enums
+
+```zig
+
+// BAD
+const step: f64 = 3;
+
+// GOOD
+const step: Step = Step.start;
+
+```

@@ -314,3 +314,46 @@ The agent's own command, typed into its input on the user's behalf, that
 changes a provider option on a running agent. Its effect is confirmed only by
 the transcript.
 _Avoid_: Slash command, remote setting
+
+## Change review
+
+**Directed session**:
+A synchronous collaboration in an agent pane where the user directs project
+changes through natural language, contextual code review and optional direct
+editing, taking exclusive collaboration turns with one managed agent. The
+agent works without subagents in a working tree that other agents do not share.
+_Avoid_: Permission mode
+
+**Collaboration turn**:
+An exclusive period of a directed session assigned to the user or the agent;
+the other participant must wait for its owner to hand control back before
+advancing the shared work. It is independent of the provider's model exchanges.
+_Avoid_: Model exchange, Provider turn completion
+
+**Explanation turn**:
+An agent collaboration turn whose scope is answering the user's contextual
+question without implementing further changes. Earlier implementation
+instructions do not authorize additional implementation during this turn.
+_Avoid_: Continue implementation
+
+**Implementation turn**:
+An agent collaboration turn authorized to work on one agreed change objective
+and then return control to the user. The objective can involve multiple files.
+_Avoid_: Complete the whole task
+
+**Review step**:
+A project change with an agreed objective, developed and reviewed across one
+or more collaboration turns. It becomes accepted only through an explicit
+user decision.
+_Avoid_: Tool call, Commit, Collaboration turn
+
+**Step acceptance**:
+The user's explicit decision to accept a review step. Asking a question,
+editing code, or handing control back does not itself accept the step.
+_Avoid_: Turn handoff
+
+**Experiment area**:
+A designated space for a directed session's disposable utilities and
+experiments outside the project changes under review. Incorporating its
+contents into the project requires a change proposal.
+_Avoid_: Untracked files

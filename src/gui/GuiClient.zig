@@ -9,6 +9,9 @@ const Regions = @import("widgets/Regions.zig");
 const Renderer = @import("render/TerminalRenderer.zig");
 const native = @import("native/native.zig");
 const selection = @import("render/copy_selection.zig");
+const State = @import("widgets/interaction/State.zig");
+const Chrome = @import("widgets/Chrome.zig");
+
 const GuiClient = @This();
 
 app: client.AttachedClient,
@@ -17,10 +20,11 @@ input: NativeInput = .{},
 host: @import("host/Services.zig") = .{},
 input_revision: u64 = 0,
 focused: bool = true,
-widgets: @import("widgets/interaction/State.zig") = .{},
+widgets: State = .{},
 region: client.Region,
 theme: client.ColorTheme,
-chrome: @import("widgets/Chrome.zig") = .{},
+chrome: Chrome = .{},
+
 /// The sidebar band width preference; the shared model keeps only visibility.
 sidebar: @import("SidebarPreference.zig") = .{},
 overlays: @import("widgets/overlays/Overlays.zig") = .{},

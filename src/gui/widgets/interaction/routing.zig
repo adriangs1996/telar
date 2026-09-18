@@ -3,6 +3,14 @@
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
+
+const image_preview = @import("image_preview.zig");
+const completions = @import("completions.zig");
+const thread_items = @import("thread_items.zig");
+const thread_selection = @import("thread_selection.zig");
+
+const PointerRouting = @import("../../input/PointerRouting.zig");
+
 const GuiClient = @import("../../GuiClient.zig");
 const Event = @import("../../input/event.zig").Event;
 const Key = @import("../../input/KeyInput.zig");
@@ -17,6 +25,7 @@ pub fn reconcileFocus(gui: *GuiClient) void {
     const state = &gui.widgets;
     const model = gui.app.model.activeTabModelConst();
     const focused_pane: ?core.PaneId = if (model) |value| value.layout.focused() else null;
+
     if (state.composer_menu.selector) |selector| {
         if (focused_pane != selector.pane_id) {
             state.composer_menu.selector = null;
@@ -26,6 +35,7 @@ pub fn reconcileFocus(gui: *GuiClient) void {
 
     const target = state.dispatcher.focusedTarget() orelse return;
     const pane_id = target.paneId() orelse return;
+
     if (focused_pane == pane_id and eligible(gui, target)) {
         return;
     }
@@ -34,6 +44,7 @@ pub fn reconcileFocus(gui: *GuiClient) void {
     state.paste_owner = null;
     _ = state.dispatcher.focus(null);
     state.dispatcher.cancel();
+
     if (gui.input.binding_target != null) {
         gui.input.cancelBinding();
     }
@@ -44,9 +55,10 @@ pub fn reconcileFocus(gui: *GuiClient) void {
 /// Example: `if (try routing.apply(gui, event)) return;`
 pub fn apply(gui: *GuiClient, event: Event) !bool {
     reconcileFocus(gui);
-    @import("completions.zig").refresh(gui);
+    completions.refresh(gui);
     const state = &gui.widgets;
-    if (@import("image_preview.zig").route(gui, event)) {
+
+    if (image_preview.route(gui, event)) {
         return true;
     }
 
@@ -54,33 +66,36 @@ pub fn apply(gui: *GuiClient, event: Event) !bool {
         return true;
     }
 
-    const begins = event == .scroll or (event == .pointer and (event.pointer.kind == .press or event.pointer.kind == .scroll_up or event.pointer.kind == .scroll_down));
-    if (begins and !@import("../../input/PointerRouting.zig").geometryMatches(&gui.app)) {
-        if (event == .scroll) {
+    if (event.isScrollOrPointerBegin() and !PointerRouting.geometryMatches(&gui.app)) {
+        if (event.isScroll()) {
             state.thread_scroll.clear();
         }
-        if (event == .pointer and event.pointer.kind == .press) {
+
+        if (event.isPointerPress()) {
             state.dispatcher.discardPointer(event.pointer.button);
         }
 
         return true;
     }
 
-    if (event == .focus and !event.focus) {
+    if (event.isFocusNotFocused()) {
         state.thread_scroll.clear();
         state.cancelComposition();
     }
-    if (event == .clipboard and event.clipboard.operation == .write) {
+
+    if (event.isWriteClipboardContent()) {
         try finishCut(gui, event.clipboard);
-        @import("thread_items.zig").copied(gui, event.clipboard);
-        @import("thread_selection.zig").copied(gui, event.clipboard);
+        thread_items.copied(gui, event.clipboard);
+        thread_selection.copied(gui, event.clipboard);
         return true;
     }
-    if (event == .clipboard) {
+
+    if (event.isClipboard()) {
         try finishPaste(gui, event.clipboard);
         return true;
     }
-    if (event == .accessibility) {
+
+    if (event.isAccessibility()) {
         try accessibility(gui, event.accessibility);
         return true;
     }
