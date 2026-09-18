@@ -1,0 +1,15 @@
+flowchart TD
+A[Teclado, ratón, texto del sistema] --> B[Callback input]
+B --> C[Inbox: eventos propios ordenados]
+C --> D[Callback pump]
+D --> E[Runner.dispatch]
+E --> F[MyWidget.input modifica estado]
+F --> G[dirty = true]
+G --> H[El backend programa un dibujo]
+H --> I[callback render → Runner.prepare]
+I --> J[MyWidget.draw → Canvas]
+J --> K[Frame: quads, atlas, sprites y token]
+K --> L[Backend gráfico → GPU]
+L --> M[callback complete]
+M --> C
+D --> N[Runner.finish confirma geometría interactiva]

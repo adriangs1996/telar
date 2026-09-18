@@ -18,6 +18,8 @@ static unsigned marker_rgb[3], frame_quads;
 static uint64_t frame_token;
 static telar_gui_quad rules[256];
 static unsigned rule_count;
+static unsigned diagram_count;
+static uint32_t diagram_widths[TELAR_GUI_DIAGRAM_SLOTS], diagram_heights[TELAR_GUI_DIAGRAM_SLOTS];
 
 static id find_control(NSArray *children, NSString *label) {
     for (id child in children) {
@@ -114,6 +116,12 @@ static void render(void *context, telar_gui_viewport size, telar_gui_frame *fram
     frame_token = frame->token;
     marker_valid = NO;
     rule_count = 0;
+    diagram_count = 0;
+    for (unsigned i = 0; i < TELAR_GUI_DIAGRAM_SLOTS; i++) {
+        diagram_widths[i] = frame->diagrams[i].width;
+        diagram_heights[i] = frame->diagrams[i].height;
+        if (frame->diagrams[i].pixels != NULL) diagram_count++;
+    }
     for (uint32_t i = 0; i < frame->quad_count; i++) {
         const telar_gui_quad *quad = &frame->quads[i];
         if (quad->height == 1 && quad->u0 == quad->u1) {
@@ -212,12 +220,17 @@ static NSDictionary *pointer_record(NSView *view) {
     for (unsigned i = 0; i < rule_count; i++) {
         [lines addObject:@[@(rules[i].x), @(rules[i].y), @(rules[i].width), @(rules[i].height)]];
     }
+    NSMutableArray *diagrams = [NSMutableArray array];
+    for (unsigned i = 0; i < TELAR_GUI_DIAGRAM_SLOTS; i++) {
+        if (diagram_widths[i]) [diagrams addObject:@[@(diagram_widths[i]), @(diagram_heights[i])]];
+    }
     return @{@"desired_pointer": @([view desiredPointerShape]), @"native_cursor": native_cursor(),
              @"app_active": @(NSApp.isActive), @"window_key": @(view.window.isKeyWindow),
              @"viewport": @[@(viewport.width), @(viewport.height), @(viewport.scale)],
              @"view_points": @[@(view.bounds.size.width), @(view.bounds.size.height)],
              @"marker": @[@(marker.x), @(marker.y), @(marker.width), @(marker.height)],
-             @"quads": @(frame_quads), @"frame_token": @(frame_token), @"horizontal_rules": lines};
+             @"quads": @(frame_quads), @"frame_token": @(frame_token), @"horizontal_rules": lines,
+             @"diagrams": diagrams};
 }
 
 __attribute__((constructor)) static void install(void) {
@@ -250,8 +263,10 @@ __attribute__((constructor)) static void install(void) {
                 abort();
             }
             if ((action[@"wait"] && ![NSFileManager.defaultManager fileExistsAtPath:action[@"wait"]]) ||
-                ([action[@"wait_marker"] boolValue] && !marker_valid) || cursor_pending) {
-                if (++waiting > 80) {
+                ([action[@"wait_marker"] boolValue] && !marker_valid) ||
+                (action[@"wait_diagrams"] && diagram_count < [action[@"wait_diagrams"] unsignedIntValue]) || cursor_pending) {
+                const NSUInteger limit = action[@"wait_seconds"] ? MAX(1, [action[@"wait_seconds"] unsignedIntegerValue]) * 7 : 80;
+                if (++waiting > limit) {
                     fprintf(stderr, "GUI action %lu timed out: %s\n", (unsigned long)index, [action.description UTF8String]);
                     if (action[@"assert_pointer"]) fprintf(stderr, "pointer state: %s\n", [pointer_record(view).description UTF8String]);
                     abort();
@@ -260,9 +275,15 @@ __attribute__((constructor)) static void install(void) {
             }
             waiting = 0;
             fprintf(stderr, "GUI action %lu: %s\n", (unsigned long)index, [action.description UTF8String]);
+            if (action[@"resize"]) {
+                NSArray *size = action[@"resize"];
+                [window setContentSize:NSMakeSize([size[0] doubleValue], [size[1] doubleValue])];
+            }
             if (action[@"key"]) send_key(view, action);
             if (action[@"text"]) [(id<NSTextInputClient>)view insertText:action[@"text"] replacementRange:NSMakeRange(NSNotFound, 0)];
             if (action[@"click_label"]) click_control(view, action[@"click_label"]);
+            if (action[@"signal"] && ![[NSData data] writeToFile:action[@"signal"] atomically:YES]) abort();
+            if (action[@"expect_clipboard"] && ![[NSPasteboard.generalPasteboard stringForType:NSPasteboardTypeString] isEqualToString:action[@"expect_clipboard"]]) abort();
             if (action[@"expect_value"]) {
                 NSDictionary *expected = action[@"expect_value"];
                 id control = find_control([view accessibilityChildren], expected[@"label"]);
