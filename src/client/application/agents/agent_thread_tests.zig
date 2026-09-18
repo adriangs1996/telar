@@ -349,6 +349,9 @@ test "folded history scanning is bounded and preserves its seam across retries" 
 
     try std.testing.expect(!handler.skipFolded(pane_id));
     try std.testing.expect(model.agentPane(pane_id).?.history_intent == null);
+    handler.reverse(pane_id, .older);
+    try std.testing.expectEqual(@as(u8, 32), window.scan_remaining);
+    try std.testing.expect(handler.skipFolded(pane_id));
     try std.testing.expect(handler.navigate(pane_id, .older));
     const failed = (try handler.begin(pane_id)).?;
     try std.testing.expect(window.preserve_seam);
@@ -382,7 +385,7 @@ test "expanding work or reversing cancels a pending invisible page" {
     const window = pane.agent_history.?;
     try std.testing.expect(handler.skipFolded(pane_id));
     const pending = (try handler.begin(pane_id)).?;
-    handler.revealWork(pane_id);
+    handler.revealWork(pane_id, 0);
     try std.testing.expect(window.pending == null and pane.history_intent == null);
     try std.testing.expect(!window.preserve_seam);
     try std.testing.expect(!try handler.apply(historyOperation(model, pending.view_generation), try historyResponse(&buffer, pending.view_generation)));
@@ -408,6 +411,7 @@ test "history navigation freezes the live seam and owns pages after receive reus
     const live = pane.agent_thread.?;
     @memcpy(live.text_storage[0..5], "Later");
     live.revision += 1;
+    pane.transcript_scroll = 0.125;
     const frozen = &pane.agent_history.?.pages[0].snapshot;
     try std.testing.expectEqualStrings("Ready", frozen.items()[0].text(frozen));
     var buffer: [4096]u8 = undefined;
@@ -420,10 +424,52 @@ test "history navigation freezes the live seam and owns pages after receive reus
     try std.testing.expectEqualStrings("Later", live.items()[0].text(live));
     try std.testing.expectEqualStrings("older-cursor", window.cursor(.older));
     try std.testing.expect(!window.has(.newer));
+    pane.transcript_scroll = 0;
     try std.testing.expect(handler.navigate(pane_id, .newer));
     try std.testing.expect(try handler.begin(pane_id) == null);
-    try std.testing.expect(pane.agent_history == null);
+    try std.testing.expectEqual(window, pane.agent_history.?);
+    try std.testing.expectEqualStrings("Earlier", window.pages[0].snapshot.items()[0].text(&window.pages[0].snapshot));
+    try std.testing.expectEqualStrings("Later", window.pages[1].snapshot.items()[0].text(&window.pages[1].snapshot));
     try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
+}
+
+test "a retained live tail follows snapshots at the bottom and pauses while reading or selecting" {
+    const model = try historyModel();
+    defer std.testing.allocator.destroy(model);
+    defer model.deinit();
+    const pane = model.workspace.findPane(pane_id).?;
+    const handler: HistoryHandler = .{ .model = model };
+    try std.testing.expect(handler.navigate(pane_id, .older));
+    const query = (try handler.begin(pane_id)).?;
+    var bytes: [4096]u8 = undefined;
+    try std.testing.expect(try handler.apply(historyOperation(model, query.view_generation), try historyResponse(&bytes, query.view_generation)));
+    const window = pane.agent_history.?;
+    var update = pane.agent_thread.?.*;
+    update.revision += 1;
+    @memcpy(update.text_storage[0..5], "Later");
+    try std.testing.expect(try model.applyAgentThread((try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &update))).agent_thread_snapshot));
+    try std.testing.expectEqual(@as(u8, 2), window.count);
+    try std.testing.expectEqualStrings("Earlier", window.pages[0].snapshot.items()[0].text(&window.pages[0].snapshot));
+    try std.testing.expectEqualStrings("Later", window.pages[1].snapshot.items()[0].text(&window.pages[1].snapshot));
+
+    pane.transcript_scroll = 0.125;
+    update.revision += 1;
+    @memcpy(update.text_storage[0..5], "Again");
+    _ = try model.applyAgentThread((try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &update))).agent_thread_snapshot);
+    try std.testing.expectEqualStrings("Later", window.pages[1].snapshot.items()[0].text(&window.pages[1].snapshot));
+    pane.transcript_scroll = 0;
+    try std.testing.expect(try handler.freeze(pane_id, pane.attachment_generation));
+    try std.testing.expect(!pane.followAgentThread());
+    handler.unfreeze(pane_id, pane.attachment_generation);
+    try std.testing.expectEqualStrings("Again", window.pages[1].snapshot.items()[0].text(&window.pages[1].snapshot));
+
+    update.revision += 1;
+    @memcpy(update.metadata_storage[0..4], "next");
+    update.item_storage[0].identity += 1;
+    _ = try model.applyAgentThread((try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &update))).agent_thread_snapshot);
+    try std.testing.expectEqual(@as(u8, 2), window.count);
+    try std.testing.expectEqualStrings("Earlier", window.pages[0].snapshot.items()[0].text(&window.pages[0].snapshot));
+    try std.testing.expectEqualStrings("next", window.pages[1].snapshot.items()[0].sourceId(&window.pages[1].snapshot));
 }
 
 test "history direction reversal rejects stale completion and preserves the next intent" {
@@ -611,7 +657,7 @@ test "history ownership retains at most sixteen windows and evicts an inactive r
     try std.testing.expect(model.agentPane(@enumFromInt(17)).?.agent_history != null);
     try std.testing.expectEqual(selected, model.agentPane(pane_id).?.agent_history.?);
     try std.testing.expect(selected.retained);
-    try std.testing.expect(@sizeOf(@import("../../panes/AgentHistoryWindow.zig")) <= 256 * 1024);
+    try std.testing.expect(@sizeOf(@import("../../panes/AgentHistoryWindow.zig")) <= 2 * 1024 * 1024);
 }
 
 test "a live provider item without turn identity falls back to persisted tail" {

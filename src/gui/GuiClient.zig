@@ -172,6 +172,7 @@ pub fn requestClipboardWriteOwned(gui: *GuiClient, owner: @import("host/Owner.zi
 pub fn focus(gui: *GuiClient, focused: bool) !void {
     gui.focused = focused;
     if (!focused) {
+        gui.widgets.thread_scroll.clear();
         gui.widgets.tab_drag.cancel();
         @import("widgets/interaction/message_links.zig").clear(gui);
         @import("widgets/interaction/thread_selection.zig").cancel(gui);
@@ -303,6 +304,7 @@ pub fn complete(gui: *GuiClient, token: u64, delivered: bool) !void {
     if (delivered) {
         try @import("widgets/interaction/thread_items.zig").delivered(gui);
         try @import("widgets/interaction/thread_history.zig").delivered(gui);
+        @import("widgets/interaction/thread_scroll.zig").delivered(gui);
         @import("widgets/interaction/thread_selection.zig").delivered(gui);
     }
 }
@@ -337,11 +339,12 @@ pub fn prepare(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.zig"
         return error.PresentationBusy;
     }
 
+    gui.chrome.now_ns = client.monotonic(gui.app.io);
+    try @import("widgets/interaction/thread_scroll.zig").advance(gui, gui.chrome.now_ns);
     try @import("widgets/interaction/thread_selection.zig").prepare(gui);
     gui.diagrams.beginFrame();
 
     gui.refreshPointer();
-    gui.chrome.now_ns = client.monotonic(gui.app.io);
     try gui.resolveFavicons(renderer);
     const projected = gui.projection();
     const observed = gui.observation();

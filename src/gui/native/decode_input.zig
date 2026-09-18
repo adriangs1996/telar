@@ -98,11 +98,11 @@ pub fn decode(native: NativeEvent) !events.Event {
             return .{ .composition = .{ .target_id = native.target_id, .generation = native.generation, .text = text, .selection_start = native.selection_start, .selection_end = native.selection_end, .replacement_start = native.replacement_start, .replacement_end = native.replacement_end, .cancel = native.code == 2 } };
         },
         8 => {
-            if (text.len != 0 or native.precise > 1 or native.scroll_phase > 4 or native.momentum_phase > 4 or !std.math.isFinite(native.x) or !std.math.isFinite(native.y) or !std.math.isFinite(native.delta_x) or !std.math.isFinite(native.delta_y)) {
+            if (text.len != 0 or native.precise > 1 or native.scroll_phase > 4 or native.momentum_phase > 4 or native.scroll_kinetic > 1 or (native.scroll_kinetic == 1 and native.precise == 0) or !std.math.isFinite(native.x) or !std.math.isFinite(native.y) or !std.math.isFinite(native.delta_x) or !std.math.isFinite(native.delta_y)) {
                 return error.InvalidNativeScroll;
             }
 
-            return .{ .scroll = .{ .x = native.x, .y = native.y, .delta_x = native.delta_x, .delta_y = native.delta_y, .mods = @intCast(native.mods), .precise = native.precise == 1, .phase = @enumFromInt(native.scroll_phase), .momentum = @enumFromInt(native.momentum_phase) } };
+            return .{ .scroll = .{ .x = native.x, .y = native.y, .delta_x = native.delta_x, .delta_y = native.delta_y, .mods = @intCast(native.mods), .precise = native.precise == 1, .phase = @enumFromInt(native.scroll_phase), .momentum = @enumFromInt(native.momentum_phase), .kinetic = native.scroll_kinetic == 1, .time_ms = native.scroll_time_ms } };
         },
         9 => {
             if (native.request_id == 0 or native.code > 4 or (native.code != 0 and native.code != 4 and text.len != 0)) {
@@ -202,12 +202,23 @@ test "host result identities and precise scroll phases survive translation" {
     try std.testing.expectEqual(@as(f64, 0.125), scroll.delta_x);
     try std.testing.expectEqual(@as(f64, -0.25), scroll.delta_y);
     try std.testing.expect(scroll.phase == .update and scroll.momentum == .end and scroll.precise);
+    try std.testing.expect(!scroll.kinetic);
     try std.testing.expectError(error.InvalidNativeScroll, decode(.{ .kind = 8, .delta_y = std.math.nan(f64) }));
     const result = (try decode(.{ .kind = 9, .phase = 0, .request_id = 99, .target_id = 42, .generation = 8, .code = 3 })).clipboard;
     try std.testing.expectEqual(@as(u64, 99), result.request_id);
     try std.testing.expect(result.status == .cancelled);
     try std.testing.expectError(error.InvalidNativeClipboard, decode(.{ .kind = 9, .request_id = 0 }));
     try std.testing.expectError(error.InvalidNativeAccessibility, decode(.{ .kind = 10, .target_id = 42, .code = 3 }));
+}
+
+test "native finger timestamps and client inertia ownership survive translation" {
+    const scroll = (try decode(.{ .kind = 8, .precise = 1, .scroll_phase = 3, .scroll_kinetic = 1, .scroll_time_ms = std.math.maxInt(u32) })).scroll;
+    try std.testing.expect(scroll.precise and scroll.kinetic and scroll.phase == .end);
+    try std.testing.expectEqual(std.math.maxInt(u32), scroll.time_ms);
+    const wrapped = (try decode(.{ .kind = 8, .precise = 1, .scroll_phase = 1, .scroll_kinetic = 1 })).scroll;
+    try std.testing.expectEqual(@as(u32, 0), wrapped.time_ms);
+    try std.testing.expectError(error.InvalidNativeScroll, decode(.{ .kind = 8, .precise = 1, .scroll_kinetic = 2 }));
+    try std.testing.expectError(error.InvalidNativeScroll, decode(.{ .kind = 8, .scroll_kinetic = 1 }));
 }
 
 test "GUI Command shortcuts remain distinct from terminal control chords" {

@@ -21,5 +21,7 @@ pub const InputEvent = extern struct {
     precise: u32 = 0,
     scroll_phase: u32 = 0,
     momentum_phase: u32 = 0,
+    scroll_kinetic: u32 = 0,
+    scroll_time_ms: u32 = 0,
     revision: u64 = 0,
 };

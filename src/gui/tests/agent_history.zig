@@ -52,6 +52,107 @@ fn rowY(flow: *const Flow, id: u64) !f32 {
     return error.MissingHistoryRow;
 }
 
+fn foldedTurn(first: u64) !*core.AgentThreadSnapshot {
+    const value = try snapshot(first);
+    for (value.item_storage[0..3]) |*item| {
+        item.role = .tool;
+        item.kind = .command;
+    }
+    const turn = try std.fmt.bufPrint(value.metadata_storage[value.metadata_len..], "turn-{d}", .{first});
+    for (value.item_storage[0..4]) |*item| {
+        item.source_turn_offset = value.metadata_len;
+        item.source_turn_len = @intCast(turn.len);
+    }
+    value.metadata_len += @intCast(turn.len);
+    return value;
+}
+
+test "collapsed turns prefetch enough visible content without replacing the last response" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    try fixture.enableCache();
+    const live = try foldedTurn(1000);
+    defer std.testing.allocator.destroy(live);
+    const window = try std.testing.allocator.create(Window);
+    defer std.testing.allocator.destroy(window);
+    window.start(live, 1);
+    const page = try std.testing.allocator.create(core.AgentHistoryPage);
+    defer std.testing.allocator.destroy(page);
+    var flow = flowFor(live);
+    flow.bounds.height = 900;
+    flow.thread.history = window;
+    flow.thread.history_generation = 1;
+    var loaded: usize = 0;
+    while (loaded < Window.capacity) : (loaded += 1) {
+        try publish(&fixture, &flow);
+        flow.thread.transcript_scroll = flow.resolved_scroll;
+        flow.thread.transcript_anchor_revision += 1;
+        _ = try rowY(&flow, 1003);
+        const navigation = flow.navigation(.{ .bounds = flow.bounds, .action = .{ .transcript = live.pane_id } });
+        if (navigation.thread_prefetch == null) {
+            break;
+        }
+        try std.testing.expectEqual(.older, navigation.thread_prefetch.?);
+        const earlier = try foldedTurn(990 - loaded * 10);
+        defer std.testing.allocator.destroy(earlier);
+        page.* = .{ .request_id = @enumFromInt(1), .view_generation = 1, .snapshot = earlier.*, .has_before = true, .has_after = true };
+        window.pending = .older;
+        try std.testing.expect(window.apply(page));
+    }
+    try std.testing.expect(loaded > 2 and loaded < Window.capacity);
+    try std.testing.expect(flow.height >= flow.bounds.height);
+    try std.testing.expectEqual(2 * @as(usize, window.count), flow.len);
+    for (flow.rows[1..flow.len], flow.rows[0 .. flow.len - 1]) |row, previous| {
+        try std.testing.expectApproxEqAbs(previous.bounds.y + previous.bounds.height, row.bounds.y, 0.001);
+    }
+    const response_y = try rowY(&flow, 1003);
+    flow.thread.transcript_scroll += 0.125 / 24.0;
+    try publish(&fixture, &flow);
+    try std.testing.expectApproxEqAbs(response_y + 0.125, try rowY(&flow, 1003), 0.001);
+}
+
+test "prefetch replaces only offscreen pages at capacity and preserves fractional anchors" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    try fixture.enableCache();
+    const live = try snapshot(1000);
+    defer std.testing.allocator.destroy(live);
+    const window = try std.testing.allocator.create(Window);
+    defer std.testing.allocator.destroy(window);
+    window.start(live, 1);
+    for (0..Window.capacity) |index| {
+        const source = try snapshot(100 + index * 10);
+        defer std.testing.allocator.destroy(source);
+        window.pages[index] = .{ .request_id = @enumFromInt(1), .view_generation = 1, .snapshot = source.*, .has_before = true, .has_after = true };
+    }
+    window.count = Window.capacity;
+    var flow = flowFor(live);
+    flow.thread.history = window;
+    flow.thread.history_generation = 1;
+    var canvas = fixture.canvas();
+    try flow.resolve(&canvas);
+    flow.thread.transcript_scroll = flow.scroll_limit - 0.125 / 24.0;
+    try publish(&fixture, &flow);
+    const before = try rowY(&flow, 100);
+    try std.testing.expectEqual(.older, flow.navigation(.{ .bounds = flow.bounds, .action = .{ .transcript = live.pane_id } }).thread_prefetch.?);
+    const earlier = try snapshot(90);
+    defer std.testing.allocator.destroy(earlier);
+    const page = try std.testing.allocator.create(core.AgentHistoryPage);
+    defer std.testing.allocator.destroy(page);
+    page.* = .{ .request_id = @enumFromInt(1), .view_generation = 1, .snapshot = earlier.*, .has_before = true, .has_after = true };
+    window.pending = .older;
+    try std.testing.expect(window.apply(page));
+    try publish(&fixture, &flow);
+    try std.testing.expectApproxEqAbs(before, try rowY(&flow, 100), 0.001);
+    try std.testing.expectError(error.MissingHistoryRow, rowY(&flow, 100 + (Window.capacity - 1) * 10));
+    try std.testing.expectEqual(@as(u8, Window.capacity), window.count);
+
+    flow.bounds.height = flow.height + 100;
+    flow.thread.transcript_scroll = 0;
+    try publish(&fixture, &flow);
+    try std.testing.expect(flow.navigation(.{ .bounds = flow.bounds, .action = .{ .transcript = live.pane_id } }).thread_prefetch == null);
+}
+
 test "prepending history preserves the delivered message anchor through failed delivery and resize" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
@@ -79,11 +180,11 @@ test "prepending history preserves the delivered message anchor through failed d
     _ = fixture.state.?.dispatcher.begin();
     try flow.resolve(&canvas);
     try std.testing.expect(flow.reanchored);
-    try std.testing.expectApproxEqAbs(before, try rowY(&flow, 20), 12.1);
+    try std.testing.expectApproxEqAbs(before, try rowY(&flow, 20), 0.01);
     fixture.state.?.dispatcher.seal();
     fixture.state.?.dispatcher.present(false);
     try publish(&fixture, &flow);
-    try std.testing.expectApproxEqAbs(before, try rowY(&flow, 20), 12.1);
+    try std.testing.expectApproxEqAbs(before, try rowY(&flow, 20), 0.01);
     flow.thread.transcript_scroll = flow.resolved_scroll;
     flow.thread.transcript_anchor_revision += 1;
     const position = try rowY(&flow, 20);
@@ -91,7 +192,7 @@ test "prepending history preserves the delivered message anchor through failed d
     try std.testing.expectApproxEqAbs(position, try rowY(&flow, 20), 0.01);
     flow.bounds.width = 240;
     try publish(&fixture, &flow);
-    try std.testing.expectApproxEqAbs(position, try rowY(&flow, 20), 12.1);
+    try std.testing.expectApproxEqAbs(position, try rowY(&flow, 20), 0.01);
 }
 
 test "history seam deduplicates exact provider fragments and preserves the newer copy" {
@@ -162,7 +263,7 @@ test "history scroll can reach the beginning of two newline-heavy pages" {
     window.start(live, 1);
     window.pages[1] = window.pages[0];
     window.count = 2;
-    for (&window.pages, 0..) |*page, index| {
+    for (window.pages[0..window.count], 0..) |*page, index| {
         page.snapshot.item_count = 1;
         page.snapshot.item_storage[0].identity = index + 1;
         page.snapshot.item_storage[0].source_len = 0;
@@ -226,7 +327,8 @@ test "history request admission failure is retryable and stale failure only wake
     try std.testing.expectEqual(notification_revision, app.model.notifications_revision);
     try std.testing.expect(!pane.agent_history.?.failed);
     try client.agent_history.flush(app);
-    try std.testing.expect(pane.agent_history == null);
+    try std.testing.expect(pane.agent_history != null);
+    try std.testing.expect(pane.agent_history.?.pending == null);
 }
 
 test "history page loading starts after successful delivery and not after a failed frame" {
@@ -246,7 +348,7 @@ test "history page loading starts after successful delivery and not after a fail
     try session.settle();
 }
 
-test "loading newer messages keeps the last delivered message anchored while evicting the old page" {
+test "loading newer messages preserves the delivered anchor and earlier context" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.enableCache();
@@ -274,8 +376,9 @@ test "loading newer messages keeps the last delivered message anchored while evi
     window.direction = .newer;
     try std.testing.expect(window.apply(page));
     try publish(&fixture, &flow);
-    try std.testing.expectApproxEqAbs(before, try rowY(&flow, 23), 12.1);
-    try std.testing.expectError(error.MissingHistoryRow, rowY(&flow, 10));
+    try std.testing.expectApproxEqAbs(before, try rowY(&flow, 23), 0.01);
+    _ = try rowY(&flow, 10);
+    try std.testing.expectEqual(@as(u8, 3), window.count);
     flow.thread.transcript_scroll = flow.resolved_scroll;
     flow.thread.transcript_anchor_revision += 1;
     const position = try rowY(&flow, 23);
@@ -379,7 +482,7 @@ test "reused provider item IDs in different turns retain both messages anchors a
     flow.thread.history_generation = 1;
     try publish(&fixture, &flow);
     try std.testing.expectEqual(@as(usize, 8), flow.len);
-    try std.testing.expectApproxEqAbs(before, try rowY(&flow, 20), 12.1);
+    try std.testing.expectApproxEqAbs(before, try rowY(&flow, 20), 0.01);
     var expansions: @import("../widgets/interaction/ThreadExpansions.zig") = .{};
     const old = flow.rows[3].control();
     const current = flow.rows[4].control();
@@ -477,11 +580,11 @@ test "one history gesture crosses folded pages without evicting the visible answ
     try std.testing.expect(window.findItem(1) != null);
     try std.testing.expect(window.findItem(answer) != null);
     try std.testing.expectEqual(@as(u8, 2), window.count);
-    try std.testing.expectEqual(.older, window.skipped_work.?);
+    try std.testing.expectEqual(.older, window.gaps[1].?.direction);
 
-    client.agent_history.revealWork(&gui.app, pane.id);
+    client.agent_history.revealWork(&gui.app, pane.id, window.gaps[1].?.key);
     try std.testing.expectEqual(@as(u8, 1), window.count);
-    try std.testing.expect(window.skipped_work == null);
+    try std.testing.expect(window.gaps[0] == null);
     try std.testing.expectEqual(answer, window.pages[0].snapshot.items()[3].identity);
     try std.testing.expectEqualStrings("", window.cursor(.older));
     try std.testing.expectEqual(.older, pane.history_intent.?);
@@ -548,7 +651,7 @@ test "newer folded pages preserve the prompt and stop at the next public respons
     window.pending = .newer;
     window.preserve_seam = true;
     try std.testing.expect(window.apply(page));
-    try std.testing.expectEqual(.newer, window.skipped_work.?);
+    try std.testing.expectEqual(.newer, window.gaps[1].?.direction);
     try std.testing.expectEqual(core.agent_thread.Role.user, window.pages[0].snapshot.items()[0].role);
 
     page.snapshot.item_storage[0].kind = .message;
@@ -560,7 +663,68 @@ test "newer folded pages preserve the prompt and stop at the next public respons
     try std.testing.expect(window.apply(page));
     try flow.resolve(&canvas);
     try std.testing.expect(!flow.navigation(target).thread_skip_folded);
-    try std.testing.expectEqual(.newer, window.revealWork().?);
+    try std.testing.expectEqual(.newer, window.revealWork(window.gaps[1].?.key).?);
     try std.testing.expectEqual(@as(u8, 1), window.count);
     try std.testing.expectEqual(core.agent_thread.Role.user, window.pages[0].snapshot.items()[0].role);
+}
+
+test "opening one skipped work group retains the boundaries of other groups" {
+    const live = try foldedTurn(100);
+    defer std.testing.allocator.destroy(live);
+    const window = try std.testing.allocator.create(Window);
+    defer std.testing.allocator.destroy(window);
+    window.start(live, 1);
+    for (1..4) |index| {
+        window.pages[index] = window.pages[0];
+        window.pages[index].snapshot.item_storage[0].identity += index;
+    }
+    window.count = 4;
+    window.gaps[1] = .{ .key = 100, .direction = .older };
+    window.gaps[3] = .{ .key = 200, .direction = .newer };
+    live.revision += 1;
+    try std.testing.expect(window.followLive(live));
+    try std.testing.expectEqual(@as(u64, 200), window.gaps[3].?.key);
+    try std.testing.expect(window.revealWork(300) == null);
+    try std.testing.expectEqual(@as(u8, 4), window.count);
+    try std.testing.expectEqual(.older, window.revealWork(100).?);
+    try std.testing.expectEqual(@as(u8, 3), window.count);
+    try std.testing.expectEqual(@as(u64, 101), window.pages[0].snapshot.items()[0].identity);
+    try std.testing.expect(window.gaps[0] == null);
+    try std.testing.expectEqual(@as(u64, 200), window.gaps[2].?.key);
+    try std.testing.expectEqual(.newer, window.revealWork(200).?);
+    try std.testing.expectEqual(@as(u8, 2), window.count);
+    try std.testing.expectEqual(@as(u64, 102), window.pages[1].snapshot.items()[0].identity);
+}
+
+test "new live text stays at the bottom without resetting earlier history" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    try fixture.enableCache();
+    const live = try snapshot(20);
+    defer std.testing.allocator.destroy(live);
+    const older = try snapshot(10);
+    defer std.testing.allocator.destroy(older);
+    const window = try std.testing.allocator.create(Window);
+    defer std.testing.allocator.destroy(window);
+    window.start(live, 1);
+    window.pages[1] = window.pages[0];
+    window.pages[0].snapshot = older.*;
+    window.count = 2;
+    var flow = flowFor(live);
+    flow.thread.history = window;
+    flow.thread.history_generation = 1;
+    try publish(&fixture, &flow);
+    const before = try rowY(&flow, 23);
+    const text = "\nOne more streamed line.";
+    @memcpy(live.text_storage[live.text_len..][0..text.len], text);
+    live.item_storage[3].text_len += text.len;
+    live.text_len += text.len;
+    live.revision += 1;
+    try std.testing.expect(window.followLive(live));
+    try publish(&fixture, &flow);
+    try std.testing.expectEqual(@as(f64, 0), flow.resolved_scroll);
+    try std.testing.expect(try rowY(&flow, 23) < before);
+    _ = try rowY(&flow, 10);
+    const last = flow.rows[flow.len - 1].bounds;
+    try std.testing.expectApproxEqAbs(flow.bounds.y + flow.bounds.height, last.y + last.height, 0.001);
 }

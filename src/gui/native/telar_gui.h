@@ -129,6 +129,8 @@ typedef struct {
   // Kind 1 may also carry replacement_* for an IME commit.
   // Kind 8: scroll, positive dx right/dy down; precise=1 uses device pixels,
   // otherwise line units. phases: none0/begin1/update2/end3/cancel4.
+  // scroll_kinetic=1 requests client inertia for precise finger input without
+  // system momentum. scroll_time_ms is its native wrapping millisecond timestamp.
   // Kind 9: clipboard completion: code success0/unavailable1/too_large2/cancelled3/image_path4.
   // Kind 10: accessibility action: code is one action bit from the node.
   // Kind 11: delete surrounding: replacement_start/end contain before/after byte
@@ -138,6 +140,7 @@ typedef struct {
   uint32_t replacement_start, replacement_end;
   double delta_x, delta_y;
   uint32_t precise, scroll_phase, momentum_phase;
+  uint32_t scroll_kinetic, scroll_time_ms;
   uint64_t revision;
 } telar_gui_input;
 

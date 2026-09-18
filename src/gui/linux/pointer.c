@@ -11,7 +11,7 @@ struct telar_pointer {
     telar_cursor *cursor;
     bool entered;
     double x, y, axis[2], discrete[2], value120[2];
-    uint32_t axis_source, axis_seen, axis_stopped, active_axes;
+    uint32_t axis_source, axis_seen, axis_stopped, active_axes, axis_time;
     uint32_t mods, buttons;
 };
 
@@ -46,10 +46,12 @@ static void leave(void *data, struct wl_pointer *handle, uint32_t serial, struct
     telar_pointer *self = data;
     release_buttons(self);
     if (self->active_axes != 0) {
-        self->callbacks.input(self->context, (telar_gui_input){.kind = 8, .x = self->x, .y = self->y, .mods = self->mods, .precise = 1, .scroll_phase = 4});
+        self->callbacks.input(self->context, (telar_gui_input){.kind = 8, .x = self->x, .y = self->y, .mods = self->mods, .precise = 1, .scroll_phase = 4,
+            .scroll_kinetic = self->axis_source == WL_POINTER_AXIS_SOURCE_FINGER, .scroll_time_ms = self->axis_time});
     }
     self->axis[0] = self->axis[1] = self->discrete[0] = self->discrete[1] = self->value120[0] = self->value120[1] = 0;
     self->axis_seen = self->axis_stopped = self->active_axes = 0;
+    self->axis_source = WL_POINTER_AXIS_SOURCE_WHEEL;
     if (self->entered) {
         emit(self, 7, 0);
     }
@@ -111,12 +113,15 @@ static void frame(void *data, struct wl_pointer *handle) {
     uint32_t phase = precise ? (self->active_axes == 0 ? 3 : was_active ? 2 : 1) : 0;
     self->callbacks.input(self->context, (telar_gui_input){.kind = 8, .x = self->x, .y = self->y,
         .mods = self->mods, .delta_x = delta[WL_POINTER_AXIS_HORIZONTAL_SCROLL], .delta_y = delta[WL_POINTER_AXIS_VERTICAL_SCROLL],
-        .precise = precise, .scroll_phase = phase});
+        .precise = precise, .scroll_phase = phase,
+        .scroll_kinetic = self->axis_source == WL_POINTER_AXIS_SOURCE_FINGER, .scroll_time_ms = self->axis_time});
     self->axis_seen = self->axis_stopped = 0;
+    if (self->active_axes == 0) {
+        self->axis_source = WL_POINTER_AXIS_SOURCE_WHEEL;
+    }
 }
 
 static void axis(void *data, struct wl_pointer *handle, uint32_t time, uint32_t direction, wl_fixed_t value) {
-    (void)time;
     telar_pointer *self = data;
     if (direction > WL_POINTER_AXIS_HORIZONTAL_SCROLL) {
         return;
@@ -124,6 +129,7 @@ static void axis(void *data, struct wl_pointer *handle, uint32_t time, uint32_t 
 
     self->axis[direction] += wl_fixed_to_double(value);
     self->axis_seen |= 1u << direction;
+    self->axis_time = time;
     if (wl_pointer_get_version(handle) < WL_POINTER_FRAME_SINCE_VERSION) {
         frame(data, handle);
     }
@@ -131,12 +137,20 @@ static void axis(void *data, struct wl_pointer *handle, uint32_t time, uint32_t 
 
 static void axis_source(void *data, struct wl_pointer *handle, uint32_t source) {
     (void)handle;
-    ((telar_pointer *)data)->axis_source = source;
+    telar_pointer *self = data;
+    if (source != self->axis_source) {
+        self->active_axes = 0;
+    }
+    self->axis_source = source;
 }
 
 static void axis_stop(void *data, struct wl_pointer *handle, uint32_t time, uint32_t direction) {
-    (void)handle; (void)time;
-    if (direction <= WL_POINTER_AXIS_HORIZONTAL_SCROLL) ((telar_pointer *)data)->axis_stopped |= 1u << direction;
+    (void)handle;
+    if (direction <= WL_POINTER_AXIS_HORIZONTAL_SCROLL) {
+        telar_pointer *self = data;
+        self->axis_stopped |= 1u << direction;
+        self->axis_time = time;
+    }
 }
 
 static void axis_discrete(void *data, struct wl_pointer *handle, uint32_t direction, int32_t discrete) {

@@ -16,7 +16,7 @@ pub fn reverse(client: *Client, id: core.PaneId, direction: core.agent_history.D
 }
 
 /// Example: `agent_history.anchor(client, id, resolved_scroll);`
-pub fn anchor(client: *Client, id: core.PaneId, scroll: u32) void {
+pub fn anchor(client: *Client, id: core.PaneId, scroll: f64) void {
     (Handler{ .model = &client.model }).anchor(id, scroll);
 }
 
@@ -25,9 +25,14 @@ pub fn skipFolded(client: *Client, id: core.PaneId) void {
     _ = (Handler{ .model = &client.model }).skipFolded(id);
 }
 
+/// Example: `agent_history.prefetch(client, id, .older);`
+pub fn prefetch(client: *Client, id: core.PaneId, direction: core.agent_history.Direction) void {
+    (Handler{ .model = &client.model }).prefetch(id, direction);
+}
+
 /// Example: `agent_history.revealWork(client, id);`
-pub fn revealWork(client: *Client, id: core.PaneId) void {
-    (Handler{ .model = &client.model }).revealWork(id);
+pub fn revealWork(client: *Client, id: core.PaneId, key: u64) void {
+    (Handler{ .model = &client.model }).revealWork(id, key);
 }
 
 /// Freezes displayed text during selection; call during preparation, never input.

@@ -65,7 +65,7 @@ pub fn complete(handler: AgentThreadHandler, operation: AgentOperation) bool {
 }
 
 /// Updates client-owned transcript navigation. Example: `_ = handler.scroll(pane_id, 3);`
-pub fn scroll(handler: AgentThreadHandler, pane_id: core.PaneId, delta: i32) bool {
+pub fn scroll(handler: AgentThreadHandler, pane_id: core.PaneId, delta: f64) bool {
     return handler.model.scrollAgentThread(pane_id, delta);
 }
 

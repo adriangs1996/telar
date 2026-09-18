@@ -9,6 +9,23 @@
 - (uint32_t)desiredPointerShape;
 @end
 
+@interface TelarScrollProbe : NSEvent
+@property(nonatomic) NSPoint probeLocation;
+@property(nonatomic) double probeDelta;
+@property(nonatomic) BOOL probeDiscrete;
+@property(nonatomic) NSEventPhase probePhase;
+@end
+
+@implementation TelarScrollProbe
+- (NSPoint)locationInWindow { return self.probeLocation; }
+- (CGFloat)scrollingDeltaX { return 0; }
+- (CGFloat)scrollingDeltaY { return self.probeDelta; }
+- (BOOL)hasPreciseScrollingDeltas { return !self.probeDiscrete; }
+- (NSEventModifierFlags)modifierFlags { return 0; }
+- (NSEventPhase)phase { return self.probePhase; }
+- (NSEventPhase)momentumPhase { return NSEventPhaseNone; }
+@end
+
 static IMP original_init;
 static void (*original_render)(void *, telar_gui_viewport, telar_gui_frame *);
 static telar_gui_viewport viewport;
@@ -45,6 +62,63 @@ static void click_control(NSView *view, NSString *label) {
         if (type.unsignedIntegerValue == NSEventTypeLeftMouseDown) [view mouseDown:event];
         else [view mouseUp:event];
     }
+}
+
+static void scroll_control(NSView *view, NSDictionary *action) {
+    id control = find_control([view accessibilityChildren], action[@"control"]);
+    if (control == nil) abort();
+    NSRect frame = [control accessibilityFrame];
+    TelarScrollProbe *event = [TelarScrollProbe new];
+    event.probeLocation = [view.window convertPointFromScreen:NSMakePoint(NSMidX(frame), NSMidY(frame))];
+    event.probeDelta = [action[@"scroll"] doubleValue];
+    event.probeDiscrete = [action[@"discrete"] boolValue];
+    NSDictionary *phases = @{@"begin": @(NSEventPhaseBegan), @"update": @(NSEventPhaseChanged),
+        @"end": @(NSEventPhaseEnded), @"cancel": @(NSEventPhaseCancelled), @"none": @(NSEventPhaseNone)};
+    NSString *phase = action[@"phase"];
+    if (phase != nil && phases[phase] == nil) {
+        abort();
+    }
+    event.probePhase = event.probeDiscrete ? NSEventPhaseNone : phase != nil ? [phases[phase] unsignedIntegerValue] : NSEventPhaseChanged;
+    [view scrollWheel:event];
+}
+
+static void record_controls(NSArray *children, NSMutableArray *records) {
+    for (id child in children) {
+        NSRect frame = [child accessibilityFrame];
+        NSString *label = [child accessibilityLabel];
+        if (label != nil) [records addObject:@{@"label": label,
+            @"bounds": @[@(frame.origin.x), @(frame.origin.y), @(frame.size.width), @(frame.size.height)]}];
+        record_controls([child accessibilityChildren], records);
+    }
+}
+
+static void trace_scroll(NSView *view, NSString *path) {
+    NSMutableArray *samples = [NSMutableArray arrayWithCapacity:160];
+    const NSTimeInterval started = NSProcessInfo.processInfo.systemUptime;
+    void (^sample)(void) = ^{
+        NSMutableArray *controls = [NSMutableArray array];
+        record_controls([view accessibilityChildren], controls);
+        NSPredicate *anchors = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *control, NSDictionary *bindings) {
+            (void)bindings;
+            return [control[@"label"] hasPrefix:@"Anchor"];
+        }];
+        [samples addObject:@{@"time_ms": @((NSProcessInfo.processInfo.systemUptime - started) * 1000),
+            @"anchors": [controls filteredArrayUsingPredicate:anchors],
+            @"app_active": @(NSApp.isActive), @"window_key": @(view.window.isKeyWindow)}];
+    };
+    sample();
+    [NSTimer scheduledTimerWithTimeInterval:1.0 / 120 repeats:YES block:^(NSTimer *timer) {
+        sample();
+        if (NSProcessInfo.processInfo.systemUptime - started < 1.25 && samples.count < 180) {
+            return;
+        }
+        [timer invalidate];
+        NSDictionary *trace = @{@"samples": samples, @"scale": @(view.window.backingScaleFactor)};
+        NSData *data = [NSJSONSerialization dataWithJSONObject:trace options:NSJSONWritingPrettyPrinted error:nil];
+        if (![data writeToFile:path atomically:YES]) {
+            abort();
+        }
+    }];
 }
 
 static void capture_region(NSRect bounds, NSString *path) {
@@ -224,13 +298,15 @@ static NSDictionary *pointer_record(NSView *view) {
     for (unsigned i = 0; i < TELAR_GUI_DIAGRAM_SLOTS; i++) {
         if (diagram_widths[i]) [diagrams addObject:@[@(diagram_widths[i]), @(diagram_heights[i])]];
     }
+    NSMutableArray *controls = [NSMutableArray array];
+    record_controls([view accessibilityChildren], controls);
     return @{@"desired_pointer": @([view desiredPointerShape]), @"native_cursor": native_cursor(),
              @"app_active": @(NSApp.isActive), @"window_key": @(view.window.isKeyWindow),
              @"viewport": @[@(viewport.width), @(viewport.height), @(viewport.scale)],
              @"view_points": @[@(view.bounds.size.width), @(view.bounds.size.height)],
              @"marker": @[@(marker.x), @(marker.y), @(marker.width), @(marker.height)],
              @"quads": @(frame_quads), @"frame_token": @(frame_token), @"horizontal_rules": lines,
-             @"diagrams": diagrams};
+             @"diagrams": diagrams, @"controls": controls};
 }
 
 __attribute__((constructor)) static void install(void) {
@@ -275,6 +351,10 @@ __attribute__((constructor)) static void install(void) {
             }
             waiting = 0;
             fprintf(stderr, "GUI action %lu: %s\n", (unsigned long)index, [action.description UTF8String]);
+            if ([action[@"activate"] boolValue]) {
+                [NSApp activateIgnoringOtherApps:YES];
+                [window makeKeyAndOrderFront:nil];
+            }
             if (action[@"resize"]) {
                 NSArray *size = action[@"resize"];
                 [window setContentSize:NSMakeSize([size[0] doubleValue], [size[1] doubleValue])];
@@ -292,6 +372,10 @@ __attribute__((constructor)) static void install(void) {
             if (action[@"capture_controls"]) capture_controls(view, action[@"capture_controls"]);
             if (action[@"tab_order"]) check_tabs(view, action);
             if (action[@"pointer"]) send_pointer(view, action);
+            if (action[@"trace_scroll"]) {
+                trace_scroll(view, action[@"trace_scroll"]);
+            }
+            if (action[@"scroll"]) scroll_control(view, action);
             if (action[@"click"]) {
                 NSArray *point = action[@"click"];
                 NSPoint local = NSMakePoint(view.bounds.size.width * [point[0] doubleValue],

@@ -56,6 +56,9 @@ pub fn apply(gui: *GuiClient, event: Event) !bool {
 
     const begins = event == .scroll or (event == .pointer and (event.pointer.kind == .press or event.pointer.kind == .scroll_up or event.pointer.kind == .scroll_down));
     if (begins and !@import("../../input/PointerRouting.zig").geometryMatches(&gui.app)) {
+        if (event == .scroll) {
+            state.thread_scroll.clear();
+        }
         if (event == .pointer and event.pointer.kind == .press) {
             state.dispatcher.discardPointer(event.pointer.button);
         }
@@ -64,6 +67,7 @@ pub fn apply(gui: *GuiClient, event: Event) !bool {
     }
 
     if (event == .focus and !event.focus) {
+        state.thread_scroll.clear();
         state.cancelComposition();
     }
     if (event == .clipboard and event.clipboard.operation == .write) {
@@ -397,7 +401,7 @@ fn composerKey(gui: *GuiClient, target: Target, key: Key) !void {
             return;
         },
         .page_up, .page_down => {
-            try scrollThread(gui, target, if (key.code == .page_up) 12 else -12);
+            try @import("thread_scroll.zig").input(gui, threadScrollTarget(gui, target), .{ .delta_y = if (key.code == .page_up) -12 else 12 });
             return;
         },
         .escape => .cancel,
@@ -415,7 +419,9 @@ fn composerKey(gui: *GuiClient, target: Target, key: Key) !void {
     try command(gui, value);
 }
 
-fn eligible(gui: *const GuiClient, target: Target) bool {
+/// Validates a delivered control against the current attachment and modal owner.
+/// Example: `if (!routing.eligible(gui, target)) return;`
+pub fn eligible(gui: *const GuiClient, target: Target) bool {
     if (target.action == .agent_control and target.action.agent_control.kind == .close_image) {
         const preview = gui.widgets.image_preview orelse return false;
         return target.layer == 1 and target.id.generation == preview.generation and target.action.agent_control.pane_id == preview.control.pane_id;
@@ -653,7 +659,7 @@ fn threadItemKey(gui: *GuiClient, target: Target, event: Event) !bool {
     const key = event.key;
     switch (key.code) {
         .page_up, .page_down => {
-            try scrollThread(gui, target, if (key.code == .page_up) 12 else -12);
+            try @import("thread_scroll.zig").input(gui, threadScrollTarget(gui, target), .{ .delta_y = if (key.code == .page_up) -12 else 12 });
             return true;
         },
         .escape => {
@@ -779,8 +785,16 @@ fn dispatchIntent(gui: *GuiClient, intent: client.Intent) !void {
 }
 
 fn scroll(gui: *GuiClient, event: Event) !bool {
+    if (!gui.focused) {
+        return true;
+    }
+
     if (gui.app.model.name_prompt.currentConst()) |prompt| {
         return if (prompt.target() == .history) try scrollHistory(gui, event) else false;
+    }
+
+    if (event == .scroll and try @import("thread_scroll.zig").captured(gui, event.scroll)) {
+        return true;
     }
 
     const pointer = if (event == .scroll) [2]f64{ event.scroll.x, event.scroll.y } else [2]f64{ event.pointer.x, event.pointer.y };
@@ -791,22 +805,8 @@ fn scroll(gui: *GuiClient, event: Event) !bool {
                 return true;
             }
 
-            const same_owner = if (gui.widgets.thread_scroll_owner) |owner| owner.eql(target.id) else false;
-            if (!same_owner or (event == .scroll and (event.scroll.phase == .begin or event.scroll.phase == .cancel))) {
-                gui.widgets.thread_scroll_remainder = 0;
-                gui.widgets.thread_scroll_owner = target.id;
-            }
-            if (event == .scroll and event.scroll.phase == .cancel) {
-                return true;
-            }
-
-            const delta = if (event == .scroll) event.scroll.delta_y / (if (event.scroll.precise) @max(1, @as(f64, target.scroll_step)) else 1) else if (event.pointer.kind == .scroll_up) @as(f64, -1) else 1;
-            gui.widgets.thread_scroll_remainder += std.math.clamp(delta, -32, 32);
-            const lines: i32 = @intFromFloat(@trunc(gui.widgets.thread_scroll_remainder));
-            gui.widgets.thread_scroll_remainder -= @floatFromInt(lines);
-            if (lines != 0) {
-                try scrollThread(gui, target, -lines);
-            }
+            const input: @import("../../input/ScrollEvent.zig") = if (event == .scroll) event.scroll else .{ .delta_y = if (event.pointer.kind == .scroll_up) -1 else 1 };
+            try @import("thread_scroll.zig").input(gui, target, input);
 
             return true;
         }
@@ -861,55 +861,12 @@ pub fn scrollFocusedThread(gui: *GuiClient, direction: client.ScrollDirection) !
     const registry = gui.widgets.dispatcher.maps.presented();
     for (registry.targets[0..registry.len]) |target| {
         if (target.action == .transcript and target.action.transcript == pane.id and eligible(gui, target)) {
-            try scrollThread(gui, target, if (direction == .up) 3 else -3);
+            try @import("thread_scroll.zig").input(gui, target, .{ .delta_y = if (direction == .up) -3 else 3 });
             break;
         }
     }
 
     return true;
-}
-
-fn scrollThread(gui: *GuiClient, target: Target, delta: i32) !void {
-    const pane_id = switch (target.action) {
-        .transcript => |id| id,
-        .composer => |id| id,
-        .thread_item => |control| control.pane_id,
-        .message_link => |control| control.owner.pane_id,
-        else => return,
-    };
-    const pane = gui.app.model.agentPane(pane_id) orelse return;
-    gui.widgets.thread_anchor.cancel(pane_id);
-    const registry = gui.widgets.dispatcher.maps.presented();
-    var limit = target.scroll_limit;
-    if (target.action != .transcript) {
-        for (registry.targets[0..registry.len]) |item| {
-            if (item.action == .transcript and item.action.transcript == pane_id and item.id.generation == target.id.generation) {
-                limit = item.scroll_limit;
-                break;
-            }
-        }
-    }
-
-    const next = std.math.clamp(@as(i64, @min(pane.transcript_scroll, limit)) + delta, 0, limit);
-    try client.agent_threads.scroll(&gui.app, pane_id, @intCast(next - pane.transcript_scroll));
-    const reviewing = if (gui.widgets.approval_review) |review| blk: {
-        const model = gui.app.model.activeTabModelConst() orelse break :blk false;
-        const thread = client.ThreadView.capture(model, null, pane_id) orelse break :blk false;
-        break :blk review.request(thread) != null;
-    } else false;
-    if (gui.widgets.thread_selection.retains(pane_id)) {
-        gui.widgets.thread_selection.blocked_edge = (delta > 0 and next == limit) or (delta < 0 and next == 0);
-        gui.widgets.dispatcher.revision +%= 1;
-        return;
-    }
-    if (!reviewing and delta != 0) {
-        client.agent_history.reverse(&gui.app, pane_id, if (delta > 0) .older else .newer);
-    }
-    if (!reviewing and delta > 0 and next == limit) {
-        client.agent_history.navigate(&gui.app, pane_id, .older);
-    } else if (!reviewing and delta < 0 and next == 0) {
-        client.agent_history.navigate(&gui.app, pane_id, .newer);
-    }
 }
 
 fn scrollHistory(gui: *GuiClient, event: Event) !bool {

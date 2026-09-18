@@ -60,7 +60,7 @@ agent_thread: ?*core.AgentThreadSnapshot = null,
 agent_history: ?*@import("AgentHistoryWindow.zig") = null,
 history_intent: ?core.agent_history.Direction = null,
 history_generation: u64 = 0,
-transcript_scroll: u32 = 0,
+transcript_scroll: f64 = 0,
 transcript_anchor_revision: u64 = 0,
 agent_options: ?*core.AgentOptions = null,
 options_revision: u64 = 0,
@@ -359,6 +359,8 @@ pub fn applyAgentThread(pane: *Pane, snapshot: core.AgentThreadSnapshotView) !bo
         pane.history_intent = .older;
         pane.resume_history_requested = true;
     }
+
+    _ = pane.followAgentThread();
     if (pane.agent_options == null or !retained.accepts(pane.agent_options.?.*)) {
         if (retained.accepts(retained.options)) {
             if (pane.agent_options == null) {
@@ -485,6 +487,18 @@ pub fn clearHistory(pane: *Pane) void {
     pane.history_generation +%= 1;
 }
 
+/// Refreshes the live tail only while the reader remains at its end.
+/// Example: `_ = pane.followAgentThread();`
+pub fn followAgentThread(pane: *Pane) bool {
+    if (pane.transcript_scroll != 0) {
+        return false;
+    }
+
+    const window = pane.agent_history orelse return false;
+    const live = pane.agent_thread orelse return false;
+    return window.followLive(live);
+}
+
 /// Resolves delivered history controls without falling through to newer bytes.
 /// Example: `const snapshot = pane.threadItemSource(identity) orelse return;`
 pub fn threadItemSource(pane: *const Pane, identity: u64) ?*const core.AgentThreadSnapshot {
@@ -497,8 +511,12 @@ pub fn threadItemSource(pane: *const Pane, identity: u64) ?*const core.AgentThre
 
 /// Retains bounded client navigation from the end of the transcript.
 /// Example: `_ = pane.scrollConversation(3);`
-pub fn scrollConversation(pane: *Pane, delta: i32) bool {
-    const next: u32 = @intCast(std.math.clamp(@as(i64, pane.transcript_scroll) + delta, 0, std.math.maxInt(u32)));
+pub fn scrollConversation(pane: *Pane, delta: f64) bool {
+    if (!std.math.isFinite(delta)) {
+        return false;
+    }
+
+    const next = std.math.clamp(pane.transcript_scroll + delta, 0, @as(f64, std.math.maxInt(u32)));
     if (next == pane.transcript_scroll) {
         return false;
     }

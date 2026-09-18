@@ -30,14 +30,14 @@ pub fn cancel(anchor: *Anchor, pane_id: core.PaneId) void {
 
 /// Measures the requested item with the latest width, text and expansion state.
 /// Example: `const scroll = anchor.resolve(geometry) orelse current_scroll;`
-pub fn resolve(anchor: *Anchor, geometry: Geometry) ?u32 {
+pub fn resolve(anchor: *Anchor, geometry: Geometry) ?f64 {
     const request = anchor.pending orelse return null;
     if (!request.control.sameItem(geometry.control) or request.baseline != geometry.baseline) {
         return null;
     }
 
-    const desired = @round((geometry.maximum - geometry.offset + request.offset) / geometry.step);
-    const scroll: u32 = @intFromFloat(@max(0, @min(@as(f32, @floatFromInt(geometry.limit)), desired)));
+    const desired = (@as(f64, geometry.maximum) - geometry.offset + request.offset) / geometry.step;
+    const scroll = @max(0, @min(geometry.limit, desired));
     anchor.prepared = .{ .request = request, .scroll = scroll };
     anchor.prepared.?.request.control = geometry.control;
     return scroll;

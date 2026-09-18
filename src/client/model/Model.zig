@@ -358,7 +358,7 @@ pub fn acceptAgentPrompt(model: *Model, pane_id: PaneIdType, revision: u64) bool
 
 /// Stores disposable transcript navigation independently of provider state.
 /// Example: `_ = model.scrollAgentThread(pane_id, 3);`
-pub fn scrollAgentThread(model: *Model, pane_id: PaneIdType, delta: i32) bool {
+pub fn scrollAgentThread(model: *Model, pane_id: PaneIdType, delta: f64) bool {
     const pane = model.workspace.findPane(pane_id) orelse return false;
     if (!pane.attached or pane.kind != .agent or !pane.scrollConversation(delta)) {
         return false;

@@ -99,6 +99,15 @@ fn publish(session: *Session) !void {
     try session.settle();
 }
 
+fn settleConversationScroll(session: *Session) !void {
+    var now_ns: u64 = 0;
+    for (session.gui.widgets.thread_scroll.entries[0..session.gui.widgets.thread_scroll.len]) |entry| {
+        now_ns = @max(now_ns, entry.motion.timestamp_ns);
+    }
+
+    try @import("../widgets/interaction/thread_scroll.zig").advance(session.gui, now_ns + std.time.ns_per_s);
+}
+
 fn initSession() !*Session {
     const session = try Session.init();
     errdefer session.deinit();
@@ -1126,6 +1135,7 @@ test "approval review exposes the complete request with bounded scroll and pane 
     const body = transcript orelse return error.MissingTranscript;
     try std.testing.expect(body.scroll_limit > 10);
     try send(session, .{ .scroll = .{ .x = body.bounds.x + 1, .y = body.bounds.y + 1, .delta_y = 1 } });
+    try settleConversationScroll(session);
     try std.testing.expectEqual(body.scroll_limit - 1, session.gui.app.model.agentPane(Session.pane_id).?.transcript_scroll);
     for (session.renderer.quads.items()) |quad| {
         try std.testing.expect(quad.x >= 0 and quad.y >= 0);
@@ -1522,14 +1532,17 @@ test "agent scroll bindings move the focused transcript without editing the comp
     try send(session, .{ .key = .{ .code = client.default_prefix.code, .physical = .{ .value = 103 }, .phase = .release } });
     try send(session, .{ .text = .{ .bytes = "-", .physical = .{ .value = 104 } } });
     try send(session, .{ .text = .{ .bytes = "-", .physical = .{ .value = 104 }, .phase = .release } });
+    try settleConversationScroll(session);
     try std.testing.expectEqual(@as(u32, 3), pane.transcript_scroll);
     try publish(session);
+    try settleConversationScroll(session);
     try std.testing.expectEqual(@as(u32, 3), pane.transcript_scroll);
 
     try send(session, .{ .key = .{ .code = client.default_prefix.code, .mods = .{ .ctrl = true }, .physical = .{ .value = 103 } } });
     try send(session, .{ .key = .{ .code = client.default_prefix.code, .physical = .{ .value = 103 }, .phase = .release } });
     try send(session, .{ .text = .{ .bytes = "=", .physical = .{ .value = 105 } } });
     try send(session, .{ .text = .{ .bytes = "=", .physical = .{ .value = 105 }, .phase = .release } });
+    try settleConversationScroll(session);
     try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
     try std.testing.expectEqualDeep(terminal_scroll, pane.scroll);
     try std.testing.expectEqualStrings("", pane.composerSlice());
@@ -1550,16 +1563,20 @@ test "held agent scroll bindings pace transcript movement and stop on release" {
     var key: client.Key = .{ .code = .{ .char = .init("-") }, .mods = .{ .alt = true }, .physical = .{ .value = 45 } };
 
     _ = try session.gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = 0 }, &handler);
+    try settleConversationScroll(session);
     try std.testing.expectEqual(@as(u32, 3), pane.transcript_scroll);
     key.phase = .repeat;
     _ = try session.gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = 99 * std.time.ns_per_ms }, &handler);
+    try settleConversationScroll(session);
     try std.testing.expectEqual(@as(u32, 3), pane.transcript_scroll);
     _ = try session.gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = 100 * std.time.ns_per_ms }, &handler);
+    try settleConversationScroll(session);
     try std.testing.expectEqual(@as(u32, 6), pane.transcript_scroll);
     key.phase = .release;
     _ = try session.gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = 200 * std.time.ns_per_ms }, &handler);
     key.phase = .repeat;
     _ = try session.gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = 300 * std.time.ns_per_ms }, &handler);
+    try settleConversationScroll(session);
     try std.testing.expectEqual(@as(u32, 6), pane.transcript_scroll);
     try std.testing.expectEqualStrings("", pane.composerSlice());
     try expectReleasedKeys(session);
@@ -1581,20 +1598,25 @@ test "agent scroll bindings respect transcript bounds and attachment identity" {
     var handler: @import("../input/InputHandler.zig") = .{ .app = &session.gui.app };
 
     _ = try handler.action(.{ .scroll_pane = .down });
+    try settleConversationScroll(session);
     try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
-    try client.agent_threads.scroll(&session.gui.app, pane.id, @intCast(transcript.scroll_limit - 1));
+    try client.agent_threads.scroll(&session.gui.app, pane.id, transcript.scroll_limit - 1);
     _ = try handler.action(.{ .scroll_pane = .up });
+    try settleConversationScroll(session);
     try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
     _ = try handler.action(.{ .scroll_pane = .up });
+    try settleConversationScroll(session);
     try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
 
     pane.attached = false;
     try std.testing.expect(handler.repeatPolicy(.{ .scroll_pane = .down }) == null);
     _ = try handler.action(.{ .scroll_pane = .down });
+    try settleConversationScroll(session);
     try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
     pane.attached = true;
     pane.attachment_generation += 1;
     _ = try handler.action(.{ .scroll_pane = .down });
+    try settleConversationScroll(session);
     try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
     try std.testing.expectEqualStrings("", pane.composerSlice());
 }
@@ -2096,9 +2118,39 @@ test "wheel input on message links scrolls the owning conversation" {
     const pane = session.gui.app.model.agentPane(Session.pane_id).?;
     const before = pane.transcript_scroll;
     try send(session, .{ .pointer = .{ .kind = .scroll_up, .x = link.bounds.x + 2, .y = link.bounds.y + 2 } });
+    try settleConversationScroll(session);
     try std.testing.expect(pane.transcript_scroll > before);
     try publish(session);
     try std.testing.expect(session.gui.widgets.message_link_preview == null);
+    try std.testing.expectEqual(@as(usize, 0), session.input_len);
+}
+
+test "precise conversation scrolling moves on every fractional delta including momentum and reversal" {
+    const session = try agentSession();
+    defer session.deinit();
+    try linkSnapshot(session, "Earlier output\n" ** 40 ++ "[documentation](https://example.test)");
+    try publish(session);
+    const link = try messageLinkTarget(session);
+    const pane = session.gui.app.model.agentPane(Session.pane_id).?;
+    const step = session.renderer.chrome.px(24);
+    var displacement: f64 = 0;
+    const Phase = @FieldType(@import("../input/ScrollEvent.zig"), "phase");
+    for ([_]Phase{ .begin, .update, .end, .none, .none, .none, .begin, .update }, 0..) |phase, index| {
+        const delta: f64 = if (index < 6) -0.25 else 0.125;
+        try send(session, .{ .scroll = .{ .x = link.bounds.x + 2, .y = link.bounds.y + 2, .delta_y = delta, .precise = true, .phase = phase, .momentum = if (index >= 3 and index < 6) .update else .none } });
+        displacement -= delta;
+        try std.testing.expectApproxEqAbs(displacement / step, pane.transcript_scroll, 0.000001);
+        try publish(session);
+        const moved = try messageLinkTarget(session);
+        try std.testing.expectApproxEqAbs(@as(f64, link.bounds.y) + displacement, moved.bounds.y, 0.001);
+    }
+
+    try send(session, .{ .scroll = .{ .x = link.bounds.x + 2, .y = link.bounds.y + 2, .delta_y = 20, .precise = true, .phase = .cancel } });
+    try std.testing.expectApproxEqAbs(displacement / step, pane.transcript_scroll, 0.000001);
+    const failed = try session.gui.prepare(&session.renderer);
+    try session.gui.complete(failed, false);
+    try publish(session);
+    try std.testing.expectApproxEqAbs(@as(f64, link.bounds.y) + displacement, (try messageLinkTarget(session)).bounds.y, 0.001);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }
 
@@ -2131,7 +2183,8 @@ test "resolved approval review no longer captures conversation history scrolling
         }
     } else return error.MissingTranscript;
     try send(session, .{ .pointer = .{ .kind = .scroll_up, .x = transcript.bounds.x + 1, .y = transcript.bounds.y + 1 } });
-    try std.testing.expectEqual(core.agent_history.Direction.older, pane.history_intent.?);
+    try std.testing.expectEqual(core.agent_history.Direction.older, pane.agent_history.?.pending.?);
+    try std.testing.expect(client.request_lifecycle.has(&session.gui.app, .agent_history));
 }
 
 test "delayed composer cut cannot steal focus from another agent split" {

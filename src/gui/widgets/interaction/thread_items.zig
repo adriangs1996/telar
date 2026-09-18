@@ -18,10 +18,11 @@ pub fn activate(gui: *GuiClient, target: Target) !void {
     switch (control.operation) {
         .toggle, .toggle_work => {
             const pane = gui.app.model.agentPane(control.pane_id) orelse return;
+            gui.widgets.thread_scroll.cancel(pane.id);
             gui.widgets.thread_anchor.capture(.{ .control = control, .baseline = pane.transcript_scroll, .offset = target.thread_header_offset });
             gui.widgets.thread_expansions.toggle(control);
             if (control.operation == .toggle_work and gui.widgets.threadExpanded(control)) {
-                @import("telar-client").agent_history.revealWork(&gui.app, pane.id);
+                @import("telar-client").agent_history.revealWork(&gui.app, pane.id, control.source_key);
             }
             gui.widgets.dispatcher.revision +%= 1;
         },
@@ -61,7 +62,7 @@ pub fn delivered(gui: *GuiClient) !void {
         return;
     }
 
-    try @import("telar-client").agent_threads.scroll(&gui.app, pane.id, @as(i32, @intCast(resolution.scroll)) - @as(i32, @intCast(request.baseline)));
+    try @import("telar-client").agent_threads.scroll(&gui.app, pane.id, resolution.scroll - request.baseline);
 }
 
 /// Native failure never displays a successful copy. Example: `thread_items.copied(gui, result);`

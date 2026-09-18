@@ -3,15 +3,18 @@ const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const View = @import("ThreadItemView.zig");
+const Window = @import("telar-client").AgentHistoryWindow;
 const Flow = @This();
 
 bounds: Rect,
 thread: @import("telar-client").ThreadView,
-rows: [4 * core.agent_thread.max_items]View = undefined,
+rows: [2 * Window.capacity * core.agent_thread.max_items]View = undefined,
 len: usize = 0,
 height: f32 = 0,
-scroll_limit: u32 = 0,
-resolved_scroll: u32 = 0,
+scroll_limit: f64 = 0,
+resolved_scroll: f64 = 0,
+destination_scroll: f64 = 0,
+scroll_step: f32 = 24,
 reanchored: bool = false,
 
 /// Measures retained items once, then moves the visible window from its end.
@@ -21,16 +24,21 @@ pub fn resolve(flow: *Flow, canvas: *Canvas) !void {
     flow.len = 0;
     flow.reanchored = false;
     flow.height = canvas.chrome.px(12);
-    const pages: [2]?*const core.AgentThreadSnapshot = if (flow.thread.history) |window| .{ &window.pages[0].snapshot, if (window.count == 2) &window.pages[1].snapshot else null } else .{ live, null };
-    var items: [2 * core.agent_thread.max_items]View = undefined;
-    var item_count: usize = 0;
-    for (pages, 0..) |optional, page_index| {
-        const snapshot = optional orelse continue;
+    flow.scroll_step = canvas.chrome.px(24);
+    var conversation: @import("ThreadConversation.zig") = .{ .rows = &flow.rows };
+    const page_count: usize = if (flow.thread.history) |window| window.count else 1;
+    const unique = if (flow.thread.history) |window| uniqueItems(window) else null;
+
+    for (0..page_count) |page_index| {
+        const snapshot = if (flow.thread.history) |window| &window.pages[page_index].snapshot else live;
         const order = @import("ThreadOrder.zig").resolve(snapshot.items());
+
         for (order.indices[0..order.len]) |index| {
             const item = &snapshot.items()[index];
-            if (page_index == 0 and pages[1] != null and duplicate(snapshot, item, pages[1].?)) {
-                continue;
+            if (unique) |masks| {
+                if (masks[page_index] & (@as(u64, 1) << @intCast(index)) == 0) {
+                    continue;
+                }
             }
             const depth = parentDepth(snapshot, item);
             const indent = @min(canvas.chrome.px(@as(f32, @floatFromInt(depth)) * 22), flow.bounds.width * 0.22);
@@ -40,14 +48,11 @@ pub fn resolve(flow: *Flow, canvas: *Canvas) !void {
                 view.expanded = state.threadExpanded(view.control());
             }
 
-            items[item_count] = view;
-            item_count += 1;
+            conversation.push(view, canvas.widgets);
         }
     }
 
-    const conversation = @import("ThreadConversation.zig").resolve(items[0..item_count], canvas.widgets);
     flow.len = conversation.len;
-    @memcpy(flow.rows[0..flow.len], conversation.rows[0..conversation.len]);
     for (flow.rows[0..flow.len], 0..) |*view, index| {
         view.bounds.y = flow.height;
         if (view.work_count != 0) {
@@ -65,7 +70,7 @@ pub fn resolve(flow: *Flow, canvas: *Canvas) !void {
     }
 
     const maximum = @max(0, flow.height - flow.bounds.height);
-    flow.scroll_limit = @intFromFloat(@min(@as(f64, @floatFromInt(@import("std").math.maxInt(u32))), @ceil(@as(f64, maximum) / canvas.chrome.px(24))));
+    flow.scroll_limit = @as(f64, maximum) / canvas.chrome.px(24);
     var scroll = @min(flow.thread.transcript_scroll, flow.scroll_limit);
     // Retire offsets left behind by shrinking or folded content on delivery.
     flow.reanchored = scroll != flow.thread.transcript_scroll;
@@ -76,16 +81,17 @@ pub fn resolve(flow: *Flow, canvas: *Canvas) !void {
                 continue;
             }
             const changed = target.thread_window_revision != flow.windowRevision() or target.thread_history_generation != flow.thread.history_generation or target.bounds.width != flow.bounds.width or target.bounds.height != flow.bounds.height;
-            if ((flow.thread.history != null or flow.thread.transcript_scroll > 0) and (changed or target.thread_reanchor and target.thread_anchor_revision == flow.thread.transcript_anchor_revision and target.thread_resolved_scroll != target.thread_scroll_value)) {
+            const following_live = flow.thread.transcript_scroll == 0 and target.thread_live_revision != flow.liveRevision();
+            if (!following_live and (flow.thread.history != null or flow.thread.transcript_scroll > 0) and (changed or target.thread_reanchor and target.thread_anchor_revision == flow.thread.transcript_anchor_revision and target.thread_resolved_scroll != target.thread_scroll_value)) {
                 const newer = if (flow.thread.history) |window| window.direction == .newer else false;
                 const key = if (newer) target.thread_last_key else target.thread_first_key;
                 const offset = if (newer) target.thread_last_offset else target.thread_first_offset;
                 const baseline = if (target.thread_anchor_revision != flow.thread.transcript_anchor_revision) target.thread_resolved_scroll else target.thread_scroll_value;
-                const movement = @as(f32, @floatFromInt(@as(i64, flow.thread.transcript_scroll) - baseline)) * canvas.chrome.px(24);
+                const movement = (flow.thread.transcript_scroll - baseline) * canvas.chrome.px(24);
                 for (flow.rows[0..flow.len]) |view| {
                     if (itemKey(view) == key and key != 0) {
-                        const desired = @round((maximum - view.bounds.y + offset + movement) / canvas.chrome.px(24));
-                        scroll = @intFromFloat(@max(0, @min(@as(f32, @floatFromInt(flow.scroll_limit)), desired)));
+                        const desired = (@as(f64, maximum) - view.bounds.y + offset + movement) / canvas.chrome.px(24);
+                        scroll = @max(0, @min(flow.scroll_limit, desired));
                         flow.reanchored = true;
                         break;
                     }
@@ -100,8 +106,14 @@ pub fn resolve(flow: *Flow, canvas: *Canvas) !void {
         }
     }
     flow.resolved_scroll = scroll;
+    flow.destination_scroll = scroll;
+    if (canvas.widgets) |state| {
+        if (state.thread_scroll.find(.{ .pane_id = flow.thread.pane_id, .pane_generation = flow.thread.attachment_generation })) |entry| {
+            flow.destination_scroll += (entry.motion.spring.target - entry.motion.spring.position) / flow.scroll_step;
+        }
+    }
 
-    const first = @max(0, maximum - @as(f32, @floatFromInt(scroll)) * canvas.chrome.px(24));
+    const first = @max(0, maximum - @as(f32, @floatCast(scroll)) * canvas.chrome.px(24));
     for (flow.rows[0..flow.len]) |*view| {
         view.bounds.y += flow.bounds.y - first;
     }
@@ -112,12 +124,16 @@ pub fn resolve(flow: *Flow, canvas: *Canvas) !void {
 pub fn navigation(flow: *const Flow, original: @import("interaction/Target.zig")) @import("interaction/Target.zig") {
     var target = original;
     target.thread_window_revision = flow.windowRevision();
+    target.thread_live_revision = flow.liveRevision();
     target.thread_history_generation = flow.thread.history_generation;
     target.thread_scroll_value = flow.thread.transcript_scroll;
     target.thread_anchor_revision = flow.thread.transcript_anchor_revision;
     target.thread_resolved_scroll = flow.resolved_scroll;
     target.thread_reanchor = flow.reanchored;
     target.thread_skip_folded = flow.skipFolded();
+    target.thread_prefetch = flow.prefetch();
+    target.thread_has_older = if (flow.thread.history) |window| window.has(.older) else if (flow.thread.transcript) |live| live.truncated else false;
+    target.thread_has_newer = if (flow.thread.history) |window| window.has(.newer) else false;
     var visible_header = false;
     for (flow.rows[0..flow.len]) |view| {
         if (view.bounds.y + view.bounds.height <= flow.bounds.y or view.bounds.y >= flow.bounds.y + flow.bounds.height) {
@@ -141,7 +157,8 @@ fn skipFolded(flow: *const Flow) bool {
     }
 
     const older = window.direction == .older;
-    if ((older and flow.resolved_scroll < flow.scroll_limit) or (!older and flow.resolved_scroll != 0)) {
+    const distance = (if (older) flow.scroll_limit - @max(flow.resolved_scroll, flow.destination_scroll) else @min(flow.resolved_scroll, flow.destination_scroll)) * flow.scroll_step;
+    if (distance > flow.bounds.height * 0.75) {
         return false;
     }
 
@@ -159,8 +176,8 @@ fn skipFolded(flow: *const Flow) bool {
         return false;
     }
 
-    const scanned = &window.pages[if (older) @as(usize, 0) else 1].snapshot;
-    const retained = &window.pages[if (older) @as(usize, 1) else 0].snapshot;
+    const scanned = &window.pages[if (older) @as(usize, 0) else window.count - 1].snapshot;
+    const retained = &window.pages[if (older) @as(usize, 1) else window.count - 2].snapshot;
     if (scanned.item_count == 0 or retained.item_count == 0) {
         return false;
     }
@@ -187,8 +204,39 @@ fn skipFolded(flow: *const Flow) bool {
     return false;
 }
 
+fn prefetch(flow: *const Flow) ?core.agent_history.Direction {
+    const margin = flow.bounds.height * 0.75;
+    const top = (flow.scroll_limit - @max(flow.resolved_scroll, flow.destination_scroll)) * flow.scroll_step;
+    const bottom = @min(flow.resolved_scroll, flow.destination_scroll) * flow.scroll_step;
+    const window = flow.thread.history orelse {
+        const live = flow.thread.transcript orelse return null;
+        if (top <= margin and live.truncated and (live.status == .ready or flow.resolved_scroll > 0)) {
+            return .older;
+        }
+        return null;
+    };
+    if (window.retained or window.failed or window.pending != null or window.scan_remaining == 0) {
+        return null;
+    }
+
+    const direction: core.agent_history.Direction = if (top <= margin and window.has(.older)) .older else if (bottom <= margin and window.has(.newer)) .newer else return null;
+    if (window.count == window.pages.len) {
+        const evicted = &window.pages[if (direction == .older) window.count - 1 else @as(usize, 0)].snapshot;
+        for (flow.rows[0..flow.len]) |row| {
+            if (row.thread.transcript == evicted and row.bounds.y < flow.bounds.y + flow.bounds.height and row.bounds.y + row.bounds.height > flow.bounds.y) {
+                return null;
+            }
+        }
+    }
+    return direction;
+}
+
 fn windowRevision(flow: *const Flow) u64 {
     return if (flow.thread.history) |window| window.revision else if (flow.thread.transcript) |snapshot| snapshot.revision else 0;
+}
+
+fn liveRevision(flow: *const Flow) u64 {
+    return if (flow.thread.history) |window| window.live_revision else if (flow.thread.transcript) |snapshot| snapshot.revision else 0;
 }
 
 fn itemKey(view: View) u64 {
@@ -199,13 +247,34 @@ fn itemKey(view: View) u64 {
     return @import("telar-client").AgentHistoryWindow.itemKey(view.thread.transcript.?, view.item);
 }
 
-fn duplicate(snapshot: *const core.AgentThreadSnapshot, item: *const core.AgentThreadItem, newer: *const core.AgentThreadSnapshot) bool {
-    for (newer.items()) |*candidate| {
-        if (@import("telar-client").AgentHistoryWindow.sameFragment(.{ .snapshot = snapshot, .item = item }, .{ .snapshot = newer, .item = candidate })) {
-            return true;
+fn uniqueItems(window: *const Window) [Window.capacity]u64 {
+    const page_size = core.agent_thread.max_items;
+    var masks: [Window.capacity]u64 = @splat(0);
+    var slots: [2 * Window.capacity * page_size]u16 = @splat(0);
+    var page_index: usize = window.count;
+    while (page_index > 0) {
+        page_index -= 1;
+        const snapshot = &window.pages[page_index].snapshot;
+        for (snapshot.items(), 0..) |*item, index| {
+            if (item.source_len != 0) {
+                var slot: usize = @intCast(Window.itemKey(snapshot, item) % slots.len);
+                const repeated = while (slots[slot] != 0) : (slot = (slot + 1) % slots.len) {
+                    const previous = slots[slot] - 1;
+                    const newer = &window.pages[previous / page_size].snapshot;
+                    if (Window.sameFragment(.{ .snapshot = snapshot, .item = item }, .{ .snapshot = newer, .item = &newer.items()[previous % page_size] })) {
+                        break true;
+                    }
+                } else false;
+                if (repeated) {
+                    continue;
+                }
+
+                slots[slot] = @intCast(page_index * page_size + index + 1);
+            }
+            masks[page_index] |= @as(u64, 1) << @intCast(index);
         }
     }
-    return false;
+    return masks;
 }
 
 /// Only visible rows paint or request the next animation frame.

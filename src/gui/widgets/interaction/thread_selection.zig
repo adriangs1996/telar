@@ -22,6 +22,7 @@ pub fn enter(gui: *GuiClient, pane_id: core.PaneId) bool {
         return false;
     }
     const selection = &gui.widgets.thread_selection;
+    gui.widgets.thread_scroll.cancel(pane_id);
     selection.restart(.{ .pane_id = pane_id, .attachment_generation = target.id.generation });
     selection.head = at;
     selection.keyboard = true;
@@ -170,6 +171,7 @@ fn pointer(gui: *GuiClient, event: @import("../../input/PointerEvent.zig"), targ
             return true;
         }
         const previous = if (event.mods & 1 != 0 and selection.owner != null and selection.owner.?.pane_id == pane_id) selection.anchor else null;
+        gui.widgets.thread_scroll.cancel(pane_id);
         selection.restart(.{ .pane_id = pane_id, .attachment_generation = container.id.generation });
         selection.anchor = previous orelse at;
         selection.head = at;
@@ -398,9 +400,9 @@ fn scroll(gui: *GuiClient, delta: i32) !void {
     const owner = selection.owner orelse return;
     const target = transcript(gui, owner.pane_id) orelse return;
     const pane = gui.app.model.agentPane(owner.pane_id) orelse return;
-    const next = std.math.clamp(@as(i64, pane.transcript_scroll) + delta, 0, target.scroll_limit);
+    const next = std.math.clamp(pane.transcript_scroll + @as(f64, @floatFromInt(delta)), 0, target.scroll_limit);
     selection.blocked_edge = next == pane.transcript_scroll;
-    try client.agent_threads.scroll(&gui.app, owner.pane_id, @intCast(next - pane.transcript_scroll));
+    try client.agent_threads.scroll(&gui.app, owner.pane_id, next - pane.transcript_scroll);
 }
 
 fn valid(gui: *const GuiClient, at: Position) bool {

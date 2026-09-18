@@ -158,7 +158,7 @@ int telar_test_host_input(NSView *host) {
   [view scrollWheel:(NSEvent *)[TelarScrollTestEvent new]];
   const double scale = view.window.backingScaleFactor;
   if (fixture.last.kind != 8 || fixture.last.mods != 1 || fixture.last.precise != 1 || fixture.last.scroll_phase != 1 || fixture.last.momentum_phase != 3 ||
-      fixture.last.delta_x != -1.25 * scale || fixture.last.delta_y != 2.5 * scale) { fprintf(stderr, "native host input assertion failed at line %d\n", __LINE__); failures++; }
+      fixture.last.scroll_kinetic != 0 || fixture.last.delta_x != -1.25 * scale || fixture.last.delta_y != 2.5 * scale) { fprintf(stderr, "native host input assertion failed at line %d\n", __LINE__); failures++; }
 
   const telar_gui_callbacks callbacks = {.input = receive, .host_request = next_request, .accessibility = tree_snapshot};
   fixture.nodes[0] = (telar_gui_accessibility_node){.id = 1, .generation = 1, .role = 1, .flags = 1, .width = 300, .height = 100};

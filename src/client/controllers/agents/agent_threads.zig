@@ -196,7 +196,7 @@ pub fn opened(client: *Client, opened_pane: core.PaneOpened) !void {
 }
 
 /// Moves transcript navigation independently from terminal scrollback. Example: `try agent_threads.scroll(client, id, 3);`
-pub fn scroll(client: *Client, pane_id: core.PaneId, delta: i32) !void {
+pub fn scroll(client: *Client, pane_id: core.PaneId, delta: f64) !void {
     const handler: AgentThreadHandler = .{ .model = &client.model };
     _ = handler.scroll(pane_id, delta);
 }

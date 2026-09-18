@@ -7,7 +7,7 @@ const client = @import("telar-client");
 pub fn delivered(gui: *GuiClient) !void {
     const registry = gui.widgets.dispatcher.maps.presented();
     for (registry.targets[0..registry.len]) |target| {
-        if (target.action != .transcript or (!target.thread_reanchor and !target.thread_skip_folded)) {
+        if (target.action != .transcript or (!target.thread_reanchor and !target.thread_skip_folded and target.thread_prefetch == null)) {
             continue;
         }
         if (gui.widgets.thread_anchor.pending) |pending| {
@@ -28,6 +28,8 @@ pub fn delivered(gui: *GuiClient) !void {
         }
         if (target.thread_skip_folded) {
             client.agent_history.skipFolded(&gui.app, pane.id);
+        } else if (target.thread_prefetch) |direction| {
+            client.agent_history.prefetch(&gui.app, pane.id, direction);
         }
     }
     try client.agent_history.flush(&gui.app);

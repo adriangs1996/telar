@@ -420,6 +420,16 @@ entries. Animation can reuse unchanged layout and visible fragments.
 
 Scroll position uses logical 24-point units; the delivered transcript target
 carries its actual pixel step and limit. At zero the view follows new output.
+`ThreadScrollMotions` owns fixed-capacity, attachment-scoped physical-pixel
+trajectories. `thread_scroll.advance` updates the semantic offset before scene
+preparation; all geometry therefore follows the animated position. Discrete
+wheel/key impulses use `Spring` without restarting velocity. Precise gestures
+remain direct: macOS momentum is consumed unchanged, while Wayland finger axis
+stop launches client inertia using native sample times. Delivery rebases page
+coordinates and adopts limits; provisional page edges park time and request no
+animation deadline until content arrives. Focus loss, selection and disclosures
+stop autonomous movement. The existing scene clock owns all wakeups.
+
 `ThreadItemControl` identifies pane, attachment and stable runtime item, with no
 borrowed text or row index. Expansion and copy resolve that identity again before
 acting, so eviction and replacement cannot redirect stale input. The GUI retains

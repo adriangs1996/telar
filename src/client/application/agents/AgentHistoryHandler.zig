@@ -73,16 +73,34 @@ pub fn skipFolded(handler: Handler, id: core.PaneId) bool {
     return true;
 }
 
+/// Loads adjacent context without treating frame delivery as a new gesture.
+/// Example: `handler.prefetch(id, .older);`
+pub fn prefetch(handler: Handler, id: core.PaneId, direction: core.agent_history.Direction) void {
+    const pane = handler.findPane(id) orelse return;
+    const window = pane.agent_history orelse {
+        _ = handler.navigate(id, direction);
+        return;
+    };
+    if (window.retained or window.failed or window.pending != null or pane.history_intent != null or window.scan_remaining == 0 or !window.has(direction)) {
+        return;
+    }
+
+    window.scan_remaining -= 1;
+    window.preserve_seam = false;
+    pane.history_intent = direction;
+    handler.invalidate(id);
+}
+
 /// Restores omitted activity bytes through normal correlated history requests.
-/// Example: `handler.revealWork(id);`
-pub fn revealWork(handler: Handler, id: core.PaneId) void {
+/// Example: `handler.revealWork(id, group_key);`
+pub fn revealWork(handler: Handler, id: core.PaneId, key: u64) void {
     const pane = handler.findPane(id) orelse return;
     const window = pane.agent_history orelse return;
     if (window.retained) {
         return;
     }
 
-    const direction = window.revealWork();
+    const direction = window.revealWork(key);
     if (direction == null and !window.preserve_seam) {
         return;
     }
@@ -111,9 +129,7 @@ pub fn begin(handler: Handler, id: core.PaneId) !?core.QueryAgentHistory {
         return null;
     }
     if (!window.has(direction)) {
-        if (direction == .newer) {
-            pane.clearHistory();
-            pane.transcript_scroll = 0;
+        if (direction == .newer and pane.followAgentThread()) {
             handler.invalidate(id);
         }
         return null;
@@ -170,6 +186,7 @@ pub fn unfreeze(handler: Handler, id: core.PaneId, attachment: u64) void {
         pane.clearHistory();
     } else {
         window.retained = false;
+        _ = pane.followAgentThread();
     }
     handler.invalidate(id);
 }
@@ -186,6 +203,7 @@ pub fn apply(handler: Handler, operation: Operation, response: core.AgentHistory
     try response.copyTo(replacement);
     const changed = pane.agent_history.?.apply(replacement);
     if (changed) {
+        _ = pane.followAgentThread();
         handler.invalidate(pane.id);
     }
     return changed;
@@ -215,14 +233,14 @@ pub fn retired(handler: Handler) void {
 
 /// Commits delivered geometry without confusing it with a new scroll gesture.
 /// Example: `handler.anchor(id, resolved_scroll);`
-pub fn anchor(handler: Handler, id: core.PaneId, scroll: u32) void {
+pub fn anchor(handler: Handler, id: core.PaneId, scroll: f64) void {
     const value = handler.findPane(id) orelse return;
     value.transcript_scroll = scroll;
     value.transcript_anchor_revision +%= 1;
     handler.invalidate(id);
 }
 
-/// Reversing a gesture invalidates pending work before reaching the opposite edge.
+/// Fresh scroll input renews prefetch and invalidates an opposing request.
 /// Example: `handler.reverse(id, .newer);`
 pub fn reverse(handler: Handler, id: core.PaneId, direction: core.agent_history.Direction) void {
     const value = handler.findPane(id) orelse return;
@@ -230,6 +248,12 @@ pub fn reverse(handler: Handler, id: core.PaneId, direction: core.agent_history.
     if (window.retained) {
         return;
     }
+
+    if (window.scan_remaining != Window.max_scan_pages) {
+        window.scan_remaining = Window.max_scan_pages;
+        handler.invalidate(id);
+    }
+
     const pending = window.pending orelse return;
     if (pending == direction) {
         return;
@@ -240,7 +264,6 @@ pub fn reverse(handler: Handler, id: core.PaneId, direction: core.agent_history.
     value.history_intent = null;
     window.direction = direction;
     window.preserve_seam = false;
-    window.scan_remaining = 0;
     handler.invalidate(id);
 }
 

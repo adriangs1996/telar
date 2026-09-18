@@ -307,6 +307,10 @@ static void verify_legacy(void) {
     surface_enter(theme, theme->surface, theme->outputs[0].handle);
     telar_pointer_update(self);
     assert(theme->loaded_scale == 1 && last_serial == 123);
+    event_count = 0;
+    axis(self, self->handle, 42, WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_int(20));
+    assert(event_count == 1 && events[0].kind == 8 && events[0].delta_y == 2);
+    assert(events[0].precise == 0 && events[0].scroll_kinetic == 0 && events[0].scroll_time_ms == 42);
     telar_pointer_destroy(self);
 }
 
@@ -320,25 +324,48 @@ static void verify_scroll(void) {
     frame(self, self->handle);
     assert(event_count == 1 && events[0].kind == 8 && events[0].precise == 1 && events[0].scroll_phase == 1);
     assert(events[0].delta_y == 0.25 && events[0].delta_x == -0.5);
+    assert(events[0].scroll_kinetic == 1 && events[0].scroll_time_ms == 1 && events[0].momentum_phase == 0);
     axis(self, self->handle, 2, WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_double(0.125));
     frame(self, self->handle);
     assert(event_count == 2 && events[1].scroll_phase == 2 && events[1].delta_y == 0.125);
+    assert(events[1].scroll_kinetic == 1 && events[1].scroll_time_ms == 2);
     axis_stop(self, self->handle, 3, WL_POINTER_AXIS_VERTICAL_SCROLL);
     frame(self, self->handle);
     assert(events[2].scroll_phase == 2); // The other axis still belongs to the gesture.
+    assert(events[2].scroll_kinetic == 1 && events[2].scroll_time_ms == 3);
     axis_stop(self, self->handle, 4, WL_POINTER_AXIS_HORIZONTAL_SCROLL);
     frame(self, self->handle);
     assert(events[3].scroll_phase == 3 && self->active_axes == 0);
-    axis_source(self, self->handle, WL_POINTER_AXIS_SOURCE_WHEEL);
+    assert(events[3].scroll_kinetic == 1 && events[3].scroll_time_ms == 4);
+    // Source metadata is optional; a finished finger gesture must not classify
+    // a later unknown wheel sequence as kinetic input.
     axis(self, self->handle, 5, WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_int(10));
     axis_value120(self, self->handle, WL_POINTER_AXIS_VERTICAL_SCROLL, 30);
     frame(self, self->handle);
     assert(events[4].precise == 0 && events[4].delta_y == 0.25 && events[4].scroll_phase == 0);
+    assert(events[4].scroll_kinetic == 0 && events[4].scroll_time_ms == 5);
     axis_source(self, self->handle, WL_POINTER_AXIS_SOURCE_FINGER);
     axis(self, self->handle, 6, WL_POINTER_AXIS_HORIZONTAL_SCROLL, wl_fixed_from_int(1));
     frame(self, self->handle);
     leave(self, self->handle, 0, NULL);
     assert(events[6].kind == 8 && events[6].scroll_phase == 4 && self->active_axes == 0);
+    assert(events[6].scroll_kinetic == 1 && events[6].scroll_time_ms == 6);
+    axis_source(self, self->handle, WL_POINTER_AXIS_SOURCE_CONTINUOUS);
+    axis(self, self->handle, UINT32_MAX, WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_double(0.125));
+    frame(self, self->handle);
+    assert(events[7].precise == 1 && events[7].scroll_phase == 1 && events[7].scroll_kinetic == 0);
+    assert(events[7].scroll_time_ms == UINT32_MAX);
+    axis(self, self->handle, 0, WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_double(0.25));
+    frame(self, self->handle);
+    assert(events[8].scroll_time_ms == 0 && events[8].scroll_phase == 2 && events[8].scroll_kinetic == 0);
+    // Continuous sources need not send a stop; a source change begins a new gesture.
+    axis_source(self, self->handle, WL_POINTER_AXIS_SOURCE_FINGER);
+    axis(self, self->handle, 1, WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_double(0.5));
+    frame(self, self->handle);
+    assert(events[9].scroll_phase == 1 && events[9].scroll_kinetic == 1);
+    axis_stop(self, self->handle, 1, WL_POINTER_AXIS_VERTICAL_SCROLL);
+    frame(self, self->handle);
+    assert(events[10].scroll_phase == 3 && events[10].scroll_time_ms == 1 && events[10].scroll_kinetic == 1);
     telar_pointer_destroy(self);
 }
 

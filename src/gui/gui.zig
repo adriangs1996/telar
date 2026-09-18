@@ -39,6 +39,8 @@ test {
     _ = @import("tests/host_input.zig");
     _ = @import("animation/FrameClock.zig");
     _ = @import("animation/Transition.zig");
+    _ = @import("animation/Spring.zig");
+    _ = @import("widgets/ScrollMotion.zig");
     _ = @import("native/decode_input.zig");
     _ = @import("tests/links.zig");
     _ = @import("tests/link_metadata.zig");
@@ -49,6 +51,7 @@ test {
     _ = @import("tests/agent_history.zig");
     _ = @import("tests/thread_text_geometry.zig");
     _ = @import("tests/thread_selection.zig");
+    _ = @import("tests/thread_scroll_motion.zig");
     _ = Application;
     _ = @import("WindowIdentity.zig");
     _ = @import("tests/terminal.zig");

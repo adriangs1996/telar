@@ -214,22 +214,59 @@ an existing history reader retains its pages and can paginate again.
 
 ## Conversation history
 
-Scrolling beyond the retained conversation requests an earlier page from Codex.
-The client keeps at most two pages and replaces the page furthest from the
-reading position as navigation continues. Each page has the same item and byte
-bounds as a live snapshot. New provider output still updates the live state,
-composer and approvals while the client reads older messages.
+Trackpad deltas retain fractional scroll positions. Each precise input moves the
+conversation immediately; it is not accumulated into whole 24-pixel steps.
+Wheel and keyboard bindings keep their existing line distances, with a
+critically damped trajectory between positions. `animation/Spring` solves the
+motion from elapsed time; `widgets/ScrollMotion` handles wheel impulses and
+precise gestures. macOS supplies its own momentum. Wayland finger gestures
+supply native timestamps and explicitly request client inertia after axis stop;
+continuous and wheel sources never masquerade as finger gestures.
 
-The GUI measures and scrolls exposed rows. At a history boundary, pages that
+`interaction/thread_scroll` advances visible attachments before projection,
+through the existing scroll controller, so painting, hit testing and selection
+use the same offset. A precise gesture retains its original transcript owner
+through native momentum. Focus loss, input recovery and selection cancel motion;
+successful presentation retires hidden or replaced attachments. State uses fixed
+storage bounded by the pane count and schedules the shared `FrameClock` only
+while visible movement remains.
+
+Page and disclosure anchors use fractional positions and commit only after
+successful delivery. Page anchors translate both motion position and destination,
+preserving velocity. Prefetch considers the destination as well as the visible
+offset. A missing page parks movement at the loaded boundary without spending
+the remaining travel or polling; delivery resumes it. Actual history endpoints
+absorb outward velocity. Failed frames cannot commit limits or anchor changes.
+
+The GUI requests adjacent history within three quarters of a viewport from a
+loaded edge. Completed, truncated conversations also fill a short initial view.
+The client keeps at most 16 pages, so several collapsed turns can share one
+continuous viewport. Prefetch stops before evicting a visible page. Each page
+has the same item and byte bounds as a live snapshot. Reaching the live tail
+keeps earlier context. New output follows the tail while the reader is at its
+end; scrolling up or selecting text freezes the reading window. The live
+model, composer and approvals continue receiving provider updates.
+
+The GUI measures and scrolls exposed rows. Near a history boundary, pages that
 only extend an already folded work group are traversed automatically, keeping
 the page with visible conversation in place. This scan runs after successful
 frame delivery, with one request outstanding and at most 32 additional pages
-per gesture. Selection, expanded work, a new visible group, failures and cursors
-that stop advancing interrupt the scan. Opening a group whose middle pages were
-skipped restores a contiguous reading window and reloads those activities.
+without further scroll input. Fresh input renews the budget, so a long gesture
+can cross more pages. Selection, failures and cursors that stop advancing
+interrupt the scan. Expanded work and new visible groups occupy measured rows
+and count toward the prefetch margin. Opening a group whose middle pages were
+skipped reloads those activities from that group's retained boundary.
 `tools/gui_agent_scroll.py` exercises this with a native window and a paginated
 provider fixture: one gesture reaches the prompt, the final response remains
 copyable, and expanding then folding the group reloads the omitted work.
+Its `--continuous` mode uses 24 turns, sends fractional native scroll events,
+and checks visible message coordinates while crossing pages in both directions.
+Its `--smooth` mode samples native accessibility geometry after a single wheel
+impulse, checking intermediate positions, exact final distance and settled idle.
+The GUI tests also cover viewport filling, bounded eviction, selection,
+momentum, reversal, delayed pages, live-tail resumption and failed frame delivery.
+The Wayland pointer tests verify inertia ownership and wrapping timestamps;
+the native Linux window test exercises deadline-driven frames followed by idle.
 
 History queries use `query_agent_history`; `agent_history_page` is the final,
 targeted reply. Request IDs, pane generations and navigation generations reject
@@ -323,9 +360,11 @@ for validation, failed resume recovery and the `resume_agents` setting.
   storage and 2 MiB of formatting storage. Pages and cursors are bounded;
   cursors hold at most 2 KiB. Larger provider items fail explicitly. Reader
   configuration is immutable and retained independently of the pane lifetime.
-- Each client retains at most 16 history windows, each bounded to two pages and
-  256 KiB. Inactive readers can be evicted; selected text remains pinned until
-  selection ends.
+- Each client retains at most 16 history windows, each bounded to 16 pages and
+  2 MiB. Inactive readers can be evicted; selected text remains pinned until
+  selection ends. The GUI uses a fixed fragment index to deduplicate page seams
+  without comparing every item against every later page, and only exposed
+  rows contribute to its measured height.
 - Native text selection stores at most 2,048 item rows, 4,096 visible fragments
   and 32,768 grapheme carets per frame. The lazily allocated double buffer stays
   below 2 MiB and publishes only after successful frame delivery. Saturation

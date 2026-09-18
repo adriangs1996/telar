@@ -39,6 +39,8 @@ static struct {
     int wake[2];
     atomic_uint painted, delivered, completed, retries, failures;
     atomic_uint cursor_shape, cursor_observed, cursor_queries;
+    atomic_uint timer_remaining, timer_wakes;
+    atomic_llong timer_deadline_ns;
     atomic_bool requested, closing;
     uint8_t atlas[4];
     uint8_t sprites[16];
@@ -73,6 +75,12 @@ static void pause_ms(unsigned milliseconds) {
     nanosleep(&delay, NULL);
 }
 
+static int64_t now_ns(void) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (int64_t)now.tv_sec * 1000000000 + now.tv_nsec;
+}
+
 static bool await_delivery(unsigned wanted) {
     for (unsigned i = 0; i < 500; i++) {
         if (atomic_load(&state.delivered) >= wanted) {
@@ -100,6 +108,18 @@ static void *exercise(void *unused) {
             goto close;
         }
     }
+    // After the initial wake, animation progresses solely through the host
+    // deadline callback, then parks without a repeating timer or frame queue.
+    unsigned before_timer = atomic_load(&state.delivered);
+    atomic_store(&state.timer_remaining, 6);
+    atomic_store(&state.requested, true);
+    telar_gui_wake(state.wake[1]);
+    if (!await_delivery(before_timer + 6)) {
+        goto close;
+    }
+    if (atomic_load(&state.timer_wakes) != 5 || atomic_load(&state.timer_deadline_ns) != 0) {
+        atomic_fetch_add(&state.failures, 1);
+    }
     pause_ms(200);
     unsigned settled = atomic_load(&state.painted);
     atomic_store(&state.cursor_shape, 3);
@@ -116,7 +136,7 @@ static void *exercise(void *unused) {
     if (cursor_queries != atomic_load(&state.cursor_queries)) {
         atomic_fetch_add(&state.failures, 1);
     }
-    if (settled != atomic_load(&state.painted) || settled > 16) {
+    if (settled != atomic_load(&state.painted) || settled > 22) {
         atomic_fetch_add(&state.failures, 1);
     }
 close:
@@ -184,6 +204,10 @@ static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *
     if (invalid_frame_test) {
         frame->atlas_side = 0;
     }
+    if (atomic_load(&state.timer_remaining) != 0) {
+        unsigned remaining = atomic_fetch_sub(&state.timer_remaining, 1);
+        atomic_store(&state.timer_deadline_ns, remaining > 1 ? now_ns() + 16666667 : 0);
+    }
 }
 
 static int pump(void *context) {
@@ -191,7 +215,24 @@ static int pump(void *context) {
     if (atomic_load(&state.closing)) {
         return -1;
     }
-    return atomic_exchange(&state.requested, false);
+    bool requested = atomic_exchange(&state.requested, false);
+    int64_t deadline = atomic_load(&state.timer_deadline_ns);
+    if (deadline != 0 && now_ns() >= deadline) {
+        atomic_store(&state.timer_deadline_ns, 0);
+        atomic_fetch_add(&state.timer_wakes, 1);
+        requested = true;
+    }
+    return requested;
+}
+
+static uint32_t wakeup_after(void *context) {
+    (void)context;
+    int64_t deadline = atomic_load(&state.timer_deadline_ns);
+    if (deadline == 0) {
+        return 0;
+    }
+    int64_t delay = deadline - now_ns();
+    return delay <= 0 ? 1 : (uint32_t)((delay + 999999) / 1000000);
 }
 
 static uint32_t pointer_shape(void *context) {
@@ -240,7 +281,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     telar_gui_callbacks callbacks = {
-        .render = render, .pump = pump, .complete = complete, .input = input, .wake_fd = state.wake[0], .pointer_shape = pointer_shape};
+        .render = render, .pump = pump, .complete = complete, .input = input, .wake_fd = state.wake[0], .pointer_shape = pointer_shape, .wakeup_after = wakeup_after};
     int status = telar_gui_run("Telar Vulkan integration test", NULL, &callbacks);
     if (invalid_frame_test) {
         telar_gui_close_pipe(state.wake);
@@ -257,7 +298,7 @@ int main(int argc, char **argv) {
         atomic_fetch_add(&state.failures, 1);
     }
     unsigned failures = atomic_load(&state.failures);
-    printf("native Linux: status=%d painted=%u delivered=%u retries=%u failures=%u\n", status,
-           atomic_load(&state.painted), atomic_load(&state.delivered), atomic_load(&state.retries), failures);
+    printf("native Linux: status=%d painted=%u delivered=%u retries=%u timer_wakes=%u failures=%u\n", status,
+           atomic_load(&state.painted), atomic_load(&state.delivered), atomic_load(&state.retries), atomic_load(&state.timer_wakes), failures);
     return status != 0 || failures != 0;
 }

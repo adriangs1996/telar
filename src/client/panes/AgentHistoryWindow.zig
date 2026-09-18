@@ -1,14 +1,17 @@
-//! Two owned pages preserve a reading window independently of live agent state.
+//! A bounded reading window retains visible history across asynchronous page loads.
 const std = @import("std");
 const core = @import("telar-core");
 const Window = @This();
 
 pub const max_scan_pages = 32;
+pub const capacity = 16;
 
-pages: [2]core.AgentHistoryPage = undefined,
+pages: [capacity]core.AgentHistoryPage = undefined,
+gaps: [capacity]?@import("AgentHistoryGap.zig") = @splat(null),
 count: u8 = 0,
 generation: u64 = 0,
 revision: u64 = 1,
+live_revision: u64 = 0,
 pending: ?core.agent_history.Direction = null,
 direction: core.agent_history.Direction = .older,
 failed: bool = false,
@@ -18,13 +21,12 @@ replace_seam: bool = false,
 retained: bool = false,
 selection_only: bool = false,
 preserve_seam: bool = false,
-skipped_work: ?core.agent_history.Direction = null,
 scan_remaining: u8 = max_scan_pages,
 
 /// Freezes the live seam before an asynchronous history request starts.
 /// Example: `window.start(live, generation);`
 pub fn start(window: *Window, live: *const core.AgentThreadSnapshot, generation: u64) void {
-    window.* = .{ .generation = generation, .count = 1 };
+    window.* = .{ .generation = generation, .count = 1, .live_revision = live.revision };
     window.pages[0] = .{ .request_id = @enumFromInt(0), .view_generation = generation, .snapshot = live.*, .has_before = true, .has_after = false };
     for (live.items()) |item| {
         window.replace_seam = window.replace_seam or !item.fragment_end;
@@ -40,6 +42,29 @@ pub fn cursor(window: *const Window, direction: core.agent_history.Direction) []
 /// Example: `if (window.has(.older)) showEarlier();`
 pub fn has(window: *const Window, direction: core.agent_history.Direction) bool {
     return if (direction == .older) window.pages[0].has_before else window.pages[window.count - 1].has_after;
+}
+
+/// Keeps earlier context when the reader reaches the current live tail.
+/// Example: `if (window.followLive(live)) invalidate();`
+pub fn followLive(window: *Window, live: *const core.AgentThreadSnapshot) bool {
+    if (window.live_revision == live.revision or window.retained or window.pending != null or window.has(.newer)) {
+        return false;
+    }
+
+    const tail = &window.pages[window.count - 1];
+    if (tail.before.len != 0 or tail.after.len != 0) {
+        if (window.count == capacity) {
+            window.discardBefore(1);
+        }
+
+        window.count += 1;
+        window.gaps[window.count - 1] = null;
+    }
+
+    window.pages[window.count - 1] = .{ .request_id = @enumFromInt(0), .view_generation = window.generation, .snapshot = live.*, .has_before = true, .has_after = false };
+    window.live_revision = live.revision;
+    window.revision +%= 1;
+    return true;
 }
 
 /// The first retained provider item anchors a cursorless initial request.
@@ -100,25 +125,31 @@ pub fn apply(window: *Window, page: *const core.AgentHistoryPage) bool {
     } else if (window.replace_seam) {
         window.pages[0] = page.*;
         window.count = 1;
+        window.gaps = @splat(null);
         window.replace_seam = false;
+    } else if (window.preserve_seam and window.count > 1) {
+        const edge: usize = if (direction == .older) 0 else window.count - 1;
+        const removed = &window.pages[edge].snapshot;
+        const key = groupKey(removed, &removed.items()[0]);
+        window.pages[edge] = page.*;
+        window.gaps[if (direction == .older) @as(usize, 1) else edge] = .{ .key = key, .direction = direction };
     } else if (direction == .older) {
-        if (!window.preserve_seam or window.count < 2) {
-            window.pages[1] = window.pages[0];
-            window.skipped_work = null;
-        } else {
-            window.skipped_work = direction;
+        const count = @min(capacity, window.count + 1);
+        var index: usize = count - 1;
+        while (index > 0) : (index -= 1) {
+            window.pages[index] = window.pages[index - 1];
+            window.gaps[index] = window.gaps[index - 1];
         }
         window.pages[0] = page.*;
-        window.count = 2;
+        window.gaps[0] = null;
+        window.count = @intCast(count);
     } else {
-        if (!window.preserve_seam or window.count < 2) {
-            window.pages[0] = window.pages[window.count - 1];
-            window.skipped_work = null;
-        } else {
-            window.skipped_work = direction;
+        if (window.count == capacity) {
+            window.discardBefore(1);
         }
-        window.pages[1] = page.*;
-        window.count = 2;
+        window.pages[window.count] = page.*;
+        window.gaps[window.count] = null;
+        window.count += 1;
     }
 
     window.preserve_seam = false;
@@ -126,22 +157,54 @@ pub fn apply(window: *Window, page: *const core.AgentHistoryPage) bool {
     return true;
 }
 
-/// Reopens the contiguous source window before revealing previously skipped work.
-/// Example: `const direction = window.revealWork() orelse return;`
-pub fn revealWork(window: *Window) ?core.agent_history.Direction {
-    const direction = window.skipped_work orelse return null;
-    if (direction == .older) {
-        window.pages[0] = window.pages[window.count - 1];
+/// Reloads the omitted part of the selected work group from its retained boundary.
+/// Example: `const direction = window.revealWork(group_key) orelse return;`
+pub fn revealWork(window: *Window, key: u64) ?core.agent_history.Direction {
+    for (window.gaps[0..window.count], 0..) |optional, index| {
+        const gap = optional orelse continue;
+        if (gap.key != key) {
+            continue;
+        }
+
+        if (gap.direction == .older) {
+            window.discardBefore(index);
+        } else {
+            window.count = @intCast(index);
+        }
+        window.preserve_seam = false;
+        window.pending = null;
+        window.failed = false;
+        window.scan_remaining = max_scan_pages;
+        window.revision +%= 1;
+        return gap.direction;
     }
 
-    window.count = 1;
-    window.skipped_work = null;
-    window.preserve_seam = false;
-    window.pending = null;
-    window.failed = false;
-    window.scan_remaining = max_scan_pages;
-    window.revision +%= 1;
-    return direction;
+    return null;
+}
+
+fn discardBefore(window: *Window, count: usize) void {
+    const remaining = window.count - count;
+    for (0..remaining) |index| {
+        window.pages[index] = window.pages[index + count];
+        window.gaps[index] = window.gaps[index + count];
+    }
+    window.count = @intCast(remaining);
+    window.gaps[0] = null;
+}
+
+/// Identifies a disclosure independently of page boundaries and item numbering.
+/// Example: `const key = Window.groupKey(snapshot, item);`
+pub fn groupKey(snapshot: *const core.AgentThreadSnapshot, item: *const core.AgentThreadItem) u64 {
+    const turn = item.sourceTurn(snapshot);
+    if (turn.len == 0) {
+        return if (item.turn_identity != 0) item.turn_identity else item.identity;
+    }
+
+    var hash = std.hash.Wyhash.init(0x776f726b7475726e);
+    hash.update(snapshot.threadId());
+    hash.update(&.{0});
+    hash.update(turn);
+    return hash.final() | 1;
 }
 
 /// Resolves actions against the same owned page that supplied their geometry.
