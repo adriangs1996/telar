@@ -1509,6 +1509,96 @@ fn expectReleasedKeys(session: *Session) !void {
     try std.testing.expectEqual(@as(usize, 0), session.gui.app.input_leases.len);
 }
 
+test "agent scroll bindings move the focused transcript without editing the composer" {
+    const session = try agentSession();
+    defer session.deinit();
+    try linkSnapshot(session, "Earlier output\n" ** 80);
+    try publish(session);
+    const pane = session.gui.app.model.agentPane(Session.pane_id).?;
+    const terminal_scroll = pane.scroll;
+
+    try send(session, .{ .key = .{ .code = client.default_prefix.code, .mods = .{ .ctrl = true }, .physical = .{ .value = 103 } } });
+    try std.testing.expect(session.gui.input.router.prefixPending());
+    try send(session, .{ .key = .{ .code = client.default_prefix.code, .physical = .{ .value = 103 }, .phase = .release } });
+    try send(session, .{ .text = .{ .bytes = "-", .physical = .{ .value = 104 } } });
+    try send(session, .{ .text = .{ .bytes = "-", .physical = .{ .value = 104 }, .phase = .release } });
+    try std.testing.expectEqual(@as(u32, 3), pane.transcript_scroll);
+    try publish(session);
+    try std.testing.expectEqual(@as(u32, 3), pane.transcript_scroll);
+
+    try send(session, .{ .key = .{ .code = client.default_prefix.code, .mods = .{ .ctrl = true }, .physical = .{ .value = 103 } } });
+    try send(session, .{ .key = .{ .code = client.default_prefix.code, .physical = .{ .value = 103 }, .phase = .release } });
+    try send(session, .{ .text = .{ .bytes = "=", .physical = .{ .value = 105 } } });
+    try send(session, .{ .text = .{ .bytes = "=", .physical = .{ .value = 105 }, .phase = .release } });
+    try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
+    try std.testing.expectEqualDeep(terminal_scroll, pane.scroll);
+    try std.testing.expectEqualStrings("", pane.composerSlice());
+    try session.settle();
+    try std.testing.expectEqual(@as(usize, 0), session.input_len);
+    try std.testing.expectEqual(@as(usize, 0), session.agent_prompt_count);
+    try expectReleasedKeys(session);
+}
+
+test "held agent scroll bindings pace transcript movement and stop on release" {
+    const session = try agentSession();
+    defer session.deinit();
+    try linkSnapshot(session, "Earlier output\n" ** 80);
+    try publish(session);
+    adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up }));
+    const pane = session.gui.app.model.agentPane(Session.pane_id).?;
+    var handler: @import("../input/InputHandler.zig") = .{ .app = &session.gui.app };
+    var key: client.Key = .{ .code = .{ .char = .init("-") }, .mods = .{ .alt = true }, .physical = .{ .value = 45 } };
+
+    _ = try session.gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = 0 }, &handler);
+    try std.testing.expectEqual(@as(u32, 3), pane.transcript_scroll);
+    key.phase = .repeat;
+    _ = try session.gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = 99 * std.time.ns_per_ms }, &handler);
+    try std.testing.expectEqual(@as(u32, 3), pane.transcript_scroll);
+    _ = try session.gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = 100 * std.time.ns_per_ms }, &handler);
+    try std.testing.expectEqual(@as(u32, 6), pane.transcript_scroll);
+    key.phase = .release;
+    _ = try session.gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = 200 * std.time.ns_per_ms }, &handler);
+    key.phase = .repeat;
+    _ = try session.gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = 300 * std.time.ns_per_ms }, &handler);
+    try std.testing.expectEqual(@as(u32, 6), pane.transcript_scroll);
+    try std.testing.expectEqualStrings("", pane.composerSlice());
+    try expectReleasedKeys(session);
+}
+
+test "agent scroll bindings respect transcript bounds and attachment identity" {
+    const session = try agentSession();
+    defer session.deinit();
+    try linkSnapshot(session, "Earlier output\n" ** 80);
+    try publish(session);
+    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const registry = session.gui.widgets.dispatcher.maps.presented();
+    const transcript = for (registry.targets[0..registry.len]) |target| {
+        if (target.action == .transcript and target.action.transcript == pane.id) {
+            break target;
+        }
+    } else return error.MissingTranscript;
+    try std.testing.expect(transcript.scroll_limit > 3);
+    var handler: @import("../input/InputHandler.zig") = .{ .app = &session.gui.app };
+
+    _ = try handler.action(.{ .scroll_pane = .down });
+    try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
+    try client.agent_threads.scroll(&session.gui.app, pane.id, @intCast(transcript.scroll_limit - 1));
+    _ = try handler.action(.{ .scroll_pane = .up });
+    try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
+    _ = try handler.action(.{ .scroll_pane = .up });
+    try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
+
+    pane.attached = false;
+    try std.testing.expect(handler.repeatPolicy(.{ .scroll_pane = .down }) == null);
+    _ = try handler.action(.{ .scroll_pane = .down });
+    try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
+    pane.attached = true;
+    pane.attachment_generation += 1;
+    _ = try handler.action(.{ .scroll_pane = .down });
+    try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
+    try std.testing.expectEqualStrings("", pane.composerSlice());
+}
+
 test "slash completion filters commands and rename submits through the agent request" {
     const session = try agentSession();
     defer session.deinit();

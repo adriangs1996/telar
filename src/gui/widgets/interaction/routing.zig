@@ -849,6 +849,26 @@ fn threadScrollTarget(gui: *const GuiClient, target: Target) Target {
     return target;
 }
 
+/// Routes a pane scroll binding through the delivered transcript's wheel policy.
+/// Example: `_ = try routing.scrollFocusedThread(gui, .up);`
+pub fn scrollFocusedThread(gui: *GuiClient, direction: client.ScrollDirection) !bool {
+    const model = gui.app.model.activeTabModelConst() orelse return false;
+    const pane = model.focusedPaneConst() orelse return false;
+    if (pane.kind != .agent) {
+        return false;
+    }
+
+    const registry = gui.widgets.dispatcher.maps.presented();
+    for (registry.targets[0..registry.len]) |target| {
+        if (target.action == .transcript and target.action.transcript == pane.id and eligible(gui, target)) {
+            try scrollThread(gui, target, if (direction == .up) 3 else -3);
+            break;
+        }
+    }
+
+    return true;
+}
+
 fn scrollThread(gui: *GuiClient, target: Target, delta: i32) !void {
     const pane_id = switch (target.action) {
         .transcript => |id| id,

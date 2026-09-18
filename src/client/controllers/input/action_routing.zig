@@ -57,13 +57,17 @@ pub fn apply(client: *Client, value: Action) !ControlType {
 /// Resolves repeat authority without retaining pane storage.
 /// For example: `const policy = repeatPolicy(client, action);`.
 pub fn repeatPolicy(client: *const Client, value: Action) ?RepeatPolicyType {
-    if (key_routing.captures(client)) {
+    if (key_routing.captures(client) or client.model.copyModeActive()) {
         return null;
     }
 
-    const target = client.model.planPaneInput(.focused) orelse return null;
+    const model = client.model.activeTabModelConst() orelse return null;
+    const pane = model.focusedPaneConst() orelse return null;
+    if (!pane.attached) {
+        return null;
+    }
 
-    return repeatPolicy_module(value, target.pane_id);
+    return repeatPolicy_module(value, pane.id);
 }
 
 fn native(raw_context: *anyopaque, value: Action) !ApplicationInputActionRoutingControl {

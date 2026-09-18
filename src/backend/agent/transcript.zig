@@ -7,7 +7,7 @@ const max_agent_session_title_bytes_module = @import("telar-core").max_agent_ses
 const Scan = @import("Scan.zig");
 const std = @import("std");
 const TitleLine = @import("TitleLine.zig");
-const truncateSessionTitle_module = @import("telar-core").truncateSessionTitle;
+const truncateSessionTitle = @import("telar-core").truncateSessionTitle;
 
 /// Bytes one probe reads; a longer backlog continues on the next probe.
 pub const max_scan_bytes = 64 * 1024;
@@ -41,7 +41,7 @@ pub fn scan(bytes: []const u8, session: []const u8, buffer: *[max_agent_session_
             continue;
         }
 
-        result.title = truncateSessionTitle_module(buffer, parsed.customTitle);
+        result.title = truncateSessionTitle(buffer, parsed.customTitle);
     }
 
     return result;

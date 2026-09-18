@@ -27,12 +27,19 @@ pub fn key(handler: *Handler, value: client.Key) !void {
     _ = try client.controllers.key_routing.apply(handler.app, .{ .key = value });
 }
 
-/// The goto and suggest keys open the native palette already prefixed and
-/// a sidebar resize moves this window's pixel preference instead of the
-/// shared column width; every other action keeps the shared routing. Copy
-/// mode retires first, as the shared native action policy does.
+/// Agent scrolling uses delivered transcript geometry. The goto and suggest
+/// keys open the native palette already prefixed, and sidebar resize uses
+/// this window's pixel preference. Other actions keep the shared routing.
+/// Copy mode retires first, as the shared native action policy does.
 /// Example: `const control = try handler.action(.new_tab);`
 pub fn action(handler: *Handler, value: client.Action) !client.Control {
+    if (value == .scroll_pane) {
+        const gui = @import("../GuiClient.zig").of(handler.app);
+        if (try @import("../widgets/interaction/routing.zig").scrollFocusedThread(gui, value.scroll_pane)) {
+            return .continue_routing;
+        }
+    }
+
     const prefix: client.command_palette.Prefix = switch (value) {
         .goto_picker => .goto,
         .suggest_command => .suggest,
