@@ -1,0 +1,42 @@
+(lldb) target create "/tmp/tgb-diagnostic-source/.zig-cache/o/7d13e5c8d8e63e0cdb2380c725e2bf44/test"
+Current executable set to '/tmp/tgb-diagnostic-source/.zig-cache/o/7d13e5c8d8e63e0cdb2380c725e2bf44/test' (arm64).
+(lldb) disassemble --start-address 0x1000f3ea0 --count 38
+test`agent_panes.Codex.errorMessage:
+test[0x1000f3ea0] <+5272>: movi.2d v0, #0000000000000000
+test[0x1000f3ea4] <+5276>: stur   q0, [x25, #0x58]
+test[0x1000f3ea8] <+5280>: stur   q0, [x25, #0x68]
+test[0x1000f3eac] <+5284>: adrp   x8, 5010
+test[0x1000f3eb0] <+5288>: add    x8, x8, #0x2d0            ; "Error"
+test[0x1000f3eb4] <+5292>: mov    w9, #0x5                  ; =5 
+test[0x1000f3eb8] <+5296>: stp    x8, x9, [x25, #0x78]
+test[0x1000f3ebc] <+5300>: adrp   x8, 5010
+test[0x1000f3ec0] <+5304>: add    x8, x8, #0x2b0            ; "Codex reported an error."
+test[0x1000f3ec4] <+5308>: cmp    x20, #0x0
+test[0x1000f3ec8] <+5312>: csel   x8, x8, x21, eq
+test[0x1000f3ecc] <+5316>: stur   q0, [x25, #0x88]
+test[0x1000f3ed0] <+5320>: stur   q0, [x25, #0x98]
+test[0x1000f3ed4] <+5324>: mov    w9, #0x18                 ; =24 
+test[0x1000f3ed8] <+5328>: csel   x9, x9, x20, eq
+test[0x1000f3edc] <+5332>: stp    x8, x9, [x25, #0xa8]
+test[0x1000f3ee0] <+5336>: mov    w8, #0x10000              ; =65536 
+test[0x1000f3ee4] <+5340>: stur   w8, [x25, #0xbf]
+test[0x1000f3ee8] <+5344>: add    x8, x19, #0x32, lsl #12   ; ___lldb_unnamed_symbol46215 + 2431903804, =0x32000 
+test[0x1000f3eec] <+5348>: add    x0, x8, #0x4c0            ; ___lldb_unnamed_symbol46215 + 2428903124
+test[0x1000f3ef0] <+5352>: add    x1, sp, #0x15, lsl #12    ; ___lldb_unnamed_symbol46215 + 2431874485, =0x15000 
+test[0x1000f3ef4] <+5356>: add    x1, x1, #0x980            ; ___lldb_unnamed_symbol46215 + 2430148085
+test[0x1000f3ef8] <+5360>: bl     0x10010d8a4               ; agent_panes.Transcript.update at Transcript.zig:26
+test[0x1000f3efc] <+5364>: add    x1, sp, #0x70             ; ___lldb_unnamed_symbol46215 + 2427773365
+test[0x1000f3f00] <+5368>: mov    x0, x19
+test[0x1000f3f04] <+5372>: bl     0x1001064b8               ; agent_panes.Session.publish at Session.zig:257
+test[0x1000f3f08] <+5376>: add    x0, x19, #0x28            ; ___lldb_unnamed_symbol46215 + 2427699252
+test[0x1000f3f0c] <+5380>: add    x1, sp, #0x70             ; ___lldb_unnamed_symbol46215 + 2427773365
+test[0x1000f3f10] <+5384>: bl     0x1000933cc               ; Io.TypeErasedQueue.close at Io.zig:1918
+test[0x1000f3f14] <+5388>: add    sp, sp, #0x18, lsl #12    ; ___lldb_unnamed_symbol46215 + 2431877587, =0x18000 
+test[0x1000f3f18] <+5392>: add    sp, sp, #0xa70            ; ___lldb_unnamed_symbol46215 + 2430394835
+test[0x1000f3f1c] <+5396>: ldp    x29, x30, [sp, #0x50]
+test[0x1000f3f20] <+5400>: ldp    x20, x19, [sp, #0x40]
+test[0x1000f3f24] <+5404>: ldp    x22, x21, [sp, #0x30]
+test[0x1000f3f28] <+5408>: ldp    x24, x23, [sp, #0x20]
+test[0x1000f3f2c] <+5412>: ldp    x26, x25, [sp, #0x10]
+test[0x1000f3f30] <+5416>: ldp    x28, x27, [sp], #0x60
+test[0x1000f3f34] <+5420>: ret    

@@ -1,5 +1,7 @@
 //! Public entrypoint for telar-client.
 
+const core = @import("telar-core");
+
 pub const Action = @import("input/action.zig").Action;
 pub const ActionRoutingHandler = @import("application/input/ActionRoutingHandler.zig");
 pub const ActivateNotificationHandler = @import("application/notifications/ActivateNotificationHandler.zig");
@@ -423,7 +425,7 @@ pub const Route = @import("application/input/Route.zig");
 pub const RouterLimits = @import("input/RouterLimits.zig");
 pub const RuntimeTransportState = @import("connection/RuntimeTransportState.zig");
 pub const SavedLayout = @import("workspace/SavedLayout.zig");
-pub const Scheduler = @import("resources/Scheduler.zig");
+pub const Scheduler = core.DeadlineScheduler;
 pub const ScrollDirection = @import("input/action.zig").ScrollDirection;
 pub const SelectTabHandler = @import("application/tabs/SelectTabHandler.zig");
 pub const SelectWorkspaceHandler = @import("application/workspaces/SelectWorkspaceHandler.zig");
@@ -545,7 +547,7 @@ pub const max_title_bytes = @import("presentation/window_title.zig").max_title_b
 pub const min_command_timeout_ms = @import("bars/model.zig").min_command_timeout_ms;
 pub const min_interval_ms = @import("bars/model.zig").min_interval_ms;
 pub const minimum_marker_width = @import("attachments/markers.zig").minimum_marker_width;
-pub const monotonic = @import("resources/clock.zig").monotonic;
+pub const monotonic = core.monotonic;
 pub const notification_timers = @import("resources/notification_timers.zig");
 pub const pane_input = @import("application/input/pane_input.zig");
 pub const parseKey = @import("input/chord.zig").parseKey;
@@ -567,7 +569,7 @@ pub const tracked = @import("input/mouse_protocol.zig").tracked;
 pub const transition_duration_ns = @import("notifications/notifications.zig").transition_duration_ns;
 pub const truncateName = @import("workspace/workspace_list.zig").truncateName;
 pub const validateDefaultBindings = @import("config/default_bindings.zig").validate;
-pub const wait = @import("resources/deadline_timer.zig").wait;
+pub const wait = core.deadline_timer.wait;
 
 test {
     _ = @import("application/agents/agent_thread_tests.zig");
@@ -730,9 +732,7 @@ test {
     _ = @import("presentation/headless_tests.zig");
     _ = @import("presentation/lifecycle.zig");
     _ = @import("presentation/window_title.zig");
-    _ = @import("resources/clock.zig");
     _ = @import("resources/config_reload.zig");
-    _ = @import("resources/deadline_timer.zig");
     _ = @import("transport/local.zig");
     _ = @import("workspace/geometry.zig");
     _ = @import("workspace/layout_support.zig");

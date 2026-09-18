@@ -1,0 +1,14 @@
+probe located 175,191 in 800x512
+probe floated window 25684 for process 60079
+probe requested foreground for primary window 25684
+probe located 175,191 in 1000x700
+probe requested tabs 2/4
+probe located 175,191 in 1000x700
+probe requested tabs 3/4
+probe requested tabs 4/4
+probe located 175,191 in 1000x700
+probe requested foreground for primary window 25684
+probe located 175,191 in 1000x700
+probe located 175,191 in 1000x700
+probe setup complete: gui/tabs, 4 panes
+probe finished 0: 

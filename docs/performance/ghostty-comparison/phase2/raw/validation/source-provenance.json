@@ -1,0 +1,28 @@
+{
+  "source_base": "bf6e130c9ac81274c405847c6baf20dd3a242382",
+  "source_tree": "/tmp/tgb-diagnostic-source",
+  "patch_sha256": "21888097f2bb33ea6fe426bc89d946b45da644e3671e44666a0904211b06d71d",
+  "scope": "Complete measured-source diff, including phase-one changes, frozen GUI instrumentation and diagnostic-only test steps; excludes workspace concurrent GUI edits.",
+  "binary_builds": {
+    "baseline": {
+      "path": "/tmp/tgb-phase1-final-verified/bin/telar",
+      "sha256": "749f8679bf7ec0204ffc548ae799b227adeda7179824de440b01268b55369702"
+    },
+    "candidate": {
+      "path": "/tmp/tgb-phase2-stable/bin/telar",
+      "sha256": "f9dd3cf7a007f9cca462fb2b9050b9e07b08e5eaa4246f494c1fd1c186f6b822"
+    },
+    "candidate_diagnostic": {
+      "path": "/tmp/tgb-phase2-stable-diagnostic/bin/telar",
+      "sha256": "498082c53e45247dae92d004d334ebb7204672a942e3c2059fa355f95d71fdb2"
+    },
+    "workspace": {
+      "path": "/tmp/tgb-phase2-workspace/bin/telar",
+      "sha256": "d9b789eb7aa39b9aabbced4b2041b6725d07517291fff70f55062b75efffe8e4"
+    }
+  },
+  "post_build_source_change": "A comment documenting std.Io task allocations was added to the workspace Application.zig after measurements; executable behavior did not change. Documentation and raw evidence were added after the build.",
+  "production_source_differences_to_measured_tree": [
+    "src/backend/runtime/application/Application.zig"
+  ]
+}

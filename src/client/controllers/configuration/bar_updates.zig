@@ -1,9 +1,10 @@
 //! Owns configured bar ticks, bounded Lua evaluation and command workers.
 
+const core = @import("telar-core");
 const std = @import("std");
 const PositionType = @import("../../bars/model.zig").Position;
 const Client = @import("../../AttachedClient.zig");
-const monotonic_module = @import("../../resources/clock.zig").monotonic;
+const monotonic_module = core.monotonic;
 const BarUpdatesCompletion = @import("../../bars/BarUpdatesCompletion.zig");
 const CallbackRequest = @import("CallbackRequest.zig");
 const ApplicationConfigurationBarUpdateOutcome = @import("../../application/configuration/bar_update.zig").Outcome;

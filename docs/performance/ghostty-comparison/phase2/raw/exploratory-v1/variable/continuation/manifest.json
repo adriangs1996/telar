@@ -1,0 +1,34 @@
+{
+  "started_at": "2026-09-18T20:45:16+0200",
+  "command_line": [
+    "/tmp/tgb-phase2-variable-continue.py"
+  ],
+  "original_manifest_sha256": "bccfe248e4b4d6759c6def3046eddb979c1cb08573f104836b73798ff407c6d6",
+  "original_runner_sha256": "02719ae9691490afb5a71ba9b13d41c07b8e2ebca6daf9707b7c3168fff3d6ad",
+  "original_runs_sha256": "7d6056a7b15b426317e350e35deae4c2a51116ce890fa8c2d97228c7f33c3687",
+  "recovered_result_sha256": "1a39f70a280dec2a50cc278ece6d3eb0d7081153c7351864389732c94eb4cb96",
+  "runner_sha256": "108720bb7ac9e3377e28b61bc0bdb81b1b475eb156140c1002eacdfc2b008198",
+  "runner_diff_sha256": "accf79731ea6c19c1e78bbfd7f1dfde55c94c33722f3654aef80555685035512",
+  "harness_sha256": {
+    "gui_tui_latency.py": "203363f799b5914e0560a3bdaa516d4c21413e3f217ddd4c7c5aeb9588c34dbf",
+    "gui_tui_latency.m": "32ffe35aa14fb3bd0a895a1b7d3d72de952434e614e504c2776b5f00b0de8e86",
+    "gui_view.h": "bade68d5cdd63d722dabf6614ad1701a500cc1e67575a9298c15d7239be591b7",
+    "terminal_bench_fixture.py": "a308c1fe614ac3698111ada68a3c120d90281a569105d86dd03b5957db2d7ff0",
+    "gui_tui_marker.py": "b6063fecaa821c3917e0b91b269677e7ed0053ddf1fcb0df6f7e3bd6ae57a0c4",
+    "echo_latency.py": "295cd102afb4ea0ab82ed60cf28227b824c861367410af3226ab58a915691350",
+    "perf_e2e.py": "0a9d2627b6bccf31a23a926610a09db385d289999d8d297f470f29e0820d26fc",
+    "graphics_roundtrip.py": "bb778ea1cb874c13a8584218238fd7e67876ffe2656ca226b7ced2591f0b8bf6",
+    "load_latency.py": "2b67e67f135abf3692b6324d27ec5057b303afea7929ce20f51b1ede51642004",
+    "terminal_bench_report.py": "e40c18a430eeaff7c6603cedd5f4e72b85f0e4492f68245f422b1057f1f3e3c7"
+  },
+  "original_completed_runs": 12,
+  "recovered_context": {
+    "round": 1,
+    "case": "splits-load",
+    "version": "candidate",
+    "attempt": 0,
+    "directory": "1-splits-load-candidate"
+  },
+  "policy": "Retain every complete measured rate miss without retry. Preserve the original 5% tolerance and all raw latencies. Other failures abort.",
+  "load_note": "Requested rate is per producer. Observed rate misses remain in paired and pooled latency summaries; identical load is not claimed for those windows."
+}

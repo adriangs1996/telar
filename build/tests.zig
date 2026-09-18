@@ -121,6 +121,9 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         .{ .path = "src/core/ui/ui_tests.zig" },
         .{ .path = "src/core/select.zig" },
         .{ .path = "src/core/link.zig" },
+        .{ .path = "src/core/pacing/pace.zig" },
+        .{ .path = "src/core/time/deadline_timer.zig", .libc = true },
+        .{ .path = "src/core/time/clock.zig", .libc = true },
         // Only referenced through non-pub imports elsewhere, so their tests
         // never run unless they are their own suite roots.
         .{ .path = "src/core/graphics.zig" },

@@ -1,0 +1,1259 @@
+1/1249 backend.test_0...OK
+2/1249 agent_panes.HistoryOptions.test.agent history options survive the session reference without cloning...OK
+3/1249 runtime.application.AgentHistoryJobs.test.agent history readers enforce global and connection generation bounds...OK
+4/1249 runtime.application.AgentHistoryJobs.test.agent history shutdown releases an owned result whose completion was discarded...OK
+5/1249 agent.Agent.test.agent rejects an untracked proxy response...OK
+6/1249 agent.Agent.test.agent applies a tracked proxy lifecycle...OK
+7/1249 agent.Agent.test.agent applies semantic completion without changing its authority...OK
+8/1249 agent.Agent.test.agent rejects completion from a contradictory provider...OK
+9/1249 agent.Agent.test.a process-backed agent accepts exchanges with any provider family...OK
+10/1249 agent.Agent.test.semantic completion does not clear stronger blocked screen evidence...OK
+11/1249 agent.Agent.test.agent coalesces frequent proxy activity...OK
+12/1249 agent.Agent.test.new proxy work resumes an obscured agent...OK
+13/1249 agent.Agent.test.managed official state persists idle and stronger authority cannot be replaced by heuristics...OK
+14/1249 agent.description.test.capture distinguishes pasted newlines, cancellation, and submit across chunks...OK
+15/1249 agent.description.test.query normalization applies editing controls and validates UTF-8...OK
+16/1249 agent.description.test.title normalization accepts one bounded display line...OK
+17/1249 agent.description.test.description command succeeds, rejects invalid output, times out, and may be absent...OK
+18/1249 agent.EventLine.test.event lines keep one control-free UTF-8 line within the wire bound...OK
+19/1249 agent.evidence_support.test.proxy evidence derives confidence and expiry from phase and aggregate status...OK
+20/1249 agent.providers.claude.test_0...OK
+21/1249 agent.providers.codex.test_0...OK
+22/1249 agent.providers.pi.test_0...OK
+23/1249 agent.providers.providers.test.built-in agents own their capabilities and configured agents get the default...OK
+24/1249 agent.providers.providers.test_0...OK
+25/1249 agent.proxy_state.test.provider turn completion settles the last exchange as ready...OK
+26/1249 agent.proxy_state.test.provider turn completion closes an exact exchange for every proxy protocol...OK
+27/1249 agent.proxy_state.test.an untracked provider turn completion is ignored...OK
+28/1249 agent.proxy_state.test.provider turn completion is idempotent...OK
+29/1249 agent.proxy_state.test.transport events after provider turn completion cannot regress ready evidence...OK
+30/1249 agent.proxy_state.test.provider turn completion remains working while another exchange is active...OK
+31/1249 agent.proxy_state.test.new model work supersedes ready evidence...OK
+32/1249 agent.proxy_state.test.an older request start cannot supersede ready evidence...OK
+33/1249 agent.proxy_state.test.a late completion settles only its older exchange...OK
+34/1249 agent.proxy_state.test.model and transport completion require an exact HTTP2 stream...OK
+35/1249 agent.proxy_state.test.a partial request failure preserves working evidence...OK
+36/1249 agent.proxy_state.test.an HTTP2 connection failure preserves work on another connection...OK
+37/1249 agent.proxy_state.test.apply rejects duplicate and overflowing request starts...OK
+38/1249 agent.proxy_state.test.proxy state starts an exchange...OK
+39/1249 agent.proxy_state.test.proxy state rejects a duplicate exchange without changing its count...OK
+40/1249 agent.proxy_state.test.proxy state does not exceed its bounded exchange capacity...OK
+41/1249 agent.proxy_state.test.proxy state settles only the specified exchange...OK
+42/1249 agent.proxy_state.test.proxy state HTTP2 failure sentinel settles only its connection streams...OK
+43/1249 agent.proxy_state.test.proxy state clear removes evidence and every active exchange...OK
+44/1249 agent.repository_support.test.an empty repository has no matches removals or iteration results...OK
+45/1249 agent.repository_support.test.insert stores and find returns the same aggregate...OK
+46/1249 agent.repository_support.test.pane generations are independent repository identities...OK
+47/1249 agent.repository_support.test.insert rejects duplicate pane generations without consuming capacity...OK
+48/1249 agent.repository_support.test.insert rejects overflow without losing stored aggregates...OK
+49/1249 agent.repository_support.test.remove deletes only the exact pane generation and permits slot reuse...OK
+50/1249 agent.repository_support.test.mutable iteration can remove only its current aggregate...OK
+51/1249 agent.restored_titles.test.restored titles wait for their exact pane generation and are consumed once...OK
+52/1249 agent.restored_titles.test.restored titles refuse to grow past the agent record bound...OK
+53/1249 agent.restored_titles.test.session titles accept only durable sources and printable text...OK
+54/1249 agent.session_file.test.watches replace a changed path, keep progress for the same one and pick the stalest due...OK
+55/1249 agent.session_file.test.a watch remembers the last name it handed over...OK
+56/1249 agent.session_readers.session_readers.test.transcript probe seeds at the end, then reads only appended lines and resumes after a rewrite...OK
+57/1249 agent.session_readers.session_readers.test.a transcript that does not exist yet is read whole once it appears...OK
+58/1249 agent.session_readers.session_readers.test.codex state probe reads the thread name, a NULL name as empty and nothing for unknown threads...OK
+59/1249 agent.tracker_support.test.display context changes advance the public snapshot revision...OK
+60/1249 agent.tracker_support.test.an agent without evidence does not consume a projection sequence...OK
+61/1249 agent.tracker_support.test.tracker rejects every observation that would exceed repository capacity...OK
+62/1249 agent.tracker_support.test.only a confirmed prompt settles model work...OK
+63/1249 agent.tracker_support.test.explicit Codex prompt settles working without repetition...OK
+64/1249 agent.tracker_support.test.Codex Stop stays working until a newer input prompt confirms completion...OK
+65/1249 agent.tracker_support.test.Codex active tool reports cannot be settled by a repainted composer...OK
+66/1249 agent.tracker_support.test.a continuing Codex hook cancels pending settlement and only the final Stop can complete...OK
+67/1249 agent.tracker_support.test.Codex evidence expiration cannot turn an old prompt into a completion...OK
+68/1249 agent.tracker_support.test.new Codex activity supersedes an older SessionStart or Interrupt ready report...OK
+69/1249 agent.tracker_support.test.a Codex model response never completes the agent turn without a new composer...OK
+70/1249 agent.tracker_support.test.Codex settlement orders events within one millisecond by the monotonic clock...OK
+71/1249 agent.tracker_support.test.an older Codex prompt cannot overrule current lifecycle work...OK
+72/1249 agent.tracker_support.test.agent branding alone does not settle working...OK
+73/1249 agent.tracker_support.test.screen text cannot register an agent without independent evidence...OK
+74/1249 agent.tracker_support.test.foreground process establishes agent identity without screen branding...OK
+75/1249 agent.tracker_support.test.first working turn starts one generated session title...OK
+76/1249 agent.tracker_support.test.submitted managed prompt queues once even when working is coalesced into ready...OK
+77/1249 agent.tracker_support.test.submitted managed prompt preserves ready manual and reported titles...OK
+78/1249 agent.tracker_support.test.submitted managed prompt shares the bounded description queue...OK
+79/1249 agent.tracker_support.test.manual title wins over a late generated result...OK
+80/1249 agent.tracker_support.test.description backpressure fails the ninth queued request without retry...OK
+81/1249 agent.tracker_support.test.process identity rejects contradictory screen branding...OK
+82/1249 agent.tracker_support.test.foreground process exit removes all evidence for that session...OK
+83/1249 agent.tracker_support.test.new foreground process replaces prior session evidence...OK
+84/1249 agent.tracker_support.test.confirmed Claude prompt refreshes branded identity...OK
+85/1249 agent.tracker_support.test.network work resumes a visibly blocked agent...OK
+86/1249 agent.tracker_support.test.new network work supersedes an older ready prompt...OK
+87/1249 agent.tracker_support.test.unmatched proxy responses cannot create agent state...OK
+88/1249 agent.tracker_support.test.a contradictory provider cannot complete another agent's exchange...OK
+89/1249 agent.tracker_support.test.transport completion without provider turn completion remains working...OK
+90/1249 agent.tracker_support.test.provider turn completion projects ready and ignores later transport completion...OK
+91/1249 agent.tracker_support.test.all concurrent model exchanges must complete before ready...OK
+92/1249 agent.tracker_support.test.new model work supersedes a completed response...OK
+93/1249 agent.tracker_support.test.expired agent evidence is removed...OK
+94/1249 agent.tracker_support.test.expiration removes every adjacent stale aggregate...OK
+95/1249 agent.tracker_support.test.a bare shell prompt is not Claude identity...OK
+96/1249 agent.tracker_support.test.completed HTTP2 streams do not settle the agent turn...OK
+97/1249 agent.tracker_support.test.sequential model requests stay working until a confirmed prompt...OK
+98/1249 agent.tracker_support.test.HTTP2 connection failure settles all of its active streams...OK
+99/1249 agent.tracker_support.test.session references attach to the exact generation and replace only on change...OK
+100/1249 agent.tracker_support.test.a restored title waits for the resumed agent and skips title generation...OK
+101/1249 agent.tracker_support.test.a pending resume survives observation ticks without inventing an active agent...OK
+102/1249 agent.tracker_support.test.a pending resume is discarded for another provider or a different reported session...OK
+103/1249 agent.tracker_support.test.a proxy provider guess cannot authorize resume for a reported session...OK
+104/1249 agent.tracker_support.test.an agent title outranks generated titles, never clears a manual one and is durable...OK
+105/1249 agent.tracker_support.test.a reported session file is watched, probed once at a time and its names become agent titles...OK
+106/1249 agent.tracker_support.test.a restored title is dropped with its pane and never reaches another generation...OK
+107/1249 agent.tracker_support.test.lifecycle reports outrank screen and proxy evidence until they expire...OK
+108/1249 agent.tracker_support.test.Pi report renewal keeps a long tool working and loss cannot announce completion...OK
+109/1249 agent.tracker_support.test.Pi model completion followed by local tools is not an agent completion...OK
+110/1249 agent.tracker_support.test.a blocked report names its reason and event and the proxy names permission without one...OK
+111/1249 agent.tracker_support.test.the status age follows the last status change and never advances the revision...OK
+112/1249 agent.tracker_support.test.a changed event line advances the revision like a label and clears with its report...OK
+113/1249 agent.tracker_support.test.managed conversation activity republishes sidebar events without restarting the status age...OK
+114/1249 agent.tracker_support.test.managed sidebar activity excludes old turns and child output and owns bounded UTF8...OK
+115/1249 agent.transcript.test.scan keeps the last name for the session and leaves a partial line...OK
+116/1249 agent.transcript.test.scan reports a cleared name as an empty title and bounds long names...OK
+117/1249 agent.types.test.agent policy interprets neutral wire dialects without importing a proxy adapter...OK
+118/1249 engine.rpc.test.prompt encoding escapes the message and ends the record with LF...OK
+119/1249 engine.rpc.test.records classify replies and settlement, and skip everything else...OK
+120/1249 engine.service_support.test.the actor answers prompts over one child and reuses it...OK
+121/1249 engine.service_support.test.an idle check kills a child past the idle interval...OK
+122/1249 engine.service_support.test.a broken child is discarded and a bad reply keeps it...OK
+123/1249 engine.service_support.test.the ring refuses requests beyond its capacity and the loop drains it...OK
+124/1249 engine.session_support.test.a session answers a prompt with the settled assistant text...OK
+125/1249 engine.session_support.test.protocol failures map to a status...OK
+126/1249 engine.session_support.test.oversized records are dropped and an oversized reply is invalid...OK
+127/1249 engine.session_support.test.a session without a command cannot open...OK
+128/1249 engine.types.test.a prompt is bounded on both ends...OK
+129/1249 history.agent_detection.test.a status line above the idle prompt keeps Codex working...OK
+130/1249 history.agent_detection.test.the idle prompt alone marks Codex ready...OK
+131/1249 history.agent_detection.test.an erased status line no longer counts...OK
+132/1249 history.agent_detection.test.permission prompts outrank work and the prompt...OK
+133/1249 history.agent_detection.test.Claude branding confirms identity without claiming a prompt...OK
+134/1249 history.agent_detection.test.soft-wrapped rows join without a separator...OK
+135/1249 history.agent_detection.test.hard line breaks separate rows and blank cells become spaces...OK
+136/1249 history.agent_detection.test.the bottom rows survive a screen larger than the capacity...OK
+137/1249 history.channel_support.test.accepted requests transfer to the worker and release their queue depth...OK
+138/1249 history.channel_support.test.a full request queue refuses work without exceeding its bound...OK
+139/1249 history.channel_support.test.responses cross the channel without changing their correlation...OK
+140/1249 history.codex_screen.test.Codex status clocks support remapped shortcuts and disabled animations...OK
+141/1249 history.codex_screen.test.Codex composer drafts prove readiness without claiming identity...OK
+142/1249 history.escape.test.the input scanner tracks plain typed text with backspaces applied...OK
+143/1249 history.escape.test.the OSC scanner produces identical events for any byte split...OK
+144/1249 history.escape.test.the Kitty framing counter counts identically for any byte split...OK
+145/1249 history.escape.test.the input scanner classifies identically for any byte split...OK
+146/1249 history.escape.test.Kitty framing counter survives splits and ignores other APCs...OK
+147/1249 history.escape.test.UTF-8 continuation bytes do not desynchronize the Kitty framing counter...OK
+148/1249 history.history_tests.test_0...OK
+149/1249 history.metrics.test.queue counters preserve depth high-water and drop semantics...OK
+150/1249 history.metrics.test.persistence counters retain totals failures and maximum latency...OK
+151/1249 history.model.test.session titles validate text and source authority before persistence...OK
+152/1249 history.model.test.history queries own request text and scope bytes...OK
+153/1249 history.model.test.history query validation rejects values that cannot enter the worker...OK
+154/1249 history.observer_support.test.input and output are observed in enqueue order...OK
+155/1249 history.observer_support.test.overflow marks the observer for a counted reset...OK
+156/1249 history.observer_support.test.Claude readiness comes from the prompt at the visible cursor...OK
+157/1249 history.observer_support.test.a raw Claude prompt with a hidden cursor is not ready...OK
+158/1249 history.observer_support.test.Claude software cursor confirms readiness while the terminal cursor is hidden...OK
+159/1249 history.observer_support.test.an inverse status row does not revive a stale Claude prompt...OK
+160/1249 history.observer_support.test.Codex transcript quotes do not keep the idle composer working or blocked...OK
+161/1249 history.observer_support.test.Codex synchronized repaint never publishes its intermediate idle prompt...OK
+162/1249 history.observer_support.test.Codex repaints preserve the PTY timestamp and reconsider an unchanged ready screen...OK
+163/1249 history.observer_support.test.every byte boundary of a Codex synchronized redraw preserves working until completion...OK
+164/1249 history.observer_support.test.Codex transcript placeholders without a live composer never prove readiness...OK
+165/1249 history.observer_support.test.observation loss cannot manufacture an idle Codex screen from a partial repaint...OK
+166/1249 history.osc.test.tracks command lifecycle across chunk boundaries...OK
+167/1249 history.osc.test.updates cwd from OSC 7 and reports interrupted commands...OK
+168/1249 history.osc.test.an oversized OSC does not prevent later markers...OK
+169/1249 history.persistence.sqlite.test.persists sessions and filters command history...OK
+170/1249 history.persistence.sqlite.test.author filters partition query results...OK
+171/1249 history.persistence.sqlite.test.agent command synthesis persists provenance and deduplicates tool calls...OK
+172/1249 history.persistence.sqlite.test.opening a version four database migrates command provenance to version five...OK
+173/1249 history.persistence.sqlite.test.delete and prune remove rows and keep the FTS index consistent...OK
+174/1249 history.persistence.sqlite.test.command output rows round trip through the store...OK
+175/1249 history.persistence.sqlite.test.fuzzy matching ranks subsequences and collapses duplicates...OK
+176/1249 history.prompt_scan.test_0...OK
+177/1249 history.query_result.test.result accumulation releases rejected entries and survives allocation failures...OK
+178/1249 history.request_factory.test.owned request construction releases every partial allocation failure...OK
+179/1249 history.request_factory.test.a command request owns every byte borrowed from the terminal...OK
+180/1249 history.sequence_support.test.concurrent history producers reserve disjoint sequences...OK
+181/1249 history.sequence_support.test.history sequence exhaustion never reuses an identity...OK
+182/1249 history.service_support.test.service configuration controls recording and output capture...OK
+183/1249 history.service_support.test.database open degradation remains visible through the service facade...OK
+184/1249 history.service_support.test.agent recording applies secret filtering by default but keeps leading spaces...OK
+185/1249 history.terminal.test.bracketed paste newlines do not submit...OK
+186/1249 history.terminal.test.bracketed paste markers survive chunk boundaries...OK
+187/1249 history.terminal.test.control-c cancels an edit...OK
+188/1249 history.terminal.test.UTF-8 truncation stops on a codepoint boundary...OK
+189/1249 history.terminal.test.captures the rendered line even when the edit cursor is not at its end...OK
+190/1249 history.terminal.test.excludes an unchanged right prompt from the submitted command...OK
+191/1249 history.terminal.test.a captured command is bounded in bytes while resident...OK
+192/1249 history.terminal.test.Kitty graphics commands do not enter shell history...OK
+193/1249 history.terminal.test.output capture keeps a bounded tail favoring the newest bytes...OK
+194/1249 history.terminal.test.output capture stays disabled without the opt-in...OK
+195/1249 history.terminal.test.type-ahead echoed by the kernel is re-anchored at the line editor's re-echo...OK
+196/1249 history.terminal.test.type-ahead is re-anchored when the prompt and the re-echo arrive together...OK
+197/1249 history.terminal.test.type-ahead with no echo is re-anchored once a prompt is painted...OK
+198/1249 history.terminal.test.a clear-screen while editing is re-anchored at the repainted prompt...OK
+199/1249 history.terminal.test.a prompt repainted below asynchronous output is re-anchored...OK
+200/1249 history.terminal.test.an erased anchor row without a repainted prompt captures nothing...OK
+201/1249 history.terminal.test.alternate screen input cannot move primary history pins before resize...OK
+202/1249 history.terminal.test.alternate output cancels an incomplete edit without rebasing to another page list...OK
+203/1249 history.terminal.test.history pins belong to primary even when initialized or destroyed in alternate...OK
+204/1249 history.terminal.test.alternate screen cannot become the end of a submitted shell selection...OK
+205/1249 history.terminal.test.running shell command survives input and output on alternate screen...OK
+206/1249 history.worker_support.test.query replacement stops at writes and preserves clients, pages and CLI replies...OK
+207/1249 history.worker_support.test.database open degradation is explicit...OK
+208/1249 history.worker_support.test.sqlite byte sampling distinguishes memory and disk databases...OK
+209/1249 history.worker_support.test.import batches remain idempotent at the worker storage boundary...OK
+210/1249 media.media.test_0...OK
+211/1249 media.media.test.file frames parse like shared ones and are never handed to the emulator...OK
+212/1249 media.media.test.answered file queries are removed from what the emulator parses...OK
+213/1249 media.media.test.a sink that loads shared frames itself receives the parsed frame instead of bytes...OK
+214/1249 media.media.test.shared frames with crop or offset keys are left to the emulator parser...OK
+215/1249 media.media.test.atomic shared-memory frames are latest-wins per placement...OK
+216/1249 media.media.test.shared frame folding falls back to the newest available resource...OK
+217/1249 media.media.test.unavailable shared frames cannot delete the current image...OK
+218/1249 media.media.test.media terminal preserves cursor-relative KGP placement...OK
+219/1249 media.media.test.media terminal loads KGP pixels from POSIX shared memory...OK
+220/1249 media.media.test.overflow replaces obsolete media and requests a reset...OK
+221/1249 media.media.test.adjacent PTY reads use the byte bound instead of the event bound...OK
+222/1249 media.media.test.output coalescing preserves resize order...OK
+223/1249 media.media.test.graphics terminal answers KGP queries and rejects unsupported payloads...OK
+224/1249 media.png.test.PNG decoder releases every partial allocation...OK
+225/1249 media.png.test.PNG decoder rejects malformed and truncated input...OK
+226/1249 media.png.test.PNG decoder normalizes RGB and grayscale and preserves straight alpha...OK
+227/1249 media.png.test.PNG decoder charges workspace and rejects oversized pixels before allocation...OK
+228/1249 media.png_test.test.PNG KGP preserves chunk state across every PTY split and keeps cursor policy...OK
+229/1249 media.png_test.test.PNG KGP accepts Pi's 4096-character chunks and quiet anonymous placements...OK
+230/1249 media.png_test.test.PNG queries validate without storing and malformed uploads recover...OK
+231/1249 media.png_test.test.PNG decoded pixels obey the screen quota...OK
+232/1249 media.shared_transfer.test.child file metadata rejects undersized files, directories, symlinks and missing paths...OK
+233/1249 media.shared_transfer.test.child shared memory validates size before mapping and unlinking...OK
+234/1249 media.shared_transfer.test.a newer generation replaces the parked object of its image...OK
+235/1249 media.shared_transfer.test.parking is bounded and releases what the emulator dropped...OK
+236/1249 pane.blit.test.the attribute word crosses as a bitcast, so its layout must match...OK
+237/1249 pane.blit.test.text lands in the cells the emulator put it in...OK
+238/1249 pane.blit.test.a wide character owns two columns...OK
+239/1249 pane.blit.test.a grapheme cluster stays one cell...OK
+240/1249 pane.blit.test.attributes survive the crossing...OK
+241/1249 pane.blit.test.unmodified colours defer to the outer terminal theme...OK
+242/1249 pane.blit.test.host query defaults do not turn semantic cells into opaque RGB backgrounds...OK
+243/1249 pane.blit.test.OSC default colour overrides stay inside the pane...OK
+244/1249 pane.blit.test.default colours refresh across reverse mode and OSC changes including padding...OK
+245/1249 pane.blit.test.palette colours are resolved with the pane's own palette...OK
+246/1249 pane.blit.test.clean rows are skipped and the caller can override that...OK
+247/1249 pane.blit.test.only the rows that changed are copied...OK
+248/1249 pane.blit.test.a pane smaller than its rectangle leaves nothing stale behind...OK
+249/1249 pane.blit.test.the cursor inverts the cell it sits on rather than hiding it...OK
+250/1249 pane.blit.test.an unfocused pane draws no cursor...OK
+251/1249 pane.blit.test.a pane wider than its rectangle is clipped, not wrapped...OK
+252/1249 pane.blit.test.a steady frame allocates nothing...OK
+253/1249 pane.blit.test.a selected pane copies the agent's line, not the wrapped one...OK
+254/1249 pane.blit.test.a real line break is kept...OK
+255/1249 pane.blit.test.highlighting a selection does not disturb the characters...OK
+256/1249 pane.blit.test.dragging a selection repaints rows the emulator calls clean...OK
+257/1249 pane.blit.test.a selection outside the pane is refused rather than guessed at...OK
+258/1249 pane.damage.test.damage limits patch generation to dirty rows...OK
+259/1249 pane.damage.test.damage from separate rows accumulates without scanning the gap...OK
+260/1249 pane.damage.test.adjacent damage across rows stays one span...OK
+261/1249 pane.damage.test.short unchanged gaps share a cheaper span...OK
+262/1249 pane.damage.test.an expensive gap keeps separate spans...OK
+263/1249 pane.damage.test.too many damaged runs request a snapshot...OK
+264/1249 pane.pane_namespace.test.pane color defaults answer fragmented OSC queries and preserve overrides...OK
+265/1249 pane.pane_namespace.test.pane frames follow VT cursor style blink and visibility across every read boundary...OK
+266/1249 pane.pane_namespace.test.agent reports capture runtime geometry without accessing the observation terminal...OK
+267/1249 pane.pane_namespace.test.cwd state is bounded and advances only for a new valid path...OK
+268/1249 pane.pane_namespace.test.pane store rejects an event from another generation...OK
+269/1249 pane.pane_namespace.test.graphics allocator reserves pane and global bytes before allocation...OK
+270/1249 pane.pane_namespace.test.frozen graphics transfers use the same reservation as VT media...OK
+271/1249 pane.pane_namespace.test.the slot index survives collisions, removals, and slot reuse...OK
+272/1249 pane.pane_namespace.test.pane launch state settles exactly once...OK
+273/1249 pane.pane_namespace.test.PaneStore discovers only committed launches...OK
+274/1249 pane.pane_namespace.test.pane creation releases every partial allocation...OK
+275/1249 pane.pane_namespace.test.pane keeps launch cwd separate from workspace path...OK
+276/1249 pane.pane_namespace.test.pane retains OSC 9 progress without painting it into terminal cells...OK
+277/1249 pane.pane_namespace.test.shell regaining the terminal expires the job's progress report...OK
+278/1249 pane.pane_namespace.test.pane close requests shut down the PTY exactly once...OK
+279/1249 pane.pane_namespace.test.a pane is destroyable only when no actor can still borrow it...OK
+280/1249 pane.pane_namespace.test.a child's synchronized-output block holds frames until it closes or expires...OK
+281/1249 pane.pane_namespace.test.inline output admits only a bounded simple row run without allocation...OK
+282/1249 pane.pane_namespace.test.inline output never completes a partial control or UTF-8 sequence...OK
+283/1249 pane.pane_namespace.test.inline output defers wrapping and complex terminal state to its actor...OK
+284/1249 pane.pane_namespace.test.pane input modes expose child focus reporting...OK
+285/1249 pane.pane_namespace.test.pane pointer shapes follow every VT shape across every OSC read boundary...[stream] (warn): unknown cursor shape: not-a-cursor
+OK
+286/1249 pane.pane_namespace.test.pane keyboard modes follow VT negotiation and screen-local stacks...OK
+287/1249 pane.pane_namespace.test.a failed resize cannot split the screen from its damage flags...OK
+288/1249 pane.pane_namespace.test.the PTY response queue bounds depth and entry size...OK
+289/1249 pane.pane_namespace.test.the pane input queue reports whole-message loss...OK
+290/1249 pane.pane_namespace.test.launch records keep restorable commands and reject the rest...OK
+291/1249 pane.pane_namespace.test.restored pane keys are reserved in order and counters only advance...OK
+292/1249 persistence.checkpoint.test.checkpoint records round trip through the file encoding...OK
+293/1249 persistence.checkpoint.test.checkpoint labels distinguish automatic tabs from explicit former defaults...OK
+294/1249 persistence.checkpoint.test.version 2 checkpoints retain former default labels as explicit...OK
+295/1249 persistence.checkpoint.test.pane titles must be printable and come from a durable source...OK
+296/1249 persistence.checkpoint.test.a version 1 checkpoint still reads, with no pane title...OK
+297/1249 persistence.checkpoint.test.corrupt, truncated and foreign checkpoints are rejected...OK
+298/1249 persistence.checkpoint.test.agent pane checkpoints round trip empty and known conversations without executable arguments...OK
+299/1249 persistence.checkpoint.test.agent pane checkpoint rejects argv unsupported providers and unsafe references...OK
+300/1249 persistence.checkpoint.test.version 3 pane records restore as terminals without a kind byte...OK
+301/1249 plugins.host_support.test.shipped agent command tap accumulates Anthropic and OpenAI arguments...OK
+302/1249 plugins.host_support.test.shipped agent command tap maps non-stream shell commands and rejects unusable bodies...OK
+303/1249 plugins.protocol.test.effect protocol round trips all effect variants and rejects trailing bytes...OK
+304/1249 plugins.protocol.test.worker error protocol round trips and rejects trailing bytes...OK
+305/1249 plugins.service_support.test.effect authorization checks exact identity, declaration and grant...OK
+306/1249 plugins.service_support.test.worker queue drops the oldest frame when full...OK
+307/1249 plugins.service_support.test.five restarts in one window disable a worker...OK
+308/1249 process.cwd.test.reads the current process working directory...OK
+309/1249 process.cwd.test.accepts exactly enough space for the working directory and rejects every shorter buffer...OK
+310/1249 process.process.test.process file reads are bounded and missing files return null...OK
+311/1249 process.process.test.identifies direct agent executables...OK
+312/1249 process.process.test.does not infer an agent from arbitrary runtime arguments...OK
+313/1249 process.process.test.process acquisition is bounded and cached...OK
+314/1249 process.process.test.foreground names are bounded application labels...OK
+315/1249 process.process.test.direct pane-root agents retain provider evidence instead of becoming shells...OK
+316/1249 process.process.test.pane-root acquisition can recognize an agent after exec in the same process group...OK
+317/1249 proxy.ca.test.minted leaves verify against the local authority...OK
+318/1249 proxy.ca.test.authority files and derived bundle are owner-only...OK
+319/1249 proxy.ca.test.system authorities have a bounded 30-day lifetime...OK
+320/1249 proxy.capture.buffer_support.test.buffer grows within its bound and scrubs owned storage...OK
+321/1249 proxy.capture.buffer_support.test.quota reservations remain bounded and release exactly once...OK
+322/1249 proxy.capture.buffer_support.test.capture config rejects impossible bounds...OK
+323/1249 proxy.capture.capture_tests.test_0...OK
+324/1249 proxy.capture.capture_tests.test.disabled capture does not allocate or reserve quota...OK
+325/1249 proxy.capture.decode.test.gzip brotli and zstd decode within a shared output cap...OK
+326/1249 proxy.capture.decode.test.unknown and malformed encodings preserve bounded wire bytes...OK
+327/1249 proxy.capture.queue.test.queue saturation drops and frees the rejected half...OK
+328/1249 proxy.capture.queue.test.delivery rejects a credential revoked after publication...OK
+329/1249 proxy.capture.table.test.joiner pairs independently delivered request and response halves...OK
+330/1249 proxy.capture.table.test.joiner returns a partial exchange only after its deadline...OK
+331/1249 proxy.connect_authentication.test.missing authorization is rejected before credential or target lookup...OK
+332/1249 proxy.connect_authentication.test.a malformed Basic value is an invalid authorization...OK
+333/1249 proxy.connect_authentication.test.a parsed credential must still be live...OK
+334/1249 proxy.connect_authentication.test.target validity is hidden until credential authentication succeeds...OK
+335/1249 proxy.connect_authentication.test.authenticated malformed targets map to a bad request without an auth metric...OK
+336/1249 proxy.connect_authentication.test.a live credential and valid CONNECT target produce authenticated input...OK
+337/1249 proxy.connection_admission.test.connection slots never expose a count above their bound...OK
+338/1249 proxy.connection_admission.test.a zero connection limit rejects and counts every attempt...OK
+339/1249 proxy.connection_admission.test.listener closure stops and cancels the worker group...OK
+340/1249 proxy.connection_admission.test.listener cancellation propagates after canceling workers...OK
+341/1249 proxy.connection_admission.test.transient accept failure retries without touching admission state...OK
+342/1249 proxy.connection_admission.test.capacity rejection closes the stream without starting a worker...OK
+343/1249 proxy.connection_admission.test.worker scheduling failure releases the slot before closing the stream...OK
+344/1249 proxy.credential_registry.test.register, lookup, exact revocation, and duplicate rejection...OK
+345/1249 proxy.credential_registry.test.pane revocation removes every credential for only that generation...OK
+346/1249 proxy.credential_registry.test.pane identity and generation participate in credential identity...OK
+347/1249 proxy.credential_registry.test.registry rejects insertion beyond its fixed capacity...OK
+348/1249 proxy.h2.connection.test.response completion cancels the unfinished request relay before settlement...OK
+349/1249 proxy.h2.connection.test.both decode failures are recorded before connection settlement...OK
+350/1249 proxy.h2.framing.test.fragmented headers, empty frames and payload offsets preserve frame boundaries...OK
+351/1249 proxy.h2.h2.test.relay options map direction and peer settings...OK
+352/1249 proxy.h2.h2.test.HTTP2 connection composition relays both directions before settlement...OK
+353/1249 proxy.h2.h2.test_0...OK
+354/1249 proxy.h2.relay.test.HTTP2 observer exposes request DATA across every two-chunk split...OK
+355/1249 proxy.h2.relay.test.HTTP2 observer finishes a bodyless request across every two-chunk split...OK
+356/1249 proxy.h2.relay.test.HTTP2 observer exposes DATA payload across every two-chunk split...OK
+357/1249 proxy.h2.relay.test.HTTP2 observer attaches the decoded final status to response DATA...OK
+358/1249 proxy.h2.relay.test.HTTP2 observer excludes the pad length and padding from DATA payload...OK
+359/1249 proxy.h2.relay.test.HTTP2 observer drops invalid DATA padding from observation only...OK
+360/1249 proxy.h2.relay.test.HPACK status turns a completed HTTP2 error stream into failure...OK
+361/1249 proxy.h2.relay.test.request trailers do not emit a second request start...OK
+362/1249 proxy.h2.relay.test.cross-dialect HTTP2 requests are classified as auxiliary...OK
+363/1249 proxy.h2.relay.test.HPACK dynamic table survives padded response blocks...OK
+364/1249 proxy.h2.relay.test.HTTP2 transcoder applies a header transform across arbitrary input splits...OK
+365/1249 proxy.h2.relay.test.HTTP2 transcoder preserves continuation padding priority and HPACK state...OK
+366/1249 proxy.h2.relay.test.HTTP2 transcoder fragments encoded heads to the peer frame limit...OK
+367/1249 proxy.h2.relay.test.HTTP2 SETTINGS update the opposite encoder bounds without changing wire bytes...OK
+368/1249 proxy.h2.relay.test.HTTP2 transform mode carries SSE response metadata into DATA events...OK
+369/1249 proxy.h2.relay.test.HTTP2 transform mode exposes unpadded response DATA without changing wire bytes...OK
+370/1249 proxy.h2.relay.test.HTTP2 transform mode exposes request DATA without changing wire bytes...OK
+371/1249 proxy.h2.relay.test.HTTP2 transform mode excludes DATA padding under single-byte reads...OK
+372/1249 proxy.h2.relay.test.HTTP2 transform mode relays DATA and control frames byte for byte...OK
+373/1249 proxy.h2.relay.test.HTTP2 invalid transform effects preserve the original semantic head...OK
+374/1249 proxy.h2.relay.test.HTTP2 PUSH_PROMISE exposes the promised stream to transformers...OK
+375/1249 proxy.h2.streams.test.request tracking is idempotent bounded and reusable...OK
+376/1249 proxy.h2.streams.test.response tracking updates metadata and releases capacity...OK
+377/1249 proxy.h2.streams.test.response capacity exhaustion does not replace active streams...OK
+378/1249 proxy.http.body.test.chunk lines use one write each and preserve single-byte input boundaries...OK
+379/1249 proxy.http.body.test.an incomplete chunk line forwards its prefix once...OK
+380/1249 proxy.http.body.test.a body without framing consumes and forwards nothing...OK
+381/1249 proxy.http.body.test.a fixed body stops at its declared length across short reads...OK
+382/1249 proxy.http.body.test.an incomplete fixed body reports failure after forwarding its prefix...OK
+383/1249 proxy.http.body.test.a close-delimited body relays until EOF...OK
+384/1249 proxy.http.body.test.a chunked body preserves chunk framing and trailers...OK
+385/1249 proxy.http.body.test.an invalid chunk size reports failure after forwarding its line...OK
+386/1249 proxy.http.body.test.an oversized chunk line reports failure at its bound...OK
+387/1249 proxy.http.body.test.an incomplete trailer block reports failure...OK
+388/1249 proxy.http.connection.test.exchange state distinguishes completed and early responses...OK
+389/1249 proxy.http.connection.test.exchange state rejects either failed relay...OK
+390/1249 proxy.http.connection.test.bodyless exchange never schedules a body relay...OK
+391/1249 proxy.http.connection.test.an early response cancels an unfinished request body...OK
+392/1249 proxy.http.connection.test.a failed response cancels an unfinished request body...OK
+393/1249 proxy.http.connection.test.a failed request body cancels an unfinished response...OK
+394/1249 proxy.http.connection.test.input EOF ends an idle HTTP connection without an observation...OK
+395/1249 proxy.http.connection.test.a keep-alive response permits the next exchange...OK
+396/1249 proxy.http.connection.test.an exchange failure publishes exactly one failure and stops...OK
+397/1249 proxy.http.connection.test.an early response is published and forces connection close...OK
+398/1249 proxy.http.connection.test.a complete upgrade publishes before transferring the connection...OK
+399/1249 proxy.http.connection.test.an informational result violates the exchange contract...OK
+400/1249 proxy.http.head_support.test.head reader stops before the first body byte...OK
+401/1249 proxy.http.head_support.test.head reader rejects EOF before the blank line...OK
+402/1249 proxy.http.head_support.test.head reader rejects a head that fills its bound...OK
+403/1249 proxy.http.head_support.test.analyze recognizes fixed and chunked body framing...OK
+404/1249 proxy.http.head_support.test.analyze accepts repeated identical content lengths...OK
+405/1249 proxy.http.head_support.test.analyze rejects ambiguous body framing...OK
+406/1249 proxy.http.head_support.test.responses without an explicit length close the connection...OK
+407/1249 proxy.http.head_support.test.SSE response metadata accepts identity payloads across HTTP framing modes...OK
+408/1249 proxy.http.head_support.test.SSE response metadata rejects ambiguous non-SSE and encoded payloads...OK
+409/1249 proxy.http.head_support.test.request content type never assigns response SSE metadata...OK
+410/1249 proxy.http.head_support.test.bodyless responses ignore declared framing...OK
+411/1249 proxy.http.head_support.test.status and connection tokens are case insensitive...OK
+412/1249 proxy.http.head_support.test.response status must be exactly three digits in the HTTP range...OK
+413/1249 proxy.http.head_support.test.request classification uses the dialect that owns the connection...OK
+414/1249 proxy.http.head_support.test.a HEAD request is identified without assigning response metadata...OK
+415/1249 proxy.http.head_support.test.framing reports whether a concurrent body relay is needed...OK
+416/1249 proxy.http.http.test.request head is forwarded before its body is consumed...OK
+417/1249 proxy.http.http.test.transformed head selection is the only head written...OK
+418/1249 proxy.http.http.test.a preserved transformation forwards the original head exactly...OK
+419/1249 proxy.http.http.test.informational response is delimited before the final response...OK
+420/1249 proxy.http.http.test.HTTP connection composition relays keep-alive exchanges and publishes final results...OK
+421/1249 proxy.http.http.test_0...OK
+422/1249 proxy.http.transform.test.a safe header transformation produces a replacement...OK
+423/1249 proxy.http.transform.test.a transformer without effects preserves the original...OK
+424/1249 proxy.http.transform.test.a transformation cannot change body framing...OK
+425/1249 proxy.http.transform.test.invalid transformed request lines preserve the original...OK
+426/1249 proxy.http.transform.test.an encoded head that exceeds the output bound is preserved...OK
+427/1249 proxy.http.transform.test.request classification remains tied to the original route...OK
+428/1249 proxy.http.types.test.body plans report whether payload relay is required...OK
+429/1249 proxy.identity.test.proxy basic authentication round trips pane identity...OK
+430/1249 proxy.identity.test.duplicate proxy authorization headers are rejected...OK
+431/1249 proxy.interception_policy.test.configured hosts form one canonical interception allowlist...OK
+432/1249 proxy.interception_policy.test.suffix and global wildcards authorize only their intended hosts...OK
+433/1249 proxy.interception_policy.test.empty policy and partial host matches never authorize interception...OK
+434/1249 proxy.interception_policy.test.configured hosts respect count and hostname bounds...OK
+435/1249 proxy.lifecycle.test.worker startup failure destroys the transferred service...OK
+436/1249 proxy.lifecycle.test.successful startup retains every resource until deinit...OK
+437/1249 proxy.metrics.test.each proxy counter has one independent snapshot field...OK
+438/1249 proxy.middleware.test.observable SSE headers require one event-stream type and identity bytes...OK
+439/1249 proxy.middleware.test.header effect batches are atomic and preserve pseudo-header order...OK
+440/1249 proxy.middleware.test.invalid complete effect batch preserves the original headers...OK
+441/1249 proxy.middleware.test.known secret headers remain sensitive regardless of transformer flags...OK
+442/1249 proxy.observation_queue.test.publication rejects revoked credentials without consuming capacity...OK
+443/1249 proxy.observation_queue.test.bounded publication records depth high water and loss...OK
+444/1249 proxy.observation_queue.test.concurrent publishers cannot reserve beyond the fixed bound...OK
+445/1249 proxy.observation_queue.test.delivery discards events revoked after publication...OK
+446/1249 proxy.observation_queue.test.direct handoff reserves depth before a waiting receiver releases it...OK
+447/1249 proxy.observation_queue.test.closure drains buffered observations then rejects delivery and publication...OK
+448/1249 proxy.observation_queue.test.closure wakes a receiver waiting on an empty channel...OK
+449/1249 proxy.provider.claude.test.Claude end_turn requires matching SSE and JSON event types...OK
+450/1249 proxy.provider.claude.test.Claude end_turn accepts field reordering unknown fields and escaped text...OK
+451/1249 proxy.provider.claude.test.Claude nonterminal and continuation stop reasons do not complete a turn...OK
+452/1249 proxy.provider.claude.test.Claude completion rejects missing null malformed and misleading fields...OK
+453/1249 proxy.provider.claude.test.Claude completion rejects an SSE event whose retained data was truncated...OK
+454/1249 proxy.provider.claude_request.test.a startup probe is auxiliary across every two-chunk split...OK
+455/1249 proxy.provider.claude_request.test.a streaming request with declared tools is primary across every two-chunk split...OK
+456/1249 proxy.provider.claude_request.test.field order does not affect primary classification...OK
+457/1249 proxy.provider.claude_request.test.escaped top-level field names are decoded...OK
+458/1249 proxy.provider.claude_request.test.streaming helper requests without tools remain auxiliary...OK
+459/1249 proxy.provider.claude_request.test.tools without enabled streaming remain auxiliary...OK
+460/1249 proxy.provider.claude_request.test.nested lookalike fields do not classify the request...OK
+461/1249 proxy.provider.claude_request.test.duplicate semantic fields fail closed...OK
+462/1249 proxy.provider.claude_request.test.malformed and truncated JSON fail closed...OK
+463/1249 proxy.provider.claude_request.test.one-byte feeds preserve classification state...OK
+464/1249 proxy.provider.claude_request.test.a tool result continuation remains a primary request...OK
+465/1249 proxy.provider.claude_request.test.the byte budget fails closed without retaining the body...OK
+466/1249 proxy.provider.claude_request.test.excessive JSON depth fails closed...OK
+467/1249 proxy.provider.claude_transport.test.Claude inference requests negotiate identity encoding...OK
+468/1249 proxy.provider.claude_transport.test.Claude identity negotiation preserves unrelated traffic...OK
+469/1249 proxy.provider.claude_transport.test.Claude identity negotiation rejects ambiguous pseudo headers...OK
+470/1249 proxy.provider.dialect.test.dialect identification requires a DNS label boundary...OK
+471/1249 proxy.provider.provider.test.response observer reports Claude completion exactly once...OK
+472/1249 proxy.provider.provider.test.response observer preserves Claude SSE state across every split...OK
+473/1249 proxy.provider.provider.test.response observer ignores stream closure and tool continuation...OK
+474/1249 proxy.provider.provider.test.response observer ignores malformed and truncated SSE input...OK
+475/1249 proxy.provider.provider.test.response observer ignores unsupported providers...OK
+476/1249 proxy.provider.provider.test.response streams decode arbitrarily interleaved HTTP2 payloads independently...OK
+477/1249 proxy.provider.provider.test.response streams discard finished state and allow stream-slot reuse...OK
+478/1249 proxy.provider.provider.test.response streams reject the connection sentinel and unsupported providers...OK
+479/1249 proxy.provider.provider.test.response stream allocation failure drops observation without retaining a slot...OK
+480/1249 proxy.provider.provider.test.response streams degrade locally at their fixed concurrency bound...OK
+481/1249 proxy.provider.provider.test_0...OK
+482/1249 proxy.provider.request_body.test.request observer distinguishes primary and auxiliary Claude bodies...OK
+483/1249 proxy.provider.request_body.test.request streams classify arbitrarily interleaved bodies independently...OK
+484/1249 proxy.provider.request_body.test.finishing a request stream releases its slot for reuse...OK
+485/1249 proxy.provider.request_body.test.discarding a request stream erases partial input and releases its slot...OK
+486/1249 proxy.provider.request_body.test.request stream capacity fails closed without disturbing active slots...OK
+487/1249 proxy.provider.request_support.test.request classification enforces dialect route ownership...OK
+488/1249 proxy.provider.request_support.test.request classification rejects non-generation variants...OK
+489/1249 proxy.proxy_namespace.test.proxy environment covers Git and Google Cloud trust stores...OK
+490/1249 proxy.proxy_namespace.test.pane registration owns and disposes its ephemeral environment...OK
+491/1249 proxy.proxy_namespace.test.proxy lifecycle accepts traffic and cancels an active tunnel during destruction...OK
+492/1249 proxy.proxy_namespace.test.proxy connection admission enforces the real worker limit...OK
+493/1249 proxy.proxy_namespace.test_0...OK
+494/1249 proxy.service.configuration_support.test.custom transforms are visible before serving begins...OK
+495/1249 proxy.service.configuration_support.test.serving freezes transforms and rejects a second start...OK
+496/1249 proxy.service.interception_support.test.interception owns trust paths and exposes bounded tunnel resources...OK
+497/1249 proxy.service.listener_support.test.listeners skip ports already owned by another proxy listener...OK
+498/1249 proxy.service.observations_support.test.published observations traverse the owned channel exactly once...OK
+499/1249 proxy.service.service_namespace.test_0...OK
+500/1249 proxy.service.service_test.test.pane registration creates one live capability for the requested generation...OK
+501/1249 proxy.service.service_test.test.service negotiates identity encoding for Claude message requests...OK
+502/1249 proxy.service.service_test.test.running service leaves exchange capture inert when disabled...OK
+503/1249 proxy.service.service_test.test.non-whitelisted CONNECT relays bytes with a saturated observation queue...OK
+504/1249 proxy.service.service_test.test.intercepted CONNECT publishes and counts an upstream TLS failure...OK
+505/1249 proxy.service.service_test.test.receive discards observations queued before pane revocation...OK
+506/1249 proxy.service.service_test.test.loopback service maps CONNECT authentication and target rejections...OK
+507/1249 proxy.sse.test.a complete SSE event is emitted at its blank line...OK
+508/1249 proxy.sse.test.an event is not emitted before its blank line...OK
+509/1249 proxy.sse.test.an SSE event survives every possible two-chunk split...OK
+510/1249 proxy.sse.test.an SSE event survives one-byte input chunks...OK
+511/1249 proxy.sse.test.CRLF line endings do not become part of event fields...OK
+512/1249 proxy.sse.test.multiple data fields are joined with one LF...OK
+513/1249 proxy.sse.test.comment lines do not alter the event...OK
+514/1249 proxy.sse.test.an absent event field uses the SSE default name...OK
+515/1249 proxy.sse.test.an event without data is not emitted...OK
+516/1249 proxy.sse.test.an oversized event is marked truncated and the next event still parses...OK
+517/1249 proxy.sse.test.a data line at max_line_bytes is retained completely...OK
+518/1249 proxy.sse.test.an oversized data line retains its bounded prefix...OK
+519/1249 proxy.sse.test.a later event field replaces previous event name...OK
+520/1249 proxy.sse.test.an event without data does not leak its name into the next event...OK
+521/1249 proxy.sse.test.one leading UTF-8 BOM is ignored across every two-chunk split...OK
+522/1249 proxy.sse.test.a BOM-like UTF-8 prefix is replayed when it diverges...OK
+523/1249 proxy.sse.test.only the first UTF-8 BOM is ignored...OK
+524/1249 proxy.sse.test.LF CRLF and lone CR line endings survive every two-chunk split...OK
+525/1249 proxy.sse.test.a CRLF pair is one line ending rather than two...OK
+526/1249 proxy.sse.test.fields without a colon have an empty value...OK
+527/1249 proxy.sse.test.field parsing uses the first colon and removes exactly one leading space...OK
+528/1249 proxy.sse.test.field names are case-sensitive and unknown fields are ignored...OK
+529/1249 proxy.sse.test.valid UTF-8 bytes are preserved in event names and data...OK
+530/1249 proxy.sse.test.empty data fields and NUL bytes are preserved...OK
+531/1249 proxy.sse.test.an oversized line resynchronizes at a lone CR...OK
+532/1249 proxy.tls.test.ALPN mirror never offers a second protocol...OK
+533/1249 proxy.tls.test.ClientHello ALPN is normalized to supported protocols...OK
+534/1249 proxy.tls.test.malformed ClientHello falls back without consuming bytes...OK
+535/1249 proxy.tls_tunnel.test.a host outside the allowlist avoids every TLS operation...OK
+536/1249 proxy.tls_tunnel.test.HTTP11 negotiation transfers the established session...OK
+537/1249 proxy.tls_tunnel.test.HTTP2 negotiation transfers the established session...OK
+538/1249 proxy.tls_tunnel.test.every TLS establishment failure records and publishes exactly once...OK
+539/1249 proxy.tunnel.exchange_support.test.published status carries authenticated exchange identity...OK
+540/1249 proxy.tunnel.exchange_support.test.only lifecycle evidence for Claude increments Claude counters...OK
+541/1249 proxy.tunnel.exchange_support.test.request classification maps to one lifecycle phase...OK
+542/1249 proxy.tunnel.h2.test.Claude request bodies refine interleaved route candidates per stream...OK
+543/1249 proxy.tunnel.h2.test.payload inspection requires a successful SSE response body...OK
+544/1249 proxy.tunnel.h2.test.built-in Claude negotiation transforms only request heads...OK
+545/1249 proxy.tunnel.h2.test.final DATA publishes Claude completion before transport completion...OK
+546/1249 proxy.tunnel.h2.test.decode failure increments only the HTTP2 counter...OK
+547/1249 proxy.tunnel.h2.test.HTTP2 capture keeps interleaved streams independent for unknown dialects...OK
+548/1249 proxy.tunnel.http1.test.Claude request bodies refine route candidates before publication...OK
+549/1249 proxy.tunnel.http1.test.only successful inference SSE responses are inspected...OK
+550/1249 proxy.tunnel.http1.test.Claude SSE completion is published after forwarded response activity...OK
+551/1249 proxy.tunnel.http1.test.response metadata preserves final routing semantics...OK
+552/1249 proxy.tunnel.http1.test.final status maps to response completion or failure...OK
+553/1249 proxy.tunnel.http1.test.HTTP1 capture de-frames split bodies without changing forwarded bytes...OK
+554/1249 proxy.tunnel.http1.test.capture truncation never truncates HTTP1 forwarding...OK
+555/1249 proxy.tunnel.tls.test.each TLS establishment failure maps to its exact counter...OK
+556/1249 proxy.tunnel.tunnel_namespace.test.authentication rejection records total and exact reason...OK
+557/1249 proxy_test.test_0...OK
+558/1249 pty.command_support.test.an empty argument list is rejected...OK
+559/1249 pty.command_support.test.command arguments remain null terminated...OK
+560/1249 pty.command_support.test.a command accepts the schema's maximum argument count...OK
+561/1249 pty.command_support.test.one argument past the limit is rejected...OK
+562/1249 pty.environment.test.terminal child environment provides Telar's Ghostty compatibility profile...OK
+563/1249 pty.environment.test.terminal child environment applies bounded proxy overrides...OK
+564/1249 pty.exit.test.the process result maps to the conventional shell status...OK
+565/1249 pty.native.test.close-on-exec setup reports invalid descriptors...OK
+566/1249 pty.native.test.output readiness never waits and does not consume queued bytes...OK
+567/1249 pty.pty_tests.test_0...OK
+568/1249 pty.session_support.test.zero-sized hosts still create a valid terminal...OK
+569/1249 pty.session_support.test.pixel dimensions saturate instead of overflowing the native window...OK
+570/1249 pty.session_support.test.the public session protocol identifies and exchanges bytes with the child...OK
+571/1249 pty.session_support.test.resize changes the dimensions observed by the child...OK
+572/1249 pty.session_support.test.bounded PTY reads preserve every byte and the closing tail of a burst...OK
+573/1249 pty.session_support.test.PTY child receives the explicit terminal environment...OK
+574/1249 pty.session_support.test.executable lookup uses PATH from the explicit child environment...OK
+575/1249 pty.session_support.test.the child starts in the requested working directory...OK
+576/1249 pty.session_support.test.spawn rejects an invalid working directory before forking...OK
+577/1249 pty.session_support.test.spawn rejects a missing executable before returning a session...OK
+578/1249 pty.session_support.test.spawn rejects an executable without execute permission...OK
+579/1249 pty.session_support.test.spawn preserves execvp shell fallback semantics...OK
+580/1249 pty.session_support.test.spawn marks the retained PTY master close-on-exec...OK
+581/1249 pty.session_support.test.wait reaps a real child once and shutdown after the reap is harmless...OK
+582/1249 pty.session_support.test.foreground inspection identifies the session leader...OK
+583/1249 pty.session_support.test.foreground inspection follows a foreground job rather than its shell...OK
+584/1249 pty.session_support.test.deinit is idempotent after the child has been reaped...OK
+585/1249 pty.session_support.test.deinit terminates and reaps a live child...OK
+586/1249 pty.session_support.test.shutdown and wait coordinate ownership of the child PID...OK
+587/1249 pty.spawn.test.child failure reports preserve actionable exec errors...OK
+588/1249 pty.spawn.test.environment lookup requires the complete variable name...OK
+589/1249 runtime.application.application_namespace.test.terminal colors follow workspace authority without letting spectators acquire it...OK
+590/1249 runtime.application.application_namespace.test.a workspace geometry lease is exclusive to one client generation...OK
+591/1249 runtime.application.application_namespace.test.workspace geometry leases remain bounded by workspace capacity...OK
+592/1249 runtime.application.application_namespace.test_0...OK
+593/1249 runtime.application.commands.acknowledge_agent.test.AcknowledgeAgentHandler reports an unknown generation without touching the tracker...OK
+594/1249 runtime.application.commands.close_pane.test.ClosePaneHandler returns the exact attached pane transition...OK
+595/1249 runtime.application.commands.close_pane.test.ClosePaneHandler rejects panes outside the requesting attachments...OK
+596/1249 runtime.application.commands.close_tab.test.CloseTabHandler commits a tab-only removal before its effects...OK
+597/1249 runtime.application.commands.close_tab.test.CloseTabHandler removes an empty workspace with its stable predecessor...OK
+598/1249 runtime.application.commands.close_tab.test.CloseTabHandler rejects missing targets without effects...OK
+599/1249 runtime.application.commands.close_tab.test.CloseTabHandler does not repeat effects for an already removed tab...OK
+600/1249 runtime.application.commands.copy_selection.test.CopySelectionHandler rejects a pane outside the client attachments...OK
+601/1249 runtime.application.commands.create_pane.test.CreatePaneHandler publishes the committed pane before attaching...OK
+602/1249 runtime.application.commands.create_pane.test.CreatePaneHandler rejects absent or pane-less tabs before authority effects...OK
+603/1249 runtime.application.commands.create_pane.test.CreatePaneHandler leaves launch untouched when authority rejects the request...OK
+604/1249 runtime.application.commands.create_pane.test.CreatePaneHandler maps every pane launch failure category...OK
+605/1249 runtime.application.commands.create_pane.test.CreatePaneHandler preserves the launch event after attachment failure...OK
+606/1249 runtime.application.commands.create_tab.test.CreateTabHandler commits state before publishing and attaching...OK
+607/1249 runtime.application.commands.create_tab.test.CreateTabHandler preserves automatic labels through commit and publication...OK
+608/1249 runtime.application.commands.create_tab.test.CreateTabHandler rejects missing workspaces before client effects...OK
+609/1249 runtime.application.commands.create_tab.test.CreateTabHandler leaves state untouched when client launch preparation fails...OK
+610/1249 runtime.application.commands.create_tab.test.CreateTabHandler rejects aggregate validation failures before launch...OK
+611/1249 runtime.application.commands.create_tab.test.CreateTabHandler reports tab capacity without launching a pane...OK
+612/1249 runtime.application.commands.create_tab.test.CreateTabHandler rolls back every pane launch failure category...OK
+613/1249 runtime.application.commands.create_tab.test.CreateTabHandler never rolls back a committed tab after attachment failure...OK
+614/1249 runtime.application.commands.create_workspace.test.CreateWorkspaceHandler commits before publishing and replacing attachments...OK
+615/1249 runtime.application.commands.create_workspace.test.CreateWorkspaceHandler stops before proposal when launch authority fails...OK
+616/1249 runtime.application.commands.create_workspace.test.CreateWorkspaceHandler maps proposal validation without consuming identity...OK
+617/1249 runtime.application.commands.create_workspace.test.CreateWorkspaceHandler reports repository capacity before runtime effects...OK
+618/1249 runtime.application.commands.create_workspace.test.CreateWorkspaceHandler rolls back when geometry is unavailable...OK
+619/1249 runtime.application.commands.create_workspace.test.CreateWorkspaceHandler rolls back every pane launch failure category...OK
+620/1249 runtime.application.commands.create_workspace.test.CreateWorkspaceHandler preserves committed state after attachment failure...OK
+621/1249 runtime.application.commands.detach_pane.test.DetachPaneHandler leaves missing attachments and geometry unchanged...OK
+622/1249 runtime.application.commands.detach_pane.test.DetachPaneHandler keeps geometry while another pane observes the workspace...OK
+623/1249 runtime.application.commands.detach_pane.test.DetachPaneHandler releases geometry after leaving the workspace...OK
+624/1249 runtime.application.commands.detach_pane.test.DetachPaneHandler does not release geometry after a workspace state conflict...OK
+625/1249 runtime.application.commands.frame_ack.test.FrameAckHandler rejects an acknowledgement without an attachment...OK
+626/1249 runtime.application.commands.graphics_configuration.test.ConfigureGraphicsHandler is idempotent on an empty client aggregate...OK
+627/1249 runtime.application.commands.graphics_credit.test.ReturnGraphicsCreditHandler rejects a pane outside the client attachments...OK
+628/1249 runtime.application.commands.move_tab.test.MoveTabHandler commits before publishing the canonical position...OK
+629/1249 runtime.application.commands.move_tab.test.MoveTabHandler publishes a successful move at either edge...OK
+630/1249 runtime.application.commands.move_tab.test.MoveTabHandler rejects missing workspaces and tabs without publishing...OK
+631/1249 runtime.application.commands.open_pane.test.OpenPaneHandler attaches an explicit pane and prepares it only with geometry...OK
+632/1249 runtime.application.commands.open_pane.test.OpenPaneHandler resolves workspace targets and distinguishes their failures...OK
+633/1249 runtime.application.commands.open_pane.test.OpenPaneHandler reuses a default pane without launch effects...OK
+634/1249 runtime.application.commands.open_pane.test.OpenPaneHandler commits a new default workspace only after pane launch...OK
+635/1249 runtime.application.commands.open_pane.test.OpenPaneHandler stops before launch when authority or geometry rejects a new default...OK
+636/1249 runtime.application.commands.open_pane.test.OpenPaneHandler maps launch failures and rolls back their provisional state...OK
+637/1249 runtime.application.commands.open_pane.test.OpenPaneHandler rolls back a new default workspace on launch failure...OK
+638/1249 runtime.application.commands.open_pane.test.OpenPaneHandler validates default launch and preserves committed effects...OK
+639/1249 runtime.application.commands.open_pane.test.OpenPaneHandler keeps a committed launch when view preparation fails...OK
+640/1249 runtime.application.commands.pane_viewport.test.SetPaneViewportHandler rejects a pane outside the client attachments...OK
+641/1249 runtime.application.commands.rename_tab.test.RenameTabHandler commits before publishing one owned event...OK
+642/1249 runtime.application.commands.rename_tab.test.RenameTabHandler rejects invalid targets and labels without effects...OK
+643/1249 runtime.application.commands.rename_workspace.test.RenameWorkspaceHandler commits before publishing one owned event...OK
+644/1249 runtime.application.commands.rename_workspace.test.RenameWorkspaceHandler rejects missing targets and invalid names without effects...OK
+645/1249 runtime.application.commands.request_graphics_snapshot.test.RequestGraphicsSnapshotHandler rejects a pane outside the client attachments...OK
+646/1249 runtime.application.commands.request_snapshot.test.RequestCellSnapshotHandler rejects a pane outside the client attachments...OK
+647/1249 runtime.application.commands.runtime_stop.test.RuntimeStopHandler commits authority before publishing one event...OK
+648/1249 runtime.application.commands.runtime_stop.test.RuntimeStopHandler ignores every request after the first...OK
+649/1249 runtime.application.commands.send_pane_text.test.promptBytes frames a paste only when the child asked for it...OK
+650/1249 runtime.application.commands.show_notification.test.ShowNotificationHandler publishes one owned bounded notification...OK
+651/1249 runtime.application.commands.show_notification.test.ShowNotificationHandler preserves a zero-recipient result...OK
+652/1249 runtime.application.coordinators.agent_description.test.disabled generation leaves queued work untouched...OK
+653/1249 runtime.application.coordinators.agent_description.test.successful scheduling claims the global actor slot after startup...OK
+654/1249 runtime.application.coordinators.agent_description.test.startup failure commits an owned failed title without claiming the slot...OK
+655/1249 runtime.application.coordinators.agent_description.test.successful completion persists the aggregate event before pumping...OK
+656/1249 runtime.application.coordinators.agent_description.test.invalid successful output persists the aggregate's failed projection...OK
+657/1249 runtime.application.coordinators.agent_description.test.every unsuccessful generator result persists one failed projection...OK
+658/1249 runtime.application.coordinators.agent_description.test.a stale generated result cannot overwrite or persist a manual title...OK
+659/1249 runtime.application.coordinators.agent_description.test.completion starts the next queued job before one client pump...OK
+660/1249 runtime.application.coordinators.agent_description.test.a retired running aggregate holds the slot until its stale completion...OK
+661/1249 runtime.application.coordinators.agent_maintenance.test.timer failure preserves projections and stops periodic maintenance...OK
+662/1249 runtime.application.coordinators.agent_maintenance.test.rearm failure propagates before reading the clock or expiring evidence...OK
+663/1249 runtime.application.coordinators.agent_maintenance.test.successful maintenance pumps an unchanged projection...OK
+664/1249 runtime.application.coordinators.agent_maintenance.test.expired evidence is removed before clients are pumped...OK
+665/1249 runtime.application.event_dispatcher.agent.test_0...OK
+666/1249 runtime.application.event_dispatcher.client.test_0...OK
+667/1249 runtime.application.event_dispatcher.history.test_0...OK
+668/1249 runtime.application.event_dispatcher.observability.test_0...OK
+669/1249 runtime.application.event_dispatcher.pane.io.test_0...OK
+670/1249 runtime.application.event_dispatcher.pane.pipeline.test_0...OK
+671/1249 runtime.application.event_dispatcher.pane.projection.test_0...OK
+672/1249 runtime.application.model.test.runtime model starts with empty configured capability roots...OK
+673/1249 runtime.application.model.test.workspace repository releases allocations retained by the runtime model...OK
+674/1249 runtime.application.operation_scheduler.test_0...OK
+675/1249 runtime.application.pane_launcher.test.pane overrides name the runtime socket and the pane's own identity...OK
+676/1249 runtime.application.queries.history.test.Handler submits an owned query with its asynchronous reply origin...OK
+677/1249 runtime.application.queries.history.test.Handler reports bounded service backpressure after one submission...OK
+678/1249 runtime.application.queries.history.test.Handler rejects every model constraint before service submission...OK
+679/1249 runtime.application.queries.tab_snapshot.test.Handler returns the requested live tab snapshot reference...OK
+680/1249 runtime.application.queries.tab_snapshot.test.Handler rejects an absent tab without consulting panes...OK
+681/1249 runtime.application.queries.tab_snapshot.test.Handler rejects a tab without a running pane...OK
+682/1249 runtime.application.queries.workspace_snapshot.test.Handler returns an existing workspace snapshot reference...OK
+683/1249 runtime.application.queries.workspace_snapshot.test.Handler rejects missing workspace identities...OK
+684/1249 runtime.application.request_dispatch.test_0...OK
+685/1249 runtime.application.session_checkpoint.test.resume commands exist only for built-in providers and UUID references...OK
+686/1249 runtime.application.session_checkpoint.test.checkpoint state debounces, coalesces and retries after failure...OK
+687/1249 runtime.application.session_checkpoint.test.checkpoint startup failure releases ownership once and permits retry...OK
+688/1249 runtime.application.session_checkpoint.test.writeFile replaces the checkpoint atomically and keeps it private...OK
+689/1249 runtime.application.suggestion.test.the prompt keeps the newest screen rows inside the engine cap...OK
+690/1249 runtime.application.suggestion.test.replies reduce to one command line...OK
+691/1249 runtime.attachment.attachment_namespace.test.attachment store reports and commits workspace departure on the last pane...OK
+692/1249 runtime.attachment.attachment_namespace.test.pointer-only frames coalesce independently and survive snapshot recovery...OK
+693/1249 runtime.attachment.attachment_namespace.test.attachments keep independent scrollback viewports...OK
+694/1249 runtime.attachment.attachment_namespace.test.an unsupported stored image degrades graphics sync instead of killing it...OK
+695/1249 runtime.attachment.attachment_namespace.test.graphics transfers wait for pane and client memory credit...OK
+696/1249 runtime.attachment.attachment_namespace.test.a staged transfer drains while the media actor stays busy...OK
+697/1249 runtime.attachment.attachment_namespace.test.completed replacements do not exhaust attachment image slots...OK
+698/1249 runtime.attachment.attachment_namespace.test.graphics quota enforcement evicts oldest images on the ingested pane...OK
+699/1249 runtime.attachment.attachment_namespace.test.a shared-transport attachment ships one name instead of pixel chunks...OK
+700/1249 runtime.attachment.attachment_namespace.test.an abandoned unsent shared transfer unlinks its object...OK
+701/1249 runtime.attachment.cell.test.viewport pin allocation failure restores the shared screen and sync state...OK
+702/1249 runtime.attachment.selection.test.linewise endpoints cover full rows in reading order...OK
+703/1249 runtime.attachment.selection.test.linear endpoints clamp columns without changing drag direction...OK
+704/1249 runtime.attachment.selection.test.a zero-width pane has no selectable endpoints...OK
+705/1249 runtime.client.admission.test.an accept failure rearms the listener without touching admission state...OK
+706/1249 runtime.client.admission.test.rearm failure after an accept failure propagates...OK
+707/1249 runtime.client.admission.test.runtime shutdown closes an accepted socket without rearming...OK
+708/1249 runtime.client.admission.test.rearm failure closes the accepted socket before propagating...OK
+709/1249 runtime.client.admission.test.capacity rejection closes the socket after rearming acceptance...OK
+710/1249 runtime.client.admission.test.an idle admission slot transfers socket ownership to one handshake...OK
+711/1249 runtime.client.admission.test.handshake scheduling failure releases and closes the claimed socket...OK
+712/1249 runtime.client.admission.test.a new socket aborts a stalled handshake but does not replace its slot...OK
+713/1249 runtime.client.admission.test.a failed handshake releases the slot and closes its connection...OK
+714/1249 runtime.client.admission.test.shutdown after negotiation closes the connection without admitting it...OK
+715/1249 runtime.client.admission.test.session admission failure leaves connection ownership with the coordinator...OK
+716/1249 runtime.client.admission.test.successful admission transfers ownership before scheduling the first read...OK
+717/1249 runtime.client.admission.test.first-read scheduling failure drops the admitted session...OK
+718/1249 runtime.client.request_router.test.Router delegates every client tag exactly once and preserves classification...OK
+719/1249 runtime.client.request_router.test.Router propagates handler failure without a second delegation...OK
+720/1249 runtime.client.send_coordinator.test.a stale completion records one stale message without touching a session...OK
+721/1249 runtime.client.send_coordinator.test.a closing session releases the send before finalization...OK
+722/1249 runtime.client.send_coordinator.test.a failed delivery closes the client before deferred effects...OK
+723/1249 runtime.client.send_coordinator.test.a successful deferred detach precedes the next delivery pump...OK
+724/1249 runtime.client.send_coordinator.test.close-after-reply drops an active client without retrying delivery...OK
+725/1249 runtime.client.send_coordinator.test.shutdown defers close-after-reply until the stopping delivery completes...OK
+726/1249 runtime.client.send_coordinator.test.delivery retry failure drops the client...OK
+727/1249 runtime.client.send_coordinator.test.an active shutdown pumps every client before checking completion...OK
+728/1249 runtime.client.session_support.test.focus exchange rejects duplicate reservations and stale UI completions...OK
+729/1249 runtime.client.session_support.test.Session keeps its bounded buffers outside client store storage...OK
+730/1249 runtime.client.store_support.test.Store rejects exhausted identities before allocating a session...OK
+731/1249 runtime.client.store_support.test.Store resolves only the retained client generation...OK
+732/1249 runtime.client.store_support.test.Store reports capacity from retained session count...OK
+733/1249 runtime.config.test.the ingest gate is claimed at most once...OK
+734/1249 runtime.delivery.delivery_namespace.test.agent history page stays reserved until send commit or failed client cleanup...OK
+735/1249 runtime.delivery.delivery_namespace.test.delivery display labels are bounded and valid...OK
+736/1249 runtime.delivery.delivery_namespace.test.oversized clipboard input preserves the pending message...OK
+737/1249 runtime.delivery.delivery_namespace.test.clipboard accepts exactly the wire byte limit...OK
+738/1249 runtime.delivery.delivery_namespace.test.delivery commits one logical send transaction before completion...OK
+739/1249 runtime.delivery.delivery_namespace.test.delivery abort closes a prepared transaction...OK
+740/1249 runtime.delivery.delivery_namespace.test.delivery preserves management before resync wire order...OK
+741/1249 runtime.delivery.delivery_namespace.test.agent conversation delivery coalesces revisions independently for reconnecting clients...OK
+742/1249 runtime.delivery.encoder.test.a workspace snapshot for a vanished workspace becomes a failure reply...OK
+743/1249 runtime.delivery.encoder.test.a command suggestion encodes its owned text and a bare status...OK
+744/1249 runtime.delivery.response_queue.test.management responses overtake observation work...OK
+745/1249 runtime.delivery.response_queue.test.queue records lifetime high water...OK
+746/1249 runtime.delivery.response_queue.test.a dropped workspace close preserves its handoff target...OK
+747/1249 runtime.delivery.response_queue.test.a dropped tab move preserves the workspace that must be resynchronized...OK
+748/1249 runtime.delivery.response_queue.test.notification reservations remain exact when request IDs repeat...OK
+749/1249 runtime.delivery.response_queue.test.notification backpressure is counted and never overwrites queued work...OK
+750/1249 runtime.entrypoints.events.history_response.test.a failed worker receive ends without rearming or routing...OK
+751/1249 runtime.entrypoints.events.history_response.test.rearm failure disposes an owned query result before propagating...OK
+752/1249 runtime.entrypoints.events.history_response.test.a stale query result is disposed without pumping clients...OK
+753/1249 runtime.entrypoints.events.history_response.test.an accepted query result transfers ownership before pumping...OK
+754/1249 runtime.entrypoints.events.history_response.test.query response backpressure disposes before pumping...OK
+755/1249 runtime.entrypoints.events.history_response.test.a stale failure response has no owned value or delivery effects...OK
+756/1249 runtime.entrypoints.events.history_response.test.failure response backpressure still leaves a delivery opportunity...OK
+757/1249 runtime.entrypoints.events.pane.exit.test.a running pane exit retires agent and credential before lifecycle effects...OK
+758/1249 runtime.entrypoints.events.pane.exit.test.drained output queues exit history before observation...OK
+759/1249 runtime.entrypoints.events.pane.exit.test.an aborting launch skips exit history even after output drains...OK
+760/1249 runtime.entrypoints.events.pane.exit.test.exit observation failure preserves retirement and skips lifecycle effects...OK
+761/1249 runtime.entrypoints.events.pane.exit.test.wait failure commits a synthetic SIGKILL exit...OK
+762/1249 runtime.entrypoints.events.pane.exit.test.a stale generation cannot release a live wait borrow...OK
+763/1249 runtime.entrypoints.events.pane.exit.test.wait failure becomes a synthetic SIGKILL exit...OK
+764/1249 runtime.entrypoints.events.pane.ingest.test.ingest failure closes the pane output before collection...OK
+765/1249 runtime.entrypoints.events.pane.ingest.test.success synchronizes every dependent before starting the next read...OK
+766/1249 runtime.entrypoints.events.pane.ingest.test.a pending resize commits before observers and client projections...OK
+767/1249 runtime.entrypoints.events.pane.ingest.test.a failed deferred resize retires the pane but preserves effect ordering...OK
+768/1249 runtime.entrypoints.events.pane.ingest.test.observation failure stops every later post-ingest effect...OK
+769/1249 runtime.entrypoints.events.pane.ingest.test.media failure stops before client projection and PTY work...OK
+770/1249 runtime.entrypoints.events.pane.ingest.test.response failure preserves refreshed clients and skips the next read...OK
+771/1249 runtime.entrypoints.events.pane.ingest.test.read start failure releases its pane borrow and skips lifecycle effects...OK
+772/1249 runtime.entrypoints.events.pane.ingest.test.a stale generation cannot release a live ingest borrow...OK
+773/1249 runtime.entrypoints.events.pane.input.test.schedule is single-flight and rolls async-start failure back...OK
+774/1249 runtime.entrypoints.events.pane.input.test.successful completion consumes only its borrow and starts the backlog...OK
+775/1249 runtime.entrypoints.events.pane.input.test.failed completion clears the pump without starting another write...OK
+776/1249 runtime.entrypoints.events.pane.input.test.backlog start failure preserves bytes and skips collection...OK
+777/1249 runtime.entrypoints.events.pane.input.test.stale completion is counted without touching writer or lifecycle ports...OK
+778/1249 runtime.entrypoints.events.pane.media.test.media completion refreshes graphics before clients and preserves effect order...OK
+779/1249 runtime.entrypoints.events.pane.media.test.pending media is rearmed between the two client pumps...OK
+780/1249 runtime.entrypoints.events.pane.media.test.response scheduling failure stops before pumping and media rearm...OK
+781/1249 runtime.entrypoints.events.pane.media.test.media start failure rolls its borrow back after the first client pump...OK
+782/1249 runtime.entrypoints.events.pane.media.test.a stale generation cannot release a live media borrow...OK
+783/1249 runtime.entrypoints.events.pane.media_projection.test.shared transport clients are counted on the pane for the media actor...OK
+784/1249 runtime.entrypoints.events.pane.media_projection.test.a generation the media actor froze is adopted without a runtime-thread copy...OK
+785/1249 runtime.entrypoints.events.pane.media_projection.test.a replaced generation releases the object the actor parked for it...OK
+786/1249 runtime.entrypoints.events.pane.media_projection.test.parked generations every client already knows are released at synchronization...OK
+787/1249 runtime.entrypoints.events.pane.media_projection.test.detach releases a parked fallback and its quota before another consumer arrives...OK
+788/1249 runtime.entrypoints.events.pane.media_projection.test.missing generations release all bounded transfer request slots...OK
+789/1249 runtime.entrypoints.events.pane.media_projection.test.a media reset invalidates every attached client before staging...OK
+790/1249 runtime.entrypoints.events.pane.media_projection.test.one idle-boundary pass freezes at most one transfer per client...OK
+791/1249 runtime.entrypoints.events.pane.media_projection.test.a failed freeze abandons only its client graphics projection...OK
+792/1249 runtime.entrypoints.events.pane.observation.test.known process observation commits pane state agent evidence and metrics...OK
+793/1249 runtime.entrypoints.events.pane.observation.test.foreground revision wraps past zero when the process name changes...OK
+794/1249 runtime.entrypoints.events.pane.observation.test.shell foreground removes the agent and ignores screen readiness...OK
+795/1249 runtime.entrypoints.events.pane.observation.test.shell startup observations preserve a queued resume until the agent starts...OK
+796/1249 runtime.entrypoints.events.pane.observation.test.an unknown non-shell process clears previous process evidence...OK
+797/1249 runtime.entrypoints.events.pane.observation.test.working to ready screen evidence publishes one generation-safe sound...OK
+798/1249 runtime.entrypoints.events.pane.observation.test.a delayed screen completion cannot settle a newer Codex Stop or publish a sound...OK
+799/1249 runtime.entrypoints.events.pane.observation.test.Codex PTY frames and continuing Stop hooks publish exactly one final completion sound...OK
+800/1249 runtime.entrypoints.events.pane.observation.test.pending history is rearmed after description scheduling...OK
+801/1249 runtime.entrypoints.events.pane.observation.test.observation start failure releases the sealed batch and skips lifecycle effects...OK
+802/1249 runtime.entrypoints.events.pane.observation.test.a stale generation cannot release a live observation borrow...OK
+803/1249 runtime.entrypoints.events.pane.observation.test.sounds are restricted to working-to-ready and working-to-blocked transitions...OK
+804/1249 runtime.entrypoints.events.pane.observation.test.a pane-root agent keeps its resumed session and receives screen observations...OK
+805/1249 runtime.entrypoints.events.pane.output.test.read error finishes output before collection and client pumping...OK
+806/1249 runtime.entrypoints.events.pane.output.test.EOF after exit queues the exit observation before lifecycle effects...OK
+807/1249 runtime.entrypoints.events.pane.output.test.data fans out before the VT ingest actor borrows the output buffer...OK
+808/1249 runtime.entrypoints.events.pane.output.test.data read while the shell owns the terminal expires stale progress...OK
+809/1249 runtime.entrypoints.events.pane.output.test.observation scheduling failure stops before media and ingest...OK
+810/1249 runtime.entrypoints.events.pane.output.test.media scheduling failure stops before ingest...OK
+811/1249 runtime.entrypoints.events.pane.output.test.ingest start failure releases its buffer borrow...OK
+812/1249 runtime.entrypoints.events.pane.output.test.exit observation failure skips collection and client pumping...OK
+813/1249 runtime.entrypoints.events.pane.output.test.stale generation cannot release a live output-read borrow...OK
+814/1249 runtime.entrypoints.events.pane.response.test.schedule is single-flight and rolls async-start failure back...OK
+815/1249 runtime.entrypoints.events.pane.response.test.successful completion removes one response and starts the next...OK
+816/1249 runtime.entrypoints.events.pane.response.test.failed completion clears queued responses without another write...OK
+817/1249 runtime.entrypoints.events.pane.response.test.next-response start failure preserves the head and skips collection...OK
+818/1249 runtime.entrypoints.events.pane.response.test.stale generation cannot release a live response borrow...OK
+819/1249 runtime.entrypoints.events.plugin_effects.test_0...OK
+820/1249 runtime.entrypoints.events.proxy_capture.test_0...OK
+821/1249 runtime.entrypoints.events.proxy_observation.test.every proxy protocol and inference phase translates without losing identity...OK
+822/1249 runtime.entrypoints.events.proxy_observation.test.receive failure does not rearm or mutate runtime state...OK
+823/1249 runtime.entrypoints.events.proxy_observation.test.rearm failure propagates before applying a received observation...OK
+824/1249 runtime.entrypoints.events.proxy_observation.test.a stale pane generation is counted after the receive is rearmed...OK
+825/1249 runtime.entrypoints.events.proxy_observation.test.auxiliary traffic is measured but cannot create an agent...OK
+826/1249 runtime.entrypoints.events.proxy_observation.test.an inference start updates the agent before scheduling downstream work...OK
+827/1249 runtime.entrypoints.events.proxy_observation.test.Claude provider completion projects ready for each HTTP protocol...OK
+828/1249 runtime.entrypoints.events.proxy_observation.test.an unmatched lifecycle event still runs the established downstream policy...OK
+829/1249 runtime.entrypoints.requests.acknowledge_agent.test.Controller maps the exact agent generation and clock...OK
+830/1249 runtime.entrypoints.requests.acknowledge_agent.test.Controller counts only an unknown generation as stale...OK
+831/1249 runtime.entrypoints.requests.close_pane.test.Controller requests pane closure without inventing an acknowledgement...OK
+832/1249 runtime.entrypoints.requests.close_pane.test.Controller maps a detached pane to one protocol failure...OK
+833/1249 runtime.entrypoints.requests.close_pane.test.Controller propagates unexpected pane close failures...OK
+834/1249 runtime.entrypoints.requests.close_pane.test.Controller reports backpressure while mapping a detached pane...OK
+835/1249 runtime.entrypoints.requests.close_tab.test.Controller maps tab-only and whole-workspace removal results...OK
+836/1249 runtime.entrypoints.requests.close_tab.test.Controller maps a missing tab without inventing a success...OK
+837/1249 runtime.entrypoints.requests.close_tab.test.Controller propagates unexpected close-tab failures without a response...OK
+838/1249 runtime.entrypoints.requests.copy_selection.test.Controller maps exact coordinates and delivers copied bytes...OK
+839/1249 runtime.entrypoints.requests.copy_selection.test.Controller counts only a missing attachment as stale...OK
+840/1249 runtime.entrypoints.requests.copy_selection.test.Controller preserves clipboard output for unavailable and oversized selections...OK
+841/1249 runtime.entrypoints.requests.create_pane.test.Controller maps create-pane input to the canonical launch result...OK
+842/1249 runtime.entrypoints.requests.create_pane.test.Controller maps every expected create-pane failure...OK
+843/1249 runtime.entrypoints.requests.create_pane.test.Controller propagates post-launch attachment failures...OK
+844/1249 runtime.entrypoints.requests.create_tab.test.Controller maps create-tab input and queues the canonical result...OK
+845/1249 runtime.entrypoints.requests.create_tab.test.Controller maps every expected create-tab command error...OK
+846/1249 runtime.entrypoints.requests.create_tab.test.Controller propagates unexpected create-tab failures without a response...OK
+847/1249 runtime.entrypoints.requests.create_workspace.test.Controller maps create-workspace input to a canonical pane confirmation...OK
+848/1249 runtime.entrypoints.requests.create_workspace.test.Controller maps every expected create-workspace failure...OK
+849/1249 runtime.entrypoints.requests.create_workspace.test.Controller propagates unexpected create-workspace failures...OK
+850/1249 runtime.entrypoints.requests.detach_pane.test.Controller maps detach-pane requests without a success response...OK
+851/1249 runtime.entrypoints.requests.detach_pane.test.Controller records one stale message for a missing attachment...OK
+852/1249 runtime.entrypoints.requests.detach_pane.test.Controller propagates unexpected detach failures without recording stale input...OK
+853/1249 runtime.entrypoints.requests.frame_ack.test.Controller maps an exact ACK and records accepted-frame latency...OK
+854/1249 runtime.entrypoints.requests.frame_ack.test.Controller counts a rejected ACK as one stale client message...OK
+855/1249 runtime.entrypoints.requests.frame_ack.test.Controller propagates ACK infrastructure failures without changing metrics...OK
+856/1249 runtime.entrypoints.requests.graphics_configuration.test.Controller maps both graphics transport declarations exactly...OK
+857/1249 runtime.entrypoints.requests.graphics_configuration.test.Controller accepts an idempotent graphics configuration result...OK
+858/1249 runtime.entrypoints.requests.graphics_configuration.test.Controller propagates graphics configuration infrastructure failures...OK
+859/1249 runtime.entrypoints.requests.graphics_credit.test.Controller maps the exact graphics credit return...OK
+860/1249 runtime.entrypoints.requests.graphics_credit.test.Controller counts every rejected graphics credit return as stale...OK
+861/1249 runtime.entrypoints.requests.graphics_credit.test.Controller propagates credit infrastructure failures without stale accounting...OK
+862/1249 runtime.entrypoints.requests.history_query.test.Controller submits every wire field with the asynchronous reply origin...OK
+863/1249 runtime.entrypoints.requests.history_query.test.Controller maps an invalid query without recording service failure...OK
+864/1249 runtime.entrypoints.requests.history_query.test.Controller maps service backpressure and records it before replying...OK
+865/1249 runtime.entrypoints.requests.history_query.test.Controller propagates unexpected query failures without side effects...OK
+866/1249 runtime.entrypoints.requests.history_query.test.Controller reports response backpressure after recording queue rejection...OK
+867/1249 runtime.entrypoints.requests.import_history.test.Controller acknowledges an accepted batch...OK
+868/1249 runtime.entrypoints.requests.move_tab.test.Controller maps a move request and queues the canonical result...OK
+869/1249 runtime.entrypoints.requests.move_tab.test.Controller maps expected move errors without a success response...OK
+870/1249 runtime.entrypoints.requests.move_tab.test.Controller propagates unexpected move failures without a response...OK
+871/1249 runtime.entrypoints.requests.open_pane.test.Controller maps open-pane input to the canonical result...OK
+872/1249 runtime.entrypoints.requests.open_pane.test.Controller maps every expected open-pane failure...OK
+873/1249 runtime.entrypoints.requests.open_pane.test.Controller propagates unexpected open-pane failures...OK
+874/1249 runtime.entrypoints.requests.open_pane.test.Controller reports backpressure after a successful open...OK
+875/1249 runtime.entrypoints.requests.pane_input.test.Controller forwards the exact pane input without stale accounting...OK
+876/1249 runtime.entrypoints.requests.pane_input.test.Controller counts unavailable pane input as stale...OK
+877/1249 runtime.entrypoints.requests.pane_input.test.Controller propagates infrastructure failures even when their names resemble stale results...OK
+878/1249 runtime.entrypoints.requests.pane_resize.test.Controller forwards the exact pane resize...OK
+879/1249 runtime.entrypoints.requests.pane_resize.test.Controller accounts for resize policy rejections...OK
+880/1249 runtime.entrypoints.requests.pane_resize.test.Controller propagates resize infrastructure failures regardless of their names...OK
+881/1249 runtime.entrypoints.requests.pane_viewport.test.Controller maps the exact pane viewport...OK
+882/1249 runtime.entrypoints.requests.pane_viewport.test.Controller does not count an unchanged viewport as stale...OK
+883/1249 runtime.entrypoints.requests.pane_viewport.test.Controller counts a viewport for a missing attachment as stale...OK
+884/1249 runtime.entrypoints.requests.pane_viewport.test.Controller propagates viewport infrastructure failures without stale accounting...OK
+885/1249 runtime.entrypoints.requests.query_agents.test.Controller schedules one snapshot per query...OK
+886/1249 runtime.entrypoints.requests.read_pane.test.Controller queues the exact read for late binding...OK
+887/1249 runtime.entrypoints.requests.rename_tab.test.Controller maps a rename request and queues the canonical result...OK
+888/1249 runtime.entrypoints.requests.rename_tab.test.Controller maps rename command errors without inventing domain effects...OK
+889/1249 runtime.entrypoints.requests.rename_tab.test.Controller propagates unexpected command failures without a response...OK
+890/1249 runtime.entrypoints.requests.rename_workspace.test.Controller maps a workspace rename and queues its canonical snapshot reference...OK
+891/1249 runtime.entrypoints.requests.rename_workspace.test.Controller preserves legacy workspace rename error mapping...OK
+892/1249 runtime.entrypoints.requests.rename_workspace.test.Controller propagates unexpected workspace rename failures...OK
+893/1249 runtime.entrypoints.requests.report_agent.test.Controller confirms applied reports and fails unknown panes...OK
+894/1249 runtime.entrypoints.requests.report_agent_session.test.Controller confirms recorded and unchanged reports and fails the rest...OK
+895/1249 runtime.entrypoints.requests.report_agent_title.test.Controller confirms recorded and unchanged titles and fails the rest...OK
+896/1249 runtime.entrypoints.requests.request_graphics_snapshot.test.Controller maps the exact graphics snapshot pane...OK
+897/1249 runtime.entrypoints.requests.request_graphics_snapshot.test.Controller counts a graphics snapshot for a missing attachment as stale...OK
+898/1249 runtime.entrypoints.requests.request_graphics_snapshot.test.Controller propagates graphics recovery failures without stale accounting...OK
+899/1249 runtime.entrypoints.requests.request_snapshot.test.Controller maps advisory frame state to an unconditional snapshot command...OK
+900/1249 runtime.entrypoints.requests.request_snapshot.test.Controller counts a snapshot request for a missing attachment as stale...OK
+901/1249 runtime.entrypoints.requests.request_snapshot.test.Controller propagates snapshot infrastructure failures without stale accounting...OK
+902/1249 runtime.entrypoints.requests.runtime_state.test.Controller routes every runtime-state request to the client subscription...OK
+903/1249 runtime.entrypoints.requests.runtime_stop.test.Controller attributes runtime stop to the exact requesting client...OK
+904/1249 runtime.entrypoints.requests.search_pane.test.Controller queues matches or a failure...OK
+905/1249 runtime.entrypoints.requests.send_pane_text.test.Controller confirms a handled send and maps every refusal to a failure code...OK
+906/1249 runtime.entrypoints.requests.show_notification.test.Controller reserves, broadcasts, commits, then pumps exact notification data...OK
+907/1249 runtime.entrypoints.requests.show_notification.test.Controller confirms and pumps a zero-recipient broadcast...OK
+908/1249 runtime.entrypoints.requests.show_notification.test.Controller queue backpressure prevents broadcast and pumping...OK
+909/1249 runtime.entrypoints.requests.tab_snapshot.test.Controller maps a tab snapshot request to its canonical result...OK
+910/1249 runtime.entrypoints.requests.tab_snapshot.test.Controller maps a missing tab to one protocol failure...OK
+911/1249 runtime.entrypoints.requests.tab_snapshot.test.Controller propagates unexpected query failures without a response...OK
+912/1249 runtime.entrypoints.requests.tab_snapshot.test.Controller reports response backpressure after a successful query...OK
+913/1249 runtime.entrypoints.requests.workspace_snapshot.test.Controller maps a workspace snapshot request to its canonical result...OK
+914/1249 runtime.entrypoints.requests.workspace_snapshot.test.Controller maps a missing workspace to one protocol failure...OK
+915/1249 runtime.entrypoints.requests.workspace_snapshot.test.Controller propagates unexpected workspace query failures...OK
+916/1249 runtime.entrypoints.requests.workspace_snapshot.test.Controller reports response backpressure after a successful workspace query...OK
+917/1249 runtime.event.test.interactive events use the interactive budget...OK
+918/1249 runtime.event.test.media events use the media budget...OK
+919/1249 runtime.event.test.observation events use the observation budget...OK
+920/1249 runtime.event.test.lifecycle events stay outside latency-budgeted paths...OK
+921/1249 runtime.event_loop.test.event storage covers every bounded actor slot...OK
+922/1249 runtime.event_sources.test_0...OK
+923/1249 runtime.instance.test.invalid graphics limits fail before runtime resources are created...OK
+924/1249 runtime.instance.test.a failure after actor scheduling rolls back the composed runtime...OK
+925/1249 runtime.instance.test.runtime composition keeps every borrowed capability at a stable address...OK
+926/1249 runtime.instance.test.a restart drops tabs and workspaces whose panes did not come back...OK
+927/1249 runtime.instance.test.a restart restores workspaces, tabs and panes from the session checkpoint...OK
+928/1249 runtime.instance.test.a restart restores every workspace and tab from unordered pane records...OK
+929/1249 runtime.instance.test.repeated restarts preserve pending agent resumes and reject duplicate sessions...OK
+930/1249 runtime.instance.test.direct agent restore launches resume argv and preserves the original command for disabled resume...OK
+931/1249 runtime.instance.test.process observation checkpoints a session reported before provider detection and its later exit...OK
+932/1249 runtime.lifecycle.shutdown_authority.test.the first shutdown requester becomes the stable authority...OK
+933/1249 runtime.lifecycle.shutdown_coordinator.test.shutdown executes every step once in dependency order...OK
+934/1249 runtime.lifecycle.shutdown_coordinator.test.shutdown order contains every declared step exactly once...OK
+935/1249 runtime.lifecycle.shutdown_coordinator.test.shutdown is idempotent after completion...OK
+936/1249 runtime.lifecycle.shutdown_coordinator.test.recursive shutdown cannot duplicate or reorder effects...OK
+937/1249 runtime.lifecycle.stop_signal.test.a disabled stop signal does not schedule a wait...OK
+938/1249 runtime.lifecycle.stop_signal.test.an active stop signal schedules its exact borrowed queue...OK
+939/1249 runtime.lifecycle.stop_signal.test.a scheduling failure is propagated without losing the queue...OK
+940/1249 runtime.lifecycle.stop_signal.test.a successful stop completion terminates the event loop...OK
+941/1249 runtime.lifecycle.stop_signal.test.a failed stop completion preserves the source error...OK
+942/1249 runtime.lifecycle.stop_signal.test.wait consumes one queue token...OK
+943/1249 runtime.observability.system_metrics.test.Linux system metrics read the live proc filesystem...SKIP
+944/1249 runtime.observability.system_metrics.test.cpu percentage comes from tick deltas, never the since-boot average...OK
+945/1249 runtime.observability.system_metrics.test.memory converts to tenths of a GiB...OK
+946/1249 runtime.observability.system_metrics.test.the revision moves only when a visible value changes...OK
+947/1249 runtime.observability.system_metrics_coordinator.test.blocked host sampling never queues another sample or pumps clients...OK
+948/1249 runtime.observability.system_metrics_coordinator.test.unchanged samples update previous counters without scanning clients...OK
+949/1249 runtime.observability.system_metrics_coordinator.test.failed timers and scheduling preserve admission for the next tick...OK
+950/1249 runtime.observability.telemetry.test.telemetry state lends its line buffer to exactly one write...OK
+951/1249 runtime.observability.telemetry.test.a failed telemetry write releases the buffer before retiring its sink...OK
+952/1249 runtime.observability.telemetry.test.runtime telemetry reports retained memory domains...OK
+953/1249 runtime.observability.telemetry_tick_coordinator.test.a failed tick retires the sink without scheduling more work...OK
+954/1249 runtime.observability.telemetry_tick_coordinator.test.an unavailable sink does not rearm the periodic tick...OK
+955/1249 runtime.observability.telemetry_tick_coordinator.test.tick scheduling failure retires the sink...OK
+956/1249 runtime.observability.telemetry_tick_coordinator.test.an in-flight write coalesces the sample after rearming the tick...OK
+957/1249 runtime.observability.telemetry_tick_coordinator.test.formatting failure discards only the current sample...OK
+958/1249 runtime.observability.telemetry_tick_coordinator.test.a formatted sample is borrowed before its write is scheduled...OK
+959/1249 runtime.observability.telemetry_tick_coordinator.test.write scheduling failure releases the buffer and retires the sink...OK
+960/1249 runtime.resources.engine.test.every allocation failure rolls back engine runtime ownership...OK
+961/1249 runtime.resources.engine.test.the engine runtime answers through its actor and stops cleanly...OK
+962/1249 runtime.resources.git_probe.test.HEAD contents resolve to a branch or a short detached hash...OK
+963/1249 runtime.resources.history.test.every allocation failure rolls back history runtime ownership...OK
+964/1249 runtime.resources.history.test.database open failure starts a queryable degraded worker...OK
+965/1249 runtime.resources.proxy.test.runtime scope distinguishes exact and wildcard policies...OK
+966/1249 runtime.resources.proxy.test.disabled owner does not schedule or destroy a capability...OK
+967/1249 runtime.resources.proxy.test.schedule failure preserves ownership and deinit destroys exactly once...OK
+968/1249 runtime.resources.proxy.test.disabled runtime exposes zero state and skips receive scheduling...OK
+969/1249 runtime.resources.proxy.test.configured runtime schedules its owned proxy and tears it down...OK
+970/1249 runtime.resources.resources_namespace.test.every resource acquisition checkpoint rolls back...OK
+971/1249 runtime.resources.worker_lifecycle.test.worker startup failure releases transferred service ownership...OK
+972/1249 runtime.resources.worker_lifecycle.test.shutdown closes queues before joining and destroying the service...OK
+973/1249 runtime.runtime_tests.test.Runtime owns its endpoint until the injected stop dependency fires...OK
+974/1249 runtime.runtime_tests.test_0...OK
+975/1249 runtime.tests.acknowledge_agent_test.test.acknowledgement crosses controller and handler and turns done into ready...OK
+976/1249 runtime.tests.acknowledge_agent_test.test.a repeated acknowledgement changes nothing and is not stale...OK
+977/1249 runtime.tests.acknowledge_agent_test.test.a stale generation is counted and leaves the agent done...OK
+978/1249 runtime.tests.acknowledge_agent_test.test.a new turn after acknowledgement reports done again...OK
+979/1249 runtime.tests.cell_projection_test.test.resizing a pane holds its snapshot until synchronized redraw completes...OK
+980/1249 runtime.tests.cell_projection_test.test.a resized snapshot escapes an unfinished synchronized redraw after its deadline...OK
+981/1249 runtime.tests.cell_projection_test.test.a resized snapshot completes before pane exit with synchronized redraw unfinished...OK
+982/1249 runtime.tests.cell_projection_test.test.a no-op projection advances its observed revision and is not prepared twice...OK
+983/1249 runtime.tests.cell_projection_test.test.a current attachment skips retained damage while a stale attachment receives it...OK
+984/1249 runtime.tests.cell_projection_test.test.text metadata replacements follow each client's acknowledged frame without queuing...OK
+985/1249 runtime.tests.cell_projection_test.test.historical text metadata stays client-local and snapshots restore the active viewport...OK
+986/1249 runtime.tests.checkpoint_shutdown_test.test.shutdown replaces a pending checkpoint with the latest session and releases its buffer...OK
+987/1249 runtime.tests.checkpoint_shutdown_test.test.failed startup joins restored children and preserves the original checkpoint...OK
+988/1249 runtime.tests.checkpoint_shutdown_test.test.agent panes survive consecutive runtime checkpoints with their kind identity conversation and title...FAIL (ProviderFailed)
+989/1249 runtime.tests.checkpoint_shutdown_test.test.agent checkpoint skips duplicate claims and retains empty panes when the provider is unavailable...OK
+990/1249 runtime.tests.close_pane_test.test.repeated close requests cross controller and handler idempotently...OK
+991/1249 runtime.tests.close_tab_test.test.a committed tab removal survives response queue backpressure...OK
+992/1249 runtime.tests.copy_selection_test.test.CopySelectionHandler reads inclusive absolute scrollback coordinates...OK
+993/1249 runtime.tests.copy_selection_test.test.CopySelectionHandler preserves reverse linear selection semantics...OK
+994/1249 runtime.tests.copy_selection_test.test.CopySelectionHandler normalizes linewise selection and clamps columns...OK
+995/1249 runtime.tests.copy_selection_test.test.CopySelectionHandler reports bounded scratch exhaustion...OK
+996/1249 runtime.tests.copy_selection_test.test.copy selection crosses controller and handler before replacing clipboard delivery...OK
+997/1249 runtime.tests.create_pane_test.test.a committed pane launch survives response queue backpressure...OK
+998/1249 runtime.tests.create_tab_test.test.a committed tab creation survives response queue backpressure...OK
+999/1249 runtime.tests.create_workspace_test.test.a committed workspace creation survives response queue backpressure...OK
+1000/1249 runtime.tests.detach_pane_test.test.a detach request commits session state before releasing geometry...OK
+1001/1249 runtime.tests.frame_ack_test.test.FrameAckHandler accepts only the exact outstanding frame...OK
+1002/1249 runtime.tests.frame_ack_test.test.FrameAckHandler leaves another pane's outstanding frame untouched...OK
+1003/1249 runtime.tests.frame_ack_test.test.FrameAckHandler rejects future obsolete and duplicate frame IDs...OK
+1004/1249 runtime.tests.frame_ack_test.test.an accepted ACK preserves a pending recovery snapshot...OK
+1005/1249 runtime.tests.frame_ack_test.test.frame ACK crosses controller and handler and records only accepted latency...OK
+1006/1249 runtime.tests.graphics_configuration_test.test.ConfigureGraphicsHandler updates existing attachments only for its client...OK
+1007/1249 runtime.tests.graphics_configuration_test.test.graphics policy survives workspace clearing and resets at aggregate deinit...OK
+1008/1249 runtime.tests.graphics_configuration_test.test.graphics configuration crosses controller and handler in both directions...OK
+1009/1249 runtime.tests.graphics_credit_test.test.ReturnGraphicsCreditHandler accepts the exact outstanding bound...OK
+1010/1249 runtime.tests.graphics_credit_test.test.ReturnGraphicsCreditHandler leaves existing credit unchanged for another pane...OK
+1011/1249 runtime.tests.graphics_credit_test.test.credit return crosses controller and handler with exact stale accounting...OK
+1012/1249 runtime.tests.graphics_credit_test.test.returned credit lets the next delivery pump stage a blocked image...OK
+1013/1249 runtime.tests.history_query_test.test.borrowed protocol bytes become one owned asynchronous history query...OK
+1014/1249 runtime.tests.move_tab_test.test.a committed tab move survives response queue backpressure...OK
+1015/1249 runtime.tests.open_pane_test.test.a default pane launch survives response queue backpressure...OK
+1016/1249 runtime.tests.pane_input_test.test.PaneInputHandler rejects a pane outside the client attachments...OK
+1017/1249 runtime.tests.pane_input_test.test.PaneInputHandler rejects an exited attached pane before side effects...OK
+1018/1249 runtime.tests.pane_input_test.test.PaneInputHandler preserves input handling until the pane exit is observed...OK
+1019/1249 runtime.tests.pane_input_test.test.pane input crosses controller and handler in observation-before-PTY order...OK
+1020/1249 runtime.tests.pane_input_test.test.PaneInputHandler leaves agent input untouched when descriptions are disabled...OK
+1021/1249 runtime.tests.pane_input_test.test.PaneInputHandler stops before the PTY queue when observation scheduling fails...OK
+1022/1249 runtime.tests.pane_input_test.test.PaneInputHandler preserves queued bytes when input scheduling fails...OK
+1023/1249 runtime.tests.pane_input_test.test.PaneInputHandler drops one whole saturated message and schedules the backlog...OK
+1024/1249 runtime.tests.pane_resize_test.test.PaneResizeHandler rejects a pane outside the client attachments...OK
+1025/1249 runtime.tests.pane_resize_test.test.PaneResizeHandler rejects a client without the workspace geometry lease...OK
+1026/1249 runtime.tests.pane_resize_test.test.PaneResizeHandler defers terminal and attachment mutation during ingest...OK
+1027/1249 runtime.tests.pane_resize_test.test.pane resize crosses controller and handler in synchronization order...OK
+1028/1249 runtime.tests.pane_resize_test.test.PaneResizeHandler keeps an equal resize allocation-free but refreshes dependents...OK
+1029/1249 runtime.tests.pane_resize_test.test.PaneResizeHandler propagates PTY resize failure before local mutation...OK
+1030/1249 runtime.tests.pane_resize_test.test.PaneResizeHandler closes the pane when its local resize cannot commit...OK
+1031/1249 runtime.tests.pane_resize_test.test.PaneResizeHandler stops before attachment sync on observation failure...OK
+1032/1249 runtime.tests.pane_resize_test.test.PaneResizeHandler stops before attachment sync on media failure...OK
+1033/1249 runtime.tests.pane_resize_test.test.PaneResizeHandler detaches the last projection after attachment allocation failure...OK
+1034/1249 runtime.tests.pane_resize_test.test.PaneResizeHandler retains workspace geometry when another attachment survives...OK
+1035/1249 runtime.tests.pane_resize_test.test.PaneResizeHandler preserves synchronized state when response scheduling fails...OK
+1036/1249 runtime.tests.pane_title_test.test.an OSC 0 title is captured once and delivered to the attachment...OK
+1037/1249 runtime.tests.pane_title_test.test.control bytes are dropped and a cleared title is delivered as empty...OK
+1038/1249 runtime.tests.pane_title_test.test.a long title is cut on a UTF-8 boundary...OK
+1039/1249 runtime.tests.pane_viewport_test.test.viewport change crosses controller and handler and schedules one snapshot...OK
+1040/1249 runtime.tests.pane_viewport_test.test.SetPaneViewportHandler leaves an identical historical viewport unchanged...OK
+1041/1249 runtime.tests.pane_viewport_test.test.SetPaneViewportHandler clamps beyond scrollback to bottom and releases its pin...OK
+1042/1249 runtime.tests.pane_viewport_test.test.SetPaneViewportHandler leaves existing projection state unchanged for another pane...OK
+1043/1249 runtime.tests.performance_isolation_test.test.performance probe measures bounded search turns against the complete query...PERF search_complete n=20 p50_ns=411375 p95_ns=441834 p99_ns=722792
+PERF search_incremental_total n=20 p50_ns=390167 p95_ns=639417 p99_ns=644459
+PERF search_max_turn n=20 p50_ns=13917 p95_ns=40875 p99_ns=85958
+OK
+1044/1249 runtime.tests.performance_isolation_test.test.performance probe measures runtime staging of a 4K RGBA transfer...PERF graphics_runtime_stage_4k n=20 p50_ns=2125 p95_ns=2625 p99_ns=3375
+PERF graphics_total_prepare_4k n=20 p50_ns=3002667 p95_ns=3957250 p99_ns=5065291
+OK
+1045/1249 runtime.tests.performance_isolation_test.test.performance probe counts work while host sampling is blocked or unchanged...PERF metrics_ticks ticks=100 inline_reads=0 scheduled_jobs=1 client_pumps=0
+OK
+1046/1249 runtime.tests.performance_isolation_test.test.performance probe counts TLS-facing writes without changing chunk framing...PERF chunk_framing wire_bytes=279 tls_facing_writes=6
+OK
+1047/1249 runtime.tests.performance_isolation_test.test.performance probe executes a queued history burst and preserves every correlation...PERF history_burst queued=32 sqlite_queries=1 elapsed_ns=262125
+OK
+1048/1249 runtime.tests.read_pane_test.test.recent rows dump scrollback and screen as plain text, newest last...OK
+1049/1249 runtime.tests.read_pane_test.test.screen rows never reach into scrollback...OK
+1050/1249 runtime.tests.read_pane_test.test.a dump that does not fit keeps a prefix and reports truncation...OK
+1051/1249 runtime.tests.read_pane_test.test.read crosses controller and encoder and degrades to a failure for a gone pane...OK
+1052/1249 runtime.tests.rename_tab_test.test.a committed rename survives response queue backpressure...OK
+1053/1249 runtime.tests.rename_workspace_test.test.a committed workspace rename survives response queue backpressure...OK
+1054/1249 runtime.tests.request_graphics_snapshot_test.test.RequestGraphicsSnapshotHandler discards transfer state and preserves transport policy...OK
+1055/1249 runtime.tests.request_graphics_snapshot_test.test.RequestGraphicsSnapshotHandler leaves other attachments unchanged...OK
+1056/1249 runtime.tests.request_graphics_snapshot_test.test.graphics recovery crosses controller and handler without stale accounting...OK
+1057/1249 runtime.tests.request_graphics_snapshot_test.test.repeated recovery requests emit one complete empty graphics snapshot...OK
+1058/1249 runtime.tests.request_snapshot_test.test.RequestCellSnapshotHandler marks an attached pane and coalesces repeats...OK
+1059/1249 runtime.tests.request_snapshot_test.test.RequestCellSnapshotHandler leaves an existing attachment unchanged for another pane...OK
+1060/1249 runtime.tests.request_snapshot_test.test.snapshot recovery crosses controller and handler without stale accounting...OK
+1061/1249 runtime.tests.request_snapshot_test.test.repeated recovery requests replace one outstanding frame with one full snapshot...OK
+1062/1249 runtime.tests.runtime_state_test.test.runtime-state subscription emits current projections once and future revisions...OK
+1063/1249 runtime.tests.runtime_state_test.test.runtime-state foreground updates reach panes without cell attachments...OK
+1064/1249 runtime.tests.runtime_stop_test.test.the first runtime-stop request notifies every active recipient once...OK
+1065/1249 runtime.tests.search_pane_test.test.search turns are bounded, wait for VT ownership and reject changed history...OK
+1066/1249 runtime.tests.search_pane_test.test.linear search preserves non-overlap and wide-cell coordinates...OK
+1067/1249 runtime.tests.search_pane_test.test.search finds matches in document order with absolute rows and folds ASCII case...OK
+1068/1249 runtime.tests.send_pane_text_test.test.a prompt reaches the PTY queue with Enter and is confirmed...OK
+1069/1249 runtime.tests.send_pane_text_test.test.a prompt is wrapped in bracketed paste once the child enables it...OK
+1070/1249 runtime.tests.send_pane_text_test.test.raw text is forwarded byte for byte...OK
+1071/1249 runtime.tests.send_pane_text_test.test.a prompt to a blocked agent is refused before any byte is queued...OK
+1072/1249 runtime.tests.send_pane_text_test.test.a stale generation is refused as pane_not_found...OK
+1073/1249 runtime.tests.shared_frame_test.test.a shared frame is copied once into the object that becomes emulator storage...OK
+1074/1249 runtime.tests.shared_frame_test.test.replacing a direct frame unmaps the previous object and keeps quota flat...OK
+1075/1249 runtime.tests.shared_frame_test.test.a frame published through a validated file loads with one copy and leaves the file alone...OK
+1076/1249 runtime.tests.shared_frame_test.test.file frames that fail validation keep the current image and count as unavailable...OK
+1077/1249 runtime.tests.shared_frame_test.test.the pane answers file capability queries the emulator would refuse...OK
+1078/1249 runtime.tests.shared_frame_test.test.without a shared-transport client the frame still loads with one copy and parks nothing...OK
+1079/1249 runtime.tests.show_notification_test.test.show notification confirms only recipients that accepted owned delivery...OK
+1080/1249 runtime.tests.tab_snapshot_test.test.a live aggregate tab crosses query and controller boundaries...OK
+1081/1249 runtime.tests.workspace_snapshot_test.test.workspace delivery includes distinct foreground names for tabs without attachments...OK
+1082/1249 runtime.tests.workspace_snapshot_test.test.an aggregate crosses workspace query and controller boundaries...OK
+1083/1249 transport.local.test.endpoint directory trust classification...OK
+1084/1249 transport.local.test.peer authentication rejects a different account...OK
+1085/1249 transport.local.test.a listener refuses a directory another account could rewrite...OK
+1086/1249 transport.local.test.a listener refuses a symlink as its endpoint directory...OK
+1087/1249 transport.local.test.a listener reclaims a socket left behind by a crashed process...OK
+1088/1249 workspace.commands.test.workspace commands move and remove tabs around repository state...OK
+1089/1249 workspace.commands.test.closing workspaces returns the predecessor from repository order...OK
+1090/1249 workspace.commands.test.removing a missing tab leaves repository state unchanged...OK
+1091/1249 workspace.commands.test.workspace rename is aggregate behavior recorded by the repository...OK
+1092/1249 workspace.events.test.TabCreated owns its canonical label and position...OK
+1093/1249 workspace.events.test.TabCreated rejects labels it cannot own...OK
+1094/1249 workspace.events.test.TabCreated preserves the automatic label marker...OK
+1095/1249 workspace.events.test.TabRemoved represents tab-only and whole-workspace removals...OK
+1096/1249 workspace.events.test.TabRemoved rejects impossible workspace handoffs...OK
+1097/1249 workspace.events.test.TabRenamed owns its label independently of the source buffer...OK
+1098/1249 workspace.events.test.TabRenamed rejects labels it cannot own...OK
+1099/1249 workspace.events.test.TabMoved identifies the committed tab and canonical position...OK
+1100/1249 workspace.events.test.WorkspaceRenamed owns its canonical name...OK
+1101/1249 workspace.events.test.WorkspaceRenamed rejects names the aggregate cannot store...OK
+1102/1249 workspace.events.test.WorkspaceCreated owns its canonical name and root tab identity...OK
+1103/1249 workspace.events.test.WorkspaceCreated owns path-derived names beyond the explicit label limit...OK
+1104/1249 workspace.events.test.WorkspaceCreated rejects names the aggregate cannot store...OK
+1105/1249 workspace.repository_support.test.Git probes reserve one workspace, reject stale results and recover after removal...OK
+1106/1249 workspace.repository_support.test.repository ensures stable path identity and owns aggregate storage...OK
+1107/1249 workspace.repository_support.test.checkpoint restoration preserves automatic labels and explicit former defaults...OK
+1108/1249 workspace.repository_support.test.workspace proposals stay invisible and preserve identities on rollback...OK
+1109/1249 workspace.repository_support.test.committing a workspace proposal advances state exactly once...OK
+1110/1249 workspace.repository_support.test.repository permits distinct aggregates with the same path...OK
+1111/1249 workspace.repository_support.test.repository removal selects stable predecessors and releases storage...OK
+1112/1249 workspace.repository_support.test.reader creates bounded list and tab projections...OK
+1113/1249 workspace.repository_support.test.failed insertion preserves repository identities and revision...OK
+1114/1249 workspace.repository_support.test.repository rejects aggregates beyond its fixed capacity...OK
+1115/1249 workspace.repository_support.test.restored workspaces keep their identities and push the counters past them...OK
+1116/1249 workspace.state_support.test.workspace state starts empty with nonzero identities and revision...OK
+1117/1249 workspace.state_support.test.workspace state revision never becomes zero...OK
+1118/1249 workspace.workspace_support.test.workspace derives its name from its path until explicitly renamed...OK
+1119/1249 workspace.workspace_support.test.workspace uses its root path as a non-empty derived name...OK
+1120/1249 workspace.workspace_support.test.workspace rejects paths that cannot cross the runtime protocol...OK
+1121/1249 workspace.workspace_support.test.workspace explicit names follow the request label limit...OK
+1122/1249 workspace.workspace_support.test.renameTab validates and mutates only the requested tab...OK
+1123/1249 workspace.workspace_support.test.tabs are created moved described and removed through the aggregate...OK
+1124/1249 workspace.workspace_support.test.renaming an automatic tab records names matching former defaults as explicit...OK
+1125/1249 workspace.workspace_support.test.workspace rejects tabs beyond its fixed capacity without mutation...OK
+1126/1249 workspace.workspace_support.test.anchored tab moves preserve the order and identity of every intervening tab...OK
+1127/1249 workspace.workspace_support.test.missing insertion anchor leaves the workspace untouched...OK
+1128/1249 pane.TextMetadataCapture.test.text metadata preserves explicit OSC 8 identity and wide-cell runs...OK
+1129/1249 pane.TextMetadataCapture.test.text metadata captures soft wrap and wide padding before blit clears damage...OK
+1130/1249 pane.TextMetadataCapture.test.text metadata drops an over-quota link table whole and recovers without allocation...OK
+1131/1249 agent.Capture.test.submitted composer capture preserves multiline text without terminal edits...OK
+1132/1249 agent.Capture.test.submitted composer capture truncates at a UTF-8 boundary and rejects invalid input...OK
+1133/1249 agent_panes.Session.test_0...OK
+1134/1249 agent_panes.ThreadMetadata.test.provider thread metadata owns names and distinguishes missing from clear...OK
+1135/1249 agent_panes.ThreadMetadata.test.provider thread metadata truncates UTF8 and ignores invalid names without wrapping revisions...OK
+1136/1249 agent_panes.Stream.test.Codex JSONL framing survives every byte boundary including UTF-8 and CRLF...OK
+1137/1249 agent_panes.Stream.test.large provider outputs drain to newline with bounded memory and preserve following frames...OK
+1138/1249 agent_panes.Stream.test.large provider output cannot hide malformed discarded content or missing newline...OK
+1139/1249 agent_panes.Stream.test.large provider output drain remains cancellable before the newline...OK
+1140/1249 agent_panes.OutputFrame.test.output projection preserves JSON values across every input boundary...OK
+1141/1249 agent_panes.OutputFrame.test.output projection validates discarded escapes and keeps UTF8 preview boundaries...OK
+1142/1249 agent_panes.OutputFrame.test.output projection bounds metadata and nesting instead of truncating authority...OK
+1143/1249 agent_panes.Transcript.test.streamed items retain identity and authoritative completion replaces deltas...OK
+1144/1249 agent_panes.Transcript.test.transcript scopes reused provider IDs and approval reviews to their source turn...OK
+1145/1249 agent_panes.Transcript.test.transcript evicts oldest items to enforce count and byte limits...OK
+1146/1249 agent_panes.Transcript.test.transcript truncation cannot expose partial UTF8 from bounded tool formatting...OK
+1147/1249 agent_panes.Transcript.test.transcript typed metadata survives streaming replacement and compaction without identity reuse...OK
+1148/1249 agent_panes.Transcript.test.transcript metadata is bounded valid UTF8 without NUL and reference truncation never invents identity...OK
+1149/1249 agent_panes.Transcript.test.transcript metadata pressure evicts old rows while keeping new structured identities...OK
+1150/1249 agent_panes.codex_test.test.Codex owns an optional thread start name independently from its preview...OK
+1151/1249 agent_panes.codex_test.test.Codex root thread name events distinguish omission clear and duplicate updates...OK
+1152/1249 agent_panes.codex_test.test.Codex initializes before creating a thread with explicit user approvals...OK
+1153/1249 agent_panes.codex_test.test.Codex official user item attaches its source identity to the accepted prompt...OK
+1154/1249 agent_panes.codex_test.test.Codex reused assistant IDs in a second turn preserve the first reply...OK
+1155/1249 agent_panes.codex_test.test.Codex approval requires matching explicit decision and preserves string RPC identity...OK
+1156/1249 agent_panes.codex_test.test.Codex stale approval is declined and completed turn revokes every approval...OK
+1157/1249 agent_panes.codex_test.test.Codex turn failure keeps the submitted user message and a visible error...OK
+1158/1249 agent_panes.codex_test.test.Codex deltas stay scoped to thread and completion replaces assistant text...OK
+1159/1249 agent_panes.codex_test.test.Codex unsupported server requests receive explicit errors without authorization...OK
+1160/1249 agent_panes.codex_test.test.Codex interrupts a turn even when requested before the start acknowledgement...OK
+1161/1249 agent_panes.codex_test.test.Codex rejects invalid envelopes and never consumes stale turn deltas...OK
+1162/1249 agent_panes.codex_test.test.Codex preserves multiline prompts as one escaped JSONL request...OK
+1163/1249 agent_panes.codex_test.test.Codex catalog retains arbitrary efforts and the effective configured default...OK
+1164/1249 agent_panes.codex_test.test.Codex sends complete settings on every turn and lowers access after full access...OK
+1165/1249 agent_panes.codex_test.test.Codex rejects unknown models and preserves effective settings when a turn is rejected...OK
+1166/1249 agent_panes.codex_test.test.Codex catalog bounds fail explicitly and an unmarked catalog supplies its first available model...OK
+1167/1249 agent_panes.codex_test.test.Codex replaces an unavailable configured model with the advertised default in either response order...OK
+1168/1249 agent_panes.codex_test.test.Codex preserves an available model and replaces an unavailable configured effort with notice...OK
+1169/1249 agent_panes.codex_test.test.Codex file approval includes the full change and requested session write root...OK
+1170/1249 agent_panes.codex_test.test.Codex command approval shows additional permissions and future scope fields...OK
+1171/1249 agent_panes.codex_test.test.Codex commandless network approval shows target and fails without an actionable context...OK
+1172/1249 agent_panes.codex_test.test.Codex refuses to expose approvals with truncated or oversized details...OK
+1173/1249 agent_panes.codex_test.test.Codex cannot present one-time approval when only broader grants are available...OK
+1174/1249 agent_panes.codex_test.test.Codex never exposes truncated RPC approval details or accepts truncated responses...OK
+1175/1249 agent_panes.codex_test.test.Codex tracks projected output incompleteness for deltas and completed items...OK
+1176/1249 agent_panes.codex_test.test.Codex typed command lifecycle preserves title and status while authoritative completion replaces output...OK
+1177/1249 agent_panes.codex_test.test.Codex distinguishes final message reasoning summary tools and structured plan updates...OK
+1178/1249 agent_panes.codex_test.test.Codex child tool preview does not replace the child response and retains public metadata...OK
+1179/1249 agent_panes.codex_test.test.Codex file change headings preserve actions move destinations and complete reviewable diffs...OK
+1180/1249 agent_panes.codex_test.test.Codex unrepresentable file change metadata cannot expose an approval...OK
+1181/1249 agent_panes.codex_test.test.recent conversations are scoped bounded normalized and selected without sending a prompt...OK
+1182/1249 agent_panes.codex_test.test.resume failure leaves the unused conversation available and rejects busy replacement...OK
+1183/1249 agent_panes.codex_test.test.malformed duplicate and wrong-directory recent references cannot be selected...OK
+1184/1249 agent_panes.codex_test.test.resume validates identity directory and permissions before replacing the conversation...OK
+1185/1249 agent_panes.codex_test.test.unnamed resumed conversation retains its preview and skips reserved request IDs...OK
+1186/1249 agent_panes.codex_test.test.Codex skill catalog excludes disabled and foreign cwd entries and invokes exact paths...OK
+1187/1249 agent_panes.codex_test.test.Codex slash rename updates metadata only after provider success and never starts a turn...OK
+1188/1249 agent_panes.codex_test.test.Codex slash clear keeps the old transcript until a new thread is ready...OK
+1189/1249 agent_panes.codex_test.test.oversized skill references reject the turn without breaking the provider session...OK
+1190/1249 agent_panes.codex_test.test.skill refresh ignores a late initial catalog and preserves correlation...OK
+1191/1249 agent_panes.codex_test.test.failed clear retains the current conversation and permits retry...OK
+1192/1249 agent_panes.codex_test.test.Codex image-only turn sends localImage inputs without an empty text block...OK
+1193/1249 agent_panes.codex_test.test.Codex mixed images preserve text and do not execute a slash command instead of the turn...OK
+1194/1249 agent_panes.codex_test.test.provider image echoes never display local paths or inline image bytes...OK
+1195/1249 agent_panes.adversarial_test.test.Codex adversarial metadata requires an exact known root and never accepts child titles...OK
+1196/1249 agent_panes.adversarial_test.test.Codex adversarial invalid names do not fail a turn or consume its pending approval...OK
+1197/1249 agent_panes.adversarial_test.test.Codex adversarial child completion cannot finish a later main turn...OK
+1198/1249 agent_panes.adversarial_test.test.Codex adversarial child deltas stay with their current message identity...OK
+1199/1249 agent_panes.adversarial_test.test.Codex adversarial child row eviction retires controls without changing its parent turn...OK
+1200/1249 agent_panes.adversarial_test.test.Codex adversarial closed child slots admit subsequent agents without losing historical rows...OK
+1201/1249 agent_panes.adversarial_test.test.Codex adversarial provider failure resolves active rows and revokes pending approvals...OK
+1202/1249 agent_panes.adversarial_test.test.Codex adversarial exhausted identities cannot bind child or plan updates to an unrelated row...OK
+1203/1249 agent_panes.adversarial_test.test.Codex adversarial stale main start cannot revoke a later pending prompt...OK
+1204/1249 agent_panes.adversarial_test.test.Codex adversarial provider NUL identities cannot poison a shared snapshot...OK
+1205/1249 agent_panes.adversarial_test.test.Codex adversarial source before dispatch receives task without overwriting child replies...OK
+1206/1249 agent_panes.session_test.test.agent pane provider streams while detached and reconnect snapshot retains explicit approval...OK
+1207/1249 agent_panes.session_test.test.agent pane provider startup timeout leaves a failed snapshot and shutdown joins idle reads...OK
+1208/1249 agent_panes.session_test.test.agent pane provider process launch failure reports an explicit error...OK
+1209/1249 agent_panes.session_test.test.agent pane provider startup deadline covers a missing model catalog after thread creation...OK
+1210/1249 agent_panes.session_test.test.agent pane provider rejects malformed and oversized control frames without growing memory...OK
+1211/1249 agent_panes.session_test.test.agent pane survives megabyte command output then approval completion and another prompt...OK
+1212/1249 agent_panes.session_test.test.agent pane provider explicit stop joins a live child and closes change receivers...OK
+1213/1249 agent_panes.session_test.test.agent pane provider rolls back every initialization allocation failure...OK
+1214/1249 agent_panes.session_test.test.agent pane provider inherits authentication environment without runtime authority...OK
+1215/1249 agent_panes.session_test.test.resume admission reserves the thread before provider progress and rejects racing prompts...OK
+1216/1249 agent_panes.session_test.test.agent checkpoint resumes directly before the catalog arrives and retains the startup claim...OK
+1217/1249 agent_panes.session_test.test.agent checkpoint failed startup retains its reference and cannot accept a new prompt...OK
+1218/1249 agent_panes.session_test.test.agent checkpoint startup rejects a provider returning a different working directory...OK
+1219/1249 agent_panes.ProviderHistory.test_0...OK
+1220/1249 agent_panes.history_test.test.history reader pages backward and forward without losing or duplicating inclusive anchors...OK
+1221/1249 agent_panes.history_test.test.history pages containing tool output survive wire validation...OK
+1222/1249 agent_panes.history_test.test.history initial live anchor is excluded and unavailable anchor fails explicitly...OK
+1223/1249 agent_panes.history_test.test.history repeated item IDs in distinct turns survive pages anchors and direction changes...OK
+1224/1249 agent_panes.history_test.test.historical identity includes unambiguous turn and item boundaries...OK
+1225/1249 agent_panes.history_test.test.history long UTF8 item has lossless exclusive fragments in both directions...OK
+1226/1249 agent_panes.history_test.test.history empty item boundaries do not repeat zero-byte activities...OK
+1227/1249 agent_panes.history_test.test.historical subagent status and unrecognized item stay visible...OK
+1228/1249 agent_panes.history_test.test.history reader rejects malformed legacy and oversized output without leaving a subprocess...OK
+1229/1249 agent_panes.history_test.test.history deadline includes provider startup and reaps a published process...OK
+1230/1249 agent_panes.history_test.test.history cancellation reaps a provider after confirmed startup...OK
+1231/1249 agent_panes.history_test.test.history cursor binds opaque provider anchor and exact fragment boundary to one thread...OK
+1232/1249 agent_panes.history_test.test.historical formatted tool output exceeds live scratch without truncation...OK
+1233/1249 agent_panes.history_test.test.historical dispatch retains every announced child status and result...OK
+1234/1249 agent_panes.LegacyHistory.test.legacy history pages preserve ordering and exclusive boundaries across both directions...OK
+1235/1249 runtime.application.AgentHistoryJob.test.agent history admission owns positions and allocates nothing...OK
+1236/1249 runtime.application.GenericCheckpointer.test.checkpoint pane records fit the bounded restore storage before application...OK
+1237/1249 runtime.tests.cell_publication_test.test.cell publication folds output before rendering and delivers the final frame without more output...OK
+1238/1249 runtime.tests.cell_publication_test.test.cell snapshot recovery bypasses an exhausted publication budget...OK
+1239/1249 runtime.tests.cell_publication_test.test.pane EOF publishes deferred cells before its exit message...OK
+1240/1249 runtime.tests.cell_publication_test.test.input grants only its pane a bounded number of immediate publication frames...OK
+1241/1249 runtime.tests.cell_publication_test.test.clients pace independently and an unacknowledged frame never advances its baseline...OK
+1242/1249 runtime.tests.cell_publication_test.test.publication deadlines park during ingest and outstanding acknowledgement...OK
+1243/1249 runtime.tests.cell_publication_test.test.reattaching a deferred pane starts with a fresh publication budget and snapshot...OK
+1244/1249 runtime.tests.cell_publication_test.test.a deferred no-op projection clears its deadline without more output...OK
+1245/1249 runtime.application.commands.ReportAgentHandler.test.lifecycle reports persist every changed session reference and ignore repeats...OK
+1246/1249 runtime.client.launch_cwd.test.createLaunchDirectory creates missing parents and refuses files and relative paths...OK
+1247/1249 runtime.application.commands.AgentThreadHandler.test.agent controls reject a terminal and stale generation before touching provider state...OK
+1248/1249 runtime.application.commands.AgentThreadHandler.test.rejected managed prompt cannot consume first title capture...OK
+1249/1249 runtime.application.commands.AgentThreadHandler.test.resume authority rejects stale selections and reserves a conversation across panes...OK
+1247 passed; 1 skipped; 1 failed.

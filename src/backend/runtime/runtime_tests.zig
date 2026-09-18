@@ -2,6 +2,7 @@
 
 const std_module = @import("std");
 const Runtime = @import("Runtime.zig");
+const cell_publication_test = @import("tests/cell_publication_test.zig");
 
 test "Runtime owns its endpoint until the injected stop dependency fires" {
     const std = std_module;
@@ -42,6 +43,7 @@ test "Runtime owns its endpoint until the injected stop dependency fires" {
 
 test {
     std_module.testing.refAllDecls(@This());
+    _ = cell_publication_test;
     _ = @import("tests/acknowledge_agent_test.zig");
     _ = @import("tests/cell_projection_test.zig");
     _ = @import("tests/close_pane_test.zig");

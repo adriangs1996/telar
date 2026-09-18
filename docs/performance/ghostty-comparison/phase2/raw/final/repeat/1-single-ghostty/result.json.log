@@ -1,0 +1,10 @@
+probe located 175,149 in 3770x2112
+probe located 175,149 in 1000x700
+probe floated window 25385 for process 53656
+probe requested foreground for primary window 25385
+probe acknowledged viewport at fixture geometry generation 2
+probe requested foreground for primary window 25385
+probe located 175,149 in 1000x700
+probe located 175,149 in 1000x700
+probe setup complete: ghostty/single, 1 panes
+probe finished 0: 

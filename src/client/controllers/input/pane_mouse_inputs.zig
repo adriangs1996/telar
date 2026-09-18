@@ -1,5 +1,6 @@
 //! Wires pane mouse policy to viewport and pane-input effects.
 
+const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const MultiplexerModel = @import("../../workspace/MultiplexerModel.zig");
 const ApplicationInputPaneMouseCommand = @import("../../application/input/pane_mouse.zig").Command;
@@ -9,7 +10,7 @@ const PaneMouseHandlerType = @import("../../application/input/PaneMouseHandler.z
 const ResolvedType = @import("../../application/input/Resolved.zig");
 const EffectType = @import("../../application/input/pane_mouse.zig").Effect;
 const copy_modes = @import("copy_modes.zig");
-const monotonic_module = @import("../../resources/clock.zig").monotonic;
+const monotonic_module = core.monotonic;
 const pane_viewports = @import("../panes/pane_viewports.zig");
 const std = @import("std");
 const pane_inputs = @import("pane_inputs.zig");

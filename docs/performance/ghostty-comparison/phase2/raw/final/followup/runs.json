@@ -1,0 +1,1309 @@
+[
+  {
+    "name": "diagnostic-repeat-baseline",
+    "kind": "diagnostic",
+    "variant": "baseline",
+    "pattern": "repeat",
+    "mib": 8,
+    "settle": 3,
+    "binary_key": "diagnostic-baseline",
+    "sampled": false,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/diagnostic-repeat-baseline",
+    "binary": "/private/tmp/tgb-phase1-final-diagnostic/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase1-final-diagnostic/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/diagnostic-repeat-baseline",
+      "--mib",
+      "8",
+      "--settle-seconds",
+      "3"
+    ],
+    "started_unix_ns": 1789757904884243000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 8388608,
+      "text_pattern": "repeat",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 8388608,
+          "text_pattern": "repeat",
+          "payload_sha256": "917f567a0a2274d6a26dda69e071b057ee805ad02c86a32d5ed25d608d3bb41c",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 157.022167,
+          "mib_per_second": 50.94822057830854
+        },
+        {
+          "name": "ansi",
+          "bytes": 8388608,
+          "text_pattern": "repeat",
+          "payload_sha256": "a44b2d60a8d860532982e6020545243aaa8715262d9a44b952d9d92298519647",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 141.528458,
+          "mib_per_second": 56.525734209582076
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase1-final-diagnostic/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 12775,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 70.7647920000003,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        48762
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "elapsed_seconds": 12.738680167
+  },
+  {
+    "name": "diagnostic-repeat-candidate",
+    "kind": "diagnostic",
+    "variant": "candidate",
+    "pattern": "repeat",
+    "mib": 8,
+    "settle": 3,
+    "binary_key": "diagnostic-candidate",
+    "sampled": false,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/diagnostic-repeat-candidate",
+    "binary": "/private/tmp/tgb-phase2-stable-diagnostic/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase2-stable-diagnostic/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/diagnostic-repeat-candidate",
+      "--mib",
+      "8",
+      "--settle-seconds",
+      "3"
+    ],
+    "started_unix_ns": 1789757917627648000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 8388608,
+      "text_pattern": "repeat",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 8388608,
+          "text_pattern": "repeat",
+          "payload_sha256": "917f567a0a2274d6a26dda69e071b057ee805ad02c86a32d5ed25d608d3bb41c",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 124.141166,
+          "mib_per_second": 64.44276510178743
+        },
+        {
+          "name": "ansi",
+          "bytes": 8388608,
+          "text_pattern": "repeat",
+          "payload_sha256": "a44b2d60a8d860532982e6020545243aaa8715262d9a44b952d9d92298519647",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 99.55512499999999,
+          "mib_per_second": 80.35749038535184
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase2-stable-diagnostic/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 12308,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 71.99641699999937,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        48922
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "elapsed_seconds": 12.717052709
+  },
+  {
+    "name": "diagnostic-variable-candidate",
+    "kind": "diagnostic",
+    "variant": "candidate",
+    "pattern": "variable",
+    "mib": 8,
+    "settle": 3,
+    "binary_key": "diagnostic-candidate",
+    "sampled": false,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/diagnostic-variable-candidate",
+    "binary": "/private/tmp/tgb-phase2-stable-diagnostic/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase2-stable-diagnostic/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/diagnostic-variable-candidate",
+      "--mib",
+      "8",
+      "--settle-seconds",
+      "3"
+    ],
+    "started_unix_ns": 1789757930352231000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 8388608,
+      "text_pattern": "variable",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 8388608,
+          "text_pattern": "variable",
+          "payload_sha256": "616c9c0bc0db83ef45ffad755503b4249a206081677cd05b41bb804755e0037d",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 136.11658300000002,
+          "mib_per_second": 58.77314742759888
+        },
+        {
+          "name": "ansi",
+          "bytes": 8388608,
+          "text_pattern": "variable",
+          "payload_sha256": "b3708df3c06e513a24def94140e9cfb448ad025dd8690ac0e93d80ac2f987ff6",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 181.171541,
+          "mib_per_second": 44.15704561457586
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase2-stable-diagnostic/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 65178,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 70.1982499999998,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        49108
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "elapsed_seconds": 12.936072584000005
+  },
+  {
+    "name": "diagnostic-variable-baseline",
+    "kind": "diagnostic",
+    "variant": "baseline",
+    "pattern": "variable",
+    "mib": 8,
+    "settle": 3,
+    "binary_key": "diagnostic-baseline",
+    "sampled": false,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/diagnostic-variable-baseline",
+    "binary": "/private/tmp/tgb-phase1-final-diagnostic/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase1-final-diagnostic/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/diagnostic-variable-baseline",
+      "--mib",
+      "8",
+      "--settle-seconds",
+      "3"
+    ],
+    "started_unix_ns": 1789757943298062000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 8388608,
+      "text_pattern": "variable",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 8388608,
+          "text_pattern": "variable",
+          "payload_sha256": "616c9c0bc0db83ef45ffad755503b4249a206081677cd05b41bb804755e0037d",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 148.470375,
+          "mib_per_second": 53.88280321916073
+        },
+        {
+          "name": "ansi",
+          "bytes": 8388608,
+          "text_pattern": "variable",
+          "payload_sha256": "b3708df3c06e513a24def94140e9cfb448ad025dd8690ac0e93d80ac2f987ff6",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 242.642833,
+          "mib_per_second": 32.970271163953974
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase1-final-diagnostic/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 104478,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 71.68725000000009,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        49465
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "elapsed_seconds": 13.037237292
+  },
+  {
+    "name": "sustained-0-repeat-baseline",
+    "kind": "sustained",
+    "variant": "baseline",
+    "pattern": "repeat",
+    "round": 0,
+    "mib": 64,
+    "settle": 0,
+    "binary_key": "baseline",
+    "sampled": false,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/sustained-0-repeat-baseline",
+    "binary": "/private/tmp/tgb-phase1-final-verified/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase1-final-verified/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/sustained-0-repeat-baseline",
+      "--mib",
+      "64",
+      "--settle-seconds",
+      "0"
+    ],
+    "started_unix_ns": 1789757956346570000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 67108864,
+      "text_pattern": "repeat",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 67108864,
+          "text_pattern": "repeat",
+          "payload_sha256": "615f6f96c21778175e1fe9c05eeea8ba89cc1bd30ad72252cda921c9de0b02e4",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 1098.6670000000001,
+          "mib_per_second": 58.25240951079808
+        },
+        {
+          "name": "ansi",
+          "bytes": 67108864,
+          "text_pattern": "repeat",
+          "payload_sha256": "652c3dc769a18e8f95f5d3cc8c812bfbc0db1fcc6e21b46b0855ee1f3d3d475a",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 1130.66475,
+          "mib_per_second": 56.60386953780951
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase1-final-verified/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 16813,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 74.92704199999966,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        49712
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "elapsed_seconds": 11.680886625
+  },
+  {
+    "name": "sustained-0-repeat-candidate",
+    "kind": "sustained",
+    "variant": "candidate",
+    "pattern": "repeat",
+    "round": 0,
+    "mib": 64,
+    "settle": 0,
+    "binary_key": "candidate",
+    "sampled": false,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/sustained-0-repeat-candidate",
+    "binary": "/private/tmp/tgb-phase2-stable/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase2-stable/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/sustained-0-repeat-candidate",
+      "--mib",
+      "64",
+      "--settle-seconds",
+      "0"
+    ],
+    "started_unix_ns": 1789757968031495000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 67108864,
+      "text_pattern": "repeat",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 67108864,
+          "text_pattern": "repeat",
+          "payload_sha256": "615f6f96c21778175e1fe9c05eeea8ba89cc1bd30ad72252cda921c9de0b02e4",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 717.0880830000001,
+          "mib_per_second": 89.24984463868157
+        },
+        {
+          "name": "ansi",
+          "bytes": 67108864,
+          "text_pattern": "repeat",
+          "payload_sha256": "652c3dc769a18e8f95f5d3cc8c812bfbc0db1fcc6e21b46b0855ee1f3d3d475a",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 853.348416,
+          "mib_per_second": 74.99867439843001
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase2-stable/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 14643,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 70.0505420000006,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        49843
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "elapsed_seconds": 11.040365582999996
+  },
+  {
+    "name": "sustained-0-variable-baseline",
+    "kind": "sustained",
+    "variant": "baseline",
+    "pattern": "variable",
+    "round": 0,
+    "mib": 64,
+    "settle": 0,
+    "binary_key": "baseline",
+    "sampled": false,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/sustained-0-variable-baseline",
+    "binary": "/private/tmp/tgb-phase1-final-verified/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase1-final-verified/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/sustained-0-variable-baseline",
+      "--mib",
+      "64",
+      "--settle-seconds",
+      "0"
+    ],
+    "started_unix_ns": 1789757979077883000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 67108864,
+      "text_pattern": "variable",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 67108864,
+          "text_pattern": "variable",
+          "payload_sha256": "899bd1abe995a13c97fcb5fddf311a5e207eb6994292a4d14fda3248859d55a8",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 1177.306792,
+          "mib_per_second": 54.36136140120051
+        },
+        {
+          "name": "ansi",
+          "bytes": 67108864,
+          "text_pattern": "variable",
+          "payload_sha256": "403468ccc7342828cef5adb625530b2d9854ca7ac184f0254f7bcff411b817f0",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 1239.989792,
+          "mib_per_second": 51.6133281200431
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase1-final-verified/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 568492,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 74.51429100000072,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        50020
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "elapsed_seconds": 12.993260207999995
+  },
+  {
+    "name": "sustained-0-variable-candidate",
+    "kind": "sustained",
+    "variant": "candidate",
+    "pattern": "variable",
+    "round": 0,
+    "mib": 64,
+    "settle": 0,
+    "binary_key": "candidate",
+    "sampled": false,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/sustained-0-variable-candidate",
+    "binary": "/private/tmp/tgb-phase2-stable/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase2-stable/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/sustained-0-variable-candidate",
+      "--mib",
+      "64",
+      "--settle-seconds",
+      "0"
+    ],
+    "started_unix_ns": 1789757992076301000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 67108864,
+      "text_pattern": "variable",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 67108864,
+          "text_pattern": "variable",
+          "payload_sha256": "899bd1abe995a13c97fcb5fddf311a5e207eb6994292a4d14fda3248859d55a8",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 757.3339169999999,
+          "mib_per_second": 84.50697712512459
+        },
+        {
+          "name": "ansi",
+          "bytes": 67108864,
+          "text_pattern": "variable",
+          "payload_sha256": "403468ccc7342828cef5adb625530b2d9854ca7ac184f0254f7bcff411b817f0",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 833.0534160000001,
+          "mib_per_second": 76.82580584964553
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase2-stable/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 252254,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 73.45608299999995,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        50242
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "elapsed_seconds": 12.253685999999988
+  },
+  {
+    "name": "sustained-1-variable-candidate",
+    "kind": "sustained",
+    "variant": "candidate",
+    "pattern": "variable",
+    "round": 1,
+    "mib": 64,
+    "settle": 0,
+    "binary_key": "candidate",
+    "sampled": false,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/sustained-1-variable-candidate",
+    "binary": "/private/tmp/tgb-phase2-stable/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase2-stable/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/sustained-1-variable-candidate",
+      "--mib",
+      "64",
+      "--settle-seconds",
+      "0"
+    ],
+    "started_unix_ns": 1789758004341023000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 67108864,
+      "text_pattern": "variable",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 67108864,
+          "text_pattern": "variable",
+          "payload_sha256": "899bd1abe995a13c97fcb5fddf311a5e207eb6994292a4d14fda3248859d55a8",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 769.485875,
+          "mib_per_second": 83.17241690758782
+        },
+        {
+          "name": "ansi",
+          "bytes": 67108864,
+          "text_pattern": "variable",
+          "payload_sha256": "403468ccc7342828cef5adb625530b2d9854ca7ac184f0254f7bcff411b817f0",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 870.769625,
+          "mib_per_second": 73.49819994008175
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase2-stable/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 263386,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 69.90391699999954,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        50535
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "elapsed_seconds": 12.311428833000008
+  },
+  {
+    "name": "sustained-1-variable-baseline",
+    "kind": "sustained",
+    "variant": "baseline",
+    "pattern": "variable",
+    "round": 1,
+    "mib": 64,
+    "settle": 0,
+    "binary_key": "baseline",
+    "sampled": false,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/sustained-1-variable-baseline",
+    "binary": "/private/tmp/tgb-phase1-final-verified/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase1-final-verified/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/sustained-1-variable-baseline",
+      "--mib",
+      "64",
+      "--settle-seconds",
+      "0"
+    ],
+    "started_unix_ns": 1789758016663646000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 67108864,
+      "text_pattern": "variable",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 67108864,
+          "text_pattern": "variable",
+          "payload_sha256": "899bd1abe995a13c97fcb5fddf311a5e207eb6994292a4d14fda3248859d55a8",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 1213.364042,
+          "mib_per_second": 52.74591778285119
+        },
+        {
+          "name": "ansi",
+          "bytes": 67108864,
+          "text_pattern": "variable",
+          "payload_sha256": "403468ccc7342828cef5adb625530b2d9854ca7ac184f0254f7bcff411b817f0",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 1224.7862499999999,
+          "mib_per_second": 52.25401575172811
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase1-final-verified/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 578152,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 71.75920800000046,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        50742
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "elapsed_seconds": 13.041721249999995
+  },
+  {
+    "name": "sustained-1-repeat-candidate",
+    "kind": "sustained",
+    "variant": "candidate",
+    "pattern": "repeat",
+    "round": 1,
+    "mib": 64,
+    "settle": 0,
+    "binary_key": "candidate",
+    "sampled": false,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/sustained-1-repeat-candidate",
+    "binary": "/private/tmp/tgb-phase2-stable/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase2-stable/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/sustained-1-repeat-candidate",
+      "--mib",
+      "64",
+      "--settle-seconds",
+      "0"
+    ],
+    "started_unix_ns": 1789758029714559000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 67108864,
+      "text_pattern": "repeat",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 67108864,
+          "text_pattern": "repeat",
+          "payload_sha256": "615f6f96c21778175e1fe9c05eeea8ba89cc1bd30ad72252cda921c9de0b02e4",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 734.024208,
+          "mib_per_second": 87.19058486419837
+        },
+        {
+          "name": "ansi",
+          "bytes": 67108864,
+          "text_pattern": "repeat",
+          "payload_sha256": "652c3dc769a18e8f95f5d3cc8c812bfbc0db1fcc6e21b46b0855ee1f3d3d475a",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 911.0677919999999,
+          "mib_per_second": 70.24724236986307
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase2-stable/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 13723,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 69.00570799999971,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        50877
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "elapsed_seconds": 11.092349958
+  },
+  {
+    "name": "sustained-1-repeat-baseline",
+    "kind": "sustained",
+    "variant": "baseline",
+    "pattern": "repeat",
+    "round": 1,
+    "mib": 64,
+    "settle": 0,
+    "binary_key": "baseline",
+    "sampled": false,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/sustained-1-repeat-baseline",
+    "binary": "/private/tmp/tgb-phase1-final-verified/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase1-final-verified/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/sustained-1-repeat-baseline",
+      "--mib",
+      "64",
+      "--settle-seconds",
+      "0"
+    ],
+    "started_unix_ns": 1789758040818116000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 67108864,
+      "text_pattern": "repeat",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 67108864,
+          "text_pattern": "repeat",
+          "payload_sha256": "615f6f96c21778175e1fe9c05eeea8ba89cc1bd30ad72252cda921c9de0b02e4",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 1068.995042,
+          "mib_per_second": 59.869314155341044
+        },
+        {
+          "name": "ansi",
+          "bytes": 67108864,
+          "text_pattern": "repeat",
+          "payload_sha256": "652c3dc769a18e8f95f5d3cc8c812bfbc0db1fcc6e21b46b0855ee1f3d3d475a",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 1110.47825,
+          "mib_per_second": 57.63282621699255
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase1-final-verified/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 15795,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 68.50099999999948,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        51016
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "elapsed_seconds": 11.65754425
+  },
+  {
+    "name": "sustained-2-repeat-baseline",
+    "kind": "sustained",
+    "variant": "baseline",
+    "pattern": "repeat",
+    "round": 2,
+    "mib": 64,
+    "settle": 0,
+    "binary_key": "baseline",
+    "sampled": false,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/sustained-2-repeat-baseline",
+    "binary": "/private/tmp/tgb-phase1-final-verified/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase1-final-verified/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/sustained-2-repeat-baseline",
+      "--mib",
+      "64",
+      "--settle-seconds",
+      "0"
+    ],
+    "started_unix_ns": 1789758052487336000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 67108864,
+      "text_pattern": "repeat",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 67108864,
+          "text_pattern": "repeat",
+          "payload_sha256": "615f6f96c21778175e1fe9c05eeea8ba89cc1bd30ad72252cda921c9de0b02e4",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 1033.1294579999999,
+          "mib_per_second": 61.94770607344351
+        },
+        {
+          "name": "ansi",
+          "bytes": 67108864,
+          "text_pattern": "repeat",
+          "payload_sha256": "652c3dc769a18e8f95f5d3cc8c812bfbc0db1fcc6e21b46b0855ee1f3d3d475a",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 1117.097583,
+          "mib_per_second": 57.29132438737001
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase1-final-verified/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 16761,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 70.9123749999998,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        51217
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "elapsed_seconds": 11.652534833999994
+  },
+  {
+    "name": "sustained-2-repeat-candidate",
+    "kind": "sustained",
+    "variant": "candidate",
+    "pattern": "repeat",
+    "round": 2,
+    "mib": 64,
+    "settle": 0,
+    "binary_key": "candidate",
+    "sampled": false,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/sustained-2-repeat-candidate",
+    "binary": "/private/tmp/tgb-phase2-stable/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase2-stable/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/sustained-2-repeat-candidate",
+      "--mib",
+      "64",
+      "--settle-seconds",
+      "0"
+    ],
+    "started_unix_ns": 1789758064145726000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 67108864,
+      "text_pattern": "repeat",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 67108864,
+          "text_pattern": "repeat",
+          "payload_sha256": "615f6f96c21778175e1fe9c05eeea8ba89cc1bd30ad72252cda921c9de0b02e4",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 707.5241249999999,
+          "mib_per_second": 90.45627949435647
+        },
+        {
+          "name": "ansi",
+          "bytes": 67108864,
+          "text_pattern": "repeat",
+          "payload_sha256": "652c3dc769a18e8f95f5d3cc8c812bfbc0db1fcc6e21b46b0855ee1f3d3d475a",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 868.6581249999999,
+          "mib_per_second": 73.6768564733105
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase2-stable/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 13954,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 71.75237499999997,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        51413
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "elapsed_seconds": 11.030205999999993
+  },
+  {
+    "name": "sustained-2-variable-baseline",
+    "kind": "sustained",
+    "variant": "baseline",
+    "pattern": "variable",
+    "round": 2,
+    "mib": 64,
+    "settle": 0,
+    "binary_key": "baseline",
+    "sampled": false,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/sustained-2-variable-baseline",
+    "binary": "/private/tmp/tgb-phase1-final-verified/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase1-final-verified/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/sustained-2-variable-baseline",
+      "--mib",
+      "64",
+      "--settle-seconds",
+      "0"
+    ],
+    "started_unix_ns": 1789758075186040000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 67108864,
+      "text_pattern": "variable",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 67108864,
+          "text_pattern": "variable",
+          "payload_sha256": "899bd1abe995a13c97fcb5fddf311a5e207eb6994292a4d14fda3248859d55a8",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 1189.2419169999998,
+          "mib_per_second": 53.815795663717765
+        },
+        {
+          "name": "ansi",
+          "bytes": 67108864,
+          "text_pattern": "variable",
+          "payload_sha256": "403468ccc7342828cef5adb625530b2d9854ca7ac184f0254f7bcff411b817f0",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 1261.630542,
+          "mib_per_second": 50.72800464908212
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase1-final-verified/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 555760,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 75.28454200000034,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        51690
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "elapsed_seconds": 13.065296332999992
+  },
+  {
+    "name": "sustained-2-variable-candidate",
+    "kind": "sustained",
+    "variant": "candidate",
+    "pattern": "variable",
+    "round": 2,
+    "mib": 64,
+    "settle": 0,
+    "binary_key": "candidate",
+    "sampled": false,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/sustained-2-variable-candidate",
+    "binary": "/private/tmp/tgb-phase2-stable/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase2-stable/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/sustained-2-variable-candidate",
+      "--mib",
+      "64",
+      "--settle-seconds",
+      "0"
+    ],
+    "started_unix_ns": 1789758088262903000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 67108864,
+      "text_pattern": "variable",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 67108864,
+          "text_pattern": "variable",
+          "payload_sha256": "899bd1abe995a13c97fcb5fddf311a5e207eb6994292a4d14fda3248859d55a8",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 752.156417,
+          "mib_per_second": 85.08868441921436
+        },
+        {
+          "name": "ansi",
+          "bytes": 67108864,
+          "text_pattern": "variable",
+          "payload_sha256": "403468ccc7342828cef5adb625530b2d9854ca7ac184f0254f7bcff411b817f0",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 878.1415000000001,
+          "mib_per_second": 72.88119283737302
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase2-stable/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 258808,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 70.50687499999952,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        51835
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "elapsed_seconds": 12.257509292000009
+  },
+  {
+    "name": "profile-candidate-repeat",
+    "kind": "profile",
+    "variant": "candidate",
+    "pattern": "repeat",
+    "mib": 1024,
+    "settle": 0,
+    "binary_key": "candidate",
+    "sampled": true,
+    "directory": "/private/tmp/tgb-p2-stable-followup/raw/profile-candidate-repeat",
+    "binary": "/private/tmp/tgb-phase2-stable/bin/telar",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/private/tmp/tgb-phase2-stable/bin/telar",
+      "--output",
+      "/private/tmp/tgb-p2-stable-followup/raw/profile-candidate-repeat",
+      "--mib",
+      "1024",
+      "--settle-seconds",
+      "0",
+      "--sample"
+    ],
+    "started_unix_ns": 1789758100533221000,
+    "valid": true,
+    "returncode": 0,
+    "result": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 1073741824,
+      "text_pattern": "repeat",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 1073741824,
+          "text_pattern": "repeat",
+          "payload_sha256": "f82012a86811d0b8ed26a3317e26631570210683558b4104321935bc0b8fff54",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 14144.366958,
+          "mib_per_second": 72.39631176429776
+        },
+        {
+          "name": "ansi",
+          "bytes": 1073741824,
+          "text_pattern": "repeat",
+          "payload_sha256": "8f3eebcd9e2499d32671d96906e961d5bd5d6e14f5e2a906b6d45247f8e4f04e",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 13277.508375,
+          "mib_per_second": 77.1229037164889
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/tgb-phase2-stable/bin/telar",
+      "sampled": true,
+      "detached": false,
+      "host_bytes": 54866,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "shutdown": {
+      "elapsed_ms": 72.22050000000024,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        51983
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    },
+    "profile_ascii_elapsed_ms": 14144.366958,
+    "profile_note": "Profiler starts before corpus hashing; inspect samples before attributing active-work fractions.",
+    "elapsed_seconds": 37.63853424999999
+  }
+]

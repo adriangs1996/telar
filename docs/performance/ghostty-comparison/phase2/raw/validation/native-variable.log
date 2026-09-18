@@ -1,0 +1,20 @@
+{"mode": "ghostty", "round": "0-single-ghostty", "viewport": [1000, 700], "pty_cells": [111, 35], "n": 100, "p50_ms": 11.527958209626377, "p95_ms": 23.080412566196173, "p99_ms": 30.295635466463903, "max_ms": 37.69691661000252}
+{"mode": "gui", "round": "0-single-baseline", "viewport": [1000, 700], "pty_cells": [111, 31], "n": 100, "p50_ms": 6.284333299845457, "p95_ms": 15.922802058048545, "p99_ms": 18.283166938927025, "max_ms": 18.448208225890994}
+{"mode": "gui", "round": "0-single-candidate", "viewport": [1000, 700], "pty_cells": [111, 31], "n": 100, "p50_ms": 6.651708390563726, "p95_ms": 16.711023019161075, "p99_ms": 18.277884104754776, "max_ms": 18.365416675806046}
+{"mode": "ghostty", "round": "0-splits-load-ghostty", "viewport": [499, 700], "pty_cells": [55, 35], "n": 100, "p50_ms": 10.322937509045005, "p95_ms": 14.80526867089793, "p99_ms": 16.457595478277657, "max_ms": 17.085791565477848}
+{"mode": "gui", "round": "0-splits-load-baseline", "viewport": [1000, 700], "pty_cells": [53, 29], "n": 100, "p50_ms": 17.844333313405514, "p95_ms": 24.035756336525083, "p99_ms": 26.689626416191498, "max_ms": 34.52724986709654}
+{"mode": "gui", "round": "0-splits-load-candidate", "viewport": [1000, 700], "pty_cells": [53, 29], "n": 100, "p50_ms": 19.438145915046334, "p95_ms": 29.131245915777978, "p99_ms": 33.14556217053905, "max_ms": 33.737458288669586}
+{"mode": "ghostty", "round": "0-tabs-load-ghostty", "viewport": [1000, 700], "pty_cells": [111, 36], "n": 100, "p50_ms": 10.96679165493697, "p95_ms": 20.58673141291365, "p99_ms": 22.47193913906813, "max_ms": 22.853666683658957}
+{"mode": "gui", "round": "0-tabs-load-baseline", "viewport": [1000, 700], "pty_cells": [111, 31], "n": 100, "p50_ms": 5.931062623858452, "p95_ms": 16.34408771060407, "p99_ms": 19.644122095778663, "max_ms": 34.93520827032626}
+{"mode": "gui", "round": "0-tabs-load-candidate", "viewport": [1000, 700], "pty_cells": [111, 31], "n": 100, "p50_ms": 6.150833331048489, "p95_ms": 16.492443880997595, "p99_ms": 17.864551262464378, "max_ms": 18.702875124290586}
+{"mode": "gui", "round": "1-single-candidate", "viewport": [1000, 700], "pty_cells": [111, 31], "n": 100, "p50_ms": 5.444000125862658, "p95_ms": 14.065483247395601, "p99_ms": 16.205624376889325, "max_ms": 17.327541718259454}
+{"mode": "gui", "round": "1-single-baseline", "viewport": [1000, 700], "pty_cells": [111, 31], "n": 100, "p50_ms": 6.895520957186818, "p95_ms": 14.031397912185637, "p99_ms": 18.995555895380683, "max_ms": 20.387083292007446}
+{"mode": "ghostty", "round": "1-single-ghostty", "viewport": [1000, 700], "pty_cells": [111, 35], "n": 100, "p50_ms": 13.244124944321811, "p95_ms": 24.51967503875494, "p99_ms": 29.99039201065898, "max_ms": 30.23133333772421}
+Traceback (most recent call last):
+  File "/tmp/tgb-phase2-native-ab.py", line 284, in <module>
+    main()
+  File "/tmp/tgb-phase2-native-ab.py", line 218, in main
+    result = measure(mode, directory, setup)
+  File "/private/tmp/tgb-p2-variable/harness/gui_tui_latency.py", line 203, in measure
+    raise RuntimeError(f'background output missed its requested rate; raw observations retained in {result_path}')
+RuntimeError: background output missed its requested rate; raw observations retained in /private/tmp/tgb-p2-variable/1-splits-load-candidate/result.json

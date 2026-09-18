@@ -1,5 +1,7 @@
 //! Public entrypoint for telar-core.
 
+const clock = @import("time/clock.zig");
+
 pub const AcknowledgeAgent = @import("schema/messages/AcknowledgeAgent.zig");
 pub const AgentAttachmentMarkers = @import("schema/types.zig").AgentAttachmentMarkers;
 pub const AgentBlockedReason = @import("schema/types.zig").AgentBlockedReason;
@@ -20,6 +22,11 @@ pub const AgentTitleState = @import("schema/types.zig").AgentTitleState;
 pub const Buffer = @import("ui/Buffer.zig");
 pub const Capability = @import("plugin.zig").Capability;
 pub const CapabilitySet = @import("plugin.zig").CapabilitySet;
+pub const DeadlineScheduler = @import("time/DeadlineScheduler.zig");
+pub const Pacer = @import("pacing/Pacer.zig");
+pub const deadline_timer = @import("time/deadline_timer.zig");
+pub const monotonic = clock.monotonic;
+pub const pace = @import("pacing/pace.zig");
 pub const Cell = @import("ui/Cell.zig");
 pub const ClickTracker = @import("ClickTracker.zig");
 pub const ClientIdentity = @import("schema/types.zig").ClientIdentity;
@@ -405,6 +412,9 @@ pub const workspace = @import("schema/id.zig").workspace;
 pub const worktree = @import("schema/id.zig").worktree;
 
 test {
+    _ = clock;
+    _ = deadline_timer;
+    _ = pace;
     _ = @import("AgentSkills.zig");
     _ = @import("agent_manifest.zig");
     _ = @import("diagnostics.zig");

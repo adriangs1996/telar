@@ -1,0 +1,32 @@
+{"mode": "gui", "round": "1-splits-load-baseline", "viewport": [1000, 700], "pty_cells": [53, 29], "n": 100, "p50_ms": 16.935979132540524, "p95_ms": 25.36523740272969, "p99_ms": 27.47738014906647, "max_ms": 31.53687482699752}
+{"round": 1, "case": "splits-load", "version": "baseline", "attempt": 0, "directory": "1-splits-load-baseline", "rate_miss_retained": false, "n": 100, "p50_ms": 16.935979132540524, "p95_ms": 25.36523740272969, "p99_ms": 27.47738014906647, "max_ms": 31.53687482699752}
+{"mode": "ghostty", "round": "1-splits-load-ghostty", "viewport": [499, 700], "pty_cells": [55, 35], "n": 100, "p50_ms": 9.792375029064715, "p95_ms": 15.544854255858809, "p99_ms": 16.641718903556466, "max_ms": 16.766499960795045}
+{"round": 1, "case": "splits-load", "version": "ghostty", "attempt": 0, "directory": "1-splits-load-ghostty", "rate_miss_retained": false, "n": 100, "p50_ms": 9.792375029064715, "p95_ms": 15.544854255858809, "p99_ms": 16.641718903556466, "max_ms": 16.766499960795045}
+{"mode": "gui", "round": "1-tabs-load-candidate", "viewport": [1000, 700], "pty_cells": [111, 31], "n": 100, "p50_ms": 5.363062489777803, "p95_ms": 13.951554300729185, "p99_ms": 16.701226034201685, "max_ms": 17.598124919459224}
+{"round": 1, "case": "tabs-load", "version": "candidate", "attempt": 0, "directory": "1-tabs-load-candidate", "rate_miss_retained": false, "n": 100, "p50_ms": 5.363062489777803, "p95_ms": 13.951554300729185, "p99_ms": 16.701226034201685, "max_ms": 17.598124919459224}
+{"mode": "gui", "round": "1-tabs-load-baseline", "viewport": [1000, 700], "pty_cells": [111, 31], "n": 100, "p50_ms": 6.01222924888134, "p95_ms": 16.36630422435701, "p99_ms": 18.35830292664469, "max_ms": 20.050666760653257}
+{"round": 1, "case": "tabs-load", "version": "baseline", "attempt": 0, "directory": "1-tabs-load-baseline", "rate_miss_retained": false, "n": 100, "p50_ms": 6.01222924888134, "p95_ms": 16.36630422435701, "p99_ms": 18.35830292664469, "max_ms": 20.050666760653257}
+{"mode": "ghostty", "round": "1-tabs-load-ghostty", "viewport": [1000, 700], "pty_cells": [111, 36], "n": 100, "p50_ms": 10.534583241678774, "p95_ms": 22.71437286399304, "p99_ms": 28.43989087035881, "max_ms": 31.011333223432302}
+{"round": 1, "case": "tabs-load", "version": "ghostty", "attempt": 0, "directory": "1-tabs-load-ghostty", "rate_miss_retained": false, "n": 100, "p50_ms": 10.534583241678774, "p95_ms": 22.71437286399304, "p99_ms": 28.43989087035881, "max_ms": 31.011333223432302}
+{"mode": "ghostty", "round": "2-single-ghostty", "viewport": [1000, 700], "pty_cells": [111, 35], "n": 100, "p50_ms": 10.943458415567875, "p95_ms": 19.459675007965412, "p99_ms": 24.875807631760864, "max_ms": 30.318249948322773}
+{"round": 2, "case": "single", "version": "ghostty", "attempt": 0, "directory": "2-single-ghostty", "rate_miss_retained": false, "n": 100, "p50_ms": 10.943458415567875, "p95_ms": 19.459675007965412, "p99_ms": 24.875807631760864, "max_ms": 30.318249948322773}
+{"mode": "gui", "round": "2-single-baseline", "viewport": [1000, 700], "pty_cells": [111, 31], "n": 100, "p50_ms": 5.314395879395306, "p95_ms": 16.429839620832354, "p99_ms": 17.57379831746222, "max_ms": 20.123708294704556}
+{"round": 2, "case": "single", "version": "baseline", "attempt": 0, "directory": "2-single-baseline", "rate_miss_retained": false, "n": 100, "p50_ms": 5.314395879395306, "p95_ms": 16.429839620832354, "p99_ms": 17.57379831746222, "max_ms": 20.123708294704556}
+{"mode": "gui", "round": "2-single-candidate", "viewport": [1000, 700], "pty_cells": [111, 31], "n": 100, "p50_ms": 5.059666582383215, "p95_ms": 17.028806230518967, "p99_ms": 23.24339992599562, "max_ms": 23.90174986794591}
+{"round": 2, "case": "single", "version": "candidate", "attempt": 0, "directory": "2-single-candidate", "rate_miss_retained": false, "n": 100, "p50_ms": 5.059666582383215, "p95_ms": 17.028806230518967, "p99_ms": 23.24339992599562, "max_ms": 23.90174986794591}
+{"mode": "ghostty", "round": "2-splits-load-ghostty", "viewport": [499, 700], "pty_cells": [55, 35], "n": 100, "p50_ms": 10.239145834930241, "p95_ms": 16.56564587028697, "p99_ms": 17.449739689473066, "max_ms": 18.116958439350128}
+{"round": 2, "case": "splits-load", "version": "ghostty", "attempt": 0, "directory": "2-splits-load-ghostty", "rate_miss_retained": false, "n": 100, "p50_ms": 10.239145834930241, "p95_ms": 16.56564587028697, "p99_ms": 17.449739689473066, "max_ms": 18.116958439350128}
+{"mode": "gui", "round": "2-splits-load-baseline", "viewport": [1000, 700], "pty_cells": [53, 29], "n": 100, "p50_ms": 18.898104201070964, "p95_ms": 30.77673956286162, "p99_ms": 32.910169665701694, "max_ms": 34.74195837043226}
+{"round": 2, "case": "splits-load", "version": "baseline", "attempt": 0, "directory": "2-splits-load-baseline", "rate_miss_retained": false, "n": 100, "p50_ms": 18.898104201070964, "p95_ms": 30.77673956286162, "p99_ms": 32.910169665701694, "max_ms": 34.74195837043226}
+{"round": 2, "case": "splits-load", "version": "candidate", "attempt": 0, "directory": "2-splits-load-candidate", "rate_miss_retained": true, "n": 100, "p50_ms": 19.28395824506879, "p95_ms": 31.299658317584544, "p99_ms": 32.03611708711833, "max_ms": 32.497333362698555}
+{"mode": "ghostty", "round": "2-tabs-load-ghostty", "viewport": [1000, 700], "pty_cells": [111, 36], "n": 100, "p50_ms": 10.789312422275543, "p95_ms": 23.991104098968204, "p99_ms": 28.128572548739612, "max_ms": 28.251250041648746}
+Traceback (most recent call last):
+  File "/tmp/tgb-phase2-variable-continue.py", line 321, in <module>
+    main()
+  File "/tmp/tgb-phase2-variable-continue.py", line 273, in main
+    verify(row, context)
+  File "/tmp/tgb-phase2-variable-continue.py", line 184, in verify
+    require(current == expected_geometry[key], f'geometry changed for {key}')
+  File "/tmp/tgb-phase2-variable-continue.py", line 53, in require
+    raise RuntimeError(message)
+RuntimeError: geometry changed for ('ghostty', 'tabs-load')

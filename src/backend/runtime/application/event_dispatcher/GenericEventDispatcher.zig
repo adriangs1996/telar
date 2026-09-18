@@ -66,6 +66,9 @@ pub fn Type(comptime Application: type) type {
                 },
                 .client_message => |value| return ClientEvents.handleMessage(application, value),
                 .client_sent => |value| return ClientEvents.handleSent(application, value),
+                .cell_publication_due => |result| {
+                    try application.cellPublicationDue(result);
+                },
                 .history_response => |result| {
                     try HistoryEvents.handle(application, result);
                 },

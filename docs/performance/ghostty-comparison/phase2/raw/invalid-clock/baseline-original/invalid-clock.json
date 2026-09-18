@@ -1,0 +1,6 @@
+{
+  "valid": false,
+  "classification": "invalid_clock",
+  "reason": "Python 3.9 macOS monotonic_ns uses a process-local epoch; parent deadlines compared against producer timestamps. Original result.json and host-output.bin are preserved unchanged.",
+  "original_script": "/tmp/tgb-phase2-final-frame-process-clock.py"
+}

@@ -27,6 +27,24 @@ index: GenericSlotIndex(2 * max_panes_per_tab) = .{},
 workspace: ?WorkspaceLocationType = null,
 shared_graphics: bool = false,
 
+/// Finds the next deferred publication that is not waiting for ingest or ACK.
+/// Example: `const deadline = attachments.cellDeadline();`.
+pub fn cellDeadline(store: *AttachmentStore) ?u64 {
+    var earliest: ?u64 = null;
+    for (&store.items) |*slot| {
+        const attachment = if (slot.*) |*value| value else continue;
+        const deadline = attachment.cell_deadline_ns orelse continue;
+
+        if (attachment.pane.ingest_pending or attachment.cells.hasOutstanding()) {
+            continue;
+        }
+
+        earliest = @min(earliest orelse deadline, deadline);
+    }
+
+    return earliest;
+}
+
 pub fn find(store: *AttachmentStore, pane_id: PaneIdType) ?*Attachment {
     const slot = store.index.get(raw_module(pane_id)) orelse return null;
     const attachment = &store.items[slot].?;

@@ -1,0 +1,21 @@
+probe located 175,149 in 3770x2112
+probe located 175,149 in 1000x700
+probe floated window 25247 for process 37187
+probe requested foreground for primary window 25247
+probe requested tabs 2/4
+probe located 175,149 in 1000x664
+probe requested tabs 3/4
+probe located 175,149 in 3770x2076
+probe requested tabs 4/4
+probe located 175,149 in 3770x2076
+probe window command failed with 1; discovering windows for process 37187
+probe located 175,149 in 3770x2076
+probe floated window 25254 for process 37187
+probe floated window 25256 for process 37187
+probe floated window 25258 for process 37187
+probe skipping stale window 25247 after 3 successful floats in this setup cycle
+probe located 175,149 in 1000x700
+probe requested foreground for primary window 25247
+probe located 175,149 in 1000x700
+probe setup complete: ghostty/tabs, 4 panes
+probe finished 0: 

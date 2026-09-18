@@ -1,0 +1,426 @@
+{
+  "status": "incomplete_superseded_by_v2",
+  "complete": false,
+  "planned_runs": 36,
+  "accepted_runs": 24,
+  "accepted_measured_samples": 2400,
+  "accepted_true_focus_flags": 11520,
+  "coverage": {
+    "single": {
+      "baseline": [
+        0,
+        1,
+        2
+      ],
+      "candidate": [
+        0,
+        1,
+        2
+      ],
+      "ghostty": [
+        0,
+        1,
+        2
+      ]
+    },
+    "splits-load": {
+      "baseline": [
+        0,
+        1,
+        2
+      ],
+      "candidate": [
+        0,
+        1,
+        2
+      ],
+      "ghostty": [
+        0,
+        1,
+        2
+      ]
+    },
+    "tabs-load": {
+      "baseline": [
+        0,
+        1
+      ],
+      "candidate": [
+        0,
+        1
+      ],
+      "ghostty": [
+        0,
+        1
+      ]
+    }
+  },
+  "retained_rate_misses": [
+    {
+      "round": 1,
+      "case": "splits-load",
+      "version": "candidate",
+      "directory": "1-splits-load-candidate",
+      "background_load": {
+        "endpoint": "bytes accepted by background PTY writes",
+        "scope": "periodic background checkpoints, not synchronized to echo samples",
+        "rate_scope": "per background producer/pane",
+        "relative_tolerance": 0.05,
+        "rate_met": false,
+        "fixtures": [
+          {
+            "pid": 29921,
+            "requested_mib_per_second": 1.0,
+            "observed_mib_per_second": [
+              0.9987899741110168,
+              1.000678947299972,
+              1.001307987818874,
+              0.9978395934616296,
+              0.99988996156851,
+              1.0000332021331682,
+              0.9997870453593385,
+              1.0006196221650534,
+              0.9993685913619716,
+              1.001532246293444,
+              0.98582405286675,
+              0.9997538925837703,
+              0.9983815970024461,
+              0.8472379600451254,
+              0.9957588142703192,
+              1.0008808525939983,
+              0.9985599088533688,
+              1.003464353411232,
+              0.9978570182333543,
+              0.9998959035310262,
+              0.9943461478035888
+            ],
+            "rate_met": false,
+            "max_write_ms": 80.444542
+          },
+          {
+            "pid": 29922,
+            "requested_mib_per_second": 1.0,
+            "observed_mib_per_second": [
+              0.9965379061039631,
+              1.00429710874336,
+              0.9998444402026154,
+              0.9969458563690135,
+              1.0025317031532759,
+              0.9982087981612388,
+              1.0013985057124744,
+              0.9968395203008861,
+              1.0023365090254897,
+              0.9850803507326196,
+              0.993431101749246,
+              1.0011206316608878,
+              0.9990407550344017,
+              0.8320126603455064,
+              0.9978234974960867,
+              1.0006337503361562,
+              0.9881232954960234,
+              0.99987893065956,
+              1.0007810044964798,
+              0.9996633069524262
+            ],
+            "rate_met": false,
+            "max_write_ms": 77.704167
+          },
+          {
+            "pid": 29924,
+            "requested_mib_per_second": 1.0,
+            "observed_mib_per_second": [
+              0.9976921558227615,
+              0.9986400180696322,
+              0.9998289452647284,
+              1.0000411243948812,
+              1.0012425506136011,
+              0.9984014753722052,
+              1.0019572040425038,
+              0.9999407535103545,
+              0.9830220946481822,
+              0.9940506071164084,
+              1.0012982247073534,
+              0.998150841721041,
+              0.8387421645624286,
+              1.0008035674640212,
+              0.9874314283595039,
+              1.0017037754669351,
+              0.9973445910629963,
+              1.001936577120615,
+              0.9930673156380111,
+              0.9871640563115448
+            ],
+            "rate_met": false,
+            "max_write_ms": 78.878834
+          }
+        ]
+      },
+      "summary": {
+        "n": 100,
+        "p50_ms": 18.150499905459583,
+        "p95_ms": 30.759731133002784,
+        "p99_ms": 36.43411171855429,
+        "max_ms": 83.54441658593714
+      }
+    },
+    {
+      "round": 2,
+      "case": "splits-load",
+      "version": "candidate",
+      "directory": "2-splits-load-candidate",
+      "background_load": {
+        "endpoint": "bytes accepted by background PTY writes",
+        "scope": "periodic background checkpoints, not synchronized to echo samples",
+        "rate_scope": "per background producer/pane",
+        "relative_tolerance": 0.05,
+        "rate_met": false,
+        "fixtures": [
+          {
+            "pid": 38366,
+            "requested_mib_per_second": 1.0,
+            "observed_mib_per_second": [
+              0.9995067434221212,
+              0.9976594650573679,
+              1.001641183449163,
+              1.0008022463866293,
+              0.997911263286171,
+              1.000961040671068,
+              0.9883059285266353,
+              1.0028733483954848,
+              0.9998714345312052,
+              0.9988717204509875,
+              1.001843725732535,
+              0.984364681995959,
+              0.9995462060224658,
+              0.973380044248853,
+              0.9895875758753921,
+              0.9423063244564877,
+              0.9715831063315109,
+              0.9838496921157116,
+              0.9850801860802201,
+              0.9904049567787276,
+              0.999761526709257
+            ],
+            "rate_met": false,
+            "max_write_ms": 5.731125
+          },
+          {
+            "pid": 38367,
+            "requested_mib_per_second": 1.0,
+            "observed_mib_per_second": [
+              1.0015056776697202,
+              0.9977869086366439,
+              0.9981960939576668,
+              0.9994823345975881,
+              1.0043627780283142,
+              0.9958137662235091,
+              1.0011483370944578,
+              0.9987873882125694,
+              0.9930549056700819,
+              0.9980097191176497,
+              0.9759591797797725,
+              0.9897116357671459,
+              0.9753712439960601,
+              0.9917294636253055,
+              0.9511750244676839,
+              0.9669870292464331,
+              0.9881955334335562,
+              0.9979652327195644,
+              0.9885086135544379,
+              0.9867236489959357,
+              0.9535983810566613
+            ],
+            "rate_met": true,
+            "max_write_ms": 6.975416
+          },
+          {
+            "pid": 38368,
+            "requested_mib_per_second": 1.0,
+            "observed_mib_per_second": [
+              0.9991892418621253,
+              1.0012751430623374,
+              0.999604490489666,
+              0.9978335357578357,
+              0.9997510534231675,
+              1.0029390826133837,
+              0.9981632956902132,
+              0.9990714470120038,
+              0.9996413786554074,
+              0.9875397176130178,
+              0.9917973400987137,
+              0.9891412152993799,
+              0.9984929406559081,
+              0.9623691404422241,
+              0.9342422327165993,
+              0.9834337236616806,
+              0.9857081606258238,
+              0.9787949970630097,
+              0.9837061642195611,
+              0.9975987748050639
+            ],
+            "rate_met": false,
+            "max_write_ms": 5.9615
+          }
+        ]
+      },
+      "summary": {
+        "n": 100,
+        "p50_ms": 19.28395824506879,
+        "p95_ms": 31.299658317584544,
+        "p99_ms": 32.03611708711833,
+        "max_ms": 32.497333362698555
+      }
+    }
+  ],
+  "candidate_binary": {
+    "path": "/private/tmp/tgb-phase2-final/bin/telar",
+    "sha256": "f5867f31b4e8e659e7a57737d7eef9944a59973c486c45431e7fe5444832ae52"
+  },
+  "accepted_run_directories": [
+    "0-single-ghostty",
+    "0-single-baseline",
+    "0-single-candidate",
+    "0-splits-load-ghostty",
+    "0-splits-load-baseline",
+    "0-splits-load-candidate",
+    "0-tabs-load-ghostty",
+    "0-tabs-load-baseline",
+    "0-tabs-load-candidate",
+    "1-single-candidate",
+    "1-single-baseline",
+    "1-single-ghostty",
+    "1-splits-load-candidate",
+    "1-splits-load-baseline",
+    "1-splits-load-ghostty",
+    "1-tabs-load-candidate",
+    "1-tabs-load-baseline",
+    "1-tabs-load-ghostty",
+    "2-single-ghostty",
+    "2-single-baseline",
+    "2-single-candidate",
+    "2-splits-load-ghostty",
+    "2-splits-load-baseline",
+    "2-splits-load-candidate"
+  ],
+  "raw_25": {
+    "directory": "2-tabs-load-ghostty",
+    "failure": {
+      "round": 2,
+      "case": "tabs-load",
+      "version": "ghostty",
+      "attempt": 0,
+      "directory": "2-tabs-load-ghostty",
+      "error_type": "RuntimeError",
+      "error": "geometry changed for ('ghostty', 'tabs-load')"
+    },
+    "native_probe_failed": 0,
+    "measured_samples": 100,
+    "summary": {
+      "n": 100,
+      "p50_ms": 10.789312422275543,
+      "p95_ms": 23.991104098968204,
+      "p99_ms": 28.128572548739612,
+      "max_ms": 28.251250041648746
+    },
+    "all_focus_flags_true": true,
+    "expected_geometry": {
+      "viewport": [
+        1000,
+        700
+      ],
+      "scene_pixels": [
+        1000,
+        700
+      ],
+      "primary_view_pixels": [
+        1000,
+        700
+      ],
+      "pty_cells": [
+        111,
+        36
+      ],
+      "backing_scale": 1,
+      "display_max_fps": 100,
+      "fixtures": [
+        [
+          "background",
+          111,
+          35
+        ],
+        [
+          "background",
+          111,
+          36
+        ],
+        [
+          "background",
+          111,
+          36
+        ],
+        [
+          "primary",
+          111,
+          36
+        ]
+      ]
+    },
+    "observed_geometry": {
+      "viewport": [
+        1000,
+        700
+      ],
+      "scene_pixels": [
+        1000,
+        700
+      ],
+      "primary_view_pixels": [
+        1000,
+        700
+      ],
+      "pty_cells": [
+        111,
+        36
+      ],
+      "backing_scale": 1,
+      "display_max_fps": 100,
+      "fixtures": [
+        [
+          "background",
+          111,
+          36
+        ],
+        [
+          "background",
+          111,
+          36
+        ],
+        [
+          "background",
+          111,
+          36
+        ],
+        [
+          "primary",
+          111,
+          36
+        ]
+      ]
+    },
+    "raw_sha256": "78a4de4638bc0fb489aaa7f71e9a2902d02d62b4a3698d6132539534ef3b7fe0",
+    "included_in_accepted_runs": false
+  },
+  "source_hashes": {
+    "manifest.json": "bccfe248e4b4d6759c6def3046eddb979c1cb08573f104836b73798ff407c6d6",
+    "runner.py": "02719ae9691490afb5a71ba9b13d41c07b8e2ebca6daf9707b7c3168fff3d6ad",
+    "runs.json": "8c427d3b6e648d855f774c81b8a0e6201421a92d72c5ce843824f2f5f8157dff",
+    "continuation/failure.json": "c1069d60c66f82f64bcf0dc372da09cd80e44b65ebb1c2c82690f8365e909f19"
+  },
+  "limitations": [
+    "The series stopped before completion and is not a complete four-round comparison.",
+    "Two accepted candidate splits-load runs missed the requested per-producer rate. Their complete latency observations are retained without retries.",
+    "The 25th raw Ghostty tabs-load run contains 100 measured responses but failed cross-round geometry validation; it remains available separately and is not pooled with accepted runs.",
+    "No missing run is imputed and no incomplete pair is used to claim a completed experiment.",
+    "Candidate v1 data must not be mixed with subsequent v2 measurements."
+  ]
+}

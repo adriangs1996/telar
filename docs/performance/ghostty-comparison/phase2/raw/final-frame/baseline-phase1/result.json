@@ -1,0 +1,111 @@
+{
+  "binary": "/private/tmp/tgb-phase1-final-verified/bin/telar",
+  "probe": "/Users/adriangonzalez/sandbox/telar/zig-out/bin/echo-probe",
+  "outer_pty": [
+    160,
+    40
+  ],
+  "clock": "clock_gettime_ns(CLOCK_MONOTONIC_RAW), shared kernel epoch",
+  "python": "3.9.20 (main, Sep 23 2024, 15:23:06) \n[Clang 16.0.0 (clang-1600.0.26.3)]",
+  "script": "/private/tmp/tgb-phase2-final-frame.py",
+  "cycles": [
+    {
+      "pid": 26816,
+      "cols": 160,
+      "rows": 38,
+      "cycle": 0,
+      "flood_started_ns": 1383214683427625,
+      "flood_elapsed_ms": 150.001916,
+      "flood_bytes": 7768320,
+      "flood_writes": 4080,
+      "final_started_ns": 1383214833429541,
+      "final_written_ns": 1383214833431250,
+      "output_after_final_bytes": 0,
+      "marker_observed_ns": 1383214855211250,
+      "observed_ms": 21.781709,
+      "marker_count": 1,
+      "synchronized": false,
+      "cleared_before_final": true
+    },
+    {
+      "pid": 26816,
+      "cols": 160,
+      "rows": 38,
+      "cycle": 1,
+      "flood_started_ns": 1383215261385875,
+      "flood_elapsed_ms": 150.043083,
+      "flood_bytes": 7199024,
+      "flood_writes": 3781,
+      "final_started_ns": 1383215411428958,
+      "final_written_ns": 1383215411430666,
+      "output_after_final_bytes": 0,
+      "marker_observed_ns": 1383215421072875,
+      "observed_ms": 9.643917,
+      "marker_count": 1,
+      "synchronized": false,
+      "cleared_before_final": true
+    },
+    {
+      "pid": 26816,
+      "cols": 160,
+      "rows": 38,
+      "cycle": 2,
+      "flood_started_ns": 1383215826891041,
+      "flood_elapsed_ms": 150.022459,
+      "flood_bytes": 7358960,
+      "flood_writes": 3865,
+      "final_started_ns": 1383215976913500,
+      "final_written_ns": 1383215976916875,
+      "output_after_final_bytes": 0,
+      "marker_observed_ns": 1383215995032000,
+      "observed_ms": 18.1185,
+      "marker_count": 1,
+      "synchronized": false,
+      "cleared_before_final": true
+    }
+  ],
+  "deadline_ms": 250,
+  "flood_ms": 150,
+  "host_input_bytes": 0,
+  "endpoint": "producer final-write start to committed host VT marker",
+  "scope": "correctness check, not a latency benchmark",
+  "passed": true,
+  "producer": {
+    "pid": 26816,
+    "cols": 160,
+    "rows": 38
+  },
+  "idle": {
+    "pid": 26816,
+    "cols": 160,
+    "rows": 38,
+    "cycles": 3,
+    "before_blocking_read_ns": 1383215977300375
+  },
+  "idle_verified_ms": 400,
+  "marker_count_before_shutdown": 1,
+  "synchronized_before_shutdown": false,
+  "shutdown": {
+    "elapsed_ms": 71.18541700000058,
+    "exited": true,
+    "returncode": 0,
+    "reply": "telar runtime is stopping\n",
+    "pids": [
+      26814
+    ],
+    "children_exited": true,
+    "socket_removed": true,
+    "cleanup_complete": true
+  },
+  "client_returncode": 0,
+  "cleanup": {
+    "sessions": [
+      26812,
+      26813,
+      26816
+    ],
+    "forced_cleanup": [],
+    "remaining": []
+  },
+  "failure": null
+}

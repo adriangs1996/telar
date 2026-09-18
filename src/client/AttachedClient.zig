@@ -3,6 +3,7 @@
 //! presentation adapter supplies its host. Adapters embed it, build it in
 //! place and bind the ports before the first event.
 
+const core = @import("telar-core");
 const std = @import("std");
 const OptionsType = @import("Options.zig");
 const ClientInit = @import("ClientInit.zig");
@@ -27,7 +28,7 @@ const CaptureResourcesType = @import("attachments/CaptureResources.zig");
 const OpeningType = @import("links/Opening.zig");
 const PointerType = @import("links/Pointer.zig");
 const LifecycleState = @import("connection/LifecycleState.zig");
-const SchedulerType = @import("resources/Scheduler.zig");
+const SchedulerType = core.DeadlineScheduler;
 const BarUpdatesState = @import("controllers/configuration/State.zig");
 const LeasesType = @import("application/input/key_routing.zig").Leases;
 const RegionType = @import("workspace/Region.zig");

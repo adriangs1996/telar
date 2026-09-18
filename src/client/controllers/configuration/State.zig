@@ -1,4 +1,5 @@
-const SchedulerType = @import("../../resources/Scheduler.zig");
+const core = @import("telar-core");
+const SchedulerType = core.DeadlineScheduler;
 const bar_updates = @import("bar_updates.zig");
 const CommandExecution = @import("CommandExecution.zig");
 const Synchronization = @import("Synchronization.zig");

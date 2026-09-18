@@ -1,0 +1,103 @@
+--- a/src/core/time/DeadlineScheduler.zig
++++ b/src/core/time/DeadlineScheduler.zig
+@@ -33,6 +33,25 @@
+     return .schedule;
+ }
+ 
++/// Keeps an armed wake unless new work needs an earlier deadline. Removing
++/// work or moving it later leaves at most one obsolete wake; its owner must
++/// complete that wake and re-evaluate current work before scheduling again.
++///
++/// ```zig
++/// if (scheduler.updateEarlier(io, earliest_pending_ns) == .schedule) startWorker();
++/// ```
++pub fn updateEarlier(scheduler: *DeadlineScheduler, io: std.Io, deadline_ns: ?u64) deadline_timer.Update {
++    if (scheduler.pending) {
++        const requested = deadline_ns orelse return .retained;
++        const armed = scheduler.deadline_ns.load(.acquire);
++        if (armed <= requested) {
++            return .retained;
++        }
++    }
++
++    return scheduler.update(io, deadline_ns);
++}
++
+ /// Releases the reservation when the caller could not schedule its worker.
+ ///
+ /// ```zig
+--- a/src/core/time/deadline_timer.zig
++++ b/src/core/time/deadline_timer.zig
+@@ -150,3 +150,61 @@
+     }
+     try std.testing.expect(!scheduler.pending);
+ }
++
++test "earliest deadline updates retain null unchanged and later requests without waking" {
++    const io = std.testing.io;
++    const first = clock.monotonic(io) + std.time.ns_per_s;
++    const later = first + std.time.ns_per_s;
++    var scheduler: Scheduler = .{};
++
++    try std.testing.expectEqual(Update.schedule, scheduler.updateEarlier(io, first));
++    for ([_]?u64{ null, first, later }) |requested| {
++        try std.testing.expectEqual(Update.retained, scheduler.updateEarlier(io, requested));
++        try std.testing.expectEqual(first, scheduler.deadline_ns.load(.acquire));
++        try std.testing.expect(scheduler.pending);
++        try std.testing.expect(!scheduler.wake.isSet());
++    }
++}
++
++test "an earlier deadline wakes the existing worker instead of scheduling another" {
++    const io = std.testing.io;
++    const earlier = clock.monotonic(io);
++    const first = earlier + std.time.ns_per_s;
++    var scheduler: Scheduler = .{};
++
++    try std.testing.expectEqual(Update.schedule, scheduler.updateEarlier(io, first));
++    try std.testing.expectEqual(Update.retained, scheduler.updateEarlier(io, earlier));
++    try std.testing.expectEqual(earlier, scheduler.deadline_ns.load(.acquire));
++    try std.testing.expect(scheduler.pending);
++    try std.testing.expect(scheduler.wake.isSet());
++    try wait(io, &scheduler);
++}
++
++test "an expired queued wake retains ownership until completion and then idles or rearms" {
++    const io = std.testing.io;
++    const expired = clock.monotonic(io);
++    const later = expired + std.time.ns_per_s;
++    var scheduler: Scheduler = .{};
++
++    try std.testing.expectEqual(Update.schedule, scheduler.updateEarlier(io, expired));
++    try wait(io, &scheduler);
++
++    // The worker has returned, but its owner has not consumed the completion.
++    for ([_]?u64{ later, null, later }) |requested| {
++        try std.testing.expectEqual(Update.retained, scheduler.updateEarlier(io, requested));
++        try std.testing.expectEqual(expired, scheduler.deadline_ns.load(.acquire));
++        try std.testing.expect(scheduler.pending);
++        try std.testing.expect(!scheduler.wake.isSet());
++    }
++
++    try scheduler.complete({});
++    try std.testing.expectEqual(Update.idle, scheduler.updateEarlier(io, null));
++    try std.testing.expectEqual(no_deadline, scheduler.deadline_ns.load(.acquire));
++    try std.testing.expect(!scheduler.pending);
++    try std.testing.expect(!scheduler.wake.isSet());
++
++    try std.testing.expectEqual(Update.schedule, scheduler.updateEarlier(io, later));
++    try std.testing.expectEqual(later, scheduler.deadline_ns.load(.acquire));
++    try std.testing.expect(scheduler.pending);
++    try std.testing.expect(!scheduler.wake.isSet());
++}
+--- a/src/backend/runtime/application/Application.zig
++++ b/src/backend/runtime/application/Application.zig
+@@ -827,7 +827,7 @@
+         earliest = @min(earliest orelse deadline, deadline);
+     }
+ 
+-    if (application.cell_timer.update(application.io, earliest) != .schedule) {
++    if (application.cell_timer.updateEarlier(application.io, earliest) != .schedule) {
+         return;
+     }
+ 

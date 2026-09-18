@@ -1,7 +1,8 @@
 //! Owns the replaceable timer used by the client notification lifecycle.
 
+const core = @import("telar-core");
 const Client = @import("../AttachedClient.zig");
-const monotonic_module = @import("clock.zig").monotonic;
+const monotonic_module = core.monotonic;
 
 /// Replaces the pending deadline from current model state and starts at most
 /// one inbox producer through the timer port.

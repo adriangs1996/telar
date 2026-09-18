@@ -1,0 +1,9 @@
+{
+  "round": 2,
+  "case": "tabs-load",
+  "version": "ghostty",
+  "attempt": 0,
+  "directory": "2-tabs-load-ghostty",
+  "error_type": "RuntimeError",
+  "error": "geometry changed for ('ghostty', 'tabs-load')"
+}

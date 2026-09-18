@@ -1,0 +1,14 @@
+probe located 175,149 in 3770x2112
+probe located 175,149 in 1000x700
+probe floated window 25291 for process 37943
+probe requested foreground for primary window 25291
+probe requested splits 2/4
+probe located 175,149 in 499x700
+probe requested splits 3/4
+probe requested splits 4/4
+probe located 175,149 in 499x700
+probe requested foreground for primary window 25291
+probe located 175,149 in 499x700
+probe located 175,149 in 499x700
+probe setup complete: ghostty/splits, 4 panes
+probe finished 0: 

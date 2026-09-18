@@ -1,5 +1,7 @@
 //! Public entrypoint for telar-frontend.
 
+const core = @import("telar-core");
+
 pub const ClientRun = @import("client/run.zig").run;
 pub const Color = @import("graphics/Color.zig");
 pub const CompositionResult = @import("workspace/CompositionResult.zig");
@@ -14,8 +16,8 @@ pub const GenericInput = @import("presentation/GenericInput.zig").Type;
 pub const GenericRouter = @import("input/GenericRouter.zig").Type;
 pub const Hits = @import("widgets/context_support.zig").Hits;
 pub const KittyGraphicsWriter = @import("graphics/KittyGraphicsWriter.zig");
-pub const Pacer = @import("presentation/Pacer.zig");
-pub const PacerStats = @import("presentation/PacerStats.zig");
+pub const Pacer = core.Pacer;
+pub const PacerStats = core.Pacer.Stats;
 pub const Position = @import("presentation/Position.zig");
 pub const Rasterizer = @import("graphics/Rasterizer.zig");
 pub const ResizeWatcher = @import("platform/platform.zig").ResizeWatcher;
@@ -27,7 +29,7 @@ pub const Store = @import("graphics/kitty_delivery.zig").Store;
 pub const Surface = @import("graphics/Surface.zig");
 pub const Tty = @import("platform/platform.zig").Tty;
 pub const apply = @import("presentation/frame.zig").apply;
-pub const coalesce = @import("presentation/pace.zig").coalesce;
+pub const coalesce = core.pace.coalesce;
 pub const enter = @import("platform/sequences.zig").enter;
 pub const installCrashRestore = @import("platform/platform.zig").installCrashRestore;
 pub const invalidatePlacements = @import("graphics/kitty_delivery.zig").invalidatePlacements;
@@ -87,7 +89,6 @@ test {
     _ = @import("platform/windows.zig");
     _ = @import("presentation/diff.zig");
     _ = @import("presentation/frame.zig");
-    _ = @import("presentation/pace.zig");
     _ = @import("presentation/pane_labels.zig");
     _ = @import("presentation/pointer.zig");
     _ = @import("presentation/screen_support.zig");

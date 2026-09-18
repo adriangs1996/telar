@@ -1,11 +1,12 @@
 //! Connects the sidebar animation use case to the client timer.
 
+const core = @import("telar-core");
 const std = @import("std");
 const Client = @import("../../AttachedClient.zig");
 const ActivityType = @import("../../application/notifications/sidebar_animation.zig").Activity;
 const SidebarAnimationChangeType = @import("../../model/SidebarAnimationChange.zig");
 const SidebarAnimationHandlerType = @import("../../application/notifications/SidebarAnimationHandler.zig");
-const monotonic_module = @import("../../resources/clock.zig").monotonic;
+const monotonic_module = core.monotonic;
 
 const interval_ns = 120 * std.time.ns_per_ms;
 

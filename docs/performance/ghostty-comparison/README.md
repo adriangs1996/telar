@@ -3,6 +3,10 @@
 El [diagnóstico posterior del cuello de botella](bottleneck.md) localiza una
 copia de 2,7 MB en el runtime y valida su efecto con una comparación A/B.
 La [primera optimización aplicada](phase1.md) eleva la GUI a **60,00 MiB/s ASCII y 55,71 MiB/s ANSI**.
+La [segunda optimización](phase2.md) alcanza **84,81 y 78,59 MiB/s** con texto
+repetido, y **79,15 y 72,53 MiB/s** con texto variable. También registra una
+regresión de latencia bajo carga: +3,82 ms de p95 por ronda en splits y
++1,89 ms en pestañas. El informe conserva ese coste y todas las observaciones.
 Los resultados originales de este informe conservan el binario anterior.
 
 Medición local del 18 de septiembre de 2026, con las ventanas de prueba en

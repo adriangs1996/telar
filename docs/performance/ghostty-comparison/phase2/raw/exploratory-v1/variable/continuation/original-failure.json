@@ -1,0 +1,9 @@
+{
+  "round": 1,
+  "case": "splits-load",
+  "version": "candidate",
+  "attempt": 0,
+  "directory": "1-splits-load-candidate",
+  "error_type": "RuntimeError",
+  "error": "background output missed its requested rate; raw observations retained in /private/tmp/tgb-p2-variable/1-splits-load-candidate/result.json"
+}

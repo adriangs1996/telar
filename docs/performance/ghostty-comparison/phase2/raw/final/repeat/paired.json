@@ -1,0 +1,152 @@
+{
+  "latency": {
+    "single": {
+      "rounds": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "n_rounds": 4,
+      "unpaired_reference_rounds": [],
+      "unpaired_candidate_rounds": [],
+      "quantiles": {
+        "p50": {
+          "paired_deltas_ms": [
+            0.20912487525492907,
+            -0.579833285883069,
+            0.8338958723470569,
+            -1.1745000956580043
+          ],
+          "mean_delta_ms": -0.17782815848477185,
+          "median_delta_ms": -0.18535420531407,
+          "delta_range_ms": [
+            -1.1745000956580043,
+            0.8338958723470569
+          ],
+          "geometric_mean_ratio": 0.9746860278533948,
+          "mean_delta_ci95_ms": [
+            -0.8771666907705367,
+            0.521510373800993
+          ],
+          "geometric_mean_ratio_ci95": [
+            0.8695086962613288,
+            1.092585798138015
+          ]
+        },
+        "p95": {
+          "paired_deltas_ms": [
+            1.7625020700506848,
+            0.7330998894758594,
+            -0.5209562717936933,
+            0.23855845211073756
+          ],
+          "mean_delta_ms": 0.5533010349608971,
+          "median_delta_ms": 0.48582917079329846,
+          "delta_range_ms": [
+            -0.5209562717936933,
+            1.7625020700506848
+          ],
+          "geometric_mean_ratio": 1.0353608968798713,
+          "mean_delta_ci95_ms": [
+            -0.20744223147630514,
+            1.381516165565698
+          ],
+          "geometric_mean_ratio_ci95": [
+            0.9881798070266282,
+            1.0886566154901638
+          ]
+        }
+      }
+    }
+  },
+  "throughput": {
+    "baseline": {
+      "ascii": {
+        "rounds": [
+          65.67214413393833,
+          65.8227190290675,
+          67.49528832266041,
+          59.60267397264324
+        ],
+        "median": 65.74743158150292,
+        "minimum": 59.60267397264324,
+        "maximum": 67.49528832266041,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      },
+      "ansi": {
+        "rounds": [
+          52.57969109431482,
+          54.535895270630114,
+          61.067303802203,
+          59.14895740720545
+        ],
+        "median": 56.84242633891778,
+        "minimum": 52.57969109431482,
+        "maximum": 61.067303802203,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      }
+    },
+    "candidate": {
+      "ascii": {
+        "rounds": [
+          85.5558158710081,
+          83.36206111529039,
+          84.70859771195512,
+          84.91682603874268
+        ],
+        "median": 84.8127118753489,
+        "minimum": 83.36206111529039,
+        "maximum": 85.5558158710081,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": true
+      },
+      "ansi": {
+        "rounds": [
+          78.68065600862435,
+          71.95126201389334,
+          78.4932567865785,
+          78.91161159704771
+        ],
+        "median": 78.58695639760143,
+        "minimum": 71.95126201389334,
+        "maximum": 78.91161159704771,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      }
+    },
+    "ghostty": {
+      "ascii": {
+        "rounds": [
+          81.4553356009209,
+          88.06680968349615,
+          68.72178181629728,
+          76.47888096407289
+        ],
+        "median": 78.9671082824969,
+        "minimum": 68.72178181629728,
+        "maximum": 88.06680968349615,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      },
+      "ansi": {
+        "rounds": [
+          87.52655459934375,
+          86.11302036833425,
+          58.942335055861676,
+          89.47023866454575
+        ],
+        "median": 86.81978748383901,
+        "minimum": 58.942335055861676,
+        "maximum": 89.47023866454575,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      }
+    }
+  },
+  "note": "Latency differences are candidate minus baseline; bootstrap units are complete paired rounds. All retained rate misses are included.",
+  "rate_misses": [],
+  "load_note": "The target rate is per producer. Identical observed load is not claimed for intervals with rate_met=false."
+}

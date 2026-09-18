@@ -1,0 +1,117 @@
+{
+  "pooled_latency_ms": {
+    "single": {
+      "baseline": {
+        "n": 160,
+        "p50_ms": 6.25187496189028,
+        "p95_ms": 16.49284787708893,
+        "p99_ms": 19.529462051577866,
+        "max_ms": 27.109374990686774
+      },
+      "candidate": {
+        "n": 160,
+        "p50_ms": 5.797395831905305,
+        "p95_ms": 16.940420889295634,
+        "p99_ms": 27.528481727931624,
+        "max_ms": 32.16370823793113
+      },
+      "ghostty": {
+        "n": 160,
+        "p50_ms": 12.020916678011417,
+        "p95_ms": 23.10867480700834,
+        "p99_ms": 33.1234342069365,
+        "max_ms": 35.135624930262566
+      }
+    }
+  },
+  "throughput_mib_per_second": {
+    "baseline": {
+      "ascii": {
+        "rounds": [
+          65.67214413393833,
+          65.8227190290675,
+          67.49528832266041,
+          59.60267397264324
+        ],
+        "median": 65.74743158150292,
+        "minimum": 59.60267397264324,
+        "maximum": 67.49528832266041,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      },
+      "ansi": {
+        "rounds": [
+          52.57969109431482,
+          54.535895270630114,
+          61.067303802203,
+          59.14895740720545
+        ],
+        "median": 56.84242633891778,
+        "minimum": 52.57969109431482,
+        "maximum": 61.067303802203,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      }
+    },
+    "candidate": {
+      "ascii": {
+        "rounds": [
+          85.5558158710081,
+          83.36206111529039,
+          84.70859771195512,
+          84.91682603874268
+        ],
+        "median": 84.8127118753489,
+        "minimum": 83.36206111529039,
+        "maximum": 85.5558158710081,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": true
+      },
+      "ansi": {
+        "rounds": [
+          78.68065600862435,
+          71.95126201389334,
+          78.4932567865785,
+          78.91161159704771
+        ],
+        "median": 78.58695639760143,
+        "minimum": 71.95126201389334,
+        "maximum": 78.91161159704771,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      }
+    },
+    "ghostty": {
+      "ascii": {
+        "rounds": [
+          81.4553356009209,
+          88.06680968349615,
+          68.72178181629728,
+          76.47888096407289
+        ],
+        "median": 78.9671082824969,
+        "minimum": 68.72178181629728,
+        "maximum": 88.06680968349615,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      },
+      "ansi": {
+        "rounds": [
+          87.52655459934375,
+          86.11302036833425,
+          58.942335055861676,
+          89.47023866454575
+        ],
+        "median": 86.81978748383901,
+        "minimum": 58.942335055861676,
+        "maximum": 89.47023866454575,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      }
+    }
+  },
+  "requested_background_mib_per_second": null,
+  "rate_misses": [],
+  "background_load_runs": [],
+  "load_note": "All samples are retained. Rate misses preserve their observed throughput and do not establish equal load."
+}

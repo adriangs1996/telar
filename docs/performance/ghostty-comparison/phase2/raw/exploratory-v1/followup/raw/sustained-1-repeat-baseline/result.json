@@ -1,0 +1,36 @@
+{
+  "endpoint": "pty_write_to_dsr_response",
+  "bytes_per_case": 67108864,
+  "text_pattern": "repeat",
+  "cases": [
+    {
+      "name": "ascii",
+      "bytes": 67108864,
+      "text_pattern": "repeat",
+      "payload_sha256": "615f6f96c21778175e1fe9c05eeea8ba89cc1bd30ad72252cda921c9de0b02e4",
+      "cols": 111,
+      "rows": 33,
+      "elapsed_ms": 1099.866208,
+      "mib_per_second": 58.18889564429641
+    },
+    {
+      "name": "ansi",
+      "bytes": 67108864,
+      "text_pattern": "repeat",
+      "payload_sha256": "652c3dc769a18e8f95f5d3cc8c812bfbc0db1fcc6e21b46b0855ee1f3d3d475a",
+      "cols": 111,
+      "rows": 33,
+      "elapsed_ms": 1168.6398339999998,
+      "mib_per_second": 54.76452037488909
+    }
+  ],
+  "failed": false,
+  "binary": "/private/tmp/tgb-phase1-final-verified/bin/telar",
+  "sampled": false,
+  "detached": false,
+  "host_bytes": 17626,
+  "outer_pty": [
+    111,
+    35
+  ]
+}

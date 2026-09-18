@@ -1,5 +1,6 @@
 //! Connects notification use cases to the client timer infrastructure.
 
+const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const NotificationType = @import("../../input/Notification.zig");
 const RequestIdType = @import("telar-core").RequestId;
@@ -9,7 +10,7 @@ const DeliveryOutcome = @import("../../application/notifications/notifications.z
 const HandleNotificationDeliveryHandlerType = @import("../../application/notifications/HandleNotificationDeliveryHandler.zig");
 const CoreNotification = @import("telar-core").Notification;
 const NotificationPublicationType = @import("../../model/NotificationPublication.zig");
-const monotonic_module = @import("../../resources/clock.zig").monotonic;
+const monotonic_module = core.monotonic;
 const std = @import("std");
 const InputType = @import("../../notifications/NotificationInput.zig");
 const PublishNotificationHandlerType = @import("../../application/notifications/PublishNotificationHandler.zig");

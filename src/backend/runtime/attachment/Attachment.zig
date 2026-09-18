@@ -16,6 +16,8 @@ const encodePaneProgress_module = @import("telar-core").encodePaneProgress;
 const encodePaneExited_module = @import("telar-core").encodePaneExited;
 const max_image_bytes_per_pane_module = @import("telar-core").max_image_bytes_per_pane;
 const attachment_namespace = @import("attachment_namespace.zig");
+const Pacer = @import("telar-core").Pacer;
+const monotonic = @import("telar-core").monotonic;
 /// Per-client rendering state. It is disposable: reconnecting creates a fresh
 /// baseline while the pane and its PTY continue to exist.
 const Attachment = @This();
@@ -29,6 +31,8 @@ pub const CommitEffect = @import("CommitEffect.zig");
 pane: *PaneType,
 cells: CellSync,
 graphics: GraphicsSync,
+cell_pacer: Pacer = .{},
+cell_deadline_ns: ?u64 = null,
 observed_cwd_revision: u64 = 0,
 observed_foreground_revision: u64 = 0,
 /// Starts at the empty-title revision so a fresh attachment learns only
@@ -153,6 +157,8 @@ pub fn prepareProgress(attachment: *Attachment, buffer: []u8) !?PreparedType {
 /// ```
 pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparationType) !?PreparedType {
     const pane = attachment.pane;
+    const scheduled_deadline = attachment.cell_deadline_ns;
+    attachment.cell_deadline_ns = null;
     if (pane.ingest_pending) {
         return null;
     }
@@ -176,22 +182,50 @@ pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparationTyp
         return null;
     }
 
-    const payload = (try attachment.cells.prepare(.{
+    const now_ns = monotonic(preparation.io);
+    if (pane.cell_input_ns) |input_ns| {
+        if (attachment.cell_pacer.last_input_ns != input_ns) {
+            attachment.cell_pacer.noteInput(input_ns);
+        }
+    }
+
+    if (!pane.output_done) {
+        if (attachment.cell_pacer.waitUntil(now_ns)) |deadline| {
+            if (deadline > now_ns) {
+                attachment.cell_deadline_ns = deadline;
+                attachment.cell_pacer.noteThrottled();
+                return null;
+            }
+        }
+    }
+
+    const payload = try attachment.cells.prepare(.{
         .io = preparation.io,
         .buffer = preparation.buffer,
         .pane = pane,
         .force_snapshot = false,
         .metrics = preparation.metrics,
-    })) orelse
+    });
+    if (pane.render_pending or attachment.cells.observed_revision != pane.cell_revision) {
         return null;
+    }
 
-    return .{ .bytes = payload, .effect = .cells };
+    // A no-op still paid for projection and diff; synchronized holds did not.
+    attachment.cell_pacer.record(.{
+        .now = now_ns,
+        .scheduled_deadline = if (scheduled_deadline) |deadline| (if (now_ns >= deadline) deadline else null) else null,
+        .absorbed = 1,
+    });
+
+    return if (payload) |bytes| .{ .bytes = bytes, .effect = .cells } else null;
 }
 
 pub fn prepareExit(attachment: *Attachment, buffer: []u8) !?PreparedType {
     const pane = attachment.pane;
     if (pane.ingest_pending or attachment.exit_sent or !pane.output_done or
-        pane.exit == null or attachment.outstandingFrameId() != 0)
+        pane.exit == null or attachment.outstandingFrameId() != 0 or
+        attachment.cells.snapshot_pending or pane.render_pending or
+        attachment.cells.observed_revision != pane.cell_revision)
     {
         return null;
     }

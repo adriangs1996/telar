@@ -1,0 +1,13 @@
+{
+  "pid": 48637,
+  "cols": 160,
+  "rows": 38,
+  "cycle": 2,
+  "flood_started_ns": 1384611304484291,
+  "flood_elapsed_ms": 150.018334,
+  "flood_bytes": 11654384,
+  "flood_writes": 6121,
+  "final_started_ns": 1384611454502625,
+  "final_written_ns": 1384611454504125,
+  "output_after_final_bytes": 0
+}

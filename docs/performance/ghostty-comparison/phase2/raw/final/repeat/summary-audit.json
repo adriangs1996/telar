@@ -1,0 +1,483 @@
+{
+  "source": "/tmp/tgb-p2-stable-repeat",
+  "validation": {
+    "valid": true,
+    "issues": [],
+    "runs": 12,
+    "rounds_per_version": 4,
+    "total_measured_samples": 480,
+    "total_samples_including_warmup": 720,
+    "true_focus_flags": 2880,
+    "expected_focus_flags": 2880,
+    "runtime_cleanups_passed": 8,
+    "rejected_startups": 0,
+    "retained_rate_misses": 0,
+    "raw_results_equal_index": true,
+    "hashes_verified": true,
+    "hashes_checked": 17,
+    "payload_sha256": {
+      "ascii": "917f567a0a2274d6a26dda69e071b057ee805ad02c86a32d5ed25d608d3bb41c",
+      "ansi": "a44b2d60a8d860532982e6020545243aaa8715262d9a44b952d9d92298519647"
+    },
+    "payload_bytes_per_case": 8388608,
+    "ghostty_cleanup_evidence": "measure returned after cleanup_host; standalone runs have no separate shutdown.json",
+    "fixture_receipts": {
+      "ready_snapshot_only": 8,
+      "finished_with_60_inputs": 4,
+      "input_count_evidence": "Native probe verified 60 marker GPU completions per run. Ready receipts retain pre-input snapshots and cannot independently verify final input count."
+    }
+  },
+  "method": {
+    "latency_endpoint": "native keyDown injection to verified marker GPU completion callback",
+    "throughput_endpoint": "PTY write to DSR response; Telar responds within runtime",
+    "warmup_per_run": 20,
+    "samples_per_run": 40,
+    "quantile_interpolation": "linear at (n-1)*p",
+    "bootstrap": {
+      "samples": 10000,
+      "seed": 20260918,
+      "unit": "paired round",
+      "interval": "percentile 95%; p50/p95 only"
+    },
+    "vsync": "true",
+    "display_max_fps": 100,
+    "backing_scale": 1,
+    "outlier_policy": "All post-warmup samples retained."
+  },
+  "geometry": {
+    "baseline": [
+      {
+        "round": 0,
+        "viewport": [
+          1000,
+          700
+        ],
+        "pty_cells": [
+          111,
+          31
+        ]
+      },
+      {
+        "round": 1,
+        "viewport": [
+          1000,
+          700
+        ],
+        "pty_cells": [
+          111,
+          31
+        ]
+      },
+      {
+        "round": 2,
+        "viewport": [
+          1000,
+          700
+        ],
+        "pty_cells": [
+          111,
+          31
+        ]
+      },
+      {
+        "round": 3,
+        "viewport": [
+          1000,
+          700
+        ],
+        "pty_cells": [
+          111,
+          31
+        ]
+      }
+    ],
+    "candidate": [
+      {
+        "round": 0,
+        "viewport": [
+          1000,
+          700
+        ],
+        "pty_cells": [
+          111,
+          31
+        ]
+      },
+      {
+        "round": 1,
+        "viewport": [
+          1000,
+          700
+        ],
+        "pty_cells": [
+          111,
+          31
+        ]
+      },
+      {
+        "round": 2,
+        "viewport": [
+          1000,
+          700
+        ],
+        "pty_cells": [
+          111,
+          31
+        ]
+      },
+      {
+        "round": 3,
+        "viewport": [
+          1000,
+          700
+        ],
+        "pty_cells": [
+          111,
+          31
+        ]
+      }
+    ],
+    "ghostty": [
+      {
+        "round": 0,
+        "viewport": [
+          1000,
+          700
+        ],
+        "pty_cells": [
+          111,
+          35
+        ]
+      },
+      {
+        "round": 1,
+        "viewport": [
+          1000,
+          700
+        ],
+        "pty_cells": [
+          111,
+          35
+        ]
+      },
+      {
+        "round": 2,
+        "viewport": [
+          1000,
+          700
+        ],
+        "pty_cells": [
+          111,
+          35
+        ]
+      },
+      {
+        "round": 3,
+        "viewport": [
+          1000,
+          700
+        ],
+        "pty_cells": [
+          111,
+          35
+        ]
+      }
+    ]
+  },
+  "pooled_latency_ms": {
+    "baseline": {
+      "n": 160,
+      "p50_ms": 6.25187496189028,
+      "p95_ms": 16.49284787708893,
+      "p99_ms": 19.529462051577866,
+      "max_ms": 27.109374990686774
+    },
+    "candidate": {
+      "n": 160,
+      "p50_ms": 5.797395831905305,
+      "p95_ms": 16.940420889295634,
+      "p99_ms": 27.528481727931624,
+      "max_ms": 32.16370823793113
+    },
+    "ghostty": {
+      "n": 160,
+      "p50_ms": 12.020916678011417,
+      "p95_ms": 23.10867480700834,
+      "p99_ms": 33.1234342069365,
+      "max_ms": 35.135624930262566
+    }
+  },
+  "per_run_latency_ms": {
+    "baseline": {
+      "0": {
+        "n": 40,
+        "p50_ms": 5.693749990314245,
+        "p95_ms": 15.430616610683499,
+        "p99_ms": 16.5186162176542,
+        "max_ms": 16.714249970391393
+      },
+      "1": {
+        "n": 40,
+        "p50_ms": 5.938124959357083,
+        "p95_ms": 15.20718755200504,
+        "p99_ms": 19.56237042788416,
+        "max_ms": 19.626541761681437
+      },
+      "2": {
+        "n": 40,
+        "p50_ms": 5.505999899469316,
+        "p95_ms": 16.774987545795735,
+        "p99_ms": 23.61300881020724,
+        "max_ms": 27.109374990686774
+      },
+      "3": {
+        "n": 40,
+        "p50_ms": 7.243687519803643,
+        "p95_ms": 15.46178319258615,
+        "p99_ms": 17.201067092828453,
+        "max_ms": 17.441583331674337
+      }
+    },
+    "candidate": {
+      "0": {
+        "n": 40,
+        "p50_ms": 5.902874865569174,
+        "p95_ms": 17.193118680734184,
+        "p99_ms": 19.807699914090335,
+        "max_ms": 20.45899978838861
+      },
+      "1": {
+        "n": 40,
+        "p50_ms": 5.358291673474014,
+        "p95_ms": 15.9402874414809,
+        "p99_ms": 26.596377072855823,
+        "max_ms": 32.16370823793113
+      },
+      "2": {
+        "n": 40,
+        "p50_ms": 6.339895771816373,
+        "p95_ms": 16.254031274002042,
+        "p99_ms": 21.62359711481258,
+        "max_ms": 24.427583441138268
+      },
+      "3": {
+        "n": 40,
+        "p50_ms": 6.069187424145639,
+        "p95_ms": 15.700341644696888,
+        "p99_ms": 26.11765877110883,
+        "max_ms": 31.990749994292855
+      }
+    },
+    "ghostty": {
+      "0": {
+        "n": 40,
+        "p50_ms": 12.020916678011417,
+        "p95_ms": 24.391804193146502,
+        "p99_ms": 34.00534002576023,
+        "max_ms": 35.135624930262566
+      },
+      "1": {
+        "n": 40,
+        "p50_ms": 13.165937503799796,
+        "p95_ms": 28.834270813968025,
+        "p99_ms": 33.2927898876369,
+        "max_ms": 34.398374846205115
+      },
+      "2": {
+        "n": 40,
+        "p50_ms": 12.44283327832818,
+        "p95_ms": 21.6444291640073,
+        "p99_ms": 27.57834672927856,
+        "max_ms": 29.769041808322072
+      },
+      "3": {
+        "n": 40,
+        "p50_ms": 10.547437472268939,
+        "p95_ms": 20.508950063958757,
+        "p99_ms": 22.474934146739542,
+        "max_ms": 22.574416594579816
+      }
+    }
+  },
+  "paired_candidate_minus_baseline": {
+    "p50": {
+      "paired_deltas_ms": [
+        0.20912487525492907,
+        -0.579833285883069,
+        0.8338958723470569,
+        -1.1745000956580043
+      ],
+      "mean_delta_ms": -0.17782815848477185,
+      "median_delta_ms": -0.18535420531407,
+      "delta_range_ms": [
+        -1.1745000956580043,
+        0.8338958723470569
+      ],
+      "geometric_mean_ratio": 0.9746860278533948,
+      "mean_delta_ci95_ms": [
+        -0.8771666907705367,
+        0.521510373800993
+      ],
+      "geometric_mean_ratio_ci95": [
+        0.8695086962613288,
+        1.092585798138015
+      ]
+    },
+    "p95": {
+      "paired_deltas_ms": [
+        1.7625020700506848,
+        0.7330998894758594,
+        -0.5209562717936933,
+        0.23855845211073756
+      ],
+      "mean_delta_ms": 0.5533010349608971,
+      "median_delta_ms": 0.48582917079329846,
+      "delta_range_ms": [
+        -0.5209562717936933,
+        1.7625020700506848
+      ],
+      "geometric_mean_ratio": 1.0353608968798713,
+      "mean_delta_ci95_ms": [
+        -0.20744223147630514,
+        1.381516165565698
+      ],
+      "geometric_mean_ratio_ci95": [
+        0.9881798070266282,
+        1.0886566154901638
+      ]
+    },
+    "p99": {
+      "paired_deltas_ms": [
+        3.289083696436137,
+        7.034006644971662,
+        -1.9894116953946615,
+        8.916591678280376
+      ],
+      "mean_delta_ms": 4.312567581073378,
+      "median_delta_ms": 5.161545170703899,
+      "delta_range_ms": [
+        -1.9894116953946615,
+        8.916591678280376
+      ],
+      "geometric_mean_ratio": 1.2270272660207908
+    }
+  },
+  "throughput_mib_per_second": {
+    "baseline": {
+      "ascii": {
+        "rounds": [
+          65.67214413393833,
+          65.8227190290675,
+          67.49528832266041,
+          59.60267397264324
+        ],
+        "median": 65.74743158150292,
+        "minimum": 59.60267397264324,
+        "maximum": 67.49528832266041,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      },
+      "ansi": {
+        "rounds": [
+          52.57969109431482,
+          54.535895270630114,
+          61.067303802203,
+          59.14895740720545
+        ],
+        "median": 56.84242633891778,
+        "minimum": 52.57969109431482,
+        "maximum": 61.067303802203,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      }
+    },
+    "candidate": {
+      "ascii": {
+        "rounds": [
+          85.5558158710081,
+          83.36206111529039,
+          84.70859771195512,
+          84.91682603874268
+        ],
+        "median": 84.8127118753489,
+        "minimum": 83.36206111529039,
+        "maximum": 85.5558158710081,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": true
+      },
+      "ansi": {
+        "rounds": [
+          78.68065600862435,
+          71.95126201389334,
+          78.4932567865785,
+          78.91161159704771
+        ],
+        "median": 78.58695639760143,
+        "minimum": 71.95126201389334,
+        "maximum": 78.91161159704771,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      }
+    },
+    "ghostty": {
+      "ascii": {
+        "rounds": [
+          81.4553356009209,
+          88.06680968349615,
+          68.72178181629728,
+          76.47888096407289
+        ],
+        "median": 78.9671082824969,
+        "minimum": 68.72178181629728,
+        "maximum": 88.06680968349615,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      },
+      "ansi": {
+        "rounds": [
+          87.52655459934375,
+          86.11302036833425,
+          58.942335055861676,
+          89.47023866454575
+        ],
+        "median": 86.81978748383901,
+        "minimum": 58.942335055861676,
+        "maximum": 89.47023866454575,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      }
+    }
+  },
+  "throughput_candidate_comparison": {
+    "ascii": {
+      "ratio_of_medians": 1.2899775677200707,
+      "paired_ratio_geometric_mean": 1.3105716008068984,
+      "candidate_rounds_meeting_80": 4
+    },
+    "ansi": {
+      "ratio_of_medians": 1.3825404976387508,
+      "paired_ratio_geometric_mean": 1.3564563820675786,
+      "candidate_rounds_meeting_80": 0
+    }
+  },
+  "background_process_observation": {
+    "source": "/tmp/tgb-phase2-validation/background-process-observations.json",
+    "unix_ns": 1789758246290462000,
+    "next_server_snapshot_rows": [
+      "61118 61060 171.4 1677488 01-06:47:54 next-server (v16.1.1)"
+    ],
+    "note": "Unrelated applications remained active; no attribution of a particular measurement to these processes."
+  },
+  "limits": [
+    "Four paired rounds; interval estimates have limited resolution. A confidence interval containing zero does not establish equivalence or no regression.",
+    "Only 40 measured samples per run and 160 per version; p99 is descriptive and sparse. Pooled candidate p99 exceeds baseline by about 8 ms in these retained observations.",
+    "The host was not otherwise idle. A recorded next-server snapshot showed 171.4% CPU; no measurement is causally attributed to that process and no outlier was discarded.",
+    "The repeat corpus is not the variable-text or background-load workload.",
+    "Equal 1000x700 render pixels produced Telar 111x31 cells versus Ghostty 111x35 cells.",
+    "DSR throughput is a runtime/VT response endpoint, not proof of GPU presentation throughput.",
+    "Native latency ends at the verified GPU completion callback, not physical presentation, and does not isolate Unix-socket cost.",
+    "The echo samples follow the throughput bursts; they are not independent cold or idle-start runs.",
+    "Ghostty versus Telar instrumentation and presentation pipelines differ.",
+    "Candidate ANSI throughput does not reach 80 MiB/s in any of the four rounds."
+  ]
+}

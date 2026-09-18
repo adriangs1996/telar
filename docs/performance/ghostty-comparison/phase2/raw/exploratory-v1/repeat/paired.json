@@ -1,0 +1,150 @@
+{
+  "latency": {
+    "single": {
+      "rounds": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "n_rounds": 4,
+      "unpaired_reference_rounds": [],
+      "unpaired_candidate_rounds": [],
+      "quantiles": {
+        "p50": {
+          "paired_deltas_ms": [
+            0.0809583580121398,
+            0.7876458112150431,
+            -1.6528123524039984,
+            1.415999955497682
+          ],
+          "mean_delta_ms": 0.15794794308021665,
+          "median_delta_ms": 0.43430208461359143,
+          "delta_range_ms": [
+            -1.6528123524039984,
+            1.415999955497682
+          ],
+          "geometric_mean_ratio": 1.0372742416008607,
+          "mean_delta_ci95_ms": [
+            -1.042697811499238,
+            1.1018228833563626
+          ],
+          "geometric_mean_ratio_ci95": [
+            0.8608130559233296,
+            1.2085265252137416
+          ]
+        },
+        "p95": {
+          "paired_deltas_ms": [
+            1.329147850628944,
+            0.8988980902358907,
+            -0.6850519916042703,
+            -0.08540186099708436
+          ],
+          "mean_delta_ms": 0.36439802206587,
+          "median_delta_ms": 0.4067481146194032,
+          "delta_range_ms": [
+            -0.6850519916042703,
+            1.329147850628944
+          ],
+          "geometric_mean_ratio": 1.0232469276452536,
+          "mean_delta_ci95_ms": [
+            -0.38522692630067734,
+            1.1140229704324174
+          ],
+          "geometric_mean_ratio_ci95": [
+            0.9742357941278249,
+            1.0747236770055224
+          ]
+        }
+      }
+    }
+  },
+  "throughput": {
+    "baseline": {
+      "ascii": {
+        "rounds": [
+          62.45982369434336,
+          59.45785598553651,
+          60.35042853519137,
+          55.0665375512383
+        ],
+        "median": 59.90414226036394,
+        "minimum": 55.0665375512383,
+        "maximum": 62.45982369434336,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      },
+      "ansi": {
+        "rounds": [
+          63.52569581044542,
+          51.12124579868828,
+          55.04513009163067,
+          52.223042551929105
+        ],
+        "median": 53.63408632177989,
+        "minimum": 51.12124579868828,
+        "maximum": 63.52569581044542,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      }
+    },
+    "candidate": {
+      "ascii": {
+        "rounds": [
+          77.21399028321773,
+          61.33044894187612,
+          76.42153050144245,
+          76.55984756015633
+        ],
+        "median": 76.49068903079939,
+        "minimum": 61.33044894187612,
+        "maximum": 77.21399028321773,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      },
+      "ansi": {
+        "rounds": [
+          74.52935874473927,
+          70.48033839513432,
+          75.08561566933932,
+          74.90721430631912
+        ],
+        "median": 74.7182865255292,
+        "minimum": 70.48033839513432,
+        "maximum": 75.08561566933932,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      }
+    },
+    "ghostty": {
+      "ascii": {
+        "rounds": [
+          78.57661680302607,
+          81.07296748474391,
+          92.04209775446044,
+          80.85105845405197
+        ],
+        "median": 80.96201296939793,
+        "minimum": 78.57661680302607,
+        "maximum": 92.04209775446044,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": false
+      },
+      "ansi": {
+        "rounds": [
+          85.37385745767324,
+          88.44046331172855,
+          87.01563562202583,
+          89.38048153734428
+        ],
+        "median": 87.7280494668772,
+        "minimum": 85.37385745767324,
+        "maximum": 89.38048153734428,
+        "target_mib_per_second": 80,
+        "all_rounds_meet_target": true
+      }
+    }
+  },
+  "note": "Latency differences are candidate minus baseline; bootstrap units are complete paired rounds."
+}

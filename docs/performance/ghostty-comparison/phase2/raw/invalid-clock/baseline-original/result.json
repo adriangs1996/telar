@@ -1,0 +1,43 @@
+{
+  "binary": "/private/tmp/tgb-phase1-final-verified/bin/telar",
+  "probe": "/Users/adriangonzalez/sandbox/telar/zig-out/bin/echo-probe",
+  "outer_pty": [
+    160,
+    40
+  ],
+  "cycles": [],
+  "deadline_ms": 250,
+  "flood_ms": 150,
+  "host_input_bytes": 0,
+  "endpoint": "producer final-write start to committed host VT marker",
+  "scope": "correctness check, not a latency benchmark",
+  "passed": false,
+  "producer": {
+    "pid": 25978,
+    "cols": 160,
+    "rows": 38
+  },
+  "shutdown": {
+    "elapsed_ms": 72.28799999999991,
+    "exited": true,
+    "returncode": 0,
+    "reply": "telar runtime is stopping\n",
+    "pids": [
+      25977
+    ],
+    "children_exited": true,
+    "socket_removed": true,
+    "cleanup_complete": true
+  },
+  "client_returncode": 0,
+  "cleanup": {
+    "sessions": [
+      25975,
+      25976,
+      25978
+    ],
+    "forced_cleanup": [],
+    "remaining": []
+  },
+  "failure": "TimeoutError: cycle 0: final marker missing after 250 ms; count=0, sync=0, cleared=True"
+}

@@ -1,0 +1,3961 @@
+{
+  "schema_version": 1,
+  "source": {
+    "path": "/tmp/tgb-p2-stable-followup/raw/profile-candidate-repeat/runtime-sample.txt",
+    "sha256": "0ca8982c93de43384ac3d6fab94dd56034f447761c9c62467ee90a512bf8984a",
+    "bytes": 580221,
+    "profile_date_time": "2026-09-18 21:01:43.698 +0200",
+    "requested_interval_ms": 1,
+    "requested_duration_seconds": 8
+  },
+  "method": {
+    "aggregation": "Parse call graph indentation. Sum inclusive matches unless an ancestor already matches that metric. Assert every self count nonnegative and per-thread self sum equals root count. Profile lines are 1-based.",
+    "scope": "Main denominator includes waiting and runnable samples; percentages are not CPU shares. Worker totals span different pooled threads and are not comparable to main percentages. Nested metrics overlap and must not be added.",
+    "window": "Sampling starts before fixture payload hashing and the initial 1 GiB ASCII transfer. ASCII itself lasts 14.144366958 s, longer than the requested 8 s profile. The sampled window includes an unquantified initial idle/hash period followed by the beginning of ASCII; it does not cover ANSI or represent a wholly active workload window."
+  },
+  "main_thread": {
+    "name": "Thread_81135125   DispatchQueue_1: com.apple.main-thread  (serial)",
+    "samples": 5920,
+    "metrics": {
+      "event_queue_get": {
+        "inclusive_samples": 4871,
+        "callsites": [
+          {
+            "function": "Io.TypeErasedQueue.getLocked",
+            "location": "(in telar) + 828  [0x102b3e298]",
+            "samples": 4859,
+            "profile_lines": [
+              29
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.getLocked",
+            "location": "(in telar) + 116  [0x102b3dfd0]",
+            "samples": 6,
+            "profile_lines": [
+              40
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.getLocked",
+            "location": "(in telar) + 828,744  [0x102b3e298,0x102b3e244]",
+            "samples": 5,
+            "profile_lines": [
+              43
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.getLocked",
+            "location": "(in telar) + 508  [0x102b3e158]",
+            "samples": 1,
+            "profile_lines": [
+              45
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5920,
+        "percentage_of_main_thread_samples": 82.2804054054054
+      },
+      "futex_wait": {
+        "inclusive_samples": 4856,
+        "callsites": [
+          {
+            "function": "__ulock_wait2",
+            "location": "(in libsystem_kernel.dylib) + 8,4  [0x186d9dc98,0x186d9dc94]",
+            "samples": 4834,
+            "profile_lines": [
+              33
+            ]
+          },
+          {
+            "function": "__ulock_wait2",
+            "location": "(in libsystem_kernel.dylib) + 8  [0x186d9dc98]",
+            "samples": 22,
+            "profile_lines": [
+              37,
+              332
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5920,
+        "percentage_of_main_thread_samples": 82.02702702702703
+      },
+      "client_pump": {
+        "inclusive_samples": 183,
+        "callsites": [
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 9152  [0x102a1f000]",
+            "samples": 40,
+            "profile_lines": [
+              61,
+              173,
+              218,
+              232
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 2076  [0x102a1d45c]",
+            "samples": 29,
+            "profile_lines": [
+              74,
+              143,
+              196,
+              234
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 9016  [0x102a1ef78]",
+            "samples": 16,
+            "profile_lines": [
+              66,
+              159,
+              216,
+              253
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 1424,7184,...  [0x102a1d1d0,0x102a1e850,...]",
+            "samples": 12,
+            "profile_lines": [
+              65
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 8836  [0x102a1eec4]",
+            "samples": 12,
+            "profile_lines": [
+              88,
+              182,
+              238
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 8964  [0x102a1ef44]",
+            "samples": 11,
+            "profile_lines": [
+              90,
+              184,
+              209,
+              249
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 8912  [0x102a1ef10]",
+            "samples": 11,
+            "profile_lines": [
+              98,
+              162,
+              240
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 9092  [0x102a1efc4]",
+            "samples": 10,
+            "profile_lines": [
+              105,
+              167,
+              246
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 8780  [0x102a1ee8c]",
+            "samples": 7,
+            "profile_lines": [
+              103,
+              171,
+              251
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 1280  [0x102a1d140]",
+            "samples": 6,
+            "profile_lines": [
+              68
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 472  [0x102a1ce18]",
+            "samples": 6,
+            "profile_lines": [
+              92,
+              175,
+              255
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 0,1096,...  [0x102a1cc40,0x102a1d088,...]",
+            "samples": 6,
+            "profile_lines": [
+              161
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 7332,260,...  [0x102a1e8e4,0x102a1cd44,...]",
+            "samples": 5,
+            "profile_lines": [
+              208
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 376  [0x102a1cdb8]",
+            "samples": 4,
+            "profile_lines": [
+              169,
+              211
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 264,1108,...  [0x102a1cd48,0x102a1d094,...]",
+            "samples": 4,
+            "profile_lines": [
+              248
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 1652  [0x102a1d2b4]",
+            "samples": 1,
+            "profile_lines": [
+              213
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 1744  [0x102a1d310]",
+            "samples": 1,
+            "profile_lines": [
+              261
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 180  [0x102a1ccf4]",
+            "samples": 1,
+            "profile_lines": [
+              323
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 7136  [0x102a1e820]",
+            "samples": 1,
+            "profile_lines": [
+              337
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5920,
+        "percentage_of_main_thread_samples": 3.0912162162162162
+      },
+      "cell_prepare": {
+        "inclusive_samples": 8,
+        "callsites": [
+          {
+            "function": "runtime.attachment.CellSync.prepare",
+            "location": "(in telar) + 284  [0x102a16b54]",
+            "samples": 7,
+            "profile_lines": [
+              82,
+              153,
+              198
+            ]
+          },
+          {
+            "function": "runtime.attachment.CellSync.prepare",
+            "location": "(in telar) + 1044  [0x102a16e4c]",
+            "samples": 1,
+            "profile_lines": [
+              85
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5920,
+        "percentage_of_main_thread_samples": 0.13513513513513514
+      },
+      "pane_render": {
+        "inclusive_samples": 7,
+        "callsites": [
+          {
+            "function": "pane.Pane.render",
+            "location": "(in telar) + 244  [0x102a10bdc]",
+            "samples": 4,
+            "profile_lines": [
+              83,
+              157,
+              203
+            ]
+          },
+          {
+            "function": "pane.Pane.render",
+            "location": "(in telar) + 76  [0x102a10b34]",
+            "samples": 2,
+            "profile_lines": [
+              199
+            ]
+          },
+          {
+            "function": "pane.Pane.render",
+            "location": "(in telar) + 108  [0x102a10b54]",
+            "samples": 1,
+            "profile_lines": [
+              154
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5920,
+        "percentage_of_main_thread_samples": 0.11824324324324324
+      },
+      "blit": {
+        "inclusive_samples": 4,
+        "callsites": [
+          {
+            "function": "pane.blit.blit",
+            "location": "(in telar) + 2836,2864  [0x102c68bd4,0x102c68bf0]",
+            "samples": 2,
+            "profile_lines": [
+              204
+            ]
+          },
+          {
+            "function": "pane.blit.blit",
+            "location": "(in telar) + 3160  [0x102c68d18]",
+            "samples": 1,
+            "profile_lines": [
+              84
+            ]
+          },
+          {
+            "function": "pane.blit.blit",
+            "location": "(in telar) + 1176  [0x102c68558]",
+            "samples": 1,
+            "profile_lines": [
+              158
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5920,
+        "percentage_of_main_thread_samples": 0.06756756756756757
+      },
+      "style_comparison": {
+        "inclusive_samples": 1,
+        "callsites": [
+          {
+            "function": "ui.Style.eql",
+            "location": "(in telar) + 292  [0x102c082b4]",
+            "samples": 1,
+            "profile_lines": [
+              86
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5920,
+        "percentage_of_main_thread_samples": 0.016891891891891893
+      },
+      "foreground_group_probe": {
+        "inclusive_samples": 454,
+        "callsites": [
+          {
+            "function": "tcgetpgrp",
+            "location": "(in libsystem_c.dylib) + 60  [0x186c84254]",
+            "samples": 393,
+            "profile_lines": [
+              49
+            ]
+          },
+          {
+            "function": "tcgetpgrp",
+            "location": "(in libsystem_c.dylib) + 28  [0x186c84234]",
+            "samples": 59,
+            "profile_lines": [
+              52
+            ]
+          },
+          {
+            "function": "tcgetpgrp",
+            "location": "(in libsystem_c.dylib) + 0,60  [0x186c84218,0x186c84254]",
+            "samples": 2,
+            "profile_lines": [
+              58
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5920,
+        "percentage_of_main_thread_samples": 7.668918918918919
+      },
+      "task_scheduling": {
+        "inclusive_samples": 208,
+        "callsites": [
+          {
+            "function": "Io.Threaded.groupConcurrent",
+            "location": "(in telar) + 892  [0x102aaf178]",
+            "samples": 183,
+            "profile_lines": [
+              69,
+              111,
+              122,
+              130,
+              214,
+              222,
+              263,
+              270,
+              313
+            ]
+          },
+          {
+            "function": "Io.Threaded.groupConcurrent",
+            "location": "(in telar) + 156  [0x102aaee98]",
+            "samples": 12,
+            "profile_lines": [
+              113,
+              124,
+              132,
+              224,
+              272
+            ]
+          },
+          {
+            "function": "Io.Threaded.groupConcurrent",
+            "location": "(in telar) + 832  [0x102aaf13c]",
+            "samples": 9,
+            "profile_lines": [
+              71,
+              116,
+              127,
+              136
+            ]
+          },
+          {
+            "function": "Io.Threaded.groupConcurrent",
+            "location": "(in telar) + 248  [0x102aaeef4]",
+            "samples": 2,
+            "profile_lines": [
+              118,
+              138
+            ]
+          },
+          {
+            "function": "Io.Threaded.groupConcurrent",
+            "location": "(in telar) + 768  [0x102aaf0fc]",
+            "samples": 1,
+            "profile_lines": [
+              73
+            ]
+          },
+          {
+            "function": "Io.Threaded.groupConcurrent",
+            "location": "(in telar) + 628  [0x102aaf070]",
+            "samples": 1,
+            "profile_lines": [
+              120
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5920,
+        "percentage_of_main_thread_samples": 3.5135135135135136
+      },
+      "deadline_schedule": {
+        "inclusive_samples": 2,
+        "callsites": [
+          {
+            "function": "runtime.application.Application.scheduleCellPublication",
+            "location": "(in telar) + 836  [0x102a11974]",
+            "samples": 1,
+            "profile_lines": [
+              186
+            ]
+          },
+          {
+            "function": "runtime.application.Application.scheduleCellPublication",
+            "location": "(in telar) + 812  [0x102a1195c]",
+            "samples": 1,
+            "profile_lines": [
+              262
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5920,
+        "percentage_of_main_thread_samples": 0.033783783783783786
+      },
+      "clock_read": {
+        "inclusive_samples": 22,
+        "callsites": [
+          {
+            "function": "Io.Threaded.now",
+            "location": "(in telar) + 48  [0x102aa1160]",
+            "samples": 20,
+            "profile_lines": [
+              76,
+              93,
+              145,
+              176,
+              256,
+              292,
+              299
+            ]
+          },
+          {
+            "function": "Io.Threaded.now",
+            "location": "(in telar) + 112  [0x102aa11a0]",
+            "samples": 1,
+            "profile_lines": [
+              237
+            ]
+          },
+          {
+            "function": "Io.Threaded.now",
+            "location": "(in telar) + 0  [0x102aa1130]",
+            "samples": 1,
+            "profile_lines": [
+              297
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5920,
+        "percentage_of_main_thread_samples": 0.3716216216216216
+      }
+    },
+    "top_self": [
+      {
+        "function": "__ulock_wait2",
+        "self_samples": 4856,
+        "profile_lines": [
+          33,
+          37,
+          332
+        ]
+      },
+      {
+        "function": "__ioctl",
+        "self_samples": 450,
+        "profile_lines": [
+          51,
+          55
+        ]
+      },
+      {
+        "function": "__ulock_wake",
+        "self_samples": 197,
+        "profile_lines": [
+          70,
+          72,
+          112,
+          117,
+          123,
+          128,
+          131,
+          137,
+          215,
+          223,
+          264,
+          271,
+          314,
+          335
+        ]
+      },
+      {
+        "function": "<deduplicated_symbol>",
+        "self_samples": 132,
+        "profile_lines": [
+          42,
+          102,
+          109,
+          119,
+          125,
+          140,
+          166,
+          170,
+          191,
+          207,
+          212,
+          242,
+          244,
+          267,
+          273,
+          277,
+          282,
+          290,
+          321,
+          326,
+          327,
+          338
+        ]
+      },
+      {
+        "function": "runtime.delivery.Delivery.prepareAttachment",
+        "self_samples": 83,
+        "profile_lines": [
+          64,
+          67,
+          87,
+          89,
+          91,
+          104,
+          106,
+          151,
+          160,
+          168,
+          172,
+          174,
+          183,
+          185,
+          205,
+          210,
+          217,
+          219,
+          233,
+          235,
+          239,
+          247,
+          250,
+          252,
+          254
+        ]
+      },
+      {
+        "function": "runtime.application.Application.pump",
+        "self_samples": 28,
+        "profile_lines": [
+          65,
+          161,
+          208,
+          248,
+          323
+        ]
+      },
+      {
+        "function": "runtime.application.event_dispatcher.GenericEventDispatcher.Type(runtime.application.Application).handle",
+        "self_samples": 27,
+        "profile_lines": [
+          268
+        ]
+      },
+      {
+        "function": "runtime.attachment.attachment_namespace.encodeNextGraphics",
+        "self_samples": 23,
+        "profile_lines": [
+          63
+        ]
+      },
+      {
+        "function": "agent.Tracker.resumeSession",
+        "self_samples": 18,
+        "profile_lines": [
+          192,
+          278
+        ]
+      },
+      {
+        "function": "cli.server.run",
+        "self_samples": 14,
+        "profile_lines": [
+          328
+        ]
+      },
+      {
+        "function": "mach_absolute_time",
+        "self_samples": 11,
+        "profile_lines": [
+          79,
+          148,
+          180,
+          260,
+          296,
+          302
+        ]
+      },
+      {
+        "function": "Io.Condition.waitInner",
+        "self_samples": 8,
+        "profile_lines": [
+          38,
+          44
+        ]
+      },
+      {
+        "function": "runtime.delivery.Delivery.prepareForeground",
+        "self_samples": 7,
+        "profile_lines": [
+          99,
+          163,
+          245
+        ]
+      },
+      {
+        "function": "Io.TypeErasedQueue.getLocked",
+        "self_samples": 5,
+        "profile_lines": [
+          43
+        ]
+      },
+      {
+        "function": "clock_gettime",
+        "self_samples": 5,
+        "profile_lines": [
+          80,
+          97,
+          150,
+          181
+        ]
+      },
+      {
+        "function": "Io.Threaded.Thread.futexWaitInner",
+        "self_samples": 4,
+        "profile_lines": [
+          34
+        ]
+      },
+      {
+        "function": "pane.blit.blit",
+        "self_samples": 4,
+        "profile_lines": [
+          84,
+          158,
+          204
+        ]
+      },
+      {
+        "function": "_xzm_xzone_malloc_tiny",
+        "self_samples": 3,
+        "profile_lines": [
+          114,
+          134
+        ]
+      },
+      {
+        "function": "heap.c_allocator_impl.alloc",
+        "self_samples": 3,
+        "profile_lines": [
+          115,
+          135,
+          225
+        ]
+      },
+      {
+        "function": "enums.EnumMap(lib.enum.Enum(.{ .zig = {} },&.{ &.{ ... }[0..(...)], &.{ ... }[0..(...)] }[0..2]),*terminal.Screen).get",
+        "self_samples": 3,
+        "profile_lines": [
+          285
+        ]
+      },
+      {
+        "function": "Io.Threaded.futexWait",
+        "self_samples": 2,
+        "profile_lines": [
+          35,
+          39
+        ]
+      },
+      {
+        "function": "tcgetpgrp",
+        "self_samples": 2,
+        "profile_lines": [
+          58
+        ]
+      },
+      {
+        "function": "Io.Threaded.groupConcurrent",
+        "self_samples": 2,
+        "profile_lines": [
+          73,
+          120
+        ]
+      },
+      {
+        "function": "DYLD-STUB$$__commpage_gettimeofday",
+        "self_samples": 2,
+        "profile_lines": [
+          96
+        ]
+      },
+      {
+        "function": "DYLD-STUB$$malloc",
+        "self_samples": 2,
+        "profile_lines": [
+          133
+        ]
+      },
+      {
+        "function": "runtime.application.Application.pumpAll",
+        "self_samples": 2,
+        "profile_lines": [
+          187,
+          220
+        ]
+      },
+      {
+        "function": "heap.ArenaAllocator.reset",
+        "self_samples": 2,
+        "profile_lines": [
+          202
+        ]
+      },
+      {
+        "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).handleIngested",
+        "self_samples": 2,
+        "profile_lines": [
+          227
+        ]
+      },
+      {
+        "function": "Io.Threaded.now",
+        "self_samples": 2,
+        "profile_lines": [
+          237,
+          297
+        ]
+      },
+      {
+        "function": "terminal.ScreenSet.get",
+        "self_samples": 2,
+        "profile_lines": [
+          286,
+          311
+        ]
+      }
+    ]
+  },
+  "workers": {
+    "threads": [
+      {
+        "name": "Thread_81135126",
+        "samples": 5920
+      },
+      {
+        "name": "Thread_81135127",
+        "samples": 5920
+      },
+      {
+        "name": "Thread_81135128",
+        "samples": 5920
+      },
+      {
+        "name": "Thread_81135129",
+        "samples": 5920
+      },
+      {
+        "name": "Thread_81135130",
+        "samples": 5920
+      },
+      {
+        "name": "Thread_81135131",
+        "samples": 5920
+      },
+      {
+        "name": "Thread_81135132",
+        "samples": 5920
+      },
+      {
+        "name": "Thread_81135143",
+        "samples": 5920
+      },
+      {
+        "name": "Thread_81135146",
+        "samples": 5920
+      },
+      {
+        "name": "Thread_81135147",
+        "samples": 5920
+      },
+      {
+        "name": "Thread_81135148",
+        "samples": 5920
+      },
+      {
+        "name": "Thread_81135260",
+        "samples": 5755
+      },
+      {
+        "name": "Thread_81135261",
+        "samples": 5755
+      },
+      {
+        "name": "Thread_81135262",
+        "samples": 5755
+      },
+      {
+        "name": "Thread_81135263",
+        "samples": 5755
+      },
+      {
+        "name": "Thread_81135264",
+        "samples": 5755
+      },
+      {
+        "name": "Thread_81135267",
+        "samples": 5614
+      }
+    ],
+    "total_thread_samples": 99509,
+    "metrics": {
+      "observation": {
+        "inclusive_samples": 3918,
+        "callsites": [
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 14820  [0x102c65364]",
+            "samples": 1906,
+            "profile_lines": [
+              399,
+              649,
+              913,
+              1155,
+              1397,
+              1619,
+              1881,
+              2115,
+              2368,
+              2613,
+              2839,
+              3077
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 14796  [0x102c6534c]",
+            "samples": 426,
+            "profile_lines": [
+              402,
+              652,
+              915,
+              1158,
+              1400,
+              1621,
+              1883,
+              2117,
+              2370,
+              2615,
+              2841,
+              3079
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 14852  [0x102c65384]",
+            "samples": 335,
+            "profile_lines": [
+              408,
+              670,
+              922,
+              1168,
+              1404,
+              1627,
+              1888,
+              2138,
+              2380,
+              2620,
+              2846,
+              3095
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 164  [0x102c61a24]",
+            "samples": 263,
+            "profile_lines": [
+              419,
+              661,
+              934,
+              1171,
+              1411,
+              1635,
+              1896,
+              2124,
+              2386,
+              2631,
+              2856,
+              3086
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 7232  [0x102c635c0]",
+            "samples": 207,
+            "profile_lines": [
+              427,
+              676,
+              930,
+              1162,
+              1423,
+              1645,
+              1905,
+              2132,
+              2395,
+              2625,
+              2865,
+              3101
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 7400  [0x102c63668]",
+            "samples": 133,
+            "profile_lines": [
+              432,
+              682,
+              941,
+              1180,
+              1429,
+              1650,
+              1918,
+              2145,
+              2401,
+              2643,
+              2871,
+              3105
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 11320,11536,...  [0x102c645b8,0x102c64690,...]",
+            "samples": 114,
+            "profile_lines": [
+              1399,
+              2379,
+              3085
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 1584  [0x102c61fb0]",
+            "samples": 83,
+            "profile_lines": [
+              446,
+              694,
+              953,
+              1195,
+              1419,
+              1664,
+              1910,
+              2160,
+              2416,
+              2640,
+              2885,
+              3121
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 11352,11752,...  [0x102c645d8,0x102c64768,...]",
+            "samples": 82,
+            "profile_lines": [
+              1887,
+              2845
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 15216  [0x102c654f0]",
+            "samples": 73,
+            "profile_lines": [
+              444,
+              692,
+              959,
+              1192,
+              1438,
+              1662,
+              1913,
+              2163,
+              2422,
+              2883,
+              3119
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 11320,11352,...  [0x102c645b8,0x102c645d8,...]",
+            "samples": 64,
+            "profile_lines": [
+              401,
+              1634
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 11752,11336,...  [0x102c64768,0x102c645c8,...]",
+            "samples": 45,
+            "profile_lines": [
+              2123
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 11752,11352,...  [0x102c64768,0x102c645d8,...]",
+            "samples": 43,
+            "profile_lines": [
+              651
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 7132  [0x102c6355c]",
+            "samples": 39,
+            "profile_lines": [
+              449,
+              697,
+              956,
+              1198,
+              1440,
+              1667,
+              1928,
+              2167,
+              2419,
+              2651,
+              2888,
+              3116
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 11352,11356,...  [0x102c645d8,0x102c645dc,...]",
+            "samples": 35,
+            "profile_lines": [
+              921
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 11536,11356,...  [0x102c64690,0x102c645dc,...]",
+            "samples": 26,
+            "profile_lines": [
+              1157
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 11536,11320,...  [0x102c64690,0x102c645b8,...]",
+            "samples": 26,
+            "profile_lines": [
+              2619
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 7608  [0x102c63738]",
+            "samples": 17,
+            "profile_lines": [
+              700,
+              1670,
+              1931,
+              2165,
+              2426,
+              2654,
+              2891
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+            "location": "(in telar) + 416  [0x102c61b20]",
+            "samples": 1,
+            "profile_lines": [
+              702
+            ]
+          }
+        ]
+      },
+      "observation_screen_signal": {
+        "inclusive_samples": 1906,
+        "callsites": [
+          {
+            "function": "history.Sample.signal",
+            "location": "(in telar) + 204,416,...  [0x102c66554,0x102c66628,...]",
+            "samples": 1474,
+            "profile_lines": [
+              400,
+              650,
+              914,
+              1398,
+              1882,
+              2116,
+              2614,
+              2840,
+              3078
+            ]
+          },
+          {
+            "function": "history.Sample.signal",
+            "location": "(in telar) + 204,224,...  [0x102c66554,0x102c66568,...]",
+            "samples": 432,
+            "profile_lines": [
+              1156,
+              1620,
+              2369
+            ]
+          }
+        ]
+      },
+      "observation_sample_capture": {
+        "inclusive_samples": 425,
+        "callsites": [
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 424  [0x102c66c24]",
+            "samples": 105,
+            "profile_lines": [
+              404,
+              654,
+              917,
+              1160,
+              1402,
+              1623,
+              1885,
+              2119,
+              2372,
+              2617,
+              2843,
+              3081
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 344,436,...  [0x102c66bd4,0x102c66c30,...]",
+            "samples": 39,
+            "profile_lines": [
+              2842
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 424,316,...  [0x102c66c24,0x102c66bb8,...]",
+            "samples": 35,
+            "profile_lines": [
+              2118
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 384,452,...  [0x102c66bfc,0x102c66c40,...]",
+            "samples": 31,
+            "profile_lines": [
+              2371
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 424,520,...  [0x102c66c24,0x102c66c84,...]",
+            "samples": 26,
+            "profile_lines": [
+              1884
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 508,104,...  [0x102c66c78,0x102c66ae4,...]",
+            "samples": 25,
+            "profile_lines": [
+              1401
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 316,508,...  [0x102c66bb8,0x102c66c78,...]",
+            "samples": 25,
+            "profile_lines": [
+              3080
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 520,316,...  [0x102c66c84,0x102c66bb8,...]",
+            "samples": 24,
+            "profile_lines": [
+              916
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 316,344,...  [0x102c66bb8,0x102c66bd4,...]",
+            "samples": 24,
+            "profile_lines": [
+              2616
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 396,424,...  [0x102c66c08,0x102c66c24,...]",
+            "samples": 23,
+            "profile_lines": [
+              403
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 328,452,...  [0x102c66bc4,0x102c66c40,...]",
+            "samples": 20,
+            "profile_lines": [
+              653
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 396,452,...  [0x102c66c08,0x102c66c40,...]",
+            "samples": 20,
+            "profile_lines": [
+              1622
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 500,316,...  [0x102c66c70,0x102c66bb8,...]",
+            "samples": 18,
+            "profile_lines": [
+              1159
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 140  [0x102c66b08]",
+            "samples": 10,
+            "profile_lines": [
+              406,
+              656,
+              919,
+              1625,
+              2121,
+              2374,
+              3083
+            ]
+          }
+        ]
+      },
+      "media_processing": {
+        "inclusive_samples": 1727,
+        "callsites": [
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 9240  [0x102c17a54]",
+            "samples": 1518,
+            "profile_lines": [
+              455,
+              706,
+              965,
+              1221,
+              1444,
+              1683,
+              1935,
+              2172,
+              2429,
+              2663,
+              2895,
+              3125
+            ]
+          },
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 988  [0x102c15a18]",
+            "samples": 142,
+            "profile_lines": [
+              488,
+              733,
+              994,
+              1244,
+              1470,
+              1712,
+              1962,
+              2200,
+              2458,
+              2684,
+              2921,
+              3156
+            ]
+          },
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 4084  [0x102c16630]",
+            "samples": 51,
+            "profile_lines": [
+              490,
+              735,
+              996,
+              1246,
+              1472,
+              1714,
+              1964,
+              2202,
+              2460,
+              2686,
+              2923,
+              3158
+            ]
+          },
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 10176  [0x102c17dfc]",
+            "samples": 4,
+            "profile_lines": [
+              1248,
+              2462
+            ]
+          },
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 10192,4,...  [0x102c17e0c,0x102c15640,...]",
+            "samples": 4,
+            "profile_lines": [
+              2925
+            ]
+          },
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 4,10192  [0x102c15640,0x102c17e0c]",
+            "samples": 2,
+            "profile_lines": [
+              1966
+            ]
+          },
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 10188  [0x102c17e08]",
+            "samples": 2,
+            "profile_lines": [
+              2204
+            ]
+          },
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 872  [0x102c159a4]",
+            "samples": 1,
+            "profile_lines": [
+              998
+            ]
+          },
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 11768  [0x102c18434]",
+            "samples": 1,
+            "profile_lines": [
+              1474
+            ]
+          },
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 11804  [0x102c18458]",
+            "samples": 1,
+            "profile_lines": [
+              2066
+            ]
+          },
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 10252  [0x102c17e48]",
+            "samples": 1,
+            "profile_lines": [
+              3160
+            ]
+          }
+        ]
+      },
+      "media_ingest": {
+        "inclusive_samples": 1511,
+        "callsites": [
+          {
+            "function": "media.Processor.ingestMediaOutput",
+            "location": "(in telar) + 180,156,...  [0x102c18be4,0x102c18bcc,...]",
+            "samples": 931,
+            "profile_lines": [
+              456,
+              966,
+              1222,
+              1445,
+              1684,
+              1936,
+              2173,
+              2430,
+              2664,
+              2896,
+              3126
+            ]
+          },
+          {
+            "function": "media.Processor.ingestMediaOutput",
+            "location": "(in telar) + 3004  [0x102c196ec]",
+            "samples": 264,
+            "profile_lines": [
+              457,
+              708,
+              967,
+              1223,
+              1446,
+              1685,
+              1937,
+              2174,
+              2431,
+              2665,
+              2897,
+              3127
+            ]
+          },
+          {
+            "function": "media.Processor.ingestMediaOutput",
+            "location": "(in telar) + 3060  [0x102c19724]",
+            "samples": 154,
+            "profile_lines": [
+              463,
+              713,
+              972,
+              1229,
+              1451,
+              1691,
+              1944,
+              2180,
+              2437,
+              2671,
+              2902,
+              3133
+            ]
+          },
+          {
+            "function": "media.Processor.ingestMediaOutput",
+            "location": "(in telar) + 180,128,...  [0x102c18be4,0x102c18bb0,...]",
+            "samples": 86,
+            "profile_lines": [
+              707
+            ]
+          },
+          {
+            "function": "media.Processor.ingestMediaOutput",
+            "location": "(in telar) + 2808  [0x102c19628]",
+            "samples": 57,
+            "profile_lines": [
+              480,
+              728,
+              989,
+              1240,
+              1465,
+              1707,
+              1956,
+              2195,
+              2452,
+              2681,
+              2915,
+              3151
+            ]
+          },
+          {
+            "function": "media.Processor.ingestMediaOutput",
+            "location": "(in telar) + 3220  [0x102c197c4]",
+            "samples": 19,
+            "profile_lines": [
+              484,
+              731,
+              992,
+              1468,
+              1710,
+              1959,
+              2198,
+              2455,
+              2918,
+              3154
+            ]
+          }
+        ]
+      },
+      "canonical_ingest": {
+        "inclusive_samples": 386,
+        "callsites": [
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+            "location": "(in telar) + 2720  [0x102c7b9a4]",
+            "samples": 163,
+            "profile_lines": [
+              517,
+              748,
+              1008,
+              1260,
+              1486,
+              1745,
+              1986,
+              2210,
+              2480,
+              2699,
+              2939,
+              3188
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+            "location": "(in telar) + 2892  [0x102c7ba50]",
+            "samples": 155,
+            "profile_lines": [
+              501,
+              754,
+              1013,
+              1266,
+              1492,
+              1729,
+              1972,
+              2216,
+              2466,
+              2704,
+              2943,
+              3176
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+            "location": "(in telar) + 2628  [0x102c7b948]",
+            "samples": 29,
+            "profile_lines": [
+              525,
+              765,
+              1032,
+              1276,
+              1504,
+              1751,
+              1991,
+              2230,
+              2485,
+              2714,
+              2961,
+              3194
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+            "location": "(in telar) + 3100  [0x102c7bb20]",
+            "samples": 17,
+            "profile_lines": [
+              523,
+              769,
+              1029,
+              1279,
+              1754,
+              1995,
+              2233,
+              2488,
+              2717,
+              2964,
+              3197
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+            "location": "(in telar) + 2800,408,...  [0x102c7b9f4,0x102c7b09c,...]",
+            "samples": 4,
+            "profile_lines": [
+              1031
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+            "location": "(in telar) + 376,2800,...  [0x102c7b07c,0x102c7b9f4,...]",
+            "samples": 3,
+            "profile_lines": [
+              1507
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+            "location": "(in telar) + 408,2768,...  [0x102c7b09c,0x102c7b9d4,...]",
+            "samples": 3,
+            "profile_lines": [
+              2960
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+            "location": "(in telar) + 2760,2952  [0x102c7b9cc,0x102c7ba8c]",
+            "samples": 2,
+            "profile_lines": [
+              768
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+            "location": "(in telar) + 2696,2768  [0x102c7b98c,0x102c7b9d4]",
+            "samples": 2,
+            "profile_lines": [
+              1994
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+            "location": "(in telar) + 2780,2812  [0x102c7b9e0,0x102c7ba00]",
+            "samples": 2,
+            "profile_lines": [
+              2235
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+            "location": "(in telar) + 2864  [0x102c7ba34]",
+            "samples": 1,
+            "profile_lines": [
+              528
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+            "location": "(in telar) + 2780  [0x102c7b9e0]",
+            "samples": 1,
+            "profile_lines": [
+              1756
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+            "location": "(in telar) + 2856  [0x102c7ba2c]",
+            "samples": 1,
+            "profile_lines": [
+              2490
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+            "location": "(in telar) + 5132  [0x102c7c310]",
+            "samples": 1,
+            "profile_lines": [
+              2719
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+            "location": "(in telar) + 2912  [0x102c7ba64]",
+            "samples": 1,
+            "profile_lines": [
+              2721
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+            "location": "(in telar) + 2800  [0x102c7b9f4]",
+            "samples": 1,
+            "profile_lines": [
+              3199
+            ]
+          }
+        ]
+      },
+      "queue_completion_put": {
+        "inclusive_samples": 339,
+        "callsites": [
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 96  [0x102b3e440]",
+            "samples": 198,
+            "profile_lines": [
+              543,
+              557,
+              568,
+              580,
+              780,
+              793,
+              818,
+              828,
+              1046,
+              1061,
+              1067,
+              1084,
+              1098,
+              1103,
+              1286,
+              1297,
+              1313,
+              1317,
+              1329,
+              1334,
+              1516,
+              1532,
+              1542,
+              1561,
+              1567,
+              1760,
+              1770,
+              1781,
+              1801,
+              1810,
+              2012,
+              2018,
+              2040,
+              2041,
+              2049,
+              2053,
+              2251,
+              2255,
+              2257,
+              2273,
+              2296,
+              2301,
+              2306,
+              2506,
+              2515,
+              2539,
+              2555,
+              2728,
+              2744,
+              2760,
+              2781,
+              2969,
+              2975,
+              2987,
+              3002,
+              3021,
+              3201,
+              3208,
+              3219,
+              3226,
+              3248
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 332  [0x102b3e52c]",
+            "samples": 59,
+            "profile_lines": [
+              548,
+              566,
+              784,
+              797,
+              822,
+              1054,
+              1065,
+              1091,
+              1301,
+              1520,
+              1536,
+              1546,
+              1764,
+              2025,
+              2261,
+              2277,
+              2504,
+              2520,
+              2543,
+              2735,
+              2758,
+              2775,
+              2973,
+              2991,
+              3006,
+              3206,
+              3223,
+              3230
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putLocked",
+            "location": "(in telar) + 228  [0x102a9f9a4]",
+            "samples": 28,
+            "profile_lines": [
+              605,
+              851,
+              854,
+              1121,
+              1129,
+              1350,
+              1355,
+              1583,
+              1586,
+              1826,
+              1831,
+              1836,
+              2080,
+              2325,
+              2328,
+              2572,
+              2792,
+              2797,
+              3042,
+              3267
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 284  [0x102b3e4fc]",
+            "samples": 21,
+            "profile_lines": [
+              786,
+              799,
+              1050,
+              1088,
+              1774,
+              1785,
+              2008,
+              2037,
+              2263,
+              2510,
+              2732,
+              2748
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putLocked",
+            "location": "(in telar) + 468  [0x102a9fa94]",
+            "samples": 19,
+            "profile_lines": [
+              603,
+              1123,
+              1126,
+              1352,
+              1357,
+              1581,
+              1588,
+              1828,
+              1833,
+              2082,
+              2578,
+              2794,
+              2799,
+              2805,
+              3044,
+              3270
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 208  [0x102b3e4b0]",
+            "samples": 3,
+            "profile_lines": [
+              611,
+              2022,
+              3008
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 96,0  [0x102b3e440,0x102b3e3e0]",
+            "samples": 3,
+            "profile_lines": [
+              2011
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 0,164  [0x102b3e3e0,0x102b3e484]",
+            "samples": 2,
+            "profile_lines": [
+              561
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 48  [0x102b3e410]",
+            "samples": 2,
+            "profile_lines": [
+              1548,
+              2513
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 0,96  [0x102b3e3e0,0x102b3e440]",
+            "samples": 2,
+            "profile_lines": [
+              2993
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 0  [0x102b3e3e0]",
+            "samples": 1,
+            "profile_lines": [
+              2522
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 160  [0x102b3e480]",
+            "samples": 1,
+            "profile_lines": [
+              3252
+            ]
+          }
+        ]
+      },
+      "socket_read_operation": {
+        "inclusive_samples": 5661,
+        "callsites": [
+          {
+            "function": "Io.Threaded.netReadPosix",
+            "location": "(in telar) + 184  [0x102ab0f04]",
+            "samples": 5661,
+            "profile_lines": [
+              381,
+              646,
+              894,
+              1148,
+              1375,
+              1677,
+              1874,
+              2097,
+              2347,
+              2660,
+              2816,
+              3066
+            ]
+          }
+        ]
+      },
+      "socket_write_operation": {
+        "inclusive_samples": 0,
+        "callsites": []
+      },
+      "poll_syscall": {
+        "inclusive_samples": 2900,
+        "callsites": [
+          {
+            "function": "poll",
+            "location": "(in libsystem_kernel.dylib) + 8  [0x186d986f8]",
+            "samples": 2900,
+            "profile_lines": [
+              493,
+              495,
+              497,
+              499,
+              530,
+              532,
+              534,
+              738,
+              740,
+              742,
+              744,
+              746,
+              773,
+              775,
+              1000,
+              1002,
+              1004,
+              1006,
+              1037,
+              1039,
+              1041,
+              1250,
+              1252,
+              1254,
+              1256,
+              1258,
+              1282,
+              1284,
+              1476,
+              1478,
+              1480,
+              1482,
+              1484,
+              1509,
+              1511,
+              1717,
+              1719,
+              1721,
+              1723,
+              1725,
+              1727,
+              1758,
+              1968,
+              1970,
+              1998,
+              2000,
+              2002,
+              2004,
+              2006,
+              2206,
+              2208,
+              2238,
+              2240,
+              2242,
+              2244,
+              2246,
+              2464,
+              2492,
+              2494,
+              2496,
+              2498,
+              2500,
+              2502,
+              2689,
+              2691,
+              2693,
+              2695,
+              2697,
+              2724,
+              2726,
+              2927,
+              2929,
+              2931,
+              2933,
+              2935,
+              2937,
+              2967,
+              3162,
+              3164,
+              3166,
+              3168,
+              3170,
+              3172,
+              3174
+            ]
+          }
+        ]
+      },
+      "foreground_group_probe": {
+        "inclusive_samples": 263,
+        "callsites": [
+          {
+            "function": "tcgetpgrp",
+            "location": "(in libsystem_c.dylib) + 60  [0x186c84254]",
+            "samples": 227,
+            "profile_lines": [
+              420,
+              662,
+              935,
+              1172,
+              1412,
+              1636,
+              1897,
+              2125,
+              2387,
+              2632,
+              2857,
+              3087
+            ]
+          },
+          {
+            "function": "tcgetpgrp",
+            "location": "(in libsystem_c.dylib) + 28  [0x186c84234]",
+            "samples": 34,
+            "profile_lines": [
+              423,
+              665,
+              938,
+              1175,
+              1415,
+              1639,
+              1900,
+              2128,
+              2390,
+              2636,
+              2860,
+              3090
+            ]
+          },
+          {
+            "function": "tcgetpgrp",
+            "location": "(in libsystem_c.dylib) + 80  [0x186c84268]",
+            "samples": 1,
+            "profile_lines": [
+              2394
+            ]
+          },
+          {
+            "function": "DYLD-STUB$$tcgetpgrp",
+            "location": "(in telar) + 0  [0x102dbb5b4]",
+            "samples": 1,
+            "profile_lines": [
+              2864
+            ]
+          }
+        ]
+      },
+      "futex_wait": {
+        "inclusive_samples": 54544,
+        "callsites": [
+          {
+            "function": "__ulock_wait2",
+            "location": "(in libsystem_kernel.dylib) + 8  [0x186d9dc98]",
+            "samples": 34934,
+            "profile_lines": [
+              349,
+              367,
+              390,
+              397,
+              549,
+              567,
+              594,
+              596,
+              598,
+              632,
+              636,
+              641,
+              785,
+              798,
+              823,
+              838,
+              840,
+              842,
+              866,
+              887,
+              902,
+              1055,
+              1066,
+              1092,
+              1111,
+              1113,
+              1115,
+              1153,
+              1207,
+              1214,
+              1302,
+              1341,
+              1343,
+              1348,
+              1383,
+              1391,
+              1521,
+              1537,
+              1547,
+              1572,
+              1574,
+              1576,
+              1609,
+              1613,
+              1765,
+              1819,
+              1821,
+              1823,
+              1856,
+              1860,
+              1879,
+              2024,
+              2026,
+              2071,
+              2073,
+              2092,
+              2109,
+              2113,
+              2262,
+              2278,
+              2314,
+              2316,
+              2318,
+              2352,
+              2359,
+              2363,
+              2505,
+              2521,
+              2544,
+              2565,
+              2567,
+              2569,
+              2599,
+              2603,
+              2611,
+              2736,
+              2759,
+              2776,
+              2788,
+              2790,
+              2828,
+              2837,
+              2974,
+              2992,
+              3007,
+              3010,
+              3029,
+              3031,
+              3033,
+              3037,
+              3061,
+              3071,
+              3207,
+              3224,
+              3231,
+              3255,
+              3257,
+              3259,
+              3261
+            ]
+          },
+          {
+            "function": "__ulock_wait2",
+            "location": "(in libsystem_kernel.dylib) + 8,4  [0x186d9dc98,0x186d9dc94]",
+            "samples": 15115,
+            "profile_lines": [
+              836,
+              1109,
+              1570,
+              1817,
+              2312,
+              2563,
+              2786
+            ]
+          },
+          {
+            "function": "__ulock_wait2",
+            "location": "(in libsystem_kernel.dylib) + 8,0,...  [0x186d9dc98,0x186d9dc90,...]",
+            "samples": 2442,
+            "profile_lines": [
+              592
+            ]
+          },
+          {
+            "function": "__ulock_wait2",
+            "location": "(in libsystem_kernel.dylib) + 8,4,...  [0x186d9dc98,0x186d9dc94,...]",
+            "samples": 2052,
+            "profile_lines": [
+              2069
+            ]
+          },
+          {
+            "function": "__ulock_wait2",
+            "location": "(in libsystem_kernel.dylib) + 40  [0x186d9dcb8]",
+            "samples": 1,
+            "profile_lines": [
+              846
+            ]
+          }
+        ]
+      },
+      "futex_wake": {
+        "inclusive_samples": 218,
+        "callsites": [
+          {
+            "function": "__ulock_wake",
+            "location": "(in libsystem_kernel.dylib) + 8  [0x186d91bcc]",
+            "samples": 199,
+            "profile_lines": [
+              560,
+              571,
+              583,
+              600,
+              783,
+              788,
+              796,
+              801,
+              821,
+              831,
+              844,
+              1049,
+              1052,
+              1064,
+              1087,
+              1090,
+              1101,
+              1106,
+              1300,
+              1316,
+              1332,
+              1337,
+              1346,
+              1519,
+              1535,
+              1545,
+              1564,
+              1763,
+              1773,
+              1776,
+              1784,
+              1787,
+              1804,
+              1813,
+              2015,
+              2021,
+              2039,
+              2044,
+              2052,
+              2254,
+              2260,
+              2265,
+              2276,
+              2299,
+              2304,
+              2320,
+              2509,
+              2512,
+              2518,
+              2542,
+              2558,
+              2731,
+              2734,
+              2747,
+              2750,
+              2763,
+              2831,
+              2972,
+              2990,
+              3005,
+              3024,
+              3035,
+              3204,
+              3222,
+              3229,
+              3251
+            ]
+          },
+          {
+            "function": "__ulock_wake",
+            "location": "(in libsystem_kernel.dylib) + 8,4  [0x186d91bcc,0x186d91bc8]",
+            "samples": 18,
+            "profile_lines": [
+              546,
+              1289,
+              2010
+            ]
+          },
+          {
+            "function": "__ulock_wake",
+            "location": "(in libsystem_kernel.dylib) + 4  [0x186d91bc8]",
+            "samples": 1,
+            "profile_lines": [
+              2784
+            ]
+          }
+        ]
+      },
+      "deadline_timer_wait": {
+        "inclusive_samples": 5563,
+        "callsites": [
+          {
+            "function": "time.deadline_timer.wait",
+            "location": "(in telar) + 420  [0x102b68b7c]",
+            "samples": 5531,
+            "profile_lines": [
+              392,
+              627,
+              897,
+              1202,
+              1378,
+              1604,
+              1851,
+              2104,
+              2354,
+              2594,
+              2823,
+              3056
+            ]
+          },
+          {
+            "function": "time.deadline_timer.wait",
+            "location": "(in telar) + 512  [0x102b68bd8]",
+            "samples": 20,
+            "profile_lines": [
+              633,
+              903,
+              1208,
+              1384,
+              1857,
+              2110,
+              2360,
+              2600
+            ]
+          },
+          {
+            "function": "time.deadline_timer.wait",
+            "location": "(in telar) + 332  [0x102b68b24]",
+            "samples": 11,
+            "profile_lines": [
+              2829
+            ]
+          },
+          {
+            "function": "time.deadline_timer.wait",
+            "location": "(in telar) + 492  [0x102b68bc4]",
+            "samples": 1,
+            "profile_lines": [
+              2832
+            ]
+          }
+        ]
+      },
+      "signal_trampoline": {
+        "inclusive_samples": 1,
+        "callsites": [
+          {
+            "function": "_sigtramp",
+            "location": "(in libsystem_platform.dylib) + 0  [0x186ddd70c]",
+            "samples": 1,
+            "profile_lines": [
+              889
+            ]
+          }
+        ]
+      }
+    },
+    "top_self": [
+      {
+        "function": "__ulock_wait2",
+        "self_samples": 54544,
+        "profile_lines": [
+          349,
+          367,
+          390,
+          397,
+          549,
+          567,
+          592,
+          594,
+          596,
+          598,
+          632,
+          636,
+          641,
+          785,
+          798,
+          823,
+          836,
+          838,
+          840,
+          842,
+          846,
+          866,
+          887,
+          902,
+          1055,
+          1066,
+          1092,
+          1109,
+          1111,
+          1113,
+          1115,
+          1153,
+          1207,
+          1214,
+          1302,
+          1341,
+          1343,
+          1348,
+          1383,
+          1391,
+          1521,
+          1537,
+          1547,
+          1570,
+          1572,
+          1574,
+          1576,
+          1609,
+          1613,
+          1765,
+          1817,
+          1819,
+          1821,
+          1823,
+          1856,
+          1860,
+          1879,
+          2024,
+          2026,
+          2069,
+          2071,
+          2073,
+          2092,
+          2109,
+          2113,
+          2262,
+          2278,
+          2312,
+          2314,
+          2316,
+          2318,
+          2352,
+          2359,
+          2363,
+          2505,
+          2521,
+          2544,
+          2563,
+          2565,
+          2567,
+          2569,
+          2599,
+          2603,
+          2611,
+          2736,
+          2759,
+          2776,
+          2786,
+          2788,
+          2790,
+          2828,
+          2837,
+          2974,
+          2992,
+          3007,
+          3010,
+          3029,
+          3031,
+          3033,
+          3037,
+          3061,
+          3071,
+          3207,
+          3224,
+          3231,
+          3255,
+          3257,
+          3259,
+          3261
+        ]
+      },
+      {
+        "function": "__semwait_signal",
+        "self_samples": 17417,
+        "profile_lines": [
+          376,
+          386,
+          621,
+          883,
+          911,
+          1139,
+          1143,
+          1219,
+          1370,
+          1395,
+          1598,
+          1602,
+          1617,
+          1849,
+          1868,
+          2102,
+          2338,
+          2342,
+          2588,
+          2592,
+          2607,
+          2821,
+          3054,
+          3075
+        ]
+      },
+      {
+        "function": "readv",
+        "self_samples": 6364,
+        "profile_lines": [
+          382,
+          537,
+          541,
+          552,
+          555,
+          564,
+          574,
+          577,
+          586,
+          647,
+          778,
+          791,
+          804,
+          807,
+          810,
+          813,
+          816,
+          826,
+          895,
+          1044,
+          1058,
+          1070,
+          1073,
+          1076,
+          1079,
+          1082,
+          1095,
+          1149,
+          1292,
+          1295,
+          1305,
+          1308,
+          1311,
+          1320,
+          1323,
+          1327,
+          1376,
+          1514,
+          1524,
+          1527,
+          1530,
+          1540,
+          1551,
+          1554,
+          1557,
+          1678,
+          1681,
+          1768,
+          1779,
+          1790,
+          1793,
+          1796,
+          1799,
+          1807,
+          1875,
+          2029,
+          2032,
+          2035,
+          2047,
+          2056,
+          2059,
+          2062,
+          2065,
+          2098,
+          2249,
+          2268,
+          2271,
+          2281,
+          2284,
+          2287,
+          2290,
+          2293,
+          2348,
+          2525,
+          2528,
+          2531,
+          2534,
+          2537,
+          2547,
+          2550,
+          2553,
+          2661,
+          2739,
+          2742,
+          2753,
+          2756,
+          2766,
+          2769,
+          2772,
+          2779,
+          2817,
+          2978,
+          2981,
+          2984,
+          2996,
+          3000,
+          3013,
+          3016,
+          3019,
+          3067,
+          3211,
+          3214,
+          3217,
+          3234,
+          3237,
+          3240,
+          3243,
+          3246
+        ]
+      },
+      {
+        "function": "waitid",
+        "self_samples": 5920,
+        "profile_lines": [
+          356
+        ]
+      },
+      {
+        "function": "__accept",
+        "self_samples": 5920,
+        "profile_lines": [
+          874
+        ]
+      },
+      {
+        "function": "poll",
+        "self_samples": 2900,
+        "profile_lines": [
+          493,
+          495,
+          497,
+          499,
+          530,
+          532,
+          534,
+          738,
+          740,
+          742,
+          744,
+          746,
+          773,
+          775,
+          1000,
+          1002,
+          1004,
+          1006,
+          1037,
+          1039,
+          1041,
+          1250,
+          1252,
+          1254,
+          1256,
+          1258,
+          1282,
+          1284,
+          1476,
+          1478,
+          1480,
+          1482,
+          1484,
+          1509,
+          1511,
+          1717,
+          1719,
+          1721,
+          1723,
+          1725,
+          1727,
+          1758,
+          1968,
+          1970,
+          1998,
+          2000,
+          2002,
+          2004,
+          2006,
+          2206,
+          2208,
+          2238,
+          2240,
+          2242,
+          2244,
+          2246,
+          2464,
+          2492,
+          2494,
+          2496,
+          2498,
+          2500,
+          2502,
+          2689,
+          2691,
+          2693,
+          2695,
+          2697,
+          2724,
+          2726,
+          2927,
+          2929,
+          2931,
+          2933,
+          2935,
+          2937,
+          2967,
+          3162,
+          3164,
+          3166,
+          3168,
+          3170,
+          3172,
+          3174
+        ]
+      },
+      {
+        "function": "history.Sample.signal",
+        "self_samples": 1906,
+        "profile_lines": [
+          400,
+          650,
+          914,
+          1156,
+          1398,
+          1620,
+          1882,
+          2116,
+          2369,
+          2614,
+          2840,
+          3078
+        ]
+      },
+      {
+        "function": "media.Processor.ingestMediaOutput",
+        "self_samples": 1017,
+        "profile_lines": [
+          456,
+          707,
+          966,
+          1222,
+          1445,
+          1684,
+          1936,
+          2173,
+          2430,
+          2664,
+          2896,
+          3126
+        ]
+      },
+      {
+        "function": "terminal.Terminal.printSliceFill__anon_210974",
+        "self_samples": 538,
+        "profile_lines": [
+          430,
+          460,
+          462,
+          520,
+          522,
+          679,
+          711,
+          751,
+          753,
+          933,
+          970,
+          1011,
+          1165,
+          1167,
+          1226,
+          1228,
+          1263,
+          1426,
+          1449,
+          1489,
+          1491,
+          1648,
+          1688,
+          1748,
+          1908,
+          1940,
+          1942,
+          1989,
+          2135,
+          2177,
+          2213,
+          2398,
+          2434,
+          2483,
+          2628,
+          2668,
+          2670,
+          2702,
+          2868,
+          2870,
+          2900,
+          2942,
+          3104,
+          3130,
+          3191
+        ]
+      },
+      {
+        "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).observePane",
+        "self_samples": 435,
+        "profile_lines": [
+          401,
+          651,
+          921,
+          1157,
+          1399,
+          1634,
+          1887,
+          2123,
+          2379,
+          2619,
+          2845,
+          3085
+        ]
+      },
+      {
+        "function": "history.Sample.capture",
+        "self_samples": 310,
+        "profile_lines": [
+          403,
+          653,
+          916,
+          1159,
+          1401,
+          1622,
+          1884,
+          2118,
+          2371,
+          2616,
+          2842,
+          3080
+        ]
+      },
+      {
+        "function": "history.Row.read",
+        "self_samples": 299,
+        "profile_lines": [
+          410,
+          672,
+          924,
+          929,
+          1170,
+          1406,
+          1629,
+          1890,
+          2140,
+          2382,
+          2622,
+          2848,
+          3097
+        ]
+      },
+      {
+        "function": "__ioctl",
+        "self_samples": 252,
+        "profile_lines": [
+          422,
+          426,
+          664,
+          668,
+          937,
+          1174,
+          1178,
+          1414,
+          1418,
+          1638,
+          1642,
+          1899,
+          1904,
+          2127,
+          2131,
+          2389,
+          2393,
+          2634,
+          2639,
+          2859,
+          2863,
+          3089,
+          3093
+        ]
+      },
+      {
+        "function": "__ulock_wake",
+        "self_samples": 218,
+        "profile_lines": [
+          546,
+          560,
+          571,
+          583,
+          600,
+          783,
+          788,
+          796,
+          801,
+          821,
+          831,
+          844,
+          1049,
+          1052,
+          1064,
+          1087,
+          1090,
+          1101,
+          1106,
+          1289,
+          1300,
+          1316,
+          1332,
+          1337,
+          1346,
+          1519,
+          1535,
+          1545,
+          1564,
+          1763,
+          1773,
+          1776,
+          1784,
+          1787,
+          1804,
+          1813,
+          2010,
+          2015,
+          2021,
+          2039,
+          2044,
+          2052,
+          2254,
+          2260,
+          2265,
+          2276,
+          2299,
+          2304,
+          2320,
+          2509,
+          2512,
+          2518,
+          2542,
+          2558,
+          2731,
+          2734,
+          2747,
+          2750,
+          2763,
+          2784,
+          2831,
+          2972,
+          2990,
+          3005,
+          3024,
+          3035,
+          3204,
+          3222,
+          3229,
+          3251
+        ]
+      },
+      {
+        "function": "mem.findPos__anon_189248",
+        "self_samples": 193,
+        "profile_lines": [
+          489,
+          491,
+          734,
+          736,
+          995,
+          997,
+          1245,
+          1247,
+          1471,
+          1473,
+          1713,
+          1715,
+          1963,
+          1965,
+          2201,
+          2203,
+          2459,
+          2461,
+          2685,
+          2687,
+          2922,
+          2924,
+          3157,
+          3159
+        ]
+      },
+      {
+        "function": "<deduplicated_symbol>",
+        "self_samples": 189,
+        "profile_lines": [
+          405,
+          604,
+          606,
+          609,
+          655,
+          849,
+          852,
+          855,
+          918,
+          1119,
+          1122,
+          1124,
+          1127,
+          1130,
+          1161,
+          1351,
+          1353,
+          1356,
+          1358,
+          1361,
+          1403,
+          1579,
+          1582,
+          1584,
+          1587,
+          1589,
+          1624,
+          1632,
+          1827,
+          1829,
+          1832,
+          1834,
+          1837,
+          1840,
+          1886,
+          2078,
+          2081,
+          2083,
+          2120,
+          2323,
+          2326,
+          2329,
+          2373,
+          2573,
+          2576,
+          2579,
+          2618,
+          2793,
+          2795,
+          2798,
+          2800,
+          2803,
+          2806,
+          2844,
+          3040,
+          3043,
+          3045,
+          3082,
+          3265,
+          3268,
+          3271
+        ]
+      },
+      {
+        "function": "terminal.Screen.cursorScrollAbove",
+        "self_samples": 150,
+        "profile_lines": [
+          441,
+          443,
+          477,
+          478,
+          504,
+          516,
+          689,
+          721,
+          764,
+          950,
+          985,
+          988,
+          1025,
+          1189,
+          1273,
+          1275,
+          1432,
+          1437,
+          1462,
+          1464,
+          1495,
+          1503,
+          1659,
+          1702,
+          1741,
+          1744,
+          1925,
+          1926,
+          1953,
+          1954,
+          1975,
+          1985,
+          2156,
+          2158,
+          2191,
+          2192,
+          2219,
+          2227,
+          2412,
+          2448,
+          2477,
+          2478,
+          2650,
+          2678,
+          2679,
+          2707,
+          2882,
+          2905,
+          2912,
+          2957,
+          2959,
+          3114,
+          3145,
+          3149,
+          3186,
+          3187
+        ]
+      },
+      {
+        "function": "ghostty::N_NEON_BF16::DecodeUTF8UntilControlSeq(unsigned char const*, unsigned long, char32_t*, unsigned long*)",
+        "self_samples": 124,
+        "profile_lines": [
+          451,
+          482,
+          527,
+          699,
+          730,
+          767,
+          958,
+          991,
+          1034,
+          1200,
+          1242,
+          1278,
+          1442,
+          1467,
+          1506,
+          1669,
+          1709,
+          1753,
+          1930,
+          1958,
+          1993,
+          2169,
+          2197,
+          2232,
+          2421,
+          2454,
+          2487,
+          2653,
+          2683,
+          2716,
+          2890,
+          2917,
+          2963,
+          3118,
+          3153,
+          3196
+        ]
+      },
+      {
+        "function": "__bzero",
+        "self_samples": 90,
+        "profile_lines": [
+          439,
+          468,
+          510,
+          688,
+          718,
+          762,
+          926,
+          946,
+          984,
+          1022,
+          1185,
+          1271,
+          1435,
+          1460,
+          1500,
+          1655,
+          1696,
+          1923,
+          1952,
+          1982,
+          2155,
+          2189,
+          2226,
+          2410,
+          2442,
+          2476,
+          2649,
+          2676,
+          2876,
+          2910,
+          2948,
+          3112,
+          3144,
+          3184
+        ]
+      },
+      {
+        "function": "terminal.Terminal.printSlice",
+        "self_samples": 88,
+        "profile_lines": [
+          431,
+          461,
+          521,
+          680,
+          681,
+          712,
+          752,
+          971,
+          1012,
+          1166,
+          1227,
+          1264,
+          1265,
+          1427,
+          1428,
+          1450,
+          1490,
+          1649,
+          1689,
+          1749,
+          1750,
+          1909,
+          1941,
+          1943,
+          1990,
+          2136,
+          2137,
+          2178,
+          2214,
+          2215,
+          2399,
+          2435,
+          2484,
+          2629,
+          2669,
+          2703,
+          2869,
+          2901,
+          3131,
+          3132,
+          3192
+        ]
+      },
+      {
+        "function": "__proc_info",
+        "self_samples": 83,
+        "profile_lines": [
+          448,
+          696,
+          704,
+          955,
+          1197,
+          1421,
+          1666,
+          1912,
+          2162,
+          2418,
+          2642,
+          2887,
+          3123
+        ]
+      },
+      {
+        "function": "terminal.PageList.grow",
+        "self_samples": 74,
+        "profile_lines": [
+          440,
+          442,
+          473,
+          511,
+          512,
+          686,
+          690,
+          722,
+          763,
+          951,
+          978,
+          1023,
+          1024,
+          1186,
+          1233,
+          1272,
+          1274,
+          1436,
+          1461,
+          1463,
+          1658,
+          1697,
+          1703,
+          1733,
+          1924,
+          1950,
+          1983,
+          1984,
+          2153,
+          2157,
+          2190,
+          2221,
+          2411,
+          2447,
+          2474,
+          2647,
+          2677,
+          2881,
+          2911,
+          2949,
+          2958,
+          3113,
+          3146,
+          3185
+        ]
+      },
+      {
+        "function": "history.prompt_scan.claudeReadyPrompt",
+        "self_samples": 69,
+        "profile_lines": [
+          445,
+          693,
+          962,
+          1193,
+          1439,
+          1663,
+          1914,
+          2164,
+          2423,
+          2884,
+          3120
+        ]
+      },
+      {
+        "function": "terminal.PageList.Limits.enforce",
+        "self_samples": 68,
+        "profile_lines": [
+          437,
+          470,
+          472,
+          508,
+          760,
+          949,
+          977,
+          1019,
+          1020,
+          1235,
+          1237,
+          1456,
+          1458,
+          1498,
+          1657,
+          1699,
+          1701,
+          1736,
+          1949,
+          1978,
+          1980,
+          2151,
+          2152,
+          2186,
+          2187,
+          2224,
+          2406,
+          2408,
+          2444,
+          2446,
+          2471,
+          2473,
+          2710,
+          2878,
+          2880,
+          2908,
+          2954,
+          3110,
+          3142,
+          3182
+        ]
+      },
+      {
+        "function": "terminal.stream_terminal.Handler.vt__anon_209785",
+        "self_samples": 67,
+        "profile_lines": [
+          452,
+          485,
+          486,
+          524,
+          701,
+          732,
+          770,
+          963,
+          993,
+          1030,
+          1035,
+          1243,
+          1280,
+          1469,
+          1671,
+          1672,
+          1711,
+          1755,
+          1932,
+          1960,
+          1996,
+          2166,
+          2199,
+          2229,
+          2234,
+          2427,
+          2456,
+          2489,
+          2655,
+          2718,
+          2722,
+          2892,
+          2919,
+          2920,
+          2965,
+          3155,
+          3198
+        ]
+      },
+      {
+        "function": "terminal.Terminal.index",
+        "self_samples": 30,
+        "profile_lines": [
+          479,
+          515,
+          691,
+          725,
+          726,
+          952,
+          1028,
+          1190,
+          1238,
+          1660,
+          1706,
+          1955,
+          2159,
+          2193,
+          2228,
+          2415,
+          2451,
+          2479,
+          2713,
+          2913,
+          2914,
+          3115
+        ]
+      },
+      {
+        "function": "terminal.PageList.pin",
+        "self_samples": 26,
+        "profile_lines": [
+          407,
+          414,
+          418,
+          659,
+          660,
+          674,
+          920,
+          928,
+          961,
+          1194,
+          1410,
+          1626,
+          1633,
+          1894,
+          2122,
+          2144,
+          2378,
+          2384,
+          2385,
+          2425,
+          2853,
+          3084
+        ]
+      },
+      {
+        "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.Type(runtime.application.Application,.{ .schedule_observation = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleObservation)), .schedule_media = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.Type(runtime.application.Application,.{ .schedule_description = &runtime.application.event_dispatcher.GenericAgentDispatcher.Type(runtime.application.Application).scheduleDescription, .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).scheduleMedia)), .schedule_response = @as(*const fn (*runtime.application.Application, *pane.Pane) anyerror!void, @ptrCast(&runtime.application.event_dispatcher.pane.GenericIoDispatcher.Type(runtime.application.Application).scheduleResponse)) }).ingestPane",
+        "self_samples": 21,
+        "profile_lines": [
+          528,
+          768,
+          1031,
+          1507,
+          1756,
+          1994,
+          2235,
+          2490,
+          2721,
+          2960,
+          3199
+        ]
+      },
+      {
+        "function": "math.cast__anon_201383",
+        "self_samples": 20,
+        "profile_lines": [
+          417,
+          514,
+          658,
+          724,
+          987,
+          1027,
+          1502,
+          1705,
+          1743,
+          1917,
+          2377,
+          2414,
+          2450,
+          2712,
+          2852,
+          2956,
+          3100,
+          3148
+        ]
+      },
+      {
+        "function": "Io.TypeErasedQueue.putUncancelable",
+        "self_samples": 20,
+        "profile_lines": [
+          561,
+          1067,
+          1317,
+          1548,
+          2011,
+          2040,
+          2053,
+          2255,
+          2513,
+          2522,
+          2975,
+          2993,
+          3208,
+          3252
+        ]
+      }
+    ],
+    "signal_trampoline_context": {
+      "all_signal_trampoline": 1,
+      "under_timer_event_worker": 1,
+      "profile_lines_under_timer": [
+        889
+      ]
+    }
+  },
+  "limits": [
+    "Wall-stack sampling includes sleeping threads, kernel calls and scheduler delay; these are not CPU percentages.",
+    "Nested cell preparation/render/blit and observation/screen-signal counts overlap.",
+    "poll(timeout=0) does not wait for future readiness, but samples can include syscall work or descheduling.",
+    "Socket readv presence is not evidence that IPC is the critical path.",
+    "An 8 s profile may cross workload phases; consult result timings before labelling its scope.",
+    "One profile is evidence for hypotheses, not proof of causal speedup or a quantified performance ceiling.",
+    "The initial fixture hashing phase is outside the throughput stopwatch but inside sampling; its duration is unknown, so there is no active-only denominator.",
+    "Earlier phase2 and stable timer profiles are single observations; use repeated AB/BA benchmarks to quantify throughput/latency changes."
+  ],
+  "result": {
+    "endpoint": "pty_write_to_dsr_response",
+    "bytes_per_case": 1073741824,
+    "text_pattern": "repeat",
+    "cases": [
+      {
+        "name": "ascii",
+        "bytes": 1073741824,
+        "text_pattern": "repeat",
+        "payload_sha256": "f82012a86811d0b8ed26a3317e26631570210683558b4104321935bc0b8fff54",
+        "cols": 111,
+        "rows": 33,
+        "elapsed_ms": 14144.366958,
+        "mib_per_second": 72.39631176429776
+      },
+      {
+        "name": "ansi",
+        "bytes": 1073741824,
+        "text_pattern": "repeat",
+        "payload_sha256": "8f3eebcd9e2499d32671d96906e961d5bd5d6e14f5e2a906b6d45247f8e4f04e",
+        "cols": 111,
+        "rows": 33,
+        "elapsed_ms": 13277.508375,
+        "mib_per_second": 77.1229037164889
+      }
+    ],
+    "failed": false,
+    "binary": "/private/tmp/tgb-phase2-stable/bin/telar",
+    "sampled": true,
+    "detached": false,
+    "host_bytes": 54866,
+    "outer_pty": [
+      111,
+      35
+    ]
+  },
+  "shutdown": {
+    "elapsed_ms": 72.22050000000024,
+    "exited": true,
+    "returncode": 0,
+    "reply": "telar runtime is stopping\n",
+    "pids": [
+      51983
+    ],
+    "children_exited": true,
+    "socket_removed": true,
+    "cleanup_complete": true
+  },
+  "phase1_reference": {
+    "summary_path": "docs/performance/ghostty-comparison/phase1/raw/followup/profile/summary.json",
+    "summary_sha256": "48bb717ea86bf9d73d20df2a75693305f143b810827e2dc3013555cf8c1e48ee",
+    "main_samples": 5853,
+    "main_metrics": {
+      "event_queue_get": {
+        "inclusive_samples": 3282,
+        "percentage_of_main_thread_samples": 56.073808303434134
+      },
+      "futex_wait": {
+        "inclusive_samples": 3256,
+        "percentage_of_main_thread_samples": 55.62959166239535
+      },
+      "client_pump": {
+        "inclusive_samples": 1619,
+        "percentage_of_main_thread_samples": 27.66102853237656
+      },
+      "cell_prepare": {
+        "inclusive_samples": 1386,
+        "percentage_of_main_thread_samples": 23.680164018452075
+      },
+      "pane_render": {
+        "inclusive_samples": 797,
+        "percentage_of_main_thread_samples": 13.61694857338117
+      },
+      "blit": {
+        "inclusive_samples": 744,
+        "percentage_of_main_thread_samples": 12.711430035879037
+      },
+      "style_comparison": {
+        "inclusive_samples": 366,
+        "percentage_of_main_thread_samples": 6.253203485392107
+      },
+      "foreground_group_probe": {
+        "inclusive_samples": 416,
+        "percentage_of_main_thread_samples": 7.107466256620537
+      },
+      "task_scheduling": {
+        "inclusive_samples": 346,
+        "percentage_of_main_thread_samples": 5.9114983769007345
+      }
+    },
+    "comparison_limit": "Same repeated ASCII payload family, but different workload byte budgets and initial profile timing/hash work. Compare sampled composition descriptively, not as a normalized CPU or throughput speedup."
+  },
+  "code_paths": {
+    "foreground_probe": {
+      "per_nonempty_pty_read": [
+        "src/backend/runtime/entrypoints/events/pane/GenericPipeline.zig:64",
+        "src/backend/pty/Session.zig:89",
+        "src/backend/pty/native.zig:86"
+      ],
+      "purpose": "Expire pane progress and label each queued history output event with whether the shell is foreground.",
+      "per_observation_batch": [
+        "src/backend/runtime/application/event_dispatcher/pane/GenericProjectionDispatcher.zig:109",
+        "src/backend/pty/Session.zig:105",
+        "src/backend/pty/native.zig:86"
+      ],
+      "frequency_limit": "Frequency is established structurally as once per nonempty PTY read and once per scheduled observation batch, not measured invocation counts from sample stacks."
+    },
+    "screen_heuristic": {
+      "files": [
+        "src/backend/history/Observer.zig:223",
+        "src/backend/history/Sample.zig:22",
+        "src/backend/history/Sample.zig:52",
+        "src/core/Table.zig:143"
+      ],
+      "purpose": "After an observation batch with output, and only at parser ground outside synchronized output, capture up to 16 KiB of active screen text and run agent-manifest phrase heuristics. Sample.signal is a semantic agent-state signal, not an operating-system signal.",
+      "candidate": "Measure repeated identical screen samples before considering caching the phrase-detection result keyed by text and manifest identity/revision. Keep new observation timestamps, provider reconciliation and state transitions even when reusing detection."
+    },
+    "media_reparse": {
+      "files": [
+        "src/backend/runtime/entrypoints/events/pane/GenericPipeline.zig:73",
+        "src/backend/media/Processor.zig:237"
+      ],
+      "purpose": "Copies child output to the media lane and updates a separate VT/graphics state. A text-only shortcut must preserve cursor, scrolling, escape and graphics protocol semantics."
+    }
+  },
+  "earlier_phase2_reference": {
+    "summary_path": "/tmp/tgb-p2-followup/raw/profile-candidate-repeat/profile-analysis.json",
+    "summary_sha256": "f921ac85b63bfbd590f364c0cc8e1a547bd37b34daee3751b6681017e16ba992",
+    "main_samples": 5711,
+    "worker_thread_samples": 95117,
+    "main_metrics": {
+      "event_queue_get": {
+        "inclusive_samples": 4593,
+        "percentage_of_main_thread_samples": 80.42374365260025
+      },
+      "futex_wait": {
+        "inclusive_samples": 4581,
+        "percentage_of_main_thread_samples": 80.21362283312905
+      },
+      "client_pump": {
+        "inclusive_samples": 215,
+        "percentage_of_main_thread_samples": 3.7646646821922607
+      },
+      "cell_prepare": {
+        "inclusive_samples": 17,
+        "percentage_of_main_thread_samples": 0.2976711609175276
+      },
+      "pane_render": {
+        "inclusive_samples": 13,
+        "percentage_of_main_thread_samples": 0.22763088776046225
+      },
+      "blit": {
+        "inclusive_samples": 8,
+        "percentage_of_main_thread_samples": 0.14008054631413064
+      },
+      "style_comparison": {
+        "inclusive_samples": 2,
+        "percentage_of_main_thread_samples": 0.03502013657853266
+      },
+      "foreground_group_probe": {
+        "inclusive_samples": 477,
+        "percentage_of_main_thread_samples": 8.352302573980039
+      },
+      "task_scheduling": {
+        "inclusive_samples": 222,
+        "percentage_of_main_thread_samples": 3.887235160217125
+      },
+      "deadline_schedule": {
+        "inclusive_samples": 17,
+        "percentage_of_main_thread_samples": 0.2976711609175276
+      },
+      "clock_read": {
+        "inclusive_samples": 23,
+        "percentage_of_main_thread_samples": 0.40273157065312554
+      }
+    },
+    "worker_metrics": {
+      "observation": 3652,
+      "observation_screen_signal": 1810,
+      "observation_sample_capture": 383,
+      "media_processing": 1729,
+      "media_ingest": 1521,
+      "canonical_ingest": 358,
+      "queue_completion_put": 284,
+      "socket_read_operation": 5229,
+      "socket_write_operation": 1,
+      "poll_syscall": 2630,
+      "foreground_group_probe": 275,
+      "futex_wait": 52898,
+      "futex_wake": 336,
+      "deadline_timer_wait": 5487,
+      "signal_trampoline": 704
+    },
+    "signal_trampoline_context": {
+      "all_signal_trampoline": 704,
+      "under_timer_event_worker": 655,
+      "profile_lines_under_timer": [
+        434,
+        438,
+        442,
+        452,
+        705,
+        713,
+        724,
+        893,
+        994,
+        998,
+        1232,
+        1236,
+        1240,
+        1249,
+        1509,
+        1518,
+        1528,
+        1747,
+        1790,
+        1795,
+        1799,
+        2063,
+        2072,
+        2083,
+        2268,
+        2311,
+        2316,
+        2317,
+        2322,
+        2338,
+        2608,
+        2609,
+        2614,
+        2844,
+        2926,
+        2927,
+        2933,
+        2937,
+        3153,
+        3157,
+        3158,
+        3164,
+        3392,
+        3482,
+        3487,
+        3488,
+        3494
+      ]
+    },
+    "comparison_limit": "One profile per build, not paired repeated profiling. Different total sampled stacks and unquantified hash/idle portions preclude interpreting count deltas as CPU or throughput savings."
+  },
+  "findings": [
+    {
+      "claim": "The stable timer removes nearly all sampled signal-trampoline presence from the earlier candidate.",
+      "evidence": "Outermost inclusive _sigtramp samples across workers change from 704 to 1; samples under DeadlineTimer child workers change from 655 to 1. Main scheduleCellPublication changes from 17/5711 to 2/5920.",
+      "interpretation": "Consistent with updateEarlier retaining armed timers during null/later deadline changes. This does not measure cancellation call counts or an allocation/CPU saving percentage."
+    },
+    {
+      "claim": "Cell preparation remains a very small fraction of main sampled stacks.",
+      "evidence": "CellSync.prepare 8/5920 (0.135%), including Pane.render 7, blit 4 and Style.eql 1; earlier candidate 17/5711 (0.298%), phase1 1386/5853 (23.680%).",
+      "interpretation": "Nested rows overlap and cannot be added. Replicated unprofiled benchmarks establish throughput changes."
+    },
+    {
+      "claim": "Foreground process-group probing remains the clearest sampled main-thread work candidate.",
+      "evidence": "tcgetpgrp 454/5920 (7.669%); earlier candidate 477/5711 (8.352%). GenericPipeline.handle calls shellForeground once per nonempty PTY read for progress/history semantics; the observation actor queries again per batch.",
+      "next_step": "Isolate redundant probe reduction while preserving shell/foreground-child transitions and output attribution; do not infer the attainable throughput gain from these stack percentages."
+    },
+    {
+      "claim": "Observation and media remain significant sampled worker work.",
+      "evidence": "observePane 3918 inclusive, containing Sample.signal 1906 and Sample.capture 425; media processMedia 1727, containing ingestMediaOutput 1511; canonical ingestPane 386. Worker tcgetpgrp 263.",
+      "next_step": "Measure repeated identical screen heuristic scans and duplicate terminal parsing separately. Sample.signal is manifest phrase detection, distinct from OS _sigtramp. Worker observations do not establish a serialized throughput bottleneck."
+    },
+    {
+      "claim": "Main waits and socket receive samples do not identify the Unix socket as the bottleneck.",
+      "evidence": "__ulock_wait2 4856/5920 (82.027%); event queue getLocked 4871/5920. deadline_timer.wait 5563 inclusive worker samples; socket netReadPosix 5661 and poll 2900.",
+      "interpretation": "These are wall-stack samples, including blocked and descheduled execution; do not equate them to CPU or add cross-thread counts to main percentages."
+    }
+  ]
+}

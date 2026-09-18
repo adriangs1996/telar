@@ -1,0 +1,17 @@
+{"name": "diagnostic-repeat-baseline", "valid": true, "elapsed_seconds": 12.758502042}
+{"name": "diagnostic-repeat-candidate", "valid": true, "elapsed_seconds": 12.739264000000002}
+{"name": "diagnostic-variable-candidate", "valid": true, "elapsed_seconds": 12.868487500000004}
+{"name": "diagnostic-variable-baseline", "valid": true, "elapsed_seconds": 12.958139000000003}
+{"name": "sustained-0-repeat-baseline", "valid": true, "elapsed_seconds": 11.710269333}
+{"name": "sustained-0-repeat-candidate", "valid": true, "elapsed_seconds": 11.129124292}
+{"name": "sustained-0-variable-baseline", "valid": true, "elapsed_seconds": 13.180318916999994}
+{"name": "sustained-0-variable-candidate", "valid": true, "elapsed_seconds": 12.415448333}
+{"name": "sustained-1-variable-candidate", "valid": true, "elapsed_seconds": 12.356399458999988}
+{"name": "sustained-1-variable-baseline", "valid": true, "elapsed_seconds": 13.052982209000007}
+{"name": "sustained-1-repeat-candidate", "valid": true, "elapsed_seconds": 11.183736333000013}
+{"name": "sustained-1-repeat-baseline", "valid": true, "elapsed_seconds": 11.743418166999987}
+{"name": "sustained-2-repeat-baseline", "valid": true, "elapsed_seconds": 11.724936333000016}
+{"name": "sustained-2-repeat-candidate", "valid": true, "elapsed_seconds": 11.099308500000006}
+{"name": "sustained-2-variable-baseline", "valid": true, "elapsed_seconds": 13.020001457999996}
+{"name": "sustained-2-variable-candidate", "valid": true, "elapsed_seconds": 12.37732674999998}
+{"name": "profile-candidate-repeat", "valid": true, "elapsed_seconds": 39.217034125}

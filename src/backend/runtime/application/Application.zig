@@ -44,6 +44,8 @@ const PendingNotificationType = @import("../delivery/PendingNotification.zig");
 const AgentSoundNotificationType = @import("telar-core").AgentSoundNotification;
 const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
 const ClientMessageType = @import("telar-core").ClientMessage;
+const DeadlineScheduler = @import("telar-core").DeadlineScheduler;
+const deadline_timer = @import("telar-core").deadline_timer;
 /// Owns the live model and application state used by requests and actors.
 const Application = @This();
 
@@ -77,6 +79,7 @@ session: ApplicationState = .{},
 session_name_probe_in_flight: bool = false,
 agent_history_jobs: @import("AgentHistoryJobs.zig") = .{},
 input_sequence: u64 = 0,
+cell_timer: DeadlineScheduler = .{},
 
 /// Composes application state from stable, runtime-owned capabilities.
 ///
@@ -763,7 +766,9 @@ pub fn shutdownDelivered(application: *const Application) bool {
 /// try application.pump(session);
 /// ```
 pub fn pump(application: *Application, session: *Session) !void {
+    session.cell_deadline_ns = null;
     if (!session.active() or session.send_pending) {
+        try application.scheduleCellPublication();
         return;
     }
 
@@ -796,13 +801,52 @@ pub fn pump(application: *Application, session: *Session) !void {
         }
     }
 
-    const prepared = pending orelse return;
+    const prepared = pending orelse {
+        session.cell_deadline_ns = session.attachments.cellDeadline();
+        try application.scheduleCellPublication();
+        return;
+    };
+    try application.scheduleCellPublication();
     try application_namespace.Operations.startSessionSend(application, session, prepared.payload);
     session.delivery.commit(.{
         .prepared = prepared,
         .attachments = &session.attachments,
         .metrics = &application.metrics,
     });
+}
+
+// Scheduling exception: std.Io.Threaded allocates task records outside Telar
+// Heap accounting. One logical timer and at most two child waits bound the
+// concurrent work; retaining armed deadlines avoids rebuilding transient waits.
+// There is no task per output update. Reusing the cancellable scheduler keeps
+// shutdown under the runtime's actor lifetime, before Application is released.
+fn scheduleCellPublication(application: *Application) !void {
+    var earliest: ?u64 = null;
+    for (&application.clients.items) |*slot| {
+        const session = slot.* orelse continue;
+        if (!session.active() or session.send_pending) {
+            continue;
+        }
+
+        const deadline = session.cell_deadline_ns orelse continue;
+        earliest = @min(earliest orelse deadline, deadline);
+    }
+
+    if (application.cell_timer.updateEarlier(application.io, earliest) != .schedule) {
+        return;
+    }
+
+    application.select.concurrent(.cell_publication_due, deadline_timer.wait, .{ application.io, &application.cell_timer }) catch |err| {
+        application.cell_timer.schedulingFailed();
+        return err;
+    };
+}
+
+/// Publishes due cells from current owners; the timer borrows no attachment.
+/// Example: `try application.cellPublicationDue(result);`.
+pub fn cellPublicationDue(application: *Application, result: anyerror!void) !void {
+    try application.cell_timer.complete(result);
+    application.pumpAll();
 }
 
 /// Routes a decoded client message through a request-scoped dispatcher.

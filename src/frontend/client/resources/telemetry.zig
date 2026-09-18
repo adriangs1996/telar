@@ -1,5 +1,6 @@
 //! Client observability state and its stable JSON projection.
 
+const core = @import("telar-core");
 const TerminalClient = @import("../TerminalClient.zig");
 const host = TerminalClient.of;
 const FormatRequest = @import("FormatRequest.zig");
@@ -17,7 +18,7 @@ const waitForTick_module = @import("telar-core").waitForTick;
 const TelemetryState = @import("telar-client").TelemetryState;
 const SinkType = @import("telar-core").Sink;
 const HostCapabilitiesType = @import("telar-client").HostCapabilities;
-const PacerType = @import("../../presentation/Pacer.zig");
+const PacerType = core.Pacer;
 const Metrics = @import("telar-client").TelemetryMetrics;
 const enabled_module = @import("telar-core").enabled;
 

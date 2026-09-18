@@ -6,6 +6,7 @@ const PaneType = @import("../../../pane/Pane.zig");
 const mark_module = @import("telar-core").mark;
 const enabled_module = @import("telar-core").enabled;
 const pane_mod = @import("../../../pane/pane_namespace.zig");
+const monotonic = @import("telar-core").monotonic;
 /// The attachment-independent half of pane input: observation first, then the
 /// bounded PTY queue. Shared by attached-client input and control requests
 /// that resolve panes by exact generation.
@@ -46,6 +47,9 @@ pub inline fn forward(forwarder: *const Forwarder, pane: *PaneType, bytes: []con
     mark_module(forwarder.io, .input_observed);
     try forwarder.scheduler.observation(forwarder.scheduler.context, pane);
 
-    _ = pane.queuePtyInput(bytes);
+    if (pane.queuePtyInput(bytes) and bytes.len != 0) {
+        pane.cell_input_ns = monotonic(forwarder.io);
+    }
+
     try forwarder.scheduler.input(forwarder.scheduler.context, pane);
 }

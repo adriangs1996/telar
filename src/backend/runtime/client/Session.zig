@@ -29,6 +29,7 @@ pending_pane_focus: ?PendingPaneFocus = null,
 terminal_colors: TerminalColorsType = .{},
 pending_search: ?PendingType = null,
 search_scheduled: bool = false,
+cell_deadline_ns: ?u64 = null,
 
 /// Example: `if (session.setTerminalColors(colors)) { updateOwnedPanes(); }`.
 pub fn setTerminalColors(session: *Session, colors: TerminalColorsType) bool {

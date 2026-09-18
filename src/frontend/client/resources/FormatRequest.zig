@@ -1,6 +1,7 @@
+const core = @import("telar-core");
 const std = @import("std");
 const Metrics = @import("telar-client").TelemetryMetrics;
-const PacerType = @import("../../presentation/Pacer.zig");
+const PacerType = core.Pacer;
 const Snapshot = @import("Snapshot.zig");
 const FormatRequest = @This();
 

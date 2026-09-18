@@ -203,7 +203,7 @@ new notifications after reconciliation.
   and timer event ordering.
 - `src/client/resources/notification_timers.zig` maps model deadlines to the
   shared scheduler and notification events.
-- `src/client/resources/deadline_timer.zig` proves deadline replacement,
+- `src/core/time/deadline_timer.zig` proves deadline replacement,
   removal, parking and pending-token release after successful and failed
   completions.
 - `src/frontend/client/presentation/view.zig` proves immutable rendering, ID-only intents

@@ -1,0 +1,1685 @@
+diff --git a/build.zig b/build.zig
+index 25c8a25b..15db3cae 100644
+--- a/build.zig
++++ b/build.zig
+@@ -16,6 +16,20 @@ pub fn build(b: *std.Build) void {
+     packaging.add(b, app, diagram_helper);
+     app.modules.gui = gui.add(b, app, diagram_helper);
+     @import("run_widget.zig").addBuild(b, app);
++    const credit_tests = b.addTest(.{ .root_module = app.modules.backend, .filters = &.{ "credit", "graphics", "attachment", "PTY", "session", "output readiness", "colour", "palette", "blit", "wide", "grapheme" } });
++    b.step("test-credit-diagnostic", "Run existing credit, graphics and attachment tests").dependOn(&b.addRunArtifact(credit_tests).step);
++    const backend_tests = b.addTest(.{ .root_module = app.modules.backend });
++    const pty_tests = app.modules.addSuiteTest(b, .{ .path = "src/backend/pty/pty_tests.zig", .libc = true, .vt = true });
++    const optimization_step = b.step("test-optimization", "Run backend and public PTY contracts");
++    optimization_step.dependOn(&b.addRunArtifact(backend_tests).step);
++    optimization_step.dependOn(&b.addRunArtifact(pty_tests).step);
++    const checkpoint_tests = b.addTest(.{ .root_module = app.modules.backend, .filters = &.{"agent panes survive consecutive", "default colours refresh"} });
++    b.step("test-checkpoint-diagnostic", "Run the isolated checkpoint regression").dependOn(&b.addRunArtifact(checkpoint_tests).step);
++    const shared_step = b.step("test-publication-shared", "Run shared pacing and frontend contracts");
++    shared_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = app.modules.frontend })).step);
++    for ([_][]const u8{ "src/core/pacing/pace.zig", "src/core/time/deadline_timer.zig", "src/core/time/clock.zig" }) |path| {
++        shared_step.dependOn(&b.addRunArtifact(app.modules.addSuiteTest(b, .{ .path = path, .libc = true })).step);
++    }
+     const parallel_tests = tests.add(b, app, bench);
+     parallel_tests.dependOn(cross.add(b));
+ }
+diff --git a/build/tests.zig b/build/tests.zig
+index b176b4e1..75e3ff45 100644
+--- a/build/tests.zig
++++ b/build/tests.zig
+@@ -121,6 +121,9 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
+         .{ .path = "src/core/ui/ui_tests.zig" },
+         .{ .path = "src/core/select.zig" },
+         .{ .path = "src/core/link.zig" },
++        .{ .path = "src/core/pacing/pace.zig" },
++        .{ .path = "src/core/time/deadline_timer.zig", .libc = true },
++        .{ .path = "src/core/time/clock.zig", .libc = true },
+         // Only referenced through non-pub imports elsewhere, so their tests
+         // never run unless they are their own suite roots.
+         .{ .path = "src/core/graphics.zig" },
+diff --git a/src/backend/pane/Pane.zig b/src/backend/pane/Pane.zig
+index 62307ba0..3a715cca 100644
+--- a/src/backend/pane/Pane.zig
++++ b/src/backend/pane/Pane.zig
+@@ -79,6 +79,8 @@ media_allocator: PaneMediaAllocatorType,
+ pty_write_mutex: std.Io.Mutex = .init,
+ response_pending: bool = false,
+ input_queue: PaneInputQueue = .{},
++/// Last admitted input; each attachment independently grants prompt echo frames.
++cell_input_ns: ?u64 = null,
+ input_write_pending: bool = false,
+ input_write_len: usize = 0,
+ size: TerminalSizeType,
+diff --git a/src/backend/pane/blit.zig b/src/backend/pane/blit.zig
+index 959f2749..3ed89d60 100644
+--- a/src/backend/pane/blit.zig
++++ b/src/backend/pane/blit.zig
+@@ -21,13 +21,12 @@ const BlitPane = @import("BlitPane.zig");
+ // lets the drawing layer be lifted out later without dragging an emulator
+ // behind it.
+ //
+-// The expensive half of the work is not here. `vt.RenderState` already walks
+-// the page list, resolves styles into runs, duplicates grapheme data out of
+-// pages that may be freed, tracks which rows changed, and retains its buffers
+-// between frames so a steady state allocates nothing. It also splits into
+-// `beginUpdate` (needs the terminal) and `endUpdate` (does not), so the actor
+-// owning the pty can be released before the copying starts. All this file does
+-// is turn that into cells.
++// `vt.RenderState` walks the page list, resolves styles into runs, duplicates
++// grapheme data out of pages that may be freed, and tracks which rows changed.
++// It retains buffers between frames so a steady state allocates nothing. Its
++// `beginUpdate` needs the terminal and `endUpdate` does not, so the actor owning
++// the pty can be released before the copying starts. This file turns the
++// result into cells.
+ //
+ // What it must get right, and what a naive copy gets wrong:
+ //
+@@ -54,6 +53,7 @@ pub fn blit(operation: Operation) Stats {
+     const state = operation.state;
+     const opts = operation.options;
+     const color_source: ColorSource = .{ .terminal = terminal, .colors = state.colors };
++    const default_style = defaultStyle(&color_source);
+ 
+     var stats: Stats = .{};
+     if (opts.damaged_rows) |damaged| {
+@@ -83,7 +83,7 @@ pub fn blit(operation: Operation) Stats {
+             continue;
+         }
+         const target: RowTarget = .{ .buffer = b, .area = area, .y = y };
+-        blitRow(.{ .target = target, .cells = row_cells[y].slice(), .colors = color_source });
++        blitRow(&.{ .target = target, .cells = row_cells[y].slice(), .colors = color_source }, default_style);
+         if (opts.selection) |range| {
+             highlightRow(target, range);
+         }
+@@ -98,7 +98,7 @@ pub fn blit(operation: Operation) Stats {
+     // during a resize, and leaving the previous tenant's pixels there reads as
+     // a rendering bug.
+     while (y < area.h) : (y += 1) {
+-        b.fill(area.row(y), .{ .glyph = " ", .style = .{ .bg = defaultBackground(color_source) } });
++        b.fill(area.row(y), .{ .glyph = " ", .style = .{ .bg = default_style.bg } });
+         if (opts.damaged_rows) |damaged| {
+             damaged[area.y + y] = true;
+         }
+@@ -167,12 +167,12 @@ pub fn selectionText(gpa: std.mem.Allocator, terminal: *vt.Terminal, range: Rang
+     return s.selectionString(gpa, .{ .sel = selection, .trim = true });
+ }
+ 
+-fn blitRow(projection: RowProjection) void {
++fn blitRow(projection: *const RowProjection, default_style: StyleType) void {
+     const b = projection.target.buffer;
+     const area = projection.target.area;
+     const y = projection.target.y;
+     const cells = projection.cells;
+-    const colors = projection.colors;
++    const colors = &projection.colors;
+ 
+     const raws = cells.items(.raw);
+     const styles = cells.items(.style);
+@@ -186,7 +186,7 @@ fn blitRow(projection: RowProjection) void {
+         // Style id zero is the default style and the emulator does not fill
+         // `style` for it, so reading it unconditionally is reading undefined
+         // memory.
+-        const style = translate(if (raw.style_id == 0) .{} else styles[x], colors);
++        const style = if (raw.style_id == 0) default_style else translate(styles[x], colors, default_style);
+ 
+         switch (raw.wide) {
+             // The emulator's own marker for the column a wide glyph continues
+@@ -235,7 +235,7 @@ fn blitRow(projection: RowProjection) void {
+     var pad = width;
+     while (pad < area.w) : (pad += 1) {
+         b.setCell(.{ .x = area.x + pad, .y = area.y + y }, .{ .text = " ", .width = 1, .style = .{
+-            .bg = defaultBackground(colors),
++            .bg = default_style.bg,
+         } });
+     }
+ }
+@@ -269,15 +269,15 @@ fn encode(out: *[CellType.max_bytes]u8, base: u21, extra: []const u21) []const u
+ /// The attribute word is reinterpreted rather than copied field by field;
+ /// `ui.Style.Flags` is declared to match it and a test in `ui.zig` fails if a
+ /// libghostty-vt update moves a bit.
+-fn translate(style: vt.Style, colors: ColorSource) StyleType {
++fn translate(style: vt.Style, colors: *const ColorSource, default_style: StyleType) StyleType {
+     return .{
+-        .fg = resolve(style.fg_color, colors, .foreground),
+-        .bg = resolve(style.bg_color, colors, .background),
++        .fg = resolve(style.fg_color, colors, default_style.fg),
++        .bg = resolve(style.bg_color, colors, default_style.bg),
+         // Underline colour has no default of its own: unset means "use the
+         // foreground", which the terminal already does when SGR 58 is absent.
+         .underline_color = switch (style.underline_color) {
+             .none => .default,
+-            else => resolve(style.underline_color, colors, .foreground),
++            else => resolve(style.underline_color, colors, default_style.fg),
+         },
+         .flags = @bitCast(@as(u16, @bitCast(style.flags))),
+     };
+@@ -288,36 +288,31 @@ fn translate(style: vt.Style, colors: ColorSource) StyleType {
+ /// Passing an index through instead would let the outer terminal answer with
+ /// its own palette, so an agent that recoloured its terminal would render in
+ /// whatever the user's theme happens to map that slot to.
+-const DefaultColor = enum { foreground, background };
+-
+-fn resolve(c: vt.Style.Color, colors: ColorSource, default_color: DefaultColor) ColorType {
++fn resolve(c: vt.Style.Color, colors: *const ColorSource, default_color: ColorType) ColorType {
+     return switch (c) {
+-        .none => switch (default_color) {
+-            .foreground => defaultForeground(colors),
+-            .background => defaultBackground(colors),
+-        },
++        .none => default_color,
+         .palette => |i| paletteColor(colors, i),
+         .rgb => |v| rgb(v),
+     };
+ }
+ 
+-fn defaultForeground(source: ColorSource) ColorType {
+-    if (source.terminal.modes.get(.reverse_colors)) {
+-        return rgb(source.colors.foreground);
+-    }
+-
+-    return if (source.terminal.colors.foreground.override) |color| rgb(color) else .default;
+-}
+-
+-fn defaultBackground(source: ColorSource) ColorType {
++// Defaults and reverse mode are constant during a blit. Resolve them once so
++// every default cell, explicit style and padding cell shares the same frame.
++fn defaultStyle(source: *const ColorSource) StyleType {
+     if (source.terminal.modes.get(.reverse_colors)) {
+-        return rgb(source.colors.background);
++        return .{
++            .fg = rgb(source.colors.foreground),
++            .bg = rgb(source.colors.background),
++        };
+     }
+ 
+-    return if (source.terminal.colors.background.override) |color| rgb(color) else .default;
++    return .{
++        .fg = if (source.terminal.colors.foreground.override) |color| rgb(color) else .default,
++        .bg = if (source.terminal.colors.background.override) |color| rgb(color) else .default,
++    };
+ }
+ 
+-fn paletteColor(source: ColorSource, index: u8) ColorType {
++fn paletteColor(source: *const ColorSource, index: u8) ColorType {
+     if (source.terminal.colors.palette.mask.isSet(index)) {
+         return rgb(source.colors.palette[index]);
+     }
+@@ -510,6 +505,62 @@ test "OSC default colour overrides stay inside the pane" {
+     try std.testing.expect(buf.at(0, 0).?.style.bg == .default);
+ }
+ 
++test "default colours refresh across reverse mode and OSC changes including padding" {
++    const gpa = std.testing.allocator;
++    var pane = try BlitPane.init(gpa, 4, 2);
++    defer pane.deinit();
++    var buf = try BufferType.init(gpa, 6, 3);
++    defer buf.deinit();
++    pane.term.colors.foreground.default = .{ .r = 240, .g = 230, .b = 220 };
++    pane.term.colors.background.default = .{ .r = 10, .g = 20, .b = 30 };
++
++    try pane.write("a\x1b[7mb\x1b[0;31;4;58;5;2mc\x1b[?5h");
++    _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
++
++    const reversed_foreground: ColorType = .{ .rgb = .{ 10, 20, 30 } };
++    const reversed_background: ColorType = .{ .rgb = .{ 240, 230, 220 } };
++    try std.testing.expectEqual(reversed_foreground, buf.at(0, 0).?.style.fg);
++    try std.testing.expectEqual(reversed_background, buf.at(0, 0).?.style.bg);
++    try std.testing.expectEqual(reversed_foreground, buf.at(1, 0).?.style.fg);
++    try std.testing.expect(buf.at(1, 0).?.style.flags.inverse);
++    try std.testing.expectEqual(ColorType{ .indexed = 1 }, buf.at(2, 0).?.style.fg);
++    try std.testing.expectEqual(ColorType{ .indexed = 2 }, buf.at(2, 0).?.style.underline_color);
++    try std.testing.expectEqual(reversed_background, buf.at(2, 0).?.style.bg);
++    try std.testing.expectEqual(reversed_background, buf.at(5, 0).?.style.bg);
++    try std.testing.expectEqual(reversed_background, buf.at(0, 2).?.style.bg);
++
++    try pane.write("\x1b]10;rgb:12/34/56\x07\x1b]11;rgb:65/43/21\x07");
++    // The bare VT helper has no Pane.semantic_colors_dirty tracking. Its rows
++    // stay clean after OSC alone; Pane.render supplies force for this case.
++    _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{ .force = true } });
++
++    const foreground_override: ColorType = .{ .rgb = .{ 0x12, 0x34, 0x56 } };
++    const background_override: ColorType = .{ .rgb = .{ 0x65, 0x43, 0x21 } };
++    try std.testing.expectEqual(background_override, buf.at(0, 0).?.style.fg);
++    try std.testing.expectEqual(foreground_override, buf.at(0, 0).?.style.bg);
++    try std.testing.expectEqual(foreground_override, buf.at(2, 0).?.style.bg);
++    try std.testing.expectEqual(foreground_override, buf.at(5, 0).?.style.bg);
++    try std.testing.expectEqual(foreground_override, buf.at(0, 2).?.style.bg);
++
++    try pane.write("\x1b[?5l");
++    _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{ .force = true } });
++    try std.testing.expectEqual(foreground_override, buf.at(0, 0).?.style.fg);
++    try std.testing.expectEqual(background_override, buf.at(0, 0).?.style.bg);
++    try std.testing.expect(buf.at(1, 0).?.style.flags.inverse);
++
++    try pane.write("\x1b]110\x07\x1b]111\x07");
++    _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{ .force = true } });
++    try std.testing.expect(buf.at(0, 0).?.style.fg == .default);
++    try std.testing.expect(buf.at(0, 0).?.style.bg == .default);
++    try std.testing.expect(buf.at(1, 0).?.style.fg == .default);
++    try std.testing.expect(buf.at(1, 0).?.style.flags.inverse);
++    try std.testing.expectEqual(ColorType{ .indexed = 1 }, buf.at(2, 0).?.style.fg);
++    try std.testing.expectEqual(ColorType{ .indexed = 2 }, buf.at(2, 0).?.style.underline_color);
++    try std.testing.expect(buf.at(2, 0).?.style.bg == .default);
++    try std.testing.expect(buf.at(5, 0).?.style.bg == .default);
++    try std.testing.expect(buf.at(0, 2).?.style.bg == .default);
++}
++
+ test "palette colours are resolved with the pane's own palette" {
+     const gpa = std.testing.allocator;
+     var pane = try BlitPane.init(gpa, 10, 2);
+diff --git a/src/backend/pty/Session.zig b/src/backend/pty/Session.zig
+index a7dd37fd..6a0fbafd 100644
+--- a/src/backend/pty/Session.zig
++++ b/src/backend/pty/Session.zig
+@@ -37,13 +37,31 @@ pub fn processId(session: *const Session) std.c.pid_t {
+     return session.pid;
+ }
+ 
+-/// Reads child output from the PTY master into the caller's buffer.
++/// Reads child output, then drains only bytes already available. A burst
++/// occupies at most the caller's buffer and eight reads, preserving a short
++/// response without waiting for future output. One actor owns the read side.
+ ///
+ /// ```zig
+ /// const len = try session.read(io, &buffer);
+ /// ```
+ pub fn read(session: *const Session, io: std.Io, buffer: []u8) !usize {
+-    return session.file().readStreaming(io, &.{buffer});
++    const input = session.file();
++    var len = try input.readStreaming(io, &.{buffer});
++    var reads: usize = 1;
++
++    while (len != 0 and len < buffer.len and reads < 8 and native.outputReady(session.master)) : (reads += 1) {
++        const extra = input.readStreaming(io, &.{buffer[len..]}) catch |err| switch (err) {
++            error.Canceled => return err,
++            else => break,
++        };
++        if (extra == 0) {
++            break;
++        }
++
++        len += extra;
++    }
++
++    return len;
+ }
+ 
+ /// Writes the complete input slice to the child through the PTY master.
+diff --git a/src/backend/pty/native.zig b/src/backend/pty/native.zig
+index 78d83f39..08bf2a29 100644
+--- a/src/backend/pty/native.zig
++++ b/src/backend/pty/native.zig
+@@ -29,6 +29,15 @@ pub fn openPty(window: *const std.posix.winsize) !Pair {
+     return pair;
+ }
+ 
++/// Checks for already-readable output without waiting for another PTY byte.
++/// A failed or interrupted poll ends the current burst.
++/// Example: `if (outputReady(master)) { readAnotherChunk(); }`.
++pub fn outputReady(fd: std.c.fd_t) bool {
++    var descriptor: std.c.pollfd = .{ .fd = fd, .events = std.posix.POLL.IN, .revents = 0 };
++    return std.c.poll(@ptrCast(&descriptor), 1, 0) > 0 and
++        descriptor.revents & std.posix.POLL.IN != 0;
++}
++
+ pub fn closeDescriptor(fd: *std.c.fd_t) void {
+     if (fd.* < 0) {
+         return;
+@@ -166,3 +175,21 @@ pub fn terminate(pid: std.c.pid_t) void {
+ test "close-on-exec setup reports invalid descriptors" {
+     try std.testing.expectError(error.SetCloseOnExecFailed, setCloseOnExec(-1));
+ }
++
++test "output readiness never waits and does not consume queued bytes" {
++    var pipe = try openCloseOnExecPipe();
++    defer closeDescriptor(&pipe[0]);
++    defer closeDescriptor(&pipe[1]);
++
++    try std.testing.expect(!outputReady(pipe[0]));
++    try std.testing.expectEqual(@as(isize, 1), std.c.write(pipe[1], "x", 1));
++    try std.testing.expect(outputReady(pipe[0]));
++    try std.testing.expect(outputReady(pipe[0]));
++
++    var byte: [1]u8 = undefined;
++    try std.testing.expectEqual(@as(isize, 1), std.c.read(pipe[0], &byte, 1));
++    try std.testing.expectEqualStrings("x", &byte);
++    try std.testing.expect(!outputReady(pipe[0]));
++
++    try std.testing.expect(!outputReady(-1));
++}
+diff --git a/src/backend/pty/session_support.zig b/src/backend/pty/session_support.zig
+index 984ef270..2ced2667 100644
+--- a/src/backend/pty/session_support.zig
++++ b/src/backend/pty/session_support.zig
+@@ -101,6 +101,34 @@ test "resize changes the dimensions observed by the child" {
+     try std.testing.expectEqual(exit_mod.Exit{ .exited = 0 }, try session.wait());
+ }
+ 
++test "bounded PTY reads preserve every byte and the closing tail of a burst" {
++    const io = std.testing.io;
++    const args = [_][*:0]const u8{ "/bin/sh", "-c", "head -c 32768 /dev/zero; printf TAIL" };
++    const command = try Command.fromArgv(&args);
++    var session = try Session.spawn(&command, .{ .cols = 40, .rows = 5 });
++    defer session.deinit();
++
++    var output: [32768 + 4 + 64]u8 = undefined;
++    var len: usize = 0;
++    while (len < output.len) {
++        const end = @min(len + 4095, output.len);
++        const count = session.read(io, output[len..end]) catch |err| switch (err) {
++            error.EndOfStream, error.InputOutput => break,
++            else => return err,
++        };
++        try std.testing.expect(count > 0);
++        len += count;
++    }
++
++    try std.testing.expectEqual(@as(usize, 32768 + 4), len);
++    for (output[0..32768]) |byte| {
++        try std.testing.expectEqual(@as(u8, 0), byte);
++    }
++
++    try std.testing.expectEqualStrings("TAIL", output[32768..len]);
++    try std.testing.expectEqual(exit_mod.Exit{ .exited = 0 }, try session.wait());
++}
++
+ test "PTY child receives the explicit terminal environment" {
+     var inherited_map = std.process.Environ.Map.init(std.testing.allocator);
+     defer inherited_map.deinit();
+diff --git a/src/backend/runtime/application/Application.zig b/src/backend/runtime/application/Application.zig
+index 50524c21..8802f215 100644
+--- a/src/backend/runtime/application/Application.zig
++++ b/src/backend/runtime/application/Application.zig
+@@ -44,6 +44,8 @@ const PendingNotificationType = @import("../delivery/PendingNotification.zig");
+ const AgentSoundNotificationType = @import("telar-core").AgentSoundNotification;
+ const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
+ const ClientMessageType = @import("telar-core").ClientMessage;
++const DeadlineScheduler = @import("telar-core").DeadlineScheduler;
++const deadline_timer = @import("telar-core").deadline_timer;
+ /// Owns the live model and application state used by requests and actors.
+ const Application = @This();
+ 
+@@ -77,6 +79,7 @@ session: ApplicationState = .{},
+ session_name_probe_in_flight: bool = false,
+ agent_history_jobs: @import("AgentHistoryJobs.zig") = .{},
+ input_sequence: u64 = 0,
++cell_timer: DeadlineScheduler = .{},
+ 
+ /// Composes application state from stable, runtime-owned capabilities.
+ ///
+@@ -763,7 +766,9 @@ pub fn shutdownDelivered(application: *const Application) bool {
+ /// try application.pump(session);
+ /// ```
+ pub fn pump(application: *Application, session: *Session) !void {
++    session.cell_deadline_ns = null;
+     if (!session.active() or session.send_pending) {
++        try application.scheduleCellPublication();
+         return;
+     }
+ 
+@@ -796,7 +801,12 @@ pub fn pump(application: *Application, session: *Session) !void {
+         }
+     }
+ 
+-    const prepared = pending orelse return;
++    const prepared = pending orelse {
++        session.cell_deadline_ns = session.attachments.cellDeadline();
++        try application.scheduleCellPublication();
++        return;
++    };
++    try application.scheduleCellPublication();
+     try application_namespace.Operations.startSessionSend(application, session, prepared.payload);
+     session.delivery.commit(.{
+         .prepared = prepared,
+@@ -805,6 +815,35 @@ pub fn pump(application: *Application, session: *Session) !void {
+     });
+ }
+ 
++fn scheduleCellPublication(application: *Application) !void {
++    var earliest: ?u64 = null;
++    for (&application.clients.items) |*slot| {
++        const session = slot.* orelse continue;
++        if (!session.active() or session.send_pending) {
++            continue;
++        }
++
++        const deadline = session.cell_deadline_ns orelse continue;
++        earliest = @min(earliest orelse deadline, deadline);
++    }
++
++    if (application.cell_timer.updateEarlier(application.io, earliest) != .schedule) {
++        return;
++    }
++
++    application.select.concurrent(.cell_publication_due, deadline_timer.wait, .{ application.io, &application.cell_timer }) catch |err| {
++        application.cell_timer.schedulingFailed();
++        return err;
++    };
++}
++
++/// Publishes due cells from current owners; the timer borrows no attachment.
++/// Example: `try application.cellPublicationDue(result);`.
++pub fn cellPublicationDue(application: *Application, result: anyerror!void) !void {
++    try application.cell_timer.complete(result);
++    application.pumpAll();
++}
++
+ /// Routes a decoded client message through a request-scoped dispatcher.
+ ///
+ /// ```zig
+diff --git a/src/backend/runtime/application/commands/Forwarder.zig b/src/backend/runtime/application/commands/Forwarder.zig
+index 6aab807e..a8d498ba 100644
+--- a/src/backend/runtime/application/commands/Forwarder.zig
++++ b/src/backend/runtime/application/commands/Forwarder.zig
+@@ -6,6 +6,7 @@ const PaneType = @import("../../../pane/Pane.zig");
+ const mark_module = @import("telar-core").mark;
+ const enabled_module = @import("telar-core").enabled;
+ const pane_mod = @import("../../../pane/pane_namespace.zig");
++const monotonic = @import("telar-core").monotonic;
+ /// The attachment-independent half of pane input: observation first, then the
+ /// bounded PTY queue. Shared by attached-client input and control requests
+ /// that resolve panes by exact generation.
+@@ -46,6 +47,9 @@ pub inline fn forward(forwarder: *const Forwarder, pane: *PaneType, bytes: []con
+     mark_module(forwarder.io, .input_observed);
+     try forwarder.scheduler.observation(forwarder.scheduler.context, pane);
+ 
+-    _ = pane.queuePtyInput(bytes);
++    if (pane.queuePtyInput(bytes) and bytes.len != 0) {
++        pane.cell_input_ns = monotonic(forwarder.io);
++    }
++
+     try forwarder.scheduler.input(forwarder.scheduler.context, pane);
+ }
+diff --git a/src/backend/runtime/application/event_dispatcher/GenericEventDispatcher.zig b/src/backend/runtime/application/event_dispatcher/GenericEventDispatcher.zig
+index 87c04331..f22957b0 100644
+--- a/src/backend/runtime/application/event_dispatcher/GenericEventDispatcher.zig
++++ b/src/backend/runtime/application/event_dispatcher/GenericEventDispatcher.zig
+@@ -66,6 +66,9 @@ pub fn Type(comptime Application: type) type {
+                 },
+                 .client_message => |value| return ClientEvents.handleMessage(application, value),
+                 .client_sent => |value| return ClientEvents.handleSent(application, value),
++                .cell_publication_due => |result| {
++                    try application.cellPublicationDue(result);
++                },
+                 .history_response => |result| {
+                     try HistoryEvents.handle(application, result);
+                 },
+diff --git a/src/backend/runtime/attachment/Attachment.zig b/src/backend/runtime/attachment/Attachment.zig
+index 712d4113..41c77ac7 100644
+--- a/src/backend/runtime/attachment/Attachment.zig
++++ b/src/backend/runtime/attachment/Attachment.zig
+@@ -16,6 +16,8 @@ const encodePaneProgress_module = @import("telar-core").encodePaneProgress;
+ const encodePaneExited_module = @import("telar-core").encodePaneExited;
+ const max_image_bytes_per_pane_module = @import("telar-core").max_image_bytes_per_pane;
+ const attachment_namespace = @import("attachment_namespace.zig");
++const Pacer = @import("telar-core").Pacer;
++const monotonic = @import("telar-core").monotonic;
+ /// Per-client rendering state. It is disposable: reconnecting creates a fresh
+ /// baseline while the pane and its PTY continue to exist.
+ const Attachment = @This();
+@@ -29,6 +31,8 @@ pub const CommitEffect = @import("CommitEffect.zig");
+ pane: *PaneType,
+ cells: CellSync,
+ graphics: GraphicsSync,
++cell_pacer: Pacer = .{},
++cell_deadline_ns: ?u64 = null,
+ observed_cwd_revision: u64 = 0,
+ observed_foreground_revision: u64 = 0,
+ /// Starts at the empty-title revision so a fresh attachment learns only
+@@ -153,6 +157,8 @@ pub fn prepareProgress(attachment: *Attachment, buffer: []u8) !?PreparedType {
+ /// ```
+ pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparationType) !?PreparedType {
+     const pane = attachment.pane;
++    const scheduled_deadline = attachment.cell_deadline_ns;
++    attachment.cell_deadline_ns = null;
+     if (pane.ingest_pending) {
+         return null;
+     }
+@@ -176,22 +182,50 @@ pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparationTyp
+         return null;
+     }
+ 
+-    const payload = (try attachment.cells.prepare(.{
++    const now_ns = monotonic(preparation.io);
++    if (pane.cell_input_ns) |input_ns| {
++        if (attachment.cell_pacer.last_input_ns != input_ns) {
++            attachment.cell_pacer.noteInput(input_ns);
++        }
++    }
++
++    if (!pane.output_done) {
++        if (attachment.cell_pacer.waitUntil(now_ns)) |deadline| {
++            if (deadline > now_ns) {
++                attachment.cell_deadline_ns = deadline;
++                attachment.cell_pacer.noteThrottled();
++                return null;
++            }
++        }
++    }
++
++    const payload = try attachment.cells.prepare(.{
+         .io = preparation.io,
+         .buffer = preparation.buffer,
+         .pane = pane,
+         .force_snapshot = false,
+         .metrics = preparation.metrics,
+-    })) orelse
++    });
++    if (pane.render_pending or attachment.cells.observed_revision != pane.cell_revision) {
+         return null;
++    }
++
++    // A no-op still paid for projection and diff; synchronized holds did not.
++    attachment.cell_pacer.record(.{
++        .now = now_ns,
++        .scheduled_deadline = if (scheduled_deadline) |deadline| (if (now_ns >= deadline) deadline else null) else null,
++        .absorbed = 1,
++    });
+ 
+-    return .{ .bytes = payload, .effect = .cells };
++    return if (payload) |bytes| .{ .bytes = bytes, .effect = .cells } else null;
+ }
+ 
+ pub fn prepareExit(attachment: *Attachment, buffer: []u8) !?PreparedType {
+     const pane = attachment.pane;
+     if (pane.ingest_pending or attachment.exit_sent or !pane.output_done or
+-        pane.exit == null or attachment.outstandingFrameId() != 0)
++        pane.exit == null or attachment.outstandingFrameId() != 0 or
++        attachment.cells.snapshot_pending or pane.render_pending or
++        attachment.cells.observed_revision != pane.cell_revision)
+     {
+         return null;
+     }
+diff --git a/src/backend/runtime/attachment/AttachmentStore.zig b/src/backend/runtime/attachment/AttachmentStore.zig
+index c7633c5c..af54f456 100644
+--- a/src/backend/runtime/attachment/AttachmentStore.zig
++++ b/src/backend/runtime/attachment/AttachmentStore.zig
+@@ -27,6 +27,24 @@ index: GenericSlotIndex(2 * max_panes_per_tab) = .{},
+ workspace: ?WorkspaceLocationType = null,
+ shared_graphics: bool = false,
+ 
++/// Finds the next deferred publication that is not waiting for ingest or ACK.
++/// Example: `const deadline = attachments.cellDeadline();`.
++pub fn cellDeadline(store: *AttachmentStore) ?u64 {
++    var earliest: ?u64 = null;
++    for (&store.items) |*slot| {
++        const attachment = if (slot.*) |*value| value else continue;
++        const deadline = attachment.cell_deadline_ns orelse continue;
++
++        if (attachment.pane.ingest_pending or attachment.cells.hasOutstanding()) {
++            continue;
++        }
++
++        earliest = @min(earliest orelse deadline, deadline);
++    }
++
++    return earliest;
++}
++
+ pub fn find(store: *AttachmentStore, pane_id: PaneIdType) ?*Attachment {
+     const slot = store.index.get(raw_module(pane_id)) orelse return null;
+     const attachment = &store.items[slot].?;
+@@ -238,8 +256,8 @@ pub fn observes(store: *const AttachmentStore, workspace: WorkspaceLocationType)
+ 
+ pub fn availableGraphicsCredit(store: *const AttachmentStore) usize {
+     var outstanding: usize = 0;
+-    for (store.items) |slot| {
+-        const attachment = slot orelse continue;
++    for (&store.items) |*slot| {
++        const attachment = if (slot.*) |*value| value else continue;
+         outstanding +|= max_image_bytes_per_pane_module -
+             @min(attachment.graphicsCredit(), max_image_bytes_per_pane_module);
+     }
+diff --git a/src/backend/runtime/client/Session.zig b/src/backend/runtime/client/Session.zig
+index a8101635..c22e1eb3 100644
+--- a/src/backend/runtime/client/Session.zig
++++ b/src/backend/runtime/client/Session.zig
+@@ -29,6 +29,7 @@ pending_pane_focus: ?PendingPaneFocus = null,
+ terminal_colors: TerminalColorsType = .{},
+ pending_search: ?PendingType = null,
+ search_scheduled: bool = false,
++cell_deadline_ns: ?u64 = null,
+ 
+ /// Example: `if (session.setTerminalColors(colors)) { updateOwnedPanes(); }`.
+ pub fn setTerminalColors(session: *Session, colors: TerminalColorsType) bool {
+diff --git a/src/backend/runtime/event.zig b/src/backend/runtime/event.zig
+index f4bbde56..b7d6a9c0 100644
+--- a/src/backend/runtime/event.zig
++++ b/src/backend/runtime/event.zig
+@@ -28,6 +28,7 @@ pub const Event = union(enum) {
+     handshaken: anyerror!void,
+     client_message: ClientMessage,
+     client_sent: ClientSent,
++    cell_publication_due: anyerror!void,
+     history_response: anyerror!model.Response,
+     pane_input_written: InputCompletion,
+     pane_response_written: ResponseCompletion,
+@@ -73,6 +74,7 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) PathType {
+         .pane_response_written,
+         .client_message,
+         .client_sent,
++        .cell_publication_due,
+         => .interactive,
+         .pane_media => .media,
+         .pane_search,
+diff --git a/src/backend/runtime/runtime_tests.zig b/src/backend/runtime/runtime_tests.zig
+index 3b0dadd0..cf1889b3 100644
+--- a/src/backend/runtime/runtime_tests.zig
++++ b/src/backend/runtime/runtime_tests.zig
+@@ -2,6 +2,7 @@
+ 
+ const std_module = @import("std");
+ const Runtime = @import("Runtime.zig");
++const cell_publication_test = @import("tests/cell_publication_test.zig");
+ 
+ test "Runtime owns its endpoint until the injected stop dependency fires" {
+     const std = std_module;
+@@ -42,6 +43,7 @@ test "Runtime owns its endpoint until the injected stop dependency fires" {
+ 
+ test {
+     std_module.testing.refAllDecls(@This());
++    _ = cell_publication_test;
+     _ = @import("tests/acknowledge_agent_test.zig");
+     _ = @import("tests/cell_projection_test.zig");
+     _ = @import("tests/close_pane_test.zig");
+diff --git a/src/backend/runtime/tests/cell_publication_test.zig b/src/backend/runtime/tests/cell_publication_test.zig
+new file mode 100644
+index 00000000..557653e4
+--- /dev/null
++++ b/src/backend/runtime/tests/cell_publication_test.zig
+@@ -0,0 +1,372 @@
++//! Cell publication admission preserves the latest projection and input priority.
++
++const std = @import("std");
++const core = @import("telar-core");
++const PaneFixture = @import("PaneFixture.zig");
++const Attachment = @import("../attachment/Attachment.zig");
++const PaneInputHandler = @import("../application/commands/PaneInputHandler.zig");
++const PaneInputTestScheduleCapture = @import("PaneInputTestScheduleCapture.zig");
++
++const frame_buffer_size = 16 * 1024;
++const TestInterval = enum(u64) { elapsed = 1, deferred = std.time.ns_per_hour };
++const TestPane = enum(u16) { background = 8 };
++const GraceBudget = enum(u32) { limited = 2 };
++const PreparationBudget = enum(u32) { single = 1 };
++
++fn nextFrame(fixture: *PaneFixture, attachment: *Attachment, buffer: []u8) !?core.FrameView {
++    const prepared = (try attachment.prepareNextCells(.{
++        .io = std.testing.io,
++        .buffer = buffer,
++        .metrics = &fixture.metrics,
++    })) orelse return null;
++    const message = try core.decodeServer(prepared.bytes);
++
++    return switch (message) {
++        .pane_frame => |frame| frame,
++        else => error.ExpectedPaneFrame,
++    };
++}
++
++fn acknowledge(attachment: *Attachment, frame: core.FrameView) !void {
++    const sent_ns = attachment.cells.outstanding.?.sent_ns;
++    try std.testing.expect(attachment.acknowledgeFrame(frame.frame_id, sent_ns) != null);
++}
++
++fn establishBaseline(fixture: *PaneFixture, attachment: *Attachment, buffer: []u8) !void {
++    const frame = (try nextFrame(fixture, attachment, buffer)).?;
++    try acknowledge(attachment, frame);
++}
++
++fn deferPublication(attachment: *Attachment) void {
++    attachment.cell_pacer.interval = @intFromEnum(TestInterval.deferred);
++    attachment.cell_pacer.burst = 0;
++    attachment.cell_pacer.credits = 0;
++    attachment.cell_pacer.anchor_ns = core.monotonic(std.testing.io);
++}
++
++fn expirePublication(attachment: *Attachment) void {
++    attachment.cell_pacer.interval = @intFromEnum(TestInterval.elapsed);
++    attachment.cell_pacer.anchor_ns = 0;
++    attachment.cell_deadline_ns = @intFromEnum(TestInterval.elapsed);
++}
++
++fn expectLeadingText(frame: core.FrameView, text: []const u8) !void {
++    var spans = frame.spans();
++    const span = (try spans.next()).?;
++    try std.testing.expectEqual(@as(u32, 0), span.start);
++
++    var cells = span.cells();
++    for (text) |byte| {
++        const cell = (try cells.next()).?;
++        try std.testing.expectEqualStrings(&.{byte}, cell.text());
++    }
++}
++
++test "cell publication folds output before rendering and delivers the final frame without more output" {
++    var fixture: PaneFixture = .{};
++    try fixture.init();
++    defer fixture.deinit();
++
++    const attachment = fixture.attachments.find(fixture.pane.id).?;
++    var buffer: [frame_buffer_size]u8 = undefined;
++    try establishBaseline(&fixture, attachment, &buffer);
++    deferPublication(attachment);
++    const observed = attachment.observedCellRevision();
++    const next_frame_id = attachment.cells.next_frame_id;
++    const scanned_cells = fixture.metrics.diff_scanned_cells;
++
++    _ = try fixture.pane.ingest(std.testing.io, "first");
++    try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
++    const deadline = fixture.attachments.cellDeadline().?;
++
++    _ = try fixture.pane.ingest(std.testing.io, "\x1b[Hfinal");
++    try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
++    try std.testing.expectEqual(deadline, fixture.attachments.cellDeadline().?);
++    try std.testing.expect(fixture.pane.render_pending);
++    try std.testing.expectEqual(observed, attachment.observedCellRevision());
++    try std.testing.expectEqual(next_frame_id, attachment.cells.next_frame_id);
++    try std.testing.expectEqual(scanned_cells, fixture.metrics.diff_scanned_cells);
++    try std.testing.expect(!attachment.cells.hasOutstanding());
++
++    expirePublication(attachment);
++    const frame = (try nextFrame(&fixture, attachment, &buffer)).?;
++    try expectLeadingText(frame, "final");
++    try std.testing.expect(!fixture.pane.render_pending);
++    try std.testing.expectEqual(fixture.pane.cell_revision, attachment.observedCellRevision());
++    try std.testing.expect(attachment.cell_deadline_ns == null);
++    try acknowledge(attachment, frame);
++
++    try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
++    try std.testing.expect(fixture.attachments.cellDeadline() == null);
++}
++
++test "cell snapshot recovery bypasses an exhausted publication budget" {
++    var fixture: PaneFixture = .{};
++    try fixture.init();
++    defer fixture.deinit();
++
++    const attachment = fixture.attachments.find(fixture.pane.id).?;
++    var buffer: [frame_buffer_size]u8 = undefined;
++    try establishBaseline(&fixture, attachment, &buffer);
++    deferPublication(attachment);
++    _ = try fixture.pane.ingest(std.testing.io, "recover");
++    try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
++    try std.testing.expect(attachment.cell_deadline_ns != null);
++
++    attachment.requestCellSnapshot();
++    const frame = (try nextFrame(&fixture, attachment, &buffer)).?;
++    try std.testing.expectEqual(@as(u64, 0), frame.base_frame_id);
++    try expectLeadingText(frame, "recover");
++    try std.testing.expect(!attachment.cells.snapshot_pending);
++    try std.testing.expect(attachment.cell_deadline_ns == null);
++}
++
++test "pane EOF publishes deferred cells before its exit message" {
++    var fixture: PaneFixture = .{};
++    try fixture.init();
++    defer fixture.deinit();
++
++    const attachment = fixture.attachments.find(fixture.pane.id).?;
++    var buffer: [frame_buffer_size]u8 = undefined;
++    try establishBaseline(&fixture, attachment, &buffer);
++    deferPublication(attachment);
++    _ = try fixture.pane.ingest(std.testing.io, "last");
++    try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
++
++    fixture.pane.output_done = true;
++    fixture.pane.exit = .{ .exited = 0 };
++    try std.testing.expect((try attachment.prepareExit(&buffer)) == null);
++    const frame = (try nextFrame(&fixture, attachment, &buffer)).?;
++    try expectLeadingText(frame, "last");
++    try std.testing.expect((try attachment.prepareExit(&buffer)) == null);
++    try acknowledge(attachment, frame);
++
++    try std.testing.expect((try attachment.prepareExit(&buffer)) != null);
++    try std.testing.expect(fixture.attachments.cellDeadline() == null);
++}
++
++test "input grants only its pane a bounded number of immediate publication frames" {
++    var fixture: PaneFixture = .{};
++    try fixture.init();
++    defer fixture.deinit();
++
++    const background_pane = try fixture.createPane(try core.pane(@intFromEnum(TestPane.background)));
++    defer {
++        background_pane.session.shutdown();
++        background_pane.destroy();
++    }
++
++    var background = try Attachment.init(std.testing.allocator, background_pane);
++    defer background.deinit();
++    const target = fixture.attachments.find(fixture.pane.id).?;
++    var target_buffer: [frame_buffer_size]u8 = undefined;
++    var background_buffer: [frame_buffer_size]u8 = undefined;
++    try establishBaseline(&fixture, target, &target_buffer);
++    try establishBaseline(&fixture, &background, &background_buffer);
++    deferPublication(target);
++    deferPublication(&background);
++    target.cell_pacer.input_grace = @intFromEnum(TestInterval.deferred);
++    target.cell_pacer.input_frames = @intFromEnum(GraceBudget.limited);
++
++    var capture: PaneInputTestScheduleCapture = .{ .expected_input = "x" };
++    var handler: PaneInputHandler = .{
++        .io = std.testing.io,
++        .attachments = &fixture.attachments,
++        .metrics = &fixture.metrics,
++        .agent_input = null,
++        .scheduler = capture.scheduler(),
++    };
++    _ = try handler.execute(.{ .pane_id = fixture.pane.id, .bytes = "x" });
++    try std.testing.expect(fixture.pane.cell_input_ns != null);
++    try std.testing.expect(background_pane.cell_input_ns == null);
++
++    _ = try background_pane.ingest(std.testing.io, "flood");
++    try std.testing.expect((try nextFrame(&fixture, &background, &background_buffer)) == null);
++    const background_deadline = background.cell_deadline_ns.?;
++
++    for (0..@intFromEnum(GraceBudget.limited)) |_| {
++        _ = try fixture.pane.ingest(std.testing.io, "x");
++        const frame = (try nextFrame(&fixture, target, &target_buffer)).?;
++        try std.testing.expect(target.cell_deadline_ns == null);
++        try acknowledge(target, frame);
++    }
++
++    try std.testing.expectEqual(@as(u32, 0), target.cell_pacer.input_frames_left);
++    _ = try fixture.pane.ingest(std.testing.io, "z");
++    try std.testing.expect((try nextFrame(&fixture, target, &target_buffer)) == null);
++    try std.testing.expect(target.cell_deadline_ns != null);
++    try std.testing.expect((try nextFrame(&fixture, &background, &background_buffer)) == null);
++    try std.testing.expectEqual(background_deadline, background.cell_deadline_ns.?);
++}
++
++test "clients pace independently and an unacknowledged frame never advances its baseline" {
++    var fixture: PaneFixture = .{};
++    try fixture.init();
++    defer fixture.deinit();
++
++    const deferred = fixture.attachments.find(fixture.pane.id).?;
++    var ready = try Attachment.init(std.testing.allocator, fixture.pane);
++    defer ready.deinit();
++    var deferred_buffer: [frame_buffer_size]u8 = undefined;
++    var ready_buffer: [frame_buffer_size]u8 = undefined;
++    try establishBaseline(&fixture, deferred, &deferred_buffer);
++    try establishBaseline(&fixture, &ready, &ready_buffer);
++    deferPublication(deferred);
++
++    _ = try fixture.pane.ingest(std.testing.io, "start");
++    try std.testing.expect((try nextFrame(&fixture, deferred, &deferred_buffer)) == null);
++    const first = (try nextFrame(&fixture, &ready, &ready_buffer)).?;
++    const first_revision = ready.observedCellRevision();
++
++    _ = try fixture.pane.ingest(std.testing.io, "\x1b[Hfinal");
++    try std.testing.expect((try nextFrame(&fixture, &ready, &ready_buffer)) == null);
++    try std.testing.expectEqual(first_revision, ready.observedCellRevision());
++    try std.testing.expectEqual(first.frame_id, ready.outstandingFrameId());
++    try std.testing.expect((try nextFrame(&fixture, deferred, &deferred_buffer)) == null);
++    try acknowledge(&ready, first);
++
++    const latest = (try nextFrame(&fixture, &ready, &ready_buffer)).?;
++    try std.testing.expectEqual(first.frame_id, latest.base_frame_id);
++    try expectLeadingText(latest, "final");
++    expirePublication(deferred);
++    const folded = (try nextFrame(&fixture, deferred, &deferred_buffer)).?;
++    try expectLeadingText(folded, "final");
++    try std.testing.expect(folded.base_frame_id != latest.base_frame_id);
++}
++
++test "publication deadlines park during ingest and outstanding acknowledgement" {
++    var fixture: PaneFixture = .{};
++    try fixture.init();
++    defer fixture.deinit();
++
++    const attachment = fixture.attachments.find(fixture.pane.id).?;
++    var buffer: [frame_buffer_size]u8 = undefined;
++    try establishBaseline(&fixture, attachment, &buffer);
++    deferPublication(attachment);
++    _ = try fixture.pane.ingest(std.testing.io, "pending");
++    try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
++    const deadline = fixture.attachments.cellDeadline().?;
++
++    fixture.pane.ingest_pending = true;
++    defer fixture.pane.ingest_pending = false;
++
++    try std.testing.expect(fixture.attachments.cellDeadline() == null);
++    try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
++    try std.testing.expect(attachment.cell_deadline_ns == null);
++    try std.testing.expect(fixture.pane.render_pending);
++    fixture.pane.ingest_pending = false;
++
++    try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
++    try std.testing.expectEqual(deadline, fixture.attachments.cellDeadline().?);
++    expirePublication(attachment);
++    const frame = (try nextFrame(&fixture, attachment, &buffer)).?;
++    attachment.cell_deadline_ns = deadline;
++    try std.testing.expect(fixture.attachments.cellDeadline() == null);
++    try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
++    try std.testing.expect(attachment.cell_deadline_ns == null);
++    try std.testing.expectEqual(frame.frame_id, attachment.outstandingFrameId());
++    try acknowledge(attachment, frame);
++
++    try std.testing.expect(fixture.attachments.cellDeadline() == null);
++}
++
++test "reattaching a deferred pane starts with a fresh publication budget and snapshot" {
++    var fixture: PaneFixture = .{};
++    try fixture.init();
++    defer fixture.deinit();
++
++    const attachment = fixture.attachments.find(fixture.pane.id).?;
++    var buffer: [frame_buffer_size]u8 = undefined;
++    try establishBaseline(&fixture, attachment, &buffer);
++    deferPublication(attachment);
++    _ = try fixture.pane.ingest(std.testing.io, "reconnect");
++    try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
++    try std.testing.expect(fixture.attachments.cellDeadline() != null);
++
++    try std.testing.expect(fixture.attachments.detach(fixture.pane.id) != null);
++    try std.testing.expect(fixture.attachments.cellDeadline() == null);
++    const reattached = try fixture.attachments.attach(std.testing.allocator, fixture.pane);
++    try std.testing.expect(reattached.cell_deadline_ns == null);
++    try std.testing.expect(reattached.cell_pacer.anchor_ns == null);
++    const frame = (try nextFrame(&fixture, reattached, &buffer)).?;
++    try std.testing.expectEqual(@as(u64, 0), frame.base_frame_id);
++    try expectLeadingText(frame, "reconnect");
++}
++
++test "a deferred no-op projection clears its deadline without more output" {
++    var fixture: PaneFixture = .{};
++    try fixture.init();
++    defer fixture.deinit();
++
++    const attachment = fixture.attachments.find(fixture.pane.id).?;
++    var buffer: [frame_buffer_size]u8 = undefined;
++    try establishBaseline(&fixture, attachment, &buffer);
++    deferPublication(attachment);
++    const observed = attachment.observedCellRevision();
++    const next_frame_id = attachment.cells.next_frame_id;
++    @memset(fixture.pane.damaged_rows, false);
++    fixture.pane.dirty = false;
++
++    _ = try fixture.pane.ingest(std.testing.io, "\x07");
++    try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
++    try std.testing.expect(fixture.attachments.cellDeadline() != null);
++    try std.testing.expectEqual(observed, attachment.observedCellRevision());
++    expirePublication(attachment);
++
++    try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
++    try std.testing.expectEqual(fixture.pane.cell_revision, attachment.observedCellRevision());
++    try std.testing.expect(attachment.observedCellRevision() != observed);
++    try std.testing.expect(!fixture.pane.render_pending);
++    try std.testing.expect(!attachment.cells.hasOutstanding());
++    try std.testing.expectEqual(next_frame_id, attachment.cells.next_frame_id);
++    try std.testing.expect(fixture.attachments.cellDeadline() == null);
++    try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
++    try std.testing.expect(fixture.attachments.cellDeadline() == null);
++}
++
++test "successive no-op projections consume publication credit and defer further rendering" {
++    var fixture: PaneFixture = .{};
++    try fixture.init();
++    defer fixture.deinit();
++
++    const attachment = fixture.attachments.find(fixture.pane.id).?;
++    var buffer: [frame_buffer_size]u8 = undefined;
++    try establishBaseline(&fixture, attachment, &buffer);
++    attachment.cell_pacer = .{
++        .interval = @intFromEnum(TestInterval.deferred),
++        .burst = @intFromEnum(PreparationBudget.single),
++        .credits = @intFromEnum(PreparationBudget.single),
++        .anchor_ns = core.monotonic(std.testing.io),
++    };
++    @memset(fixture.pane.damaged_rows, false);
++    fixture.pane.dirty = false;
++    const initial_observed = attachment.observedCellRevision();
++    const next_frame_id = attachment.cells.next_frame_id;
++    const preparations = attachment.cell_pacer.stats.drawn;
++
++    _ = try fixture.pane.ingest(std.testing.io, "\x07");
++    try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
++    try std.testing.expectEqual(@as(u64, @intFromEnum(PreparationBudget.single)), attachment.cell_pacer.stats.drawn - preparations);
++    try std.testing.expectEqual(@as(u32, 0), attachment.cell_pacer.credits);
++    try std.testing.expect(attachment.observedCellRevision() != initial_observed);
++    try std.testing.expect(!fixture.pane.render_pending);
++    try std.testing.expect(attachment.cell_deadline_ns == null);
++    const observed_after_noop = attachment.observedCellRevision();
++    const preparations_after_noop = attachment.cell_pacer.stats.drawn;
++
++    _ = try fixture.pane.ingest(std.testing.io, "\x07");
++    try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
++    try std.testing.expect(fixture.pane.render_pending);
++    try std.testing.expectEqual(observed_after_noop, attachment.observedCellRevision());
++    try std.testing.expectEqual(preparations_after_noop, attachment.cell_pacer.stats.drawn);
++    try std.testing.expect(fixture.attachments.cellDeadline() != null);
++    try std.testing.expect(!attachment.cells.hasOutstanding());
++    try std.testing.expectEqual(next_frame_id, attachment.cells.next_frame_id);
++
++    expirePublication(attachment);
++    try std.testing.expect((try nextFrame(&fixture, attachment, &buffer)) == null);
++    try std.testing.expectEqual(@as(u64, @intFromEnum(PreparationBudget.single)), attachment.cell_pacer.stats.drawn - preparations_after_noop);
++    try std.testing.expect(attachment.observedCellRevision() != observed_after_noop);
++    try std.testing.expect(!fixture.pane.render_pending);
++    try std.testing.expect(fixture.attachments.cellDeadline() == null);
++}
+diff --git a/src/client/AttachedClient.zig b/src/client/AttachedClient.zig
+index aa5aa850..92b324fb 100644
+--- a/src/client/AttachedClient.zig
++++ b/src/client/AttachedClient.zig
+@@ -3,6 +3,7 @@
+ //! presentation adapter supplies its host. Adapters embed it, build it in
+ //! place and bind the ports before the first event.
+ 
++const core = @import("telar-core");
+ const std = @import("std");
+ const OptionsType = @import("Options.zig");
+ const ClientInit = @import("ClientInit.zig");
+@@ -27,7 +28,7 @@ const CaptureResourcesType = @import("attachments/CaptureResources.zig");
+ const OpeningType = @import("links/Opening.zig");
+ const PointerType = @import("links/Pointer.zig");
+ const LifecycleState = @import("connection/LifecycleState.zig");
+-const SchedulerType = @import("resources/Scheduler.zig");
++const SchedulerType = core.DeadlineScheduler;
+ const BarUpdatesState = @import("controllers/configuration/State.zig");
+ const LeasesType = @import("application/input/key_routing.zig").Leases;
+ const RegionType = @import("workspace/Region.zig");
+diff --git a/src/client/capabilities.json b/src/client/capabilities.json
+index abd9b6e0..b6b3f731 100644
+--- a/src/client/capabilities.json
++++ b/src/client/capabilities.json
+@@ -611,15 +611,12 @@
+     "resources/LocalTime.zig",
+     "resources/Metrics.zig",
+     "resources/ScheduleArgs.zig",
+-    "resources/Scheduler.zig",
+     "resources/TabVersion.zig",
+     "resources/TelemetryState.zig",
+     "resources/Version.zig",
+     "resources/WaitArgs.zig",
+     "resources/client_layouts.zig",
+-    "resources/clock.zig",
+     "resources/config_reload.zig",
+-    "resources/deadline_timer.zig",
+     "resources/notification_timers.zig",
+     "resources/timers.zig",
+     "transport/handshake.zig",
+diff --git a/src/client/client.zig b/src/client/client.zig
+index 9ffe4b44..cbb6cf2e 100644
+--- a/src/client/client.zig
++++ b/src/client/client.zig
+@@ -1,5 +1,7 @@
+ //! Public entrypoint for telar-client.
+ 
++const core = @import("telar-core");
++
+ pub const Action = @import("input/action.zig").Action;
+ pub const ActionRoutingHandler = @import("application/input/ActionRoutingHandler.zig");
+ pub const ActivateNotificationHandler = @import("application/notifications/ActivateNotificationHandler.zig");
+@@ -423,7 +425,7 @@ pub const Route = @import("application/input/Route.zig");
+ pub const RouterLimits = @import("input/RouterLimits.zig");
+ pub const RuntimeTransportState = @import("connection/RuntimeTransportState.zig");
+ pub const SavedLayout = @import("workspace/SavedLayout.zig");
+-pub const Scheduler = @import("resources/Scheduler.zig");
++pub const Scheduler = core.DeadlineScheduler;
+ pub const ScrollDirection = @import("input/action.zig").ScrollDirection;
+ pub const SelectTabHandler = @import("application/tabs/SelectTabHandler.zig");
+ pub const SelectWorkspaceHandler = @import("application/workspaces/SelectWorkspaceHandler.zig");
+@@ -545,7 +547,7 @@ pub const max_title_bytes = @import("presentation/window_title.zig").max_title_b
+ pub const min_command_timeout_ms = @import("bars/model.zig").min_command_timeout_ms;
+ pub const min_interval_ms = @import("bars/model.zig").min_interval_ms;
+ pub const minimum_marker_width = @import("attachments/markers.zig").minimum_marker_width;
+-pub const monotonic = @import("resources/clock.zig").monotonic;
++pub const monotonic = core.monotonic;
+ pub const notification_timers = @import("resources/notification_timers.zig");
+ pub const pane_input = @import("application/input/pane_input.zig");
+ pub const parseKey = @import("input/chord.zig").parseKey;
+@@ -567,7 +569,7 @@ pub const tracked = @import("input/mouse_protocol.zig").tracked;
+ pub const transition_duration_ns = @import("notifications/notifications.zig").transition_duration_ns;
+ pub const truncateName = @import("workspace/workspace_list.zig").truncateName;
+ pub const validateDefaultBindings = @import("config/default_bindings.zig").validate;
+-pub const wait = @import("resources/deadline_timer.zig").wait;
++pub const wait = core.deadline_timer.wait;
+ 
+ test {
+     _ = @import("application/agents/agent_thread_tests.zig");
+@@ -730,9 +732,7 @@ test {
+     _ = @import("presentation/headless_tests.zig");
+     _ = @import("presentation/lifecycle.zig");
+     _ = @import("presentation/window_title.zig");
+-    _ = @import("resources/clock.zig");
+     _ = @import("resources/config_reload.zig");
+-    _ = @import("resources/deadline_timer.zig");
+     _ = @import("transport/local.zig");
+     _ = @import("workspace/geometry.zig");
+     _ = @import("workspace/layout_support.zig");
+diff --git a/src/client/controllers/configuration/State.zig b/src/client/controllers/configuration/State.zig
+index 2acd346e..cb883311 100644
+--- a/src/client/controllers/configuration/State.zig
++++ b/src/client/controllers/configuration/State.zig
+@@ -1,4 +1,5 @@
+-const SchedulerType = @import("../../resources/Scheduler.zig");
++const core = @import("telar-core");
++const SchedulerType = core.DeadlineScheduler;
+ const bar_updates = @import("bar_updates.zig");
+ const CommandExecution = @import("CommandExecution.zig");
+ const Synchronization = @import("Synchronization.zig");
+diff --git a/src/client/controllers/configuration/bar_updates.zig b/src/client/controllers/configuration/bar_updates.zig
+index de2a0d1f..7a5899a7 100644
+--- a/src/client/controllers/configuration/bar_updates.zig
++++ b/src/client/controllers/configuration/bar_updates.zig
+@@ -1,9 +1,10 @@
+ //! Owns configured bar ticks, bounded Lua evaluation and command workers.
+ 
++const core = @import("telar-core");
+ const std = @import("std");
+ const PositionType = @import("../../bars/model.zig").Position;
+ const Client = @import("../../AttachedClient.zig");
+-const monotonic_module = @import("../../resources/clock.zig").monotonic;
++const monotonic_module = core.monotonic;
+ const BarUpdatesCompletion = @import("../../bars/BarUpdatesCompletion.zig");
+ const CallbackRequest = @import("CallbackRequest.zig");
+ const ApplicationConfigurationBarUpdateOutcome = @import("../../application/configuration/bar_update.zig").Outcome;
+diff --git a/src/client/controllers/input/pane_mouse_inputs.zig b/src/client/controllers/input/pane_mouse_inputs.zig
+index fed4c9a4..a0f455a3 100644
+--- a/src/client/controllers/input/pane_mouse_inputs.zig
++++ b/src/client/controllers/input/pane_mouse_inputs.zig
+@@ -1,5 +1,6 @@
+ //! Wires pane mouse policy to viewport and pane-input effects.
+ 
++const core = @import("telar-core");
+ const Client = @import("../../AttachedClient.zig");
+ const MultiplexerModel = @import("../../workspace/MultiplexerModel.zig");
+ const ApplicationInputPaneMouseCommand = @import("../../application/input/pane_mouse.zig").Command;
+@@ -9,7 +10,7 @@ const PaneMouseHandlerType = @import("../../application/input/PaneMouseHandler.z
+ const ResolvedType = @import("../../application/input/Resolved.zig");
+ const EffectType = @import("../../application/input/pane_mouse.zig").Effect;
+ const copy_modes = @import("copy_modes.zig");
+-const monotonic_module = @import("../../resources/clock.zig").monotonic;
++const monotonic_module = core.monotonic;
+ const pane_viewports = @import("../panes/pane_viewports.zig");
+ const std = @import("std");
+ const pane_inputs = @import("pane_inputs.zig");
+diff --git a/src/client/controllers/notifications/notifications.zig b/src/client/controllers/notifications/notifications.zig
+index cb120cf7..48157699 100644
+--- a/src/client/controllers/notifications/notifications.zig
++++ b/src/client/controllers/notifications/notifications.zig
+@@ -1,5 +1,6 @@
+ //! Connects notification use cases to the client timer infrastructure.
+ 
++const core = @import("telar-core");
+ const Client = @import("../../AttachedClient.zig");
+ const NotificationType = @import("../../input/Notification.zig");
+ const RequestIdType = @import("telar-core").RequestId;
+@@ -9,7 +10,7 @@ const DeliveryOutcome = @import("../../application/notifications/notifications.z
+ const HandleNotificationDeliveryHandlerType = @import("../../application/notifications/HandleNotificationDeliveryHandler.zig");
+ const CoreNotification = @import("telar-core").Notification;
+ const NotificationPublicationType = @import("../../model/NotificationPublication.zig");
+-const monotonic_module = @import("../../resources/clock.zig").monotonic;
++const monotonic_module = core.monotonic;
+ const std = @import("std");
+ const InputType = @import("../../notifications/NotificationInput.zig");
+ const PublishNotificationHandlerType = @import("../../application/notifications/PublishNotificationHandler.zig");
+diff --git a/src/client/controllers/notifications/sidebar_animations.zig b/src/client/controllers/notifications/sidebar_animations.zig
+index 81f5163c..e4163378 100644
+--- a/src/client/controllers/notifications/sidebar_animations.zig
++++ b/src/client/controllers/notifications/sidebar_animations.zig
+@@ -1,11 +1,12 @@
+ //! Connects the sidebar animation use case to the client timer.
+ 
++const core = @import("telar-core");
+ const std = @import("std");
+ const Client = @import("../../AttachedClient.zig");
+ const ActivityType = @import("../../application/notifications/sidebar_animation.zig").Activity;
+ const SidebarAnimationChangeType = @import("../../model/SidebarAnimationChange.zig");
+ const SidebarAnimationHandlerType = @import("../../application/notifications/SidebarAnimationHandler.zig");
+-const monotonic_module = @import("../../resources/clock.zig").monotonic;
++const monotonic_module = core.monotonic;
+ 
+ const interval_ns = 120 * std.time.ns_per_ms;
+ 
+diff --git a/src/client/resources/HostTimers.zig b/src/client/resources/HostTimers.zig
+index 8d2e0794..78b5c51f 100644
+--- a/src/client/resources/HostTimers.zig
++++ b/src/client/resources/HostTimers.zig
+@@ -1,4 +1,5 @@
+-const SchedulerType = @import("Scheduler.zig");
++const core = @import("telar-core");
++const SchedulerType = core.DeadlineScheduler;
+ const timers = @import("timers.zig");
+ /// Arms one client `Scheduler` on the adapter's event loop. The adapter waits
+ /// with `deadline_timer.wait` and delivers the completion named by the kind.
+diff --git a/src/client/resources/notification_timers.zig b/src/client/resources/notification_timers.zig
+index e7971233..6fd01557 100644
+--- a/src/client/resources/notification_timers.zig
++++ b/src/client/resources/notification_timers.zig
+@@ -1,7 +1,8 @@
+ //! Owns the replaceable timer used by the client notification lifecycle.
+ 
++const core = @import("telar-core");
+ const Client = @import("../AttachedClient.zig");
+-const monotonic_module = @import("clock.zig").monotonic;
++const monotonic_module = core.monotonic;
+ 
+ /// Replaces the pending deadline from current model state and starts at most
+ /// one inbox producer through the timer port.
+diff --git a/src/core/core.zig b/src/core/core.zig
+index d8e6336f..2ad28776 100644
+--- a/src/core/core.zig
++++ b/src/core/core.zig
+@@ -1,5 +1,7 @@
+ //! Public entrypoint for telar-core.
+ 
++const clock = @import("time/clock.zig");
++
+ pub const AcknowledgeAgent = @import("schema/messages/AcknowledgeAgent.zig");
+ pub const AgentAttachmentMarkers = @import("schema/types.zig").AgentAttachmentMarkers;
+ pub const AgentBlockedReason = @import("schema/types.zig").AgentBlockedReason;
+@@ -20,6 +22,11 @@ pub const AgentTitleState = @import("schema/types.zig").AgentTitleState;
+ pub const Buffer = @import("ui/Buffer.zig");
+ pub const Capability = @import("plugin.zig").Capability;
+ pub const CapabilitySet = @import("plugin.zig").CapabilitySet;
++pub const DeadlineScheduler = @import("time/DeadlineScheduler.zig");
++pub const Pacer = @import("pacing/Pacer.zig");
++pub const deadline_timer = @import("time/deadline_timer.zig");
++pub const monotonic = clock.monotonic;
++pub const pace = @import("pacing/pace.zig");
+ pub const Cell = @import("ui/Cell.zig");
+ pub const ClickTracker = @import("ClickTracker.zig");
+ pub const ClientIdentity = @import("schema/types.zig").ClientIdentity;
+@@ -405,6 +412,9 @@ pub const workspace = @import("schema/id.zig").workspace;
+ pub const worktree = @import("schema/id.zig").worktree;
+ 
+ test {
++    _ = clock;
++    _ = deadline_timer;
++    _ = pace;
+     _ = @import("AgentSkills.zig");
+     _ = @import("agent_manifest.zig");
+     _ = @import("diagnostics.zig");
+diff --git a/src/frontend/presentation/Pacer.zig b/src/core/pacing/Pacer.zig
+similarity index 100%
+rename from src/frontend/presentation/Pacer.zig
+rename to src/core/pacing/Pacer.zig
+diff --git a/src/frontend/presentation/PacerStats.zig b/src/core/pacing/PacerStats.zig
+similarity index 100%
+rename from src/frontend/presentation/PacerStats.zig
+rename to src/core/pacing/PacerStats.zig
+diff --git a/src/frontend/presentation/Record.zig b/src/core/pacing/Record.zig
+similarity index 100%
+rename from src/frontend/presentation/Record.zig
+rename to src/core/pacing/Record.zig
+diff --git a/src/frontend/presentation/pace.zig b/src/core/pacing/pace.zig
+similarity index 100%
+rename from src/frontend/presentation/pace.zig
+rename to src/core/pacing/pace.zig
+diff --git a/src/client/resources/Scheduler.zig b/src/core/time/DeadlineScheduler.zig
+similarity index 54%
+rename from src/client/resources/Scheduler.zig
+rename to src/core/time/DeadlineScheduler.zig
+index b60e9704..1a5ed1ca 100644
+--- a/src/client/resources/Scheduler.zig
++++ b/src/core/time/DeadlineScheduler.zig
+@@ -1,6 +1,6 @@
+ const std = @import("std");
+ const deadline_timer = @import("deadline_timer.zig");
+-const Scheduler = @This();
++const DeadlineScheduler = @This();
+ 
+ deadline_ns: std.atomic.Value(u64) = .init(deadline_timer.no_deadline),
+ wake: std.Io.Event = .unset,
+@@ -12,7 +12,7 @@ pending: bool = false,
+ /// ```zig
+ /// if (scheduler.update(io, deadline_ns) == .schedule) startWorker();
+ /// ```
+-pub fn update(scheduler: *Scheduler, io: std.Io, deadline_ns: ?u64) deadline_timer.Update {
++pub fn update(scheduler: *DeadlineScheduler, io: std.Io, deadline_ns: ?u64) deadline_timer.Update {
+     const replacement = deadline_ns orelse deadline_timer.no_deadline;
+     const previous = scheduler.deadline_ns.load(.acquire);
+     scheduler.deadline_ns.store(replacement, .release);
+@@ -33,12 +33,31 @@ pub fn update(scheduler: *Scheduler, io: std.Io, deadline_ns: ?u64) deadline_tim
+     return .schedule;
+ }
+ 
++/// Keeps an armed wake unless new work needs an earlier deadline. Removing
++/// work or moving it later leaves at most one obsolete wake; its owner must
++/// complete that wake and re-evaluate current work before scheduling again.
++///
++/// ```zig
++/// if (scheduler.updateEarlier(io, earliest_pending_ns) == .schedule) startWorker();
++/// ```
++pub fn updateEarlier(scheduler: *DeadlineScheduler, io: std.Io, deadline_ns: ?u64) deadline_timer.Update {
++    if (scheduler.pending) {
++        const requested = deadline_ns orelse return .retained;
++        const armed = scheduler.deadline_ns.load(.acquire);
++        if (armed <= requested) {
++            return .retained;
++        }
++    }
++
++    return scheduler.update(io, deadline_ns);
++}
++
+ /// Releases the reservation when the caller could not schedule its worker.
+ ///
+ /// ```zig
+ /// scheduler.schedulingFailed();
+ /// ```
+-pub fn schedulingFailed(scheduler: *Scheduler) void {
++pub fn schedulingFailed(scheduler: *DeadlineScheduler) void {
+     scheduler.pending = false;
+ }
+ 
+@@ -47,7 +66,7 @@ pub fn schedulingFailed(scheduler: *Scheduler) void {
+ /// ```zig
+ /// try scheduler.complete(result);
+ /// ```
+-pub fn complete(scheduler: *Scheduler, result: anyerror!void) !void {
++pub fn complete(scheduler: *DeadlineScheduler, result: anyerror!void) !void {
+     scheduler.pending = false;
+ 
+     try result;
+diff --git a/src/client/resources/clock.zig b/src/core/time/clock.zig
+similarity index 89%
+rename from src/client/resources/clock.zig
+rename to src/core/time/clock.zig
+index 997efd77..60604395 100644
+--- a/src/client/resources/clock.zig
++++ b/src/core/time/clock.zig
+@@ -1,4 +1,4 @@
+-//! Shared access to the client's awake monotonic clock.
++//! Shared access to the awake monotonic clock.
+ 
+ const std = @import("std");
+ 
+diff --git a/src/client/resources/deadline_timer.zig b/src/core/time/deadline_timer.zig
+similarity index 59%
+rename from src/client/resources/deadline_timer.zig
+rename to src/core/time/deadline_timer.zig
+index e353abd2..5cb842bc 100644
+--- a/src/client/resources/deadline_timer.zig
++++ b/src/core/time/deadline_timer.zig
+@@ -1,8 +1,8 @@
+ //! One replaceable absolute deadline backed by at most one host timer worker.
+ 
+ const std = @import("std");
+-const Scheduler = @import("Scheduler.zig");
+-const client_clock = @import("clock.zig");
++const Scheduler = @import("DeadlineScheduler.zig");
++const clock = @import("clock.zig");
+ 
+ pub const no_deadline = std.math.maxInt(u64);
+ 
+@@ -35,7 +35,7 @@ pub fn wait(io: std.Io, scheduler: *Scheduler) anyerror!void {
+             scheduler.wake.reset();
+             continue;
+         }
+-        if (client_clock.monotonic(io) >= deadline_ns) {
++        if (clock.monotonic(io) >= deadline_ns) {
+             return;
+         }
+ 
+@@ -89,7 +89,7 @@ test "deadline completion releases the worker on every result" {
+ test "deadline replacement retains one worker and wakes obsolete waits" {
+     const io = std.testing.io;
+     var scheduler: Scheduler = .{};
+-    const first = client_clock.monotonic(io) + std.time.ns_per_s;
++    const first = clock.monotonic(io) + std.time.ns_per_s;
+     const second = first + std.time.ns_per_s;
+ 
+     try std.testing.expectEqual(Update.schedule, scheduler.update(io, first));
+@@ -107,7 +107,7 @@ test "deadline replacement retains one worker and wakes obsolete waits" {
+ 
+ test "an unchanged deadline retains its worker without another wake" {
+     const io = std.testing.io;
+-    const deadline_ns = client_clock.monotonic(io) + std.time.ns_per_s;
++    const deadline_ns = clock.monotonic(io) + std.time.ns_per_s;
+     var scheduler: Scheduler = .{
+         .deadline_ns = .init(deadline_ns),
+         .pending = true,
+@@ -139,14 +139,72 @@ test "a parked worker follows the next deadline without a second task" {
+ 
+     try std.testing.expectEqual(
+         Update.schedule,
+-        scheduler.update(io, client_clock.monotonic(io) + std.time.ns_per_s),
++        scheduler.update(io, clock.monotonic(io) + std.time.ns_per_s),
+     );
+     try select.concurrent(.done, wait, .{ io, &scheduler });
+     try std.testing.expectEqual(Update.retained, scheduler.update(io, null));
+-    try std.testing.expectEqual(Update.retained, scheduler.update(io, client_clock.monotonic(io)));
++    try std.testing.expectEqual(Update.retained, scheduler.update(io, clock.monotonic(io)));
+ 
+     switch (try select.await()) {
+         .done => |result| try scheduler.complete(result),
+     }
+     try std.testing.expect(!scheduler.pending);
+ }
++
++test "earliest deadline updates retain null unchanged and later requests without waking" {
++    const io = std.testing.io;
++    const first = clock.monotonic(io) + std.time.ns_per_s;
++    const later = first + std.time.ns_per_s;
++    var scheduler: Scheduler = .{};
++
++    try std.testing.expectEqual(Update.schedule, scheduler.updateEarlier(io, first));
++    for ([_]?u64{ null, first, later }) |requested| {
++        try std.testing.expectEqual(Update.retained, scheduler.updateEarlier(io, requested));
++        try std.testing.expectEqual(first, scheduler.deadline_ns.load(.acquire));
++        try std.testing.expect(scheduler.pending);
++        try std.testing.expect(!scheduler.wake.isSet());
++    }
++}
++
++test "an earlier deadline wakes the existing worker instead of scheduling another" {
++    const io = std.testing.io;
++    const earlier = clock.monotonic(io);
++    const first = earlier + std.time.ns_per_s;
++    var scheduler: Scheduler = .{};
++
++    try std.testing.expectEqual(Update.schedule, scheduler.updateEarlier(io, first));
++    try std.testing.expectEqual(Update.retained, scheduler.updateEarlier(io, earlier));
++    try std.testing.expectEqual(earlier, scheduler.deadline_ns.load(.acquire));
++    try std.testing.expect(scheduler.pending);
++    try std.testing.expect(scheduler.wake.isSet());
++    try wait(io, &scheduler);
++}
++
++test "an expired queued wake retains ownership until completion and then idles or rearms" {
++    const io = std.testing.io;
++    const expired = clock.monotonic(io);
++    const later = expired + std.time.ns_per_s;
++    var scheduler: Scheduler = .{};
++
++    try std.testing.expectEqual(Update.schedule, scheduler.updateEarlier(io, expired));
++    try wait(io, &scheduler);
++
++    // The worker has returned, but its owner has not consumed the completion.
++    for ([_]?u64{ later, null, later }) |requested| {
++        try std.testing.expectEqual(Update.retained, scheduler.updateEarlier(io, requested));
++        try std.testing.expectEqual(expired, scheduler.deadline_ns.load(.acquire));
++        try std.testing.expect(scheduler.pending);
++        try std.testing.expect(!scheduler.wake.isSet());
++    }
++
++    try scheduler.complete({});
++    try std.testing.expectEqual(Update.idle, scheduler.updateEarlier(io, null));
++    try std.testing.expectEqual(no_deadline, scheduler.deadline_ns.load(.acquire));
++    try std.testing.expect(!scheduler.pending);
++    try std.testing.expect(!scheduler.wake.isSet());
++
++    try std.testing.expectEqual(Update.schedule, scheduler.updateEarlier(io, later));
++    try std.testing.expectEqual(later, scheduler.deadline_ns.load(.acquire));
++    try std.testing.expect(scheduler.pending);
++    try std.testing.expect(!scheduler.wake.isSet());
++}
+diff --git a/src/frontend/client/presentation/Presenter.zig b/src/frontend/client/presentation/Presenter.zig
+index 1aa6b576..c449783f 100644
+--- a/src/frontend/client/presentation/Presenter.zig
++++ b/src/frontend/client/presentation/Presenter.zig
+@@ -3,6 +3,7 @@
+ //! back/front buffers. Shared presentation tokens become commits only after
+ //! the host output adapter reports successful delivery.
+ 
++const core = @import("telar-core");
+ const TokenType = @import("telar-client").Token;
+ const ObservationType = @import("telar-client").Observation;
+ const ProjectionType = @import("telar-client").Projection;
+@@ -12,12 +13,12 @@ const std = @import("std");
+ const MetricsType = @import("telar-client").TelemetryMetrics;
+ const ScreenType = @import("../../presentation/Screen.zig");
+ const CompositorType = @import("../../workspace/Compositor.zig");
+-const PacerType = @import("../../presentation/Pacer.zig");
++const PacerType = core.Pacer;
+ const LifecycleState = @import("telar-client").PresentationLifecycleState;
+ const StateType = @import("../../presentation/State.zig");
+ const enabled_module = @import("telar-core").enabled;
+ const monotonic = @import("telar-client").monotonic;
+-const pace = @import("../../presentation/pace.zig");
++const pace = core.pace;
+ const GeometryType = @import("telar-client").Geometry;
+ const toast_graphics = @import("../../graphics/toast.zig");
+ const CombinedGraphicsWriter = @import("CombinedGraphicsWriter.zig");
+diff --git a/src/frontend/client/resources/FormatRequest.zig b/src/frontend/client/resources/FormatRequest.zig
+index 74c5afdb..56f02b70 100644
+--- a/src/frontend/client/resources/FormatRequest.zig
++++ b/src/frontend/client/resources/FormatRequest.zig
+@@ -1,6 +1,7 @@
++const core = @import("telar-core");
+ const std = @import("std");
+ const Metrics = @import("telar-client").TelemetryMetrics;
+-const PacerType = @import("../../presentation/Pacer.zig");
++const PacerType = core.Pacer;
+ const Snapshot = @import("Snapshot.zig");
+ const FormatRequest = @This();
+ 
+diff --git a/src/frontend/client/resources/telemetry.zig b/src/frontend/client/resources/telemetry.zig
+index 05b15e99..00832d51 100644
+--- a/src/frontend/client/resources/telemetry.zig
++++ b/src/frontend/client/resources/telemetry.zig
+@@ -1,5 +1,6 @@
+ //! Client observability state and its stable JSON projection.
+ 
++const core = @import("telar-core");
+ const TerminalClient = @import("../TerminalClient.zig");
+ const host = TerminalClient.of;
+ const FormatRequest = @import("FormatRequest.zig");
+@@ -17,7 +18,7 @@ const waitForTick_module = @import("telar-core").waitForTick;
+ const TelemetryState = @import("telar-client").TelemetryState;
+ const SinkType = @import("telar-core").Sink;
+ const HostCapabilitiesType = @import("telar-client").HostCapabilities;
+-const PacerType = @import("../../presentation/Pacer.zig");
++const PacerType = core.Pacer;
+ const Metrics = @import("telar-client").TelemetryMetrics;
+ const enabled_module = @import("telar-core").enabled;
+ 
+diff --git a/src/frontend/frontend.zig b/src/frontend/frontend.zig
+index 3384ba37..20000a9d 100644
+--- a/src/frontend/frontend.zig
++++ b/src/frontend/frontend.zig
+@@ -1,5 +1,7 @@
+ //! Public entrypoint for telar-frontend.
+ 
++const core = @import("telar-core");
++
+ pub const ClientRun = @import("client/run.zig").run;
+ pub const Color = @import("graphics/Color.zig");
+ pub const CompositionResult = @import("workspace/CompositionResult.zig");
+@@ -14,8 +16,8 @@ pub const GenericInput = @import("presentation/GenericInput.zig").Type;
+ pub const GenericRouter = @import("input/GenericRouter.zig").Type;
+ pub const Hits = @import("widgets/context_support.zig").Hits;
+ pub const KittyGraphicsWriter = @import("graphics/KittyGraphicsWriter.zig");
+-pub const Pacer = @import("presentation/Pacer.zig");
+-pub const PacerStats = @import("presentation/PacerStats.zig");
++pub const Pacer = core.Pacer;
++pub const PacerStats = core.Pacer.Stats;
+ pub const Position = @import("presentation/Position.zig");
+ pub const Rasterizer = @import("graphics/Rasterizer.zig");
+ pub const ResizeWatcher = @import("platform/platform.zig").ResizeWatcher;
+@@ -27,7 +29,7 @@ pub const Store = @import("graphics/kitty_delivery.zig").Store;
+ pub const Surface = @import("graphics/Surface.zig");
+ pub const Tty = @import("platform/platform.zig").Tty;
+ pub const apply = @import("presentation/frame.zig").apply;
+-pub const coalesce = @import("presentation/pace.zig").coalesce;
++pub const coalesce = core.pace.coalesce;
+ pub const enter = @import("platform/sequences.zig").enter;
+ pub const installCrashRestore = @import("platform/platform.zig").installCrashRestore;
+ pub const invalidatePlacements = @import("graphics/kitty_delivery.zig").invalidatePlacements;
+@@ -87,7 +89,6 @@ test {
+     _ = @import("platform/windows.zig");
+     _ = @import("presentation/diff.zig");
+     _ = @import("presentation/frame.zig");
+-    _ = @import("presentation/pace.zig");
+     _ = @import("presentation/pane_labels.zig");
+     _ = @import("presentation/pointer.zig");
+     _ = @import("presentation/screen_support.zig");
+diff --git a/src/gui/GuiClient.zig b/src/gui/GuiClient.zig
+index 33d8e9c0..a8f7ab55 100644
+--- a/src/gui/GuiClient.zig
++++ b/src/gui/GuiClient.zig
+@@ -9,6 +9,8 @@ const Regions = @import("widgets/Regions.zig");
+ const Renderer = @import("render/TerminalRenderer.zig");
+ const native = @import("native/native.zig");
+ const selection = @import("render/copy_selection.zig");
++const State = @import("widgets/interaction/State.zig");
++
+ const GuiClient = @This();
+ 
+ app: client.AttachedClient,
+@@ -17,7 +19,7 @@ input: NativeInput = .{},
+ host: @import("host/Services.zig") = .{},
+ input_revision: u64 = 0,
+ focused: bool = true,
+-widgets: @import("widgets/interaction/State.zig") = .{},
++widgets: State = .{},
+ region: client.Region,
+ theme: client.ColorTheme,
+ chrome: @import("widgets/Chrome.zig") = .{},
+diff --git a/src/gui/widgets/interaction/routing.zig b/src/gui/widgets/interaction/routing.zig
+index cfd3bd5c..9b74ef1a 100644
+--- a/src/gui/widgets/interaction/routing.zig
++++ b/src/gui/widgets/interaction/routing.zig
+@@ -3,6 +3,10 @@
+ const std = @import("std");
+ const client = @import("telar-client");
+ const core = @import("telar-core");
++
++const image_preview = @import("image_preview.zig");
++const completions = @import("completions.zig");
++
+ const GuiClient = @import("../../GuiClient.zig");
+ const Event = @import("../../input/event.zig").Event;
+ const Key = @import("../../input/KeyInput.zig");
+@@ -17,6 +21,7 @@ pub fn reconcileFocus(gui: *GuiClient) void {
+     const state = &gui.widgets;
+     const model = gui.app.model.activeTabModelConst();
+     const focused_pane: ?core.PaneId = if (model) |value| value.layout.focused() else null;
++
+     if (state.composer_menu.selector) |selector| {
+         if (focused_pane != selector.pane_id) {
+             state.composer_menu.selector = null;
+@@ -26,6 +31,7 @@ pub fn reconcileFocus(gui: *GuiClient) void {
+ 
+     const target = state.dispatcher.focusedTarget() orelse return;
+     const pane_id = target.paneId() orelse return;
++
+     if (focused_pane == pane_id and eligible(gui, target)) {
+         return;
+     }
+@@ -34,6 +40,7 @@ pub fn reconcileFocus(gui: *GuiClient) void {
+     state.paste_owner = null;
+     _ = state.dispatcher.focus(null);
+     state.dispatcher.cancel();
++
+     if (gui.input.binding_target != null) {
+         gui.input.cancelBinding();
+     }
+@@ -44,9 +51,10 @@ pub fn reconcileFocus(gui: *GuiClient) void {
+ /// Example: `if (try routing.apply(gui, event)) return;`
+ pub fn apply(gui: *GuiClient, event: Event) !bool {
+     reconcileFocus(gui);
+-    @import("completions.zig").refresh(gui);
++    completions.refresh(gui);
+     const state = &gui.widgets;
+-    if (@import("image_preview.zig").route(gui, event)) {
++
++    if (image_preview.route(gui, event)) {
+         return true;
+     }
+ 

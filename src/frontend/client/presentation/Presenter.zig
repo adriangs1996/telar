@@ -3,6 +3,7 @@
 //! back/front buffers. Shared presentation tokens become commits only after
 //! the host output adapter reports successful delivery.
 
+const core = @import("telar-core");
 const TokenType = @import("telar-client").Token;
 const ObservationType = @import("telar-client").Observation;
 const ProjectionType = @import("telar-client").Projection;
@@ -12,12 +13,12 @@ const std = @import("std");
 const MetricsType = @import("telar-client").TelemetryMetrics;
 const ScreenType = @import("../../presentation/Screen.zig");
 const CompositorType = @import("../../workspace/Compositor.zig");
-const PacerType = @import("../../presentation/Pacer.zig");
+const PacerType = core.Pacer;
 const LifecycleState = @import("telar-client").PresentationLifecycleState;
 const StateType = @import("../../presentation/State.zig");
 const enabled_module = @import("telar-core").enabled;
 const monotonic = @import("telar-client").monotonic;
-const pace = @import("../../presentation/pace.zig");
+const pace = core.pace;
 const GeometryType = @import("telar-client").Geometry;
 const toast_graphics = @import("../../graphics/toast.zig");
 const CombinedGraphicsWriter = @import("CombinedGraphicsWriter.zig");

@@ -79,6 +79,8 @@ media_allocator: PaneMediaAllocatorType,
 pty_write_mutex: std.Io.Mutex = .init,
 response_pending: bool = false,
 input_queue: PaneInputQueue = .{},
+/// Last admitted input; each attachment independently grants prompt echo frames.
+cell_input_ns: ?u64 = null,
 input_write_pending: bool = false,
 input_write_len: usize = 0,
 size: TerminalSizeType,

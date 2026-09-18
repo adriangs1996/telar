@@ -1,0 +1,9 @@
+probe located 175,191 in 800x512
+probe floated window 25006 for process 23283
+probe requested foreground for primary window 25006
+probe located 175,191 in 1000x700
+probe acknowledged viewport at fixture geometry generation 4
+probe requested foreground for primary window 25006
+probe located 175,191 in 1000x700
+probe setup complete: gui/single, 1 panes
+probe finished 0: 

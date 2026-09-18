@@ -1,0 +1,32 @@
+(lldb) target create "/tmp/tgb-diagnostic-source/.zig-cache/o/7d13e5c8d8e63e0cdb2380c725e2bf44/test"
+Current executable set to '/tmp/tgb-diagnostic-source/.zig-cache/o/7d13e5c8d8e63e0cdb2380c725e2bf44/test' (arm64).
+(lldb) breakpoint set --file Session.zig --line 280
+Breakpoint 1: where = test`Io.concurrent__anon_47560.TypeErased.start + 5344 [inlined] agent_panes.Session.run + 332 at Session.zig:280:20, address = 0x00000001000f3ee8
+(lldb) run --cache-dir=./.zig-cache --seed=0x98b29f51
+2026-09-18 20:28:49.739437+0200 test[20148:81027151] [logging-persist] cannot open file at line 51044 of [f0ca7bba1c]
+2026-09-18 20:28:49.739618+0200 test[20148:81027151] [logging-persist] os_unix.c:51044: (2) open(/private/tmp/tgb-diagnostic-source/.zig-cache/tmp/uUTKo2ulwkLL0pIS/state_5.sqlit) - No such file or directory
+2026-09-18 20:28:50.061994+0200 test[20148:81027151] [logging-persist] cannot open file at line 50941 of [f0ca7bba1c]
+2026-09-18 20:28:50.062013+0200 test[20148:81027151] [logging-persist] os_unix.c:50942: (2) open(/private/tmp/tgb-diagnostic-source/.zig-cache/tmp/T26S8Thfrys2MKI3/missing/history.db) - No such file or directory
+2026-09-18 20:28:50.065465+0200 test[20148:81027151] [logging-persist] cannot open file at line 50941 of [f0ca7bba1c]
+2026-09-18 20:28:50.065480+0200 test[20148:81027151] [logging-persist] os_unix.c:50942: (2) open(/private/tmp/tgb-diagnostic-source/.zig-cache/tmp/vVAibRMGHnQ6NYJb/missing/history.db) - No such file or directory
+[stream] (warn): unknown cursor shape: not-a-cursor
+943/1249 runtime.observability.system_metrics.test.Linux system metrics read the live proc filesystem...SKIP
+2026-09-18 20:28:51.665097+0200 test[20148:81027151] [logging-persist] cannot open file at line 50941 of [f0ca7bba1c]
+2026-09-18 20:28:51.665114+0200 test[20148:81027151] [logging-persist] os_unix.c:50942: (2) open(/private/tmp/tgb-diagnostic-source/.zig-cache/tmp/Yl5RE-tQhvDxefwx/missing/history.db) - No such file or directory
+warning: test was compiled with optimization - stepping may behave oddly; variables may not be available.
+Process 20148 launched: '/tmp/tgb-diagnostic-source/.zig-cache/o/7d13e5c8d8e63e0cdb2380c725e2bf44/test' (arm64)
+Process 20148 stopped
+* thread #193, stop reason = breakpoint 1.1
+    frame #0: 0x00000001000f3ee8 test`agent_panes.Session.run(session=0x0000000112a7c000, io=Io @ 0x0000000179e5a290) at Session.zig:280:20 [opt]
+   277 	            session.recoverPrompt(io);
+   278 	            var buffer: [256]u8 = undefined;
+   279 	            const message = std.fmt.bufPrint(&buffer, "Codex app-server stopped: {s}.", .{@errorName(err)}) catch "Codex app-server stopped.";
+-> 280 	            session.codex.fail(message);
+    	                   ^
+   281 	            session.publish(io);
+   282 	        }
+   283 	    };
+Target 0: (test) stopped.
+(lldb) frame variable err message
+error: no variable named 'err' found in this frame
+error: no variable named 'message' found in this frame

@@ -419,6 +419,29 @@ acknowledged buffer and calls `schema.encodePaneFrame`. `startSessionSend`
 writes the `.pane_frame` message to that client. Intermediate visual states may
 be folded; they are not queued as a replay.
 
+Admission happens before VT projection and diff. Each attachment owns a
+`core.Pacer`: idle credits permit an immediate burst, then sustained output
+uses the shared 60 Hz policy. A completed no-op projection consumes a credit
+too. Admitted PTY input opens a bounded grace window for that pane's
+attachments; snapshots and final output bypass the cadence. Outstanding ACKs
+and active ingestion retain their existing ownership rules.
+
+One runtime-owned `core.DeadlineScheduler` wakes `Application.pumpAll` when a
+deferred publication is due. Its `updateEarlier` policy preserves an armed
+deadline through temporary ingest/ACK waits; only an earlier deadline replaces
+it. A completion rechecks current owners and may find no work left. It retains
+no pane or attachment pointer and does not poll idle panes. Ingest completion,
+socket completion and ACKs resume
+work blocked on those operations. Runtime shutdown joins the timer before
+destroying the application. An exit message waits for the final projection
+and its acknowledgement.
+
+The timer reuses the existing cancellable `std.Io` task scheduler. Its one
+logical worker and up to two child waits are a bounded scheduling exception
+to the allocation-free interactive policy: `std.Io.Threaded` allocates task
+records outside Telar's instrumented heap. Per-update admission and deadline
+state remain inline; no queue of obsolete frames is introduced.
+
 ## 6. Client frame and host presentation
 
 The client socket read completes at `runtime_transport.handleRead`. That
@@ -461,7 +484,7 @@ They update the same model; the next preparation captures its latest state.
 
 ## Proof
 
-- `src/client/resources/deadline_timer.zig` proves replacement, removal,
+- `src/core/time/deadline_timer.zig` proves replacement, removal,
   parking, wakeup and token release for successful and failed workers.
 - `src/frontend/client/controllers/input/host_inputs.zig` proves owned timeout configuration,
   router replacement without duplicate workers and prefix-status projection.
@@ -530,3 +553,6 @@ They update the same model; the next preparation captures its latest state.
 - The pane frame, reconnect and independent-acknowledgement integration tests
   in `src/transport_integration_test.zig` prove publication and client-specific
   recovery.
+- `src/backend/runtime/tests/cell_publication_test.zig` covers deferred final
+  frames, urgent snapshots, EOF ordering, independent clients, bounded input
+  grace, ingest/ACK waits, reconnect and no-op publication budgets.
