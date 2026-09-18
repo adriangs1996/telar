@@ -1,5 +1,8 @@
 //! Conversation controls resolve against the live attachment and stable item
 //! identity, even when input still refers to an older delivered frame.
+
+const std = @import("std");
+
 const GuiClient = @import("../../GuiClient.zig");
 const Target = @import("Target.zig");
 const core = @import("telar-core");
@@ -81,7 +84,7 @@ pub fn copied(gui: *GuiClient, result: @import("../../input/ClipboardResult.zig"
         }
 
         gui.widgets.copied_item = pending.control;
-        gui.widgets.copied_until_ns = @import("telar-client").monotonic(gui.app.io) +| 2 * @import("std").time.ns_per_s;
+        gui.widgets.copied_until_ns = @import("telar-client").monotonic(gui.app.io) +| 2 * std.time.ns_per_s;
         gui.widgets.dispatcher.revision +%= 1;
         return;
     }

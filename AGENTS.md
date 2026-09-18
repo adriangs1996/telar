@@ -241,3 +241,15 @@ const step: f64 = 3;
 const step: Step = Step.start;
 
 ```
+
+- Always use "self" as the implicit parameter of a method:
+
+```zig
+const Spring = @This()
+
+// BAD
+pub fn speed(spring: *const Spring) ...
+
+// Good
+pub fn speed(self: *const Spring) ...
+```

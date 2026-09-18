@@ -347,10 +347,28 @@ or more collaboration turns. It becomes accepted only through an explicit
 user decision.
 _Avoid_: Tool call, Commit, Collaboration turn
 
+**Step draft**:
+The current project code being developed and reviewed for a step, already
+present in the directed session's private working tree before acceptance.
+_Avoid_: Accepted version
+
+**Review revision**:
+A retained code version delivered for review within a step, linked to the
+conversation about that version. Internal edits made before that delivery do
+not become separate review revisions.
+_Avoid_: Tool call, Final task result
+
 **Step acceptance**:
-The user's explicit decision to accept a review step. Asking a question,
-editing code, or handing control back does not itself accept the step.
+The user's explicit decision that a review step is suitable to advance from,
+independently of whether it passes validation. Asking a question, editing code,
+or handing control back does not itself accept the step.
 _Avoid_: Turn handoff
+
+**Step discard**:
+The rejection of a step draft, restoring the state preceding that step,
+including reversal of both human and agent contributions to it. The rejection
+retains the user's feedback on how the work should proceed.
+_Avoid_: Request revision
 
 **Experiment area**:
 A designated space for a directed session's disposable utilities and

@@ -13,34 +13,34 @@ velocity_epsilon: f64 = 0.1,
 /// Solves x'' + 2ωx' + ω²(x - target) = 0 for the actual elapsed time.
 /// Invalid time is ignored; missed frames need no integration loop.
 /// Example: `spring.advance(@as(f64, @floatFromInt(elapsed_ns)) / 1e9);`
-pub fn advance(spring: *Spring, elapsed_seconds: f64) void {
-    if (!std.math.isFinite(elapsed_seconds) or elapsed_seconds <= 0 or !spring.active()) {
+pub fn advance(self: *Spring, elapsed_seconds: f64) void {
+    if (!std.math.isFinite(elapsed_seconds) or elapsed_seconds <= 0 or !self.active()) {
         return;
     }
 
-    if (!std.math.isFinite(spring.frequency) or spring.frequency <= 0) {
+    if (!std.math.isFinite(self.frequency) or self.frequency <= 0) {
         return;
     }
 
-    const decay = @exp(-spring.frequency * elapsed_seconds);
+    const decay = @exp(-self.frequency * elapsed_seconds);
     if (decay == 0) {
-        spring.reset(spring.target);
+        self.reset(self.target);
         return;
     }
 
-    const offset = spring.position - spring.target;
-    const coefficient = spring.velocity + spring.frequency * offset;
-    const position = spring.target + (offset + coefficient * elapsed_seconds) * decay;
-    const velocity = (spring.velocity - spring.frequency * coefficient * elapsed_seconds) * decay;
+    const offset = self.position - self.target;
+    const coefficient = self.velocity + self.frequency * offset;
+    const position = self.target + (offset + coefficient * elapsed_seconds) * decay;
+    const velocity = (self.velocity - self.frequency * coefficient * elapsed_seconds) * decay;
     if (!std.math.isFinite(position) or !std.math.isFinite(velocity)) {
-        spring.reset(spring.target);
+        self.reset(self.target);
         return;
     }
 
-    spring.position = position;
-    spring.velocity = velocity;
-    if (@abs(position - spring.target) <= spring.position_epsilon and @abs(velocity) <= spring.velocity_epsilon) {
-        spring.reset(spring.target);
+    self.position = position;
+    self.velocity = velocity;
+    if (@abs(position - self.target) <= self.position_epsilon and @abs(velocity) <= self.velocity_epsilon) {
+        self.reset(self.target);
     }
 }
 
