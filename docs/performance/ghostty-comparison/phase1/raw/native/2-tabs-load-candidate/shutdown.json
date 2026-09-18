@@ -1,0 +1,12 @@
+{
+  "elapsed_ms": 76.8689580000057,
+  "exited": true,
+  "returncode": 0,
+  "reply": "telar runtime is stopping\n",
+  "pids": [
+    60386
+  ],
+  "children_exited": true,
+  "socket_removed": true,
+  "cleanup_complete": true
+}

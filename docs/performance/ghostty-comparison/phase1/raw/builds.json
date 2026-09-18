@@ -1,0 +1,46 @@
+{
+  "baseline": {
+    "path": "/tmp/tgb-release/bin/telar",
+    "sha256": "da86b2ef9f1cd67188bf9c778316fea71741470086eaa2556c5c9f5f6c7c332c"
+  },
+  "credit": {
+    "path": "/tmp/tgb-credit-borrow/bin/telar",
+    "sha256": "c74164f0ef3124fadf36e6e87b89f3c1f312b1497c9f9a4df85c820c310ae1e7"
+  },
+  "drain": {
+    "path": "/tmp/tgb-drain-v1/bin/telar",
+    "sha256": "39e19cd9b7e16c097932c9f795ed9182b6fdbb3e19f784e11860a5253074b2c0"
+  },
+  "final": {
+    "path": "/tmp/tgb-optimized-frozen/bin/telar",
+    "sha256": "c375dcefc35c0b1a0e1ef72a401388d5000a6a09e6231e7773d5ba553928416d",
+    "text_section": {
+      "bytes": 5642148,
+      "sha256": "207d1856fb54254ce4db242ce186b2b39533520c526b3b405cd3531fb6a1dcfa"
+    }
+  },
+  "workspace": {
+    "path": "/tmp/tgb-optimized-v1/bin/telar",
+    "sha256": "81f1f9aad2372fb93a5fb454d484f2a65787f71c51db56445a457c9170be90ad"
+  },
+  "diagnostic": {
+    "path": "/tmp/tgb-phase1-diagnostic/bin/telar",
+    "sha256": "9dcac63f9c483b1769de5466709e97201973180e8d69b6b140af5e39a82b6c72"
+  },
+  "baseline_diagnostic": {
+    "path": "/tmp/tgb-phase1-baseline-diagnostic/bin/telar",
+    "sha256": "082cc884f76d6b66a863ba0c4a9fb4def7b1a608f155809ebd00a81eb070528c"
+  },
+  "final_verified": {
+    "path": "/tmp/tgb-phase1-final-verified/bin/telar",
+    "sha256": "749f8679bf7ec0204ffc548ae799b227adeda7179824de440b01268b55369702",
+    "text_section": {
+      "bytes": 5642148,
+      "sha256": "207d1856fb54254ce4db242ce186b2b39533520c526b3b405cd3531fb6a1dcfa"
+    }
+  },
+  "final_diagnostic": {
+    "path": "/tmp/tgb-phase1-final-diagnostic/bin/telar",
+    "sha256": "76755d63f85618f755ad96447cff9a14ff3bf5444a2c32f9b0cd17f06748a9b3"
+  }
+}

@@ -1,0 +1,71 @@
+Build Summary: 44/44 steps succeeded; 34/34 tests passed
+test-checkpoint-diagnostic success
++- run test 34 pass (34 total) 735ms MaxRSS:24M
+   +- compile test ReleaseFast native success 40s MaxRSS:1G
+      +- WriteFile cached
+      +- compile lib lua ReleaseFast native cached 54ms MaxRSS:34M
+      +- compile lib lua ReleaseFast native (reused)
+      +- WriteFile  cached
+      +- compile lib simdutf ReleaseFast aarch64-macos.13.0 cached 61ms MaxRSS:34M
+      |  +- WriteFile libc.txt cached
+      +- WriteFile hwy cached
+      +- compile lib highway ReleaseFast aarch64-macos.13.0 cached 38ms MaxRSS:35M
+      |  +- WriteFile libc.txt (reused)
+      +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      +- options cached
+      +- options cached
+      +- WriteFile props.zig cached
+      |  +- run exe props-unigen cached
+      |  |  +- compile exe props-unigen Debug native cached 56ms MaxRSS:35M
+      |  |     +- run exe uucode_generate (tables.zig) cached
+      |  |        +- compile exe uucode_generate Debug native cached 62ms MaxRSS:35M
+      |  +- run exe symbols-unigen cached
+      |     +- compile exe symbols-unigen Debug native cached 55ms MaxRSS:35M
+      |        +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- translate-c wuffs_c.h cached
+      |  +- compile exe translate-c Debug native cached 60ms MaxRSS:35M
+      |  |  +- options cached
+      |  |  +- options cached
+      |  |  +- options cached
+      |  |  +- run exe generate-def (aarch64.zig) cached
+      |  |  |  +- compile exe generate-def Debug native cached 57ms MaxRSS:35M
+      |  |  +- run exe generate-def (amdgcn.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (arm.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (bpf.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (common.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (hexagon.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (loongarch.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (mips.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (neon.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (nvptx.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (powerpc.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (riscv.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (s390x.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (ve.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (wasm.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (x86_64.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (x86.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (xcore.zig) cached
+      |  |     +- compile exe generate-def Debug native (reused)
+      |  +- WriteFile libc.txt (reused)
+      |  +- WriteFile wuffs_c.h cached
+      +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+

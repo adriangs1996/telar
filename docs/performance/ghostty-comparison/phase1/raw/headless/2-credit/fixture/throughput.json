@@ -1,0 +1,1 @@
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 394.677292, "mib_per_second": 20.269724562719457}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 413.900334, "mib_per_second": 19.328324581637087}], "failed": false}

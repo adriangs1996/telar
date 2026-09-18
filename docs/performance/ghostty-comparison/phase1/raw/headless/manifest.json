@@ -1,0 +1,18 @@
+{
+  "baseline": {
+    "path": "/tmp/tgb-release/bin/telar",
+    "sha256": "da86b2ef9f1cd67188bf9c778316fea71741470086eaa2556c5c9f5f6c7c332c"
+  },
+  "credit": {
+    "path": "/tmp/tgb-credit-borrow/bin/telar",
+    "sha256": "c74164f0ef3124fadf36e6e87b89f3c1f312b1497c9f9a4df85c820c310ae1e7"
+  },
+  "drain": {
+    "path": "/tmp/tgb-drain-v1/bin/telar",
+    "sha256": "39e19cd9b7e16c097932c9f795ed9182b6fdbb3e19f784e11860a5253074b2c0"
+  },
+  "final": {
+    "path": "/tmp/tgb-optimized-frozen/bin/telar",
+    "sha256": "c375dcefc35c0b1a0e1ef72a401388d5000a6a09e6231e7773d5ba553928416d"
+  }
+}

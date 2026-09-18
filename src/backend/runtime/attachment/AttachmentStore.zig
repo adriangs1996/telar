@@ -238,8 +238,8 @@ pub fn observes(store: *const AttachmentStore, workspace: WorkspaceLocationType)
 
 pub fn availableGraphicsCredit(store: *const AttachmentStore) usize {
     var outstanding: usize = 0;
-    for (store.items) |slot| {
-        const attachment = slot orelse continue;
+    for (&store.items) |*slot| {
+        const attachment = if (slot.*) |*value| value else continue;
         outstanding +|= max_image_bytes_per_pane_module -
             @min(attachment.graphicsCredit(), max_image_bytes_per_pane_module);
     }

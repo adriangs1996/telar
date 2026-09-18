@@ -1,0 +1,130 @@
+{"phase": "running", "runtime_pid": 53385, "client_pid": 53383, "directory": "/private/tmp/tgb-phase1-headless/0-baseline"}
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 1014.0033340000001, "mib_per_second": 7.889520410590681}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 1009.463209, "mib_per_second": 7.925004030533222}], "failed": false, "binary": "/tmp/tgb-release/bin/telar", "sampled": false, "detached": false, "host_bytes": 16660, "outer_pty": [111, 35]}
+{"phase": "running", "runtime_pid": 53530, "client_pid": 53525, "directory": "/private/tmp/tgb-phase1-headless/0-credit"}
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 415.325208, "mib_per_second": 19.262014069707032}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 462.346625, "mib_per_second": 17.303035357941674}], "failed": false, "binary": "/tmp/tgb-credit-borrow/bin/telar", "sampled": false, "detached": false, "host_bytes": 13726, "outer_pty": [111, 35]}
+{"phase": "running", "runtime_pid": 53814, "client_pid": 53812, "directory": "/private/tmp/tgb-phase1-headless/0-drain"}
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 148.719, "mib_per_second": 53.79272318937056}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 158.074125, "mib_per_second": 50.60916832530308}], "failed": false, "binary": "/tmp/tgb-drain-v1/bin/telar", "sampled": false, "detached": false, "host_bytes": 12260, "outer_pty": [111, 35]}
+{"phase": "running", "runtime_pid": 53973, "client_pid": 53963, "directory": "/private/tmp/tgb-phase1-headless/0-final"}
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 137.620083, "mib_per_second": 58.13105053860489}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 136.993042, "mib_per_second": 58.39712647595634}], "failed": false, "binary": "/tmp/tgb-optimized-frozen/bin/telar", "sampled": false, "detached": false, "host_bytes": 12214, "outer_pty": [111, 35]}
+{"phase": "running", "runtime_pid": 54154, "client_pid": 54152, "directory": "/private/tmp/tgb-phase1-headless/1-credit"}
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 406.292416, "mib_per_second": 19.690251860374378}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 407.851583, "mib_per_second": 19.614978422187463}], "failed": false, "binary": "/tmp/tgb-credit-borrow/bin/telar", "sampled": false, "detached": false, "host_bytes": 13540, "outer_pty": [111, 35]}
+{"phase": "running", "runtime_pid": 54284, "client_pid": 54282, "directory": "/private/tmp/tgb-phase1-headless/1-drain"}
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 148.735792, "mib_per_second": 53.786650088903954}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 152.605, "mib_per_second": 52.42292192261066}], "failed": false, "binary": "/tmp/tgb-drain-v1/bin/telar", "sampled": false, "detached": false, "host_bytes": 12182, "outer_pty": [111, 35]}
+{"phase": "running", "runtime_pid": 54410, "client_pid": 54407, "directory": "/private/tmp/tgb-phase1-headless/1-final"}
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 124.461708, "mib_per_second": 64.2767974869829}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 139.31520799999998, "mib_per_second": 57.42373797410546}], "failed": false, "binary": "/tmp/tgb-optimized-frozen/bin/telar", "sampled": false, "detached": false, "host_bytes": 12084, "outer_pty": [111, 35]}
+{"phase": "running", "runtime_pid": 54536, "client_pid": 54534, "directory": "/private/tmp/tgb-phase1-headless/1-baseline"}
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 984.09325, "mib_per_second": 8.12931091641976}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 976.908291, "mib_per_second": 8.18910032159815}], "failed": false, "binary": "/tmp/tgb-release/bin/telar", "sampled": false, "detached": false, "host_bytes": 16530, "outer_pty": [111, 35]}
+{"phase": "running", "runtime_pid": 54870, "client_pid": 54868, "directory": "/private/tmp/tgb-phase1-headless/2-drain"}
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 269.059375, "mib_per_second": 29.73321409075599}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 591.823333, "mib_per_second": 13.517547473918201}], "failed": false, "binary": "/tmp/tgb-drain-v1/bin/telar", "sampled": false, "detached": false, "host_bytes": 13552, "outer_pty": [111, 35]}
+{"phase": "running", "runtime_pid": 54997, "client_pid": 54995, "directory": "/private/tmp/tgb-phase1-headless/2-final"}
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 133.41120800000002, "mib_per_second": 59.96497685561771}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 145.17933299999999, "mib_per_second": 55.10426198197233}], "failed": false, "binary": "/tmp/tgb-optimized-frozen/bin/telar", "sampled": false, "detached": false, "host_bytes": 11168, "outer_pty": [111, 35]}
+{"phase": "running", "runtime_pid": 55274, "client_pid": 55272, "directory": "/private/tmp/tgb-phase1-headless/2-baseline"}
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 2970.4189159999996, "mib_per_second": 2.693222816791408}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 1868.108125, "mib_per_second": 4.282407368684829}], "failed": false, "binary": "/tmp/tgb-release/bin/telar", "sampled": false, "detached": false, "host_bytes": 23416, "outer_pty": [111, 35]}
+{"phase": "running", "runtime_pid": 55413, "client_pid": 55411, "directory": "/private/tmp/tgb-phase1-headless/2-credit"}
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 394.677292, "mib_per_second": 20.269724562719457}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 413.900334, "mib_per_second": 19.328324581637087}], "failed": false, "binary": "/tmp/tgb-credit-borrow/bin/telar", "sampled": false, "detached": false, "host_bytes": 13592, "outer_pty": [111, 35]}
+{"phase": "running", "runtime_pid": 55539, "client_pid": 55537, "directory": "/private/tmp/tgb-phase1-headless/3-final"}
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 131.590542, "mib_per_second": 60.794642824709996}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 139.147875, "mib_per_second": 57.49279318854133}], "failed": false, "binary": "/tmp/tgb-optimized-frozen/bin/telar", "sampled": false, "detached": false, "host_bytes": 12168, "outer_pty": [111, 35]}
+{"phase": "running", "runtime_pid": 55695, "client_pid": 55693, "directory": "/private/tmp/tgb-phase1-headless/3-baseline"}
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 1024.122875, "mib_per_second": 7.811562650624321}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 1031.052917, "mib_per_second": 7.7590585973775}], "failed": false, "binary": "/tmp/tgb-release/bin/telar", "sampled": false, "detached": false, "host_bytes": 16816, "outer_pty": [111, 35]}
+{"phase": "running", "runtime_pid": 55939, "client_pid": 55936, "directory": "/private/tmp/tgb-phase1-headless/3-credit"}
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 466.282417, "mib_per_second": 17.156984068734463}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 422.76620799999995, "mib_per_second": 18.922988281977354}], "failed": false, "binary": "/tmp/tgb-credit-borrow/bin/telar", "sampled": false, "detached": false, "host_bytes": 13774, "outer_pty": [111, 35]}
+{"phase": "running", "runtime_pid": 56122, "client_pid": 56120, "directory": "/private/tmp/tgb-phase1-headless/3-drain"}
+{"endpoint": "pty_write_to_dsr_response", "bytes_per_case": 8388608, "cases": [{"name": "ascii", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 150.064375, "mib_per_second": 53.31045426337863}, {"name": "ansi", "bytes": 8388608, "cols": 111, "rows": 33, "elapsed_ms": 150.75625, "mib_per_second": 53.065793292152065}], "failed": false, "binary": "/tmp/tgb-drain-v1/bin/telar", "sampled": false, "detached": false, "host_bytes": 12228, "outer_pty": [111, 35]}
+{
+  "baseline": {
+    "ascii": {
+      "median": 7.850541530607501,
+      "min": 2.693222816791408,
+      "max": 8.12931091641976,
+      "rates": [
+        7.889520410590681,
+        8.12931091641976,
+        2.693222816791408,
+        7.811562650624321
+      ]
+    },
+    "ansi": {
+      "median": 7.842031313955361,
+      "min": 4.282407368684829,
+      "max": 8.18910032159815,
+      "rates": [
+        7.925004030533222,
+        8.18910032159815,
+        4.282407368684829,
+        7.7590585973775
+      ]
+    }
+  },
+  "credit": {
+    "ascii": {
+      "median": 19.476132965040705,
+      "min": 17.156984068734463,
+      "max": 20.269724562719457,
+      "rates": [
+        19.262014069707032,
+        19.690251860374378,
+        20.269724562719457,
+        17.156984068734463
+      ]
+    },
+    "ansi": {
+      "median": 19.125656431807222,
+      "min": 17.303035357941674,
+      "max": 19.614978422187463,
+      "rates": [
+        17.303035357941674,
+        19.614978422187463,
+        19.328324581637087,
+        18.922988281977354
+      ]
+    }
+  },
+  "drain": {
+    "ascii": {
+      "median": 53.54855217614129,
+      "min": 29.73321409075599,
+      "max": 53.79272318937056,
+      "rates": [
+        53.79272318937056,
+        53.786650088903954,
+        29.73321409075599,
+        53.31045426337863
+      ]
+    },
+    "ansi": {
+      "median": 51.51604512395687,
+      "min": 13.517547473918201,
+      "max": 53.065793292152065,
+      "rates": [
+        50.60916832530308,
+        52.42292192261066,
+        13.517547473918201,
+        53.065793292152065
+      ]
+    }
+  },
+  "final": {
+    "ascii": {
+      "median": 60.37980984016385,
+      "min": 58.13105053860489,
+      "max": 64.2767974869829,
+      "rates": [
+        58.13105053860489,
+        64.2767974869829,
+        59.96497685561771,
+        60.794642824709996
+      ]
+    },
+    "ansi": {
+      "median": 57.45826558132339,
+      "min": 55.10426198197233,
+      "max": 58.39712647595634,
+      "rates": [
+        58.39712647595634,
+        57.42373797410546,
+        55.10426198197233,
+        57.49279318854133
+      ]
+    }
+  }
+}

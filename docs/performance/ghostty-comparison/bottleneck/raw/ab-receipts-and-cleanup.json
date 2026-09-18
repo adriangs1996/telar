@@ -1,0 +1,514 @@
+[
+  {
+    "round": 0,
+    "variant": "baseline_attached",
+    "receipts": [
+      {
+        "pid": 30118,
+        "ppid": 30117,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "ready",
+        "geometry_generation": 1,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": null
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 72.24341700000014,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        30117
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "round": 0,
+    "variant": "borrow_attached",
+    "receipts": [
+      {
+        "pid": 30346,
+        "ppid": 30344,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "ready",
+        "geometry_generation": 1,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": null
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 71.59066699999971,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        30344
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "round": 0,
+    "variant": "baseline_detached",
+    "receipts": [
+      {
+        "pid": 30471,
+        "ppid": 30468,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "ready",
+        "geometry_generation": 1,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": null
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 70.4187919999999,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        30468
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "round": 0,
+    "variant": "borrow_detached",
+    "receipts": [
+      {
+        "pid": 30493,
+        "ppid": 30492,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "ready",
+        "geometry_generation": 1,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": null
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 74.13000000000025,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        30492
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "round": 1,
+    "variant": "borrow_attached",
+    "receipts": [
+      {
+        "pid": 30612,
+        "ppid": 30611,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "ready",
+        "geometry_generation": 1,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": null
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 70.73533300000001,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        30611
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "round": 1,
+    "variant": "baseline_detached",
+    "receipts": [
+      {
+        "pid": 30803,
+        "ppid": 30800,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "ready",
+        "geometry_generation": 1,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": null
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 68.0067499999999,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        30800
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "round": 1,
+    "variant": "borrow_detached",
+    "receipts": [
+      {
+        "pid": 30824,
+        "ppid": 30823,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "ready",
+        "geometry_generation": 1,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": null
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 73.5647079999997,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        30823
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "round": 1,
+    "variant": "baseline_attached",
+    "receipts": [
+      {
+        "pid": 30849,
+        "ppid": 30848,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "ready",
+        "geometry_generation": 1,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": null
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 69.85425000000056,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        30848
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "round": 2,
+    "variant": "baseline_detached",
+    "receipts": [
+      {
+        "pid": 31008,
+        "ppid": 30982,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "ready",
+        "geometry_generation": 1,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": null
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 73.73058300000012,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        30982
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "round": 2,
+    "variant": "borrow_detached",
+    "receipts": [
+      {
+        "pid": 31174,
+        "ppid": 31171,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "ready",
+        "geometry_generation": 1,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": null
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 69.31833300000001,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        31171
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "round": 2,
+    "variant": "baseline_attached",
+    "receipts": [
+      {
+        "pid": 31260,
+        "ppid": 31259,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "ready",
+        "geometry_generation": 1,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": null
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 70.17983400000017,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        31259
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "round": 2,
+    "variant": "borrow_attached",
+    "receipts": [
+      {
+        "pid": 31388,
+        "ppid": 31385,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "ready",
+        "geometry_generation": 1,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": null
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 72.44045900000006,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        31385
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "round": 3,
+    "variant": "borrow_detached",
+    "receipts": [
+      {
+        "pid": 31515,
+        "ppid": 31514,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "ready",
+        "geometry_generation": 1,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": null
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 69.30054200000014,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        31514
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "round": 3,
+    "variant": "baseline_attached",
+    "receipts": [
+      {
+        "pid": 31630,
+        "ppid": 31629,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "ready",
+        "geometry_generation": 1,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": null
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 70.19450000000037,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        31629
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "round": 3,
+    "variant": "borrow_attached",
+    "receipts": [
+      {
+        "pid": 31814,
+        "ppid": 31813,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "ready",
+        "geometry_generation": 1,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": null
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 67.53645800000018,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        31813
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "round": 3,
+    "variant": "baseline_detached",
+    "receipts": [
+      {
+        "pid": 31941,
+        "ppid": 31940,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "ready",
+        "geometry_generation": 1,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": null
+      }
+    ],
+    "shutdown": {
+      "elapsed_ms": 71.45100000000015,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        31940
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  }
+]

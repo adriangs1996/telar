@@ -1,0 +1,120 @@
+{
+  "manifest": {
+    "binary": "/private/tmp/tgb-release/bin/telar",
+    "sha256": "da86b2ef9f1cd67188bf9c778316fea71741470086eaa2556c5c9f5f6c7c332c",
+    "ghostty_version": "Ghostty 1.3.1\n\nVersion\n  - version: 1.3.1\n  - channel: stable\nBuild Config\n  - Zig version   : 0.15.2\n  - build mode    : .ReleaseFast\n  - app runtime   : .none\n  - font engine   : .coretext\n  - renderer      : renderer.generic.Renderer(renderer.Metal)\n  - libxev        : kqueue\n",
+    "vsync": "true",
+    "warmup": 20,
+    "rounds": 6,
+    "input_method": "key",
+    "cases": [
+      "single"
+    ],
+    "panes": 4,
+    "viewport": [
+      1000,
+      700
+    ],
+    "command_line": [
+      "/tmp/tgb-harness-controlled/gui_tui_latency.py",
+      "/tmp/tgb-release/bin/telar",
+      "/tmp/tgb-controlled-throughput",
+      "--source",
+      "/tmp/tgb-source",
+      "--mode",
+      "all",
+      "--cases",
+      "single",
+      "--throughput",
+      "--samples",
+      "1",
+      "--rounds",
+      "6",
+      "--viewport",
+      "1000",
+      "700",
+      "--float-windows"
+    ],
+    "platform": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83\n",
+    "cpu": "Apple M3",
+    "memory_bytes": 17179869184,
+    "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=35651683)\t100%; charged; 0:00 remaining present: true\n",
+    "started_at": "2026-09-18T17:28:25+0200",
+    "source_commit": "bf6e130c9ac81274c405847c6baf20dd3a242382",
+    "source_patch_sha256": "6ebf0c005ac37573b042ff68480b5102961c9106aa450adb08fabb117050aa10",
+    "ghostty_sha256": "3460be6d0c80504ffafe0dbb06f60cb1e8fb680a564a97a1aa5b95b48b8e30ac",
+    "config_sha256": "cf472e102eea6e95831b7e1515ea71d8d310f7f155c9297c7eabed85e54c1b50",
+    "probe_sha256": {
+      "gui_tui_latency.py": "4e9fb597606db3f70da5736527827e335374890fa3eb5f9ed59050bcd2d42151",
+      "gui_tui_latency.m": "43cb74fcbd3ebcb1064ca7ae0622434ec05281cabe208608a175cc3bea77a42a",
+      "terminal_bench_fixture.py": "c7d8e87bd90ca1bac903f96f51b1e421a2d31c7f86ba1684af41084601022488"
+    }
+  },
+  "result": {
+    "native_view_pixels": [
+      [
+        1000,
+        700
+      ]
+    ],
+    "backing_scale": 1,
+    "window_id": 23903,
+    "window_key_end": [],
+    "setup_complete": false,
+    "scene_pixels": [
+      1000,
+      700
+    ],
+    "marker": [
+      175,
+      149
+    ],
+    "display_max_fps": 100,
+    "window_floated": true,
+    "requested_viewport": [
+      1000,
+      700
+    ],
+    "focus_failure_frontmost_application": {
+      "name": "Telar",
+      "pid": 494,
+      "bundle_identifier": "dev.telar.Telar"
+    },
+    "mode": "ghostty",
+    "foreground_required": true,
+    "primary_view_pixels": [
+      1000,
+      700
+    ],
+    "panes_requested": 1,
+    "input_class": "",
+    "focus_failure_point": "setup",
+    "target_filter": "marker-qualified Metal command queue",
+    "gpu_work_ms": [],
+    "panes_created": 1,
+    "host_user_cpu_seconds": 0.356012,
+    "native_tab_count": 1,
+    "host_system_cpu_seconds": 0.143225,
+    "failed": 17,
+    "app_active_end": [],
+    "window_key_start": [],
+    "input_method": "key",
+    "host_max_rss_bytes": 168968192,
+    "layout": "single",
+    "app_active_start": [],
+    "gpu_ms": [],
+    "floated_window_ids": [
+      23903
+    ],
+    "error": "Benchmark host was not active with its primary window key",
+    "window_content_pixels": [
+      1000,
+      700
+    ],
+    "viewport": [
+      1000,
+      700
+    ]
+  },
+  "log": "probe located 175,149 in 3770x2112\nprobe floated window 23903 for process 55751\nprobe requested foreground for primary window 23903\nprobe located 175,149 in 1000x700\nprobe foreground failure: point=setup completed=0 active=0 key_window=0\nprobe frontmost application: name=Telar pid=494 bundle=dev.telar.Telar\nprobe finished 17: Benchmark host was not active with its primary window key\n"
+}

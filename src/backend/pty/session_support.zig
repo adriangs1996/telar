@@ -101,6 +101,34 @@ test "resize changes the dimensions observed by the child" {
     try std.testing.expectEqual(exit_mod.Exit{ .exited = 0 }, try session.wait());
 }
 
+test "bounded PTY reads preserve every byte and the closing tail of a burst" {
+    const io = std.testing.io;
+    const args = [_][*:0]const u8{ "/bin/sh", "-c", "head -c 32768 /dev/zero; printf TAIL" };
+    const command = try Command.fromArgv(&args);
+    var session = try Session.spawn(&command, .{ .cols = 40, .rows = 5 });
+    defer session.deinit();
+
+    var output: [32768 + 4 + 64]u8 = undefined;
+    var len: usize = 0;
+    while (len < output.len) {
+        const end = @min(len + 4095, output.len);
+        const count = session.read(io, output[len..end]) catch |err| switch (err) {
+            error.EndOfStream, error.InputOutput => break,
+            else => return err,
+        };
+        try std.testing.expect(count > 0);
+        len += count;
+    }
+
+    try std.testing.expectEqual(@as(usize, 32768 + 4), len);
+    for (output[0..32768]) |byte| {
+        try std.testing.expectEqual(@as(u8, 0), byte);
+    }
+
+    try std.testing.expectEqualStrings("TAIL", output[32768..len]);
+    try std.testing.expectEqual(exit_mod.Exit{ .exited = 0 }, try session.wait());
+}
+
 test "PTY child receives the explicit terminal environment" {
     var inherited_map = std.process.Environ.Map.init(std.testing.allocator);
     defer inherited_map.deinit();

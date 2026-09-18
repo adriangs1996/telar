@@ -1,0 +1,11 @@
+{
+  "benchmark_configuration": "Headless Telar TUI with same fixture payload and DSR endpoint; no native or GPU probe",
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83\n",
+  "binary_builds": "builds.json",
+  "parent_source": "../../build.json",
+  "files": {
+    "tools/terminal_runtime_bench.py": "7a1f014bb67faa4447a3991028096e1a94f75976ef30eb1d99a3c644e2ef37ef",
+    "tools/terminal_bench_fixture.py": "cc6e501b4e3dd4b5c8c1dd7b3c7cb338e9aab2f494ab5d3a32cc8db4d86c0b51",
+    "docs/performance/ghostty-comparison/config.lua": "cf472e102eea6e95831b7e1515ea71d8d310f7f155c9297c7eabed85e54c1b50"
+  }
+}

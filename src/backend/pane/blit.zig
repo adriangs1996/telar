@@ -21,13 +21,12 @@ const BlitPane = @import("BlitPane.zig");
 // lets the drawing layer be lifted out later without dragging an emulator
 // behind it.
 //
-// The expensive half of the work is not here. `vt.RenderState` already walks
-// the page list, resolves styles into runs, duplicates grapheme data out of
-// pages that may be freed, tracks which rows changed, and retains its buffers
-// between frames so a steady state allocates nothing. It also splits into
-// `beginUpdate` (needs the terminal) and `endUpdate` (does not), so the actor
-// owning the pty can be released before the copying starts. All this file does
-// is turn that into cells.
+// `vt.RenderState` walks the page list, resolves styles into runs, duplicates
+// grapheme data out of pages that may be freed, and tracks which rows changed.
+// It retains buffers between frames so a steady state allocates nothing. Its
+// `beginUpdate` needs the terminal and `endUpdate` does not, so the actor owning
+// the pty can be released before the copying starts. This file turns the
+// result into cells.
 //
 // What it must get right, and what a naive copy gets wrong:
 //
@@ -54,6 +53,7 @@ pub fn blit(operation: Operation) Stats {
     const state = operation.state;
     const opts = operation.options;
     const color_source: ColorSource = .{ .terminal = terminal, .colors = state.colors };
+    const default_style = defaultStyle(&color_source);
 
     var stats: Stats = .{};
     if (opts.damaged_rows) |damaged| {
@@ -83,7 +83,7 @@ pub fn blit(operation: Operation) Stats {
             continue;
         }
         const target: RowTarget = .{ .buffer = b, .area = area, .y = y };
-        blitRow(.{ .target = target, .cells = row_cells[y].slice(), .colors = color_source });
+        blitRow(&.{ .target = target, .cells = row_cells[y].slice(), .colors = color_source }, default_style);
         if (opts.selection) |range| {
             highlightRow(target, range);
         }
@@ -98,7 +98,7 @@ pub fn blit(operation: Operation) Stats {
     // during a resize, and leaving the previous tenant's pixels there reads as
     // a rendering bug.
     while (y < area.h) : (y += 1) {
-        b.fill(area.row(y), .{ .glyph = " ", .style = .{ .bg = defaultBackground(color_source) } });
+        b.fill(area.row(y), .{ .glyph = " ", .style = .{ .bg = default_style.bg } });
         if (opts.damaged_rows) |damaged| {
             damaged[area.y + y] = true;
         }
@@ -167,12 +167,12 @@ pub fn selectionText(gpa: std.mem.Allocator, terminal: *vt.Terminal, range: Rang
     return s.selectionString(gpa, .{ .sel = selection, .trim = true });
 }
 
-fn blitRow(projection: RowProjection) void {
+fn blitRow(projection: *const RowProjection, default_style: StyleType) void {
     const b = projection.target.buffer;
     const area = projection.target.area;
     const y = projection.target.y;
     const cells = projection.cells;
-    const colors = projection.colors;
+    const colors = &projection.colors;
 
     const raws = cells.items(.raw);
     const styles = cells.items(.style);
@@ -186,7 +186,7 @@ fn blitRow(projection: RowProjection) void {
         // Style id zero is the default style and the emulator does not fill
         // `style` for it, so reading it unconditionally is reading undefined
         // memory.
-        const style = translate(if (raw.style_id == 0) .{} else styles[x], colors);
+        const style = if (raw.style_id == 0) default_style else translate(styles[x], colors, default_style);
 
         switch (raw.wide) {
             // The emulator's own marker for the column a wide glyph continues
@@ -235,7 +235,7 @@ fn blitRow(projection: RowProjection) void {
     var pad = width;
     while (pad < area.w) : (pad += 1) {
         b.setCell(.{ .x = area.x + pad, .y = area.y + y }, .{ .text = " ", .width = 1, .style = .{
-            .bg = defaultBackground(colors),
+            .bg = default_style.bg,
         } });
     }
 }
@@ -269,15 +269,15 @@ fn encode(out: *[CellType.max_bytes]u8, base: u21, extra: []const u21) []const u
 /// The attribute word is reinterpreted rather than copied field by field;
 /// `ui.Style.Flags` is declared to match it and a test in `ui.zig` fails if a
 /// libghostty-vt update moves a bit.
-fn translate(style: vt.Style, colors: ColorSource) StyleType {
+fn translate(style: vt.Style, colors: *const ColorSource, default_style: StyleType) StyleType {
     return .{
-        .fg = resolve(style.fg_color, colors, .foreground),
-        .bg = resolve(style.bg_color, colors, .background),
+        .fg = resolve(style.fg_color, colors, default_style.fg),
+        .bg = resolve(style.bg_color, colors, default_style.bg),
         // Underline colour has no default of its own: unset means "use the
         // foreground", which the terminal already does when SGR 58 is absent.
         .underline_color = switch (style.underline_color) {
             .none => .default,
-            else => resolve(style.underline_color, colors, .foreground),
+            else => resolve(style.underline_color, colors, default_style.fg),
         },
         .flags = @bitCast(@as(u16, @bitCast(style.flags))),
     };
@@ -288,36 +288,31 @@ fn translate(style: vt.Style, colors: ColorSource) StyleType {
 /// Passing an index through instead would let the outer terminal answer with
 /// its own palette, so an agent that recoloured its terminal would render in
 /// whatever the user's theme happens to map that slot to.
-const DefaultColor = enum { foreground, background };
-
-fn resolve(c: vt.Style.Color, colors: ColorSource, default_color: DefaultColor) ColorType {
+fn resolve(c: vt.Style.Color, colors: *const ColorSource, default_color: ColorType) ColorType {
     return switch (c) {
-        .none => switch (default_color) {
-            .foreground => defaultForeground(colors),
-            .background => defaultBackground(colors),
-        },
+        .none => default_color,
         .palette => |i| paletteColor(colors, i),
         .rgb => |v| rgb(v),
     };
 }
 
-fn defaultForeground(source: ColorSource) ColorType {
+// Defaults and reverse mode are constant during a blit. Resolve them once so
+// every default cell, explicit style and padding cell shares the same frame.
+fn defaultStyle(source: *const ColorSource) StyleType {
     if (source.terminal.modes.get(.reverse_colors)) {
-        return rgb(source.colors.foreground);
+        return .{
+            .fg = rgb(source.colors.foreground),
+            .bg = rgb(source.colors.background),
+        };
     }
 
-    return if (source.terminal.colors.foreground.override) |color| rgb(color) else .default;
+    return .{
+        .fg = if (source.terminal.colors.foreground.override) |color| rgb(color) else .default,
+        .bg = if (source.terminal.colors.background.override) |color| rgb(color) else .default,
+    };
 }
 
-fn defaultBackground(source: ColorSource) ColorType {
-    if (source.terminal.modes.get(.reverse_colors)) {
-        return rgb(source.colors.background);
-    }
-
-    return if (source.terminal.colors.background.override) |color| rgb(color) else .default;
-}
-
-fn paletteColor(source: ColorSource, index: u8) ColorType {
+fn paletteColor(source: *const ColorSource, index: u8) ColorType {
     if (source.terminal.colors.palette.mask.isSet(index)) {
         return rgb(source.colors.palette[index]);
     }
@@ -508,6 +503,62 @@ test "OSC default colour overrides stay inside the pane" {
     try pane.write("\x1b]111\x1b\\");
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{ .force = true } });
     try std.testing.expect(buf.at(0, 0).?.style.bg == .default);
+}
+
+test "default colours refresh across reverse mode and OSC changes including padding" {
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 4, 2);
+    defer pane.deinit();
+    var buf = try BufferType.init(gpa, 6, 3);
+    defer buf.deinit();
+    pane.term.colors.foreground.default = .{ .r = 240, .g = 230, .b = 220 };
+    pane.term.colors.background.default = .{ .r = 10, .g = 20, .b = 30 };
+
+    try pane.write("a\x1b[7mb\x1b[0;31;4;58;5;2mc\x1b[?5h");
+    _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
+
+    const reversed_foreground: ColorType = .{ .rgb = .{ 10, 20, 30 } };
+    const reversed_background: ColorType = .{ .rgb = .{ 240, 230, 220 } };
+    try std.testing.expectEqual(reversed_foreground, buf.at(0, 0).?.style.fg);
+    try std.testing.expectEqual(reversed_background, buf.at(0, 0).?.style.bg);
+    try std.testing.expectEqual(reversed_foreground, buf.at(1, 0).?.style.fg);
+    try std.testing.expect(buf.at(1, 0).?.style.flags.inverse);
+    try std.testing.expectEqual(ColorType{ .indexed = 1 }, buf.at(2, 0).?.style.fg);
+    try std.testing.expectEqual(ColorType{ .indexed = 2 }, buf.at(2, 0).?.style.underline_color);
+    try std.testing.expectEqual(reversed_background, buf.at(2, 0).?.style.bg);
+    try std.testing.expectEqual(reversed_background, buf.at(5, 0).?.style.bg);
+    try std.testing.expectEqual(reversed_background, buf.at(0, 2).?.style.bg);
+
+    try pane.write("\x1b]10;rgb:12/34/56\x07\x1b]11;rgb:65/43/21\x07");
+    // The bare VT helper has no Pane.semantic_colors_dirty tracking. Its rows
+    // stay clean after OSC alone; Pane.render supplies force for this case.
+    _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{ .force = true } });
+
+    const foreground_override: ColorType = .{ .rgb = .{ 0x12, 0x34, 0x56 } };
+    const background_override: ColorType = .{ .rgb = .{ 0x65, 0x43, 0x21 } };
+    try std.testing.expectEqual(background_override, buf.at(0, 0).?.style.fg);
+    try std.testing.expectEqual(foreground_override, buf.at(0, 0).?.style.bg);
+    try std.testing.expectEqual(foreground_override, buf.at(2, 0).?.style.bg);
+    try std.testing.expectEqual(foreground_override, buf.at(5, 0).?.style.bg);
+    try std.testing.expectEqual(foreground_override, buf.at(0, 2).?.style.bg);
+
+    try pane.write("\x1b[?5l");
+    _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{ .force = true } });
+    try std.testing.expectEqual(foreground_override, buf.at(0, 0).?.style.fg);
+    try std.testing.expectEqual(background_override, buf.at(0, 0).?.style.bg);
+    try std.testing.expect(buf.at(1, 0).?.style.flags.inverse);
+
+    try pane.write("\x1b]110\x07\x1b]111\x07");
+    _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{ .force = true } });
+    try std.testing.expect(buf.at(0, 0).?.style.fg == .default);
+    try std.testing.expect(buf.at(0, 0).?.style.bg == .default);
+    try std.testing.expect(buf.at(1, 0).?.style.fg == .default);
+    try std.testing.expect(buf.at(1, 0).?.style.flags.inverse);
+    try std.testing.expectEqual(ColorType{ .indexed = 1 }, buf.at(2, 0).?.style.fg);
+    try std.testing.expectEqual(ColorType{ .indexed = 2 }, buf.at(2, 0).?.style.underline_color);
+    try std.testing.expect(buf.at(2, 0).?.style.bg == .default);
+    try std.testing.expect(buf.at(5, 0).?.style.bg == .default);
+    try std.testing.expect(buf.at(0, 2).?.style.bg == .default);
 }
 
 test "palette colours are resolved with the pane's own palette" {

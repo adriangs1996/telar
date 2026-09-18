@@ -1,0 +1,2113 @@
+{
+  "schema_version": 1,
+  "source": {
+    "path": "/tmp/tgb-phase1-followup/profile/runtime-sample.txt",
+    "sha256": "494d9c3c077c4dce1c67669a1fa608c8c58a344ad7666c5fee567acd403796e8",
+    "bytes": 484810,
+    "requested_interval_ms": 1,
+    "requested_duration_seconds": 8,
+    "profile_date_time": "2026-09-18 19:34:11.031 +0200"
+  },
+  "method": {
+    "aggregation": "Parse the call graph by indentation. Sum inclusive counts for matching nodes unless an ancestor already matches. This avoids recursive double counting. Per-thread sum of self counts is asserted equal to its root count. Callsite profile_lines are 1-based.",
+    "scope": "Main counts use 5853 sampled stacks as denominator; they include blocked time and are not CPU percentages. Worker totals combine different pooled threads and have no process CPU-share denominator. Nested rows must not be added.",
+    "window": "Profiling was requested immediately before the viewport handshake released the 512 MiB ASCII workload. Its 10.196 s duration exceeds the 8 s requested profile, so this profile represents the beginning of ASCII rather than both payloads."
+  },
+  "result": {
+    "endpoint": "pty_write_to_dsr_response",
+    "bytes_per_case": 536870912,
+    "cases": [
+      {
+        "name": "ascii",
+        "bytes": 536870912,
+        "cols": 111,
+        "rows": 33,
+        "elapsed_ms": 10195.798792,
+        "mib_per_second": 50.21676186879385
+      },
+      {
+        "name": "ansi",
+        "bytes": 536870912,
+        "cols": 111,
+        "rows": 33,
+        "elapsed_ms": 9381.210125000001,
+        "mib_per_second": 54.57718068115439
+      }
+    ],
+    "failed": false,
+    "binary": "/tmp/tgb-phase1-final-verified/bin/telar",
+    "sampled": true,
+    "detached": false,
+    "host_bytes": 59065,
+    "outer_pty": [
+      111,
+      35
+    ]
+  },
+  "shutdown": {
+    "elapsed_ms": 71.79166699999939,
+    "exited": true,
+    "returncode": 0,
+    "reply": "telar runtime is stopping\n",
+    "pids": [
+      69543
+    ],
+    "children_exited": true,
+    "socket_removed": true,
+    "cleanup_complete": true
+  },
+  "main_thread": {
+    "name": "Thread_80880930   DispatchQueue_1: com.apple.main-thread  (serial)",
+    "samples": 5853,
+    "metrics": {
+      "event_queue_get": {
+        "inclusive_samples": 3282,
+        "callsites": [
+          {
+            "function": "Io.TypeErasedQueue.getLocked",
+            "location": "(in telar) + 828  [0x1044f1ee0]",
+            "samples": 3253,
+            "profile_lines": [
+              29
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.getLocked",
+            "location": "(in telar) + 116  [0x1044f1c18]",
+            "samples": 23,
+            "profile_lines": [
+              41
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.getLocked",
+            "location": "(in telar) + 828,64,...  [0x1044f1ee0,0x1044f1be4,...]",
+            "samples": 5,
+            "profile_lines": [
+              44
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.getLocked",
+            "location": "(in telar) + 528  [0x1044f1db4]",
+            "samples": 1,
+            "profile_lines": [
+              418
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5853,
+        "percentage_of_main_thread_samples": 56.073808303434134
+      },
+      "futex_wait": {
+        "inclusive_samples": 3256,
+        "callsites": [
+          {
+            "function": "__ulock_wait2",
+            "location": "(in libsystem_kernel.dylib) + 8,4  [0x186d9dc98,0x186d9dc94]",
+            "samples": 3214,
+            "profile_lines": [
+              33
+            ]
+          },
+          {
+            "function": "__ulock_wait2",
+            "location": "(in libsystem_kernel.dylib) + 8  [0x186d9dc98]",
+            "samples": 42,
+            "profile_lines": [
+              37,
+              40,
+              409
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5853,
+        "percentage_of_main_thread_samples": 55.62959166239535
+      },
+      "client_pump": {
+        "inclusive_samples": 1619,
+        "callsites": [
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 1844  [0x1043d0da8]",
+            "samples": 1414,
+            "profile_lines": [
+              47,
+              126,
+              224,
+              290,
+              358
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 1484  [0x1043d0c40]",
+            "samples": 57,
+            "profile_lines": [
+              91,
+              158
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 8860  [0x1043d2910]",
+            "samples": 41,
+            "profile_lines": [
+              116,
+              219,
+              301,
+              332,
+              368
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 484  [0x1043d0858]",
+            "samples": 14,
+            "profile_lines": [
+              98,
+              238,
+              305
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 8504  [0x1043d27ac]",
+            "samples": 13,
+            "profile_lines": [
+              110,
+              169,
+              228,
+              314,
+              339
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 8748  [0x1043d28a0]",
+            "samples": 13,
+            "profile_lines": [
+              118,
+              175,
+              230,
+              292,
+              343,
+              364
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 8644  [0x1043d2838]",
+            "samples": 11,
+            "profile_lines": [
+              120,
+              171,
+              233,
+              284,
+              360
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 8568  [0x1043d27ec]",
+            "samples": 10,
+            "profile_lines": [
+              112,
+              248,
+              282,
+              341
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 8800  [0x1043d28d4]",
+            "samples": 9,
+            "profile_lines": [
+              108,
+              294,
+              345,
+              366
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 8696  [0x1043d286c]",
+            "samples": 9,
+            "profile_lines": [
+              114,
+              173,
+              246,
+              299
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 1092,332,...  [0x1043d0ab8,0x1043d07c0,...]",
+            "samples": 7,
+            "profile_lines": [
+              107
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 356,1080,...  [0x1043d07d8,0x1043d0aac,...]",
+            "samples": 5,
+            "profile_lines": [
+              232
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 116,7064,...  [0x1043d06e8,0x1043d220c,...]",
+            "samples": 4,
+            "profile_lines": [
+              289
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 6896,6904,...  [0x1043d2164,0x1043d216c,...]",
+            "samples": 3,
+            "profile_lines": [
+              165
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 6848  [0x1043d2134]",
+            "samples": 3,
+            "profile_lines": [
+              166,
+              296
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 76,6904  [0x1043d06c0,0x1043d216c]",
+            "samples": 2,
+            "profile_lines": [
+              335
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 96  [0x1043d06d4]",
+            "samples": 1,
+            "profile_lines": [
+              178
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 384  [0x1043d07f4]",
+            "samples": 1,
+            "profile_lines": [
+              303
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 508  [0x1043d0870]",
+            "samples": 1,
+            "profile_lines": [
+              311
+            ]
+          },
+          {
+            "function": "runtime.application.Application.pump",
+            "location": "(in telar) + 1256  [0x1043d0b5c]",
+            "samples": 1,
+            "profile_lines": [
+              336
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5853,
+        "percentage_of_main_thread_samples": 27.66102853237656
+      },
+      "cell_prepare": {
+        "inclusive_samples": 1386,
+        "callsites": [
+          {
+            "function": "runtime.attachment.CellSync.prepare",
+            "location": "(in telar) + 224  [0x1043ca7cc]",
+            "samples": 797,
+            "profile_lines": [
+              49,
+              128
+            ]
+          },
+          {
+            "function": "runtime.attachment.CellSync.prepare",
+            "location": "(in telar) + 968  [0x1043caab4]",
+            "samples": 366,
+            "profile_lines": [
+              87,
+              154
+            ]
+          },
+          {
+            "function": "runtime.attachment.CellSync.prepare",
+            "location": "(in telar) + 896,1000,...  [0x1043caa6c,0x1043caad4,...]",
+            "samples": 129,
+            "profile_lines": [
+              89
+            ]
+          },
+          {
+            "function": "runtime.attachment.CellSync.prepare",
+            "location": "(in telar) + 868,1000,...  [0x1043caa50,0x1043caad4,...]",
+            "samples": 93,
+            "profile_lines": [
+              156
+            ]
+          },
+          {
+            "function": "runtime.attachment.CellSync.prepare",
+            "location": "(in telar) + 1044  [0x1043cab00]",
+            "samples": 1,
+            "profile_lines": [
+              227
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5853,
+        "percentage_of_main_thread_samples": 23.680164018452075
+      },
+      "pane_render": {
+        "inclusive_samples": 797,
+        "callsites": [
+          {
+            "function": "pane.Pane.render",
+            "location": "(in telar) + 216  [0x1043c4be4]",
+            "samples": 744,
+            "profile_lines": [
+              50,
+              129
+            ]
+          },
+          {
+            "function": "pane.Pane.render",
+            "location": "(in telar) + 72  [0x1043c4b54]",
+            "samples": 47,
+            "profile_lines": [
+              60,
+              137
+            ]
+          },
+          {
+            "function": "pane.Pane.render",
+            "location": "(in telar) + 100  [0x1043c4b70]",
+            "samples": 5,
+            "profile_lines": [
+              83,
+              149
+            ]
+          },
+          {
+            "function": "pane.Pane.render",
+            "location": "(in telar) + 224  [0x1043c4bec]",
+            "samples": 1,
+            "profile_lines": [
+              153
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5853,
+        "percentage_of_main_thread_samples": 13.61694857338117
+      },
+      "blit": {
+        "inclusive_samples": 744,
+        "callsites": [
+          {
+            "function": "pane.blit.blit",
+            "location": "(in telar) + 1068,3032,...  [0x10461c0e4,0x10461c890,...]",
+            "samples": 421,
+            "profile_lines": [
+              51
+            ]
+          },
+          {
+            "function": "pane.blit.blit",
+            "location": "(in telar) + 1068,1796,...  [0x10461c0e4,0x10461c3bc,...]",
+            "samples": 211,
+            "profile_lines": [
+              130
+            ]
+          },
+          {
+            "function": "pane.blit.blit",
+            "location": "(in telar) + 3160  [0x10461c910]",
+            "samples": 87,
+            "profile_lines": [
+              52,
+              131
+            ]
+          },
+          {
+            "function": "pane.blit.blit",
+            "location": "(in telar) + 820  [0x10461bfec]",
+            "samples": 24,
+            "profile_lines": [
+              54,
+              133
+            ]
+          },
+          {
+            "function": "pane.blit.blit",
+            "location": "(in telar) + 120  [0x10461bd30]",
+            "samples": 1,
+            "profile_lines": [
+              57
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5853,
+        "percentage_of_main_thread_samples": 12.711430035879037
+      },
+      "style_comparison": {
+        "inclusive_samples": 366,
+        "callsites": [
+          {
+            "function": "ui.Style.eql",
+            "location": "(in telar) + 48,292,...  [0x1045bbe08,0x1045bbefc,...]",
+            "samples": 201,
+            "profile_lines": [
+              88
+            ]
+          },
+          {
+            "function": "ui.Style.eql",
+            "location": "(in telar) + 292,48,...  [0x1045bbefc,0x1045bbe08,...]",
+            "samples": 165,
+            "profile_lines": [
+              155
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5853,
+        "percentage_of_main_thread_samples": 6.253203485392107
+      },
+      "foreground_group_probe": {
+        "inclusive_samples": 416,
+        "callsites": [
+          {
+            "function": "tcgetpgrp",
+            "location": "(in libsystem_c.dylib) + 60  [0x186c84254]",
+            "samples": 366,
+            "profile_lines": [
+              198
+            ]
+          },
+          {
+            "function": "tcgetpgrp",
+            "location": "(in libsystem_c.dylib) + 28  [0x186c84234]",
+            "samples": 48,
+            "profile_lines": [
+              201
+            ]
+          },
+          {
+            "function": "DYLD-STUB$$tcgetpgrp",
+            "location": "(in telar) + 0  [0x10476f068]",
+            "samples": 2,
+            "profile_lines": [
+              207
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5853,
+        "percentage_of_main_thread_samples": 7.107466256620537
+      },
+      "task_scheduling": {
+        "inclusive_samples": 346,
+        "callsites": [
+          {
+            "function": "Io.Threaded.groupConcurrent",
+            "location": "(in telar) + 892  [0x104462dc0]",
+            "samples": 306,
+            "profile_lines": [
+              92,
+              159,
+              180,
+              210,
+              251,
+              259,
+              269,
+              325,
+              337,
+              392
+            ]
+          },
+          {
+            "function": "Io.Threaded.groupConcurrent",
+            "location": "(in telar) + 832  [0x104462d84]",
+            "samples": 19,
+            "profile_lines": [
+              94,
+              163,
+              185,
+              212,
+              256,
+              265,
+              271,
+              327
+            ]
+          },
+          {
+            "function": "Io.Threaded.groupConcurrent",
+            "location": "(in telar) + 156  [0x104462ae0]",
+            "samples": 13,
+            "profile_lines": [
+              96,
+              161,
+              182,
+              214,
+              254,
+              261,
+              273
+            ]
+          },
+          {
+            "function": "Io.Threaded.groupConcurrent",
+            "location": "(in telar) + 0  [0x104462a44]",
+            "samples": 2,
+            "profile_lines": [
+              191,
+              217
+            ]
+          },
+          {
+            "function": "Io.Threaded.groupConcurrent",
+            "location": "(in telar) + 0,808  [0x104462a44,0x104462d6c]",
+            "samples": 2,
+            "profile_lines": [
+              253
+            ]
+          },
+          {
+            "function": "Io.Threaded.groupConcurrent",
+            "location": "(in telar) + 0,628  [0x104462a44,0x104462cb8]",
+            "samples": 2,
+            "profile_lines": [
+              329
+            ]
+          },
+          {
+            "function": "Io.Threaded.groupConcurrent",
+            "location": "(in telar) + 348  [0x104462ba0]",
+            "samples": 1,
+            "profile_lines": [
+              187
+            ]
+          },
+          {
+            "function": "Io.Threaded.groupConcurrent",
+            "location": "(in telar) + 208  [0x104462b14]",
+            "samples": 1,
+            "profile_lines": [
+              267
+            ]
+          }
+        ],
+        "denominator_main_thread_samples": 5853,
+        "percentage_of_main_thread_samples": 5.9114983769007345
+      }
+    }
+  },
+  "workers": {
+    "threads": [
+      {
+        "name": "Thread_80880931",
+        "samples": 5853
+      },
+      {
+        "name": "Thread_80880932",
+        "samples": 5853
+      },
+      {
+        "name": "Thread_80880933",
+        "samples": 5853
+      },
+      {
+        "name": "Thread_80880934",
+        "samples": 5853
+      },
+      {
+        "name": "Thread_80880935",
+        "samples": 5853
+      },
+      {
+        "name": "Thread_80880936",
+        "samples": 5853
+      },
+      {
+        "name": "Thread_80880937",
+        "samples": 5853
+      },
+      {
+        "name": "Thread_80880950",
+        "samples": 5853
+      },
+      {
+        "name": "Thread_80880953",
+        "samples": 5853
+      },
+      {
+        "name": "Thread_80880954",
+        "samples": 5853
+      },
+      {
+        "name": "Thread_80880955",
+        "samples": 5853
+      },
+      {
+        "name": "Thread_80881035",
+        "samples": 5853
+      },
+      {
+        "name": "Thread_80881063",
+        "samples": 5853
+      },
+      {
+        "name": "Thread_80881080",
+        "samples": 5652
+      }
+    ],
+    "total_thread_samples": 81741,
+    "metrics": {
+      "observation": {
+        "inclusive_samples": 2009,
+        "callsites": [
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 14836  [0x104618f74]",
+            "samples": 986,
+            "profile_lines": [
+              470,
+              701,
+              942,
+              1168,
+              1418,
+              1682,
+              1932,
+              2173,
+              2408
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 14868  [0x104618f94]",
+            "samples": 211,
+            "profile_lines": [
+              481,
+              703,
+              944,
+              1170,
+              1421,
+              1684,
+              1939,
+              2184,
+              2410
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 14812  [0x104618f5c]",
+            "samples": 159,
+            "profile_lines": [
+              476,
+              724,
+              976,
+              1179,
+              1428,
+              1692,
+              1935,
+              2198,
+              2422
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 164  [0x104615624]",
+            "samples": 125,
+            "profile_lines": [
+              472,
+              711,
+              950,
+              1189,
+              1432,
+              1703,
+              1955,
+              2176,
+              2427
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 7252  [0x1046171d4]",
+            "samples": 124,
+            "profile_lines": [
+              489,
+              719,
+              958,
+              1185,
+              1440,
+              1699,
+              1946,
+              2191,
+              2417
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 7420  [0x10461727c]",
+            "samples": 78,
+            "profile_lines": [
+              493,
+              735,
+              963,
+              1197,
+              1446,
+              1711,
+              1963,
+              2202,
+              2435
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 11372,11772,...  [0x1046181ec,0x10461837c,...]",
+            "samples": 73,
+            "profile_lines": [
+              1420,
+              1698,
+              1934
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 15196  [0x1046190dc]",
+            "samples": 49,
+            "profile_lines": [
+              506,
+              730,
+              980,
+              1210,
+              1463,
+              1724,
+              1973,
+              2219,
+              2447
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 1600  [0x104615bc0]",
+            "samples": 46,
+            "profile_lines": [
+              508,
+              732,
+              973,
+              1214,
+              1460,
+              1721,
+              1952,
+              2221,
+              2451
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 11556,11372,...  [0x1046182a4,0x1046181ec,...]",
+            "samples": 33,
+            "profile_lines": [
+              488,
+              2426
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 11772,11372,...  [0x10461837c,0x1046181ec,...]",
+            "samples": 30,
+            "profile_lines": [
+              1178
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 7152  [0x104617170]",
+            "samples": 26,
+            "profile_lines": [
+              511,
+              743,
+              982,
+              1217,
+              1467,
+              1730,
+              1977,
+              2216,
+              2454
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 11376,11556,...  [0x1046181f0,0x1046182a4,...]",
+            "samples": 18,
+            "profile_lines": [
+              2175
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 11556,11340,...  [0x1046182a4,0x1046181cc,...]",
+            "samples": 17,
+            "profile_lines": [
+              949
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 7628  [0x10461734c]",
+            "samples": 16,
+            "profile_lines": [
+              514,
+              746,
+              985,
+              1220,
+              1465,
+              1733,
+              1980,
+              2224,
+              2457
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 11372,11340,...  [0x1046181ec,0x1046181cc,...]",
+            "samples": 16,
+            "profile_lines": [
+              710
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 1648  [0x104615bf0]",
+            "samples": 1,
+            "profile_lines": [
+              1222
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericProjectionDispatcher.observePane",
+            "location": "(in telar) + 15264  [0x104619120]",
+            "samples": 1,
+            "profile_lines": [
+              1735
+            ]
+          }
+        ]
+      },
+      "observation_screen_signal": {
+        "inclusive_samples": 986,
+        "callsites": [
+          {
+            "function": "history.Sample.signal",
+            "location": "(in telar) + 204,416,...  [0x10461a14c,0x10461a220,...]",
+            "samples": 559,
+            "profile_lines": [
+              471,
+              702,
+              1419,
+              2174,
+              2409
+            ]
+          },
+          {
+            "function": "history.Sample.signal",
+            "location": "(in telar) + 224,204,...  [0x10461a160,0x10461a14c,...]",
+            "samples": 254,
+            "profile_lines": [
+              1169,
+              1683
+            ]
+          },
+          {
+            "function": "history.Sample.signal",
+            "location": "(in telar) + 204,224,...  [0x10461a14c,0x10461a160,...]",
+            "samples": 110,
+            "profile_lines": [
+              1933
+            ]
+          },
+          {
+            "function": "history.Sample.signal",
+            "location": "(in telar) + 416,224,...  [0x10461a220,0x10461a160,...]",
+            "samples": 63,
+            "profile_lines": [
+              943
+            ]
+          }
+        ]
+      },
+      "observation_sample_capture": {
+        "inclusive_samples": 158,
+        "callsites": [
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 384,344,...  [0x10461a7f4,0x10461a7cc,...]",
+            "samples": 38,
+            "profile_lines": [
+              725,
+              1180,
+              2423
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 424  [0x10461a81c]",
+            "samples": 32,
+            "profile_lines": [
+              478,
+              728,
+              978,
+              1181,
+              1430,
+              1694,
+              1937,
+              2200,
+              2424
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 344,384,...  [0x10461a7cc,0x10461a7f4,...]",
+            "samples": 18,
+            "profile_lines": [
+              477
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 316,384,...  [0x10461a7b0,0x10461a7f4,...]",
+            "samples": 18,
+            "profile_lines": [
+              1936
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 384,316,...  [0x10461a7f4,0x10461a7b0,...]",
+            "samples": 17,
+            "profile_lines": [
+              1693
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 384,436,...  [0x10461a7f4,0x10461a828,...]",
+            "samples": 15,
+            "profile_lines": [
+              1429
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 384,424,...  [0x10461a7f4,0x10461a81c,...]",
+            "samples": 12,
+            "profile_lines": [
+              2199
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 140  [0x10461a700]",
+            "samples": 4,
+            "profile_lines": [
+              726,
+              1183,
+              1696
+            ]
+          },
+          {
+            "function": "history.Sample.capture",
+            "location": "(in telar) + 384,452,...  [0x10461a7f4,0x10461a838,...]",
+            "samples": 4,
+            "profile_lines": [
+              977
+            ]
+          }
+        ]
+      },
+      "media_processing": {
+        "inclusive_samples": 838,
+        "callsites": [
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 9240  [0x1045cb634]",
+            "samples": 650,
+            "profile_lines": [
+              517,
+              749,
+              988,
+              1225,
+              1471,
+              1738,
+              1984,
+              2227,
+              2460
+            ]
+          },
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 988  [0x1045c95f8]",
+            "samples": 140,
+            "profile_lines": [
+              542,
+              775,
+              1004,
+              1251,
+              1496,
+              1762,
+              2009,
+              2250,
+              2484
+            ]
+          },
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 4084  [0x1045ca210]",
+            "samples": 40,
+            "profile_lines": [
+              544,
+              778,
+              1006,
+              1253,
+              1498,
+              1764,
+              2011,
+              2252,
+              2486
+            ]
+          },
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 10176,0,...  [0x1045cb9dc,0x1045c921c,...]",
+            "samples": 4,
+            "profile_lines": [
+              777
+            ]
+          },
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 268,620  [0x1045c9328,0x1045c9488]",
+            "samples": 2,
+            "profile_lines": [
+              1008
+            ]
+          },
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 10188  [0x1045cb9e8]",
+            "samples": 1,
+            "profile_lines": [
+              1255
+            ]
+          },
+          {
+            "function": "media.Processor.processMedia",
+            "location": "(in telar) + 0  [0x1045c921c]",
+            "samples": 1,
+            "profile_lines": [
+              2488
+            ]
+          }
+        ]
+      },
+      "media_ingest": {
+        "inclusive_samples": 642,
+        "callsites": [
+          {
+            "function": "media.Processor.ingestMediaOutput",
+            "location": "(in telar) + 180,156,...  [0x1045cc7c4,0x1045cc7ac,...]",
+            "samples": 334,
+            "profile_lines": [
+              750,
+              989,
+              1226,
+              1472,
+              1739,
+              1985,
+              2461
+            ]
+          },
+          {
+            "function": "media.Processor.ingestMediaOutput",
+            "location": "(in telar) + 3004  [0x1045cd2cc]",
+            "samples": 116,
+            "profile_lines": [
+              534,
+              751,
+              990,
+              1227,
+              1473,
+              1740,
+              1986,
+              2238,
+              2462
+            ]
+          },
+          {
+            "function": "media.Processor.ingestMediaOutput",
+            "location": "(in telar) + 3060  [0x1045cd304]",
+            "samples": 70,
+            "profile_lines": [
+              519,
+              756,
+              994,
+              1231,
+              1479,
+              1746,
+              1991,
+              2229,
+              2467
+            ]
+          },
+          {
+            "function": "media.Processor.ingestMediaOutput",
+            "location": "(in telar) + 156,180,...  [0x1045cc7ac,0x1045cc7c4,...]",
+            "samples": 52,
+            "profile_lines": [
+              518
+            ]
+          },
+          {
+            "function": "media.Processor.ingestMediaOutput",
+            "location": "(in telar) + 128,156,...  [0x1045cc790,0x1045cc7ac,...]",
+            "samples": 44,
+            "profile_lines": [
+              2228
+            ]
+          },
+          {
+            "function": "media.Processor.ingestMediaOutput",
+            "location": "(in telar) + 2808  [0x1045cd208]",
+            "samples": 18,
+            "profile_lines": [
+              539,
+              770,
+              1244,
+              1490,
+              1756,
+              2004,
+              2243,
+              2480
+            ]
+          },
+          {
+            "function": "media.Processor.ingestMediaOutput",
+            "location": "(in telar) + 3220  [0x1045cd3a4]",
+            "samples": 8,
+            "profile_lines": [
+              1247,
+              1494,
+              1759,
+              2007,
+              2246,
+              2478
+            ]
+          }
+        ]
+      },
+      "canonical_ingest": {
+        "inclusive_samples": 350,
+        "callsites": [
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.ingestPane",
+            "location": "(in telar) + 2668  [0x10462f574]",
+            "samples": 148,
+            "profile_lines": [
+              574,
+              789,
+              1016,
+              1284,
+              1513,
+              1779,
+              2018,
+              2265,
+              2517
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.ingestPane",
+            "location": "(in telar) + 2840  [0x10462f620]",
+            "samples": 132,
+            "profile_lines": [
+              561,
+              795,
+              1021,
+              1269,
+              1518,
+              1784,
+              2024,
+              2270,
+              2502
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.ingestPane",
+            "location": "(in telar) + 2576  [0x10462f518]",
+            "samples": 36,
+            "profile_lines": [
+              579,
+              1032,
+              1291,
+              1533,
+              1797,
+              2039,
+              2286,
+              2521
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.ingestPane",
+            "location": "(in telar) + 3048  [0x10462f6f0]",
+            "samples": 14,
+            "profile_lines": [
+              806,
+              1035,
+              1294,
+              1538,
+              1801,
+              2043,
+              2525
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.ingestPane",
+            "location": "(in telar) + 2716,2748,...  [0x10462f5a4,0x10462f5c4,...]",
+            "samples": 6,
+            "profile_lines": [
+              1537
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.ingestPane",
+            "location": "(in telar) + 2708,2716,...  [0x10462f59c,0x10462f5a4,...]",
+            "samples": 4,
+            "profile_lines": [
+              2289
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.ingestPane",
+            "location": "(in telar) + 2708,2748,...  [0x10462f59c,0x10462f5c4,...]",
+            "samples": 3,
+            "profile_lines": [
+              2042
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.ingestPane",
+            "location": "(in telar) + 2716,2728,...  [0x10462f5a4,0x10462f5b0,...]",
+            "samples": 3,
+            "profile_lines": [
+              2524
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.ingestPane",
+            "location": "(in telar) + 2748  [0x10462f5c4]",
+            "samples": 2,
+            "profile_lines": [
+              582,
+              1296
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.ingestPane",
+            "location": "(in telar) + 2804  [0x10462f5fc]",
+            "samples": 1,
+            "profile_lines": [
+              1037
+            ]
+          },
+          {
+            "function": "runtime.application.event_dispatcher.pane.GenericPipelineDispatcher.ingestPane",
+            "location": "(in telar) + 2708  [0x10462f59c]",
+            "samples": 1,
+            "profile_lines": [
+              1803
+            ]
+          }
+        ]
+      },
+      "queue_completion_put": {
+        "inclusive_samples": 328,
+        "callsites": [
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 96  [0x1044f2088]",
+            "samples": 158,
+            "profile_lines": [
+              610,
+              619,
+              624,
+              649,
+              652,
+              821,
+              826,
+              848,
+              849,
+              856,
+              864,
+              1052,
+              1061,
+              1071,
+              1077,
+              1087,
+              1107,
+              1118,
+              1310,
+              1332,
+              1344,
+              1359,
+              1547,
+              1557,
+              1565,
+              1595,
+              1608,
+              1613,
+              1620,
+              1622,
+              1817,
+              1855,
+              1867,
+              1872,
+              1886,
+              2067,
+              2074,
+              2089,
+              2107,
+              2111,
+              2113,
+              2121,
+              2124,
+              2295,
+              2337,
+              2342,
+              2355,
+              2531,
+              2540,
+              2565,
+              2575,
+              2583,
+              2593,
+              2601
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 332  [0x1044f2174]",
+            "samples": 56,
+            "profile_lines": [
+              614,
+              617,
+              631,
+              637,
+              647,
+              853,
+              869,
+              1066,
+              1085,
+              1111,
+              1315,
+              1342,
+              1355,
+              1552,
+              1570,
+              1593,
+              1606,
+              1627,
+              1824,
+              1830,
+              1859,
+              1865,
+              2072,
+              2096,
+              2105,
+              2300,
+              2346,
+              2352,
+              2538,
+              2572,
+              2587
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putLocked",
+            "location": "(in telar) + 468  [0x1044536dc]",
+            "samples": 39,
+            "profile_lines": [
+              665,
+              668,
+              679,
+              890,
+              896,
+              899,
+              905,
+              1139,
+              1147,
+              1379,
+              1392,
+              1395,
+              1398,
+              1650,
+              1655,
+              1658,
+              1661,
+              1902,
+              1910,
+              2140,
+              2143,
+              2149,
+              2381,
+              2387,
+              2621,
+              2626
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putLocked",
+            "location": "(in telar) + 228  [0x1044535ec]",
+            "samples": 38,
+            "profile_lines": [
+              663,
+              670,
+              676,
+              682,
+              888,
+              1137,
+              1145,
+              1150,
+              1381,
+              1384,
+              1390,
+              1648,
+              1653,
+              1904,
+              1907,
+              2146,
+              2378,
+              2384,
+              2619,
+              2624,
+              2629
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 284  [0x1044f2144]",
+            "samples": 25,
+            "profile_lines": [
+              628,
+              634,
+              861,
+              873,
+              1057,
+              1068,
+              1082,
+              1336,
+              1363,
+              1554,
+              1599,
+              1617,
+              1821,
+              1832,
+              1862,
+              1876,
+              2093,
+              2325,
+              2349,
+              2579
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 208  [0x1044f20f8]",
+            "samples": 5,
+            "profile_lines": [
+              1114,
+              1317,
+              1339,
+              1835,
+              2569
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 48  [0x1044f2058]",
+            "samples": 3,
+            "profile_lines": [
+              639,
+              2324
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 104  [0x1044f2090]",
+            "samples": 2,
+            "profile_lines": [
+              1357,
+              1366
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putUncancelable",
+            "location": "(in telar) + 80  [0x1044f2078]",
+            "samples": 1,
+            "profile_lines": [
+              1572
+            ]
+          },
+          {
+            "function": "Io.TypeErasedQueue.putLocked",
+            "location": "(in telar) + 636  [0x104453784]",
+            "samples": 1,
+            "profile_lines": [
+              2302
+            ]
+          }
+        ]
+      },
+      "socket_read_operation": {
+        "inclusive_samples": 4119,
+        "callsites": [
+          {
+            "function": "Io.Threaded.netReadPosix",
+            "location": "(in telar) + 184  [0x104464b4c]",
+            "samples": 4118,
+            "profile_lines": [
+              467,
+              697,
+              939,
+              1164,
+              1411,
+              1678,
+              1680,
+              1927,
+              2170,
+              2404
+            ]
+          },
+          {
+            "function": "Io.Threaded.netReadPosix",
+            "location": "(in telar) + 44  [0x104464ac0]",
+            "samples": 1,
+            "profile_lines": [
+              1929
+            ]
+          }
+        ]
+      },
+      "socket_write_operation": {
+        "inclusive_samples": 75,
+        "callsites": [
+          {
+            "function": "Io.Threaded.netWritePosix",
+            "location": "(in telar) + 500  [0x1044648dc]",
+            "samples": 74,
+            "profile_lines": [
+              590,
+              830,
+              1091,
+              1323,
+              1580,
+              1809,
+              2062,
+              2315,
+              2562
+            ]
+          },
+          {
+            "function": "Io.Threaded.netWritePosix",
+            "location": "(in telar) + 484  [0x1044648cc]",
+            "samples": 1,
+            "profile_lines": [
+              2064
+            ]
+          }
+        ]
+      },
+      "poll_syscall": {
+        "inclusive_samples": 2896,
+        "callsites": [
+          {
+            "function": "poll",
+            "location": "(in libsystem_kernel.dylib) + 8  [0x186d986f8]",
+            "samples": 2861,
+            "profile_lines": [
+              547,
+              549,
+              551,
+              553,
+              555,
+              557,
+              559,
+              781,
+              783,
+              785,
+              787,
+              811,
+              813,
+              1010,
+              1012,
+              1014,
+              1041,
+              1043,
+              1045,
+              1047,
+              1257,
+              1259,
+              1261,
+              1263,
+              1265,
+              1267,
+              1299,
+              1501,
+              1503,
+              1505,
+              1507,
+              1509,
+              1511,
+              1541,
+              1767,
+              1769,
+              1771,
+              1773,
+              1775,
+              1777,
+              1805,
+              2014,
+              2016,
+              2046,
+              2048,
+              2050,
+              2052,
+              2054,
+              2255,
+              2257,
+              2259,
+              2261,
+              2263,
+              2291,
+              2293,
+              2490,
+              2492,
+              2494,
+              2496,
+              2498,
+              2500,
+              2529
+            ]
+          },
+          {
+            "function": "poll",
+            "location": "(in libsystem_kernel.dylib) + 8,0  [0x186d986f8,0x186d986f0]",
+            "samples": 35,
+            "profile_lines": [
+              809
+            ]
+          }
+        ]
+      }
+    },
+    "io_routes": {
+      "socket_readv_samples": 4117,
+      "pty_readv_samples": 528,
+      "pty_poll_samples": 2896,
+      "pty_actor_symbol": "Io.Select(runtime.event.Event).concurrent__anon_424354.Context.start",
+      "interpretation": "Counts locate sampled stacks, not CPU time. Socket readv can be blocked waiting for the client. PTY poll is a timeout-zero readiness check; its samples can include syscall/kernel cost and must not be labelled exclusively blocked wait."
+    }
+  },
+  "separate_8mib_diagnostic": {
+    "baseline": {
+      "source": "/tmp/tgb-phase1-followup/diagnostic-baseline/runtime.sock.runtime-68522.log",
+      "sha256": "67211bc1196bb345b1cf6e7b3b8cddaf63092c77d81b49c13adca7513028eec0",
+      "before_uptime_ms": 1005,
+      "after_uptime_ms": 7043,
+      "counters": {
+        "pty_events": {
+          "before": 1,
+          "after": 16391,
+          "delta": 16390
+        },
+        "pty_bytes": {
+          "before": 48,
+          "after": 16777360,
+          "delta": 16777312
+        },
+        "frames": {
+          "before": 2,
+          "after": 15830,
+          "delta": 15828
+        },
+        "frame_bytes": {
+          "before": 7533,
+          "after": 1004110,
+          "delta": 996577
+        },
+        "frame_cells": {
+          "before": 3664,
+          "after": 10130,
+          "delta": 6466
+        },
+        "frame_spans": {
+          "before": 2,
+          "after": 132,
+          "delta": 130
+        },
+        "cursor_only_frames": {
+          "before": 0,
+          "after": 15822,
+          "delta": 15822
+        },
+        "noop_frames": {
+          "before": 0,
+          "after": 2,
+          "delta": 2
+        },
+        "diff_scanned_cells": {
+          "before": 3663,
+          "after": 57982071,
+          "delta": 57978408
+        },
+        "interactive_telar_allocs": {
+          "before": 260,
+          "after": 260,
+          "delta": 0
+        },
+        "interactive_vt_allocs": {
+          "before": 36,
+          "after": 69,
+          "delta": 33
+        },
+        "heap_allocs": {
+          "before": 512,
+          "after": 546,
+          "delta": 34
+        },
+        "history_dropped": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "history_queue_dropped": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "media_dropped_events": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "media_dropped_bytes": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "client_resyncs": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "outstanding_frames": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "dirty_panes": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "history_queue_depth": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "media_queue_events": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "media_queue_bytes": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        }
+      },
+      "result": {
+        "endpoint": "pty_write_to_dsr_response",
+        "bytes_per_case": 8388608,
+        "cases": [
+          {
+            "name": "ascii",
+            "bytes": 8388608,
+            "cols": 111,
+            "rows": 33,
+            "elapsed_ms": 977.3669170000001,
+            "mib_per_second": 8.185257614976138
+          },
+          {
+            "name": "ansi",
+            "bytes": 8388608,
+            "cols": 111,
+            "rows": 33,
+            "elapsed_ms": 954.532875,
+            "mib_per_second": 8.381062831387553
+          }
+        ],
+        "failed": false,
+        "binary": "/tmp/tgb-phase1-baseline-diagnostic/bin/telar",
+        "sampled": false,
+        "detached": false,
+        "host_bytes": 16564,
+        "outer_pty": [
+          111,
+          35
+        ]
+      },
+      "shutdown": {
+        "elapsed_ms": 70.7807909999989,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          68522
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    "final": {
+      "source": "/tmp/tgb-phase1-followup/diagnostic-candidate/runtime.sock.runtime-68729.log",
+      "sha256": "f6ef526d2949c2cc56d937a61651935195e046f7bfc97ebb60b2810f3efe6238",
+      "before_uptime_ms": 1001,
+      "after_uptime_ms": 5034,
+      "counters": {
+        "pty_events": {
+          "before": 1,
+          "after": 2856,
+          "delta": 2855
+        },
+        "pty_bytes": {
+          "before": 48,
+          "after": 16777360,
+          "delta": 16777312
+        },
+        "frames": {
+          "before": 2,
+          "after": 2750,
+          "delta": 2748
+        },
+        "frame_bytes": {
+          "before": 7533,
+          "after": 193141,
+          "delta": 185608
+        },
+        "frame_cells": {
+          "before": 3664,
+          "after": 10129,
+          "delta": 6465
+        },
+        "frame_spans": {
+          "before": 2,
+          "after": 131,
+          "delta": 129
+        },
+        "cursor_only_frames": {
+          "before": 0,
+          "after": 2742,
+          "delta": 2742
+        },
+        "noop_frames": {
+          "before": 0,
+          "after": 1,
+          "delta": 1
+        },
+        "diff_scanned_cells": {
+          "before": 3663,
+          "after": 10068033,
+          "delta": 10064370
+        },
+        "interactive_telar_allocs": {
+          "before": 260,
+          "after": 260,
+          "delta": 0
+        },
+        "interactive_vt_allocs": {
+          "before": 36,
+          "after": 69,
+          "delta": 33
+        },
+        "heap_allocs": {
+          "before": 513,
+          "after": 546,
+          "delta": 33
+        },
+        "history_dropped": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "history_queue_dropped": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "media_dropped_events": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "media_dropped_bytes": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "client_resyncs": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "outstanding_frames": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "dirty_panes": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "history_queue_depth": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "media_queue_events": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        },
+        "media_queue_bytes": {
+          "before": 0,
+          "after": 0,
+          "delta": 0
+        }
+      },
+      "result": {
+        "endpoint": "pty_write_to_dsr_response",
+        "bytes_per_case": 8388608,
+        "cases": [
+          {
+            "name": "ascii",
+            "bytes": 8388608,
+            "cols": 111,
+            "rows": 33,
+            "elapsed_ms": 142.26587500000002,
+            "mib_per_second": 56.23274028293854
+          },
+          {
+            "name": "ansi",
+            "bytes": 8388608,
+            "cols": 111,
+            "rows": 33,
+            "elapsed_ms": 139.659334,
+            "mib_per_second": 57.28224366299785
+          }
+        ],
+        "failed": false,
+        "binary": "/tmp/tgb-phase1-final-diagnostic/bin/telar",
+        "sampled": false,
+        "detached": false,
+        "host_bytes": 12715,
+        "outer_pty": [
+          111,
+          35
+        ]
+      },
+      "shutdown": {
+        "elapsed_ms": 68.00937499999992,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          68729
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    }
+  },
+  "diagnostic_semantics": [
+    "These diagnostic counters are separate 8 MiB ASCII + 8 MiB ANSI runs, with settling time after DSR; they are not counters from the 512 MiB profile.",
+    "cursor_only_frames counts any non-snapshot frame with zero cell spans (CellSync.zig:337), including scroll or other metadata; it does not mean that only the cursor changed.",
+    "frame_bytes is encoded cell-frame payload, not total Unix-socket traffic.",
+    "The repeated ASCII/ANSI lines make many scrolled screens identical. The observed ratio of empty-cell frames is workload-specific.",
+    "interactive_telar_allocs has zero delta, but VT/heap allocations increase and std.Io task allocator activity appears in the profile. This is not proof of zero process-wide allocation."
+  ],
+  "hypotheses": [
+    {
+      "priority": 1,
+      "name": "Coalesce cell publication before render/diff during sustained output",
+      "evidence": "CellSync.prepare occupies 1386/5853 main sampled stacks, including 797 Pane.render and 366 Style.eql. The final separate diagnostic emits 2750 total frames, 2742 without cell spans, while scanning 10068033 cells. Client acknowledgement precedes presentation, permitting another frame immediately.",
+      "source_references": [
+        "src/backend/runtime/attachment/CellSync.zig:241",
+        "src/backend/runtime/attachment/CellSync.zig:253",
+        "src/backend/runtime/attachment/CellSync.zig:337",
+        "src/client/application/panes/ApplyPaneFrameHandler.zig:23",
+        "src/backend/runtime/application/event_dispatcher/GenericClientDispatcher.zig:105",
+        "src/backend/runtime/entrypoints/events/pane/GenericIngestCoordinator.zig:75"
+      ],
+      "falsification": "Compare a bounded publication-coalescing candidate against the current binary, keeping VT ingestion and per-client ACK semantics intact. Expect fewer prepares/scanned cells/frames for equal PTY bytes, higher DSR throughput, immediate idle echo and guaranteed delivery after the producer stops. Include unique-line output because this fixture repeats identical lines. No throughput gain is quantified by this profile."
+    },
+    {
+      "priority": 2,
+      "name": "Avoid duplicate foreground-group probes per output event when semantics permit",
+      "evidence": "The foreground tcgetpgrp branch accounts for 416/5853 main sampled stacks. GenericPipeline.handle calls shellForeground on each PTY output completion; observation also samples the process group.",
+      "source_references": [
+        "src/backend/runtime/entrypoints/events/pane/GenericPipeline.zig:64",
+        "src/backend/pty/Session.zig:89",
+        "src/backend/pty/native.zig:86",
+        "src/backend/runtime/application/event_dispatcher/pane/GenericProjectionDispatcher.zig:115"
+      ],
+      "falsification": "Measure a separately isolated change that reduces redundant probes without weakening foreground attribution, progress expiration or input authority. Verify transitions between the shell and a foreground child. Smaller observed main share than cell preparation; savings cannot be extrapolated directly to throughput."
+    },
+    {
+      "priority": 3,
+      "name": "Measure handoff and readiness-check overhead",
+      "evidence": "Main futex wait is 3256/5853 samples and groupConcurrent 346/5853. Workers contain 2896 PTY poll samples. Existing read-to-ingest-to-next-read handoffs remain serial per pane; these stacks alone do not identify why the main thread waited.",
+      "source_references": [
+        "src/backend/pty/Session.zig:52",
+        "src/backend/pty/native.zig:35",
+        "src/backend/runtime/application/event_dispatcher/pane/GenericPipelineDispatcher.zig:114",
+        "src/backend/runtime/application/event_dispatcher/pane/GenericPipelineDispatcher.zig:191",
+        "src/backend/runtime/entrypoints/events/pane/GenericIngestCoordinator.zig:67"
+      ],
+      "falsification": "Trace queue submission, task start/completion and PTY readiness, separating running time from scheduler/PTY/client waiting. Do not remove cancellation, make all PTY operations nonblocking, or infer IPC causation from socket readv stacks."
+    }
+  ],
+  "limits": [
+    "One sampled run with profiling overhead; use the unprofiled replicated benchmark for throughput claims.",
+    "Wall-stack sampling includes sleeping threads, kernel calls and scheduler delay. Counts across threads cannot be interpreted as CPU percentages or added to main-thread percentages.",
+    "Cell preparation, render, blit and style-comparison rows overlap by ancestry.",
+    "poll(timeout=0) does not wait for future readiness by API contract, but its sampled presence can represent syscall/kernel work or scheduling; do not label all poll samples idle wait.",
+    "DSR measures write through terminal processing and response read, not GPU presentation, photon latency or completion of observation.",
+    "Neither a single profile nor the diagnostic counters establishes the causal speedup of the proposed changes or guarantees 80 MiB/s."
+  ]
+}

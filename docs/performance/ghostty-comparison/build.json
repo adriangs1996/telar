@@ -1,0 +1,18 @@
+{
+  "command": [
+    "zig",
+    "build",
+    "-Doptimize=ReleaseFast",
+    "--prefix",
+    "/tmp/tgb-release"
+  ],
+  "cwd": "/tmp/tgb-source",
+  "exit_code": 0,
+  "zig_version": "0.16.0",
+  "mode": "ReleaseFast",
+  "production_tracing": false,
+  "binary_sha256": "da86b2ef9f1cd67188bf9c778316fea71741470086eaa2556c5c9f5f6c7c332c",
+  "binary_mtime": "2026-09-18T16:53:18.749681+02:00",
+  "source_commit": "bf6e130c9ac81274c405847c6baf20dd3a242382",
+  "source_patch_sha256": "6ebf0c005ac37573b042ff68480b5102961c9106aa450adb08fabb117050aa10"
+}

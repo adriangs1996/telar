@@ -1,0 +1,31 @@
+{
+  "endpoint": "pty_write_to_dsr_response",
+  "bytes_per_case": 8388608,
+  "cases": [
+    {
+      "name": "ascii",
+      "bytes": 8388608,
+      "cols": 111,
+      "rows": 33,
+      "elapsed_ms": 2970.4189159999996,
+      "mib_per_second": 2.693222816791408
+    },
+    {
+      "name": "ansi",
+      "bytes": 8388608,
+      "cols": 111,
+      "rows": 33,
+      "elapsed_ms": 1868.108125,
+      "mib_per_second": 4.282407368684829
+    }
+  ],
+  "failed": false,
+  "binary": "/tmp/tgb-release/bin/telar",
+  "sampled": false,
+  "detached": false,
+  "host_bytes": 23416,
+  "outer_pty": [
+    111,
+    35
+  ]
+}

@@ -29,6 +29,15 @@ pub fn openPty(window: *const std.posix.winsize) !Pair {
     return pair;
 }
 
+/// Checks for already-readable output without waiting for another PTY byte.
+/// A failed or interrupted poll ends the current burst.
+/// Example: `if (outputReady(master)) { readAnotherChunk(); }`.
+pub fn outputReady(fd: std.c.fd_t) bool {
+    var descriptor: std.c.pollfd = .{ .fd = fd, .events = std.posix.POLL.IN, .revents = 0 };
+    return std.c.poll(@ptrCast(&descriptor), 1, 0) > 0 and
+        descriptor.revents & std.posix.POLL.IN != 0;
+}
+
 pub fn closeDescriptor(fd: *std.c.fd_t) void {
     if (fd.* < 0) {
         return;
@@ -165,4 +174,22 @@ pub fn terminate(pid: std.c.pid_t) void {
 
 test "close-on-exec setup reports invalid descriptors" {
     try std.testing.expectError(error.SetCloseOnExecFailed, setCloseOnExec(-1));
+}
+
+test "output readiness never waits and does not consume queued bytes" {
+    var pipe = try openCloseOnExecPipe();
+    defer closeDescriptor(&pipe[0]);
+    defer closeDescriptor(&pipe[1]);
+
+    try std.testing.expect(!outputReady(pipe[0]));
+    try std.testing.expectEqual(@as(isize, 1), std.c.write(pipe[1], "x", 1));
+    try std.testing.expect(outputReady(pipe[0]));
+    try std.testing.expect(outputReady(pipe[0]));
+
+    var byte: [1]u8 = undefined;
+    try std.testing.expectEqual(@as(isize, 1), std.c.read(pipe[0], &byte, 1));
+    try std.testing.expectEqualStrings("x", &byte);
+    try std.testing.expect(!outputReady(pipe[0]));
+
+    try std.testing.expect(!outputReady(-1));
 }

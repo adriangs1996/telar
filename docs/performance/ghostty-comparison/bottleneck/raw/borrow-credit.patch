@@ -1,0 +1,13 @@
+--- a/src/backend/runtime/attachment/AttachmentStore.zig
++++ b/src/backend/runtime/attachment/AttachmentStore.zig
+@@ -238,8 +238,8 @@
+ 
+ pub fn availableGraphicsCredit(store: *const AttachmentStore) usize {
+     var outstanding: usize = 0;
+-    for (store.items) |slot| {
+-        const attachment = slot orelse continue;
++    for (&store.items) |*slot| {
++        const attachment = if (slot.*) |*value| value else continue;
+         outstanding +|= max_image_bytes_per_pane_module -
+             @min(attachment.graphicsCredit(), max_image_bytes_per_pane_module);
+     }

@@ -1,0 +1,13 @@
+{
+  "baseline": {
+    "binary": "/tmp/tgb-release/bin/telar",
+    "sha256": "da86b2ef9f1cd67188bf9c778316fea71741470086eaa2556c5c9f5f6c7c332c"
+  },
+  "borrow_credit": {
+    "binary": "/tmp/tgb-credit-borrow/bin/telar",
+    "sha256": "c74164f0ef3124fadf36e6e87b89f3c1f312b1497c9f9a4df85c820c310ae1e7"
+  },
+  "patch_sha256": "9ee16f93f72e62b4bf81d2c000ecb5bcadfcf4be68a7f78dbaa7530db83a2b83",
+  "source": "Original frozen benchmark source plus borrow-credit.patch only for candidate",
+  "command": "zig build -Doptimize=ReleaseFast --prefix /tmp/tgb-credit-borrow"
+}

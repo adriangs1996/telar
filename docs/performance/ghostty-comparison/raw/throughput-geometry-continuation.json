@@ -1,0 +1,25 @@
+{
+  "after_run": "1-single-gui-retry1",
+  "failed_setup": "1-single-ghostty",
+  "failed_setup_receipts": [
+    {
+      "pid": 86522,
+      "ppid": 86520,
+      "role": "primary",
+      "background": "idle",
+      "cols": 111,
+      "rows": 35,
+      "phase": "failed",
+      "geometry_generation": 2,
+      "marker_inputs": 0,
+      "last_input": null,
+      "emitted_bytes": 0,
+      "error": "native probe did not confirm the viewport within 25 seconds"
+    }
+  ],
+  "failed_setup_log": "probe located 175,149 in 3770x2112\nprobe floated window 24613 for process 86518\nprobe requested foreground for primary window 24613\n",
+  "reason": "Refresh marker coordinates when the window manager changed the texture dimensions before resize setup.",
+  "fixture_sha256": "cc6e501b4e3dd4b5c8c1dd7b3c7cb338e9aab2f494ab5d3a32cc8db4d86c0b51",
+  "probe_source_sha256": "32ffe35aa14fb3bd0a895a1b7d3d72de952434e614e504c2776b5f00b0de8e86",
+  "resume_script_sha256": "3355c6313810e5f27ff7c69cfb90cce6d0aa970cfc079ea79af81f24150c468d"
+}

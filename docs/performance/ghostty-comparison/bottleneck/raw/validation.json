@@ -1,0 +1,26 @@
+{
+  "command": [
+    "zig",
+    "build",
+    "test-credit-diagnostic",
+    "-Doptimize=ReleaseFast",
+    "--summary",
+    "all"
+  ],
+  "cwd": "/tmp/tgb-diagnostic-source",
+  "exit_code": 0,
+  "build_steps_passed": 44,
+  "build_steps_total": 44,
+  "tests_passed": 103,
+  "tests_total": 103,
+  "test_filters": [
+    "credit",
+    "graphics",
+    "attachment"
+  ],
+  "test_step_patch": "diagnostic-test-step.patch",
+  "runtime_change_patch": "borrow-credit.patch",
+  "assembly_check": "Baseline dispatcher contains memcpy with size 0x296e00; candidate contains no such copy.",
+  "python_check": "python3 -m py_compile tools/terminal_runtime_bench.py passed",
+  "scope": "Existing behavior tests and throughput diagnostics; no GUI latency regression measurement for candidate."
+}

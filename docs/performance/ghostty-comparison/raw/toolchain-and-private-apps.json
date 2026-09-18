@@ -1,0 +1,31 @@
+{
+  "python_version": "3.9.20",
+  "clang_version": "Apple clang version 17.0.0 (clang-1700.4.4.1)\nTarget: arm64-apple-darwin25.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+  "private_applications": {
+    "tgb-v2-single": {
+      "executable_sha256": "8239d478c01fef51b5eff613590ab78c771309609de67505167a22fc755f5637"
+    },
+    "tgb-v2-layouts": {
+      "executable_sha256": "bde7bbc8eee8f842a040e00113a0329df10b7c533ebfdd2f5a397f5e8042b99e"
+    },
+    "tgb-v2-nosync": {
+      "executable_sha256": "8026e79bbbce656a4d98f96a75e210676ff1ded05f43997ff39221f5a79c96c4"
+    },
+    "tgb-v4-throughput": {
+      "executable_sha256": "89d217441cd764d4dca903530f18f46fd96621898635a541acb39f8a3a0cd2d8"
+    },
+    "tgb-v5-throughput-tui": {
+      "executable_sha256": "5f8b25c8d61c587a01f6c9a03cfd9d659910932bc28b6a79875ffb1e0846b560"
+    }
+  },
+  "temporary_application_cleanup": {
+    "removed": [
+      "/tmp/tgb-v2-single/GhosttyProbe.app",
+      "/tmp/tgb-v2-layouts/GhosttyProbe.app",
+      "/tmp/tgb-v2-nosync/GhosttyProbe.app",
+      "/tmp/tgb-v4-throughput/GhosttyProbe.app",
+      "/tmp/tgb-v5-throughput-tui/GhosttyProbe.app"
+    ],
+    "evidence": "Executable hashes verified before removing stopped private copies; raw samples and logs retained."
+  }
+}

@@ -1,0 +1,11 @@
+--- a/build.zig
++++ b/build.zig
+@@ -16,6 +16,8 @@
+     packaging.add(b, app, diagram_helper);
+     app.modules.gui = gui.add(b, app, diagram_helper);
+     @import("run_widget.zig").addBuild(b, app);
++    const credit_tests = b.addTest(.{ .root_module = app.modules.backend, .filters = &.{ "credit", "graphics", "attachment" } });
++    b.step("test-credit-diagnostic", "Run existing credit, graphics and attachment tests").dependOn(&b.addRunArtifact(credit_tests).step);
+     const parallel_tests = tests.add(b, app, bench);
+     parallel_tests.dependOn(cross.add(b));
+ }

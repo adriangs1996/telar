@@ -1,0 +1,569 @@
+{
+  "manifest": {
+    "binary": "/private/tmp/tgb-release/bin/telar",
+    "sha256": "da86b2ef9f1cd67188bf9c778316fea71741470086eaa2556c5c9f5f6c7c332c",
+    "ghostty_version": "Ghostty 1.3.1\n\nVersion\n  - version: 1.3.1\n  - channel: stable\nBuild Config\n  - Zig version   : 0.15.2\n  - build mode    : .ReleaseFast\n  - app runtime   : .none\n  - font engine   : .coretext\n  - renderer      : renderer.generic.Renderer(renderer.Metal)\n  - libxev        : kqueue\n",
+    "vsync": "true",
+    "warmup": 20,
+    "rounds": 6,
+    "input_method": "key",
+    "cases": [
+      "single"
+    ],
+    "panes": 4,
+    "viewport": [
+      1000,
+      700
+    ],
+    "command_line": [
+      "/tmp/tgb-harness-closure/gui_tui_latency.py",
+      "/tmp/tgb-release/bin/telar",
+      "/tmp/tgb-v2-throughput",
+      "--source",
+      "/tmp/tgb-source",
+      "--mode",
+      "all",
+      "--cases",
+      "single",
+      "--throughput",
+      "--samples",
+      "1",
+      "--rounds",
+      "6",
+      "--viewport",
+      "1000",
+      "700",
+      "--float-windows"
+    ],
+    "platform": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83\n",
+    "cpu": "Apple M3",
+    "memory_bytes": 17179869184,
+    "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=35651683)\t100%; charged; 0:00 remaining present: true\n",
+    "started_at": "2026-09-18T17:54:34+0200",
+    "source_commit": "bf6e130c9ac81274c405847c6baf20dd3a242382",
+    "source_patch_sha256": "6ebf0c005ac37573b042ff68480b5102961c9106aa450adb08fabb117050aa10",
+    "ghostty_sha256": "3460be6d0c80504ffafe0dbb06f60cb1e8fb680a564a97a1aa5b95b48b8e30ac",
+    "config_sha256": "cf472e102eea6e95831b7e1515ea71d8d310f7f155c9297c7eabed85e54c1b50",
+    "probe_sha256": {
+      "gui_tui_latency.py": "4e9fb597606db3f70da5736527827e335374890fa3eb5f9ed59050bcd2d42151",
+      "gui_tui_latency.m": "95816501cff253ff1d8c485a9fabda40c31f76a44956466578f8da7ec7dce2da",
+      "terminal_bench_fixture.py": "812b7d9b03eaba46f6009734004766d56bbf389e0a5eb37a87f0502f099ecf65"
+    }
+  },
+  "completed_runs": [
+    {
+      "native_view_pixels": [
+        [
+          1000,
+          700
+        ]
+      ],
+      "backing_scale": 1,
+      "window_id": 24461,
+      "window_key_end": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "setup_complete": true,
+      "scene_pixels": [
+        1000,
+        700
+      ],
+      "marker": [
+        175,
+        149
+      ],
+      "display_max_fps": 100,
+      "window_floated": true,
+      "requested_viewport": [
+        1000,
+        700
+      ],
+      "focus_failure_frontmost_application": {},
+      "mode": "ghostty",
+      "foreground_required": true,
+      "primary_view_pixels": [
+        1000,
+        700
+      ],
+      "panes_requested": 1,
+      "input_class": "_TtCO7Ghostty7Ghostty11SurfaceView",
+      "focus_failure_point": "",
+      "target_filter": "marker-qualified Metal command queue",
+      "gpu_work_ms": [
+        0.25162496604025364,
+        0.09533320553600788,
+        0.10904157534241676,
+        0.10879174806177616,
+        0.1090832520276308,
+        0.13041659258306026,
+        0.25104149244725704,
+        0.09758328087627888,
+        0.11000013910233974,
+        0.10875007137656212,
+        0.13958336785435677,
+        0.2490000333636999,
+        0.10975007899105549,
+        0.25108340196311474,
+        0.09449990466237068,
+        4.278749926015735,
+        0.0980000477284193,
+        0.10887510143220425,
+        0.25049992837011814,
+        0.09508337825536728,
+        0.2508750185370445
+      ],
+      "panes_created": 1,
+      "host_user_cpu_seconds": 0.570477,
+      "native_tab_count": 1,
+      "host_system_cpu_seconds": 0.237313,
+      "failed": 0,
+      "app_active_end": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "window_key_start": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "input_method": "key",
+      "host_max_rss_bytes": 159301632,
+      "layout": "single",
+      "app_active_start": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "gpu_ms": [
+        2.646791748702526,
+        6.0327500104904175,
+        5.736833438277245,
+        11.240750085562468,
+        3.7913331761956215,
+        9.631125023588538,
+        9.8557083401829,
+        8.668041555210948,
+        8.921666536480188,
+        10.87791658937931,
+        4.245250020176172,
+        2.0940417889505625,
+        2.5701250415295362,
+        1.921958290040493,
+        4.565166775137186,
+        13.008249923586845,
+        9.975791675969958,
+        6.262833485379815,
+        8.692333474755287,
+        7.549041649326682,
+        7.493833312764764
+      ],
+      "floated_window_ids": [
+        24461
+      ],
+      "error": "",
+      "window_content_pixels": [
+        1000,
+        700
+      ],
+      "viewport": [
+        1000,
+        700
+      ],
+      "pty_cells": [
+        111,
+        35
+      ],
+      "warmup": 20,
+      "summary": {
+        "n": 1,
+        "p50_ms": 7.493833312764764,
+        "p95_ms": 7.493833312764764,
+        "p99_ms": 7.493833312764764,
+        "max_ms": 7.493833312764764
+      },
+      "case": "single",
+      "fixtures": [
+        {
+          "pid": 78729,
+          "ppid": 78727,
+          "role": "primary",
+          "background": "idle",
+          "cols": 111,
+          "rows": 35,
+          "phase": "finished",
+          "geometry_generation": 2,
+          "marker_inputs": 21,
+          "last_input": "78",
+          "emitted_bytes": 0,
+          "error": null
+        }
+      ],
+      "throughput": {
+        "endpoint": "pty_write_to_dsr_response",
+        "bytes_per_case": 8388608,
+        "cases": [
+          {
+            "name": "ascii",
+            "bytes": 8388608,
+            "cols": 111,
+            "rows": 35,
+            "elapsed_ms": 95.30612500000001,
+            "mib_per_second": 83.94004057976336
+          },
+          {
+            "name": "ansi",
+            "bytes": 8388608,
+            "cols": 111,
+            "rows": 35,
+            "elapsed_ms": 89.306833,
+            "mib_per_second": 89.57881195943875
+          }
+        ],
+        "failed": false
+      },
+      "round": 0
+    },
+    {
+      "native_view_pixels": [
+        [
+          1000,
+          700
+        ]
+      ],
+      "backing_scale": 1,
+      "window_id": 24469,
+      "window_key_end": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "setup_complete": true,
+      "scene_pixels": [
+        1000,
+        700
+      ],
+      "marker": [
+        175,
+        191
+      ],
+      "display_max_fps": 100,
+      "window_floated": true,
+      "requested_viewport": [
+        1000,
+        700
+      ],
+      "focus_failure_frontmost_application": {},
+      "mode": "gui",
+      "foreground_required": true,
+      "primary_view_pixels": [
+        1000,
+        700
+      ],
+      "panes_requested": 1,
+      "input_class": "TelarView",
+      "focus_failure_point": "",
+      "target_filter": "marker-qualified Metal command queue",
+      "gpu_work_ms": [
+        2.653250005096197,
+        3.086624899879098,
+        0.050833215937018394,
+        0.04904181696474552,
+        0.050333328545093536,
+        0.08691661059856415,
+        0.08674990385770798,
+        0.043958425521850586,
+        0.041999854147434235,
+        0.04324992187321186,
+        0.04850002005696297,
+        0.08737505413591862,
+        0.041499966755509377,
+        0.04624994471669197,
+        0.04549999721348286,
+        0.04937499761581421,
+        0.05037500523030758,
+        0.05574990063905716,
+        0.04924996756017208,
+        0.08699996396899223,
+        0.0447083730250597
+      ],
+      "panes_created": 1,
+      "host_user_cpu_seconds": 0.597352,
+      "native_tab_count": 1,
+      "host_system_cpu_seconds": 0.686866,
+      "failed": 0,
+      "app_active_end": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "window_key_start": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "input_method": "key",
+      "host_max_rss_bytes": 311312384,
+      "layout": "single",
+      "app_active_start": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "gpu_ms": [
+        3.9856249932199717,
+        4.456124966964126,
+        1.1948749888688326,
+        1.1421667877584696,
+        1.4614167157560587,
+        1.7361666541546583,
+        1.2621665373444557,
+        1.2580417096614838,
+        1.2187084648758173,
+        1.2948333751410246,
+        1.119124935939908,
+        2.1976251155138016,
+        2.400958212092519,
+        2.524916548281908,
+        2.53820838406682,
+        2.4494582321494818,
+        2.4650415871292353,
+        2.4846249725669622,
+        1.1921250261366367,
+        1.2395000085234642,
+        1.2627083342522383
+      ],
+      "floated_window_ids": [
+        24469
+      ],
+      "error": "",
+      "window_content_pixels": [
+        1000,
+        700
+      ],
+      "viewport": [
+        1000,
+        700
+      ],
+      "pty_cells": [
+        111,
+        31
+      ],
+      "warmup": 20,
+      "summary": {
+        "n": 1,
+        "p50_ms": 1.2627083342522383,
+        "p95_ms": 1.2627083342522383,
+        "p99_ms": 1.2627083342522383,
+        "max_ms": 1.2627083342522383
+      },
+      "case": "single",
+      "fixtures": [
+        {
+          "pid": 78838,
+          "ppid": 78836,
+          "role": "primary",
+          "background": "idle",
+          "cols": 111,
+          "rows": 31,
+          "phase": "ready",
+          "geometry_generation": 5,
+          "marker_inputs": 0,
+          "last_input": null,
+          "emitted_bytes": 0,
+          "error": null
+        }
+      ],
+      "throughput": {
+        "endpoint": "pty_write_to_dsr_response",
+        "bytes_per_case": 8388608,
+        "cases": [
+          {
+            "name": "ascii",
+            "bytes": 8388608,
+            "cols": 111,
+            "rows": 31,
+            "elapsed_ms": 990.3221669999999,
+            "mib_per_second": 8.078179269918332
+          },
+          {
+            "name": "ansi",
+            "bytes": 8388608,
+            "cols": 111,
+            "rows": 31,
+            "elapsed_ms": 963.226792,
+            "mib_per_second": 8.305416820258047
+          }
+        ],
+        "failed": false
+      },
+      "round": 0
+    }
+  ],
+  "failed_setup": {
+    "mode": "tui",
+    "log": "probe located 175,169 in 3770x2112\nprobe floated window 24478 for process 78880\nprobe requested foreground for primary window 24478\n",
+    "fixtures": [
+      {
+        "pid": 78980,
+        "ppid": 78879,
+        "role": "primary",
+        "background": "idle",
+        "cols": 111,
+        "rows": 33,
+        "phase": "failed",
+        "geometry_generation": 2,
+        "marker_inputs": 0,
+        "last_input": null,
+        "emitted_bytes": 0,
+        "error": "native probe did not confirm the viewport within 25 seconds"
+      }
+    ]
+  }
+}

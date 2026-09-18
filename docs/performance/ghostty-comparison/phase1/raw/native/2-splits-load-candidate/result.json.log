@@ -1,0 +1,18 @@
+probe located 175,191 in 800x512
+probe floated window 24890 for process 60018
+probe requested foreground for primary window 24890
+probe located 175,191 in 1000x700
+probe requested splits 2/4
+probe located 175,191 in 1000x700
+probe requested splits 3/4
+probe located 184,211 in 1000x700
+probe requested splits 4/4
+probe located 184,211 in 1000x700
+probe located 184,211 in 1000x700
+probe located 184,211 in 1000x700
+probe located 184,211 in 1000x700
+probe requested foreground for primary window 24890
+probe located 184,211 in 1000x700
+probe located 184,211 in 1000x700
+probe setup complete: gui/splits, 4 panes
+probe finished 0: 

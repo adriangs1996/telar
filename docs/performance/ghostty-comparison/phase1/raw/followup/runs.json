@@ -1,0 +1,87 @@
+[
+  {
+    "name": "diagnostic-baseline",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/tmp/tgb-phase1-baseline-diagnostic/bin/telar",
+      "--output",
+      "/tmp/tgb-phase1-followup/diagnostic-baseline",
+      "--settle-seconds",
+      "3"
+    ],
+    "returncode": 0
+  },
+  {
+    "name": "diagnostic-candidate",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/tmp/tgb-phase1-final-diagnostic/bin/telar",
+      "--output",
+      "/tmp/tgb-phase1-followup/diagnostic-candidate",
+      "--settle-seconds",
+      "3"
+    ],
+    "returncode": 0
+  },
+  {
+    "name": "sustained-0",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/tmp/tgb-phase1-final-verified/bin/telar",
+      "--output",
+      "/tmp/tgb-phase1-followup/sustained-0",
+      "--mib",
+      "64"
+    ],
+    "returncode": 0
+  },
+  {
+    "name": "sustained-1",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/tmp/tgb-phase1-final-verified/bin/telar",
+      "--output",
+      "/tmp/tgb-phase1-followup/sustained-1",
+      "--mib",
+      "64"
+    ],
+    "returncode": 0
+  },
+  {
+    "name": "sustained-2",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/tmp/tgb-phase1-final-verified/bin/telar",
+      "--output",
+      "/tmp/tgb-phase1-followup/sustained-2",
+      "--mib",
+      "64"
+    ],
+    "returncode": 0
+  },
+  {
+    "name": "profile",
+    "command": [
+      "/Users/adriangonzalez/.local/share/mise/installs/python/3.9.20/bin/python3",
+      "/Users/adriangonzalez/sandbox/telar/tools/terminal_runtime_bench.py",
+      "--binary",
+      "/tmp/tgb-phase1-final-verified/bin/telar",
+      "--output",
+      "/tmp/tgb-phase1-followup/profile",
+      "--mib",
+      "512",
+      "--sample"
+    ],
+    "returncode": 0
+  }
+]

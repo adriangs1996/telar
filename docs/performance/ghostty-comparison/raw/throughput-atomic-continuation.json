@@ -1,0 +1,23 @@
+{
+  "after_run": "0-single-gui",
+  "failed_setup": "1-single-gui",
+  "failed_setup_receipts": [
+    {
+      "pid": 84134,
+      "ppid": 84131,
+      "role": "primary",
+      "background": "idle",
+      "cols": 88,
+      "rows": 22,
+      "phase": "failed",
+      "geometry_generation": 2,
+      "marker_inputs": 0,
+      "last_input": null,
+      "emitted_bytes": 0,
+      "error": "[Errno 2] No such file or directory: '/private/tmp/tgb-v4-throughput/1-single-gui/receipts/84134.json.84134.tmp' -> '/private/tmp/tgb-v4-throughput/1-single-gui/receipts/84134.json'"
+    }
+  ],
+  "reason": "Defer SIGWINCH during atomic JSON replacement; startup had failed before any throughput measurement.",
+  "fixture_sha256": "cc6e501b4e3dd4b5c8c1dd7b3c7cb338e9aab2f494ab5d3a32cc8db4d86c0b51",
+  "resume_script_sha256": "bfc9298f6e16ee290a56045ce484853a10f870ceaae72a8abd88141c72b35dc8"
+}

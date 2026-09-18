@@ -1,0 +1,47 @@
+[
+  {
+    "name": "final-tests",
+    "args": [
+      "test-optimization",
+      "-Doptimize=ReleaseFast"
+    ],
+    "returncode": 0
+  },
+  {
+    "name": "baseline-control",
+    "args": [
+      "test-checkpoint-diagnostic",
+      "-Doptimize=ReleaseFast"
+    ],
+    "returncode": 0
+  },
+  {
+    "name": "baseline-diagnostic-build",
+    "args": [
+      "-Doptimize=ReleaseFast",
+      "-Ddiagnostics=true",
+      "--prefix",
+      "/tmp/tgb-phase1-baseline-diagnostic"
+    ],
+    "returncode": 0
+  },
+  {
+    "name": "final-rebuild",
+    "args": [
+      "-Doptimize=ReleaseFast",
+      "--prefix",
+      "/tmp/tgb-phase1-final-verified"
+    ],
+    "returncode": 0
+  },
+  {
+    "name": "final-diagnostic-rebuild",
+    "args": [
+      "-Doptimize=ReleaseFast",
+      "-Ddiagnostics=true",
+      "--prefix",
+      "/tmp/tgb-phase1-final-diagnostic"
+    ],
+    "returncode": 0
+  }
+]

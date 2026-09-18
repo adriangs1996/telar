@@ -1,0 +1,54 @@
+{
+  "ghostty": {
+    "throughput": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 8388608,
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 8388608,
+          "cols": 111,
+          "rows": 35,
+          "elapsed_ms": 104.197041,
+          "mib_per_second": 76.77761213967679
+        },
+        {
+          "name": "ansi",
+          "bytes": 8388608,
+          "cols": 111,
+          "rows": 35,
+          "elapsed_ms": 89.33049999999999,
+          "mib_per_second": 89.5550791722872
+        }
+      ],
+      "failed": false
+    },
+    "probe_log": "probe located 175,149 in 3770x2112\nprobe floated window 23769 for process 37269\nprobe acknowledged viewport at fixture geometry generation 2\nprobe located 175,149 in 1000x700\nprobe setup complete: ghostty/single, 1 panes\nprobe finished 0: \n"
+  },
+  "gui": {
+    "throughput": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 8388608,
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 8388608,
+          "cols": 111,
+          "rows": 31,
+          "elapsed_ms": 989.635541,
+          "mib_per_second": 8.08378404833381
+        },
+        {
+          "name": "ansi",
+          "bytes": 8388608,
+          "cols": 111,
+          "rows": 31,
+          "elapsed_ms": 962.748833,
+          "mib_per_second": 8.309540064641137
+        }
+      ],
+      "failed": false
+    },
+    "probe_log": "probe located 175,191 in 800x512\nprobe floated window 23773 for process 37286\nprobe located 175,191 in 1000x700\nprobe acknowledged viewport at fixture geometry generation 5\nprobe located 175,191 in 1000x700\nprobe setup complete: gui/single, 1 panes\nprobe finished 0: \n"
+  }
+}

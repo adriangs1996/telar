@@ -37,13 +37,31 @@ pub fn processId(session: *const Session) std.c.pid_t {
     return session.pid;
 }
 
-/// Reads child output from the PTY master into the caller's buffer.
+/// Reads child output, then drains only bytes already available. A burst
+/// occupies at most the caller's buffer and eight reads, preserving a short
+/// response without waiting for future output. One actor owns the read side.
 ///
 /// ```zig
 /// const len = try session.read(io, &buffer);
 /// ```
 pub fn read(session: *const Session, io: std.Io, buffer: []u8) !usize {
-    return session.file().readStreaming(io, &.{buffer});
+    const input = session.file();
+    var len = try input.readStreaming(io, &.{buffer});
+    var reads: usize = 1;
+
+    while (len != 0 and len < buffer.len and reads < 8 and native.outputReady(session.master)) : (reads += 1) {
+        const extra = input.readStreaming(io, &.{buffer[len..]}) catch |err| switch (err) {
+            error.Canceled => return err,
+            else => break,
+        };
+        if (extra == 0) {
+            break;
+        }
+
+        len += extra;
+    }
+
+    return len;
 }
 
 /// Writes the complete input slice to the child through the PTY master.

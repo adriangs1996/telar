@@ -1,0 +1,20 @@
+diff --git a/build.zig b/build.zig
+index 25c8a25b..9c8508fe 100644
+--- a/build.zig
++++ b/build.zig
+@@ -16,6 +16,15 @@ pub fn build(b: *std.Build) void {
+     packaging.add(b, app, diagram_helper);
+     app.modules.gui = gui.add(b, app, diagram_helper);
+     @import("run_widget.zig").addBuild(b, app);
++    const credit_tests = b.addTest(.{ .root_module = app.modules.backend, .filters = &.{ "credit", "graphics", "attachment", "PTY", "session", "output readiness", "colour", "palette", "blit", "wide", "grapheme" } });
++    b.step("test-credit-diagnostic", "Run existing credit, graphics and attachment tests").dependOn(&b.addRunArtifact(credit_tests).step);
++    const backend_tests = b.addTest(.{ .root_module = app.modules.backend });
++    const pty_tests = app.modules.addSuiteTest(b, .{ .path = "src/backend/pty/pty_tests.zig", .libc = true, .vt = true });
++    const optimization_step = b.step("test-optimization", "Run backend and public PTY contracts");
++    optimization_step.dependOn(&b.addRunArtifact(backend_tests).step);
++    optimization_step.dependOn(&b.addRunArtifact(pty_tests).step);
++    const checkpoint_tests = b.addTest(.{ .root_module = app.modules.backend, .filters = &.{"agent panes survive consecutive", "default colours refresh"} });
++    b.step("test-checkpoint-diagnostic", "Run the isolated checkpoint regression").dependOn(&b.addRunArtifact(checkpoint_tests).step);
+     const parallel_tests = tests.add(b, app, bench);
+     parallel_tests.dependOn(cross.add(b));
+ }

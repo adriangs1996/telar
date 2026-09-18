@@ -1,0 +1,929 @@
+{
+  "endpoint": "native_input_to_verified_gpu_completion_callback",
+  "bootstrap": {
+    "samples": 10000,
+    "seed": 20260918,
+    "resampling_unit": "paired_round",
+    "confidence": 0.95,
+    "interval": "percentile",
+    "delta_estimator": "mean_of_paired_run_quantile_differences",
+    "ratio_estimator": "geometric_mean_of_paired_run_quantile_ratios"
+  },
+  "sources": [
+    {
+      "path": "/private/tmp/tgb-single-final/comparison.json",
+      "manifest": {
+        "binary": "/private/tmp/tgb-release/bin/telar",
+        "sha256": "da86b2ef9f1cd67188bf9c778316fea71741470086eaa2556c5c9f5f6c7c332c",
+        "ghostty_version": "Ghostty 1.3.1\n\nVersion\n  - version: 1.3.1\n  - channel: stable\nBuild Config\n  - Zig version   : 0.15.2\n  - build mode    : .ReleaseFast\n  - app runtime   : .none\n  - font engine   : .coretext\n  - renderer      : renderer.generic.Renderer(renderer.Metal)\n  - libxev        : kqueue\n",
+        "vsync": "true",
+        "warmup": 20,
+        "rounds": 6,
+        "input_method": "key",
+        "cases": [
+          "single"
+        ],
+        "panes": 4,
+        "viewport": [
+          1000,
+          700
+        ],
+        "command_line": [
+          "/tmp/tgb-harness-v2/gui_tui_latency.py",
+          "/tmp/tgb-release/bin/telar",
+          "/tmp/tgb-single-final",
+          "--source",
+          "/tmp/tgb-source",
+          "--mode",
+          "all",
+          "--cases",
+          "single",
+          "--samples",
+          "200",
+          "--rounds",
+          "6",
+          "--viewport",
+          "1000",
+          "700",
+          "--float-windows"
+        ],
+        "platform": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83\n",
+        "cpu": "Apple M3",
+        "memory_bytes": 17179869184,
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=35651683)\t100%; charged; 0:00 remaining present: true\n",
+        "started_at": "2026-09-18T17:00:10+0200",
+        "source_commit": "bf6e130c9ac81274c405847c6baf20dd3a242382",
+        "source_patch_sha256": "6ebf0c005ac37573b042ff68480b5102961c9106aa450adb08fabb117050aa10",
+        "ghostty_sha256": "3460be6d0c80504ffafe0dbb06f60cb1e8fb680a564a97a1aa5b95b48b8e30ac",
+        "config_sha256": "cf472e102eea6e95831b7e1515ea71d8d310f7f155c9297c7eabed85e54c1b50",
+        "probe_sha256": {
+          "gui_tui_latency.py": "3c168afda82bb195d1e30c614e2ccbd64ee76190e60eddfa9844c58ef724cd36",
+          "gui_tui_latency.m": "7e94c7da0e9c25721922ad6ee86baec10c683f45dd58b94ddb0200eb5b6366e5",
+          "terminal_bench_fixture.py": "ab1ffcc39a8baa209d3bb7bb40558541b94601c7d4c35af562d831265f4596ff"
+        }
+      }
+    }
+  ],
+  "cases": {
+    "single": {
+      "input_method": "key",
+      "modes": {
+        "ghostty": {
+          "pooled": {
+            "n": 1200,
+            "p50_ms": 6.9044167175889015,
+            "p95_ms": 18.137093586847183,
+            "p99_ms": 24.495773364324123,
+            "max_ms": 43.344249948859215
+          },
+          "n_rounds": 6,
+          "run_p50_range_ms": [
+            2.230395912192762,
+            12.601916561834514
+          ],
+          "geometry": [
+            {
+              "round": 0,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                35
+              ]
+            },
+            {
+              "round": 1,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                35
+              ]
+            },
+            {
+              "round": 2,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                35
+              ]
+            },
+            {
+              "round": 3,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                35
+              ]
+            },
+            {
+              "round": 4,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                35
+              ]
+            },
+            {
+              "round": 5,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                35
+              ]
+            }
+          ],
+          "runs": [
+            {
+              "round": 0,
+              "n": 200,
+              "p50_ms": 8.992291754111648,
+              "p95_ms": 15.16272722510621,
+              "p99_ms": 17.61048681335523,
+              "max_ms": 21.07650018297136
+            },
+            {
+              "round": 1,
+              "n": 200,
+              "p50_ms": 12.601916561834514,
+              "p95_ms": 24.50253335991874,
+              "p99_ms": 30.628779341932358,
+              "max_ms": 43.344249948859215
+            },
+            {
+              "round": 2,
+              "n": 200,
+              "p50_ms": 5.0524999387562275,
+              "p95_ms": 19.199452211614688,
+              "p99_ms": 24.23856531502676,
+              "max_ms": 30.60645842924714
+            },
+            {
+              "round": 3,
+              "n": 200,
+              "p50_ms": 2.230395912192762,
+              "p95_ms": 13.742078992072482,
+              "p99_ms": 19.69627747312187,
+              "max_ms": 22.936125053092837
+            },
+            {
+              "round": 4,
+              "n": 200,
+              "p50_ms": 6.53168756980449,
+              "p95_ms": 11.628137540537864,
+              "p99_ms": 12.981356491800396,
+              "max_ms": 13.556791702285409
+            },
+            {
+              "round": 5,
+              "n": 200,
+              "p50_ms": 6.691916612908244,
+              "p95_ms": 12.281093676574516,
+              "p99_ms": 16.70441016554832,
+              "max_ms": 17.83462497405708
+            }
+          ],
+          "throughput": {}
+        },
+        "gui": {
+          "pooled": {
+            "n": 1200,
+            "p50_ms": 2.4683541851118207,
+            "p95_ms": 18.775185383856297,
+            "p99_ms": 27.774757535662502,
+            "max_ms": 46.85354186221957
+          },
+          "n_rounds": 6,
+          "run_p50_range_ms": [
+            2.2757708793506026,
+            8.306291652843356
+          ],
+          "geometry": [
+            {
+              "round": 0,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                31
+              ]
+            },
+            {
+              "round": 1,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                31
+              ]
+            },
+            {
+              "round": 2,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                31
+              ]
+            },
+            {
+              "round": 3,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                31
+              ]
+            },
+            {
+              "round": 4,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                31
+              ]
+            },
+            {
+              "round": 5,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                31
+              ]
+            }
+          ],
+          "runs": [
+            {
+              "round": 0,
+              "n": 200,
+              "p50_ms": 6.637666607275605,
+              "p95_ms": 21.170625032391392,
+              "p99_ms": 30.05965502932666,
+              "max_ms": 33.14583329483867
+            },
+            {
+              "round": 1,
+              "n": 200,
+              "p50_ms": 7.074791705235839,
+              "p95_ms": 21.78211254067717,
+              "p99_ms": 31.825800638180226,
+              "max_ms": 34.51216663233936
+            },
+            {
+              "round": 2,
+              "n": 200,
+              "p50_ms": 8.306291652843356,
+              "p95_ms": 20.739120908547186,
+              "p99_ms": 23.819586716126626,
+              "max_ms": 46.85354186221957
+            },
+            {
+              "round": 3,
+              "n": 200,
+              "p50_ms": 2.3436250630766153,
+              "p95_ms": 2.649956208188086,
+              "p99_ms": 21.40564009547233,
+              "max_ms": 24.759125197306275
+            },
+            {
+              "round": 4,
+              "n": 200,
+              "p50_ms": 2.2757708793506026,
+              "p95_ms": 2.718033432029187,
+              "p99_ms": 16.76253176294266,
+              "max_ms": 31.576125184074044
+            },
+            {
+              "round": 5,
+              "n": 200,
+              "p50_ms": 2.3536666994914412,
+              "p95_ms": 2.6840561302378756,
+              "p99_ms": 8.454260155558536,
+              "max_ms": 31.04366664774716
+            }
+          ],
+          "throughput": {}
+        },
+        "tui": {
+          "pooled": {
+            "n": 1200,
+            "p50_ms": 10.319458320736885,
+            "p95_ms": 23.97404167568311,
+            "p99_ms": 33.92802512506022,
+            "max_ms": 43.82429155521095
+          },
+          "n_rounds": 6,
+          "run_p50_range_ms": [
+            2.3279791930690408,
+            14.72756254952401
+          ],
+          "geometry": [
+            {
+              "round": 0,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                33
+              ]
+            },
+            {
+              "round": 1,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                33
+              ]
+            },
+            {
+              "round": 2,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                33
+              ]
+            },
+            {
+              "round": 3,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                33
+              ]
+            },
+            {
+              "round": 4,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                33
+              ]
+            },
+            {
+              "round": 5,
+              "viewport": [
+                1000,
+                700
+              ],
+              "requested_viewport": [
+                1000,
+                700
+              ],
+              "window_content_pixels": [
+                1000,
+                700
+              ],
+              "primary_view_pixels": [
+                1000,
+                700
+              ],
+              "native_view_pixels": [
+                [
+                  1000,
+                  700
+                ]
+              ],
+              "pty_cells": [
+                111,
+                33
+              ]
+            }
+          ],
+          "runs": [
+            {
+              "round": 0,
+              "n": 200,
+              "p50_ms": 13.555250014178455,
+              "p95_ms": 26.430381275713422,
+              "p99_ms": 36.8366115889512,
+              "max_ms": 37.42408333346248
+            },
+            {
+              "round": 1,
+              "n": 200,
+              "p50_ms": 14.593229163438082,
+              "p95_ms": 28.734035533852857,
+              "p99_ms": 36.72206291463226,
+              "max_ms": 43.82429155521095
+            },
+            {
+              "round": 2,
+              "n": 200,
+              "p50_ms": 14.72756254952401,
+              "p95_ms": 28.040099912323058,
+              "p99_ms": 34.81893952470271,
+              "max_ms": 39.84050010330975
+            },
+            {
+              "round": 3,
+              "n": 200,
+              "p50_ms": 2.3279791930690408,
+              "p95_ms": 13.607941544614732,
+              "p99_ms": 21.357470182701928,
+              "max_ms": 29.070833465084434
+            },
+            {
+              "round": 4,
+              "n": 200,
+              "p50_ms": 8.556708344258368,
+              "p95_ms": 15.503768925555045,
+              "p99_ms": 18.01057922653854,
+              "max_ms": 18.093124963343143
+            },
+            {
+              "round": 5,
+              "n": 200,
+              "p50_ms": 7.996729109436274,
+              "p95_ms": 14.59997708443552,
+              "p99_ms": 17.980088265612718,
+              "max_ms": 19.093583337962627
+            }
+          ],
+          "throughput": {}
+        }
+      },
+      "paired": {
+        "gui": {
+          "rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "n_rounds": 6,
+          "unpaired_reference_rounds": [],
+          "unpaired_candidate_rounds": [],
+          "quantiles": {
+            "p50": {
+              "paired_deltas_ms": [
+                -2.3546251468360424,
+                -5.527124856598675,
+                3.2537917140871286,
+                0.11322915088385344,
+                -4.255916690453887,
+                -4.338249913416803
+              ],
+              "mean_delta_ms": -2.1848159570557377,
+              "median_delta_ms": -3.3052709186449647,
+              "delta_range_ms": [
+                -5.527124856598675,
+                3.2537917140871286
+              ],
+              "geometric_mean_ratio": 0.6665833352305055,
+              "mean_delta_ci95_ms": [
+                -4.390215229553481,
+                0.4181701612348358
+              ],
+              "geometric_mean_ratio_ci95": [
+                0.42888040969567526,
+                1.061323217172705
+              ]
+            },
+            "p95": {
+              "paired_deltas_ms": [
+                6.0078978072851825,
+                -2.7204208192415713,
+                1.5396686969324982,
+                -11.092122783884395,
+                -8.910104108508676,
+                -9.59703754633664
+              ],
+              "mean_delta_ms": -4.128686458958934,
+              "median_delta_ms": -5.815262463875124,
+              "delta_range_ms": [
+                -11.092122783884395,
+                6.0078978072851825
+              ],
+              "geometric_mean_ratio": 0.486189287353196,
+              "mean_delta_ci95_ms": [
+                -8.949296504336713,
+                1.2076506255349724
+              ],
+              "geometric_mean_ratio_ci95": [
+                0.26525047748745223,
+                0.9211578066892788
+              ]
+            }
+          }
+        },
+        "tui": {
+          "rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "n_rounds": 6,
+          "unpaired_reference_rounds": [],
+          "unpaired_candidate_rounds": [],
+          "quantiles": {
+            "p50": {
+              "paired_deltas_ms": [
+                4.562958260066807,
+                1.9913126016035676,
+                9.675062610767782,
+                0.09758328087627888,
+                2.0250207744538784,
+                1.3048124965280294
+              ],
+              "mean_delta_ms": 3.2761250040493906,
+              "median_delta_ms": 2.008166688028723,
+              "delta_range_ms": [
+                0.09758328087627888,
+                9.675062610767782
+              ],
+              "geometric_mean_ratio": 1.4233208286347738,
+              "mean_delta_ci95_ms": [
+                1.142472183952729,
+                6.147378531750292
+              ],
+              "geometric_mean_ratio_ci95": [
+                1.1478307201570446,
+                1.9261342788107796
+              ]
+            },
+            "p95": {
+              "paired_deltas_ms": [
+                11.267654050607213,
+                4.231502173934118,
+                8.84064770070837,
+                -0.13413744745774991,
+                3.875631385017181,
+                2.318883407861005
+              ],
+              "mean_delta_ms": 5.066696878445023,
+              "median_delta_ms": 4.053566779475649,
+              "delta_range_ms": [
+                -0.13413744745774991,
+                11.267654050607213
+              ],
+              "geometric_mean_ratio": 1.2935923897197528,
+              "mean_delta_ci95_ms": [
+                2.079437579959635,
+                8.198999239054189
+              ],
+              "geometric_mean_ratio_ci95": [
+                1.1228545255681657,
+                1.4954892368112296
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

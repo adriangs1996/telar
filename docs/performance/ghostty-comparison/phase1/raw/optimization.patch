@@ -1,0 +1,351 @@
+diff --git a/src/backend/pane/blit.zig b/src/backend/pane/blit.zig
+index 959f2749..3ed89d60 100644
+--- a/src/backend/pane/blit.zig
++++ b/src/backend/pane/blit.zig
+@@ -21,13 +21,12 @@ const BlitPane = @import("BlitPane.zig");
+ // lets the drawing layer be lifted out later without dragging an emulator
+ // behind it.
+ //
+-// The expensive half of the work is not here. `vt.RenderState` already walks
+-// the page list, resolves styles into runs, duplicates grapheme data out of
+-// pages that may be freed, tracks which rows changed, and retains its buffers
+-// between frames so a steady state allocates nothing. It also splits into
+-// `beginUpdate` (needs the terminal) and `endUpdate` (does not), so the actor
+-// owning the pty can be released before the copying starts. All this file does
+-// is turn that into cells.
++// `vt.RenderState` walks the page list, resolves styles into runs, duplicates
++// grapheme data out of pages that may be freed, and tracks which rows changed.
++// It retains buffers between frames so a steady state allocates nothing. Its
++// `beginUpdate` needs the terminal and `endUpdate` does not, so the actor owning
++// the pty can be released before the copying starts. This file turns the
++// result into cells.
+ //
+ // What it must get right, and what a naive copy gets wrong:
+ //
+@@ -54,6 +53,7 @@ pub fn blit(operation: Operation) Stats {
+     const state = operation.state;
+     const opts = operation.options;
+     const color_source: ColorSource = .{ .terminal = terminal, .colors = state.colors };
++    const default_style = defaultStyle(&color_source);
+ 
+     var stats: Stats = .{};
+     if (opts.damaged_rows) |damaged| {
+@@ -83,7 +83,7 @@ pub fn blit(operation: Operation) Stats {
+             continue;
+         }
+         const target: RowTarget = .{ .buffer = b, .area = area, .y = y };
+-        blitRow(.{ .target = target, .cells = row_cells[y].slice(), .colors = color_source });
++        blitRow(&.{ .target = target, .cells = row_cells[y].slice(), .colors = color_source }, default_style);
+         if (opts.selection) |range| {
+             highlightRow(target, range);
+         }
+@@ -98,7 +98,7 @@ pub fn blit(operation: Operation) Stats {
+     // during a resize, and leaving the previous tenant's pixels there reads as
+     // a rendering bug.
+     while (y < area.h) : (y += 1) {
+-        b.fill(area.row(y), .{ .glyph = " ", .style = .{ .bg = defaultBackground(color_source) } });
++        b.fill(area.row(y), .{ .glyph = " ", .style = .{ .bg = default_style.bg } });
+         if (opts.damaged_rows) |damaged| {
+             damaged[area.y + y] = true;
+         }
+@@ -167,12 +167,12 @@ pub fn selectionText(gpa: std.mem.Allocator, terminal: *vt.Terminal, range: Rang
+     return s.selectionString(gpa, .{ .sel = selection, .trim = true });
+ }
+ 
+-fn blitRow(projection: RowProjection) void {
++fn blitRow(projection: *const RowProjection, default_style: StyleType) void {
+     const b = projection.target.buffer;
+     const area = projection.target.area;
+     const y = projection.target.y;
+     const cells = projection.cells;
+-    const colors = projection.colors;
++    const colors = &projection.colors;
+ 
+     const raws = cells.items(.raw);
+     const styles = cells.items(.style);
+@@ -186,7 +186,7 @@ fn blitRow(projection: RowProjection) void {
+         // Style id zero is the default style and the emulator does not fill
+         // `style` for it, so reading it unconditionally is reading undefined
+         // memory.
+-        const style = translate(if (raw.style_id == 0) .{} else styles[x], colors);
++        const style = if (raw.style_id == 0) default_style else translate(styles[x], colors, default_style);
+ 
+         switch (raw.wide) {
+             // The emulator's own marker for the column a wide glyph continues
+@@ -235,7 +235,7 @@ fn blitRow(projection: RowProjection) void {
+     var pad = width;
+     while (pad < area.w) : (pad += 1) {
+         b.setCell(.{ .x = area.x + pad, .y = area.y + y }, .{ .text = " ", .width = 1, .style = .{
+-            .bg = defaultBackground(colors),
++            .bg = default_style.bg,
+         } });
+     }
+ }
+@@ -269,15 +269,15 @@ fn encode(out: *[CellType.max_bytes]u8, base: u21, extra: []const u21) []const u
+ /// The attribute word is reinterpreted rather than copied field by field;
+ /// `ui.Style.Flags` is declared to match it and a test in `ui.zig` fails if a
+ /// libghostty-vt update moves a bit.
+-fn translate(style: vt.Style, colors: ColorSource) StyleType {
++fn translate(style: vt.Style, colors: *const ColorSource, default_style: StyleType) StyleType {
+     return .{
+-        .fg = resolve(style.fg_color, colors, .foreground),
+-        .bg = resolve(style.bg_color, colors, .background),
++        .fg = resolve(style.fg_color, colors, default_style.fg),
++        .bg = resolve(style.bg_color, colors, default_style.bg),
+         // Underline colour has no default of its own: unset means "use the
+         // foreground", which the terminal already does when SGR 58 is absent.
+         .underline_color = switch (style.underline_color) {
+             .none => .default,
+-            else => resolve(style.underline_color, colors, .foreground),
++            else => resolve(style.underline_color, colors, default_style.fg),
+         },
+         .flags = @bitCast(@as(u16, @bitCast(style.flags))),
+     };
+@@ -288,36 +288,31 @@ fn translate(style: vt.Style, colors: ColorSource) StyleType {
+ /// Passing an index through instead would let the outer terminal answer with
+ /// its own palette, so an agent that recoloured its terminal would render in
+ /// whatever the user's theme happens to map that slot to.
+-const DefaultColor = enum { foreground, background };
+-
+-fn resolve(c: vt.Style.Color, colors: ColorSource, default_color: DefaultColor) ColorType {
++fn resolve(c: vt.Style.Color, colors: *const ColorSource, default_color: ColorType) ColorType {
+     return switch (c) {
+-        .none => switch (default_color) {
+-            .foreground => defaultForeground(colors),
+-            .background => defaultBackground(colors),
+-        },
++        .none => default_color,
+         .palette => |i| paletteColor(colors, i),
+         .rgb => |v| rgb(v),
+     };
+ }
+ 
+-fn defaultForeground(source: ColorSource) ColorType {
+-    if (source.terminal.modes.get(.reverse_colors)) {
+-        return rgb(source.colors.foreground);
+-    }
+-
+-    return if (source.terminal.colors.foreground.override) |color| rgb(color) else .default;
+-}
+-
+-fn defaultBackground(source: ColorSource) ColorType {
++// Defaults and reverse mode are constant during a blit. Resolve them once so
++// every default cell, explicit style and padding cell shares the same frame.
++fn defaultStyle(source: *const ColorSource) StyleType {
+     if (source.terminal.modes.get(.reverse_colors)) {
+-        return rgb(source.colors.background);
++        return .{
++            .fg = rgb(source.colors.foreground),
++            .bg = rgb(source.colors.background),
++        };
+     }
+ 
+-    return if (source.terminal.colors.background.override) |color| rgb(color) else .default;
++    return .{
++        .fg = if (source.terminal.colors.foreground.override) |color| rgb(color) else .default,
++        .bg = if (source.terminal.colors.background.override) |color| rgb(color) else .default,
++    };
+ }
+ 
+-fn paletteColor(source: ColorSource, index: u8) ColorType {
++fn paletteColor(source: *const ColorSource, index: u8) ColorType {
+     if (source.terminal.colors.palette.mask.isSet(index)) {
+         return rgb(source.colors.palette[index]);
+     }
+@@ -510,6 +505,62 @@ test "OSC default colour overrides stay inside the pane" {
+     try std.testing.expect(buf.at(0, 0).?.style.bg == .default);
+ }
+ 
++test "default colours refresh across reverse mode and OSC changes including padding" {
++    const gpa = std.testing.allocator;
++    var pane = try BlitPane.init(gpa, 4, 2);
++    defer pane.deinit();
++    var buf = try BufferType.init(gpa, 6, 3);
++    defer buf.deinit();
++    pane.term.colors.foreground.default = .{ .r = 240, .g = 230, .b = 220 };
++    pane.term.colors.background.default = .{ .r = 10, .g = 20, .b = 30 };
++
++    try pane.write("a\x1b[7mb\x1b[0;31;4;58;5;2mc\x1b[?5h");
++    _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
++
++    const reversed_foreground: ColorType = .{ .rgb = .{ 10, 20, 30 } };
++    const reversed_background: ColorType = .{ .rgb = .{ 240, 230, 220 } };
++    try std.testing.expectEqual(reversed_foreground, buf.at(0, 0).?.style.fg);
++    try std.testing.expectEqual(reversed_background, buf.at(0, 0).?.style.bg);
++    try std.testing.expectEqual(reversed_foreground, buf.at(1, 0).?.style.fg);
++    try std.testing.expect(buf.at(1, 0).?.style.flags.inverse);
++    try std.testing.expectEqual(ColorType{ .indexed = 1 }, buf.at(2, 0).?.style.fg);
++    try std.testing.expectEqual(ColorType{ .indexed = 2 }, buf.at(2, 0).?.style.underline_color);
++    try std.testing.expectEqual(reversed_background, buf.at(2, 0).?.style.bg);
++    try std.testing.expectEqual(reversed_background, buf.at(5, 0).?.style.bg);
++    try std.testing.expectEqual(reversed_background, buf.at(0, 2).?.style.bg);
++
++    try pane.write("\x1b]10;rgb:12/34/56\x07\x1b]11;rgb:65/43/21\x07");
++    // The bare VT helper has no Pane.semantic_colors_dirty tracking. Its rows
++    // stay clean after OSC alone; Pane.render supplies force for this case.
++    _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{ .force = true } });
++
++    const foreground_override: ColorType = .{ .rgb = .{ 0x12, 0x34, 0x56 } };
++    const background_override: ColorType = .{ .rgb = .{ 0x65, 0x43, 0x21 } };
++    try std.testing.expectEqual(background_override, buf.at(0, 0).?.style.fg);
++    try std.testing.expectEqual(foreground_override, buf.at(0, 0).?.style.bg);
++    try std.testing.expectEqual(foreground_override, buf.at(2, 0).?.style.bg);
++    try std.testing.expectEqual(foreground_override, buf.at(5, 0).?.style.bg);
++    try std.testing.expectEqual(foreground_override, buf.at(0, 2).?.style.bg);
++
++    try pane.write("\x1b[?5l");
++    _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{ .force = true } });
++    try std.testing.expectEqual(foreground_override, buf.at(0, 0).?.style.fg);
++    try std.testing.expectEqual(background_override, buf.at(0, 0).?.style.bg);
++    try std.testing.expect(buf.at(1, 0).?.style.flags.inverse);
++
++    try pane.write("\x1b]110\x07\x1b]111\x07");
++    _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{ .force = true } });
++    try std.testing.expect(buf.at(0, 0).?.style.fg == .default);
++    try std.testing.expect(buf.at(0, 0).?.style.bg == .default);
++    try std.testing.expect(buf.at(1, 0).?.style.fg == .default);
++    try std.testing.expect(buf.at(1, 0).?.style.flags.inverse);
++    try std.testing.expectEqual(ColorType{ .indexed = 1 }, buf.at(2, 0).?.style.fg);
++    try std.testing.expectEqual(ColorType{ .indexed = 2 }, buf.at(2, 0).?.style.underline_color);
++    try std.testing.expect(buf.at(2, 0).?.style.bg == .default);
++    try std.testing.expect(buf.at(5, 0).?.style.bg == .default);
++    try std.testing.expect(buf.at(0, 2).?.style.bg == .default);
++}
++
+ test "palette colours are resolved with the pane's own palette" {
+     const gpa = std.testing.allocator;
+     var pane = try BlitPane.init(gpa, 10, 2);
+diff --git a/src/backend/pty/Session.zig b/src/backend/pty/Session.zig
+index a7dd37fd..6a0fbafd 100644
+--- a/src/backend/pty/Session.zig
++++ b/src/backend/pty/Session.zig
+@@ -37,13 +37,31 @@ pub fn processId(session: *const Session) std.c.pid_t {
+     return session.pid;
+ }
+ 
+-/// Reads child output from the PTY master into the caller's buffer.
++/// Reads child output, then drains only bytes already available. A burst
++/// occupies at most the caller's buffer and eight reads, preserving a short
++/// response without waiting for future output. One actor owns the read side.
+ ///
+ /// ```zig
+ /// const len = try session.read(io, &buffer);
+ /// ```
+ pub fn read(session: *const Session, io: std.Io, buffer: []u8) !usize {
+-    return session.file().readStreaming(io, &.{buffer});
++    const input = session.file();
++    var len = try input.readStreaming(io, &.{buffer});
++    var reads: usize = 1;
++
++    while (len != 0 and len < buffer.len and reads < 8 and native.outputReady(session.master)) : (reads += 1) {
++        const extra = input.readStreaming(io, &.{buffer[len..]}) catch |err| switch (err) {
++            error.Canceled => return err,
++            else => break,
++        };
++        if (extra == 0) {
++            break;
++        }
++
++        len += extra;
++    }
++
++    return len;
+ }
+ 
+ /// Writes the complete input slice to the child through the PTY master.
+diff --git a/src/backend/pty/native.zig b/src/backend/pty/native.zig
+index 78d83f39..08bf2a29 100644
+--- a/src/backend/pty/native.zig
++++ b/src/backend/pty/native.zig
+@@ -29,6 +29,15 @@ pub fn openPty(window: *const std.posix.winsize) !Pair {
+     return pair;
+ }
+ 
++/// Checks for already-readable output without waiting for another PTY byte.
++/// A failed or interrupted poll ends the current burst.
++/// Example: `if (outputReady(master)) { readAnotherChunk(); }`.
++pub fn outputReady(fd: std.c.fd_t) bool {
++    var descriptor: std.c.pollfd = .{ .fd = fd, .events = std.posix.POLL.IN, .revents = 0 };
++    return std.c.poll(@ptrCast(&descriptor), 1, 0) > 0 and
++        descriptor.revents & std.posix.POLL.IN != 0;
++}
++
+ pub fn closeDescriptor(fd: *std.c.fd_t) void {
+     if (fd.* < 0) {
+         return;
+@@ -166,3 +175,21 @@ pub fn terminate(pid: std.c.pid_t) void {
+ test "close-on-exec setup reports invalid descriptors" {
+     try std.testing.expectError(error.SetCloseOnExecFailed, setCloseOnExec(-1));
+ }
++
++test "output readiness never waits and does not consume queued bytes" {
++    var pipe = try openCloseOnExecPipe();
++    defer closeDescriptor(&pipe[0]);
++    defer closeDescriptor(&pipe[1]);
++
++    try std.testing.expect(!outputReady(pipe[0]));
++    try std.testing.expectEqual(@as(isize, 1), std.c.write(pipe[1], "x", 1));
++    try std.testing.expect(outputReady(pipe[0]));
++    try std.testing.expect(outputReady(pipe[0]));
++
++    var byte: [1]u8 = undefined;
++    try std.testing.expectEqual(@as(isize, 1), std.c.read(pipe[0], &byte, 1));
++    try std.testing.expectEqualStrings("x", &byte);
++    try std.testing.expect(!outputReady(pipe[0]));
++
++    try std.testing.expect(!outputReady(-1));
++}
+diff --git a/src/backend/pty/session_support.zig b/src/backend/pty/session_support.zig
+index 984ef270..2ced2667 100644
+--- a/src/backend/pty/session_support.zig
++++ b/src/backend/pty/session_support.zig
+@@ -101,6 +101,34 @@ test "resize changes the dimensions observed by the child" {
+     try std.testing.expectEqual(exit_mod.Exit{ .exited = 0 }, try session.wait());
+ }
+ 
++test "bounded PTY reads preserve every byte and the closing tail of a burst" {
++    const io = std.testing.io;
++    const args = [_][*:0]const u8{ "/bin/sh", "-c", "head -c 32768 /dev/zero; printf TAIL" };
++    const command = try Command.fromArgv(&args);
++    var session = try Session.spawn(&command, .{ .cols = 40, .rows = 5 });
++    defer session.deinit();
++
++    var output: [32768 + 4 + 64]u8 = undefined;
++    var len: usize = 0;
++    while (len < output.len) {
++        const end = @min(len + 4095, output.len);
++        const count = session.read(io, output[len..end]) catch |err| switch (err) {
++            error.EndOfStream, error.InputOutput => break,
++            else => return err,
++        };
++        try std.testing.expect(count > 0);
++        len += count;
++    }
++
++    try std.testing.expectEqual(@as(usize, 32768 + 4), len);
++    for (output[0..32768]) |byte| {
++        try std.testing.expectEqual(@as(u8, 0), byte);
++    }
++
++    try std.testing.expectEqualStrings("TAIL", output[32768..len]);
++    try std.testing.expectEqual(exit_mod.Exit{ .exited = 0 }, try session.wait());
++}
++
+ test "PTY child receives the explicit terminal environment" {
+     var inherited_map = std.process.Environ.Map.init(std.testing.allocator);
+     defer inherited_map.deinit();
+diff --git a/src/backend/runtime/attachment/AttachmentStore.zig b/src/backend/runtime/attachment/AttachmentStore.zig
+index c7633c5c..ac445a89 100644
+--- a/src/backend/runtime/attachment/AttachmentStore.zig
++++ b/src/backend/runtime/attachment/AttachmentStore.zig
+@@ -238,8 +238,8 @@ pub fn observes(store: *const AttachmentStore, workspace: WorkspaceLocationType)
+ 
+ pub fn availableGraphicsCredit(store: *const AttachmentStore) usize {
+     var outstanding: usize = 0;
+-    for (store.items) |slot| {
+-        const attachment = slot orelse continue;
++    for (&store.items) |*slot| {
++        const attachment = if (slot.*) |*value| value else continue;
+         outstanding +|= max_image_bytes_per_pane_module -
+             @min(attachment.graphicsCredit(), max_image_bytes_per_pane_module);
+     }
