@@ -50,10 +50,15 @@ pub fn apply(client: *Client, opened: PaneOpenedType) !ApplicationPanesPaneOpenD
         },
     };
 
-    return use_case.execute(.{
+    const outcome = try use_case.execute(.{
         .continuation = delivery,
         .opened = translate(opened),
     });
+    if (outcome != .ignored) {
+        try @import("../agents/agent_threads.zig").opened(client, opened);
+    }
+
+    return outcome;
 }
 
 fn translate(opened: PaneOpenedType) OpenedPaneType {

@@ -33,6 +33,27 @@ pub fn dispatch(client: anytype, message: ServerMessageType, comptime Adapters: 
     const workspace_snapshots = Adapters.workspace_snapshots;
 
     switch (message) {
+        .agent_history_page => |page| {
+            if (@hasDecl(Adapters, "agent_history")) {
+                _ = try Adapters.agent_history.apply(client, page);
+            } else {
+                return error.AgentThreadsUnsupported;
+            }
+        },
+        .agent_thread_snapshot => |snapshot| {
+            if (@hasDecl(Adapters, "agent_threads")) {
+                _ = try Adapters.agent_threads.apply(client, snapshot);
+            } else {
+                return error.AgentThreadsUnsupported;
+            }
+        },
+        .request_completed => |reply| {
+            if (@hasDecl(Adapters, "agent_threads")) {
+                try Adapters.agent_threads.completed(client, reply);
+            } else {
+                return error.UnexpectedControlReply;
+            }
+        },
         .pane_opened => |opened| _ = try pane_openings.apply(client, opened),
         .tab_snapshot => |snapshot| _ = try tab_snapshots.apply(client, snapshot),
         .workspace_snapshot => |snapshot| try workspace_snapshots.apply(client, snapshot),
@@ -71,7 +92,7 @@ pub fn dispatch(client: anytype, message: ServerMessageType, comptime Adapters: 
         .history_pruned => |confirmation| _ = try history_palettes.pruned(client, confirmation),
         .history_output => |output| _ = history_palettes.output(client, output),
         .command_suggestion => |suggested| _ = try suggestions.apply(client, suggested),
-        .pane_text, .request_completed, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
+        .pane_text, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
         .proxy_status => |status| _ = try proxy_status.apply(client, status),
         .agent_snapshot => |snapshot| _ = try agent_snapshots.apply(client, snapshot),
         .system_metrics => |metrics| _ = try system_metrics.apply(client, metrics),

@@ -188,6 +188,12 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             .query_history = routeQueryHistory,
             .suggest_command = routeSuggestCommand,
             .request_workspace_snapshot = routeRequestWorkspaceSnapshot,
+            .agent_prompt = routeAgentPrompt,
+            .agent_interrupt = routeAgentInterrupt,
+            .agent_resume = routeAgentResume,
+            .agent_approval = routeAgentApproval,
+            .query_agent_thread = routeQueryAgentThread,
+            .query_agent_history = routeQueryAgentHistory,
             .create_tab = routeCreateTab,
             .rename_tab = routeRenameTab,
             .close_tab = routeCloseTab,
@@ -577,6 +583,44 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             var controller = WorkspaceSnapshotController.init(&request.session.delivery.responses, handler.executor());
 
             try controller.requestWorkspaceSnapshot(snapshot);
+        }
+
+        fn routeAgentPrompt(request: *ClientRequestContext, message: @import("telar-core").AgentPrompt) !void {
+            var handler: @import("commands/AgentThreadHandler.zig") = .{
+                .io = request.application.io,
+                .panes = &request.application.model.panes,
+                .agent_descriptions = if (request.application.agent_description_options != null) &request.application.model.agents else null,
+            };
+            var controller: @import("../entrypoints/requests/AgentThreadController.zig") = .{ .delivery = &request.session.delivery, .handler = &handler };
+            try controller.handle(message);
+        }
+
+        fn routeAgentInterrupt(request: *ClientRequestContext, message: @import("telar-core").AgentInterrupt) !void {
+            var handler: @import("commands/AgentThreadHandler.zig") = .{ .io = request.application.io, .panes = &request.application.model.panes };
+            var controller: @import("../entrypoints/requests/AgentThreadController.zig") = .{ .delivery = &request.session.delivery, .handler = &handler };
+            try controller.handle(message);
+        }
+
+        fn routeAgentResume(request: *ClientRequestContext, message: @import("telar-core").AgentResume) !void {
+            var handler: @import("commands/AgentThreadHandler.zig") = .{ .io = request.application.io, .panes = &request.application.model.panes };
+            var controller: @import("../entrypoints/requests/AgentThreadController.zig") = .{ .delivery = &request.session.delivery, .handler = &handler };
+            try controller.handle(message);
+        }
+
+        fn routeAgentApproval(request: *ClientRequestContext, message: @import("telar-core").AgentApproval) !void {
+            var handler: @import("commands/AgentThreadHandler.zig") = .{ .io = request.application.io, .panes = &request.application.model.panes };
+            var controller: @import("../entrypoints/requests/AgentThreadController.zig") = .{ .delivery = &request.session.delivery, .handler = &handler };
+            try controller.handle(message);
+        }
+
+        fn routeQueryAgentHistory(request: *ClientRequestContext, message: @import("telar-core").QueryAgentHistory) !void {
+            try @import("agent_history.zig").request(request.application, request.session, message);
+        }
+
+        fn routeQueryAgentThread(request: *ClientRequestContext, message: @import("telar-core").QueryAgentThread) !void {
+            var handler: @import("commands/AgentThreadHandler.zig") = .{ .io = request.application.io, .panes = &request.application.model.panes };
+            var controller: @import("../entrypoints/requests/AgentThreadController.zig") = .{ .delivery = &request.session.delivery, .handler = &handler };
+            try controller.handle(message);
         }
 
         fn routeCreateTab(request: *ClientRequestContext, create: CreateTabViewType) !void {
@@ -1028,13 +1072,13 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
                 return null;
             }
 
-            return .{ .key = pane.key(), .location = pane.location };
+            return .{ .key = pane.key(), .location = pane.location, .kind = pane.kind };
         }
 
         fn findFirstOpenPane(context: *anyopaque, location: TabLocationType) ?PaneLaunchedType {
             const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
             const pane = client.application.model.panes.firstAt(location) orelse return null;
-            return .{ .key = pane.key(), .location = pane.location };
+            return .{ .key = pane.key(), .location = pane.location, .kind = pane.kind };
         }
 
         fn prepareOpenPaneLaunch(context: *anyopaque, request: OpenPanePrepareLaunch) ![]const u8 {
@@ -1056,7 +1100,7 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
                 .workspace_path = request.workspace_path,
             });
 
-            return .{ .key = pane.key(), .location = pane.location };
+            return .{ .key = pane.key(), .location = pane.location, .kind = pane.kind };
         }
 
         fn prepareOpenPaneView(context: *anyopaque, request: PrepareViewType) !void {
@@ -1113,13 +1157,14 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             const application: *Application = @ptrCast(@alignCast(context));
             const pane = try application.launchPane(.{
                 .location = request.location,
+                .kind = request.kind,
                 .size = request.size,
                 .launch = request.launch,
                 .launch_cwd = request.launch_cwd,
                 .workspace_path = request.workspace_path,
             });
 
-            return .{ .id = pane.id };
+            return .{ .id = pane.id, .pane_generation = pane.generation, .kind = pane.kind };
         }
 
         fn prepareCreateWorkspaceLaunch(context: *anyopaque, request: CreateWorkspacePrepareLaunch) ![]const u8 {
@@ -1197,7 +1242,7 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
                 .workspace_path = request.workspace_path,
             });
 
-            return .{ .key = pane.key(), .location = pane.location };
+            return .{ .key = pane.key(), .location = pane.location, .kind = pane.kind };
         }
 
         fn attachCreatedPane(context: *anyopaque, launched: PaneLaunchedType) !void {

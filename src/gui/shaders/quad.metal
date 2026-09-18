@@ -61,10 +61,15 @@ static float rounded_distance(float2 local, float2 size, float radius) {
 // Texture 0 is the alpha atlas read as coverage; texture 1 the premultiplied
 // RGBA sprite page sampled linearly, divided back to straight alpha for the
 // blend state and multiplied by the tint.
-fragment float4 quad_fragment(Vertex in [[stage_in]], texture2d<float> atlas [[texture(0)]], texture2d<float> sprites [[texture(1)]]) {
+fragment float4 quad_fragment(Vertex in [[stage_in]], texture2d<float> atlas [[texture(0)]], texture2d<float> sprites [[texture(1)]], array<texture2d<float>, 8> diagrams [[texture(2)]]) {
     if (in.texture > 0.5) {
         constexpr sampler linear(filter::linear, address::clamp_to_edge);
-        float4 texel = sprites.sample(linear, in.uv);
+        float4 texel;
+        if (in.texture >= 2.0 && in.texture < 10.0) {
+            texel = diagrams[uint(in.texture) - 2].sample(linear, in.uv);
+        } else {
+            texel = sprites.sample(linear, in.uv);
+        }
         float3 straight = texel.a > 0.0 ? texel.rgb / texel.a : float3(0.0);
         return float4(straight * in.color.rgb, texel.a * in.color.a);
     }

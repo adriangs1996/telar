@@ -39,6 +39,10 @@ pub fn Type(comptime RuntimeEvent: type) type {
         /// const pane = try launcher.launch(.{ .location = location, .size = size, .launch = view, .launch_cwd = cwd, .workspace_path = path });
         /// ```
         pub fn launch(launcher: *Self, request: LaunchRequest) !*PaneType {
+            if (request.kind == .agent) {
+                return launcher.launchAgent(request);
+            }
+
             const pane_key = try launcher.panes.allocateKey();
             var pane_overrides: PaneOverrides = .{};
             const identity_overrides = pane_overrides.build(.{
@@ -87,6 +91,7 @@ pub fn Type(comptime RuntimeEvent: type) type {
                 .history_service = launcher.history_service,
                 .graphics_budget = &launcher.panes.graphics_budget,
                 .manifests = launcher.manifests,
+                .environment = launcher.inherited_environment,
             }, .{
                 .identity = pane_key,
                 .location = request.location,
@@ -145,6 +150,49 @@ pub fn Type(comptime RuntimeEvent: type) type {
             fresh.commitLaunch(shell);
             proxy_registered = false;
             return fresh;
+        }
+
+        fn launchAgent(launcher: *Self, request: LaunchRequest) !*PaneType {
+            var managed_count: usize = 0;
+            for (launcher.panes.items) |slot| {
+                if (slot) |pane| {
+                    if (pane.kind == .agent) {
+                        managed_count += 1;
+                    }
+                }
+            }
+            if (managed_count >= 16) {
+                return error.PaneLimitReached;
+            }
+            const key = try launcher.panes.allocateKey();
+            const pane = try PaneType.create(.{
+                .io = launcher.io,
+                .gpa = launcher.gpa,
+                .history_service = launcher.history_service,
+                .graphics_budget = &launcher.panes.graphics_budget,
+                .manifests = launcher.manifests,
+                .environment = launcher.inherited_environment,
+            }, .{
+                .identity = key,
+                .location = request.location,
+                .kind = .agent,
+                .restore_conversation = request.restore_conversation,
+                .launch_cwd = request.launch_cwd,
+                .workspace_path = request.workspace_path,
+                .size = request.size,
+                .graphics_limits = launcher.panes.graphics_limits,
+                .terminal_colors = launcher.terminal_colors,
+            });
+            launcher.panes.insert(pane) catch |err| {
+                pane.destroy();
+                return err;
+            };
+            errdefer launcher.panes.removeAndDestroy(pane);
+            _ = pane.beginExitWait();
+            errdefer pane.cancelExitWait();
+            try launcher.select.concurrent(.agent_thread_changed, @import("agent_threads.zig").waitForChange, .{ launcher.io, pane });
+            pane.commitLaunch("codex app-server");
+            return pane;
         }
 
         fn injectFault(launcher: *Self, phase: model.LaunchPhase) !void {

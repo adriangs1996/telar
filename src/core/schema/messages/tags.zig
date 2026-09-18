@@ -47,6 +47,12 @@ pub const ClientTag = enum(u8) {
     report_agent_command = 0x2a,
     report_agent_title = 0x2b,
     configure_terminal_colors = 0x2c,
+    agent_prompt = 0x2d,
+    agent_interrupt = 0x2e,
+    agent_approval = 0x2f,
+    query_agent_thread = 0x30,
+    query_agent_history = 0x31,
+    agent_resume = 0x32,
 };
 
 pub const ServerTag = enum(u8) {
@@ -92,4 +98,6 @@ pub const ServerTag = enum(u8) {
     pane_focus_result = 0xa8,
     command_suggestion = 0xa9,
     pane_progress = 0xaa,
+    agent_thread_snapshot = 0xab,
+    agent_history_page = 0xac,
 };

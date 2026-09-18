@@ -81,6 +81,32 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
             return router.prefix_pending;
         }
 
+        /// Admits configured shortcuts before a local editor handles the key.
+        /// Pending sequences own their next press, including misses and Escape,
+        /// so normal routing can resolve replay or discard. Repeats and releases
+        /// retain only an existing binding lease, independent of focus or modifiers.
+        /// This query never advances a sequence or changes physical ownership.
+        /// Example: `if (router.wantsBinding(key)) return routeGlobal(key);`
+        pub fn wantsBinding(router: *const Self, key: Key) bool {
+            if (key.phase != .press) {
+                const physical = key.physical orelse return false;
+                return router.leases.owner(physical) == .binding;
+            }
+
+            if (router.depth != 0) {
+                return true;
+            }
+
+            return router.map.matchingRange(.{ .start = 0, .end = router.map.len }, .{ .depth = 0, .key = key }) != null;
+        }
+
+        /// Returns a physical key to a widget after a chord replays into it.
+        /// The widget then owns subsequent repeats and release; another key's
+        /// retained repeat remains active. Example: `router.relinquishKey(physical);`
+        pub fn relinquishKey(router: *Self, physical: Key.Physical) void {
+            _ = router.releasePhysicalKey(physical);
+        }
+
         /// Copies physical ownership into a replacement router.
         ///
         /// Configuration reloads replace the compiled keymap while keys may
@@ -351,13 +377,7 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
                     return .continue_routing;
                 },
                 .release => {
-                    if (router.repeating) |held| {
-                        if (held.key.physical.?.eql(identity)) {
-                            router.repeating = null;
-                        }
-                    }
-
-                    if (router.leases.release(identity) != .application) {
+                    if (router.releasePhysicalKey(identity) != .application) {
                         return .continue_routing;
                     }
 
@@ -477,6 +497,16 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
             } else {
                 try router.appendOutput(input.raw, handler);
             }
+        }
+
+        fn releasePhysicalKey(router: *Self, physical: Key.Physical) ?LeaseOwner {
+            if (router.repeating) |held| {
+                if (held.key.physical.?.eql(physical)) {
+                    router.repeating = null;
+                }
+            }
+
+            return router.leases.release(physical);
         }
 
         fn transferKeyToApplication(router: *Self, key_value: Key) void {
@@ -683,4 +713,179 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
             try router.flushOutput(handler);
         }
     };
+}
+
+fn testRouter() type {
+    return Type(@import("routing_tests.zig").Action, .{ .max_bindings = 8, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 }, struct {});
+}
+
+test "binding admission finds configured direct and chord shortcuts without changing state" {
+    const Router = testRouter();
+    const Binding = GenericBinding(@import("routing_tests.zig").Action, 4);
+    const parse = keybind.parseKey;
+    const router = try Router.init(&.{
+        try Binding.parse(&.{ "ctrl+k", "ctrl+c" }, .next),
+        try Binding.parse(&.{"alt+down"}, .next),
+        try Binding.parse(&.{"ctrl+p"}, .detach),
+    });
+    for (0..3) |_| {
+        for ([_][]const u8{ "ctrl+p", "ctrl+k", "alt+down" }) |name| {
+            try std.testing.expect(router.wantsBinding(try parse(name)));
+        }
+
+        for ([_][]const u8{ "p", "k", "down", "ctrl+c", "escape", "ctrl+alt+p" }) |name| {
+            try std.testing.expect(!router.wantsBinding(try parse(name)));
+        }
+    }
+
+    try std.testing.expectEqual(@as(u8, 0), router.depth);
+    try std.testing.expectEqual(@as(usize, 0), router.held_len);
+    try std.testing.expectEqual(@as(usize, 0), router.leases.count());
+    try std.testing.expect(router.bindingDeadline() == null);
+    const empty = try Router.init(&.{});
+    try std.testing.expect(!empty.wantsBinding(try parse("ctrl+p")));
+}
+
+test "binding admission keeps ordinary chord misses with the router until replay" {
+    const Router = testRouter();
+    const Binding = GenericBinding(@import("routing_tests.zig").Action, 4);
+    var router = try Router.init(&.{try Binding.parse(&.{ "a", "b" }, .next)});
+    var capture: @import("Capture.zig") = .{};
+    const first = try keybind.parseKey("a");
+    const miss = try keybind.parseKey("x");
+    try std.testing.expect(router.wantsBinding(first));
+    _ = try router.routeEvent(.{ .key = first, .raw = "", .now_ns = 1 }, &capture);
+    const deadline = router.bindingDeadline();
+    try std.testing.expect(router.wantsBinding(try keybind.parseKey("b")));
+    try std.testing.expect(router.wantsBinding(miss));
+    try std.testing.expectEqual(deadline, router.bindingDeadline());
+    try std.testing.expectEqual(@as(u8, 1), router.depth);
+    try std.testing.expectEqual(@as(usize, 0), capture.key_count);
+    _ = try router.routeEvent(.{ .key = miss, .raw = "", .now_ns = 2 }, &capture);
+    try std.testing.expectEqual(@as(usize, 2), capture.key_count);
+    try std.testing.expectEqualDeep(first, capture.keys[0]);
+    try std.testing.expectEqualDeep(miss, capture.keys[1]);
+    try std.testing.expect(!router.wantsBinding(miss));
+}
+
+test "binding admission resolves persistent prefix misses and Escape without claiming unleased repeats" {
+    const Router = testRouter();
+    const Binding = GenericBinding(@import("routing_tests.zig").Action, 4);
+    const prefix = try keybind.parseKey("ctrl+b");
+    var router = try Router.initWithPrefix(&.{try Binding.parse(&.{ "ctrl+b", "n" }, .next)}, prefix);
+    var capture: @import("Capture.zig") = .{};
+    for ([_][]const u8{ "x", "escape" }) |name| {
+        _ = try router.routeEvent(.{ .key = prefix, .raw = "", .now_ns = 1 }, &capture);
+        const press = try keybind.parseKey(name);
+        try std.testing.expect(router.wantsBinding(press));
+        var repeat = press;
+        repeat.phase = .repeat;
+        repeat.physical = .{ .value = 99 };
+        try std.testing.expect(!router.wantsBinding(repeat));
+        try std.testing.expect(router.prefixPending());
+        _ = try router.routeEvent(.{ .key = press, .raw = "", .now_ns = 2 }, &capture);
+        try std.testing.expect(!router.prefixPending());
+        try std.testing.expect(!router.wantsBinding(press));
+    }
+
+    try std.testing.expectEqual(@as(usize, 0), capture.key_count);
+    try std.testing.expectEqual(@as(usize, 0), capture.action_count);
+}
+
+test "binding admission retains a physical shortcut through focus and keymap replacement" {
+    const Router = testRouter();
+    const Binding = GenericBinding(@import("routing_tests.zig").Action, 4);
+    var router = try Router.init(&.{try Binding.parse(&.{"ctrl+n"}, .next)});
+    var original: @import("Capture.zig") = .{};
+    var other_focus: @import("Capture.zig") = .{};
+    var event = try keybind.parseKey("ctrl+n");
+    event.physical = .{ .value = 42 };
+    try std.testing.expect(router.wantsBinding(event));
+    _ = try router.routeEvent(.{ .key = event, .raw = "", .now_ns = 1 }, &original);
+    router.cancelSequence();
+    var replacement = try Router.init(&.{});
+    replacement.inheritPhysicalLeases(&router);
+    event.mods = .{};
+    event.phase = .repeat;
+    try std.testing.expect(replacement.wantsBinding(event));
+    _ = try replacement.routeEvent(.{ .key = event, .raw = "", .now_ns = 2 }, &other_focus);
+    event.phase = .release;
+    try std.testing.expect(replacement.wantsBinding(event));
+    _ = try replacement.routeEvent(.{ .key = event, .raw = "", .now_ns = 3 }, &other_focus);
+    try std.testing.expect(!replacement.wantsBinding(event));
+    try std.testing.expectEqual(@as(usize, 1), original.action_count);
+    try std.testing.expectEqual(@as(usize, 0), other_focus.action_count);
+    try std.testing.expectEqual(@as(usize, 0), other_focus.key_count);
+}
+
+test "binding admission cannot steal application repeats or releases when modifiers become a shortcut" {
+    const Router = testRouter();
+    const Binding = GenericBinding(@import("routing_tests.zig").Action, 4);
+    var router = try Router.init(&.{try Binding.parse(&.{"ctrl+n"}, .next)});
+    var capture: @import("Capture.zig") = .{};
+    var event = try keybind.parseKey("n");
+    event.physical = .{ .value = 42 };
+    try std.testing.expect(!router.wantsBinding(event));
+    _ = try router.routeEvent(.{ .key = event, .raw = "", .now_ns = 1 }, &capture);
+    event.mods.ctrl = true;
+    for ([_]Key.Phase{ .repeat, .release }) |phase| {
+        event.phase = phase;
+        try std.testing.expect(!router.wantsBinding(event));
+    }
+
+    event.physical = .{ .value = 43 };
+    try std.testing.expect(!router.wantsBinding(event));
+    event.physical = null;
+    try std.testing.expect(!router.wantsBinding(event));
+    event.phase = .repeat;
+    try std.testing.expect(!router.wantsBinding(event));
+    try std.testing.expectEqual(@as(usize, 1), router.leases.count());
+    try std.testing.expectEqual(@as(usize, 1), capture.key_count);
+    try std.testing.expectEqual(@as(usize, 0), capture.action_count);
+}
+
+test "replayed chord keys can return their physical ownership to the original widget" {
+    const Router = testRouter();
+    const Binding = GenericBinding(@import("routing_tests.zig").Action, 4);
+    var router = try Router.init(&.{try Binding.parse(&.{ "a", "b" }, .next)});
+    var capture: @import("Capture.zig") = .{};
+    var first = try keybind.parseKey("a");
+    first.physical = .{ .value = 1 };
+    var miss = try keybind.parseKey("x");
+    miss.physical = .{ .value = 2 };
+    _ = try router.routeEvent(.{ .key = first, .raw = "", .now_ns = 1 }, &capture);
+    _ = try router.routeEvent(.{ .key = miss, .raw = "", .now_ns = 2 }, &capture);
+    try std.testing.expectEqual(@as(usize, 2), capture.key_count);
+    router.relinquishKey(first.physical.?);
+    router.relinquishKey(miss.physical.?);
+    try std.testing.expectEqual(@as(usize, 0), router.leases.count());
+    // Stale routing cannot forward these lifecycles to a newly focused owner.
+    var other_focus: @import("Capture.zig") = .{};
+    first.phase = .repeat;
+    _ = try router.routeEvent(.{ .key = first, .raw = "", .now_ns = 3 }, &other_focus);
+    miss.phase = .release;
+    _ = try router.routeEvent(.{ .key = miss, .raw = "", .now_ns = 4 }, &other_focus);
+    try std.testing.expectEqual(@as(usize, 0), other_focus.key_count);
+    try std.testing.expectEqual(@as(usize, 0), other_focus.action_count);
+}
+
+test "relinquishing a physical key preserves another shortcut repeat and cancels its own" {
+    const Router = testRouter();
+    const Binding = GenericBinding(@import("routing_tests.zig").Action, 4);
+    var router = try Router.init(&.{try Binding.parse(&.{"ctrl+n"}, .next)});
+    var capture: @import("Capture.zig") = .{};
+    var event = try keybind.parseKey("ctrl+n");
+    event.physical = .{ .value = 42 };
+    _ = try router.routeEvent(.{ .key = event, .raw = "", .now_ns = 1 }, &capture);
+    router.repeating = .{ .key = event, .action = .next, .policy = .{ .interval_ns = 1, .context = 9 }, .last_ns = 1 };
+    router.relinquishKey(.{ .value = 99 });
+    try std.testing.expect(router.repeating != null);
+    try std.testing.expectEqual(@as(usize, 1), router.leases.count());
+    router.relinquishKey(event.physical.?);
+    try std.testing.expect(router.repeating == null);
+    try std.testing.expectEqual(@as(usize, 0), router.leases.count());
+    event.phase = .repeat;
+    try std.testing.expect(!router.wantsBinding(event));
+    router.relinquishKey(event.physical.?);
+    try std.testing.expectEqual(@as(usize, 0), router.leases.count());
 }

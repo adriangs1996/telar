@@ -16,6 +16,7 @@ pub const Message = union(enum) {
     plugin_result: client.PluginActionsCompletion,
     path_completion: client.PathCompletionCompletion,
     favicon: client.FaviconCompletion,
+    diagram_ready,
     link_opened: anyerror!void,
 };
 

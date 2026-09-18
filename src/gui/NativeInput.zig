@@ -21,6 +21,7 @@ head: usize = 0,
 len: usize = 0,
 router: routing.Type = defaultRouter(),
 binding_timeout: client.Scheduler = .{},
+binding_target: ?@import("widgets/interaction/Id.zig") = null,
 pointer: PointerRouting = .{},
 stopped: bool = false,
 presentation_revision: u64 = 0,
@@ -43,8 +44,16 @@ pub fn adopt(input: *Input, app: *client.AttachedClient, config: client.RouterCo
     var replacement = routing.build(config) catch unreachable;
     replacement.inheritPhysicalLeases(&input.router);
     input.router = replacement;
+    input.binding_target = null;
     input.presentation_revision +%= 1;
     _ = input.binding_timeout.update(app.io, null);
+}
+
+/// Cancels a partial chord and its original widget before input changes owner.
+/// Held physical keys retain their leases. Example: `input.cancelBinding();`
+pub fn cancelBinding(input: *Input) void {
+    input.router.cancelSequence();
+    input.binding_target = null;
 }
 
 /// Example: `input.setGeometry(renderer.origin, size);`
@@ -69,7 +78,7 @@ pub fn routePromptBytes(app: *client.AttachedClient, bytes: []const u8) !void {
 /// Example: `try input.expire(app, result);`
 pub fn expire(input: *Input, app: *client.AttachedClient, result: anyerror!void) !void {
     try input.binding_timeout.complete(result);
-    var handler: InputHandler = .{ .app = app };
+    var handler: InputHandler = .{ .app = app, .widget_target = input.binding_target };
     const pending = input.router.prefixPending();
     input.stopped = try input.router.expireBinding(client.monotonic(app.io), &handler) == .stop;
     try input.finish(app, pending);
@@ -243,7 +252,8 @@ pub fn drain(input: *Input, app: *client.AttachedClient) !void {
                 }
             },
             .paste_start => {
-                try input.router.interrupt(&handler);
+                var replay: InputHandler = .{ .app = app, .widget_target = input.binding_target };
+                try input.router.interrupt(&replay);
                 input.widget_paste = try gui.beginWidgetPaste();
                 if (!input.widget_paste) {
                     _ = try client.controllers.paste_routing.start(app);
@@ -291,7 +301,7 @@ pub fn drain(input: *Input, app: *client.AttachedClient) !void {
             },
             .pointer => |event| {
                 if (event.event.interruptsKeys()) {
-                    input.router.cancelSequence();
+                    input.cancelBinding();
                 }
 
                 if (event.event.retained() or (event.geometry_revision == input.pointer.revision and event.gesture_revision == input.pointer.gesture_revision)) {
@@ -429,13 +439,17 @@ fn dispatchScroll(input: *Input, app: *client.AttachedClient, sample: *@import("
     }
 
     const pointer: @import("input/PointerEvent.zig") = .{ .kind = if (sample.lines < 0) .scroll_up else .scroll_down, .mods = event.mods, .x = event.x, .y = event.y };
-    input.router.cancelSequence();
+    input.cancelBinding();
     try input.pointer.apply(app, input.pointer.sample(pointer));
     sample.lines += if (sample.lines < 0) @as(i8, 1) else -1;
     return sample.lines == 0;
 }
 
 fn finish(input: *Input, app: *client.AttachedClient, pending: bool) !void {
+    if (input.router.bindingDeadline() == null and !input.router.prefixPending()) {
+        input.binding_target = null;
+    }
+
     if (pending != input.router.prefixPending()) {
         input.presentation_revision +%= 1;
     }

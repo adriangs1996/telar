@@ -5,3 +5,5 @@ const PaneLaunched = @This();
 
 key: PaneKey,
 location: TabLocationType,
+
+kind: @import("telar-core").PaneKind = .terminal,

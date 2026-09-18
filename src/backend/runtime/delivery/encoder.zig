@@ -121,6 +121,8 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
             .position = created.position,
             .label = created.labelSlice(),
             .root_pane_id = created.root_pane_id,
+            .kind = created.kind,
+            .pane_generation = created.pane_generation,
         }),
         .tab_renamed => |*renamed| try encodeTabRenamed_module(buffer, .{
             .request_id = renamed.request_id,
@@ -135,6 +137,22 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
         ),
         .notification_shown => |shown| try encodeNotificationShown_module(buffer, shown),
         .agent_sound => |sound| try encodeAgentSound_module(buffer, sound),
+        .agent_history_page => |result| payload: {
+            if (context.agent_history) |owned| {
+                owned.* = result;
+            }
+
+            const page = result.value;
+            if (panes.resolveControlConst(.{ .id = page.snapshot.pane_id, .generation = page.snapshot.pane_generation }) == null) {
+                break :payload try encodeRequestFailed_module(buffer, .{
+                    .request_id = page.request_id,
+                    .code = .pane_not_found,
+                    .message = "agent pane closed before its history was sent",
+                });
+            }
+
+            break :payload try @import("telar-core").encodeAgentHistoryPage(buffer, page);
+        },
         .history_result => |result| payload: {
             history_result.* = result;
             break :payload try encodeHistoryResult(buffer, result, &history_storage);

@@ -92,7 +92,7 @@ pub fn encode(buffer: []u8, batch: *const EffectBatchType) ![]const u8 {
             try writeSized8(&writer, value.title());
             try writeSized8(&writer, value.message());
         },
-        .lua_callback, .lua_expr, .plugin, .toggle_thread_view => return error.InvalidWorkerEffect,
+        .lua_callback, .lua_expr, .plugin, .toggle_thread_view, .new_agent_tab => return error.InvalidWorkerEffect,
     };
     return writer.buffered();
 }

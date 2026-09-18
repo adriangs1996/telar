@@ -8,6 +8,7 @@ const Canvas = @import("../Canvas.zig");
 const Modal = @import("Modal.zig");
 const PaletteHits = @import("PaletteHits.zig");
 const PaletteRow = @import("PaletteRow.zig");
+const SuggestionPanel = @import("SuggestionPanel.zig");
 const Label = @import("../Label.zig");
 const key_label = @import("key_label.zig");
 const Router = @import("../../input/router.zig").Type;
@@ -15,7 +16,7 @@ const CommandPalette = @This();
 
 pub const max_rows = PaletteHits.capacity;
 /// Logical width; converted to cells through the host scale.
-pub const width_px = 620;
+pub const width_px = 900;
 /// The top edge sits at this share of the host height.
 pub const top_percent = 11;
 pub const radius_px = 10;
@@ -42,7 +43,10 @@ pub fn area(palette: CommandPalette, canvas: *Canvas, rows: u16) core.Rect {
     const cell: f32 = @floatFromInt(@max(canvas.metrics.cell_width, 1));
     const wanted: u16 = @intFromFloat(@ceil(@as(f32, width_px) * scale / cell));
     const width = @min(@max(wanted, 24), @min(host.w -| 4, 140));
-    const height = rows + 4;
+    const height: u16 = if (palette.projection.prompt.?.paletteMode() == .suggest)
+        SuggestionPanel.height(palette.projection.suggestion, width)
+    else
+        rows + 4;
     const top = @as(u16, @intCast(@as(u32, host.h) * top_percent / 100));
     if (host.w < 12 or top + height > host.h) {
         return Modal.bounds(host, .{ .w = width, .h = height });
@@ -83,6 +87,13 @@ pub fn draw(palette: CommandPalette, canvas: *Canvas) !void {
         return;
     }
 
+    if (prompt.paletteMode() == .suggest) {
+        const inset: u16 = @min(2, content.w / 8);
+        const suggestion_area: core.Rect = .{ .x = content.x + inset, .y = content.y, .w = content.w - inset * 2, .h = content.h };
+        try (SuggestionPanel{ .area = suggestion_area, .projection = palette.projection, .hits = hits }).draw(canvas);
+        return;
+    }
+
     try drawField(canvas, content.row(0), prompt);
     const rows = content.splitTop(1)[1].splitBottom(1)[0];
     const selected: u16 = if (total == 0) 0 else @min(prompt.selection(), total - 1);
@@ -106,7 +117,7 @@ pub fn draw(palette: CommandPalette, canvas: *Canvas) !void {
         var child = switch (prompt.paletteMode()) {
             .goto => palette.pickerRow(goto_results.slice()[index].item, &label_storage),
             .actions => palette.actionRow(action_results.slice()[index].index, &key_storage),
-            .suggest => palette.suggestionRow(canvas),
+            .suggest => unreachable,
         };
         child.area = row;
         try child.draw(canvas);
@@ -175,27 +186,4 @@ fn actionRow(palette: CommandPalette, index: u8, storage: *[key_label.max_bytes]
         break :blk key_label.chord(storage, router.prefix, key);
     } else "";
     return .{ .icon = "»", .primary = entry.label, .hint = hint };
-}
-
-fn suggestionRow(palette: CommandPalette, canvas: *Canvas) PaletteRow {
-    const state = palette.projection.suggestion;
-    const colors = canvas.theme.palette;
-    const text: []const u8 = switch (state.phase) {
-        .idle => "Describe the command you need",
-        .waiting => "Asking the engine…",
-        .ready => state.textSlice(),
-        .failed => switch (state.status) {
-            .ready => "The engine returned no command",
-            .unavailable => "No engine configured (runtime.engine)",
-            .timeout => "The engine timed out",
-            .failed => "The engine could not answer",
-        },
-    };
-    const hint: []const u8 = switch (state.phase) {
-        .idle => "enter ask",
-        .waiting => "esc cancel",
-        .ready => "enter paste",
-        .failed => "enter retry",
-    };
-    return .{ .icon = "?", .primary = text, .hint = hint, .mono = state.phase == .ready, .color = if (state.phase == .failed) colors.red else colors.text };
 }

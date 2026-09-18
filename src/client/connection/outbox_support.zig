@@ -56,6 +56,12 @@ pub const capacity = max_panes_per_tab_module + 16;
 pub const max_pending_launches = 4;
 
 pub const Message = union(enum) {
+    agent_prompt: @import("OwnedAgentPrompt.zig"),
+    agent_interrupt: @import("telar-core").AgentInterrupt,
+    agent_resume: @import("telar-core").AgentResume,
+    agent_approval: @import("telar-core").AgentApproval,
+    query_agent_thread: @import("telar-core").QueryAgentThread,
+    query_agent_history: @import("OwnedAgentHistoryQuery.zig"),
     open_pane: OpenPaneType,
     pane_input: OwnedInput,
     pane_resize: PaneResizeType,
@@ -520,4 +526,25 @@ test "queued tab creation owns argument bytes until encoding" {
     var iterator = decoded.create_tab.launch.arguments();
     try std.testing.expectEqualStrings("lazygit", (try iterator.next()).?);
     try std.testing.expectEqualStrings("-p", (try iterator.next()).?);
+}
+
+test "agent prompt outbox owns borrowed image paths and refuses aggregate overflow atomically" {
+    const core = @import("telar-core");
+    var outbox: Outbox = .{};
+    var image = "/tmp/borrowed.png".*;
+    var request: core.AgentPrompt = .{ .request_id = @enumFromInt(1), .pane_id = @enumFromInt(2), .pane_generation = 3, .text = "inspect" };
+    try request.options.setModel("test-model");
+    request.options.effort = try core.AgentEffort.init("low");
+    try request.images.append(&image);
+    try outbox.pushAgentPrompt(request);
+    @memset(&image, 'x');
+    const stored = outbox.items[0].agent_prompt.view(&outbox.input_bytes[0]);
+    try std.testing.expectEqualStrings("/tmp/borrowed.png", stored.images.path(0));
+    try std.testing.expectEqualStrings("inspect", stored.text);
+    var long: [core.agent_thread.max_prompt_bytes]u8 = @splat('a');
+    request.text = &long;
+    request.images.storage[0] = "/tmp/image.png";
+    const depth = outbox.len;
+    try std.testing.expectError(error.InvalidAgentPrompt, outbox.pushAgentPrompt(request));
+    try std.testing.expectEqual(depth, outbox.len);
 }

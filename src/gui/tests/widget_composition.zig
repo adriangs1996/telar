@@ -144,7 +144,9 @@ test "composed frame survives local widgets and replaced projection borrows unti
     try std.testing.expect(replacement_generation != generation);
     try std.testing.expectEqualSlices(Quad, frozen, session.renderer.quads.items());
     try std.testing.expect(targets.equivalent(gui.widgets.dispatcher.maps.prepared()));
-    try std.testing.expectEqualDeep(editors.items[0..editors.len], gui.widgets.editors.prepared().items[0..editors.len]);
+    for (editors.items[0..editors.len], gui.widgets.editors.prepared().items[0..editors.len]) |expected, actual| {
+        try std.testing.expect(std.meta.eql(expected, actual));
+    }
     const retained = session.renderer.frame(token);
     try std.testing.expectEqual(frame.quads, retained.quads);
     try std.testing.expectEqual(frame.quad_count, retained.quad_count);

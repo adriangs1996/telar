@@ -1,0 +1,11 @@
+//! One owned long shaping result in the editor's bounded arena.
+hash: u64,
+text_start: u16,
+text_len: u16,
+glyph_start: u16,
+glyph_count: u16,
+pixel_height: u16,
+preferred: @import("font_id.zig").Id,
+font: @import("font_id.zig").Id,
+columns: u32,
+rtl: bool,

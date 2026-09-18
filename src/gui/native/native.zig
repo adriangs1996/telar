@@ -1,5 +1,6 @@
 //! Native backends borrow frame bytes only through their submission. Completion
 //! runs on the window thread after the GPU stops consuming that submission.
+pub const DiagramTexture = @import("DiagramTexture.zig").DiagramTexture;
 pub const Frame = @import("Frame.zig").Frame;
 pub const Viewport = @import("Viewport.zig").Viewport;
 pub const InputEvent = @import("InputEvent.zig").InputEvent;

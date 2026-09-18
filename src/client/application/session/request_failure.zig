@@ -38,6 +38,10 @@ pub fn notification(command: Command) InputType {
 
 fn failureTitle(continuation: client_requests.Continuation) []const u8 {
     return switch (continuation) {
+        .agent_prompt => "Could not send prompt",
+        .agent_control => "Could not update agent",
+        .agent_query => "Could not load conversation",
+        .agent_history => "Could not load earlier messages",
         .split => "Could not split pane",
         .close_pane => "Could not close pane",
         .attach_pane => "Could not attach pane",
@@ -55,6 +59,8 @@ fn failureTitle(continuation: client_requests.Continuation) []const u8 {
 
 fn notificationTarget(continuation: client_requests.Continuation) notifications.Target {
     return switch (continuation) {
+        .agent_history => |operation| .{ .focus_pane = operation.owner.pane_id },
+        .agent_prompt, .agent_control, .agent_query => |operation| .{ .focus_pane = operation.pane_id },
         .split => |split| .{ .focus_pane = split.target_pane },
         .close_pane, .attach_pane => |operation| .{ .select_tab = operation.location.tab_id },
         .tab_snapshot, .rename_tab, .close_tab, .move_tab => |location| .{

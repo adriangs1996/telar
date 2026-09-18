@@ -1,5 +1,6 @@
 #include "vulkan_pipeline.h"
 #include <string.h>
+#include "../native/telar_gui.h"
 
 extern const uint32_t telar_gui_quad_vert_spv[];
 extern const uint32_t telar_gui_quad_vert_spv_bytes;
@@ -21,7 +22,7 @@ bool telar_vulkan_pipeline_init(telar_vulkan_pipeline *self, VkDevice device, Vk
     self->device = device;
     self->format = format;
     // Binding 1 is the alpha atlas, binding 2 the RGBA sprite page.
-    VkDescriptorSetLayoutBinding bindings[3] = {
+    VkDescriptorSetLayoutBinding bindings[3 + TELAR_GUI_DIAGRAM_SLOTS] = {
         {.binding = 0,
          .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
          .descriptorCount = 1,
@@ -35,15 +36,23 @@ bool telar_vulkan_pipeline_init(telar_vulkan_pipeline *self, VkDevice device, Vk
          .descriptorCount = 1,
          .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT},
     };
+    for (unsigned i = 0; i < TELAR_GUI_DIAGRAM_SLOTS; i++) {
+        bindings[3 + i] = (VkDescriptorSetLayoutBinding){
+            .binding = 3 + i,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        };
+    }
     VkDescriptorSetLayoutCreateInfo set_layout = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 3,
+        .bindingCount = 3 + TELAR_GUI_DIAGRAM_SLOTS,
         .pBindings = bindings,
     };
     VK_TRY(vkCreateDescriptorSetLayout(self->device, &set_layout, NULL, &self->set_layout));
     VkDescriptorPoolSize sizes[2] = {
         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 + TELAR_GUI_DIAGRAM_SLOTS},
     };
     VkDescriptorPoolCreateInfo pool = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,

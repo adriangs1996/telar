@@ -62,7 +62,7 @@ test "native chrome preserves the resize gesture over cells and clamps scrolling
     try std.testing.expect(fixture.chrome.band_gesture == null and !fixture.chrome.sidebar_resize_active);
     try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = .press, .x = 900, .y = band.y + 10 }) == null);
     _ = fixture.chrome.bandPointer(.{ .kind = .scroll_down, .x = 2, .y = band.y + 4 });
-    try std.testing.expectEqual(@as(u16, 0), fixture.chrome.sidebar.scroll);
+    try std.testing.expectEqual(@as(u16, 0), fixture.chrome.sidebar.agents.scroll);
 }
 
 test "native agent targets retain generation through scroll and snapshot replacement" {
@@ -82,17 +82,17 @@ test "native agent targets retain generation through scroll and snapshot replace
     try fixture.paint(projection);
     const first = fixture.bandTarget(.{ .focus_agent = entries[0].key }).?;
     try std.testing.expectEqualDeep(client.Intent{ .focus_agent = entries[0].key }, fixture.clickBand(first, 0).intent);
-    const band = fixture.band();
-    _ = fixture.chrome.bandPointer(.{ .kind = .scroll_down, .x = 4, .y = band.y + 4 });
-    try std.testing.expect(fixture.chrome.sidebar.step != 0);
-    try std.testing.expectEqual(@min(fixture.chrome.sidebar.step, fixture.chrome.sidebar.maximum_scroll), fixture.chrome.sidebar.scroll);
+    const list = fixture.chrome.presented().sidebar_regions.agents;
+    _ = fixture.chrome.bandPointer(.{ .kind = .scroll_down, .x = list.x + 4, .y = list.y + 4 });
+    try std.testing.expect(fixture.chrome.sidebar.agents.step != 0);
+    try std.testing.expectEqual(@min(fixture.chrome.sidebar.agents.step, fixture.chrome.sidebar.agents.maximum_scroll), fixture.chrome.sidebar.agents.scroll);
     try fixture.paint(projection);
     try std.testing.expect(fixture.bandTarget(.{ .focus_agent = entries[2].key }) != null);
     try std.testing.expectEqual(@as(u64, 1), agents.revision);
     _ = try agents.replace(.{ .revision = 2, .agents = &.{} });
     try fixture.paint(projection);
     try std.testing.expect(fixture.bandTarget(.{ .focus_agent = entries[0].key }) == null);
-    try std.testing.expectEqual(@as(u16, 0), fixture.chrome.sidebar.scroll);
+    try std.testing.expectEqual(@as(u16, 0), fixture.chrome.sidebar.agents.scroll);
 }
 
 test "native tabs always retain the active tab when their row overflows" {

@@ -98,9 +98,8 @@ aggregate left with no tabs.
 _Avoid_: Tab close (for the committed fact), Pane close
 
 **Pane launch**:
-The act of starting a new runtime-owned pane from a requested command and
-terminal size. It ends when the runtime owns a usable pane, independently of
-any client's attachment or confirmation.
+The act of starting a new runtime-owned terminal or agent pane. It ends when
+the runtime owns a usable pane, independently of any client's attachment.
 _Avoid_: Pane creation, pane spawn
 
 **Launch working directory**:
@@ -282,12 +281,21 @@ _Avoid_: Permission text, prompt text
 
 **Pane surface**:
 How a layout leaf shows its pane: the terminal cells, or the thread surface of
-the agent running in it. Toggling the surface never moves or refocuses the pane.
-_Avoid_: View mode, agent view, pane kind
+the agent running in it. Presentation does not change the pane's kind.
+_Avoid_: View mode, agent view
+
+**Pane kind**:
+The kind of work a pane owns, either a terminal process or a managed agent.
+It belongs to the pane's lifetime and survives clients disconnecting.
+_Avoid_: Pane surface, agent mode
+
+**Agent pane**:
+A pane that owns a managed agent conversation and accepts prompts and approval
+decisions through that agent's structured interface.
+_Avoid_: Chat window, terminal agent
 
 **Thread surface**:
-The Telar view of a pane's agent: its header, its transcript items and its
-composer. The TUI paints it with cells and the GUI natively from one projection.
+The Telar view of a pane's agent, containing its header, transcript and composer.
 _Avoid_: Chat pane, conversation panel, GUI pane
 
 **Composer**:

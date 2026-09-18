@@ -3,6 +3,15 @@ layout(set = 0, binding = 1) uniform sampler2D atlas;
 // Premultiplied RGBA cells sampled linearly; the tint's alpha fades a sprite
 // and its RGB multiplies the artwork.
 layout(set = 0, binding = 2) uniform sampler2D sprites;
+layout(set = 0, binding = 3) uniform sampler2D diagram0;
+layout(set = 0, binding = 4) uniform sampler2D diagram1;
+layout(set = 0, binding = 5) uniform sampler2D diagram2;
+layout(set = 0, binding = 6) uniform sampler2D diagram3;
+layout(set = 0, binding = 7) uniform sampler2D diagram4;
+layout(set = 0, binding = 8) uniform sampler2D diagram5;
+layout(set = 0, binding = 9) uniform sampler2D diagram6;
+layout(set = 0, binding = 10) uniform sampler2D diagram7;
+
 
 layout(location = 0) in vec2 in_uv;
 layout(location = 1) in vec4 in_color;
@@ -26,7 +35,19 @@ void main() {
     if (in_texture > 0.5) {
         // The blend state expects straight alpha, so the premultiplied texel
         // is divided back before the tint applies.
-        vec4 texel = texture(sprites, in_uv);
+        vec4 texel;
+        // Fixed bindings avoid requiring dynamically indexed sampled images.
+        switch (int(in_texture)) {
+            case 2: texel = texture(diagram0, in_uv); break;
+            case 3: texel = texture(diagram1, in_uv); break;
+            case 4: texel = texture(diagram2, in_uv); break;
+            case 5: texel = texture(diagram3, in_uv); break;
+            case 6: texel = texture(diagram4, in_uv); break;
+            case 7: texel = texture(diagram5, in_uv); break;
+            case 8: texel = texture(diagram6, in_uv); break;
+            case 9: texel = texture(diagram7, in_uv); break;
+            default: texel = texture(sprites, in_uv); break;
+        }
         vec3 straight = texel.a > 0.0 ? texel.rgb / texel.a : vec3(0.0);
         out_color = vec4(straight * in_color.rgb, texel.a * in_color.a);
         return;

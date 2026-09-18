@@ -1,4 +1,7 @@
 const PaneSurfaceType = @import("telar-core").PaneSurface;
+const AgentPane = @import("../panes/Pane.zig");
+const PaneOpened = @import("telar-core").PaneOpened;
+const NamePromptCommand = @import("name_prompt.zig").Command;
 const model_namespace = @import("model_namespace.zig");
 const TabsModel = @import("../workspace/TabsModel.zig");
 const LayoutsType = @import("../workspace/Layouts.zig");
@@ -250,6 +253,12 @@ pub fn restoreClientLayouts(model: *Model, layouts: LayoutsType) void {
 pub fn togglePaneSurface(model: *Model) ?PaneSurfaceType {
     const active = model.workspace.active() orelse return null;
     const focused = active.model.layout.focused() orelse return null;
+    if (active.model.findConst(focused)) |pane| {
+        if (pane.kind == .agent) {
+            return .thread;
+        }
+    }
+
     const next: PaneSurfaceType = switch (active.model.layout.surface(focused)) {
         .terminal => .thread,
         .thread => .terminal,
@@ -260,6 +269,114 @@ pub fn togglePaneSurface(model: *Model) ?PaneSurfaceType {
 
     model.panes_revision +%= 1;
     return next;
+}
+
+/// Captures an attached agent pane without granting mutation authority.
+/// Example: `const pane = model.agentPane(pane_id) orelse return;`
+pub fn agentPane(model: *const Model, pane_id: PaneIdType) ?*const AgentPane {
+    const tab = model.workspace.tabForPaneConst(pane_id) orelse return null;
+    const pane = tab.model.findConst(pane_id) orelse return null;
+    return if (pane.attached and pane.kind == .agent) pane else null;
+}
+
+/// Installs runtime pane identity after a correlated attachment succeeds.
+/// Example: `_ = model.identifyPane(opened);`
+pub fn identifyPane(model: *Model, opened: PaneOpened) bool {
+    const tab = model.workspace.tabForPane(opened.pane_id) orelse return false;
+    const pane = tab.model.find(opened.pane_id) orelse return false;
+    if (!pane.attached or !std.meta.eql(pane.location, opened.location)) {
+        return false;
+    }
+
+    const changed = pane.identify(opened.kind, opened.pane_generation);
+    const surface_changed = if (pane.kind == .agent) tab.model.setSurface(pane.id, .thread) else false;
+
+    if (changed or surface_changed) {
+        model.panes_revision +%= 1;
+    }
+
+    return true;
+}
+
+/// Copies canonical conversation state only for the current runtime pane.
+/// Example: `_ = try model.applyAgentThread(snapshot);`
+pub fn applyAgentThread(model: *Model, snapshot: @import("telar-core").AgentThreadSnapshotView) !bool {
+    const pane = model.workspace.findPane(snapshot.pane_id) orelse return false;
+    if (!try pane.applyAgentThread(snapshot)) {
+        return false;
+    }
+
+    model.panes_revision +%= 1;
+    return true;
+}
+
+/// Mutates the composer through its owning pane. Example: `_ = model.editAgentComposer(id, .backspace);`
+pub fn editAgentComposer(model: *Model, pane_id: PaneIdType, command: NamePromptCommand) bool {
+    const pane = model.workspace.findPane(pane_id) orelse return false;
+    if (!pane.attached or pane.kind != .agent or !pane.editComposer(command)) {
+        return false;
+    }
+
+    model.panes_revision +%= 1;
+    return true;
+}
+
+/// Adds an image through its attached draft owner. Example: `_ = try model.attachAgentImage(id, path);`
+pub fn attachAgentImage(model: *Model, pane_id: PaneIdType, path: []const u8) !bool {
+    const pane = model.workspace.findPane(pane_id) orelse return false;
+    if (!pane.attached or pane.kind != .agent) {
+        return false;
+    }
+
+    try pane.attachComposerImage(path);
+    model.panes_revision +%= 1;
+    return true;
+}
+
+/// Example: `_ = model.removeAgentImage(id, removal);`
+pub fn removeAgentImage(model: *Model, pane_id: PaneIdType, removal: @import("../panes/Pane.zig").ImageRemoval) bool {
+    const pane = model.workspace.findPane(pane_id) orelse return false;
+    if (!pane.attached or pane.kind != .agent or !pane.removeComposerImage(removal)) {
+        return false;
+    }
+
+    model.panes_revision +%= 1;
+    return true;
+}
+
+/// Clears only the submitted draft revision; later typing stays intact.
+/// Example: `_ = model.acceptAgentPrompt(pane_id, composer_revision);`
+pub fn acceptAgentPrompt(model: *Model, pane_id: PaneIdType, revision: u64) bool {
+    const pane = model.workspace.findPane(pane_id) orelse return false;
+    if (!pane.attached or pane.kind != .agent or !pane.acceptComposer(revision)) {
+        return false;
+    }
+
+    model.panes_revision +%= 1;
+    return true;
+}
+
+/// Stores disposable transcript navigation independently of provider state.
+/// Example: `_ = model.scrollAgentThread(pane_id, 3);`
+pub fn scrollAgentThread(model: *Model, pane_id: PaneIdType, delta: i32) bool {
+    const pane = model.workspace.findPane(pane_id) orelse return false;
+    if (!pane.attached or pane.kind != .agent or !pane.scrollConversation(delta)) {
+        return false;
+    }
+
+    model.panes_revision +%= 1;
+    return true;
+}
+
+/// Commits one provider-backed composer selection. Example: `_ = model.changeAgentOption(id, .{ .access = .read_only });`
+pub fn changeAgentOption(model: *Model, pane_id: PaneIdType, change: @import("../panes/agent_options.zig").Change) bool {
+    const pane = model.workspace.findPane(pane_id) orelse return false;
+    if (!pane.attached or pane.kind != .agent or !pane.changeAgentOption(change)) {
+        return false;
+    }
+
+    model.panes_revision +%= 1;
+    return true;
 }
 
 /// Returns the version that presenters use to observe committed changes.
@@ -1460,7 +1577,7 @@ pub fn planPaneInput(model: *const Model, target: model_types.PaneInputTarget) ?
             break :captured tab.model.findConst(session.pane_id) orelse return null;
         },
     };
-    if (!pane.attached) {
+    if (!pane.attached or pane.kind == .agent) {
         return null;
     }
 
@@ -1693,7 +1810,7 @@ pub fn beginPointerSelection(model: *Model, press: PointerPressType) bool {
 
     const active = model.workspace.active() orelse return false;
     const pane = active.model.focusedPane() orelse return false;
-    if (pane.id != press.pane_id or !pane.attached or
+    if (pane.id != press.pane_id or !pane.attached or pane.kind != .terminal or
         press.position.x >= pane.buffer.w or press.position.y >= pane.buffer.h)
     {
         return false;
@@ -1751,7 +1868,7 @@ pub fn enterCopyMode(model: *Model) bool {
 
     const active = model.workspace.active() orelse return false;
     const pane = active.model.focusedPane() orelse return false;
-    if (!pane.attached) {
+    if (!pane.attached or pane.kind != .terminal) {
         return false;
     }
 

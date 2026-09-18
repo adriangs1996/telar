@@ -32,6 +32,8 @@ atlas: ?GlyphAtlas = null,
 /// Built with the atlas for the same display scale; favicons land in it
 /// between frames and bump its version the way glyphs bump the atlas.
 sprites: ?SpritePage = null,
+/// Supplied by the GUI image store before prepare; borrowed through frame completion.
+diagrams: [8]native.DiagramTexture = @splat(.{}),
 quads: QuadList,
 cell_quads: QuadList,
 retained: RetainedCells,
@@ -373,6 +375,7 @@ pub fn frame(renderer: *const Renderer, token: u64) native.Frame {
         .sprites = if (renderer.sprites) |page| page.pixels.ptr else null,
         .sprites_side = if (renderer.sprites != null) SpritePage.side else 0,
         .sprites_version = renderer.sprites_version,
+        .diagrams = renderer.diagrams,
         .background = .{ renderer.background.r, renderer.background.g, renderer.background.b, renderer.config.window.background_opacity },
         .background_blur = renderer.config.window.background_blur,
         .titlebar = @intFromBool(renderer.config.window.titlebar),
@@ -411,4 +414,23 @@ test "fallback icons retain their full texture in tightened terminal cells" {
             }
         }
     }
+}
+
+test "diagram frame snapshots borrow pixels and preserve versions through replace and clear" {
+    var renderer = Renderer.init(std.testing.allocator);
+    defer renderer.deinit();
+    const pixels = [_]u8{ 128, 0, 0, 128 };
+    renderer.diagrams[7] = .{ .pixels = &pixels, .width = 1, .height = 1, .version = 0x100000001 };
+    const first = renderer.frame(1);
+    try std.testing.expectEqual(pixels[0..].ptr, first.diagrams[7].pixels.?);
+    renderer.diagrams[7].version = 2;
+    const second = renderer.frame(2);
+    try std.testing.expectEqual(@as(u64, 0x100000001), first.diagrams[7].version);
+    try std.testing.expectEqual(@as(u64, 2), second.diagrams[7].version);
+    renderer.diagrams[7] = .{};
+    const cleared = renderer.frame(3);
+    try std.testing.expectEqual(@as(?[*]const u8, null), cleared.diagrams[7].pixels);
+    try std.testing.expectEqual(@as(u32, 1), first.diagrams[7].width);
+    try native.DiagramTexture.validate(&first.diagrams);
+    try native.DiagramTexture.validate(&cleared.diagrams);
 }

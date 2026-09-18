@@ -151,6 +151,20 @@ pub fn enqueueCreateTab(client: *Client, request: CreateTabType) !void {
     try pump(client);
 }
 
+/// Copies a prompt into its outbound slot before the editor can change it.
+/// Example: `try runtime_transport.enqueueAgentPrompt(client, request);`
+pub fn enqueueAgentPrompt(client: *Client, request: @import("telar-core").AgentPrompt) !void {
+    try client.runtime_transport.outbox.pushAgentPrompt(request);
+    try pump(client);
+}
+
+/// Copies a page cursor before its reading window can change.
+/// Example: `try runtime_io.enqueueAgentHistory(client, request);`
+pub fn enqueueAgentHistory(client: *Client, request: @import("telar-core").QueryAgentHistory) !void {
+    try client.runtime_transport.outbox.pushAgentHistory(request);
+    try pump(client);
+}
+
 /// Copies one notification request and starts its write when idle.
 ///
 /// ```zig

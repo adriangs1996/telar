@@ -51,7 +51,7 @@ fn paintBody(buffer: *BufferType, body: RectType, input: ThreadSurfaceInput) voi
         return;
     }
 
-    const label = "transcript index pending";
+    const label = if (input.view.kind == .agent) "Open Telar GUI to view this conversation" else "transcript index pending";
     const width = @min(body.w, measure_module(label));
     _ = buffer.writeTruncated(body, .{
         .point = .{ .x = body.x + (body.w - width) / 2, .y = body.y + body.h / 2 },
@@ -62,6 +62,10 @@ fn paintBody(buffer: *BufferType, body: RectType, input: ThreadSurfaceInput) voi
 }
 
 fn paintComposer(buffer: *BufferType, row: RectType, input: ThreadSurfaceInput) void {
+    if (input.view.kind == .agent) {
+        return;
+    }
+
     const draft = input.view.composer;
     const empty = draft.len == 0;
     var storage: [256]u8 = undefined;

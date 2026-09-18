@@ -424,6 +424,18 @@ pub fn observeInput(tracker: *Tracker, key: PaneKeyType, bytes: []const u8) bool
     return agent.observeInput(bytes);
 }
 
+/// Captures the first accepted managed prompt when the caller opted into title generation.
+/// Example: `_ = tracker.observeSubmittedPrompt(identity, "Fix tests\nKeep behavior");`.
+pub fn observeSubmittedPrompt(tracker: *Tracker, identity: IdentityType, text: []const u8) bool {
+    const agent = tracker.ensure(identity) orelse return false;
+    if (!agent.observeSubmittedPrompt(text, tracker.pendingDescriptionCount() < description.max_pending_jobs)) {
+        return false;
+    }
+
+    tracker.bumpRevision();
+    return true;
+}
+
 /// Starts one bounded job at a time. Invalid captured input deterministically
 /// becomes a failed placeholder and is never retried.
 ///
@@ -649,4 +661,12 @@ fn bumpRevision(tracker: *Tracker) void {
     if (tracker.revision == 0) {
         tracker.revision = 1;
     }
+}
+
+/// Updates the lifecycle projection for one runtime-owned provider session.
+/// Example: `_ = tracker.observeManaged(identity, state);`.
+pub fn observeManaged(tracker: *Tracker, identity: IdentityType, state: @import("ManagedState.zig")) bool {
+    const agent = tracker.ensure(identity) orelse return false;
+    agent.applyManaged(state);
+    return tracker.reproject(agent, state.observed_at_ms);
 }

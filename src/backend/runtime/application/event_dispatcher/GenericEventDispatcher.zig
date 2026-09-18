@@ -84,6 +84,12 @@ pub fn Type(comptime Application: type) type {
                 .agent_description => |result| {
                     AgentEvents.handleDescription(application, result);
                 },
+                .agent_history_completed => |job| @import("../agent_history.zig").complete(application, job),
+                .agent_thread_changed => |result| {
+                    if (try @import("../agent_threads.zig").handle(application, result)) {
+                        try PaneEvents.Pipeline.handleExit(application, .{ .pane = result.pane, .result = .{ .exited = 0 } });
+                    }
+                },
                 .engine_response => |result| {
                     try AgentEvents.handleEngineResponse(application, result);
                 },

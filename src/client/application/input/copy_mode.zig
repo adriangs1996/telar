@@ -13,6 +13,20 @@ pub const Outcome = enum {
     exited,
 };
 
+test "terminal copy mode rejects agent panes for keyboard and pointer entry" {
+    var testing = try CopyModeTestingModel.init();
+    defer testing.deinit();
+    testing.model.workspace.findPane(testing.pane_id).?.kind = .agent;
+    var capture: CopyModeEffectsCapture = .{ .model = testing.model };
+    var handler: CopyModeHandler = .{ .model = testing.model, .effects = capture.port() };
+    const revision = testing.model.copy_revision;
+    try std.testing.expect(!handler.enter());
+    try std.testing.expect(!handler.beginPointer(.{ .pane_id = testing.pane_id, .position = .{ .x = 1, .y = 1 }, .now_ns = 0 }));
+    try std.testing.expect(testing.model.copy_state == null);
+    try std.testing.expect(testing.model.pointerSelection() == null);
+    try std.testing.expectEqual(revision, testing.model.copy_revision);
+}
+
 test "mouse clicks expand words and lines and copy only once on release" {
     var testing = try CopyModeTestingModel.init();
     defer testing.deinit();

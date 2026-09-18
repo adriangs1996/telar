@@ -42,6 +42,7 @@ pub fn execute(handler: *CreateTabHandler, command: CreateTab) !CreateTabResult 
 
     const launched = handler.launcher.launch(handler.launcher.context, .{
         .location = created.location,
+        .kind = command.kind,
         .size = command.size,
         .launch = command.launch,
         .launch_cwd = launch_cwd,
@@ -56,6 +57,8 @@ pub fn execute(handler: *CreateTabHandler, command: CreateTab) !CreateTabResult 
     return .{
         .created = created,
         .root_pane_id = launched.id,
+        .kind = launched.kind,
+        .pane_generation = launched.pane_generation,
     };
 }
 

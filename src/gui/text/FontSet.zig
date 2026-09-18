@@ -13,6 +13,8 @@ const FontMatch = @import("../native/FontMatch.zig").FontMatch;
 const Id = @import("font_id.zig").Id;
 const FontSet = @This();
 
+var next_identity: std.atomic.Value(u64) = .init(1);
+
 /// The native port answering which installed face covers one grapheme.
 pub const Lookup = *const fn (text: [*:0]const u8, match: *FontMatch) callconv(.c) c_int;
 
@@ -25,6 +27,10 @@ pub const native_lookup: Lookup = telar_gui_find_fallback_font;
 /// and selectors; longer clusters keep the replacement glyph.
 pub const max_query_bytes = 64;
 
+/// Never reused, including when a replacement set occupies the same address.
+identity: u64,
+/// Changes only when the resident fallback order changes, not on rasterization.
+revision: u64 = 0,
 primary: FontFace,
 text: ?FontFace,
 symbols: FontFace,
@@ -41,6 +47,7 @@ lookups: usize = 0,
 /// sans weights, sharing one page. Discovered faces join later.
 /// Example: `var fonts = try FontSet.init(library, options, pixels);`
 pub fn init(library: freetype.c.FT_Library, options: AtlasOptions, pixels: []u8) !FontSet {
+    const identity = try allocateIdentity(&next_identity);
     var primary = try FontFace.init(library, options, pixels);
     errdefer primary.deinit();
     var fallback = options;
@@ -60,6 +67,7 @@ pub fn init(library: freetype.c.FT_Library, options: AtlasOptions, pixels: []u8)
     fallback.font = assets.plex_sans_semibold;
     const sans_semibold = try FontFace.init(library, fallback, pixels);
     return .{
+        .identity = identity,
         .primary = primary,
         .text = text,
         .symbols = symbols,
@@ -151,8 +159,18 @@ pub fn discover(fonts: *FontSet, allocator: std.mem.Allocator, text: []const u8)
         return false;
     }
 
-    _ = fonts.pool.add(face).?;
+    _ = fonts.addFallback(face).?;
     return true;
+}
+
+/// Takes a discovered face into the append-only pool and invalidates resolution caches.
+/// The caller retains the face when the pool is full. At most eight additions occur
+/// during one set's lifetime, so the revision cannot wrap.
+/// Example: `const slot = fonts.addFallback(face) orelse return error.FallbackPoolFull;`
+pub fn addFallback(fonts: *FontSet, face: FallbackFace) ?u3 {
+    const slot = fonts.pool.add(face) orelse return null;
+    fonts.revision += 1;
+    return slot;
 }
 
 pub fn get(fonts: *FontSet, id: Id) *FontFace {
@@ -175,6 +193,19 @@ fn borrow(fonts: *const FontSet, id: Id) *const FontFace {
         .sans_semibold => &fonts.sans_semibold,
         else => &fonts.pool.faces[id.fallbackSlot().?].?.face,
     };
+}
+
+fn allocateIdentity(counter: *std.atomic.Value(u64)) !u64 {
+    var candidate = counter.load(.monotonic);
+    while (candidate != std.math.maxInt(u64)) {
+        if (counter.cmpxchgWeak(candidate, candidate + 1, .monotonic, .monotonic)) |observed| {
+            candidate = observed;
+        } else {
+            return candidate;
+        }
+    }
+
+    return error.FontSetIdentityExhausted;
 }
 
 // The codepoints `FontFace.covers` tests, NUL-terminated for the port; null
@@ -201,4 +232,12 @@ fn significantBytes(text: []const u8, query: *[max_query_bytes:0]u8) ?[:0]const 
 
     query[len] = 0;
     return query[0..len :0];
+}
+
+test "font set identity exhaustion never wraps or reuses a retired identity" {
+    var counter: std.atomic.Value(u64) = .init(std.math.maxInt(u64) - 1);
+    try std.testing.expectEqual(std.math.maxInt(u64) - 1, try allocateIdentity(&counter));
+    try std.testing.expectError(error.FontSetIdentityExhausted, allocateIdentity(&counter));
+    try std.testing.expectError(error.FontSetIdentityExhausted, allocateIdentity(&counter));
+    try std.testing.expectEqual(std.math.maxInt(u64), counter.load(.monotonic));
 }

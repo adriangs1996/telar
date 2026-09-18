@@ -3,3 +3,6 @@ const PaneIdType = @import("telar-core").PaneId;
 const LaunchedPane = @This();
 
 id: PaneIdType,
+
+kind: @import("telar-core").PaneKind = .terminal,
+pane_generation: u64 = 0,

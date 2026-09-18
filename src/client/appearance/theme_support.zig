@@ -6,7 +6,7 @@ const ColorType = @import("telar-core").Color;
 const std = @import("std");
 
 pub const Builtin = enum {
-    osaka_jade,
+    shade,
     vesper,
     catppuccin,
     tokyo_night,
@@ -14,7 +14,7 @@ pub const Builtin = enum {
 
     pub fn canonicalName(value: Builtin) []const u8 {
         return switch (value) {
-            .osaka_jade => "osaka-jade",
+            .shade => "shade",
             .vesper => "vesper",
             .catppuccin => "catppuccin",
             .tokyo_night => "tokyo-night",
@@ -29,11 +29,11 @@ pub const Overrides = @import("Overrides.zig");
 
 pub const Theme = @import("Theme.zig");
 
-pub const default_theme = builtin(.osaka_jade);
+pub const default_theme = builtin(.shade);
 
 pub fn fromName(name: []const u8) ?ThemeType {
-    if (eql(name, "osaka-jade") or eql(name, "osaka_jade") or eql(name, "osakajade")) {
-        return builtin(.osaka_jade);
+    if (eql(name, "shade") or eql(name, "osaka-jade") or eql(name, "osaka_jade") or eql(name, "osakajade")) {
+        return builtin(.shade);
     }
     if (eql(name, "vesper")) {
         return builtin(.vesper);
@@ -55,16 +55,11 @@ pub fn builtin(name: Builtin) ThemeType {
         .base = name,
         .terminal = terminal(name),
         .palette = switch (name) {
-            .osaka_jade => .{
+            .shade => builtin(.vesper).withOverrides(.{
                 .accent = rgb24c(0xa8c98c),
                 .panel_bg = .default,
-                .surface0 = rgb24c(0x203128),
-                .surface1 = rgb24c(0x304a39),
-                .surface_dim = rgb24c(0x111c18),
-                .overlay0 = rgb24c(0x52675a),
-                .overlay1 = rgb24c(0x7f9785),
-                .text = rgb24c(0xd5ddcc),
-                .subtext0 = rgb24c(0x9daa9b),
+                .surface0 = rgb24c(0x232323),
+                .surface1 = rgb24c(0x343434),
                 .mauve = rgb24c(0xc3cea0),
                 .green = rgb24c(0x91b99a),
                 .yellow = rgb24c(0xd4b477),
@@ -72,7 +67,7 @@ pub fn builtin(name: Builtin) ThemeType {
                 .blue = rgb24c(0x8faf9f),
                 .teal = rgb24c(0x91b7b0),
                 .peach = rgb24c(0xa8c98c),
-            },
+            }).palette,
             .vesper => .{
                 // .accent = rgb(168, 201, 140),
                 .accent = rgb(255, 199, 153),
@@ -154,17 +149,7 @@ fn terminal(name: Builtin) @import("TerminalTheme.zig") {
     // Palette sources are recorded in docs/configuration.md. These are ANSI
     // colors, not a positional conversion of the chrome's semantic roles.
     return switch (name) {
-        .osaka_jade => .{
-            .foreground = rgb24(0xd5ddcc),
-            .background = rgb24(0x111c18),
-            .cursor_color = rgb24(0xc5e6a0),
-            .cursor_text_color = rgb24(0x111c18),
-            .palette = ansi(.{
-                0x17241e, 0xe58c85, 0x91b99a, 0xd4b477, 0x8fa9b3, 0xb3a1b5, 0x91b7b0, 0xbbc8b5,
-                0x7f9785, 0xf0a29a, 0xa8c98c, 0xd0c398, 0xabc1c8, 0xc4b3c5, 0xadd0c5, 0xd5ddcc,
-            }),
-        },
-        .vesper => .{
+        .shade, .vesper => .{
             .foreground = rgb24(0xffffff),
             .background = rgb24(0x101010),
             .cursor_color = rgb24(0xffc799),
@@ -225,16 +210,21 @@ fn eql(a: []const u8, b: []const u8) bool {
     return std.ascii.eqlIgnoreCase(a, b);
 }
 
-test "Osaka Jade is the default theme and its panel takes the terminal background" {
-    try std.testing.expectEqual(Builtin.osaka_jade, default_theme.base);
+test "Shade is the default theme and its panel takes the terminal background" {
+    try std.testing.expectEqual(Builtin.shade, default_theme.base);
     try std.testing.expectEqualDeep(rgb(168, 201, 140), default_theme.palette.accent);
     try std.testing.expectEqualDeep(ColorType.default, default_theme.palette.panel_bg);
     try std.testing.expectEqualDeep(rgb(212, 180, 119), default_theme.palette.yellow);
-    try std.testing.expectEqual([3]u8{ 0x11, 0x1c, 0x18 }, default_theme.terminal.background);
-    try std.testing.expectEqual(@as(?[3]u8, .{ 0xc5, 0xe6, 0xa0 }), default_theme.terminal.cursor_color);
-    try std.testing.expectEqual(@as(?[3]u8, .{ 0x11, 0x1c, 0x18 }), default_theme.terminal.cursor_text_color);
-    try std.testing.expectEqual([3]u8{ 0x17, 0x24, 0x1e }, default_theme.terminal.palette[0]);
-    try std.testing.expectEqual([3]u8{ 0xd5, 0xdd, 0xcc }, default_theme.terminal.palette[15]);
+
+    const vesper = builtin(.vesper);
+    try std.testing.expectEqualDeep(vesper.terminal, default_theme.terminal);
+    try std.testing.expectEqualDeep(vesper.palette.text, default_theme.palette.text);
+    try std.testing.expectEqualDeep(vesper.palette.subtext0, default_theme.palette.subtext0);
+    try std.testing.expectEqualDeep(vesper.palette.surface_dim, default_theme.palette.surface_dim);
+    try std.testing.expectEqualDeep(vesper.palette.overlay0, default_theme.palette.overlay0);
+    try std.testing.expectEqualDeep(vesper.palette.overlay1, default_theme.palette.overlay1);
+    try std.testing.expectEqualDeep(rgb(35, 35, 35), default_theme.palette.surface0);
+    try std.testing.expectEqualDeep(rgb(52, 52, 52), default_theme.palette.surface1);
 }
 
 test "Vesper stays available with its defining colors" {
@@ -245,9 +235,12 @@ test "Vesper stays available with its defining colors" {
 }
 
 test "built-in theme names accept stable aliases" {
-    try std.testing.expectEqual(Builtin.osaka_jade, fromName("osaka-jade").?.base);
-    try std.testing.expectEqual(Builtin.osaka_jade, fromName("osaka_jade").?.base);
-    try std.testing.expectEqual(Builtin.osaka_jade, fromName("OsakaJade").?.base);
+    try std.testing.expectEqualStrings("shade", Builtin.shade.canonicalName());
+    try std.testing.expectEqual(Builtin.shade, fromName("shade").?.base);
+    try std.testing.expectEqual(Builtin.shade, fromName("Shade").?.base);
+    try std.testing.expectEqual(Builtin.shade, fromName("osaka-jade").?.base);
+    try std.testing.expectEqual(Builtin.shade, fromName("osaka_jade").?.base);
+    try std.testing.expectEqual(Builtin.shade, fromName("OsakaJade").?.base);
     try std.testing.expectEqual(Builtin.catppuccin, fromName("catppuccin-mocha").?.base);
     try std.testing.expectEqual(Builtin.tokyo_night, fromName("TokyoNight").?.base);
     try std.testing.expectEqual(Builtin.terminal, fromName("default").?.base);

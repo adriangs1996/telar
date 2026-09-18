@@ -59,7 +59,7 @@ pub fn apply(client: *Client, value: Action) !ControlType {
         },
     };
     const control = try use_case.execute(value, .{
-        .copy_mode_active = client.model.copyModeActive(),
+        .copy_mode_active = copy_modes.active(client),
     });
 
     return switch (control) {
@@ -112,6 +112,7 @@ fn deliver(raw_context: *anyopaque, value: Action) !ApplicationInputActionRoutin
         .select_workspace => |position| _ = try workspace_handoffs.selectWorkspace(client, .{ .position = position }),
         .close_pane => try closeFocused(client),
         .new_tab => try createTab(client),
+        .new_agent_tab => try @import("../agents/agent_threads.zig").create(client),
         .select_tab_offset => |offset| try selectTab(client, .{ .offset = offset }),
         .select_tab => |position| try selectTab(client, .{ .position = position }),
         .rename_tab => _ = name_prompts.beginActiveTabRename(client),

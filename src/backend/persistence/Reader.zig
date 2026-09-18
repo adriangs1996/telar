@@ -93,7 +93,7 @@ pub fn next(reader: *Reader) !?checkpoint.Record {
             const rows = try reader.inner.readInt(u16);
             const argument_count = try reader.inner.readInt(u16);
             const arguments = try reader.inner.readSized16();
-            if (argument_count == 0 or argument_count > checkpoint.max_launch_arguments or arguments.len > checkpoint.max_launch_bytes) {
+            if (argument_count > checkpoint.max_launch_arguments or arguments.len > checkpoint.max_launch_bytes) {
                 return error.InvalidCheckpoint;
             }
             if (std.mem.count(u8, arguments, "\x00") != argument_count) {
@@ -107,7 +107,10 @@ pub fn next(reader: *Reader) !?checkpoint.Record {
             const agent_title = if (reader.version >= 2) try reader.inner.readSized16() else "";
             const agent_title_source = if (reader.version >= 2) try reader.inner.readByte() else 0;
             try checkpoint.validateTitle(agent_title, agent_title_source);
-            return .{ .pane = .{
+            const kind_value = if (reader.version >= 4) try reader.inner.readByte() else 0;
+            const pane_kind = std.enums.fromInt(@import("telar-core").PaneKind, kind_value) orelse return error.InvalidCheckpoint;
+            const pane: @import("PaneRecord.zig") = .{
+                .kind = pane_kind,
                 .pane_id = pane_id,
                 .workspace_id = workspace_id,
                 .tab_id = tab_id,
@@ -120,7 +123,9 @@ pub fn next(reader: *Reader) !?checkpoint.Record {
                 .agent_session = agent_session,
                 .agent_title = agent_title,
                 .agent_title_source = agent_title_source,
-            } };
+            };
+            try checkpoint.validatePaneKind(pane);
+            return .{ .pane = pane };
         },
         .layout => {
             const identity = try reader.inner.readInt(u64);

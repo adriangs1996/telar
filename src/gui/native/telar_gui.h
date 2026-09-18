@@ -9,6 +9,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define TELAR_GUI_DIAGRAM_SLOTS 8
+#define TELAR_GUI_DIAGRAM_MAX_SIDE 4096
+#define TELAR_GUI_DIAGRAM_MAX_PIXELS (4u * 1024u * 1024u)
+#define TELAR_GUI_DIAGRAM_FRAME_PIXELS (8u * 1024u * 1024u)
+
 #define TELAR_GUI_RANGE_NONE UINT32_MAX
 #define TELAR_GUI_TEXT_CAPACITY 4096
 #define TELAR_GUI_ACCESSIBILITY_CAPACITY 256
@@ -27,7 +32,7 @@ typedef struct {
   double x, y, width, height;
 } telar_gui_text_context;
 
-// kind: 1 read UTF-8 clipboard, 2 write UTF-8 clipboard. The backend copies
+// kind: 1 read UTF-8 clipboard, 2 write UTF-8 clipboard, 3 image with text fallback. The backend copies
 // borrowed bytes before requesting the next item. Every request completes.
 typedef struct {
   uint32_t kind;
@@ -77,6 +82,14 @@ typedef struct {
   float scale;
 } telar_gui_viewport;
 
+// Borrowed premultiplied RGBA8 rectangles. Empty slots are entirely zero.
+// Versions identify content and cannot be reused for changed pixels in a slot.
+typedef struct {
+  const uint8_t *pixels;
+  uint32_t width, height;
+  uint64_t version;
+} telar_gui_diagram_texture;
+
 typedef struct {
   // Zero defers submission. The host waits for another wake or viewport change.
   uint64_t token;
@@ -89,6 +102,7 @@ typedef struct {
   const uint8_t *sprites;
   uint32_t sprites_side;
   uint32_t sprites_version;
+  telar_gui_diagram_texture diagrams[TELAR_GUI_DIAGRAM_SLOTS];
   // Straight RGBA; the GPU target stores premultiplied color after blending.
   float background[4];
   uint32_t background_blur;
@@ -115,7 +129,7 @@ typedef struct {
   // Kind 1 may also carry replacement_* for an IME commit.
   // Kind 8: scroll, positive dx right/dy down; precise=1 uses device pixels,
   // otherwise line units. phases: none0/begin1/update2/end3/cancel4.
-  // Kind 9: clipboard completion: code success0/unavailable1/too_large2/cancelled3.
+  // Kind 9: clipboard completion: code success0/unavailable1/too_large2/cancelled3/image_path4.
   // Kind 10: accessibility action: code is one action bit from the node.
   // Kind 11: delete surrounding: replacement_start/end contain before/after byte
   // counts relative to the context's cursor. Applied before commit/preedit.

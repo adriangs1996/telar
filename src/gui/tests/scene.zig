@@ -13,7 +13,7 @@ test "native theme backgrounds share window opacity across bands and pane header
     var overlays: @import("../widgets/overlays/Overlays.zig") = .{};
     var scene: @import("../render/Scene.zig") = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = client.theme_support.builtin(.vesper) };
 
-    for ([_]client.theme_support.Builtin{ .vesper, .osaka_jade, .catppuccin, .tokyo_night, .terminal }) |theme| {
+    for ([_]client.theme_support.Builtin{ .vesper, .shade, .catppuccin, .tokyo_night, .terminal }) |theme| {
         scene.theme = client.theme_support.builtin(theme);
         for ([_]f32{ 1, 0.95, 0.5, 0, 1 }) |opacity| {
             renderer.config.window.background_opacity = opacity;
@@ -26,14 +26,14 @@ test "native theme backgrounds share window opacity across bands and pane header
                 .{ bands.status_bar.x + bands.status_bar.width - 2, bands.status_bar.y + bands.status_bar.height / 2 },
             };
             for (points) |point| {
-                try std.testing.expectApproxEqAbs(opacity, try backgroundAlpha(renderer, point), 0.0001);
+                try std.testing.expectApproxEqAbs(opacity, (try backgroundColor(renderer, point))[3], 0.0001);
             }
 
             var layout: client.LayoutSnapshot = .{};
             panes.layout.snapshot(projection.geometry.area, &layout);
             for (layout.views()) |view| {
                 const header = renderer.metrics.rect(renderer.origin, view.outer.row(0));
-                try std.testing.expectApproxEqAbs(opacity, try backgroundAlpha(renderer, .{ header.x + header.width / 2, header.y + header.height / 2 }), 0.0001);
+                try std.testing.expectApproxEqAbs(opacity, (try backgroundColor(renderer, .{ header.x + header.width / 2, header.y + header.height / 2 }))[3], 0.0001);
             }
         }
     }
@@ -43,13 +43,56 @@ test "native theme backgrounds share window opacity across bands and pane header
     model.name_prompt.begin(.create_workspace);
     _ = try scene.prepare(fixture.projection());
     const modal = overlays.prepared().native_modal.?;
-    try std.testing.expectEqual(@as(f32, 1), try backgroundAlpha(renderer, .{ modal.x + modal.width / 2, modal.y + 10 }));
+    try std.testing.expectEqual(@as(f32, 1), (try backgroundColor(renderer, .{ modal.x + modal.width / 2, modal.y + 10 }))[3]);
 }
 
-// Samples blank interiors, away from glyphs, rounded corners and frame strokes.
-fn backgroundAlpha(renderer: *const @import("../render/TerminalRenderer.zig"), point: [2]f32) !f32 {
+test "agent and terminal panes share the configured theme background opacity and blur" {
+    const client = @import("telar-client");
+    var fixture = try @import("ChromeFixture.zig").init();
+    defer fixture.deinit();
+    const renderer = &fixture.session.renderer;
+    const model = &fixture.session.gui.app.model;
+    const panes = model.activeTabModel().?;
+    try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(20), .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
+    try std.testing.expect(model.identifyPane(.{ .request_id = @enumFromInt(1), .pane_id = Session.pane_id, .location = Session.location, .created = false, .kind = .agent, .pane_generation = 77 }));
+    var overlays: @import("../widgets/overlays/Overlays.zig") = .{};
+    var scene: @import("../render/Scene.zig") = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = client.theme_support.builtin(.vesper) };
+    renderer.config.window.background_blur = 40;
+    for ([_]client.theme_support.Builtin{ .vesper, .shade, .catppuccin, .tokyo_night, .terminal }) |theme| {
+        scene.theme = client.theme_support.builtin(theme);
+        if (theme == .terminal) {
+            scene.theme.terminal.background = .{ 17, 43, 71 };
+        }
+
+        renderer.theme = scene.theme.terminal;
+        for ([_]f32{ 0.5, 0, 0.95, 1 }) |opacity| {
+            renderer.config.window.background_opacity = opacity;
+            const projection = fixture.projection();
+            var layout: client.LayoutSnapshot = .{};
+            panes.layout.snapshot(projection.geometry.area, &layout);
+            for (layout.views()) |view| {
+                _ = panes.focusPane(view.pane_id);
+                _ = try scene.prepare(fixture.projection());
+                try std.testing.expectEqual(@as(u32, 40), renderer.frame(1).background_blur);
+                const bounds = renderer.metrics.rect(renderer.origin, view.content);
+                const color = try backgroundColor(renderer, .{ bounds.x + 2, bounds.y + bounds.height / 2 });
+                try std.testing.expectApproxEqAbs(opacity, color[3], 0.0001);
+                for (scene.theme.terminal.background, color[0..3]) |component, actual| {
+                    try std.testing.expectApproxEqAbs(@as(f32, @floatFromInt(component)) / 255 * opacity, actual, 0.0001);
+                }
+            }
+        }
+    }
+}
+
+// Samples premultiplied color away from glyphs, rounded corners and frame strokes.
+fn backgroundColor(renderer: *const @import("../render/TerminalRenderer.zig"), point: [2]f32) ![4]f32 {
     const quad = @import("../render/Quad.zig");
-    var alpha = renderer.frame(1).background[3];
+    var color = renderer.frame(1).background;
+    for (color[0..3]) |*component| {
+        component.* *= color[3];
+    }
+
     for (renderer.quads.items()) |item| {
         if (point[0] < item.x or point[0] >= item.x + item.width or point[1] < item.y or point[1] >= item.y + item.height) {
             continue;
@@ -61,10 +104,14 @@ fn backgroundAlpha(renderer: *const @import("../render/TerminalRenderer.zig"), p
 
         try std.testing.expectEqual(quad.solid_uv[0], item.u0);
         try std.testing.expectEqual(quad.solid_uv[1], item.v0);
-        alpha = item.a + alpha * (1 - item.a);
+        for (color[0..3], [_]f32{ item.r, item.g, item.b }) |*component, source| {
+            component.* = source * item.a + component.* * (1 - item.a);
+        }
+
+        color[3] = item.a + color[3] * (1 - item.a);
     }
 
-    return alpha;
+    return color;
 }
 
 test "native scene captures terminal and thread damage in the same presentation" {

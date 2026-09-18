@@ -55,6 +55,13 @@ Only the awaited request id lands; a reply after the palette closed changes
 nothing visible. A ready reply with usable text renders as the single
 selected row; any other status renders its reason and Enter asks again.
 
+The native palette separates the request field from a bordered command preview
+and a `Paste command` button. Its width targets 900 logical pixels within the
+window; its height follows the wrapped command. Wrapping preserves grapheme
+boundaries and never changes the text sent to the pane. Short windows clip the
+preview and show a notice when there is room for the footer. The primary button
+uses the existing prompt submission path and stays disabled during generation.
+
 ## Paste
 
 Enter over a ready suggestion first closes the prompt, then pastes the text
@@ -83,3 +90,6 @@ suggestion at 1024; the engine's own prompt and reply caps bound the rest.
   suggestion is ignored without ending the client.
 - `src/core/schema_contract_test.zig` pins both messages and bumps the
   handshake fingerprint.
+- `src/gui/tests/palette.zig` checks separated request, preview and submission
+  bounds, pointer activation, wrapping at narrow widths, short and scaled hosts,
+  and allocation-free warm rendering in each suggestion phase.

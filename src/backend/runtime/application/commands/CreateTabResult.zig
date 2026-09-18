@@ -4,3 +4,6 @@ const CreateTabResult = @This();
 
 created: TabCreatedType,
 root_pane_id: PaneIdType,
+
+kind: @import("telar-core").PaneKind = .terminal,
+pane_generation: u64 = 0,

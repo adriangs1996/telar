@@ -53,7 +53,9 @@ test "fresh workspace snapshots name inactive automatic tabs before pane attachm
 }
 
 test "workspace return names inactive tabs using each client's saved pane focus" {
-    var model = ModelType.init(std.testing.allocator, true);
+    const model = try std.testing.allocator.create(ModelType);
+    defer std.testing.allocator.destroy(model);
+    model.* = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const fresh = try std.testing.allocator.create(ModelType);
     defer std.testing.allocator.destroy(fresh);

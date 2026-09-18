@@ -75,10 +75,12 @@ test "DeliverPaneViewportHandler rejects every stale commit before effects" {
     try expectStale(&handler, &capture, change);
     testing.model.workspace.findPane(testing.pane_id).?.attached = true;
 
-    var empty = ModelType.init(std.testing.allocator, true);
+    const empty = try std.testing.allocator.create(ModelType);
+    defer std.testing.allocator.destroy(empty);
+    empty.* = ModelType.init(std.testing.allocator, true);
     defer empty.deinit();
     const empty_handler: DeliverPaneViewportHandler = .{
-        .model = &empty,
+        .model = empty,
         .effects = capture.effects(),
     };
     try expectStale(&empty_handler, &capture, change);

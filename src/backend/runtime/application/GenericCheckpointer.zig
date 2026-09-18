@@ -64,7 +64,13 @@ pub fn Type(comptime Application: type) type {
             const job: WriteJob = prepared: {
                 const buffer = try application.gpa.alloc(u8, session_checkpoint.snapshot_bytes);
                 errdefer application.gpa.free(buffer);
-                const len = try encode(application, buffer);
+                const len = encode(application, buffer) catch |err| switch (err) {
+                    error.AgentBusy => {
+                        application.gpa.free(buffer);
+                        return;
+                    },
+                    else => return err,
+                };
 
                 break :prepared .{ .io = application.io, .path = path, .buffer = buffer, .len = len };
             };
@@ -245,6 +251,10 @@ pub fn Type(comptime Application: type) type {
             }
             const workspace_path = reader.workspacePath(location.workspace) orelse return error.WorkspaceNotFound;
 
+            if (record.kind == .agent) {
+                return restoreAgentPane(application, counters, record);
+            }
+
             var argument_buffer: [checkpoint.max_launch_bytes + 2 * checkpoint.max_launch_arguments]u8 = undefined;
             var encoder = EncoderType.init(&argument_buffer);
             const resumable = resumeForPane(application, record);
@@ -310,6 +320,61 @@ pub fn Type(comptime Application: type) type {
             }
         }
 
+        fn restoreAgentPane(application: *Application, counters: CountersType, record: PaneRecordType) !void {
+            const conversation = if (application.session.resume_agents and record.agent_session.len != 0)
+                try @import("telar-core").RecentConversation.init(record.agent_session, record.agent_title)
+            else
+                null;
+            if (conversation) |value| {
+                if (managedConversationClaimed(application, value.idSlice())) {
+                    return error.ConversationAlreadyOpen;
+                }
+
+                const reference = try SessionReference.init(value.idSlice(), 0);
+                if (ResumeSession.init(.codex, reference)) |session| {
+                    if (application.model.agents.hasRestoredSession(session)) {
+                        return error.ConversationAlreadyOpen;
+                    }
+                } else |_| {}
+            }
+
+            const location: TabLocationType = .{
+                .workspace = .{ .workspace = try workspace_module(record.workspace_id) },
+                .tab_id = try tab_module(record.tab_id),
+            };
+            const workspace_path = application.workspaceReader().workspacePath(location.workspace) orelse return error.WorkspaceNotFound;
+            try application.model.panes.reserveRestoredKey(record.pane_id, counters.next_pane_generation);
+            const pane = try application.launchPane(.{
+                .location = location,
+                .kind = .agent,
+                .restore_conversation = conversation,
+                .size = .{ .cols = if (record.cols == 0) 80 else record.cols, .rows = if (record.rows == 0) 24 else record.rows },
+                .launch = .{ .cwd = record.cwd, .argument_count = 0, .encoded_arguments = "", .environment_mode = .inherit_runtime, .environment_count = 0, .encoded_environment = "" },
+                .launch_cwd = record.cwd,
+                .workspace_path = workspace_path,
+            });
+            application.session.restored_panes +|= 1;
+            if (conversation != null) {
+                application.session.resumed_agents +|= 1;
+                if (restoredTitle(record)) |title| {
+                    application.restoreAgentTitle(pane, title);
+                }
+            }
+        }
+
+        fn managedConversationClaimed(application: *Application, id: []const u8) bool {
+            for (application.model.panes.items) |slot| {
+                const pane = slot orelse continue;
+                if (pane.agent_thread) |snapshot| {
+                    if (std.mem.eql(u8, snapshot.threadId(), id)) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
         fn resumeForPane(application: *Application, record: PaneRecordType) ?ResumeSession {
             if (!application.session.resume_agents) {
                 return null;
@@ -317,7 +382,7 @@ pub fn Type(comptime Application: type) type {
 
             const reference = SessionReference.init(record.agent_session, 0) catch return null;
             const session = ResumeSession.init(@enumFromInt(record.agent_provider), reference) catch return null;
-            if (application.model.agents.hasRestoredSession(session)) {
+            if (application.model.agents.hasRestoredSession(session) or (session.provider == .codex and managedConversationClaimed(application, record.agent_session))) {
                 return null;
             }
 
@@ -401,22 +466,33 @@ pub fn Type(comptime Application: type) type {
                 if (!pane.launch_state.discoverable() or pane.close_requested or pane.exit != null) {
                     continue;
                 }
-                if (!pane.launch_record.restorable()) {
+                if (pane.kind == .terminal and !pane.launch_record.restorable()) {
                     continue;
                 }
-                const resumable = application.model.agents.resumeSession(pane.key());
-                const title = if (resumable != null) application.model.agents.checkpointTitle(pane.key()) else null;
+
+                const conversation = if (pane.kind == .agent) try pane.session.agent.session.checkpoint(application.io) else null;
+                const resumable = if (pane.kind == .terminal) application.model.agents.resumeSession(pane.key()) else null;
+                const title = if (conversation) |*value| title: {
+                    if (std.mem.eql(u8, pane.agent_thread.?.threadId(), value.idSlice())) {
+                        if (application.model.agents.checkpointTitle(pane.key())) |saved| {
+                            break :title saved;
+                        }
+                    }
+
+                    break :title if (value.title_len != 0) SessionTitleType.init(value.titleSlice(), .agent) catch null else null;
+                } else if (resumable != null) application.model.agents.checkpointTitle(pane.key()) else null;
                 try encoder.pane(.{
+                    .kind = pane.kind,
                     .pane_id = raw_module(pane.id),
                     .workspace_id = raw_module(pane.location.workspace.workspace),
                     .tab_id = raw_module(pane.location.tab_id),
                     .cwd = pane.cwd.slice(),
                     .cols = pane.size.cols,
                     .rows = pane.size.rows,
-                    .arguments = pane.launch_record.slice(),
-                    .argument_count = pane.launch_record.count,
-                    .agent_provider = if (resumable) |session| @intFromEnum(session.provider) else 0,
-                    .agent_session = if (resumable) |session| session.reference.slice() else "",
+                    .arguments = if (pane.kind == .agent) "" else pane.launch_record.slice(),
+                    .argument_count = if (pane.kind == .agent) 0 else pane.launch_record.count,
+                    .agent_provider = if (pane.kind == .agent) @intFromEnum(@import("telar-core").AgentProvider.codex) else if (resumable) |session| @intFromEnum(session.provider) else 0,
+                    .agent_session = if (conversation) |*value| value.idSlice() else if (resumable) |session| session.reference.slice() else "",
                     .agent_title = if (title) |value| value.slice() else "",
                     .agent_title_source = if (title) |value| @intFromEnum(value.source) else 0,
                 });

@@ -53,15 +53,22 @@ pub fn apply(client: *Client, created: TabCreatedType) !TabCreationType {
 
     var use_case = confirmationHandler(client);
 
-    return use_case.execute(.{
+    const creation = try use_case.execute(.{
         .created = .{
             .location = created.location,
             .position = created.position,
             .label = created.label,
             .root_pane_id = created.root_pane_id,
+            .kind = created.kind,
+            .pane_generation = created.pane_generation,
         },
         .size = requested.size,
     });
+    if (created.kind == .agent) {
+        try @import("../agents/agent_threads.zig").query(client, created.root_pane_id);
+    }
+
+    return creation;
 }
 
 fn confirmationHandler(client: *Client) ConfirmTabCreationHandlerType {
@@ -99,6 +106,7 @@ fn sendCreation(context: *anyopaque, intent: TabCreationIntentType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try request_lifecycle.nextId(client);
     try request_lifecycle.deliverCreateTab(client, .{
+        .kind = intent.kind,
         .request_id = request_id,
         .workspace = intent.workspace,
         .label = intent.label,
@@ -106,7 +114,7 @@ fn sendCreation(context: *anyopaque, intent: TabCreationIntentType) !void {
         .launch = .{
             .cwd = client.options.cwd,
             .cwd_source = intent.cwd_source,
-            .arguments = if (intent.arguments.len != 0) intent.arguments else client.options.arguments,
+            .arguments = if (intent.kind == .agent) &.{} else if (intent.arguments.len != 0) intent.arguments else client.options.arguments,
         },
     });
 }

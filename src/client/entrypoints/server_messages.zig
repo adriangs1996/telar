@@ -8,6 +8,8 @@ const dispatch_module = @import("runtime_messages.zig").dispatch;
 
 pub const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
 pub const agent_snapshots = @import("../controllers/agents/agent_snapshots.zig");
+pub const agent_history = @import("../controllers/agents/agent_history.zig");
+pub const agent_threads = @import("../controllers/agents/agent_threads.zig");
 pub const notifications = @import("../controllers/notifications/notifications.zig");
 pub const client_layouts = @import("../controllers/session/client_layouts.zig");
 pub const pane_clipboards = @import("../controllers/panes/pane_clipboards.zig");

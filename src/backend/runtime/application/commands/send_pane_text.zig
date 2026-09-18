@@ -14,6 +14,7 @@ pub const SendPaneTextResult = enum {
     pane_not_found,
     pane_exited,
     agent_blocked,
+    not_terminal,
 };
 
 /// Frames one prompt the way a terminal paste followed by Enter would arrive.

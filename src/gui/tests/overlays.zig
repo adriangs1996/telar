@@ -367,7 +367,11 @@ test "native context layout ignores terminal cell geometry and reuses its warm d
     fixture.size.rows = 12;
     try fixture.paint();
     try std.testing.expectEqualDeep(bounds, fixture.overlays.presented().native_modal.?);
-    try std.testing.expectEqualDeep(fields, fixture.widgets.editors.presented().*);
+    const presented = fixture.widgets.editors.presented();
+    try std.testing.expectEqual(fields.len, presented.len);
+    for (fields.items[0..fields.len], presented.items[0..presented.len]) |expected, actual| {
+        try std.testing.expect(std.meta.eql(expected, actual));
+    }
     const calls = fixture.renderer.atlas.?.shape_calls;
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     fixture.renderer.atlas.?.allocator = failing.allocator();

@@ -85,7 +85,7 @@ test "the sidebar orders six agents by attention and maps one hit per card" {
     }
 
     try std.testing.expectEqual(entries.len, position);
-    try std.testing.expectEqual(@as(u16, 0), fixture.chrome.sidebar.maximum_scroll);
+    try std.testing.expectEqual(@as(u16, 0), fixture.chrome.sidebar.agents.maximum_scroll);
     try std.testing.expectEqualDeep(client.Intent{ .focus_agent = entries[5].key }, fixture.clickBand(fixture.bandTarget(.{ .focus_agent = entries[5].key }).?, 0).intent);
 }
 
@@ -113,7 +113,7 @@ test "replacement sidebar widgets retain scrolling and clip their own card contr
 
     const first = band_hits.find(.{ .focus_agent = entries[expected_order[0]].key }).?;
     try std.testing.expectEqualSlices(u8, &expected_order, state.ordering());
-    try std.testing.expect(state.scrollBy(20));
+    try std.testing.expect(state.agents.scrollBy(20));
     renderer.quads.clear();
     band_hits = .{};
     {
@@ -122,7 +122,7 @@ test "replacement sidebar widgets retain scrolling and clip their own card contr
         try widgets.draw(&canvas);
     }
 
-    try std.testing.expectEqual(@as(u16, 20), state.scroll);
+    try std.testing.expectEqual(@as(u16, 20), state.agents.scroll);
     const clipped = band_hits.find(.{ .focus_agent = entries[expected_order[0]].key }).?;
     try std.testing.expectEqual(first.area.y, clipped.area.y);
     try std.testing.expectEqual(first.area.height - 20, clipped.area.height);
@@ -133,8 +133,8 @@ test "replacement sidebar widgets retain scrolling and clip their own card contr
     band_hits = .{};
     try (Sidebar{ .state = &state, .context = &context, .area = area }).draw(&canvas);
     try std.testing.expectEqual(@as(usize, 0), state.ordering().len);
-    try std.testing.expectEqual(@as(u16, 0), state.scroll);
-    try std.testing.expectEqual(@as(u16, 0), state.maximum_scroll);
+    try std.testing.expectEqual(@as(u16, 0), state.agents.scroll);
+    try std.testing.expectEqual(@as(u16, 0), state.agents.maximum_scroll);
     try std.testing.expect(band_hits.find(.{ .focus_agent = entries[expected_order[0]].key }) == null);
 }
 
@@ -153,12 +153,11 @@ test "the selected card is the focused pane's agent and carries the fill and rin
     try std.testing.expectEqual(@as(usize, 5), sprites.spriteCount(quads));
     const selected = ring(quads).?;
     const renderer = &fixture.session.renderer;
-    const bounds = fixture.band();
     const geometry = CardGeometry.derive(renderer.chrome, renderer.metrics);
-    const list_top = bounds.y + Sidebar.margin + renderer.chrome.rowHeight(.body) + Sidebar.header_gap;
+    const list_top = fixture.chrome.presented().sidebar_regions.agents.y;
     try std.testing.expectEqual(list_top + 5 * geometry.pitch(), selected.y);
     try std.testing.expectEqual(geometry.height(), selected.height);
-    try std.testing.expectEqual(bounds.x + Sidebar.margin, selected.x);
+    try std.testing.expectEqual(fixture.band().x + Sidebar.margin, selected.x);
     const hovered = fixture.bandTarget(.{ .focus_agent = entries[2].key }).?;
     _ = fixture.chrome.bandPointer(.{ .kind = .move, .x = hovered.x, .y = hovered.y });
     try fixture.paint(projection);
@@ -314,6 +313,12 @@ test "a warm sidebar repaint with six agents allocates nothing" {
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
+    var workspaces: client.WorkspaceListSnapshot = .{};
+    _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
+        .{ .workspace = Session.location.workspace.workspace, .name = "telar", .path = "/sandbox/telar", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(8), .name = "a long project name that needs truncation", .path = "/work/a-long-workspace-path-that-needs-truncation", .tab_count = 1 },
+    } });
+    projection.workspaces = &workspaces;
     // Warm the changing seconds as well as the static labels and glyphs.
     for (0..60) |second| {
         fixture.chrome.now_ns = second * std.time.ns_per_s;

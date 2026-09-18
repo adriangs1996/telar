@@ -1,6 +1,9 @@
 # Packaging
 
-Telar ships as one executable. Packaging adds what a desktop expects around
+Telar ships the `telar` executable and its isolated `telar-diagram-renderer`
+helper. Building the GUI also requires Cargo and Rust 1.93.1 or newer; packaged
+applications do not need that toolchain. See the [helper build and protocol](../tools/diagram-renderer/README.md).
+Packaging adds what a desktop expects around
 it: something to double-click, an icon, and a way for shells and agents to
 find `telar` afterwards. Nothing in the client changes; `telar` typed in a
 terminal is still the terminal client.
@@ -29,6 +32,8 @@ Telar.app/Contents/
   MacOS/Telar                launcher, src/launcher/main.zig
   Resources/telar.icns       packaging/macos/telar.icns
   Resources/bin/telar        the executable
+  Resources/bin/telar-diagram-renderer   native Mermaid rasterizer
+  Resources/licenses/diagram-renderer/   dependency notices
 ```
 
 Finder starts `MacOS/Telar` with no arguments. The launcher execs

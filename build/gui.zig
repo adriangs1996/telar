@@ -3,11 +3,10 @@ const Application = @import("Application.zig");
 const macos_gui = @import("macos_gui.zig");
 const linux_gui = @import("linux_gui.zig");
 
-/// Attach the native adapter and its checks: `gui.add(b, app)`.
-pub fn add(b: *std.Build, app: Application) ?*std.Build.Module {
+/// Attach the native adapter and its checks: `gui.add(b, app, diagram_helper)`.
+pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath) ?*std.Build.Module {
     // GPU chrome over the same client behavior as the TUI. It never imports
-    // `telar-frontend`; the window and Metal backend are Objective-C compiled
-    // by Zig, so the toolchain stays a Zig compiler and the macOS SDK.
+    // `telar-frontend`. Mermaid rasterization runs in an isolated Rust helper.
     var gui_module: ?*std.Build.Module = null;
     if (app.modules.target.result.os.tag == .macos or app.modules.target.result.os.tag == .linux) {
         const gui = b.createModule(.{
@@ -21,6 +20,9 @@ pub fn add(b: *std.Build, app: Application) ?*std.Build.Module {
         gui.addImport("assets", app.modules.assets);
         gui.addImport("telar-client", app.modules.client);
         gui.addImport("telar-core", app.modules.core);
+        const diagram_options = b.addOptions();
+        diagram_options.addOptionPath("helper_path", diagram_helper.?);
+        gui.addOptions("diagram_renderer_options", diagram_options);
         if (app.modules.target.result.os.tag == .macos) {
             macos_gui.add(b, gui, app.coverage.enabled);
         } else {
@@ -41,7 +43,7 @@ pub fn add(b: *std.Build, app: Application) ?*std.Build.Module {
             const window_test_module = b.createModule(.{ .target = app.modules.target, .optimize = app.modules.optimize, .link_libc = true });
             window_test_module.addIncludePath(b.path("src/gui/native"));
             window_test_module.addCSourceFiles(.{
-                .files = &.{ "src/gui/tests/macos_window.m", "src/gui/tests/macos_host_input.m", "src/gui/native/wake.c" },
+                .files = &.{ "src/gui/tests/macos_window.m", "src/gui/tests/macos_host_input.m", "src/gui/tests/macos_diagrams.m", "src/gui/native/wake.c" },
                 .flags = &.{ "-fobjc-arc", "-std=c23" },
             });
             macos_gui.add(b, window_test_module, false);

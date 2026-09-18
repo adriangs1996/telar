@@ -153,7 +153,7 @@ pub fn optionalAreaEql(a: ?RectType, b: ?RectType) bool {
     return std.meta.eql(a.?, b.?);
 }
 
-// The Kitty frame needs an explicit RGB `panel_bg`; the default Osaka Jade
+// The Kitty frame needs an explicit RGB `panel_bg`; the default Shade
 // theme inherits the host background, so these tests draw the Vesper chrome.
 const opaque_palette = theme.builtin(.vesper).palette;
 

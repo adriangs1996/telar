@@ -23,6 +23,10 @@ pub inline fn execute(handler: *PaneInputHandler, command: PaneInput) !pane_inpu
     const attachment = handler.attachments.find(command.pane_id) orelse return .pane_not_attached;
     const pane = attachment.pane;
 
+    if (pane.kind == .agent) {
+        return .pane_not_attached;
+    }
+
     if (pane.exit != null) {
         return .pane_exited;
     }

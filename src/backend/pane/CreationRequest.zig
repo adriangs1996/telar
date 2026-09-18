@@ -8,7 +8,9 @@ const CreationRequest = @This();
 
 identity: PaneKey,
 location: TabLocationType,
-command: *const CommandType,
+command: ?*const CommandType = null,
+kind: @import("telar-core").PaneKind = .terminal,
+restore_conversation: ?@import("telar-core").RecentConversation = null,
 launch_cwd: []const u8,
 workspace_path: []const u8,
 size: TerminalSizeType,

@@ -8,9 +8,133 @@ const Rect = @import("../render/Rect.zig");
 const Canvas = @import("../widgets/Canvas.zig");
 const Label = @import("../widgets/Label.zig");
 
-test "native workspace labels center their text advance and clip long names inside each slot" {
+test "workspace departure retains the delivered indicators and overflow window until arrival" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
+    try fixture.showSidebar(false);
+    const model = &fixture.session.gui.app.model;
+    const ids = [_]core.WorkspaceId{ Session.location.workspace.workspace, @enumFromInt(9), @enumFromInt(30), @enumFromInt(40), @enumFromInt(50) };
+    var entries: [ids.len]client.EntryInput = undefined;
+    for (ids, &entries) |id, *entry| {
+        entry.* = .{ .workspace = id, .name = "project", .path = "/project", .tab_count = 1 };
+    }
+
+    _ = try model.reconcileWorkspaceList(.{ .revision = 1, .entries = &entries });
+    for ([_]u32{ 900, 320 }) |width| {
+        try fixture.measure(.{ .width = width, .height = 700, .scale = 1 });
+        _ = try model.replaceWorkspace(.{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = ids[4] }, .tab_id = Session.location.tab_id }, .size = model.hostSize() });
+        try fixture.paint(fixture.projection());
+        const selected = fixture.bandTarget(.{ .select_workspace = ids[4] }).?;
+        const region: Rect = .{ .x = 0, .y = 0, .width = selected.x + selected.width, .height = fixture.chrome.presented().bands.top_bar.height };
+        var before = try quadsIn(fixture.session.renderer.quads.items(), region);
+        defer before.deinit(std.testing.allocator);
+        var targets: [ids.len]?Rect = undefined;
+        for (ids, &targets) |id, *target| {
+            target.* = fixture.bandTarget(.{ .select_workspace = id });
+        }
+
+        _ = model.departWorkspace();
+        try std.testing.expect(model.workspaceLocation() == null);
+        for (0..3) |_| {
+            try fixture.paint(fixture.projection());
+            var during = try quadsIn(fixture.session.renderer.quads.items(), region);
+            defer during.deinit(std.testing.allocator);
+            try std.testing.expectEqualDeep(before.items, during.items);
+            for (ids, targets) |id, bounds| {
+                try std.testing.expectEqualDeep(bounds, fixture.bandTarget(.{ .select_workspace = id }));
+            }
+        }
+
+        _ = try model.arriveWorkspace(.{ .pane_id = Session.pane_id, .location = Session.location, .size = model.hostSize() });
+        try fixture.paint(fixture.projection());
+        try std.testing.expectEqual(ids[0], fixture.chrome.presented().workspace.?);
+        try std.testing.expect(fixture.bandTarget(.{ .select_workspace = ids[0] }) != null);
+    }
+}
+
+test "workspace handoff retains only delivered identities still present in the list" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    try fixture.showSidebar(false);
+    const model = &fixture.session.gui.app.model;
+    _ = try model.reconcileWorkspaceList(.{ .revision = 1, .entries = &.{
+        .{ .workspace = Session.location.workspace.workspace, .name = "telar", .path = "/telar", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(9), .name = "freya", .path = "/freya", .tab_count = 1 },
+    } });
+    try fixture.paint(fixture.projection());
+    const tabs = try createTabs();
+    defer std.testing.allocator.destroy(tabs);
+    defer tabs.deinit();
+    try tabs.replaceWithRoot(.{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = @enumFromInt(9) }, .tab_id = Session.location.tab_id }, .size = model.hostSize() });
+    var projection = fixture.projection();
+    projection.tabs = tabs;
+    try fixture.prepare(projection);
+    fixture.chrome.present(false);
+    _ = model.departWorkspace();
+    try fixture.paint(fixture.projection());
+    try std.testing.expectEqual(Session.location.workspace.workspace, fixture.chrome.presented().workspace.?);
+
+    _ = try model.reconcileWorkspaceList(.{ .revision = 2, .entries = &.{
+        .{ .workspace = @enumFromInt(9), .name = "freya", .path = "/freya", .tab_count = 1 },
+    } });
+    try fixture.paint(fixture.projection());
+    try std.testing.expect(fixture.chrome.presented().workspace == null);
+    try std.testing.expect(fixture.bandTarget(.{ .select_workspace = Session.location.workspace.workspace }) == null);
+}
+
+test "five compact projects fit without pill backgrounds and reuse landed favicons at both scales" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    try fixture.showSidebar(false);
+    const model = &fixture.session.gui.app.model;
+    _ = try model.reconcileWorkspaceList(.{ .revision = 1, .entries = &.{
+        .{ .workspace = Session.location.workspace.workspace, .name = "telar", .path = "/telar", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(9), .name = "freya", .path = "/freya", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(30), .name = "configs", .path = "/configs", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(40), .name = "docs", .path = "/docs", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(50), .name = "website", .path = "/website", .tab_count = 1 },
+    } });
+    const renderer = &fixture.session.renderer;
+    const favicons = &fixture.chrome.favicons;
+    defer favicons.deinit(std.testing.allocator);
+    for ([_]f32{ 1, 2 }) |scale| {
+        try fixture.measure(.{ .width = @intFromFloat(900 * scale), .height = @intFromFloat(700 * scale), .scale = scale });
+        favicons.refresh(std.testing.allocator, &renderer.sprites.?);
+        const want = favicons.next(model.workspaceListSnapshot()).?;
+        favicons.started(want.workspace);
+        const image = try std.testing.allocator.create(client.FaviconImage);
+        image.* = .{ .side = @intCast(renderer.sprites.?.cell) };
+        @memset(image.mutableSlice(), 255);
+        favicons.land(std.testing.allocator, .{ .workspace = want.workspace, .image = image });
+        favicons.refresh(std.testing.allocator, &renderer.sprites.?);
+        fixture.chrome.hovered = .{ .intent = .{ .select_workspace = @enumFromInt(9) } };
+        try fixture.paint(fixture.projection());
+        var last: f32 = 0;
+        for (0..5) |index| {
+            const id = model.workspaceListSnapshot().workspaceAt(index);
+            const bounds = fixture.bandTarget(.{ .select_workspace = id }).?;
+            try std.testing.expect(bounds.x >= last);
+            try std.testing.expectEqual(renderer.chrome.px(40), bounds.width);
+            try std.testing.expectEqual(index == 0, hasApplicationMark(renderer.quads.items(), bounds));
+            _ = try firstInk(renderer.quads.items(), bounds);
+            for (renderer.quads.items()) |quad| {
+                if (solid(quad) and quad.x >= bounds.x and quad.y >= bounds.y and quad.x + quad.width <= bounds.x + bounds.width and quad.y + quad.height <= bounds.y + bounds.height) {
+                    try std.testing.expectEqual(@as(usize, 0), index);
+                    try std.testing.expectEqual(renderer.chrome.px(3), quad.width);
+                    try std.testing.expectEqual(quad.width, quad.height);
+                }
+            }
+
+            try std.testing.expectEqualDeep(client.Intent{ .select_workspace = id }, fixture.clickBand(bounds, 0).intent);
+            last = bounds.x + bounds.width;
+        }
+    }
+}
+
+test "native project indicators use numbers instead of names and attention does not shift their ink" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    try fixture.showSidebar(false);
     var workspaces: client.WorkspaceListSnapshot = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = Session.location.workspace.workspace, .name = "a", .path = "/a", .tab_count = 1 },
@@ -20,10 +144,10 @@ test "native workspace labels center their text advance and clip long names insi
     var projection = fixture.projection();
     projection.workspaces = &workspaces;
     try fixture.paint(projection);
-    const labels = [_][]const u8{ "1 a", "2 a deliberately long workspace name", "3 xy" };
+    const labels = [_][]const u8{ "1", "2", "3" };
     for (labels, 0..) |text, index| {
         const bounds = fixture.bandTarget(.{ .select_workspace = workspaces.workspaceAt(index) }).?;
-        try expectCenteredLabel(&fixture, bounds, .{ .text = text, .bold = index == 0, .face = .sans, .size = .body });
+        try expectNumberLabel(&fixture, bounds, .{ .text = text, .bold = index == 0, .face = .sans, .size = .small });
     }
 
     const active = fixture.bandTarget(.{ .select_workspace = Session.location.workspace.workspace }).?;
@@ -39,6 +163,8 @@ test "native workspace labels center their text advance and clip long names insi
 test "native workspace overflow counters keep nearest hidden destinations without normal or hover backgrounds" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
+    try fixture.showSidebar(false);
+    try fixture.measure(.{ .width = 488, .height = 700, .scale = 1 });
     var workspaces: client.WorkspaceListSnapshot = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = @enumFromInt(4), .name = "one", .path = "/one", .tab_count = 1 },
@@ -71,6 +197,7 @@ test "native workspace overflow counters keep nearest hidden destinations withou
 test "native workspace visibility ignores the inherited collapse flag in wide and narrow windows" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
+    try fixture.showSidebar(false);
     const model = &fixture.session.gui.app.model;
     _ = try model.reconcileWorkspaceList(.{ .revision = 1, .entries = &.{
         .{ .workspace = Session.location.workspace.workspace, .name = "telar", .path = "/telar", .tab_count = 1 },
@@ -89,8 +216,8 @@ test "native workspace visibility ignores the inherited collapse flag in wide an
         }
 
         try std.testing.expect(expected[0] != null);
-        try std.testing.expectEqual(width == 2048, expected[1] != null);
-        try std.testing.expectEqual(width == 2048, expected[2] != null);
+        try std.testing.expect(expected[1] != null);
+        try std.testing.expect(expected[2] != null);
         projection.workspace_list_collapsed = true;
         try fixture.paint(projection);
         for (identities, expected) |id, bounds| {
@@ -105,7 +232,7 @@ test "native workspace visibility ignores the inherited collapse flag in wide an
             }
         }
 
-        try std.testing.expectEqual(@as(usize, if (width == 2048) 3 else 1), visible);
+        try std.testing.expectEqual(@as(usize, 3), visible);
         try std.testing.expect(fixture.bandTarget(.toggle_workspace_list) == null);
     }
 }
@@ -113,11 +240,13 @@ test "native workspace visibility ignores the inherited collapse flag in wide an
 test "native navigation names unlisted workspaces and worktrees without selecting unrelated entries" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    const tabs = try std.testing.allocator.create(client.TabsModel);
+    try fixture.showSidebar(false);
+    const tabs = try createTabs();
     defer std.testing.allocator.destroy(tabs);
-    tabs.* = client.TabsModel.init(std.testing.allocator);
     defer tabs.deinit();
-    var workspaces: client.WorkspaceListSnapshot = .{};
+    const workspaces = try std.testing.allocator.create(client.WorkspaceListSnapshot);
+    defer std.testing.allocator.destroy(workspaces);
+    workspaces.* = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = @enumFromInt(1), .name = "unrelated workspace", .path = "/other", .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "another workspace", .path = "/another", .tab_count = 1 },
@@ -133,7 +262,7 @@ test "native navigation names unlisted workspaces and worktrees without selectin
         var empty_snapshot = try quadsIn(renderer.quads.items(), top);
         defer empty_snapshot.deinit(std.testing.allocator);
 
-        projection.workspaces = &workspaces;
+        projection.workspaces = workspaces;
         try fixture.paint(projection);
         var unrelated_snapshot = try quadsIn(renderer.quads.items(), top);
         defer unrelated_snapshot.deinit(std.testing.allocator);
@@ -147,10 +276,13 @@ test "native navigation names unlisted workspaces and worktrees without selectin
     }
 }
 
-test "native workspace window keeps the active workspace centered with three global identities" {
+test "native project indicators keep all seven projects in stable positions across selections" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var workspaces: client.WorkspaceListSnapshot = .{};
+    try fixture.showSidebar(false);
+    const workspaces = try std.testing.allocator.create(client.WorkspaceListSnapshot);
+    defer std.testing.allocator.destroy(workspaces);
+    workspaces.* = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = @enumFromInt(4), .name = "one", .path = "/one", .tab_count = 1 },
         .{ .workspace = @enumFromInt(8), .name = "two", .path = "/two", .tab_count = 1 },
@@ -160,17 +292,16 @@ test "native workspace window keeps the active workspace centered with three glo
         .{ .workspace = @enumFromInt(42), .name = "six", .path = "/six", .tab_count = 1 },
         .{ .workspace = @enumFromInt(99), .name = "seven", .path = "/seven", .tab_count = 1 },
     } });
-    const tabs = try std.testing.allocator.create(client.TabsModel);
+    const tabs = try createTabs();
     defer std.testing.allocator.destroy(tabs);
-    tabs.* = client.TabsModel.init(std.testing.allocator);
     defer tabs.deinit();
-    var center: ?Rect = null;
+    var positions: [7]?Rect = @splat(null);
     for (1..workspaces.count - 1) |index| {
         const active_id = workspaces.workspaceAt(index);
         try tabs.replaceWithRoot(.{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = active_id }, .tab_id = Session.location.tab_id }, .size = fixture.session.gui.app.model.hostSize() });
         var projection = fixture.projection();
         projection.tabs = tabs;
-        projection.workspaces = &workspaces;
+        projection.workspaces = workspaces;
         try fixture.paint(projection);
         const previous = fixture.bandTarget(.{ .select_workspace = workspaces.workspaceAt(index - 1) }).?;
         const active = fixture.bandTarget(.{ .select_workspace = active_id }).?;
@@ -179,11 +310,15 @@ test "native workspace window keeps the active workspace centered with three glo
         try std.testing.expectEqual(next.width, active.width);
         try std.testing.expectApproxEqAbs(active.x - previous.x, next.x - active.x, 0.01);
         try std.testing.expectEqualDeep(client.Intent{ .select_workspace = active_id }, fixture.clickBand(active, 0).intent);
-        if (center) |bounds| {
-            try std.testing.expectEqualDeep(bounds, active);
+        for (0..workspaces.count) |slot| {
+            const bounds = fixture.bandTarget(.{ .select_workspace = workspaces.workspaceAt(slot) }).?;
+            if (positions[slot]) |previous_bounds| {
+                try std.testing.expectEqualDeep(previous_bounds, bounds);
+            }
+
+            positions[slot] = bounds;
         }
 
-        center = active;
         var slots: usize = 0;
         const hits = fixture.chrome.presented().band_hits;
         for (hits.items[0..hits.len]) |hit| {
@@ -192,7 +327,7 @@ test "native workspace window keeps the active workspace centered with three glo
             }
         }
 
-        try std.testing.expectEqual(@as(usize, 3), slots);
+        try std.testing.expectEqual(@as(usize, 7), slots);
         projection.workspace_list_collapsed = true;
         try fixture.paint(projection);
         try std.testing.expectEqualDeep(previous, fixture.bandTarget(.{ .select_workspace = workspaces.workspaceAt(index - 1) }).?);
@@ -202,7 +337,7 @@ test "native workspace window keeps the active workspace centered with three glo
     }
 }
 
-test "native workspaces and tabs occupy opposite ends of one row independent of sidebar visibility" {
+test "moving workspaces to the sidebar preserves every tab bound across sidebar visibility" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const model = &fixture.session.gui.app.model;
@@ -229,12 +364,13 @@ test "native workspaces and tabs occupy opposite ends of one row independent of 
         try std.testing.expect(first_tab.x + first_tab.width <= second_tab.x);
         try std.testing.expect(second_tab.x + second_tab.width <= plus.x);
         try std.testing.expect(top.width - (plus.x + plus.width) <= 12);
-        try std.testing.expect(workspace.y < top.height and first_tab.y < top.height);
+        try std.testing.expect(workspace.y >= top.height and first_tab.y < top.height);
         try std.testing.expectEqual(top.height, second_tab.y + second_tab.height);
 
         try fixture.showSidebar(false);
         try fixture.paint(fixture.projection());
-        try std.testing.expectEqualDeep(workspace, fixture.bandTarget(.{ .select_workspace = Session.location.workspace.workspace }).?);
+        const fallback = fixture.bandTarget(.{ .select_workspace = Session.location.workspace.workspace }).?;
+        try std.testing.expect(fallback.y < top.height);
         try std.testing.expectEqualDeep(first_tab, fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?);
         try std.testing.expectEqualDeep(second_tab, fixture.bandTarget(.{ .select_tab = @enumFromInt(2) }).?);
         try std.testing.expectEqualDeep(plus, fixture.bandTarget(.create_tab).?);
@@ -320,7 +456,7 @@ fn quadsIn(quads: []const Quad, area: Rect) !std.ArrayList(Quad) {
     var result: std.ArrayList(Quad) = .empty;
     errdefer result.deinit(std.testing.allocator);
     for (quads) |quad| {
-        if (quad.y >= area.y and quad.y + quad.height <= area.y + area.height) {
+        if (quad.x >= area.x and quad.x + quad.width <= area.x + area.width and quad.y >= area.y and quad.y + quad.height <= area.y + area.height) {
             try result.append(std.testing.allocator, quad);
         }
     }
@@ -328,26 +464,18 @@ fn quadsIn(quads: []const Quad, area: Rect) !std.ArrayList(Quad) {
     return result;
 }
 
-fn expectCenteredLabel(fixture: *Fixture, bounds: Rect, label: Label) !void {
+fn expectNumberLabel(fixture: *Fixture, bounds: Rect, label: Label) !void {
     const renderer = &fixture.session.renderer;
     const actual = try firstInk(renderer.quads.items(), bounds);
     var reference = @import("../render/QuadList.zig").init(std.testing.allocator);
     defer reference.deinit();
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &reference, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
-    const width = try canvas.measure(label);
-    const natural: Rect = .{ .x = 0, .y = bounds.y, .width = width, .height = bounds.height };
+    const natural: Rect = .{ .x = bounds.x + renderer.chrome.px(3), .y = bounds.y, .width = renderer.chrome.px(14), .height = bounds.height - renderer.chrome.px(5) };
     _ = try canvas.textAt(natural, label);
     const glyph = try firstInk(reference.items(), natural);
-    const inset = renderer.chrome.px(8);
-    const available = @max(0, bounds.width - 2 * inset);
-    const left = bounds.x + inset + @floor(@max(0, available - width) / 2);
-    try std.testing.expectApproxEqAbs(left + glyph.x, actual.x, 0.01);
-    for (renderer.quads.items()) |quad| {
-        if (!solid(quad) and quad.x >= bounds.x and quad.y >= bounds.y and quad.x + quad.width <= bounds.x + bounds.width and quad.y + quad.height <= bounds.y + bounds.height) {
-            try std.testing.expect(quad.x >= bounds.x + inset);
-            try std.testing.expect(quad.x + quad.width <= bounds.x + bounds.width - inset);
-        }
-    }
+    try std.testing.expectApproxEqAbs(glyph.x, actual.x, 0.01);
+    try std.testing.expectApproxEqAbs(glyph.y, actual.y, 0.01);
+    try std.testing.expectEqualSlices(f32, &.{ glyph.u0, glyph.v0, glyph.u1, glyph.v1 }, &.{ actual.u0, actual.v0, actual.u1, actual.v1 });
 }
 
 fn firstInk(quads: []const Quad, bounds: Rect) !Quad {
@@ -400,4 +528,10 @@ fn hasApplicationMark(quads: []const Quad, bounds: Rect) bool {
     }
 
     return false;
+}
+
+fn createTabs() !*client.TabsModel {
+    const tabs = try std.testing.allocator.create(client.TabsModel);
+    tabs.* = client.TabsModel.init(std.testing.allocator);
+    return tabs;
 }

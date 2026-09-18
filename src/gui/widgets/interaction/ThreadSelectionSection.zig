@@ -1,0 +1,5 @@
+row: @import("ThreadTextRow.zig"),
+owner: @import("../MessageLayoutOwner.zig"),
+text: []const u8,
+markdown: bool = false,
+code: bool = false,

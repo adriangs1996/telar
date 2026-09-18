@@ -9,3 +9,5 @@ workspace: types.WorkspaceLocation,
 label: []const u8,
 size: TerminalSizeType,
 launch: LaunchViewType,
+
+kind: @import("../pane_kind.zig").PaneKind = .terminal,

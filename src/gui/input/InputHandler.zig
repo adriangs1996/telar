@@ -3,6 +3,7 @@ const client = @import("telar-client");
 const Handler = @This();
 
 app: *client.AttachedClient,
+widget_target: ?@import("../widgets/interaction/Id.zig") = null,
 
 /// Example: `if (handler.capturesKeys()) routeToPrompt();`
 pub fn capturesKeys(handler: *const Handler) bool {
@@ -16,6 +17,13 @@ pub fn forward(handler: *Handler, bytes: []const u8) !void {
 
 /// Example: `try handler.key(key);`
 pub fn key(handler: *Handler, value: client.Key) !void {
+    if (handler.widget_target) |owner| {
+        if (value.phase == .press) {
+            try @import("../widgets/interaction/routing.zig").replayBindingKey(@import("../GuiClient.zig").of(handler.app), owner, value);
+            return;
+        }
+    }
+
     _ = try client.controllers.key_routing.apply(handler.app, .{ .key = value });
 }
 
@@ -29,6 +37,7 @@ pub fn action(handler: *Handler, value: client.Action) !client.Control {
         .goto_picker => .goto,
         .suggest_command => .suggest,
         .resize_sidebar => |direction| {
+            _ = try client.controllers.copy_modes.leave(handler.app);
             const gui = @import("../GuiClient.zig").of(handler.app);
             if (gui.sidebar.step(direction)) {
                 gui.chrome.invalidate();
@@ -38,7 +47,7 @@ pub fn action(handler: *Handler, value: client.Action) !client.Control {
         },
         else => return client.controllers.action_routing.apply(handler.app, value),
     };
-    if (handler.app.model.copyModeActive()) {
+    if (client.controllers.copy_modes.active(handler.app)) {
         _ = try client.controllers.copy_modes.leave(handler.app);
     }
 

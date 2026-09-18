@@ -1023,7 +1023,7 @@ test "cell rendering leaves toast rasterization to the media pass" {
     try std.testing.expect(state.kittyToasts().transmissionPending());
 }
 
-test "client chrome uses Vesper by default" {
+test "client chrome uses Shade by default" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
@@ -1053,7 +1053,7 @@ test "client chrome uses Vesper by default" {
     try std.testing.expectEqualDeep(state.palette().panel_bg, screen.back.cells[top_start].style.bg);
     try std.testing.expectEqualDeep(state.palette().accent, screen.back.cells[top_start].style.fg);
     try std.testing.expect(!screen.back.cells[top_start].style.flags.inverse);
-    try std.testing.expectEqual(theme_mod.Builtin.osaka_jade, state.theme.base);
+    try std.testing.expectEqual(theme_mod.Builtin.shade, state.theme.base);
 }
 
 test "configuration diagnostics stay inside the bottom bar" {

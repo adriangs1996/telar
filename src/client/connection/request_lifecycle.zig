@@ -175,6 +175,17 @@ pub fn deliverCreateTab(client: *Client, request: CreateTabType) !void {
     try runtime_transport.enqueueCreateTab(client, request);
 }
 
+/// Correlates and owns a prompt atomically; rejected delivery preserves its draft.
+/// Example: `try request_lifecycle.deliverAgentPrompt(client, request, operation);`
+pub fn deliverAgentPrompt(client: *Client, request: @import("telar-core").AgentPrompt, operation: @import("AgentOperation.zig")) !void {
+    try register(client, .{
+        .request_id = request.request_id,
+        .continuation = .{ .agent_prompt = operation },
+    });
+    errdefer _ = consume(client, request.request_id);
+    try runtime_transport.enqueueAgentPrompt(client, request);
+}
+
 /// Registers and copies one host notification request as one fallible
 /// delivery.
 ///

@@ -1,6 +1,7 @@
 //! What Zig hands the backend for one paint: the quads, the alpha page and
-//! the RGBA sprite page they sample. Mirrors `telar_gui_frame` in
+//! the RGBA sprite page and bounded diagram textures they sample. Mirrors `telar_gui_frame` in
 //! `native/telar_gui.h`.
+const diagram = @import("DiagramTexture.zig");
 const Quad = @import("../render/Quad.zig").Quad;
 
 pub const Frame = extern struct {
@@ -14,7 +15,16 @@ pub const Frame = extern struct {
     sprites: ?[*]const u8 = null,
     sprites_side: u32 = 0,
     sprites_version: u32 = 0,
+    diagrams: [diagram.slot_count]diagram.DiagramTexture = @splat(.{}),
     background: [4]f32,
     background_blur: u32 = 0,
     titlebar: u32 = 1,
 };
+
+test "native diagram descriptors preserve the C frame layout" {
+    const std = @import("std");
+    try std.testing.expectEqual(@as(usize, 24), @sizeOf(diagram.DiagramTexture));
+    try std.testing.expectEqual(@as(usize, 16), @offsetOf(diagram.DiagramTexture, "version"));
+    try std.testing.expectEqual(@as(usize, 56), @offsetOf(Frame, "diagrams"));
+    try std.testing.expectEqual(@as(usize, 272), @sizeOf(Frame));
+}

@@ -10,10 +10,19 @@ hits: *HitMap,
 bands: *BandHitMap,
 projection: *const client.Projection,
 hovered: ?Action,
+/// Last delivered project identity, used only during the empty handoff frame.
+presented_workspace: ?@import("telar-core").WorkspaceId = null,
+sidebar_regions: ?*const @import("SidebarRegions.zig") = null,
 ages: ?*const AgentAges = null,
 /// Placed workspace favicons; `null` in fixtures without a registry.
 favicons: ?*const @import("Favicons.zig") = null,
 progress: ?*@import("ProgressMotions.zig") = null,
+
+/// Resolves the navigation highlight without retaining retired pane or tab data.
+/// Example: `const selected = context.workspaceId() == workspace;`
+pub fn workspaceId(context: *const Context) ?@import("telar-core").WorkspaceId {
+    return @import("workspace_identity.zig").navigationId(context.projection, context.presented_workspace);
+}
 
 /// Shares one status clock between cards and pane headers.
 /// Example: `const seconds = context.statusAge(agent);`

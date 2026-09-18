@@ -119,7 +119,7 @@ pub fn push(outbox: *Outbox, message: outbox_support.Message) !void {
                 }
             }
         },
-        .pane_input, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout => unreachable,
+        .pane_input, .agent_prompt, .query_agent_history, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout => unreachable,
         else => {},
     }
     try outbox.append(message);
@@ -151,6 +151,62 @@ pub fn pushInput(outbox: *Outbox, pane_id: PaneIdType, bytes: []const u8) !void 
         .len = @intCast(bytes.len),
     } };
     @memcpy(outbox.input_bytes[index][0..bytes.len], bytes);
+}
+
+/// Owns one prompt in the existing slot byte storage without coalescing turns.
+/// Example: `try outbox.pushAgentPrompt(prompt);`
+pub fn pushAgentPrompt(outbox: *Outbox, prompt: @import("telar-core").AgentPrompt) !void {
+    try prompt.images.validate();
+    if ((prompt.text.len == 0 and prompt.images.count == 0) or prompt.text.len > @import("telar-core").agent_thread.max_prompt_bytes or prompt.text.len > root.max_encoded_bytes or !std.unicode.utf8ValidateSlice(prompt.text) or std.mem.indexOfScalar(u8, prompt.text, 0) != null) {
+        return error.InvalidAgentPrompt;
+    }
+    if (!prompt.options.valid()) {
+        return error.InvalidAgentOptions;
+    }
+
+    var total = prompt.text.len;
+    for (prompt.images.storage[0..prompt.images.count]) |path| {
+        total += path.len;
+    }
+
+    if (total > root.max_encoded_bytes) {
+        return error.InvalidAgentPrompt;
+    }
+
+    const index = try outbox.reserve();
+    outbox.item_launch_cwd[index] = null;
+    outbox.items[index] = .{ .agent_prompt = .{
+        .request_id = prompt.request_id,
+        .pane_id = prompt.pane_id,
+        .pane_generation = prompt.pane_generation,
+        .len = @intCast(prompt.text.len),
+        .options = prompt.options,
+        .image_count = prompt.images.count,
+    } };
+    @memcpy(outbox.input_bytes[index][0..prompt.text.len], prompt.text);
+    var offset = prompt.text.len;
+    for (prompt.images.storage[0..prompt.images.count], 0..) |path, image_index| {
+        outbox.items[index].agent_prompt.image_lengths[image_index] = @intCast(path.len);
+        @memcpy(outbox.input_bytes[index][offset..][0..path.len], path);
+        offset += path.len;
+    }
+}
+
+/// Owns cursors in the existing outbound byte slot without per-input allocation.
+/// Example: `try outbox.pushAgentHistory(query);`
+pub fn pushAgentHistory(outbox: *Outbox, query: @import("telar-core").QueryAgentHistory) !void {
+    _ = try @import("telar-core").AgentHistoryCursor.init(query.cursor);
+    _ = try @import("telar-core").AgentHistoryCursor.init(query.anchor);
+    _ = try @import("telar-core").AgentHistoryCursor.init(query.anchor_turn);
+    if (query.cursor.len + query.anchor.len + query.anchor_turn.len > root.max_encoded_bytes) {
+        return error.InvalidAgentHistoryCursor;
+    }
+    const index = try outbox.reserve();
+    outbox.item_launch_cwd[index] = null;
+    outbox.items[index] = .{ .query_agent_history = .{ .request_id = query.request_id, .pane_id = query.pane_id, .pane_generation = query.pane_generation, .view_generation = query.view_generation, .cursor_len = @intCast(query.cursor.len), .anchor_len = @intCast(query.anchor.len), .anchor_turn_len = @intCast(query.anchor_turn.len), .direction = query.direction } };
+    @memcpy(outbox.input_bytes[index][0..query.cursor.len], query.cursor);
+    @memcpy(outbox.input_bytes[index][query.cursor.len..][0..query.anchor.len], query.anchor);
+    @memcpy(outbox.input_bytes[index][query.cursor.len + query.anchor.len ..][0..query.anchor_turn.len], query.anchor_turn);
 }
 
 /// Reserves a whole bounded paste before copying any chunk into the queue.
@@ -222,6 +278,7 @@ pub fn pushCreateTab(outbox: *Outbox, request: CreateTabType) !void {
     }
 
     var owned: OwnedCreateTab = .{
+        .kind = request.kind,
         .request_id = request.request_id,
         .workspace = request.workspace,
         .label_len = @intCast(request.label.len),
@@ -404,6 +461,12 @@ fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
         .read_history_output => |value| encodeReadHistoryOutput_module(buffer, value),
         .suggest_command => |*value| encodeSuggestCommand_module(buffer, value.view()),
         .complete_pane_focus => |value| encodeCompletePaneFocus_module(buffer, value),
+        .agent_prompt => |*value| @import("telar-core").encodeAgentPrompt(buffer, value.view(&outbox.input_bytes[outbox.head])),
+        .agent_interrupt => |value| @import("telar-core").encodeAgentInterrupt(buffer, value),
+        .agent_resume => |value| @import("telar-core").encodeAgentResume(buffer, value),
+        .agent_approval => |value| @import("telar-core").encodeAgentApproval(buffer, value),
+        .query_agent_thread => |value| @import("telar-core").encodeQueryAgentThread(buffer, value),
+        .query_agent_history => |*value| @import("telar-core").encodeQueryAgentHistory(buffer, value.view(&outbox.input_bytes[outbox.head])),
     };
 }
 

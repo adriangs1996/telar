@@ -68,7 +68,7 @@ pub fn Type(comptime T: type) type {
                 bool => try encoder.writeByte(@intFromBool(value)),
                 u8 => try encoder.writeByte(value),
                 u16, u32, u64, i32, i64 => try encoder.writeInt(F, value),
-                types.ExitKind, types.TabMoveDirection, types.PaneTextSource, types.PaneTextMode, types.ProxyScope => {
+                types.ExitKind, types.TabMoveDirection, types.PaneTextSource, types.PaneTextMode, types.ProxyScope, @import("pane_kind.zig").PaneKind => {
                     try encoder.writeByte(@intFromEnum(value));
                 },
                 else => @compileError("underivable field type " ++ @typeName(F)),
@@ -96,6 +96,7 @@ pub fn Type(comptime T: type) type {
                 bool => try decoder.readBool(),
                 u8 => try decoder.readByte(),
                 u16, u32, u64, i32, i64 => try decoder.readInt(F),
+                @import("pane_kind.zig").PaneKind => try @import("messages/tab.zig").decodePaneKind(try decoder.readByte()),
                 types.ExitKind => try codec.decodeExitKind(try decoder.readByte()),
                 types.TabMoveDirection => switch (try decoder.readByte()) {
                     0 => .previous,

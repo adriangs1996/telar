@@ -8,10 +8,10 @@ count: usize = 0,
 total: usize = 0,
 
 /// Keeps the active workspace in the middle until either end of the list.
-/// Capacity may reduce the slice, but never expands it past three workspaces.
+/// Capacity follows the available width, without a fixed project-count limit.
 /// Example: `const window = WorkspaceWindow.centered(8, 4, 3);`
 pub fn centered(total: usize, active: usize, capacity: usize) WorkspaceWindow {
-    const count = @min(total, @min(capacity, 3));
+    const count = @min(total, capacity);
     if (count == 0) {
         return .{ .total = total };
     }
@@ -63,9 +63,9 @@ test "workspace window direct jumps and list replacement retain global positions
 test "workspace window includes active within every bounded capacity" {
     for (0..65) |total| {
         for (0..total + 2) |active| {
-            for (0..5) |capacity| {
+            for (0..66) |capacity| {
                 const window = WorkspaceWindow.centered(total, active, capacity);
-                try std.testing.expect(window.count <= 3);
+                try std.testing.expect(window.count <= capacity);
                 try std.testing.expect(window.first + window.count <= total);
                 if (window.count != 0) {
                     const selected = @min(active, total - 1);

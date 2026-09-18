@@ -70,6 +70,14 @@ runs the configured argv command in parallel and outside the interactive path.
 The request is written to stdin and never appears in process arguments or
 history storage.
 
+Agent-mode panes use the same generator and title tracker. Their first accepted
+composer message supplies already-submitted text, preserving every line when
+normalizing it for the generator. They queue the job at admission because the
+provider can complete a turn before the runtime observes a `working` snapshot.
+Codex thread names and root rename notifications enter the existing reported-title
+path; routine output never reapplies an older name. The sidebar session title
+remains separate from the tab label and survives GUI detach and reconnect.
+
 The queue admits eight pending jobs and one active child. Output is capped at
 512 bytes, must normalize to one control-free UTF-8 line of at most 96 bytes,
 and is guarded by a deadline. Missing executables, queue pressure, timeout,
@@ -133,7 +141,7 @@ non-repository workspaces and worktree-only locations without a workspace-list
 entry leave the row empty. A working agent with no event also leaves it empty.
 A workspace-list revision can update the branch without an agent revision.
 The card shows no location row (`workspace › tab › pane N`) and no cwd;
-the top bar shows the selected workspace's location instead. The TUI cell
+the project rows above the agents show workspace paths instead. The TUI cell
 renderer retains its own layout.
 
 The GUI draws cards in device pixels inside the sidebar band
@@ -161,7 +169,7 @@ Built-in providers use the embedded symbol atlas at 60% opacity. OpenAI
 is a white mask tinted with `text`; Claude and Pi retain their source colors. Custom providers keep an unboxed glyph.
 The workspace favicon remains colored and is resolved by the existing worker.
 One clipped `focus_agent` hit target covers each visible card. The wheel
-scrolls one card pitch; the band's last pixel column is its edge and a 6 px
+over the agent viewport scrolls one card pitch; the band's last pixel column is its edge and a 6 px
 strip centered on it remains the resize handle.
 
 KGP owns two reusable assets: one three-row focused-agent card and the same
@@ -209,10 +217,55 @@ the window lease holds no data and there is no per-window preference
 store. The PTY sees complete cells only; the band, the gap and trailing
 pixels are chrome.
 
-The band runs from under the tab strip to the status bar. Inside its 8 px
-margin, the header precedes the agent list. The list uses the remaining height
-down to the bottom inset. Configured metrics and other widgets belong in the
-bottom status bar.
+The band runs from under navigation to the status bar. Inside its 8 px
+margin, `projects` precedes workspace rows in stable runtime order. Each row
+shows the existing favicon or folder glyph, a bold name and the workspace's
+path in the small face. Both labels fit independently with an ellipsis.
+The selected workspace uses bright name and folder text, with a secondary
+path. Inactive rows use neutral gray (`#737373`) for their name, path, folder and attention count; their
+favicons draw at half opacity without replacing or uploading the sprite.
+Only hover draws a rounded card background. Selection alone has no background,
+border or accent rail.
+A trailing `! N` counts blocked and failed agents; only the active project
+uses the shared attention color. Agent cards retain their own focus surface. Rows are two line boxes plus 20 logical px
+of vertical padding. Each visible row has one clipped `select_workspace`
+target carrying its runtime ID.
+
+The project section grows with its list, up to 40% of the inset band.
+`agents` and its divider share one row below it, without a subtitle or
+summary counts. Agent cards occupy the remaining height. The lists scroll
+independently, including fractional trackpad movement. A workspace change,
+change in its list position or resize reveals the selected row; ordinary
+repaints retain manual scrolling. Headers and the resize gutter do not scroll.
+The viewports belong to the delivered hit map, so pending or failed frames
+cannot change which list receives a pointer event.
+
+When the sidebar is hidden or too short for a project line, the top bar shows
+compact project indicators: their one-based position and the existing favicon,
+or a folder glyph when no favicon is available. Names and pill backgrounds are
+absent. The active project uses the accent color and a small dot underneath;
+agent attention gets a separate dot at the top right. Each indicator occupies
+40 logical px with a 4 px gap. All projects that fit within the navigation
+region remain visible in runtime order, without a three-project limit. Only
+physical overflow uses counters that select the nearest hidden project and
+retain its group's attention signal. An unlisted workspace
+or worktree retains its current-context label there. Tab layout and behavior
+are unchanged in either case. All navigation still uses the shared client
+intents; the GUI keeps only bounded disposable scroll state. Configured
+metrics and other widgets belong in the bottom status bar.
+
+During the empty tab-model phase of a workspace handoff, the top bar retains
+the last delivered project identity while it remains in the workspace list.
+Indicators, selection and the overflow window remain in place until arrival.
+The identity is stored with the delivered hit map; failed frames cannot replace
+it. This retains no pane data and does not change navigation authority.
+
+`src/gui/tests/sidebar_workspaces.zig` covers row navigation, clipping,
+independent scrolling, selected-row visibility, deferred delivery and display
+scaling. The existing sidebar warm-repaint test includes project names and
+paths, and the favicon tests verify that rows and cards reuse the same sprite.
+`src/gui/tests/top_navigation.zig` covers compact indicators, shared favicons
+at both display scales, stable positions, overflow navigation and tab bounds.
 
 ## Detector wiring
 

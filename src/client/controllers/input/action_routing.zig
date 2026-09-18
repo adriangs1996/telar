@@ -43,7 +43,7 @@ pub fn apply(client: *Client, value: Action) !ControlType {
     else
         .{
             .available = .{
-                .copy_mode_active = client.model.copyModeActive(),
+                .copy_mode_active = @import("copy_modes.zig").active(client),
             },
         };
     const control = try use_case.execute(value, authority);

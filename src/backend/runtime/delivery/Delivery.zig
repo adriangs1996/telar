@@ -52,6 +52,8 @@ client_layout_sent: bool = false,
 proxy_status_sent: bool = false,
 agent_revision_sent: u64 = 0,
 agent_snapshot_requested: bool = false,
+agent_threads_sent: [max_panes_per_tab]?@import("AgentThreadProjection.zig") = @splat(null),
+requested_agent_thread: ?@import("../../pane/PaneKey.zig") = null,
 system_metrics_revision_sent: u64 = 0,
 workspace_list_revision_sent: u64 = 0,
 foregrounds_sent: [max_panes_per_tab]?ForegroundProjection = @splat(null),
@@ -90,6 +92,12 @@ pub fn requestWorkspaceResync(delivery: *Delivery, workspace: WorkspaceLocationT
 /// ```zig
 /// delivery.requestAgentSnapshot();
 /// ```
+/// Forces a current snapshot after a generation-checked query.
+/// Example: `delivery.requestAgentThread(pane.key());`.
+pub fn requestAgentThread(delivery: *Delivery, key: @import("../../pane/PaneKey.zig")) void {
+    delivery.requested_agent_thread = key;
+}
+
 pub fn requestAgentSnapshot(delivery: *Delivery) void {
     delivery.agent_snapshot_requested = true;
 }
@@ -176,6 +184,7 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
         var history_result: ?*QueryResultType = null;
         var history_output: ?*OutputResultType = null;
         var history_stats: ?*StatsResultType = null;
+        var agent_history: ?*@import("OwnedAgentHistoryPage.zig") = null;
         const payload = try runtime_encoder.encodeResponse(.{
             .buffer = buffer,
             .panes = sources.panes,
@@ -183,12 +192,14 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
             .history_result = &history_result,
             .history_output = &history_output,
             .history_stats = &history_stats,
+            .agent_history = &agent_history,
         }, entry.response);
         return delivery.stage(payload, .{ .response = .{
             .offset = entry.offset,
             .history_result = history_result,
             .history_output = history_output,
             .history_stats = history_stats,
+            .agent_history = agent_history,
         } });
     }
 
@@ -306,6 +317,32 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
         );
     }
 
+    if (delivery.runtime_state_requested or delivery.requested_agent_thread != null) {
+        for (sources.panes.items, 0..) |entry, slot| {
+            const pane = entry orelse continue;
+            const snapshot = pane.agent_thread orelse continue;
+            if (pane.close_requested or pane.exit != null) {
+                continue;
+            }
+            const requested = if (delivery.requested_agent_thread) |key| std.meta.eql(key, pane.key()) else false;
+            if (!delivery.runtime_state_requested and !requested) {
+                continue;
+            }
+            if (!requested) {
+                if (delivery.agent_threads_sent[slot]) |previous| {
+                    if (std.meta.eql(previous.key, pane.key()) and previous.revision >= snapshot.revision) {
+                        continue;
+                    }
+                }
+            }
+            return delivery.stage(try @import("telar-core").encodeAgentThreadSnapshot(buffer, snapshot), .{ .agent_thread = .{
+                .key = pane.key(),
+                .revision = snapshot.revision,
+                .slot = @intCast(slot),
+            } });
+        }
+    }
+
     if (delivery.runtime_state_requested and
         delivery.system_metrics_revision_sent < sources.system_metrics.revision)
     {
@@ -373,6 +410,7 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
         var history_result: ?*QueryResultType = null;
         var history_output: ?*OutputResultType = null;
         var history_stats: ?*StatsResultType = null;
+        var agent_history: ?*@import("OwnedAgentHistoryPage.zig") = null;
         const payload = try runtime_encoder.encodeResponse(.{
             .buffer = buffer,
             .panes = sources.panes,
@@ -380,12 +418,14 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
             .history_result = &history_result,
             .history_output = &history_output,
             .history_stats = &history_stats,
+            .agent_history = &agent_history,
         }, entry.response);
         return delivery.stage(payload, .{ .response = .{
             .offset = entry.offset,
             .history_result = history_result,
             .history_output = history_output,
             .history_stats = history_stats,
+            .agent_history = agent_history,
         } });
     }
     return null;
@@ -422,6 +462,9 @@ pub fn commit(delivery: *Delivery, operation: Commit) void {
             if (response.history_stats) |result| {
                 result.deinit();
             }
+            if (response.agent_history) |result| {
+                result.deinit();
+            }
             delivery.responses.removeAt(response.offset);
         },
         .resync => {
@@ -434,6 +477,14 @@ pub fn commit(delivery: *Delivery, operation: Commit) void {
         .clipboard => delivery.clipboard_pending = false,
         .client_layout => delivery.client_layout_sent = true,
         .proxy_status => delivery.proxy_status_sent = true,
+        .agent_thread => |projection| {
+            delivery.agent_threads_sent[projection.slot] = projection;
+            if (delivery.requested_agent_thread) |key| {
+                if (std.meta.eql(key, projection.key)) {
+                    delivery.requested_agent_thread = null;
+                }
+            }
+        },
         .agent_revision => |revision| {
             delivery.agent_revision_sent = revision;
             delivery.agent_snapshot_requested = false;

@@ -10,6 +10,8 @@ position: u16,
 label: [max_tab_label_bytes_module]u8,
 label_len: u8,
 root_pane_id: PaneIdType,
+kind: @import("telar-core").PaneKind = .terminal,
+pane_generation: u64 = 0,
 
 pub fn labelSlice(created: *const PendingTabCreated) []const u8 {
     return created.label[0..created.label_len];

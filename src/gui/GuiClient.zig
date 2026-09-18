@@ -26,6 +26,7 @@ sidebar: @import("SidebarPreference.zig") = .{},
 overlays: @import("widgets/overlays/Overlays.zig") = .{},
 lifecycle: client.PresentationLifecycleState = .{},
 graphics_store: @import("graphics_delivery.zig").Store,
+diagrams: @import("diagrams/Service.zig"),
 
 pub fn of(app: *client.AttachedClient) *GuiClient {
     return @fieldParentPtr("app", app);
@@ -55,6 +56,7 @@ pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
     gui.overlays = .{ .router = &gui.input.router };
     gui.lifecycle = .{};
     gui.graphics_store = .init(params.gpa);
+    gui.diagrams = .init(params.gpa);
     gui.app.sound_port = host_ports.sound(&gui.app);
     gui.app.notifier = host_ports.notifier(&gui.app);
     gui.app.link_opener = host_ports.links(&gui.app);
@@ -86,7 +88,9 @@ pub fn deinit(gui: *GuiClient) void {
     }
 
     gui.graphics_store.deinit();
+    gui.diagrams.deinit();
     gui.chrome.favicons.deinit(gpa);
+    gui.widgets.deinit();
     gui.app.deinit();
     gpa.destroy(gui);
 }
@@ -96,6 +100,7 @@ pub fn start(gui: *GuiClient, colors: core.TerminalColors) !void {
     capabilities.terminal_colors = colors;
     capabilities.images = .unsupported;
     capabilities.pointer_pixels = .supported;
+    capabilities.agent_panes = true;
     var handler: client.ResizeHostHandler = .{ .model = &gui.app.model, .effects = .{ .context = gui, .deliver = deliverResize } };
     _ = try handler.execute(.{ .size = gui.app.model.hostSize(), .capabilities = capabilities });
     gui.app.startup.phase = .opening;
@@ -145,8 +150,7 @@ pub fn inputReady(gui: *GuiClient) !void {
 /// A clipboard response retains the widget that requested it across focus
 /// changes. Example: `try gui.requestClipboardRead(id, generation);`
 pub fn requestClipboardRead(gui: *GuiClient, target_id: u64, generation: u64) !void {
-    _ = try gui.host.read(.{ .target_id = target_id, .generation = generation });
-    native.telar_gui_wake(gui.driver.fds[1]);
+    try @import("widgets/interaction/routing.zig").beginClipboardRead(gui, .{ .target_id = target_id, .generation = generation });
 }
 
 /// Copies selected UTF-8 before the native host drains the request.
@@ -169,6 +173,8 @@ pub fn focus(gui: *GuiClient, focused: bool) !void {
     gui.focused = focused;
     if (!focused) {
         gui.widgets.tab_drag.cancel();
+        @import("widgets/interaction/message_links.zig").clear(gui);
+        @import("widgets/interaction/thread_selection.zig").cancel(gui);
     }
     gui.input_revision +%= 1;
     _ = gui.widgets.dispatcher.route(.{ .focus = focused });
@@ -263,6 +269,7 @@ pub fn resize(gui: *GuiClient, size: core.TerminalSize, theme: client.TerminalTh
     capabilities.cell_height_px = size.cell_height_px;
     capabilities.images = .unsupported;
     capabilities.pointer_pixels = .supported;
+    capabilities.agent_panes = true;
     capabilities.terminal_colors = .{ .foreground = theme.foreground, .background = theme.background, .palette = theme.palette };
     var handler: client.ResizeHostHandler = .{ .model = &gui.app.model, .effects = .{ .context = gui, .deliver = deliverResize } };
     _ = try handler.execute(.{ .size = size, .capabilities = capabilities });
@@ -283,7 +290,9 @@ pub fn complete(gui: *GuiClient, token: u64, delivered: bool) !void {
 
     gui.chrome.present(delivered);
     gui.overlays.present(delivered);
+    @import("widgets/interaction/routing.zig").reconcileFocus(gui);
     gui.widgets.present(delivered);
+    @import("widgets/interaction/routing.zig").reconcileFocus(gui);
     gui.input.pointer.hover.present(delivered);
     const delivery = gui.lifecycle.complete(@enumFromInt(token), if (delivered) .delivered else .failed) orelse return;
     var handler: client.DeliverPresentationHandler = .{
@@ -291,6 +300,11 @@ pub fn complete(gui: *GuiClient, token: u64, delivered: bool) !void {
         .effects = .{ .context = gui, .flush_graphics_credits = flushCredits, .request_media = noMedia },
     };
     try handler.execute(.{ .commit = delivery.commit, .media_pending = delivery.media_pending });
+    if (delivered) {
+        try @import("widgets/interaction/thread_items.zig").delivered(gui);
+        try @import("widgets/interaction/thread_history.zig").delivered(gui);
+        @import("widgets/interaction/thread_selection.zig").delivered(gui);
+    }
 }
 
 fn flushCredits(context: *anyopaque) !void {
@@ -323,17 +337,33 @@ pub fn prepare(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.zig"
         return error.PresentationBusy;
     }
 
+    try @import("widgets/interaction/thread_selection.zig").prepare(gui);
+    gui.diagrams.beginFrame();
+
     gui.refreshPointer();
     gui.chrome.now_ns = client.monotonic(gui.app.io);
     try gui.resolveFavicons(renderer);
     const projected = gui.projection();
     const observed = gui.observation();
     _ = gui.lifecycle.observe(observed);
-    var scene: @import("render/Scene.zig") = .{ .terminal = renderer, .chrome = &gui.chrome, .overlays = &gui.overlays, .theme = gui.theme, .link = if (gui.input.pointer.hover.link) |*hit| hit else null, .widgets = &gui.widgets };
+    var scene: @import("render/Scene.zig") = .{ .terminal = renderer, .chrome = &gui.chrome, .overlays = &gui.overlays, .theme = gui.theme, .link = if (gui.input.pointer.hover.link) |*hit| hit else null, .widgets = &gui.widgets, .diagrams = &gui.diagrams.store };
     const commit = try scene.prepare(projected);
+    const diagram_revision = gui.diagrams.store.revision;
+    gui.diagrams.start(&gui.driver.inbox);
+    renderer.diagrams = gui.diagrams.store.textures();
+    if (gui.diagrams.store.revision != diagram_revision) {
+        gui.chrome.invalidate();
+    }
     const token = try gui.lifecycle.begin(.{ .observation = observed, .commit = commit, .geometry = client.Geometry.capture(projected) });
     gui.input.pointer.hover.prepare();
     return @intFromEnum(token);
+}
+
+/// Defers image adoption until the current GPU consumer releases its frame.
+/// Example: `gui.landDiagram();`
+pub fn landDiagram(gui: *GuiClient) void {
+    gui.diagrams.notify();
+    gui.chrome.invalidate();
 }
 
 /// Lands one favicon lookup from the inbox; the next preparation places it.
@@ -363,12 +393,13 @@ fn resolveFavicons(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.
 fn refreshPointer(gui: *GuiClient) void {
     gui.input.pointer.hover.refresh(gui);
     gui.input.pointer.link_gesture.validate(gui.input.pointer.hover.link, gui.app.model.version());
+    @import("widgets/interaction/message_links.zig").refresh(gui);
 }
 
 /// Captures semantic state plus adapter-owned routing and interaction revisions.
 /// Example: `const projected = gui.projection();`
 pub fn projection(gui: *const GuiClient) client.Projection {
-    return client.capture(&gui.app.model, .{ .geometry = gui.region, .status_mode = gui.input.statusMode(gui.app.model.copyModeActive()), .presentation_ingress = gui.ingress() });
+    return client.capture(&gui.app.model, .{ .geometry = gui.region, .status_mode = gui.input.statusMode(client.controllers.copy_modes.active(&gui.app)), .presentation_ingress = gui.ingress() });
 }
 
 /// Example: `_ = gui.lifecycle.observe(gui.observation());`

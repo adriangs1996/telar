@@ -1,4 +1,5 @@
 #import "TelarHostServices.h"
+#import "TelarClipboardImage.h"
 
 @implementation TelarHostServices {
   void *context;
@@ -46,6 +47,42 @@
   [NSRunLoop.mainRunLoop performInModes:@[NSRunLoopCommonModes] block:^{
     TelarHostServices *service = weak;
     if (service == nil || service->closed) return;
+    if (!invalid && kind == 3) {
+      // One owned media job; no GUI pointer or borrowed input bytes reach it.
+      NSPasteboard *board = service->pasteboard;
+      const NSInteger change_count = board.changeCount;
+      dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        @autoreleasepool {
+          uint32_t image_status = 0;
+          NSData *image_path = telar_clipboard_image_path(board, &image_status);
+          [NSRunLoop.mainRunLoop performInModes:@[NSRunLoopCommonModes] block:^{
+            TelarHostServices *owner = weak;
+            if (owner == nil || owner->closed) return;
+            uint32_t status = image_path != nil ? 4 : image_status;
+            NSData *result = image_path;
+            if (owner->pasteboard.changeCount != change_count) {
+              status = 3;
+              result = nil;
+            } else if (image_status == 1) {
+              NSString *text = [owner->pasteboard stringForType:NSPasteboardTypeString];
+              if (text == nil) status = 1;
+              else if ([text lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 64 * 1024) status = 2;
+              else {
+                result = [text dataUsingEncoding:NSUTF8StringEncoding];
+                status = result != nil ? 0 : 1;
+              }
+            }
+            owner->completion = (telar_gui_input){.kind = 9, .code = status, .phase = 1,
+                .request_id = request_id, .target_id = target_id, .generation = generation};
+            owner->completion_bytes = result;
+            owner->completion_ready = YES;
+            [owner deliver];
+          }];
+          CFRunLoopWakeUp(CFRunLoopGetMain());
+        }
+      });
+      return;
+    }
     uint32_t status = invalid ? 2 : 0;
     NSData *result = nil;
     if (!invalid && kind == 1) {

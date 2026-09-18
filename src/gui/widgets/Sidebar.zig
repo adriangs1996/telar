@@ -1,4 +1,4 @@
-//! One frame of the agent sidebar. Layout, cards, clipping and controls
+//! One frame of the project and agent sidebar. Layout, cards, clipping and controls
 //! draw in device pixels; SidebarState owns scrolling and snapshot order.
 const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
@@ -8,12 +8,12 @@ const AgentCard = @import("AgentCard.zig");
 const CardGeometry = @import("CardGeometry.zig");
 const SidebarList = @import("SidebarList.zig");
 const Label = @import("Label.zig");
-const Layout = @import("../layout/Layout.zig");
-const LayoutItem = @import("../layout/Item.zig");
+const WorkspaceList = @import("WorkspaceList.zig");
+const SidebarRegions = @import("SidebarRegions.zig");
 const Sidebar = @This();
 
-pub const margin: f32 = 8;
-pub const header_gap: f32 = 6;
+pub const margin = SidebarRegions.margin;
+pub const header_gap = SidebarRegions.header_gap;
 pub const scrollbar_width: f32 = 3;
 
 state: *SidebarState,
@@ -35,32 +35,35 @@ pub fn draw(sidebar: Sidebar, canvas: *Canvas) !void {
     // background and opacity like the workbench.
     try canvas.panelAt(.{ .x = area.x, .y = area.y, .width = area.width - 1, .height = area.height });
     try canvas.fillAt(.{ .x = area.x + area.width - 1, .y = area.y, .width = 1, .height = area.height }, palette.surface1);
-    const inset = canvas.chrome.px(margin);
     sidebar.state.observe(context.projection.agents);
-    const geometry = CardGeometry.derive(canvas.chrome, canvas.metrics);
-    const content_bottom = area.y + area.height - inset;
-    var rows = [_]LayoutItem{ .{ .height = .{ .fixed = canvas.chrome.rowHeight(.body) } }, .{} };
-    try (Layout{
-        .area = .{ .x = area.x + inset, .y = area.y + inset, .width = @max(0, area.width - 1 - 2 * inset), .height = @max(0, content_bottom - area.y - inset) },
-        .direction = .column,
-        .gap = canvas.chrome.px(header_gap),
-    }).resolve(&rows);
-    const header = rows[0].bounds;
-    const list = rows[1].bounds;
-    if (header.width <= 0 or list.height <= 0) {
-        sidebar.state.hide();
+    const regions = if (context.sidebar_regions) |prepared| prepared.* else try SidebarRegions.resolve(canvas, area, context.projection.workspaces.count);
+
+    try drawHeader(canvas, regions.projects_header, "projects");
+    try (WorkspaceList{ .state = sidebar.state, .context = context, .bounds = regions.projects }).draw(canvas);
+    try drawHeader(canvas, regions.agents_header, "agents");
+    if (regions.agents.height > 0) {
+        try sidebar.drawList(canvas, .{ .bounds = regions.agents });
     } else {
-        try drawHeader(canvas, header);
-        try sidebar.drawList(canvas, .{ .bounds = list, .geometry = geometry });
+        sidebar.state.agents.hide();
     }
 
     try context.bands.add(.{ .area = canvas.sidebar.handle(area), .action = .resize_sidebar });
 }
 
-fn drawHeader(canvas: *Canvas, header: Rect) !void {
+fn drawHeader(canvas: *Canvas, header: Rect, text: []const u8) !void {
+    if (header.width <= 0 or header.height <= 0) {
+        return;
+    }
+
     const palette = canvas.theme.palette;
-    const title: Label = .{ .text = "agents", .color = palette.text, .bold = true, .face = .sans, .size = .body };
-    _ = try canvas.textAt(header, title);
+    const inset = canvas.chrome.px(8);
+    const title: Label = .{ .text = text, .color = palette.text, .bold = true, .face = .sans, .size = .body };
+    const label_area: Rect = .{ .x = header.x + inset, .y = header.y, .width = @max(0, header.width - 2 * inset), .height = header.height };
+    _ = try canvas.textAt(label_area, title);
+    if (@import("std").mem.eql(u8, text, "agents")) {
+        const left = label_area.x + @min(label_area.width, try canvas.measure(title)) + canvas.chrome.px(10);
+        try canvas.fillAt(.{ .x = left, .y = @floor(header.y + header.height / 2), .width = @max(0, label_area.x + label_area.width - left), .height = 1 }, palette.surface1);
+    }
 }
 
 fn drawList(sidebar: Sidebar, canvas: *Canvas, list: SidebarList) !void {
@@ -68,10 +71,11 @@ fn drawList(sidebar: Sidebar, canvas: *Canvas, list: SidebarList) !void {
     const state = sidebar.state;
     const palette = canvas.theme.palette;
     const agents = context.projection.agents.slice();
-    const geometry = list.geometry;
+    const geometry = CardGeometry.derive(canvas.chrome, canvas.metrics);
     const count: f32 = @floatFromInt(state.order_len);
     const total = if (state.order_len == 0) 0 else count * geometry.pitch() - geometry.px(CardGeometry.spacing);
-    state.setScrollBounds(geometry.pitch(), total - list.bounds.height);
+    const scroll = &state.agents;
+    scroll.setBounds(geometry.pitch(), total - list.bounds.height);
     if (state.order_len == 0) {
         _ = try canvas.textAt(
             .{
@@ -94,7 +98,7 @@ fn drawList(sidebar: Sidebar, canvas: *Canvas, list: SidebarList) !void {
     const scrollbar = canvas.chrome.px(scrollbar_width);
     const card_width = @max(0, list.bounds.width - scrollbar - geometry.px(CardGeometry.spacing));
     for (state.ordering(), 0..) |index, position| {
-        const top = list.bounds.y + @as(f32, @floatFromInt(position)) * geometry.pitch() - @as(f32, @floatFromInt(state.scroll));
+        const top = list.bounds.y + @as(f32, @floatFromInt(position)) * geometry.pitch() - @as(f32, @floatFromInt(scroll.scroll));
         if (top + geometry.height() <= list.bounds.y) {
             continue;
         }
@@ -119,9 +123,9 @@ fn drawList(sidebar: Sidebar, canvas: *Canvas, list: SidebarList) !void {
         try context.bands.add(.{ .area = list.hitArea(bounds), .action = card.action() });
     }
 
-    if (state.maximum_scroll != 0) {
-        const thumb = @max(geometry.small_row, list.bounds.height * list.bounds.height / total);
-        const offset = @as(f32, @floatFromInt(state.scroll)) * (list.bounds.height - thumb) / @as(f32, @floatFromInt(state.maximum_scroll));
+    if (scroll.maximum_scroll != 0) {
+        const thumb = @min(list.bounds.height, @max(geometry.small_row, list.bounds.height * list.bounds.height / total));
+        const offset = @as(f32, @floatFromInt(scroll.scroll)) * (list.bounds.height - thumb) / @as(f32, @floatFromInt(scroll.maximum_scroll));
         try canvas.fillAt(.{ .x = list.bounds.x + list.bounds.width - scrollbar, .y = list.bounds.y + offset, .width = scrollbar, .height = thumb }, palette.overlay0);
     }
 }

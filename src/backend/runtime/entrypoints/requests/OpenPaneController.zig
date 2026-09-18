@@ -51,6 +51,8 @@ pub fn openPane(controller: *Controller, request: OpenPaneViewType) !void {
     try controller.responses.push(.{ .pane_opened = .{
         .request_id = request.request_id,
         .pane_id = result.pane.key.id,
+        .pane_generation = result.pane.key.generation,
+        .kind = result.pane.kind,
         .location = result.pane.location,
         .created = result.created,
     } });

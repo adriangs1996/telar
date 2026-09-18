@@ -105,3 +105,34 @@ pub fn decodeLaunch(decoder: *DecoderType) !LaunchView {
         .encoded_environment = decoder.consumed(environment_start),
     };
 }
+
+/// Encodes an agent launch location without executable or environment authority.
+/// Example: `try encodeAgentCwd(&encoder, launch);`.
+pub fn encodeAgentCwd(encoder: *EncoderType, launch: Launch) !void {
+    try codec.validateBytes(launch.cwd, types.max_cwd_bytes, false);
+    if (launch.arguments.len != 0 or launch.environment.len != 0 or launch.environment_mode != .inherit_runtime) {
+        return error.InvalidAgentLaunch;
+    }
+    if (launch.cwd_source) |pane_id| {
+        try codec.validatePaneId(pane_id);
+    }
+    try encoder.writeSized16(launch.cwd);
+    try encoder.writeInt(u64, if (launch.cwd_source) |pane_id| id.raw(pane_id) else 0);
+}
+
+/// Decodes the only client-selected input to a fixed provider launch.
+/// Example: `const launch = try decodeAgentCwd(&decoder);`.
+pub fn decodeAgentCwd(decoder: *DecoderType) !LaunchView {
+    const cwd = try decoder.readSized16();
+    try codec.validateBytes(cwd, types.max_cwd_bytes, false);
+    const source = try decoder.readInt(u64);
+    return .{
+        .cwd = cwd,
+        .cwd_source = if (source == 0) null else try id.pane(source),
+        .argument_count = 0,
+        .encoded_arguments = "",
+        .environment_mode = .inherit_runtime,
+        .environment_count = 0,
+        .encoded_environment = "",
+    };
+}

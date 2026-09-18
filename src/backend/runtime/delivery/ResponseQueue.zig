@@ -40,6 +40,7 @@ pub fn pushOrDrop(queue: *ResponseQueue, response: response_queue.PendingRespons
     queue.push(response) catch {
         switch (response) {
             .history_result => |result| result.deinit(),
+            .agent_history_page => |result| result.deinit(),
             .history_output => |result| result.deinit(),
             .history_stats => |result| result.deinit(),
             .tab_closed => |closed| {
@@ -88,6 +89,19 @@ pub fn reserveNotificationShown(queue: *ResponseQueue, request_id: RequestIdType
 
     const index = (@as(usize, queue.head) + queue.len - 1) % queue.items.len;
     return &queue.items[index].notification_shown;
+}
+
+/// Includes prepared responses until their send transaction commits.
+/// Example: `if (queue.hasAgentHistory()) return error.AgentHistoryBusy;`.
+pub fn hasAgentHistory(queue: *const ResponseQueue) bool {
+    for (0..queue.len) |offset| {
+        const index = (@as(usize, queue.head) + offset) % queue.items.len;
+        if (queue.items[index] == .agent_history_page) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 pub fn peek(queue: *ResponseQueue) ?*response_queue.PendingResponse {
@@ -145,6 +159,7 @@ pub fn clear(queue: *ResponseQueue) void {
     while (queue.peek()) |response| {
         switch (response.*) {
             .history_result => |result| result.deinit(),
+            .agent_history_page => |result| result.deinit(),
             .history_output => |result| result.deinit(),
             .history_stats => |result| result.deinit(),
             else => {},

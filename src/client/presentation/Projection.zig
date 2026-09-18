@@ -58,5 +58,18 @@ window_title_template: []const u8 = "",
 pub fn threadView(projection: *const Projection, pane_id: PaneIdType) ?ThreadViewType {
     const model = projection.model orelse return null;
 
-    return ThreadViewType.capture(model, projection.agents, pane_id);
+    var thread = ThreadViewType.capture(model, projection.agents, pane_id) orelse return null;
+    const pane = model.findConst(pane_id) orelse return null;
+    const workspace_id = switch (pane.location.workspace) {
+        .workspace => |id| id,
+        .worktree => return thread,
+    };
+    for (0..projection.workspaces.count) |index| {
+        if (projection.workspaces.workspaceAt(index) == workspace_id) {
+            thread.branch = projection.workspaces.branchAt(index);
+            break;
+        }
+    }
+
+    return thread;
 }

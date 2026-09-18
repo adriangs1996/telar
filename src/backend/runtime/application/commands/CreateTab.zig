@@ -9,3 +9,5 @@ label: []const u8,
 size: TerminalSizeType,
 /// Every slice in this view is borrowed only for `execute`.
 launch: LaunchViewType,
+
+kind: @import("telar-core").PaneKind = .terminal,

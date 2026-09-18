@@ -12,9 +12,10 @@ font: @import("font_id.zig").Id = .primary,
 preferred: @import("font_id.zig").Id = .primary,
 pixel_height: u16 = 0,
 columns: u32 = 0,
+rtl: bool = false,
 glyphs: [max_glyphs]freetype.c.hb_glyph_info_t = undefined,
 positions: [max_glyphs]freetype.c.hb_glyph_position_t = undefined,
 
 pub fn view(entry: *const Entry) ShapedRun {
-    return .{ .font = entry.font, .columns = entry.columns, .glyphs = entry.glyphs[0..entry.count], .positions = entry.positions[0..entry.count] };
+    return .{ .font = entry.font, .columns = entry.columns, .glyphs = entry.glyphs[0..entry.count], .positions = entry.positions[0..entry.count], .rtl = entry.rtl };
 }

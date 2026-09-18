@@ -2872,7 +2872,7 @@ test "runtime broadcasts a bounded notification and acknowledges delivery" {
     try std.testing.expectEqual(@as(u8, 1), shown.delivered_clients);
 }
 
-fn connectRuntimeForTest(io: std.Io, path: []const u8) !RuntimeTestChannel {
+pub fn connectRuntimeForTest(io: std.Io, path: []const u8) !RuntimeTestChannel {
     for (0..200) |_| {
         var connection = connect_module(io, path) catch {
             try io.sleep(.fromMilliseconds(1), .awake);
@@ -2915,4 +2915,8 @@ fn applyFrameCells(cells: []CellType, frame: FrameViewType) !void {
         var index: usize = span.start;
         while (try source.next()) |cell| : (index += 1) cells[index] = cell;
     }
+}
+
+test {
+    _ = @import("agent_pane_integration_test.zig");
 }

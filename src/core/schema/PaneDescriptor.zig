@@ -4,3 +4,6 @@ const PaneDescriptor = @This();
 
 pane_id: id.PaneId,
 lifecycle: types.PaneLifecycle,
+
+kind: @import("pane_kind.zig").PaneKind = .terminal,
+pane_generation: u64 = 0,

@@ -8,3 +8,6 @@ size: TerminalSizeType,
 launch: LaunchViewType,
 launch_cwd: []const u8,
 workspace_path: []const u8,
+
+kind: @import("telar-core").PaneKind = .terminal,
+restore_conversation: ?@import("telar-core").RecentConversation = null,

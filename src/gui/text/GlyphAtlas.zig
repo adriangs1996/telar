@@ -55,10 +55,12 @@ shelf_y: u32 = 0,
 shelf_height: u32 = reserved + padding,
 library: freetype.c.FT_Library,
 fonts: FontSet,
+shaping_revision: u64 = 0,
 shaping_buffer: *freetype.c.hb_buffer_t,
 /// The terminal cell height: the size fallback glyphs are prepared at.
 pixel_height: u16 = 0,
 shaping_cache: ShapingCache,
+editor_shaping_cache: ?*@import("EditorShapingCache.zig") = null,
 shape_calls: usize = 0,
 raster_attempts: usize = 0,
 failed_glyphs: GlyphFailures = .{},
@@ -107,6 +109,10 @@ pub fn init(allocator: std.mem.Allocator, options: AtlasOptions) !GlyphAtlas {
 }
 
 pub fn deinit(atlas: *GlyphAtlas) void {
+    if (atlas.editor_shaping_cache) |cache| {
+        atlas.allocator.destroy(cache);
+    }
+
     atlas.shaping_cache.deinit(atlas.allocator);
     atlas.glyphs.deinit(atlas.allocator);
     freetype.c.hb_buffer_destroy(atlas.shaping_buffer);
@@ -166,6 +172,7 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
         return atlas.paintBlock(run, list);
     }
 
+    atlas.syncFontRevision();
     if (atlas.shaping_cache.find(shapingKey(run.text, run))) |cached| {
         return atlas.paint(.{ .run = run, .shaped = cached }, list);
     }
@@ -200,10 +207,108 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
 /// or right-align proportional chrome text on the interactive path.
 /// Example: `const width = try atlas.measure(.{ .text = "agents", .x = 0, .y = 0, .color = ink, .pixel_height = 16, .face = .sans });`
 pub fn measure(atlas: *GlyphAtlas, run: TextRun) !f32 {
+    return atlas.measureRun(run, true);
+}
+
+/// Measures native editor input using resident fonts, without installed-font
+/// discovery or file reads. Rendering discovers missing fallback faces later.
+/// Example: `const width = try atlas.measureResident(run);`
+pub fn measureResident(atlas: *GlyphAtlas, run: TextRun) !f32 {
+    return atlas.measureRun(run, false);
+}
+
+/// Reserves the fixed long-run cache on the preparation path, never native input.
+/// Example: `try atlas.prepareEditor();`
+pub fn prepareEditor(atlas: *GlyphAtlas) !void {
+    if (atlas.editor_shaping_cache == null) {
+        const cache = try atlas.allocator.create(@import("EditorShapingCache.zig"));
+        cache.* = .{};
+        atlas.editor_shaping_cache = cache;
+    }
+}
+
+/// Maps grapheme boundaries to the same shaped pen positions used by `place`.
+/// Ligatures without separate glyph clusters divide their advance among the
+/// enclosed graphemes; combining marks remain one caret stop. Resident only.
+/// Example: `try atlas.caretPositions(run, positions[0 .. run.text.len + 1]);`
+pub fn caretPositions(atlas: *GlyphAtlas, run: TextRun, output: []u32) !void {
+    if (output.len != run.text.len + 1 or !std.unicode.utf8ValidateSlice(run.text)) {
+        return error.InvalidCaretBuffer;
+    }
+
+    @memset(output, 0);
+    var runs: FontRuns = .{ .fonts = &atlas.fonts, .iterator = .{ .bytes = run.text }, .preferred = run.face };
+    var advance: f32 = 0;
+    while (runs.next()) |part| {
+        var current = run;
+        current.text = part.text;
+        const start = @intFromPtr(part.text.ptr) - @intFromPtr(run.text.ptr);
+        const positions = output[start .. start + part.text.len + 1];
+        if (part.source != .font or (part.source.font == .primary and !atlas.fonts.primary.covers(part.text) and atlas.findShaped(shapingKey(part.text, current)) == null)) {
+            const width = (try atlas.gridBounds(current)).width * @as(f32, @floatFromInt(part.columns));
+            fillCaretCluster(.{ .text = part.text, .from = @intFromFloat(@round(advance)), .to = @intFromFloat(@round(advance + width)) }, positions);
+            advance += width;
+            continue;
+        }
+
+        const shaped = try atlas.shape(part, run.pixel_height);
+        const width = try atlas.penAdvance(.{ .run = current, .shaped = shaped });
+        if (shaped.font.fitted() or shaped.glyphs.len == 0) {
+            fillCaretCluster(.{ .text = part.text, .from = @intFromFloat(@round(advance)), .to = @intFromFloat(@round(advance + width)) }, positions);
+            advance += width;
+            continue;
+        }
+
+        var glyph: usize = 0;
+        var pen: i64 = 0;
+        var previous_cluster = part.text.len;
+        while (glyph < shaped.glyphs.len) {
+            const cluster = shaped.glyphs[glyph].cluster;
+            const pen_start = pen;
+            while (glyph < shaped.glyphs.len and shaped.glyphs[glyph].cluster == cluster) : (glyph += 1) {
+                pen += shaped.positions[glyph].x_advance;
+            }
+
+            const end = if (shaped.rtl) previous_cluster else if (glyph < shaped.glyphs.len) shaped.glyphs[glyph].cluster else part.text.len;
+            if (cluster >= end or end > part.text.len) {
+                return error.InvalidShapedCluster;
+            }
+
+            const left: u32 = @intFromFloat(@max(0, @round(advance + @as(f32, @floatFromInt(pen_start)) / 64)));
+            const right: u32 = @intFromFloat(@max(0, @round(advance + (if (glyph == shaped.glyphs.len) width else @as(f32, @floatFromInt(pen)) / 64))));
+            fillCaretCluster(.{ .text = part.text[cluster..end], .from = if (shaped.rtl) right else left, .to = if (shaped.rtl) left else right }, positions[cluster .. end + 1]);
+            previous_cluster = cluster;
+        }
+
+        advance += width;
+    }
+}
+
+fn fillCaretCluster(cluster: @import("CaretCluster.zig"), output: []u32) void {
+    var iterator: core.GraphemeIterator = .{ .bytes = cluster.text };
+    var count: u32 = 0;
+    while (iterator.next() != null) {
+        count += 1;
+    }
+
+    iterator.index = 0;
+    var index: u32 = 0;
+    output[0] = cluster.from;
+    while (iterator.next()) |grapheme| {
+        const start = iterator.index - grapheme.bytes.len;
+        @memset(output[start..iterator.index], output[start]);
+        index += 1;
+        const delta = @as(i64, cluster.to) - @as(i64, cluster.from);
+        output[iterator.index] = @intCast(@as(i64, cluster.from) + @divTrunc(delta * index, count));
+    }
+}
+
+fn measureRun(atlas: *GlyphAtlas, run: TextRun, discover: bool) !f32 {
     if (run.text.len == 0) {
         return 0;
     }
 
+    atlas.syncFontRevision();
     if (atlas.shaping_cache.find(shapingKey(run.text, run))) |cached| {
         return atlas.penAdvance(.{ .run = run, .shaped = cached });
     }
@@ -212,12 +317,22 @@ pub fn measure(atlas: *GlyphAtlas, run: TextRun) !f32 {
         return error.InvalidUtf8;
     }
 
-    atlas.discoverFallbacks(run);
+    if (discover) {
+        atlas.discoverFallbacks(run);
+    }
+
     var runs: FontRuns = .{ .fonts = &atlas.fonts, .iterator = .{ .bytes = run.text }, .preferred = run.face };
     var total: f32 = 0;
     while (runs.next()) |part| {
         var current = run;
         current.text = part.text;
+        if (!discover and part.source == .font and part.source.font == .primary and !atlas.fonts.primary.covers(part.text) and atlas.findShaped(shapingKey(part.text, current)) == null) {
+            // Fallback glyphs use the same fixed cell fit after discovery. Do
+            // not cache missing primary glyphs before rendering can resolve them.
+            total += (try atlas.gridBounds(current)).width * @as(f32, @floatFromInt(part.columns));
+            continue;
+        }
+
         total += switch (part.source) {
             .box, .block, .braille => (try atlas.gridBounds(current)).width,
             .font => try atlas.penAdvance(.{ .run = current, .shaped = try atlas.shape(part, run.pixel_height) }),
@@ -581,7 +696,7 @@ fn pack(atlas: *GlyphAtlas, extent: [2]u32) ![2]u32 {
 fn shape(atlas: *GlyphAtlas, run: FontRun, pixel_height: u16) !ShapedRun {
     const text = run.text;
     const shaping_key: ShapingKey = .{ .text = text, .face = run.preferred, .pixel_height = pixel_height };
-    if (atlas.shaping_cache.find(shaping_key)) |cached| {
+    if (atlas.findShaped(shaping_key)) |cached| {
         return cached;
     }
 
@@ -608,12 +723,104 @@ fn shape(atlas: *GlyphAtlas, run: FontRun, pixel_height: u16) !ShapedRun {
         return error.ShapingFailed;
     }
 
-    const shaped: ShapedRun = .{ .font = run.source.font, .columns = run.columns, .glyphs = glyphs[0..glyph_count], .positions = positions[0..glyph_count] };
+    const shaped: ShapedRun = .{ .font = run.source.font, .columns = run.columns, .glyphs = glyphs[0..glyph_count], .positions = positions[0..glyph_count], .rtl = freetype.c.hb_buffer_get_direction(atlas.shaping_buffer) == freetype.c.HB_DIRECTION_RTL };
     atlas.shaping_cache.remember(shaping_key, shaped);
+    if (atlas.editor_shaping_cache) |cache| {
+        cache.remember(shaping_key, shaped);
+    }
+
     return shaped;
 }
 
+fn findShaped(atlas: *GlyphAtlas, key: ShapingKey) ?ShapedRun {
+    atlas.syncFontRevision();
+    return atlas.shaping_cache.find(key) orelse if (atlas.editor_shaping_cache) |cache| cache.find(key) else null;
+}
+
+// A newly discovered face can also cover a grapheme previously cached as
+// missing. Keys name the preferred face, so both caches must retire those
+// results before measurement, painting or caret lookup can reuse them.
+fn syncFontRevision(atlas: *GlyphAtlas) void {
+    if (atlas.shaping_revision == atlas.fonts.revision) {
+        return;
+    }
+
+    atlas.shaping_cache.clear();
+    if (atlas.editor_shaping_cache) |cache| {
+        cache.clear();
+    }
+
+    atlas.shaping_revision = atlas.fonts.revision;
+}
+
 const round26 = FontSize.round26;
+
+test "editor caret positions preserve kerning ligatures and combining graphemes" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 32 });
+    defer atlas.deinit();
+    var run: TextRun = .{ .text = "AV", .x = 0, .y = 0, .color = .white, .face = .sans, .pixel_height = 32 };
+    var positions: [32]u32 = undefined;
+    try atlas.caretPositions(run, positions[0 .. run.text.len + 1]);
+    try std.testing.expectEqual(@as(u32, @intFromFloat(try atlas.measure(run))), positions[2]);
+    run.text = "A";
+    try std.testing.expect(@as(f32, @floatFromInt(positions[1])) < try atlas.measure(run));
+    run.text = "fi";
+    try atlas.caretPositions(run, positions[0..3]);
+    try std.testing.expect(positions[1] > positions[0] and positions[1] < positions[2]);
+    try std.testing.expectEqual(@as(u32, @intFromFloat(try atlas.measure(run))), positions[2]);
+    run.text = "e\u{301}x";
+    try atlas.caretPositions(run, positions[0 .. run.text.len + 1]);
+    try std.testing.expectEqual(@as(u32, 0), positions[1]);
+    try std.testing.expectEqual(@as(u32, 0), positions[2]);
+    try std.testing.expect(positions[3] > 0);
+    try std.testing.expectEqual(@as(u32, @intFromFloat(try atlas.measure(run))), positions[run.text.len]);
+    const shapes = atlas.shape_calls;
+    const rasters = atlas.raster_attempts;
+    const lookups = atlas.fonts.lookups;
+    for (0..20) |_| {
+        try atlas.caretPositions(run, positions[0 .. run.text.len + 1]);
+    }
+
+    try std.testing.expectEqual(shapes, atlas.shape_calls);
+    try std.testing.expectEqual(rasters, atlas.raster_attempts);
+    try std.testing.expectEqual(lookups, atlas.fonts.lookups);
+    try std.testing.expectError(error.InvalidCaretBuffer, atlas.caretPositions(run, positions[0..1]));
+}
+
+test "editor caret positions preserve fractional advances across mixed font spans" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    defer atlas.deinit();
+    const text = "A\u{2801}\u{f07b}V\u{2801}" ** 3 ++ "AV";
+    const run: TextRun = .{ .text = text, .x = 0, .y = 20, .color = .white, .face = .sans, .pixel_height = 16, .cell_bounds = .{ .x = 0, .y = -16, .width = 10.25, .height = 20 } };
+    var quads = QuadList.init(std.testing.allocator);
+    defer quads.deinit();
+    const painted = try atlas.place(run, &quads);
+    var positions: [text.len + 1]u32 = undefined;
+    try atlas.caretPositions(run, &positions);
+    try std.testing.expectEqual(@as(u32, @intFromFloat(@round(painted))), positions[text.len]);
+    try std.testing.expectEqual(painted, try atlas.measure(run));
+}
+
+test "editor caret follows a prepared replacement without poisoning unseen fallback lookup" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    defer atlas.deinit();
+    const text = "A🐟V";
+    const run: TextRun = .{ .text = text, .x = 0, .y = 20, .color = .white, .face = .sans, .pixel_height = 16 };
+    var positions: [text.len + 1]u32 = undefined;
+    try atlas.caretPositions(run, &positions);
+    const missing_key: ShapingKey = .{ .text = "🐟", .face = .sans, .pixel_height = 16 };
+    try std.testing.expect(atlas.findShaped(missing_key) == null);
+    var quads = QuadList.init(std.testing.allocator);
+    defer quads.deinit();
+    const painted = try atlas.place(run, &quads);
+    const shapes = atlas.shape_calls;
+    const lookups = atlas.fonts.lookups;
+    try atlas.caretPositions(run, &positions);
+    try std.testing.expectEqual(@as(u32, @intFromFloat(@round(painted))), positions[text.len]);
+    try std.testing.expectEqual(painted, try atlas.measureResident(run));
+    try std.testing.expectEqual(shapes, atlas.shape_calls);
+    try std.testing.expectEqual(lookups, atlas.fonts.lookups);
+}
 
 test "the page reserves an opaque white block at its origin" {
     var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });

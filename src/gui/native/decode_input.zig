@@ -105,11 +105,11 @@ pub fn decode(native: NativeEvent) !events.Event {
             return .{ .scroll = .{ .x = native.x, .y = native.y, .delta_x = native.delta_x, .delta_y = native.delta_y, .mods = @intCast(native.mods), .precise = native.precise == 1, .phase = @enumFromInt(native.scroll_phase), .momentum = @enumFromInt(native.momentum_phase) } };
         },
         9 => {
-            if (native.request_id == 0 or native.code > 3 or (native.code != 0 and text.len != 0)) {
+            if (native.request_id == 0 or native.code > 4 or (native.code != 0 and native.code != 4 and text.len != 0)) {
                 return error.InvalidNativeClipboard;
             }
 
-            return .{ .clipboard = .{ .request_id = native.request_id, .target_id = native.target_id, .generation = native.generation, .status = @enumFromInt(native.code), .text = text } };
+            return .{ .clipboard = .{ .request_id = native.request_id, .target_id = native.target_id, .generation = native.generation, .status = if (native.code == 4) .success else @enumFromInt(native.code), .image = native.code == 4, .text = text } };
         },
         10 => {
             if (native.target_id == 0 or text.len > events.max_composition_bytes) {

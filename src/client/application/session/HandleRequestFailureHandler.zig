@@ -64,6 +64,10 @@ fn apply(handler: *HandleRequestFailureHandler, command: Command) !request_failu
         .rename_tab,
         .move_tab,
         .notification,
+        .agent_prompt,
+        .agent_control,
+        .agent_query,
+        .agent_history,
         => {},
     }
 

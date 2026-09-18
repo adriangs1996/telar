@@ -1,11 +1,8 @@
-//! Where the sidebar's cards go: the pixel rectangle they are clipped to
-//! and the card geometry of this frame.
+//! The viewport shared by sidebar entries and their clipped pointer targets.
 const Rect = @import("../render/Rect.zig");
-const CardGeometry = @import("CardGeometry.zig");
 const SidebarList = @This();
 
 bounds: Rect,
-geometry: CardGeometry,
 
 /// The visible part of a card, as its pointer target: the list clips what
 /// it paints, so a card scrolled half out of view is hit only where it shows.

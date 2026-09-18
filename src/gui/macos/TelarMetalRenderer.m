@@ -1,5 +1,6 @@
 #import "TelarMetalRenderer.h"
 #include <string.h>
+#include "../native/diagram_textures.h"
 
 static const unsigned char shader_source[] = {
 #embed "../shaders/quad.metal"
@@ -22,6 +23,8 @@ static const unsigned char shader_source[] = {
   id<MTLRenderPipelineState> pipeline;
   id<MTLTexture> atlas;
   id<MTLTexture> sprites;
+  id<MTLTexture> diagrams[TELAR_GUI_DIAGRAM_SLOTS];
+  uint64_t diagram_versions[TELAR_GUI_DIAGRAM_SLOTS];
   id<MTLBuffer> quads;
   uint32_t atlas_version;
   uint32_t sprites_version;
@@ -64,11 +67,11 @@ static const unsigned char shader_source[] = {
   command_allocator = [device newCommandAllocator];
   MTL4ArgumentTableDescriptor *bindings = [MTL4ArgumentTableDescriptor new];
   bindings.maxBufferBindCount = 2;
-  bindings.maxTextureBindCount = 2;
+  bindings.maxTextureBindCount = 2 + TELAR_GUI_DIAGRAM_SLOTS;
   NSError *error = nil;
   arguments = [device newArgumentTableWithDescriptor:bindings error:&error];
   MTLResidencySetDescriptor *resident = [MTLResidencySetDescriptor new];
-  resident.initialCapacity = 4;
+  resident.initialCapacity = 5 + TELAR_GUI_DIAGRAM_SLOTS;
   residency = [device newResidencySetWithDescriptor:resident error:&error];
   viewport_buffer = [device newBufferWithLength:sizeof(float) * 2
                                         options:MTLResourceStorageModeShared];
@@ -238,14 +241,58 @@ static const unsigned char shader_source[] = {
   return YES;
 }
 
+// Only called with no submission in flight. Release replaced slots before
+// allocating new ones so the retained image quota does not double on resize.
+- (BOOL)uploadDiagrams:(const telar_gui_frame *)frame {
+  for (unsigned i = 0; i < TELAR_GUI_DIAGRAM_SLOTS; i++) {
+    const telar_gui_diagram_texture *source = &frame->diagrams[i];
+    if (!source->pixels || diagrams[i].width != source->width ||
+        diagrams[i].height != source->height) {
+      diagrams[i] = nil;
+      diagram_versions[i] = 0;
+    }
+  }
+  for (unsigned i = 0; i < TELAR_GUI_DIAGRAM_SLOTS; i++) {
+    const telar_gui_diagram_texture *source = &frame->diagrams[i];
+    if (!source->pixels) {
+      continue;
+    }
+    if (diagrams[i] == nil) {
+      MTLTextureDescriptor *descriptor = [MTLTextureDescriptor
+          texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+                                       width:source->width
+                                      height:source->height
+                                   mipmapped:NO];
+      descriptor.usage = MTLTextureUsageShaderRead;
+      diagrams[i] = [device newTextureWithDescriptor:descriptor];
+      if (diagrams[i] == nil) {
+        return NO;
+      }
+    }
+    if (diagram_versions[i] != source->version) {
+      [diagrams[i] replaceRegion:MTLRegionMake2D(0, 0, source->width, source->height)
+                    mipmapLevel:0
+                      withBytes:source->pixels
+                    bytesPerRow:(NSUInteger)source->width * 4];
+      diagram_versions[i] = source->version;
+    }
+  }
+  return YES;
+}
+
 - (BOOL)renderFrame:(const telar_gui_frame *)frame
            drawable:(id<CAMetalDrawable>)drawable {
-  if (stopped || in_flight || drawable == nil) {
+  if (stopped || in_flight || drawable == nil ||
+      !telar_gui_diagrams_valid(frame, TELAR_GUI_DIAGRAM_MAX_SIDE)) {
     return NO;
   }
 
+  // A residency set keeps committed allocations alive. Retire the completed
+  // set before replacing image slots, not after allocating their replacements.
+  [residency removeAllAllocations];
+  [residency commit];
   CGSize size = CGSizeMake(drawable.texture.width, drawable.texture.height);
-  if (![self uploadAtlas:frame] || ![self uploadSprites:frame]) {
+  if (![self uploadAtlas:frame] || ![self uploadSprites:frame] || ![self uploadDiagrams:frame]) {
     return NO;
   }
 
@@ -299,6 +346,10 @@ static const unsigned char shader_source[] = {
     // page the atlas stands in and no quad selects it.
     id<MTLTexture> sprite_page = sprites != nil ? sprites : atlas;
     [arguments setTexture:sprite_page.gpuResourceID atIndex:1];
+    for (unsigned i = 0; i < TELAR_GUI_DIAGRAM_SLOTS; i++) {
+      id<MTLTexture> image = diagrams[i] != nil ? diagrams[i] : atlas;
+      [arguments setTexture:image.gpuResourceID atIndex:2 + i];
+    }
     [encoder setArgumentTable:arguments
                      atStages:MTLRenderStageVertex | MTLRenderStageFragment];
 
@@ -326,6 +377,12 @@ static const unsigned char shader_source[] = {
 
   if (sprites != nil) {
     [residency addAllocation:sprites];
+  }
+
+  for (unsigned i = 0; i < TELAR_GUI_DIAGRAM_SLOTS; i++) {
+    if (diagrams[i] != nil) {
+      [residency addAllocation:diagrams[i]];
+    }
   }
 
   [residency commit];

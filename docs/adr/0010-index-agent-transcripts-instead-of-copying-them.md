@@ -4,6 +4,9 @@ status: accepted
 
 # Index agent transcripts instead of copying them
 
+[ADR 0015](0015-own-agent-panes-in-the-runtime.md) adds official app-server
+events as the live source for managed agent panes, with a bounded memory cache.
+
 The conversation view needs a readable transcript of each thread. Three
 sources were available: the agent's own session files, the proxied model
 traffic, and the pane's screen. We decided to read the agent's files and to

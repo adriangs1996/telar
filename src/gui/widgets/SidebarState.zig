@@ -3,12 +3,15 @@ const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const SnapshotMark = @import("SnapshotMark.zig");
+const PixelScroll = @import("PixelScroll.zig");
 const SidebarState = @This();
 
-scroll: u16 = 0,
-maximum_scroll: u16 = 0,
-/// One wheel step in device pixels: the pitch of the last drawn card.
-step: u16 = 0,
+agents: PixelScroll = .{},
+projects: PixelScroll = .{},
+active_workspace: ?core.WorkspaceLocation = null,
+active_position: ?usize = null,
+project_height: f32 = 0,
+project_pitch: f32 = 0,
 order: [core.max_agent_snapshot_entries]u8 = undefined,
 order_len: u8 = 0,
 ordered: SnapshotMark = .{},
@@ -31,46 +34,36 @@ pub fn observe(state: *SidebarState, snapshot: *const client.AgentSnapshot) void
     state.ordered = mark;
 }
 
-/// Applies the current list geometry within the bounded pixel scroll range.
-/// Example: `state.setScrollBounds(geometry.pitch(), total - list.height);`
-pub fn setScrollBounds(state: *SidebarState, step: f32, maximum: f32) void {
-    state.step = @intFromFloat(@min(65535, step));
-    state.maximum_scroll = @intFromFloat(@min(65535, @max(0, maximum)));
-    state.scroll = @min(state.scroll, state.maximum_scroll);
-}
-
-/// An unavailable viewport keeps its offset until layout can constrain it.
+/// Disables both viewports until another frame lays them out.
 /// Example: `state.hide();`
 pub fn hide(state: *SidebarState) void {
-    state.maximum_scroll = 0;
+    state.agents.hide();
+    state.projects.hide();
+    state.project_height = 0;
 }
 
-/// Scrolls by one card without changing the model.
-/// Example: `if (state.wheel(.scroll_down)) chrome.invalidate();`
-pub fn wheel(state: *SidebarState, kind: client.Mouse.Kind) bool {
-    const next = switch (kind) {
-        .scroll_up => state.scroll -| state.step,
-        .scroll_down => @min(state.scroll +| state.step, state.maximum_scroll),
-        else => state.scroll,
-    };
-    if (next == state.scroll) {
-        return false;
+/// Reveals a new workspace or resized row, retaining manual scrolling otherwise.
+/// Example: `state.revealWorkspace(projection, list.height);`
+pub fn revealWorkspace(state: *SidebarState, projection: *const client.Projection, height: f32) void {
+    const location = projection.tabs.workspace;
+    const position = if (location) |value| switch (value) {
+        .workspace => |id| projection.workspaces.indexOf(id),
+        .worktree => null,
+    } else null;
+    const pitch: f32 = @floatFromInt(state.projects.step);
+    const changed = !std.meta.eql(state.active_workspace, location) or state.active_position != position or state.project_height != height or state.project_pitch != pitch;
+    state.active_workspace = location;
+    state.active_position = position;
+    state.project_height = height;
+    state.project_pitch = pitch;
+    if (!changed) {
+        return;
     }
 
-    state.scroll = next;
-    return true;
-}
-
-/// Applies precise vertical movement within the last drawn scroll bounds.
-/// Example: `if (state.scrollBy(delta_pixels)) chrome.invalidate();`
-pub fn scrollBy(state: *SidebarState, delta: f64) bool {
-    const next: u16 = @intFromFloat(@max(0, @min(@as(f64, @floatFromInt(state.maximum_scroll)), @as(f64, @floatFromInt(state.scroll)) + delta)));
-    if (next == state.scroll) {
-        return false;
+    if (position) |index| {
+        const top = @as(f32, @floatFromInt(index)) * pitch;
+        state.projects.reveal(.{ top, top + pitch }, height);
     }
-
-    state.scroll = next;
-    return true;
 }
 
 /// The attention order of the last observed snapshot, as replica indices.

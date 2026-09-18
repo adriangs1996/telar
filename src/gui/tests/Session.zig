@@ -17,7 +17,18 @@ acknowledgements: [128]core.FrameAck = undefined,
 ack_count: usize = 0,
 input: [4096]u8 = undefined,
 input_len: usize = 0,
+last_input_pane: ?core.PaneId = null,
 resize_count: usize = 0,
+agent_prompt_count: usize = 0,
+agent_resume_count: usize = 0,
+last_resume: ?core.AgentResume = null,
+agent_prompt: [4096]u8 = undefined,
+agent_prompt_len: usize = 0,
+agent_images: core.AgentImages = .{},
+agent_request_id: core.RequestId = @enumFromInt(1),
+agent_tab_count: usize = 0,
+approval_count: usize = 0,
+last_approval: ?core.AgentApproval = null,
 
 pub const pane_id: core.PaneId = @enumFromInt(10);
 pub const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
@@ -99,6 +110,7 @@ pub fn settle(session: *Session) !void {
                 session.ack_count += 1;
             },
             .pane_input => |value| {
+                session.last_input_pane = value.pane_id;
                 if (value.bytes.len > session.input.len - session.input_len) {
                     return error.InputCapacityExceeded;
                 }
@@ -107,6 +119,24 @@ pub fn settle(session: *Session) !void {
                 session.input_len += value.bytes.len;
             },
             .pane_resize => session.resize_count += 1,
+            .agent_resume => |value| {
+                session.agent_resume_count += 1;
+                session.last_resume = value;
+            },
+            .agent_prompt => |value| {
+                session.agent_prompt_count += 1;
+                @memcpy(session.agent_prompt[0..value.text.len], value.text);
+                session.agent_prompt_len = value.text.len;
+                session.agent_images = try core.AgentImages.copy(value.images);
+                session.agent_request_id = value.request_id;
+            },
+            .create_tab => |value| {
+                session.agent_tab_count += @intFromBool(value.kind == .agent);
+            },
+            .agent_approval => |value| {
+                session.approval_count += 1;
+                session.last_approval = value;
+            },
             else => {},
         }
 

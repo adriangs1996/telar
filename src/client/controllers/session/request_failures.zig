@@ -32,6 +32,16 @@ pub fn apply(client: *Client, failure: RequestFailedType) !ApplicationSessionReq
 
         return error.UnexpectedRequestFailure;
     };
+    if (continuation == .ignored) {
+        (@import("../../application/agents/AgentHistoryHandler.zig"){ .model = &client.model }).retired();
+    }
+    if (continuation == .agent_history) {
+        const history: @import("../../application/agents/AgentHistoryHandler.zig") = .{ .model = &client.model };
+        defer history.retired();
+        if (!history.failed(continuation.agent_history, failure.message)) {
+            return .ignored;
+        }
+    }
     var use_case = handler(client);
     const outcome = try use_case.execute(.{
         .continuation = continuation,

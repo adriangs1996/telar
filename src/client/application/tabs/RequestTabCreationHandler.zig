@@ -24,6 +24,7 @@ pub fn execute(handler: *RequestTabCreationHandler, request: RequestTabCreation)
     try create_tab.validateLabel(request.label);
     const plan = handler.model.planTabCreation() orelse return false;
     const intent: TabCreationIntent = .{
+        .kind = request.kind,
         .workspace = plan.workspace,
         .cwd_source = plan.cwd_source,
         .label = request.label,

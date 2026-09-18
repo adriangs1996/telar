@@ -1,8 +1,8 @@
 const std = @import("std");
 const Application = @import("Application.zig");
 
-/// Register packaging for the selected target: `packaging.add(b, app)`.
-pub fn add(b: *std.Build, app: Application) void {
+/// Register packaging for the selected target: `packaging.add(b, app, diagram_helper)`.
+pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath) void {
     // Application packaging. The shipped binary is the same `telar`; a bundle
     // adds a launcher that runs `telar gui --login-shell`, and a desktop file
     // does the same on Linux. See docs/packaging.md.
@@ -19,6 +19,12 @@ pub fn add(b: *std.Build, app: Application) void {
         const contents = "Telar.app/Contents";
         // Case-folding file systems cannot hold `Telar` and `telar` side by side.
         bundle_step.dependOn(&b.addInstallArtifact(app.exe, .{ .dest_dir = .{ .override = .{ .custom = contents ++ "/Resources/bin" } } }).step);
+        bundle_step.dependOn(&b.addInstallFile(diagram_helper.?, contents ++ "/Resources/bin/telar-diagram-renderer").step);
+        bundle_step.dependOn(&b.addInstallDirectory(.{
+            .source_dir = b.path("tools/diagram-renderer/licenses"),
+            .install_dir = .prefix,
+            .install_subdir = contents ++ "/Resources/licenses/diagram-renderer",
+        }).step);
         bundle_step.dependOn(&b.addInstallArtifact(launcher, .{ .dest_dir = .{ .override = .{ .custom = contents ++ "/MacOS" } } }).step);
         bundle_step.dependOn(&b.addInstallFile(b.path("packaging/macos/Info.plist"), contents ++ "/Info.plist").step);
         bundle_step.dependOn(&b.addInstallFile(b.path("packaging/macos/telar.icns"), contents ++ "/Resources/telar.icns").step);

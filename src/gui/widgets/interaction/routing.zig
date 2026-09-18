@@ -11,11 +11,49 @@ const Target = @import("Target.zig");
 const FieldView = @import("FieldView.zig");
 const GenericField = client.GenericField;
 
+/// Delivered controls may outlive their pane's keyboard focus between frames.
+/// Example: `routing.reconcileFocus(gui);`
+pub fn reconcileFocus(gui: *GuiClient) void {
+    const state = &gui.widgets;
+    const model = gui.app.model.activeTabModelConst();
+    const focused_pane: ?core.PaneId = if (model) |value| value.layout.focused() else null;
+    if (state.composer_menu.selector) |selector| {
+        if (focused_pane != selector.pane_id) {
+            state.composer_menu.selector = null;
+            state.dispatcher.revision +%= 1;
+        }
+    }
+
+    const target = state.dispatcher.focusedTarget() orelse return;
+    const pane_id = target.paneId() orelse return;
+    if (focused_pane == pane_id and eligible(gui, target)) {
+        return;
+    }
+
+    state.cancelComposition();
+    state.paste_owner = null;
+    _ = state.dispatcher.focus(null);
+    state.dispatcher.cancel();
+    if (gui.input.binding_target != null) {
+        gui.input.cancelBinding();
+    }
+}
+
 /// Runs after queue admission, before the existing terminal fallback.
 /// Targeted stale events are consumed, never retargeted to another editor.
 /// Example: `if (try routing.apply(gui, event)) return;`
 pub fn apply(gui: *GuiClient, event: Event) !bool {
+    reconcileFocus(gui);
+    @import("completions.zig").refresh(gui);
     const state = &gui.widgets;
+    if (@import("image_preview.zig").route(gui, event)) {
+        return true;
+    }
+
+    if (try routeAgentBinding(gui, event)) {
+        return true;
+    }
+
     const begins = event == .scroll or (event == .pointer and (event.pointer.kind == .press or event.pointer.kind == .scroll_up or event.pointer.kind == .scroll_down));
     if (begins and !@import("../../input/PointerRouting.zig").geometryMatches(&gui.app)) {
         if (event == .pointer and event.pointer.kind == .press) {
@@ -30,6 +68,12 @@ pub fn apply(gui: *GuiClient, event: Event) !bool {
     }
     if (event == .clipboard and event.clipboard.operation == .write) {
         try finishCut(gui, event.clipboard);
+        @import("thread_items.zig").copied(gui, event.clipboard);
+        @import("thread_selection.zig").copied(gui, event.clipboard);
+        return true;
+    }
+    if (event == .clipboard) {
+        try finishPaste(gui, event.clipboard);
         return true;
     }
     if (event == .accessibility) {
@@ -38,7 +82,15 @@ pub fn apply(gui: *GuiClient, event: Event) !bool {
     }
 
     const leased = event == .key or (event == .text and event.text.physical != null);
-    const ownership = if (leased) state.dispatcher.route(event) else null;
+    const ownership = if (leased) (if (event == .key and state.completions.open) state.dispatcher.editorKey(event.key) else state.dispatcher.route(event)) else null;
+    const result = ownership orelse state.dispatcher.route(event);
+    if (try @import("completions.zig").route(gui, event, result)) {
+        return true;
+    }
+    if (try @import("composer_menu.zig").route(gui, event, result)) {
+        return true;
+    }
+
     if (explicitTarget(event)) |id| {
         if (ownership) |decision| {
             if (!decision.consumed) {
@@ -60,7 +112,6 @@ pub fn apply(gui: *GuiClient, event: Event) !bool {
         return true;
     }
 
-    const result = ownership orelse state.dispatcher.route(event);
     if (event == .pointer and result.consumed) {
         const capture = state.dispatcher.captures[0];
         const captured = if (capture) |id| state.dispatcher.maps.presented().find(id) else null;
@@ -69,6 +120,12 @@ pub fn apply(gui: *GuiClient, event: Event) !bool {
         gui.input.pointer.hover.refresh(gui);
     }
     if (result.focus_changed) {
+        if (state.thread_selection.owner) |owner| {
+            const focused = state.dispatcher.focusedTarget();
+            if (focused == null or focused.?.action != .transcript or focused.?.action.transcript != owner.pane_id) {
+                @import("thread_selection.zig").cancel(gui);
+            }
+        }
         state.cancelComposition();
         if (state.dispatcher.focusedTarget()) |target| {
             try focus(gui, target);
@@ -85,13 +142,27 @@ pub fn apply(gui: *GuiClient, event: Event) !bool {
         return true;
     }
 
+    if (try @import("thread_selection.zig").route(gui, event, result)) {
+        return true;
+    }
+
     const target = result.target orelse return result.consumed;
     if (!eligible(gui, target)) {
         return true;
     }
 
     switch (target.action) {
-        .text_field => try editor(gui, target, event),
+        .text_field, .composer => try editor(gui, target, event),
+        .transcript, .message_link, .composer_completion => {},
+        .agent_control, .composer_selector, .composer_choice, .thread_item => {
+            if (target.action == .thread_item and try threadItemKey(gui, target, event)) {
+                return true;
+            }
+
+            if (target.enabled and buttonActivated(event, target)) {
+                try activateControl(gui, target);
+            }
+        },
         .intent => |intent| {
             if (activated(event)) {
                 var value = intent;
@@ -129,12 +200,19 @@ pub fn apply(gui: *GuiClient, event: Event) !bool {
 /// Latches paste ownership once, including when a control merely consumes it.
 /// Example: `const owned = try routing.beginPaste(gui);`
 pub fn beginPaste(gui: *GuiClient) !bool {
+    reconcileFocus(gui);
     const state = &gui.widgets;
+    if (state.image_preview != null) {
+        state.paste_consumed = true;
+        state.paste_owner = null;
+        return true;
+    }
+
     const routed = state.dispatcher.route(.{ .paste = "" });
     state.paste_consumed = routed.consumed;
-    state.paste_owner = if (routed.target) |target| if (target.action == .text_field and field(gui, target) != null) target.id else null else null;
-    state.paste_buffer = .{};
-    state.paste_revision = gui.app.model.name_prompt.version();
+    state.paste_owner = if (routed.target) |target| if (field(gui, target) != null) target.id else null else null;
+    state.paste_buffer = .{ .multiline = if (routed.target) |target| target.action == .composer else false };
+    state.paste_revision = editingRevision(gui);
     if (routed.target) |target| {
         if (field(gui, target)) |value| {
             state.paste_selection = value.selection();
@@ -157,11 +235,12 @@ pub fn paste(gui: *GuiClient, bytes: []const u8) !void {
 
 /// Example: `try routing.endPaste(gui);`
 pub fn endPaste(gui: *GuiClient) !void {
+    reconcileFocus(gui);
     defer gui.widgets.paste_owner = null;
     defer gui.widgets.paste_consumed = false;
     const owner = gui.widgets.paste_owner orelse return;
     const target = gui.widgets.dispatcher.maps.presented().find(owner) orelse return;
-    if (field(gui, target) != null and gui.app.model.name_prompt.version() == gui.widgets.paste_revision) {
+    if (field(gui, target) != null and FieldView.revision(&gui.app, target) == gui.widgets.paste_revision) {
         if (gui.widgets.paste_buffer.text()) |bytes| {
             try focus(gui, target);
             try command(gui, .{ .replace_range = .{ .range = gui.widgets.paste_selection, .text = bytes } });
@@ -181,34 +260,244 @@ fn explicitTarget(event: Event) ?Id {
 }
 
 fn field(gui: *const GuiClient, target: Target) ?FieldView {
-    const prompt = gui.app.model.name_prompt.currentConst() orelse return null;
-    return FieldView.capture(prompt, target);
+    return FieldView.captureClient(&gui.app, target);
+}
+
+fn editingRevision(gui: *const GuiClient) u64 {
+    if (gui.widgets.dispatcher.focusedTarget()) |target| {
+        if (target.action == .composer and !gui.app.model.name_prompt.active()) {
+            return FieldView.revision(&gui.app, target);
+        }
+    }
+
+    return gui.app.model.name_prompt.version();
+}
+
+fn routeAgentBinding(gui: *GuiClient, event: Event) !bool {
+    const key: client.Key = switch (event) {
+        .key => |value| value.terminalKey(),
+        .text => |value| blk: {
+            if (value.physical == null or value.bytes.len == 0 or value.bytes.len > 4 or gui.widgets.preedit.owner != null) {
+                return false;
+            }
+
+            var result: client.Key = .{ .code = .{ .char = .{ .bytes = @splat(0), .len = @intCast(value.bytes.len) } }, .phase = value.phase, .physical = value.physical };
+            @memcpy(result.code.char.bytes[0..value.bytes.len], value.bytes);
+            break :blk result;
+        },
+        else => return false,
+    };
+    const owner = if (key.physical) |physical| gui.widgets.dispatcher.keys.owner(physical) else null;
+    if (key.phase != .press) {
+        if (owner == null or owner.? != .fallback) {
+            return false;
+        }
+
+        if (key.phase == .release) {
+            _ = gui.widgets.dispatcher.keys.release(key.physical.?);
+        }
+
+        // A binding may replace its composer with a tab or modal before keyUp.
+        // Existing fallback leases still complete through their original router.
+        var handler: @import("../../input/InputHandler.zig") = .{ .app = &gui.app };
+        gui.input.stopped = try gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = client.monotonic(gui.app.io) }, &handler) == .stop;
+        return true;
+    }
+
+    if (!gui.widgets.dispatcher.window_focused or gui.widgets.dispatcher.maps.presented().modal_layer != 0 or gui.widgets.composer_menu.selector != null or gui.widgets.completions.open or client.controllers.key_routing.captures(&gui.app)) {
+        return false;
+    }
+
+    const target = gui.widgets.dispatcher.focusedTarget() orelse return false;
+    switch (target.action) {
+        .composer, .transcript, .composer_selector, .agent_control, .thread_item => {},
+        else => return false,
+    }
+    if (target.layer != 0 or !eligible(gui, target) or (event == .key and event.key.mods.super)) {
+        return false;
+    }
+    if (explicitTarget(event)) |id| {
+        if (!id.eql(target.id)) {
+            return false;
+        }
+    }
+
+    if (!gui.input.router.wantsBinding(key)) {
+        return false;
+    }
+    if (key.physical) |physical| {
+        if (!gui.widgets.dispatcher.keys.acquire(physical, .fallback)) {
+            return true;
+        }
+    }
+
+    if (gui.input.router.bindingDeadline() == null and !gui.input.router.prefixPending()) {
+        gui.input.binding_target = target.id;
+    }
+
+    gui.widgets.cancelComposition();
+    var handler: @import("../../input/InputHandler.zig") = .{ .app = &gui.app, .widget_target = gui.input.binding_target };
+    gui.input.stopped = try gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = client.monotonic(gui.app.io) }, &handler) == .stop;
+    return true;
+}
+
+/// Replays an unmatched or expired chord only to its original live composer.
+/// Held keys return to widget ownership before ordinary repeat/release routing.
+/// Example: `try routing.replayBindingKey(gui, owner, key);`
+pub fn replayBindingKey(gui: *GuiClient, owner: Id, key: client.Key) !void {
+    const target = gui.widgets.dispatcher.focusedTarget();
+    const model = gui.app.model.activeTabModelConst();
+    const valid = gui.widgets.dispatcher.window_focused and gui.widgets.dispatcher.maps.presented().modal_layer == 0 and gui.widgets.composer_menu.selector == null and target != null and target.?.id.eql(owner) and target.?.action == .composer and model != null and model.?.layout.focused() == target.?.action.composer and field(gui, target.?) != null;
+    if (key.physical) |physical| {
+        gui.input.router.relinquishKey(physical);
+        const lease = gui.widgets.dispatcher.keys.owner(physical);
+        if (lease != null and lease.? == .fallback) {
+            _ = gui.widgets.dispatcher.keys.acquire(physical, if (valid) .{ .widget = owner } else .discarded);
+        }
+    }
+
+    if (!valid) {
+        return;
+    }
+
+    const input: Key = .{ .code = key.code, .mods = .{ .shift = key.mods.shift, .alt = key.mods.alt, .ctrl = key.mods.ctrl }, .phase = key.phase, .physical = key.physical, .kitty = key.kitty };
+    if (!try shortcut(gui, target.?, input)) {
+        try composerKey(gui, target.?, input);
+    }
+}
+
+fn composerKey(gui: *GuiClient, target: Target, key: Key) !void {
+    const value: client.ModelNamePromptCommand = switch (key.code) {
+        .enter => {
+            if (key.mods.shift) {
+                try command(gui, .{ .insert = "\n" });
+            } else {
+                gui.widgets.thread_anchor.cancel(target.action.composer);
+                try @import("completions.zig").submit(gui, target.action.composer);
+            }
+
+            return;
+        },
+        .backspace => .backspace,
+        .delete => .delete,
+        .left => .{ .move_left = key.mods.shift },
+        .right => .{ .move_right = key.mods.shift },
+        .home => .{ .home = key.mods.shift },
+        .end => .{ .end = key.mods.shift },
+        .up, .down => {
+            const current = field(gui, target) orelse return;
+            const geometry = gui.widgets.editors.presented().find(target.id) orelse return;
+            const layout: @import("MultilineLayout.zig") = .{ .text = current.text, .head = current.head, .columns = geometry.columns, .rows = @intFromFloat(@max(1, @floor(geometry.bounds.height / geometry.line_height))), .font = geometry.font };
+            const caret = layout.position(current.head);
+            const row = if (key.code == .up) caret[1] -| 1 else caret[1] + 1;
+            var full = layout;
+            full.rows = std.math.maxInt(u32);
+            const offset = full.offset(.{ @floatFromInt(caret[0]), @floatFromInt(row) });
+            try command(gui, .{ .select_range = .{ if (key.mods.shift) current.anchor else offset, offset } });
+            return;
+        },
+        .page_up, .page_down => {
+            try scrollThread(gui, target, if (key.code == .page_up) 12 else -12);
+            return;
+        },
+        .escape => .cancel,
+        .char => |character| {
+            if (key.mods.ctrl or key.mods.alt or key.mods.super) {
+                return;
+            }
+
+            try command(gui, .{ .insert = character.bytes[0..character.len] });
+            return;
+        },
+        else => return,
+    };
+
+    try command(gui, value);
 }
 
 fn eligible(gui: *const GuiClient, target: Target) bool {
+    if (target.action == .agent_control and target.action.agent_control.kind == .close_image) {
+        const preview = gui.widgets.image_preview orelse return false;
+        return target.layer == 1 and target.id.generation == preview.generation and target.action.agent_control.pane_id == preview.control.pane_id;
+    }
+
+    if (target.action == .composer_completion) {
+        return @import("completions.zig").eligible(gui, target);
+    }
+
+    if (target.action == .thread_item) {
+        return @import("thread_items.zig").eligible(gui, target);
+    }
+
+    if (target.action == .composer_selector or target.action == .composer_choice) {
+        return @import("composer_menu.zig").eligible(gui, target);
+    }
+
     if (gui.app.model.name_prompt.currentConst()) |prompt| {
         return target.layer != 0 and target.id.generation == prompt.generation;
     }
 
-    return target.layer == 0;
+    const pane_id = switch (target.action) {
+        .composer => |id| id,
+        .transcript => |id| id,
+        .agent_control => |control| control.pane_id,
+        .message_link => |control| control.owner.pane_id,
+        else => return target.layer == 0,
+    };
+    const model = gui.app.model.activeTabModelConst() orelse return false;
+    const pane = model.findConst(pane_id) orelse return false;
+    return target.layer == 0 and pane.attached and pane.kind == .agent and pane.attachment_generation == target.id.generation;
 }
 
 fn focus(gui: *GuiClient, target: Target) !void {
-    gui.input.router.cancelSequence();
+    gui.input.cancelBinding();
+    if (target.paneId()) |pane_id| {
+        if (!eligible(gui, target)) {
+            return;
+        }
+        if (target.action == .composer and field(gui, target) == null) {
+            return;
+        }
+
+        _ = gui.widgets.dispatcher.focus(target.id);
+        const model = gui.app.model.activeTabModel() orelse return;
+        _ = try client.controllers.view_interactions.apply(&gui.app, model, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
+        return;
+    }
+
     if (target.action == .text_field and field(gui, target) != null) {
         try command(gui, .{ .focus_field = if (target.action.text_field == .directory) .directory else .name });
     }
 }
 
 fn command(gui: *GuiClient, value: client.ModelNamePromptCommand) !void {
-    const revision = gui.app.model.name_prompt.version();
+    const revision = editingRevision(gui);
+    if (!gui.app.model.name_prompt.active()) {
+        if (gui.widgets.dispatcher.focusedTarget()) |target| {
+            if (target.action == .composer and field(gui, target) != null) {
+                try client.agent_threads.edit(&gui.app, target.action.composer, value);
+                if (revision != editingRevision(gui)) {
+                    gui.widgets.cancelComposition();
+                }
+
+                return;
+            }
+        }
+    }
+
     _ = try client.controllers.name_prompts.handleInput(&gui.app, .{ .command = value });
-    if (revision != gui.app.model.name_prompt.version() or value == .select_all or value == .select_range or value == .replace_range) {
+    if (revision != editingRevision(gui) or value == .select_all or value == .select_range or value == .replace_range) {
         gui.widgets.cancelComposition();
     }
 }
 
 fn editor(gui: *GuiClient, target: Target, event: Event) !void {
+    // Modifier changes can arrive as stationary pointer motion over an editor.
+    // Only selection gestures may focus it and cancel a pending key sequence.
+    if (event == .pointer and (event.pointer.button != .left or (event.pointer.kind != .press and event.pointer.kind != .drag))) {
+        return;
+    }
+
     if ((event == .key and event.key.phase == .release) or (event == .text and event.text.phase == .release)) {
         return;
     }
@@ -239,9 +528,13 @@ fn editor(gui: *GuiClient, target: Target, event: Event) !void {
                 return;
             }
 
-            const revision = gui.app.model.name_prompt.version();
-            _ = try client.controllers.name_prompts.handleInput(&gui.app, .{ .key = key.terminalKey() });
-            if (revision != gui.app.model.name_prompt.version()) {
+            const revision = editingRevision(gui);
+            if (target.action == .composer) {
+                try composerKey(gui, target, key);
+            } else {
+                _ = try client.controllers.name_prompts.handleInput(&gui.app, .{ .key = key.terminalKey() });
+            }
+            if (revision != editingRevision(gui)) {
                 state.cancelComposition();
             }
         },
@@ -256,15 +549,10 @@ fn editor(gui: *GuiClient, target: Target, event: Event) !void {
             state.dispatcher.revision +%= 1;
         },
         .paste => |bytes| {
-            var buffer: @import("PasteBuffer.zig") = .{};
+            var buffer: @import("PasteBuffer.zig") = .{ .multiline = target.action == .composer };
             buffer.append(bytes);
             if (buffer.text()) |text| {
                 try command(gui, .{ .replace_range = .{ .range = current.selection(), .text = text } });
-            }
-        },
-        .clipboard => |value| {
-            if (value.status == .success) {
-                try editor(gui, target, .{ .paste = value.text });
             }
         },
         .composition => |value| {
@@ -282,6 +570,15 @@ fn editor(gui: *GuiClient, target: Target, event: Event) !void {
         .pointer => |pointer| {
             if (pointer.button == .left and (pointer.kind == .press or pointer.kind == .drag)) {
                 const geometry = state.editors.presented().find(target.id) orelse return;
+                if (geometry.multiline) {
+                    const layout: @import("MultilineLayout.zig") = .{ .text = current.text, .head = current.head, .columns = geometry.columns, .rows = @intFromFloat(@max(1, @floor(geometry.bounds.height / geometry.line_height))), .font = geometry.font };
+                    const offset = layout.offset(.{ (pointer.x - geometry.bounds.x) / geometry.cell_width, (pointer.y - geometry.bounds.y) / geometry.line_height });
+                    const anchor = if (pointer.kind == .drag or pointer.mods & 1 != 0) current.anchor else offset;
+                    state.cancelComposition();
+                    try command(gui, .{ .select_range = .{ anchor, offset } });
+                    return;
+                }
+
                 var copy: GenericField(4096) = .init(current.text);
                 _ = copy.selectRange(.{ current.anchor, current.head });
                 const visible = copy.view(geometry.columns);
@@ -348,6 +645,45 @@ fn buttonActivated(event: Event, target: Target) bool {
     };
 }
 
+fn threadItemKey(gui: *GuiClient, target: Target, event: Event) !bool {
+    if (event != .key or event.key.phase == .release) {
+        return false;
+    }
+
+    const key = event.key;
+    switch (key.code) {
+        .page_up, .page_down => {
+            try scrollThread(gui, target, if (key.code == .page_up) 12 else -12);
+            return true;
+        },
+        .escape => {
+            const registry = gui.widgets.dispatcher.maps.presented();
+            for (registry.targets[0..registry.len]) |item| {
+                if (item.action == .composer and item.action.composer == target.action.thread_item.pane_id and item.id.generation == target.id.generation) {
+                    try focus(gui, item);
+                    break;
+                }
+            }
+
+            return true;
+        },
+        .char => |character| {
+            if ((key.mods.super or key.mods.ctrl) and character.len == 1 and std.ascii.toLower(character.bytes[0]) == 'c') {
+                if (key.phase == .press and target.action.thread_item.operation != .toggle_work) {
+                    var copy = target;
+                    copy.action.thread_item.operation = .copy;
+                    try @import("thread_items.zig").activate(gui, copy);
+                }
+
+                return true;
+            }
+        },
+        else => {},
+    }
+
+    return false;
+}
+
 fn scrollDirectory(gui: *GuiClient, target: Target, event: Event) !void {
     const pointer_scroll = event == .pointer and (event.pointer.kind == .scroll_up or event.pointer.kind == .scroll_down);
     if (event != .scroll and !pointer_scroll) {
@@ -379,6 +715,38 @@ fn scrollDirectory(gui: *GuiClient, target: Target, event: Event) !void {
 fn activateControl(gui: *GuiClient, target: Target) !void {
     gui.widgets.cancelComposition();
     switch (target.action) {
+        .composer_completion => try @import("completions.zig").activate(gui, target),
+        .composer_selector, .composer_choice => try @import("composer_menu.zig").activate(gui, target),
+        .thread_item => {
+            try focus(gui, target);
+            try @import("thread_items.zig").activate(gui, target);
+        },
+        .agent_control => |control| switch (control.kind) {
+            .preview_image => @import("image_preview.zig").open(gui, target),
+            .close_image => @import("image_preview.zig").close(gui),
+            .remove_image => client.agent_threads.removeImage(&gui.app, control.pane_id, .{ .index = control.image_index, .revision = control.composer_revision }),
+            .submit => {
+                gui.widgets.thread_anchor.cancel(control.pane_id);
+                try @import("completions.zig").submit(gui, control.pane_id);
+            },
+            .interrupt => try client.agent_threads.interrupt(&gui.app, control.pane_id),
+            .approve, .decline => try client.agent_threads.approve(&gui.app, .{ .pane_id = control.pane_id, .approval_id = control.approval_id, .accept = control.kind == .approve }),
+            .review => {
+                const pane = gui.app.model.agentPane(control.pane_id) orelse return;
+                const thread = pane.agent_thread orelse return;
+                const request = thread.pending_approval orelse return;
+                if (request.id != control.approval_id) {
+                    return;
+                }
+
+                const value: @import("AgentReview.zig") = .{ .pane_id = control.pane_id, .generation = target.id.generation, .approval_id = control.approval_id };
+                const closing = if (gui.widgets.approval_review) |review| std.meta.eql(review, value) else false;
+                gui.widgets.approval_review = if (closing) null else value;
+                gui.widgets.thread_anchor.cancel(control.pane_id);
+                gui.widgets.dispatcher.revision +%= 1;
+                try client.agent_threads.scroll(&gui.app, control.pane_id, if (closing) -65536 else 65536);
+            },
+        },
         .prompt => |action| try command(gui, if (action == .submit) .submit else .cancel),
         .complete_path => |choice| try client.controllers.name_prompts.chooseDirectory(&gui.app, choice.index, choice.revision),
         .history => |action| {
@@ -416,27 +784,112 @@ fn scroll(gui: *GuiClient, event: Event) !bool {
     }
 
     const pointer = if (event == .scroll) [2]f64{ event.scroll.x, event.scroll.y } else [2]f64{ event.pointer.x, event.pointer.y };
+    if (gui.widgets.dispatcher.maps.presented().at(pointer)) |hit| {
+        if (hit.action == .transcript or hit.action == .composer or hit.action == .thread_item or hit.action == .message_link) {
+            const target = threadScrollTarget(gui, hit);
+            if (!eligible(gui, target)) {
+                return true;
+            }
+
+            const same_owner = if (gui.widgets.thread_scroll_owner) |owner| owner.eql(target.id) else false;
+            if (!same_owner or (event == .scroll and (event.scroll.phase == .begin or event.scroll.phase == .cancel))) {
+                gui.widgets.thread_scroll_remainder = 0;
+                gui.widgets.thread_scroll_owner = target.id;
+            }
+            if (event == .scroll and event.scroll.phase == .cancel) {
+                return true;
+            }
+
+            const delta = if (event == .scroll) event.scroll.delta_y / (if (event.scroll.precise) @max(1, @as(f64, target.scroll_step)) else 1) else if (event.pointer.kind == .scroll_up) @as(f64, -1) else 1;
+            gui.widgets.thread_scroll_remainder += std.math.clamp(delta, -32, 32);
+            const lines: i32 = @intFromFloat(@trunc(gui.widgets.thread_scroll_remainder));
+            gui.widgets.thread_scroll_remainder -= @floatFromInt(lines);
+            if (lines != 0) {
+                try scrollThread(gui, target, -lines);
+            }
+
+            return true;
+        }
+    }
+
     if (!@import("../Bands.zig").within(gui.chrome.presented().bands.sidebar, pointer[0], pointer[1])) {
         return false;
     }
 
-    const sidebar = &gui.chrome.sidebar;
+    const sidebar = gui.chrome.sidebarScrollAt(pointer) orelse return true;
     if (event == .scroll and (event.scroll.phase == .begin or event.scroll.phase == .cancel)) {
-        gui.widgets.sidebar_scroll_remainder = 0;
+        sidebar.resetGesture();
     }
     if (event == .scroll and event.scroll.phase == .cancel) {
         return true;
     }
 
     const delta = if (event == .scroll) std.math.clamp(event.scroll.delta_y, -65535, 65535) * (if (event.scroll.precise) @as(f64, 1) else @as(f64, @floatFromInt(sidebar.step))) else if (event.pointer.kind == .scroll_up) -@as(f64, @floatFromInt(sidebar.step)) else @as(f64, @floatFromInt(sidebar.step));
-    gui.widgets.sidebar_scroll_remainder += delta;
-    const movement = @trunc(gui.widgets.sidebar_scroll_remainder);
-    gui.widgets.sidebar_scroll_remainder -= movement;
-    if (sidebar.scrollBy(movement)) {
+    if (sidebar.scrollBy(delta)) {
         gui.chrome.invalidate();
     }
 
     return true;
+}
+
+fn threadScrollTarget(gui: *const GuiClient, target: Target) Target {
+    const pane_id = switch (target.action) {
+        .thread_item => |control| control.pane_id,
+        .message_link => |control| control.owner.pane_id,
+        .composer => |id| id,
+        else => return target,
+    };
+    const registry = gui.widgets.dispatcher.maps.presented();
+    for (registry.targets[0..registry.len]) |item| {
+        if (item.action == .transcript and item.action.transcript == pane_id and item.id.generation == target.id.generation) {
+            return item;
+        }
+    }
+
+    return target;
+}
+
+fn scrollThread(gui: *GuiClient, target: Target, delta: i32) !void {
+    const pane_id = switch (target.action) {
+        .transcript => |id| id,
+        .composer => |id| id,
+        .thread_item => |control| control.pane_id,
+        .message_link => |control| control.owner.pane_id,
+        else => return,
+    };
+    const pane = gui.app.model.agentPane(pane_id) orelse return;
+    gui.widgets.thread_anchor.cancel(pane_id);
+    const registry = gui.widgets.dispatcher.maps.presented();
+    var limit = target.scroll_limit;
+    if (target.action != .transcript) {
+        for (registry.targets[0..registry.len]) |item| {
+            if (item.action == .transcript and item.action.transcript == pane_id and item.id.generation == target.id.generation) {
+                limit = item.scroll_limit;
+                break;
+            }
+        }
+    }
+
+    const next = std.math.clamp(@as(i64, @min(pane.transcript_scroll, limit)) + delta, 0, limit);
+    try client.agent_threads.scroll(&gui.app, pane_id, @intCast(next - pane.transcript_scroll));
+    const reviewing = if (gui.widgets.approval_review) |review| blk: {
+        const model = gui.app.model.activeTabModelConst() orelse break :blk false;
+        const thread = client.ThreadView.capture(model, null, pane_id) orelse break :blk false;
+        break :blk review.request(thread) != null;
+    } else false;
+    if (gui.widgets.thread_selection.retains(pane_id)) {
+        gui.widgets.thread_selection.blocked_edge = (delta > 0 and next == limit) or (delta < 0 and next == 0);
+        gui.widgets.dispatcher.revision +%= 1;
+        return;
+    }
+    if (!reviewing and delta != 0) {
+        client.agent_history.reverse(&gui.app, pane_id, if (delta > 0) .older else .newer);
+    }
+    if (!reviewing and delta > 0 and next == limit) {
+        client.agent_history.navigate(&gui.app, pane_id, .older);
+    } else if (!reviewing and delta < 0 and next == 0) {
+        client.agent_history.navigate(&gui.app, pane_id, .newer);
+    }
 }
 
 fn scrollHistory(gui: *GuiClient, event: Event) !bool {
@@ -520,11 +973,15 @@ fn scrollHistory(gui: *GuiClient, event: Event) !bool {
 
 fn accessibility(gui: *GuiClient, value: @import("../../input/AccessibilityAction.zig")) !void {
     const target = gui.widgets.dispatcher.maps.presented().find(.{ .target_id = value.target_id, .generation = value.generation }) orelse return;
+    if (gui.widgets.composer_menu.selector != null and target.action != .composer_selector and target.action != .composer_choice) {
+        return;
+    }
+
     if (!target.enabled or target.layer < gui.widgets.dispatcher.maps.presented().modal_layer or !eligible(gui, target)) {
         return;
     }
 
-    if (value.revision != 0 and value.revision != gui.app.model.name_prompt.version()) {
+    if (value.revision != 0 and value.revision != FieldView.revision(&gui.app, target)) {
         return;
     }
 
@@ -549,7 +1006,7 @@ fn accessibility(gui: *GuiClient, value: @import("../../input/AccessibilityActio
         .replace_range => {
             const current = field(gui, target) orelse return;
             const range: [2]u32 = .{ value.replacement_start, value.replacement_end };
-            if (value.revision != gui.app.model.name_prompt.version() or range[0] > range[1] or !current.validRange(range)) {
+            if (value.revision != FieldView.revision(&gui.app, target) or range[0] > range[1] or !current.validRange(range)) {
                 return;
             }
 
@@ -587,7 +1044,83 @@ fn beginCut(gui: *GuiClient, target: Target, range: [2]u32) !void {
         }
 
         const request_id = gui.requestClipboardWriteOwned(.{ .target_id = target.id.target_id, .generation = target.id.generation }, current.text[range[0]..range[1]]) catch return;
-        slot.* = .{ .request_id = request_id, .owner = target.id, .range = range, .revision = gui.app.model.name_prompt.version() };
+        slot.* = .{ .request_id = request_id, .owner = target.id, .range = range, .revision = FieldView.revision(&gui.app, target) };
+        return;
+    }
+}
+
+/// Retains the exact editable revision before asynchronous system clipboard I/O.
+/// Example: `try routing.beginClipboardRead(gui, target.id);`
+pub fn beginClipboardRead(gui: *GuiClient, owner: Id) !void {
+    const target = gui.widgets.dispatcher.maps.presented().find(owner) orelse return;
+    const current = field(gui, target) orelse return;
+    if (target.action == .composer and gui.widgets.pastingImage(target.action.composer)) {
+        return;
+    }
+
+    for (&gui.widgets.pending_pastes) |*slot| {
+        if (slot.* != null) {
+            continue;
+        }
+
+        const request_owner: @import("../../host/Owner.zig") = .{ .target_id = owner.target_id, .generation = owner.generation };
+        const request_id = if (target.action == .composer) try gui.host.readImage(request_owner) else try gui.host.read(request_owner);
+        slot.* = .{ .request_id = request_id, .owner = owner, .range = current.selection(), .revision = FieldView.revision(&gui.app, target) };
+        gui.widgets.dispatcher.revision +%= 1;
+        @import("../../native/native.zig").telar_gui_wake(gui.driver.fds[1]);
+        return;
+    }
+
+    return error.HostRequestsFull;
+}
+
+fn finishPaste(gui: *GuiClient, result: @import("../../input/ClipboardResult.zig")) !void {
+    const owner: Id = .{ .target_id = result.target_id, .generation = result.generation };
+    for (&gui.widgets.pending_pastes) |*slot| {
+        const pending = slot.* orelse continue;
+        if (pending.request_id != result.request_id or !pending.owner.eql(owner)) {
+            continue;
+        }
+
+        slot.* = null;
+        gui.widgets.dispatcher.revision +%= 1;
+        if (!gui.widgets.dispatcher.window_focused or gui.widgets.composer_menu.selector != null or gui.widgets.image_preview != null) {
+            return;
+        }
+
+        const focused = gui.widgets.dispatcher.focused orelse return;
+        const target = gui.widgets.dispatcher.maps.presented().find(owner) orelse return;
+        if (!focused.eql(owner) or !eligible(gui, target) or pending.revision != FieldView.revision(&gui.app, target)) {
+            return;
+        }
+
+        if (result.status != .success) {
+            if (result.status == .too_large or result.status == .cancelled) {
+                try client.controllers.notifications.publishNow(&gui.app, .{ .level = .warning, .title = "Clipboard could not be pasted", .message = if (result.status == .too_large) "The clipboard image or attachment storage exceeds its size limit." else "The clipboard image could not be read or saved." });
+            }
+
+            return;
+        }
+
+        if (result.image) {
+            if (target.action == .composer) {
+                try client.agent_threads.attachImage(&gui.app, target.action.composer, result.text);
+            }
+
+            return;
+        }
+
+        const current = field(gui, target) orelse return;
+        if (!current.validRange(pending.range)) {
+            return;
+        }
+
+        var buffer: @import("PasteBuffer.zig") = .{ .multiline = target.action == .composer };
+        buffer.append(result.text);
+        if (buffer.text()) |text| {
+            try command(gui, .{ .replace_range = .{ .range = pending.range, .text = text } });
+        }
+
         return;
     }
 }
@@ -601,11 +1134,15 @@ fn finishCut(gui: *GuiClient, result: @import("../../input/ClipboardResult.zig")
         }
 
         slot.* = null;
-        if (result.status != .success or cut.revision != gui.app.model.name_prompt.version()) {
+        const focused = gui.widgets.dispatcher.focused orelse return;
+        if (!focused.eql(id)) {
             return;
         }
 
         const target = gui.widgets.dispatcher.maps.presented().find(id) orelse return;
+        if (result.status != .success or cut.revision != FieldView.revision(&gui.app, target)) {
+            return;
+        }
         if (field(gui, target) == null or !eligible(gui, target)) {
             return;
         }

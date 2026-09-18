@@ -7,6 +7,7 @@ bytes: [capacity]u8 = undefined,
 len: usize = 0,
 overflow: bool = false,
 after_cr: bool = false,
+multiline: bool = false,
 
 /// Example: `buffer.append(chunk);`
 pub fn append(buffer: *Buffer, input: []const u8) void {
@@ -26,7 +27,7 @@ pub fn append(buffer: *Buffer, input: []const u8) void {
             return;
         }
 
-        buffer.bytes[buffer.len] = if (byte == '\r' or byte == '\n') ' ' else byte;
+        buffer.bytes[buffer.len] = if (byte == '\r' or byte == '\n') (if (buffer.multiline) @as(u8, '\n') else ' ') else byte;
         buffer.len += 1;
     }
 }

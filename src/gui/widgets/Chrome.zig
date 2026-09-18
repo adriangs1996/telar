@@ -38,9 +38,12 @@ pub fn begin(chrome: *Chrome, canvas: *Canvas, projection: *const client.Project
     const pending = chrome.maps.begin();
     try registerPanes(&pending.hits, projection.*);
     pending.bands = Bands.resolve(canvas);
+    pending.sidebar_regions = try @import("SidebarRegions.zig").resolve(canvas, pending.bands.sidebar, projection.workspaces.count);
     chrome.ages.observe(projection.agents, chrome.now_ns);
     chrome.progress.begin();
-    return .{ .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = chrome.hovered, .ages = &chrome.ages, .favicons = &chrome.favicons, .progress = &chrome.progress };
+    const context: Context = .{ .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = chrome.hovered, .presented_workspace = chrome.presented().workspace, .ages = &chrome.ages, .favicons = &chrome.favicons, .progress = &chrome.progress, .sidebar_regions = &pending.sidebar_regions };
+    pending.workspace = context.workspaceId();
+    return context;
 }
 
 /// Appends the permanent chrome in painter order without emitting quads.
@@ -157,8 +160,10 @@ pub fn bandPointer(chrome: *Chrome, event: PointerEvent) ?BandCommand {
     const action = visible.band_hits.at(.{ event.x, event.y });
     chrome.hover(action);
     if (event.kind == .scroll_up or event.kind == .scroll_down) {
-        if (Bands.within(visible.bands.sidebar, event.x, event.y) and chrome.sidebar.wheel(if (event.kind == .scroll_up) .scroll_up else .scroll_down)) {
-            chrome.invalidate();
+        if (chrome.sidebarScrollAt(.{ event.x, event.y })) |scroll| {
+            if (scroll.wheel(if (event.kind == .scroll_up) .scroll_up else .scroll_down)) {
+                chrome.invalidate();
+            }
         }
 
         return .{ .interaction = .{ .consumed = true } };
@@ -178,6 +183,16 @@ pub fn bandPointer(chrome: *Chrome, event: PointerEvent) ?BandCommand {
     }
 
     return .{ .interaction = .{ .intent = buttonIntent(target.intent, button), .consumed = true } };
+}
+
+/// Selects a scroll owner using only the completed frame's list viewports.
+/// Example: `const scroll = chrome.sidebarScrollAt(point) orelse return;`
+pub fn sidebarScrollAt(chrome: *Chrome, point: [2]f64) ?*@import("PixelScroll.zig") {
+    const list = chrome.presented().sidebar_regions.at(point) orelse return null;
+    return switch (list) {
+        .projects => &chrome.sidebar.projects,
+        .agents => &chrome.sidebar.agents,
+    };
 }
 
 /// The cursor a band point deserves, from the delivered band targets: a

@@ -4,6 +4,9 @@ status: accepted
 
 # Native chrome is a second presentation adapter over the semantic projection
 
+[ADR 0015](0015-own-agent-panes-in-the-runtime.md) extends pane ownership and
+records the initial GUI-only availability of managed agent controls.
+
 [ADR 0012](0012-share-client-behavior-across-presentation-adapters.md) moved
 client behavior into `telar-client` and left the native renderer as separate
 work. That renderer is now defined: a GPU-drawn window in the spirit of

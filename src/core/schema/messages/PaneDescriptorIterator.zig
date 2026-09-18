@@ -15,5 +15,7 @@ pub fn next(iterator: *PaneDescriptorIterator) !?PaneDescriptorType {
     return .{
         .pane_id = try id.pane(try iterator.decoder.readInt(u64)),
         .lifecycle = try codec.decodePaneLifecycle(try iterator.decoder.readByte()),
+        .kind = try @import("tab.zig").decodePaneKind(try iterator.decoder.readByte()),
+        .pane_generation = try iterator.decoder.readInt(u64),
     };
 }

@@ -12,3 +12,5 @@ graphics_budget: *GraphicsBudgetType,
 /// Runtime-owned, immutable after startup; shared with observation
 /// workers.
 manifests: *const TableType = &builtin_table_module,
+
+environment: @import("std").process.Environ = .empty,

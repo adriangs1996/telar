@@ -26,11 +26,26 @@ revision: u64 = 0,
 window_focused: bool = true,
 next_id: u64 = 1,
 overflowed: bool = false,
+message_link_count: u8 = 0,
 
 /// Begins a replacement registry without changing input authority.
 /// Example: `const targets = dispatcher.begin();`
 pub fn begin(dispatcher: *Dispatcher) *Registry {
+    dispatcher.message_link_count = 0;
     return dispatcher.maps.begin();
+}
+
+/// Link fragments have a separate quota and leave room for conversation controls.
+/// Saturation keeps the styled label visible without adding a hover target.
+/// Example: `_ = try dispatcher.addMessageLink(target);`
+pub fn addMessageLink(dispatcher: *Dispatcher, target: Target) !?Id {
+    if (dispatcher.message_link_count == 64 or dispatcher.maps.preparing().len >= Registry.capacity - 64) {
+        return null;
+    }
+
+    const id = try dispatcher.add(target);
+    dispatcher.message_link_count += 1;
+    return id;
 }
 
 /// Assigns collision-free IDs by owned semantic identity, retaining an ID
@@ -112,7 +127,7 @@ pub fn present(dispatcher: *Dispatcher, delivered: bool) void {
 /// Example: `const routed = dispatcher.route(event);`
 pub fn route(dispatcher: *Dispatcher, event: Event) Route {
     return switch (event) {
-        .key => |value| dispatcher.key(value),
+        .key => |value| dispatcher.key(value, true),
         .text => |value| if (value.physical != null) dispatcher.textKey(value) else dispatcher.text(),
         .pointer => |value| dispatcher.pointer(value),
         .scroll => |scroll| .{ .consumed = dispatcher.maps.presented().at(.{ scroll.x, scroll.y }) != null or dispatcher.maps.presented().modal_layer != 0, .target = dispatcher.maps.presented().at(.{ scroll.x, scroll.y }) },
@@ -191,10 +206,17 @@ fn text(dispatcher: *const Dispatcher) Route {
 fn textKey(dispatcher: *Dispatcher, value: @import("../../input/TextInput.zig")) Route {
     var key_value: Key = .{ .code = .{ .char = .{ .bytes = @splat(0), .len = @intCast(@min(4, value.bytes.len)) } }, .phase = value.phase, .physical = value.physical, .target_id = value.target_id, .generation = value.generation };
     @memcpy(key_value.code.char.bytes[0..key_value.code.char.len], value.bytes[0..key_value.code.char.len]);
-    return dispatcher.key(key_value);
+    return dispatcher.key(key_value, true);
 }
 
-fn key(dispatcher: *Dispatcher, event: Key) Route {
+/// Captures editor-menu navigation without traversing or abandoning its editor.
+/// Physical leases and explicit native target validation remain unchanged.
+/// Example: `const decision = dispatcher.editorKey(event);`
+pub fn editorKey(dispatcher: *Dispatcher, event: Key) Route {
+    return dispatcher.key(event, false);
+}
+
+fn key(dispatcher: *Dispatcher, event: Key, navigate: bool) Route {
     if (event.physical) |physical| {
         if (event.phase != .press) {
             const owner = (if (event.phase == .release) dispatcher.keys.release(physical) else dispatcher.keys.owner(physical)) orelse return .{ .consumed = dispatcher.overflowed };
@@ -210,11 +232,11 @@ fn key(dispatcher: *Dispatcher, event: Key) Route {
     if (event.target_id != 0 and (result.target == null or !result.target.?.id.eql(.{ .target_id = event.target_id, .generation = event.generation }))) {
         result = .{ .consumed = true };
     }
-    if (event.phase == .press and dispatcher.window_focused) {
+    if (navigate and event.phase == .press and dispatcher.window_focused) {
         const target = dispatcher.focusedTarget();
         if ((event.code == .tab or event.code == .back_tab) and (target != null or dispatcher.maps.presented().modal_layer != 0) and (target == null or target.?.traverse_tab)) {
             result = .{ .consumed = true, .focus_changed = dispatcher.traverse(event.code == .back_tab or event.mods.shift) };
-        } else if (event.code == .escape and target != null and dispatcher.maps.presented().modal_layer == 0) {
+        } else if (event.code == .escape and target != null and target.?.action != .transcript and dispatcher.maps.presented().modal_layer == 0) {
             result = .{ .consumed = true, .focus_changed = dispatcher.focus(null) };
         }
     }

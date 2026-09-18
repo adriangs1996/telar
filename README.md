@@ -23,6 +23,10 @@ The runtime links system SQLite, libnghttp2 and Brotli. On macOS with Homebrew:
 brew install sqlite libnghttp2 brotli
 ```
 
+Building the native GUI also requires Rust/Cargo 1.93.1 or newer for its
+[Mermaid renderer](tools/diagram-renderer/README.md). `zig build` installs the
+compiled helper beside Telar; running an installed build does not require Cargo.
+
 On Arch Linux or Arch Linux ARM, install the libraries and libc development
 headers before building with Zig 0.16.0:
 
@@ -41,6 +45,25 @@ x86_64 and aarch64, without running those foreign binaries.
 
 Use `zig build -Dnghttp2=/path/to/prefix` when libnghttp2 is installed under a
 different prefix.
+
+## Agent panes in the GUI
+
+Run `./zig-out/bin/telar gui`, then press your prefix followed by `a` to create
+a Codex tab in the current workspace. Codex must be installed and signed in on
+the runtime host. Enter sends a prompt, Shift+Enter adds a line, and Stop
+interrupts the active turn. The conversation and agent survive closing the GUI.
+
+The native composer includes model and reasoning-effort selectors populated by
+Codex, plus Read only, Workspace and Full access permissions for the next turn.
+Messages render Markdown with proportional text and code blocks. Closed Mermaid
+blocks render as themed diagrams; incomplete or invalid diagrams retain their
+source. Tool rows
+expand to show output and diffs; dispatch groups show subagents with independent
+states. Active labels animate while visible. Responses can be copied as Markdown,
+and command/file-change approvals stay in the conversation. Ensure `codex --version` works in the runtime's environment; an
+inactive version-manager shim on PATH cannot launch the provider.
+See [agent panes](docs/flows/agent-panes.md) for
+ownership, limits and current recovery behavior.
 
 ## Remote runtime
 
@@ -83,8 +106,8 @@ keeps a headless Pi alive as Telar's model engine.
 
 ## Themes
 
-Set `theme = "osaka-jade"` once in Lua for Telar's interface and native
-terminal. Osaka Jade is the default. Vesper, Catppuccin Mocha, Tokyo Night, and
+Set `theme = "shade"` once in Lua for Telar's interface and native
+terminal. Shade is the default. Vesper, Catppuccin Mocha, Tokyo Night, and
 a terminal-palette theme are also built in:
 
 ```sh

@@ -14,7 +14,7 @@ pub const Binding = GenericBinding(ActionType, config_model.max_binding_keys);
 
 pub fn load(prefix: KeyType) ![count]Binding {
     return .{
-        try prefixed(prefix, "a", .toggle_thread_view),
+        try prefixed(prefix, "a", .new_agent_tab),
 
         try prefixed(prefix, "-", .{ .scroll_pane = .up }),
         try prefixed(prefix, "=", .{ .scroll_pane = .down }),
@@ -128,10 +128,10 @@ fn prefixed(prefix: KeyType, suffix: []const u8, action_value: ActionType) !Bind
     return .init(&.{ prefix, try parseKey_module(suffix) }, action_value);
 }
 
-test "agent mode toggle uses configured prefix key and allow for overrides" {
+test "agent tab creation uses configured prefix key and allows overrides" {
     const testing = std.testing;
     const prefix = try parseKey_module("ctrl+s");
-    const expected = try prefixed(prefix, "a", .toggle_thread_view);
+    const expected = try prefixed(prefix, "a", .new_agent_tab);
     const resolved = try resolve(prefix, &.{});
     var found: usize = 0;
 

@@ -1,5 +1,5 @@
 //! Fixed pointer targets for the pixel bands: the sidebar toggle, every
-//! workspace pill and its overflow counter, every tab, the new-tab control,
+//! project row or fallback workspace control, every tab, the new-tab control,
 //! one target per visible agent card and the sidebar resize handle. Cell
 //! targets stay in `HitMap`; this table is looked up first because bands lie
 //! outside the grid the cell table addresses.

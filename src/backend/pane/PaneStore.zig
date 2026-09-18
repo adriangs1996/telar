@@ -136,6 +136,8 @@ pub fn descriptorsAt(store: *const PaneStore, location: TabLocationType, output:
         output[len] = .{
             .pane_id = pane.id,
             .lifecycle = .running,
+            .kind = pane.kind,
+            .pane_generation = pane.generation,
         };
         len += 1;
     }

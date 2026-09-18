@@ -43,6 +43,7 @@ pub const PendingResponse = union(enum) {
     notification_shown: NotificationShownType,
     agent_sound: AgentSoundNotificationType,
     history_result: *QueryResultType,
+    agent_history_page: *@import("OwnedAgentHistoryPage.zig"),
     request_completed: RequestCompletedType,
     pane_text: PendingPaneText,
     pane_matches: PendingPaneMatches,

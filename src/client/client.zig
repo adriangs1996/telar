@@ -128,6 +128,10 @@ pub const StartupState = @import("controllers/session/State.zig");
 pub const TelemetryMetrics = @import("resources/Metrics.zig");
 pub const TelemetryState = @import("resources/TelemetryState.zig");
 pub const ThreadView = @import("presentation/ThreadView.zig");
+pub const ComposerField = @import("panes/Pane.zig").ComposerField;
+pub const agent_threads = @import("controllers/agents/agent_threads.zig");
+pub const agent_history = @import("controllers/agents/agent_history.zig");
+pub const AgentHistoryWindow = @import("panes/AgentHistoryWindow.zig");
 pub const TimerKind = @import("resources/timers.zig").Kind;
 pub const TogglePaneSurfaceHandler = @import("application/panes/TogglePaneSurfaceHandler.zig");
 pub const GenericInbox = @import("execution/GenericInbox.zig").Type;
@@ -566,6 +570,7 @@ pub const validateDefaultBindings = @import("config/default_bindings.zig").valid
 pub const wait = @import("resources/deadline_timer.zig").wait;
 
 test {
+    _ = @import("application/agents/agent_thread_tests.zig");
     _ = @import("agents/attention.zig");
     _ = @import("agents/snapshot_support.zig");
     _ = @import("agents/sound_playback_support.zig");
@@ -677,6 +682,7 @@ test {
     _ = @import("connection/runtime_transport.zig");
     _ = @import("execution/inbox_tests.zig");
     _ = @import("controllers/configuration/bar_updates.zig");
+    _ = @import("controllers/input/copy_modes.zig");
     _ = @import("controllers/input/name_prompts.zig");
     _ = @import("controllers/input/PathCompletionsState.zig");
     _ = @import("controllers/workspaces/FaviconsState.zig");

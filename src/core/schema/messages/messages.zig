@@ -121,6 +121,12 @@ pub const ClientMessage = union(enum) {
     query_history: QueryHistoryType,
     request_workspace_snapshot: RequestWorkspaceSnapshotType,
     create_tab: CreateTabViewType,
+    agent_prompt: @import("AgentPrompt.zig"),
+    agent_interrupt: @import("AgentInterrupt.zig"),
+    agent_resume: @import("AgentResume.zig"),
+    agent_approval: @import("AgentApproval.zig"),
+    query_agent_thread: @import("QueryAgentThread.zig"),
+    query_agent_history: @import("QueryAgentHistory.zig"),
     rename_tab: RenameTabType,
     close_tab: CloseTabType,
     move_tab: MoveTabType,
@@ -156,6 +162,8 @@ pub const ClientMessage = union(enum) {
 
 pub const ServerMessage = union(enum) {
     pane_opened: PaneOpenedType,
+    agent_thread_snapshot: @import("agent_thread.zig").SnapshotView,
+    agent_history_page: @import("AgentHistoryPageView.zig"),
     pane_frame: FrameViewType,
     pane_exited: PaneExitedType,
     request_failed: RequestFailedType,
@@ -220,6 +228,12 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
             .request_workspace_snapshot = try GenericDerived(RequestWorkspaceSnapshotType).decode(&decoder),
         },
         .create_tab => .{ .create_tab = try tab.decodeCreateTab(&decoder) },
+        .agent_prompt => .{ .agent_prompt = try @import("agent_thread.zig").decodeAgentPrompt(&decoder) },
+        .agent_interrupt => .{ .agent_interrupt = try @import("agent_thread.zig").decodeControl(@import("AgentInterrupt.zig"), &decoder) },
+        .agent_resume => .{ .agent_resume = try @import("agent_thread.zig").decodeControl(@import("AgentResume.zig"), &decoder) },
+        .agent_approval => .{ .agent_approval = try @import("agent_thread.zig").decodeControl(@import("AgentApproval.zig"), &decoder) },
+        .query_agent_thread => .{ .query_agent_thread = try @import("agent_thread.zig").decodeControl(@import("QueryAgentThread.zig"), &decoder) },
+        .query_agent_history => .{ .query_agent_history = try @import("agent_history.zig").decodeQueryAgentHistory(&decoder) },
         .rename_tab => .{ .rename_tab = try tab.decodeRenameTab(&decoder) },
         .close_tab => .{ .close_tab = try GenericDerived(CloseTabType).decode(&decoder) },
         .move_tab => .{ .move_tab = try GenericDerived(MoveTabType).decode(&decoder) },
@@ -272,6 +286,8 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
     var decoder = DecoderType.init(payload);
     const tag = try decodeTag(tags.ServerTag, try decoder.readByte());
     const message: ServerMessage = switch (tag) {
+        .agent_thread_snapshot => .{ .agent_thread_snapshot = try @import("agent_thread.zig").decodeAgentThreadSnapshot(&decoder) },
+        .agent_history_page => .{ .agent_history_page = try @import("agent_history.zig").decodeAgentHistoryPage(&decoder) },
         .pane_opened => .{ .pane_opened = try GenericDerived(PaneOpenedType).decode(&decoder) },
         .pane_frame => .{ .pane_frame = try frame.decodeBody(&decoder) },
         .pane_exited => .{ .pane_exited = try GenericDerived(PaneExitedType).decode(&decoder) },

@@ -10,6 +10,7 @@ pub const max_owned_arguments = 8;
 const max_owned_argument_bytes = 224;
 
 request_id: RequestIdType,
+kind: @import("telar-core").PaneKind = .terminal,
 workspace: WorkspaceLocationType,
 label: [max_tab_label_bytes_module]u8 = undefined,
 label_len: u8,
@@ -55,6 +56,7 @@ pub fn view(value: *const OwnedCreateTab, cwd: []const u8, scratch: *[max_owned_
     }
 
     return .{
+        .kind = value.kind,
         .request_id = value.request_id,
         .workspace = value.workspace,
         .label = value.label[0..value.label_len],

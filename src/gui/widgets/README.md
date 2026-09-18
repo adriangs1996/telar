@@ -43,8 +43,13 @@ widget values. They have no drawing entrypoint. `SidebarState` retains scroll
 and snapshot ordering; `Sidebar.draw` borrows it while drawing the actual
 sidebar. Tests use the same compose, draw and seal steps as the scene.
 
-`TopBar` composes the workspace controls and `TabStrip` in one navigation row;
-tabs are no longer a separate frame section. `StatusBar` owns configured bottom
+`Sidebar` composes the project list above the agent cards. `SidebarRegions`
+resolves both viewports once per preparation, and the delivered hit map owns
+scroll targeting. `SidebarState` retains separate `PixelScroll` values;
+`WorkspaceList` clips project rows and reveals the active runtime identity.
+`TopBar` preserves `TabStrip` geometry and shows workspace controls only when
+the project list cannot be shown. Unlisted contexts keep their label there.
+Tabs are not a separate frame section. `StatusBar` owns configured bottom
 widgets and mode hints, with space reserved for TLS in every mode.
 
 ```mermaid
@@ -283,3 +288,161 @@ Run native window checks on each host when changing its bridge. On Linux also
 run `test-gui-ime`, `test-gui-clipboard-reader`, `test-gui-keyboard` and
 `test-gui-pointer`. These check protocol batching, UTF-8 ranges, backpressure,
 physical ownership and fractional scroll independently of a running compositor.
+
+## Agent panes
+
+A pane whose runtime kind is `agent` uses `ThreadPane` with a native header,
+structured conversation and an `AgentComposer` card. The GUI
+advertises `HostCapabilities.agent_panes`; the shared `new-agent-tab` action
+creates a Codex tab through the same controller for bindings, the command
+palette and Lua actions. The default binding is prefix + a.
+
+`ThreadConversation` folds consecutive commentary, reasoning and tool activity
+into an `Agent work` disclosure, closed by default. Prompts, final responses and
+system notices remain visible. Messages without a provider phase remain visible
+rather than being inferred as commentary. `ThreadWork` paints a single live or
+settled header; opening it restores the original rows and their individual tool
+disclosures. Hidden rows are neither measured nor registered as selectable text.
+The projection holds at most 256 rows, including headers, for the existing
+128-item window. It retains no transcript copies or provider state.
+
+Work disclosures reuse the attachment-scoped interaction and scroll anchor
+contracts. Their operation is distinct from an individual item's disclosure;
+provider thread and turn IDs preserve expansion through streaming and history
+page eviction. Each new turn starts folded. Approvals retain their independent
+controls outside the transcript. `tests/thread_work.zig` covers folding, page
+seams, turn isolation and hidden selection geometry.
+
+The conversation background uses the window's clear color, like a terminal
+pane. It does not add a pane-wide fill over the configured theme background,
+opacity or blur. Message cards and controls retain their themed surfaces.
+
+The composer uses the pane's client-owned `ComposerField` and revision. Enter
+submits the complete draft, Shift+Enter inserts a newline, and clipboard paste
+preserves line breaks. The runtime acknowledgement clears only the submitted
+revision, so later typing survives. `MultilineLayout` shares grapheme wrapping
+between painting, pointer selection and native caret geometry. Native input,
+IME, clipboard and accessibility carry the delivered attachment generation;
+a replaced attachment cannot inherit an edit or approval. The card embeds a
+sans `TextField` without a second background or border. `ComposerLayout`
+wraps the model, effort and permissions toolbar in narrow panes; the circular
+turn control sends a message or interrupts the running turn. The inset context
+surface shows only observed checkout and branch data.
+
+`EditorFont` uses the atlas's complete shaped spans. Painting, selection and
+native caret queries share grapheme positions, including stops within ligatures.
+Font discovery happens during frame preparation. Native input uses resident
+fonts and bounded scratch tables for at most 8 KiB of displayed text, including
+preedit. Each iterator uses about 65 KiB of stack storage. Preparing the first
+composer reserves one fixed 660 KiB shaping cache in the renderer, with 128
+entries and 16 KiB of text. Atlas destruction releases it. Warm cursor queries
+and painting reuse this cache without allocation or font discovery.
+
+`ComposerOptions` borrows the provider's bounded model and effort catalog.
+`ComposerMenu` publishes owned indices with attachment, catalog, draft-options
+and menu generations. Its interaction controller validates all four before
+applying a choice through `agent_threads`. Streaming transcript revisions do
+not retire unchanged menus. Keyboard navigation, pointer capture and native
+accessibility use the same delivered targets; outside presses dismiss the
+menu and consume their release. Held keys retain their original owner, and
+closing a menu restores its own pane's composer. Model and effort names are
+never invented.
+
+`ThreadTranscript` follows the live snapshot until the user scrolls into history.
+Historical reading owns two bounded pages and freezes the initial live seam;
+streaming continues to update the composer, approvals and agent status. Scrolling
+to either edge records navigation intent without allocating. After successful
+frame delivery, the client admits at most one history request per connection.
+At most 16 reading windows are retained, each below 192 KiB; admission evicts an
+inactive reader when the quota is full. Failed requests preserve the current page
+and retry only after another scroll gesture.
+
+Delivered row anchors preserve the reading position across page replacement and
+resizing. Provider turn, item ID and fragment offset identify seam duplicates and
+disclosure state across live and historical numbering. Copy and link controls
+resolve against the owned page and become stale after eviction. Partial messages
+render as literal text with a continuation notice and a `Copy segment` action.
+`ThreadMessage` separates user bubbles from assistant prose. `MessageText` shares Markdown block and measured-word layout between
+measurement and painting; code uses the terminal font. `ThreadActivity` renders
+typed tools, dispatch and child-agent cards. Child status never derives from the
+parent's status. Only visible messages and activity paint.
+
+Pipe tables use `MessageTable` and `MessageTableCells` to borrow header/body
+cells from the snapshot. A matching delimiter row admits at most 32 columns;
+malformed or larger tables remain ordinary text. Optional outer pipes, escaped
+pipes, CRLF, empty cells and shorter body rows are supported. Surplus body cells
+are omitted from both drawing and selected-text copy.
+`MessageTablePaint` measures preferred column widths, distributes the available
+width and wraps each cell with `MessageTextFlow`. Row height follows the tallest
+cell. Headers use a tinted background and bold text; visible rows draw subtle
+borders. `MessageTextAlignment` retains at most 256 visible line widths per cell
+for left, center or right alignment; lines beyond that quota fall back to left
+alignment. This scratch storage is local to synchronous row layout.
+Inline styles, Unicode, links and selection retain their source coordinates.
+Selected table text copies as tab-separated cells, without the delimiter row;
+copying the response still returns the original Markdown. See
+[`Markdown tables`](../../../docs/flows/markdown-tables.md) for validation.
+
+`MessageSpans` yields inline link labels with borrowed destination ranges.
+`MessageTextFlow` uses the same fragment path for fresh layout and cached replay;
+`MessageLinkButton` paints the label and registers only its clipped ink bounds.
+These passive targets retain source offsets and snapshot identity, preserve
+editor focus and forward wheel input to their owning transcript. Link registration
+is capped at 64 fragments per frame, with 64 registry slots reserved for ordinary
+controls.
+
+`interaction/message_links` resolves hover from delivered targets against the
+current snapshot and copies at most 4 KiB into `MessageLinkPreview`. The scene
+draws that tooltip after conversation clipping, only when the prepared frame
+still has the same fragment under the pointer. The tooltip fits the window,
+has no input target and requests no animation. Stale generations, replaced
+snapshots, menus, modals and pointer departure clear it. Original Markdown stays
+in the runtime snapshot and remains the source for copying.
+
+Closed `mermaid` fences use `MermaidBlock` to display a retained diagram image.
+Open fences, pending work and render failures keep the original code visible.
+Measurement only consults the diagram store; painting visible blocks registers
+bounded requests or pins an existing image. The GUI starts work after scene
+preparation. Images keep their natural aspect ratio and shrink to the message
+width; viewport clipping adjusts texture coordinates without changing layout.
+Source identity, exact content, theme and scale guard reuse across updates.
+Copying a response always copies its original Markdown.
+
+Long spans use a lazy `MessageLayoutCache` owned by GUI interaction state. It
+holds 64 measurements and four visible fragment plans, each capped at 2,048
+fragments, in one allocation below 180 KiB per GUI. Entries contain source offsets
+and geometry, without borrowing snapshot text. Keys include immutable snapshot
+provenance, source span, font
+identity and revision, style, width and viewport geometry. Short spans bypass
+the cache; a plan that exceeds its quota falls back to the measured layout.
+Replacing fonts or discovering a fallback also invalidates the atlas's shaping
+entries. Animation can reuse unchanged layout and visible fragments.
+
+Scroll position uses logical 24-point units; the delivered transcript target
+carries its actual pixel step and limit. At zero the view follows new output.
+`ThreadItemControl` identifies pane, attachment and stable runtime item, with no
+borrowed text or row index. Expansion and copy resolve that identity again before
+acting, so eviction and replacement cannot redirect stale input. The GUI retains
+at most 128 open disclosures. A bounded reading anchor preserves the selected
+row through streaming and reflow when expanding or collapsing. The next
+preparation resolves its position;
+successful delivery commits the scroll only if its attachment, sequence and
+manual-scroll baseline still match. Failed delivery leaves the anchor available
+for retry. Explicit navigation supersedes it.
+
+`ActivityText` requests the scene clock only for visible active labels. It changes
+opacity over already-shaped glyph quads, preserving layout and the atlas cache.
+There are no per-item timers. Completed and hidden messages leave no deadlines.
+
+Pending approvals expose Approve, Decline and Review full request. The review
+control shows the complete bounded request in the scrollable body, independently
+of whether the conversation retains a matching tool item.
+
+All controls publish owned pane IDs, attachment generations and approval IDs.
+Widgets call shared agent controllers and never send composer text as terminal
+input. The existing terminal thread projection retains its passive rendering.
+GUI tests exercise multiline IME, prefix routing from the composer, complete
+prompt submission, paste overflow, stale accessibility edits, approval
+replacement, review scrolling, selector navigation, stale menu decisions and
+allocation-free warm card/popover rendering, stable disclosures, original-text
+copying, Markdown layout and visible-only animation deadlines.

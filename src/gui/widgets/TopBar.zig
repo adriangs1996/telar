@@ -1,8 +1,8 @@
-//! One navigation row: a stable workspace region at the left and the active
-//! workspace's tabs at the right. Sidebar geometry never moves either group.
+//! Tabs keep their navigation geometry. Workspace controls are a fallback
+//! while the sidebar is hidden or the current context is not in its list.
 const Context = @import("Context.zig");
 const Rect = @import("../render/Rect.zig");
-const WorkspacePills = @import("WorkspacePills.zig");
+const WorkspaceIndicators = @import("WorkspaceIndicators.zig");
 const TabStrip = @import("TabStrip.zig");
 const Canvas = @import("Canvas.zig");
 const Layout = @import("../layout/Layout.zig");
@@ -47,7 +47,7 @@ pub fn draw(widget: TopBar, canvas: *Canvas) !void {
         },
         .{
             .width = .{
-                .fixed = @min(chrome.px(WorkspacePills.preferred_width), @floor(free / 2)),
+                .fixed = @min(chrome.px(WorkspaceIndicators.preferredWidth(widget.context)), @floor(free / 2)),
             },
             .height = .{
                 .fixed = control_height,
@@ -73,12 +73,17 @@ pub fn draw(widget: TopBar, canvas: *Canvas) !void {
     };
     try toggle.draw(canvas);
 
-    const workspaces: WorkspacePills = .{
+    const workspaces: WorkspaceIndicators = .{
         .context = widget.context,
         .area = children[1].bounds,
     };
 
-    try workspaces.draw(canvas);
+    const active = widget.context.workspaceId();
+    const listed = if (active) |id| widget.context.projection.workspaces.indexOf(id) != null else false;
+    const regions = if (widget.context.sidebar_regions) |prepared| prepared.* else try @import("SidebarRegions.zig").resolve(canvas, @import("Bands.zig").resolve(canvas).sidebar, widget.context.projection.workspaces.count);
+    if (!widget.sidebar_visible or !listed or regions.projects.height <= 0) {
+        try workspaces.draw(canvas);
+    }
 
     const tabs: TabStrip = .{
         .context = widget.context,

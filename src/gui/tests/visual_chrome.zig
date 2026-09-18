@@ -105,12 +105,22 @@ fn dotQuads(quads: []const Quad, bounds: Rect, color: core.Color) usize {
     return count;
 }
 
+fn coloredQuads(quads: []const Quad, bounds: Rect, color: core.Color) usize {
+    var count: usize = 0;
+    for (quads) |quad| {
+        const inside = quad.x >= bounds.x and quad.y >= bounds.y and quad.x + quad.width <= bounds.x + bounds.width and quad.y + quad.height <= bounds.y + bounds.height;
+        count += @intFromBool(inside and matchesColor(quad, color));
+    }
+
+    return count;
+}
+
 fn matchesColor(quad: Quad, color: core.Color) bool {
     const rgb = color.rgb;
     return @abs(quad.r - @as(f32, @floatFromInt(rgb[0])) / 255) < 0.01 and @abs(quad.g - @as(f32, @floatFromInt(rgb[1])) / 255) < 0.01 and @abs(quad.b - @as(f32, @floatFromInt(rgb[2])) / 255) < 0.01;
 }
 
-test "a blocked agent puts a dot on its tab and on its workspace pill" {
+test "a blocked agent marks its tab and project independently of selection" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const tabs = &fixture.session.gui.app.model.workspace;
@@ -134,8 +144,8 @@ test "a blocked agent puts a dot on its tab and on its workspace pill" {
     try std.testing.expectEqual(@as(usize, 0), dotQuads(quads, working_tab, palette.yellow));
     const pill = fixture.bandTarget(.{ .select_workspace = Session.location.workspace.workspace }).?;
     const other = fixture.bandTarget(.{ .select_workspace = @enumFromInt(9) }).?;
-    try std.testing.expectEqual(@as(usize, 1), dotQuads(quads, pill, palette.yellow));
-    try std.testing.expectEqual(@as(usize, 0), dotQuads(quads, other, palette.yellow));
+    try std.testing.expect(coloredQuads(quads, pill, palette.yellow) > 0);
+    try std.testing.expectEqual(@as(usize, 0), coloredQuads(quads, other, palette.yellow));
 
     // Failed wins the red dot; working alone shows nothing.
     var failed = try blockedAgents(second_location, .failed);

@@ -13,6 +13,7 @@ static bool entered, release_render;
 static atomic_bool destroyed;
 static telar_frame_worker *worker;
 static const telar_gui_quad quad = {.width = 42};
+static const uint8_t image[] = {128, 0, 0, 128};
 
 enum telar_render_result telar_renderer_draw(telar_renderer *renderer, telar_gui_viewport viewport,
                                              const telar_gui_frame *frame) {
@@ -25,6 +26,9 @@ enum telar_render_result telar_renderer_draw(telar_renderer *renderer, telar_gui
         pthread_cond_wait(&condition, &mutex);
     }
     assert(frame->token == 9 && frame->quads->width == 42);
+    assert(frame->diagrams[7].pixels == image && frame->diagrams[7].pixels[0] == 128);
+    assert(frame->diagrams[7].width == 1 && frame->diagrams[7].height == 1);
+    assert(frame->diagrams[7].version == UINT64_C(0x100000001));
     pthread_mutex_unlock(&mutex);
     return TELAR_RENDER_DELIVERED;
 }
@@ -40,6 +44,7 @@ int main(void) {
     worker = telar_frame_worker_create(NULL);
     assert(worker != NULL);
     telar_gui_frame frame = {.token = 9, .quads = &quad, .quad_count = 1};
+    frame.diagrams[7] = (telar_gui_diagram_texture){image, 1, 1, UINT64_C(0x100000001)};
     assert(telar_frame_worker_submit(worker, (telar_gui_viewport){640, 360, 1}, &frame));
     pthread_mutex_lock(&mutex);
     while (!entered) {

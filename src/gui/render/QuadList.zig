@@ -112,8 +112,40 @@ pub fn pushSprite(list: *QuadList, rect: Rect, sprite: SpriteQuad) !void {
     });
 }
 
+/// Appends one complete diagram texture. Pane clipping also adjusts its UVs.
+/// Example: `try list.pushDiagram(bounds, 0);`
+pub fn pushDiagram(list: *QuadList, rect: Rect, slot: u8) !void {
+    if (slot >= @import("../native/DiagramTexture.zig").slot_count) {
+        return error.InvalidDiagramSlot;
+    }
+
+    try list.push(.{
+        .x = rect.x,
+        .y = rect.y,
+        .width = rect.width,
+        .height = rect.height,
+        .u0 = 0,
+        .v0 = 0,
+        .u1 = 1,
+        .v1 = 1,
+        .r = 1,
+        .g = 1,
+        .b = 1,
+        .a = 1,
+        .texture = quad.diagram_texture + @as(f32, @floatFromInt(slot)),
+    });
+}
+
 pub fn items(list: *const QuadList) []const Quad {
     return list.quads.items;
+}
+
+/// Highlights existing glyphs without changing their geometry or reshaping.
+/// Example: `list.highlightFrom(first_glyph, .{ .center = x, .radius = 40 });`
+pub fn highlightFrom(list: *QuadList, start: usize, wave: @import("OpacityWave.zig")) void {
+    for (list.quads.items[start..]) |*glyph| {
+        glyph.a *= wave.at(glyph.x + glyph.width / 2);
+    }
 }
 
 /// Fits newly painted ink inside a box, preserving aspect ratio and centering
@@ -279,5 +311,20 @@ test "pane composition preserves contained texture coordinates and omits outside
     try list.pushClipped(glyph, clip);
     glyph.y = clip.y + clip.height;
     try list.pushClipped(glyph, clip);
+    try std.testing.expectEqual(@as(usize, 1), list.items().len);
+}
+
+test "diagram quads retain slot and UV cropping through clipping" {
+    var list = QuadList.init(std.testing.allocator);
+    defer list.deinit();
+    try list.pushDiagram(.{ .x = 10, .y = 20, .width = 200, .height = 100 }, 7);
+    list.clipFrom(0, .{ .x = 60, .y = 45, .width = 100, .height = 50 });
+    const image = list.items()[0];
+    try std.testing.expectEqual(@as(f32, 9), image.texture);
+    try std.testing.expectEqual(@as(f32, 0.25), image.u0);
+    try std.testing.expectEqual(@as(f32, 0.75), image.u1);
+    try std.testing.expectEqual(@as(f32, 0.25), image.v0);
+    try std.testing.expectEqual(@as(f32, 0.75), image.v1);
+    try std.testing.expectError(error.InvalidDiagramSlot, list.pushDiagram(.{ .x = 0, .y = 0, .width = 1, .height = 1 }, 8));
     try std.testing.expectEqual(@as(usize, 1), list.items().len);
 }

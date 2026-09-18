@@ -318,7 +318,8 @@ pub fn split(layout: *Layout, request: SplitRequest) !void {
     layout.nodes[first].node = .{ .leaf = .invalid };
     const second = layout.allocateNode() orelse return error.NodeLimitReached;
     const parent = layout.nodes[target].parent;
-    layout.nodes[first] = .{ .parent = target, .node = .{ .leaf = request.existing_pane } };
+    layout.nodes[first] = layout.nodes[target];
+    layout.nodes[first].parent = target;
     layout.nodes[second] = .{ .parent = target, .node = .{ .leaf = request.new_pane } };
     layout.nodes[target] = .{
         .parent = parent,
@@ -347,9 +348,10 @@ pub fn remove(layout: *Layout, pane_id: PaneIdType) bool {
     const branch = layout.nodes[parent].node.split;
     const sibling = if (branch.first == leaf) branch.second else branch.first;
     const grandparent = layout.nodes[parent].parent;
-    const replacement = layout.nodes[sibling].node;
-    layout.nodes[parent] = .{ .parent = grandparent, .node = replacement };
-    switch (replacement) {
+    const replacement = layout.nodes[sibling];
+    layout.nodes[parent] = replacement;
+    layout.nodes[parent].parent = grandparent;
+    switch (replacement.node) {
         .split => |children| {
             layout.nodes[children.first].parent = parent;
             layout.nodes[children.second].parent = parent;
@@ -727,4 +729,18 @@ test "surface changes advance the revision and reach the wire and the snapshot" 
     try std.testing.expect(layout.toggleFullscreen());
     layout.snapshot(.{ .w = 40, .h = 10 }, &geometry);
     try std.testing.expectEqual(PaneSurfaceType.thread, geometry.views()[0].surface);
+}
+
+test "splitting and closing a sibling preserves the existing agent surface" {
+    var layout: Layout = .{};
+    try layout.addRoot(@enumFromInt(1));
+    try std.testing.expect(layout.setSurface(@enumFromInt(1), .thread));
+    try layout.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .axis = .horizontal });
+    try std.testing.expectEqual(PaneSurfaceType.thread, layout.surface(@enumFromInt(1)));
+    try std.testing.expectEqual(PaneSurfaceType.terminal, layout.surface(@enumFromInt(2)));
+    var geometry: LayoutSnapshot = .{};
+    layout.snapshot(.{ .w = 100, .h = 40 }, &geometry);
+    try std.testing.expectEqual(PaneSurfaceType.thread, geometry.find(@enumFromInt(1)).?.surface);
+    try std.testing.expect(layout.remove(@enumFromInt(2)));
+    try std.testing.expectEqual(PaneSurfaceType.thread, layout.surface(@enumFromInt(1)));
 }

@@ -78,6 +78,12 @@ pub fn classify(tag: Tag) RequestClass {
         .read_history_output,
         .history_stats,
         .show_notification,
+        .agent_prompt,
+        .agent_interrupt,
+        .agent_resume,
+        .agent_approval,
+        .query_agent_thread,
+        .query_agent_history,
         .query_agents,
         .read_pane,
         .send_pane_text,
@@ -135,6 +141,12 @@ const testing_handlers: GenericHandlers(RequestRouterCapture) = .{
     .query_history = captureHandler(.query_history, QueryHistoryType),
     .suggest_command = captureHandler(.suggest_command, SuggestCommandType),
     .request_workspace_snapshot = captureHandler(.request_workspace_snapshot, RequestWorkspaceSnapshotType),
+    .agent_prompt = captureHandler(.agent_prompt, @import("telar-core").AgentPrompt),
+    .agent_interrupt = captureHandler(.agent_interrupt, @import("telar-core").AgentInterrupt),
+    .agent_resume = captureHandler(.agent_resume, @import("telar-core").AgentResume),
+    .agent_approval = captureHandler(.agent_approval, @import("telar-core").AgentApproval),
+    .query_agent_thread = captureHandler(.query_agent_thread, @import("telar-core").QueryAgentThread),
+    .query_agent_history = captureHandler(.query_agent_history, @import("telar-core").QueryAgentHistory),
     .create_tab = captureHandler(.create_tab, CreateTabViewType),
     .rename_tab = captureHandler(.rename_tab, RenameTabType),
     .close_tab = captureHandler(.close_tab, CloseTabType),
@@ -224,6 +236,12 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]ClientMessageType {
             .encoded_tabs = "",
         } },
         .{ .acknowledge_agent = .{ .pane_id = pane_id, .pane_generation = 1 } },
+        .{ .agent_prompt = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .text = "hello" } },
+        .{ .agent_interrupt = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1 } },
+        .{ .agent_resume = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .conversation_index = 0 } },
+        .{ .agent_approval = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .approval_id = 4, .accept = true } },
+        .{ .query_agent_thread = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1 } },
+        .{ .query_agent_history = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .view_generation = 1 } },
         .{ .query_agents = .{ .request_id = request_id } },
         .{ .read_pane = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .rows = 40, .source = .screen } },
         .{ .send_pane_text = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .mode = .prompt, .text = "ls" } },
@@ -281,6 +299,12 @@ test "Router delegates every client tag exactly once and preserves classificatio
             .read_history_output,
             .history_stats,
             .show_notification,
+            .agent_prompt,
+            .agent_interrupt,
+            .agent_resume,
+            .agent_approval,
+            .query_agent_thread,
+            .query_agent_history,
             .query_agents,
             .read_pane,
             .send_pane_text,
@@ -308,7 +332,11 @@ test "Router propagates handler failure without a second delegation" {
     var capture: RequestRouterCapture = .{ .failure = .move_tab };
     const router = TestRouter.init(&capture);
     const messages = testingMessages();
-    const move_tab = messages[@intFromEnum(Tag.move_tab)];
+    const move_tab = for (messages) |message| {
+        if (message == .move_tab) {
+            break message;
+        }
+    } else unreachable;
 
     try std.testing.expectError(error.RequestHandlerFailed, router.route(move_tab));
 

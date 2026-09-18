@@ -5,7 +5,7 @@ const CaptureContextType = @import("CaptureContext.zig");
 const PaneIdType = @import("telar-core").PaneId;
 const TabLocationType = @import("telar-core").TabLocation;
 const pane_namespace = @import("pane_namespace.zig");
-const SessionType = @import("../pty/Session.zig");
+const SessionType = @import("process.zig").Process;
 const vt = @import("ghostty-vt");
 const PipelineType = @import("../media/Pipeline.zig");
 const PtyResponseQueue = @import("PtyResponseQueue.zig");
@@ -67,6 +67,8 @@ generation: u64,
 location: TabLocationType,
 launch_state: pane_namespace.LaunchState = .starting,
 session: SessionType,
+kind: @import("telar-core").PaneKind = .terminal,
+agent_thread: ?*@import("telar-core").AgentThreadSnapshot = null,
 terminal: vt.Terminal,
 stream: vt.TerminalStream,
 media: PipelineType,
@@ -168,6 +170,7 @@ pub fn create(resources: CreationResourcesType, request: CreationRequestType) !*
     // final address, because the VT handler captures `&pane.terminal`.
     pane.* = .{
         .id = identity.id,
+        .kind = request.kind,
         .generation = identity.generation,
         .location = location,
         .io = io,
@@ -187,7 +190,7 @@ pub fn create(resources: CreationResourcesType, request: CreationRequestType) !*
         .stream = undefined,
         .media = undefined,
         .history_observer = undefined,
-        .agent_process_cache = .init(std.mem.span(command.file)),
+        .agent_process_cache = .init(if (command) |terminal_command| std.mem.span(terminal_command.file) else "codex"),
         .screen = undefined,
         .text_metadata = undefined,
         .damaged_rows = undefined,
@@ -255,12 +258,35 @@ pub fn create(resources: CreationResourcesType, request: CreationRequestType) !*
 
     // Spawn last. Once the child exists, Pane.create cannot fail and
     // erase evidence that a process ran before launch commit.
-    pane.session = try .spawn(command, .{
-        .cols = size.cols,
-        .rows = size.rows,
-        .cell_width_px = size.cell_width_px,
-        .cell_height_px = size.cell_height_px,
-    });
+    if (request.kind == .terminal) {
+        pane.session = .{ .terminal = try @import("../pty/Session.zig").spawn(command.?, .{
+            .cols = size.cols,
+            .rows = size.rows,
+            .cell_width_px = size.cell_width_px,
+            .cell_height_px = size.cell_height_px,
+        }) };
+    } else {
+        pane.stream.nextSlice("This agent pane is available in the Telar GUI.");
+        try pane.render(true);
+        const snapshot = try gpa.create(@import("telar-core").AgentThreadSnapshot);
+        errdefer gpa.destroy(snapshot);
+        snapshot.* = .{ .pane_id = identity.id, .pane_generation = identity.generation };
+        if (request.restore_conversation) |conversation| {
+            snapshot.thread_id = conversation.id;
+            snapshot.thread_id_len = conversation.id_len;
+        }
+
+        const managed = try @import("../agent_panes/Session.zig").init(io, gpa, .{
+            .pane_id = identity.id,
+            .pane_generation = identity.generation,
+            .cwd = launch_cwd,
+            .environment = resources.environment,
+            .restore_conversation = request.restore_conversation,
+        });
+        pane.session = .{ .agent = .{ .io = io, .session = managed } };
+        pane.agent_thread = snapshot;
+        pane.output_done = true;
+    }
     pane.started_at_ms = std.Io.Timestamp.now(io, .real).toMilliseconds();
     return pane;
 }
@@ -483,6 +509,9 @@ pub fn destroy(pane: *Pane) void {
     pane.media_allocator.detach();
     pane.terminal.deinit(gpa);
     pane.session.deinit();
+    if (pane.agent_thread) |snapshot| {
+        gpa.destroy(snapshot);
+    }
     gpa.destroy(pane);
 }
 

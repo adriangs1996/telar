@@ -31,6 +31,10 @@ pub const Continuation = union(enum) {
     close_tab: TabLocationType,
     move_tab: TabLocationType,
     notification,
+    agent_prompt: @import("AgentOperation.zig"),
+    agent_control: @import("AgentOperation.zig"),
+    agent_query: @import("AgentOperation.zig"),
+    agent_history: @import("AgentHistoryOperation.zig"),
     ignored,
 
     pub fn group(continuation: Continuation) Group {
@@ -43,12 +47,18 @@ pub const Continuation = union(enum) {
             .attach_pane => .attachment,
             .create_tab, .rename_tab, .close_tab, .move_tab => .tab_operation,
             .notification => .notification,
+            .agent_prompt => .agent_prompt,
+            .agent_control => .agent_control,
+            .agent_query => .agent_query,
+            .agent_history => .agent_history,
             .ignored => .ignored,
         };
     }
 
     pub fn tabId(continuation: Continuation) ?TabIdType {
         return switch (continuation) {
+            .agent_history => |operation| operation.owner.location.tab_id,
+            .agent_prompt, .agent_control, .agent_query => |operation| operation.location.tab_id,
             .tab_snapshot => |location| location.tab_id,
             .split => |split| split.location.tab_id,
             .close_pane, .attach_pane => |operation| operation.location.tab_id,
@@ -59,6 +69,8 @@ pub const Continuation = union(enum) {
 
     pub fn paneId(continuation: Continuation) ?PaneIdType {
         return switch (continuation) {
+            .agent_history => |operation| operation.owner.pane_id,
+            .agent_prompt, .agent_control, .agent_query => |operation| operation.pane_id,
             .split => |split| split.target_pane,
             .close_pane, .attach_pane => |operation| operation.pane_id,
             .initial_open, .create_workspace, .rename_workspace, .workspace_snapshot, .tab_snapshot, .create_tab, .rename_tab, .close_tab, .move_tab, .notification, .ignored => null,
@@ -67,6 +79,10 @@ pub const Continuation = union(enum) {
 };
 
 pub const Group = enum {
+    agent_prompt,
+    agent_control,
+    agent_query,
+    agent_history,
     initial_open,
     workspace_operation,
     workspace_snapshot,

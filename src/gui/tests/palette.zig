@@ -160,6 +160,102 @@ test "native palette repaints warm without shaping rasterizing or allocating" {
     }
 }
 
+test "suggestion separates the request command and paste control across window sizes" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    fixture.model.name_prompt.begin(.{ .palette = .suggest });
+    _ = fixture.model.name_prompt.apply(.{ .insert = "buscar favicon recursivamente en este directorio" });
+    fixture.model.suggestion.expect(7);
+    const command = "find . -type f \\( -iname '*favicon*' -o -iname 'apple-touch-icon*' \\) -not -path './node_modules/*' -print";
+    try std.testing.expect(fixture.model.suggestion.apply(.{ .request_id = @enumFromInt(7), .status = .ready, .text = command }));
+
+    for ([_]u32{ 1280, 640, 320 }) |width| {
+        fixture.size = try fixture.renderer.measure(.{ .width = width, .height = 720, .scale = 1 });
+        try fixture.paint();
+        const modal = fixture.overlays.presented().modal.?;
+        try quadsInside(fixture, modal);
+        const preview = fixture.overlays.presented().palette.rows[0];
+        var canvas = fixture.canvas();
+        const command_bounds = canvas.rect(preview);
+        const targets = fixture.widgets.dispatcher.maps.presented();
+        var found_field = false;
+        var found_submit = false;
+        for (targets.targets[0..targets.len]) |target| {
+            if (target.action == .text_field) {
+                found_field = true;
+                try std.testing.expect(target.bounds.y + target.bounds.height <= command_bounds.y);
+            }
+
+            if (target.action == .prompt and target.action.prompt == .submit) {
+                found_submit = true;
+                try std.testing.expect(target.enabled);
+                try std.testing.expectEqualStrings("Paste command  Enter", target.label[0..target.label_len]);
+                try std.testing.expect(target.bounds.y >= command_bounds.y + command_bounds.height);
+                const route = fixture.widgets.dispatcher.route(.{ .pointer = .{ .kind = .press, .x = target.bounds.x + 1, .y = target.bounds.y + 1 } });
+                try std.testing.expect(route.consumed);
+                const release = fixture.widgets.dispatcher.route(.{ .pointer = .{ .kind = .release, .x = target.bounds.x + 1, .y = target.bounds.y + 1 } });
+                try std.testing.expectEqualDeep(target.action, release.target.?.action);
+            }
+        }
+
+        try std.testing.expect(found_field and found_submit);
+        const lines: @import("../widgets/overlays/WrappedLines.zig") = .{ .text = command, .width = preview.w - 2 };
+        try std.testing.expect(lines.count() <= preview.h - 2);
+        if (width == 1280) {
+            try std.testing.expect(canvas.rect(modal).width >= 900);
+        }
+    }
+}
+
+test "suggestion states retain bounded controls and repaint without allocations" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    fixture.model.name_prompt.begin(.{ .palette = .suggest });
+    _ = fixture.model.name_prompt.apply(.{ .insert = "find favicon" });
+    for ([_]@FieldType(client.SuggestionState, "phase"){ .idle, .waiting, .ready, .failed }) |phase| {
+        fixture.model.suggestion.begin();
+        if (phase != .idle) {
+            fixture.model.suggestion.expect(8);
+        }
+
+        if (phase == .ready or phase == .failed) {
+            _ = fixture.model.suggestion.apply(.{ .request_id = @enumFromInt(8), .status = if (phase == .ready) .ready else .timeout, .text = if (phase == .ready) "find . -iname '*favicon*'" else "" });
+        }
+
+        try fixture.paint();
+        const targets = fixture.widgets.dispatcher.maps.presented();
+        for (targets.targets[0..targets.len]) |target| {
+            if (target.action == .prompt and target.action.prompt == .submit) {
+                try std.testing.expectEqual(phase != .waiting, target.enabled);
+            }
+        }
+
+        const calls = fixture.renderer.atlas.?.shape_calls;
+        var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+        fixture.renderer.atlas.?.allocator = failing.allocator();
+        fixture.renderer.quads.allocator = failing.allocator();
+        defer fixture.renderer.atlas.?.allocator = std.testing.allocator;
+        defer fixture.renderer.quads.allocator = std.testing.allocator;
+        try fixture.paint();
+        try std.testing.expectEqual(calls, fixture.renderer.atlas.?.shape_calls);
+        try std.testing.expectEqual(@as(usize, 0), failing.allocated_bytes);
+    }
+}
+
+test "suggestion clips long unicode commands on short and scaled hosts" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    fixture.model.name_prompt.begin(.{ .palette = .suggest });
+    fixture.model.suggestion.expect(9);
+    try std.testing.expect(fixture.model.suggestion.apply(.{ .request_id = @enumFromInt(9), .status = .ready, .text = "find . -name '界é favicon*' -print " ** 20 }));
+    for ([_]@import("../native/Viewport.zig").Viewport{ .{ .width = 640, .height = 220, .scale = 1 }, .{ .width = 320, .height = 160, .scale = 1 }, .{ .width = 160, .height = 90, .scale = 1 }, .{ .width = 32, .height = 32, .scale = 1 }, .{ .width = 2560, .height = 1440, .scale = 2 } }) |viewport| {
+        fixture.size = try fixture.renderer.measure(viewport);
+        fixture.overlays.scale = viewport.scale;
+        try fixture.paint();
+        try quadsInside(fixture, fixture.overlays.presented().modal.?);
+    }
+}
+
 test "native history keeps its own modal and records no palette rows" {
     const fixture = try Fixture.init();
     defer fixture.deinit();

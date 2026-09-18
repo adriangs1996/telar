@@ -31,6 +31,7 @@ pub const Action = union(enum) {
     select_workspace: u8,
     close_pane,
     new_tab,
+    new_agent_tab,
     select_tab_offset: i8,
     select_tab: u8,
     rename_tab,
@@ -126,6 +127,9 @@ pub const Action = union(enum) {
         }
         if (std.mem.eql(u8, name, "new-tab")) {
             return .new_tab;
+        }
+        if (std.mem.eql(u8, name, "new-agent-tab")) {
+            return .new_agent_tab;
         }
         if (std.mem.eql(u8, name, "next-tab")) {
             return .{ .select_tab_offset = 1 };

@@ -75,6 +75,7 @@ system_metrics_pending: bool = false,
 metrics: RuntimeMetricsType,
 session: ApplicationState = .{},
 session_name_probe_in_flight: bool = false,
+agent_history_jobs: @import("AgentHistoryJobs.zig") = .{},
 input_sequence: u64 = 0,
 
 /// Composes application state from stable, runtime-owned capabilities.
@@ -156,6 +157,7 @@ pub fn shutdownStep(application: *Application, step: application_namespace.Shutd
         .destroy_client_sessions => application.clients.deinit(application.io, application.gpa),
         .destroy_panes => application.model.panes.deinit(),
         .destroy_workspaces => {
+            application.agent_history_jobs.deinitJoined();
             application.model.client_layouts.deinit();
             application_namespace.deinitWorkspaces(application);
         },

@@ -5,6 +5,7 @@ const std = @import("std");
 const HostCapabilities = @This();
 
 images: root.Support = .unknown,
+agent_panes: bool = false,
 window_width_px: u32 = 0,
 window_height_px: u32 = 0,
 cell_width_px: u32 = 0,

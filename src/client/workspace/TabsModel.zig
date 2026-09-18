@@ -492,6 +492,12 @@ pub fn addCreated(model: *Model, created: CreatedTab, size: TerminalSizeType) !*
     errdefer tab.deinit();
     tab.model.setCellSize(model.cell_width_px, model.cell_height_px);
     try tab.model.addRoot(.{ .pane_id = created.root_pane_id, .location = created.location, .size = size });
+    const root = tab.model.find(created.root_pane_id).?;
+    _ = root.identify(created.kind, created.pane_generation);
+    if (created.kind == .agent) {
+        _ = tab.model.setSurface(created.root_pane_id, .thread);
+    }
+
     tab.snapshot_loaded = true;
 
     var cursor = model.count;

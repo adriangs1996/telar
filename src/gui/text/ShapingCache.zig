@@ -115,6 +115,7 @@ pub fn remember(cache: *Cache, key: Key, shaped: ShapedRun) void {
     entry.preferred = key.face;
     entry.pixel_height = key.pixel_height;
     entry.columns = shaped.columns;
+    entry.rtl = shaped.rtl;
     entry.len = @intCast(key.text.len);
     entry.count = @intCast(shaped.glyphs.len);
 }

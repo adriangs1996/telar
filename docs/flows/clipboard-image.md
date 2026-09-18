@@ -1,5 +1,9 @@
 # Clipboard image preview
 
+For Cmd+V in a native agent composer, see
+[Agent clipboard images](agent-clipboard-images.md). This page describes the
+terminal-child preview path.
+
 This flow starts when the focused child receives an unmodified `Ctrl+V`. Telar
 then tries to mirror a local clipboard image for an attachment-capable agent.
 The preview is disposable client media paired by prompt order with the

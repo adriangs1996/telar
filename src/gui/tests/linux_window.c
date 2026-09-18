@@ -42,7 +42,7 @@ static struct {
     atomic_bool requested, closing;
     uint8_t atlas[4];
     uint8_t sprites[16];
-    telar_gui_quad quads[5];
+    telar_gui_quad quads[7];
 } state;
 
 // Test-only interposition exercises retry paths against the real Vulkan backend.
@@ -170,6 +170,17 @@ static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *
                                .sprites_version = token,
                                .background = {.05f, .08f, .12f, token % 2 ? .5f : 1},
                                .background_blur = token % 3 != 0};
+    // Alternate retained content, replacement, and complete slot release.
+    if (token % 3 != 0) {
+        state.quads[5] = (telar_gui_quad){.x = 300, .y = 120, .width = 160, .height = 80,
+            .u1 = 1, .v1 = 1, .r = 1, .g = 1, .b = 1, .a = 1, .texture = 2};
+        state.quads[6] = state.quads[5];
+        state.quads[6].y = 220;
+        state.quads[6].texture = 9;
+        frame->quad_count = 7;
+        frame->diagrams[0] = (telar_gui_diagram_texture){state.sprites, 4, 1, 1};
+        frame->diagrams[7] = (telar_gui_diagram_texture){state.sprites, 1, 4, UINT64_C(0x100000000) + token};
+    }
     if (invalid_frame_test) {
         frame->atlas_side = 0;
     }

@@ -154,7 +154,7 @@ pub fn authorizeBatch(registry: *const Registry, authorization: BatchAuthorizati
             .suggest_command,
             => null,
             .notification => .notifications,
-            .scroll_pane, .lua_callback, .lua_expr, .plugin, .toggle_thread_view => return error.InvalidPluginEffect,
+            .scroll_pane, .lua_callback, .lua_expr, .plugin, .toggle_thread_view, .new_agent_tab => return error.InvalidPluginEffect,
         };
         if (capability) |required| {
             try registry.authorize(authorization.package_index, required);

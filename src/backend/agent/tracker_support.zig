@@ -464,6 +464,74 @@ test "first working turn starts one generated session title" {
     try std.testing.expect(tracker.nextDescriptionJob() == null);
 }
 
+test "submitted managed prompt queues once even when working is coalesced into ready" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    try std.testing.expect(tracker.observeManaged(identity, .{ .status = .ready, .observed_at_ms = 100 }));
+    const before = tracker.revision;
+    try std.testing.expect(tracker.observeSubmittedPrompt(identity, "Fix the sidebar\nKeep UTF-8 界 intact"));
+    try std.testing.expect(tracker.revision > before);
+    const admitted = tracker.revision;
+    try std.testing.expect(!tracker.observeSubmittedPrompt(identity, "A later turn must not replace the first"));
+    try std.testing.expectEqual(admitted, tracker.revision);
+
+    _ = tracker.observeManaged(identity, .{ .status = .ready, .observed_at_ms = 200 });
+    var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
+    try std.testing.expectEqual(AgentTitleStateType.pending, tracker.snapshot(&entries, 200)[0].title_state);
+    var job = tracker.nextDescriptionJob().?;
+    defer std.crypto.secureZero(u8, &job.query);
+    try std.testing.expectEqualStrings("Fix the sidebar Keep UTF-8 界 intact", job.querySlice());
+    try std.testing.expect(tracker.nextDescriptionJob() == null);
+    var result: ResultType = .{ .pane = job.pane, .session_id = job.session_id, .status = .success, .title_len = "Fix sidebar".len };
+    @memcpy(result.title[0..result.title_len], "Fix sidebar");
+    _ = tracker.finishDescription(&result).?;
+    try std.testing.expectEqualStrings("Fix sidebar", tracker.snapshot(&entries, 200)[0].session_title);
+    try std.testing.expect(!tracker.observeSubmittedPrompt(identity, "Another request"));
+    try std.testing.expect(tracker.nextDescriptionJob() == null);
+}
+
+test "submitted managed prompt preserves ready manual and reported titles" {
+    for ([_]bool{ false, true }) |manual| {
+        var tracker: Tracker = .{};
+        const identity = try testIdentity();
+        _ = tracker.observeManaged(identity, .{ .status = .ready, .observed_at_ms = 100 });
+        if (manual) {
+            _ = try tracker.setManualTitle(identity.key, "Existing title");
+        } else {
+            _ = try tracker.reportTitle(identity, "Existing title");
+        }
+
+        const before = tracker.revision;
+        try std.testing.expect(!tracker.observeSubmittedPrompt(identity, "Do not generate over this title"));
+        try std.testing.expectEqual(before, tracker.revision);
+        try std.testing.expect(tracker.nextDescriptionJob() == null);
+    }
+}
+
+test "submitted managed prompt shares the bounded description queue" {
+    var tracker: Tracker = .{};
+    for (0..description.max_pending_jobs + 1) |index| {
+        const identity = try testIdentityAt(@intCast(index + 1), 1);
+        _ = tracker.observeManaged(identity, .{ .status = .ready, .observed_at_ms = 100 });
+        try std.testing.expect(tracker.observeSubmittedPrompt(identity, "First accepted prompt"));
+        try std.testing.expect(!tracker.observeSubmittedPrompt(identity, "Never retry title generation"));
+    }
+
+    var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
+    var pending: usize = 0;
+    var failed: usize = 0;
+    for (tracker.snapshot(&entries, 100)) |entry| {
+        switch (entry.title_state) {
+            .pending => pending += 1,
+            .failed => failed += 1,
+            else => return error.UnexpectedTitleState,
+        }
+    }
+
+    try std.testing.expectEqual(description.max_pending_jobs, pending);
+    try std.testing.expectEqual(@as(usize, 1), failed);
+}
+
 test "manual title wins over a late generated result" {
     var tracker: Tracker = .{};
     const identity = try testIdentity();
@@ -1385,4 +1453,64 @@ test "a changed event line advances the revision like a label and clears with it
 
     _ = tracker.expire(400 + types.working_expiry_ms + 1);
     try std.testing.expectEqualStrings("", tracker.snapshot(&entries, 400 + types.working_expiry_ms + 1)[0].last_event);
+}
+
+test "managed conversation activity republishes sidebar events without restarting the status age" {
+    const ManagedState = @import("ManagedState.zig");
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
+    var transcript: @import("../agent_panes/Transcript.zig") = .{ .value = .{ .pane_id = identity.key.id, .pane_generation = identity.key.generation, .status = .working } };
+    try transcript.setTurn("turn-1");
+    transcript.update(.{ .id = "message", .role = .assistant, .text = "Checking the parser" });
+
+    try std.testing.expect(tracker.observeManaged(identity, ManagedState.fromSnapshot(&transcript.value, 100)));
+    try std.testing.expectEqualStrings("Checking the parser", tracker.snapshot(&entries, 100)[0].last_event);
+    const revision = tracker.revision;
+    transcript.update(.{ .id = "command", .role = .tool, .kind = .command, .title = "Command", .detail = "zig build test\n/tmp", .text = "Output must not become the activity" });
+    try std.testing.expect(tracker.observeManaged(identity, ManagedState.fromSnapshot(&transcript.value, 100)));
+    try std.testing.expect(tracker.revision > revision);
+    try std.testing.expectEqualStrings("zig build test", tracker.snapshot(&entries, 5_100)[0].last_event);
+    try std.testing.expectEqual(@as(u32, 5), entries[0].status_age_s);
+    try std.testing.expect(!tracker.observeManaged(identity, ManagedState.fromSnapshot(&transcript.value, 100)));
+
+    transcript.update(.{ .id = "tool", .role = .tool, .kind = .mcp, .title = "docs · lookup" });
+    try std.testing.expect(tracker.observeManaged(identity, ManagedState.fromSnapshot(&transcript.value, 100)));
+    try std.testing.expectEqualStrings("docs · lookup", tracker.snapshot(&entries, 100)[0].last_event);
+    transcript.update(.{ .id = "tool", .role = .tool, .kind = .mcp, .detail = "Reading documentation", .retain_text = true });
+    try std.testing.expect(tracker.observeManaged(identity, ManagedState.fromSnapshot(&transcript.value, 100)));
+    try std.testing.expectEqualStrings("Reading documentation", tracker.snapshot(&entries, 100)[0].last_event);
+
+    transcript.value.status = .ready;
+    try std.testing.expect(tracker.observeManaged(identity, ManagedState.fromSnapshot(&transcript.value, 6_000)));
+    try std.testing.expectEqualStrings("", tracker.snapshot(&entries, 6_000)[0].last_event);
+    try std.testing.expectEqual(AgentStatusType.done, entries[0].status);
+}
+
+test "managed sidebar activity excludes old turns and child output and owns bounded UTF8" {
+    const ManagedState = @import("ManagedState.zig");
+    var transcript: @import("../agent_panes/Transcript.zig") = .{ .value = .{ .pane_id = try pane_module(7), .pane_generation = 3 } };
+    try std.testing.expectEqualStrings("Connecting", ManagedState.fromSnapshot(&transcript.value, 100).event.slice());
+    transcript.value.status = .working;
+    try transcript.setTurn("old-turn");
+    transcript.update(.{ .id = "old", .role = .assistant, .text = "Old activity" });
+    try transcript.setTurn("new-turn");
+    transcript.update(.{ .id = "prompt", .role = .user, .text = "User prompt" });
+    try std.testing.expectEqualStrings("Working", ManagedState.fromSnapshot(&transcript.value, 100).event.slice());
+
+    transcript.update(.{ .id = "message", .role = .assistant, .text = "\n  " ++ "界" ** 40 ++ "\nAnother line" });
+    const state = ManagedState.fromSnapshot(&transcript.value, 100);
+    try std.testing.expectEqualStrings("界" ** 32, state.event.slice());
+    transcript.update(.{ .id = "message", .role = .assistant, .text = "Current root activity" });
+    transcript.update(.{ .id = "child", .role = .tool, .kind = .subagent, .text = "Child output" });
+    transcript.update(.{ .id = "nested", .role = .assistant, .parent_identity = 1, .text = "Nested output" });
+    try std.testing.expectEqualStrings("Current root activity", ManagedState.fromSnapshot(&transcript.value, 100).event.slice());
+    try std.testing.expectEqualStrings("界" ** 32, state.event.slice());
+
+    transcript.value.current_turn_id_len = 0;
+    try std.testing.expectEqualStrings("Working", ManagedState.fromSnapshot(&transcript.value, 100).event.slice());
+    inline for (.{ .ready, .blocked, .failed }) |status| {
+        transcript.value.status = status;
+        try std.testing.expectEqualStrings("", ManagedState.fromSnapshot(&transcript.value, 100).event.slice());
+    }
 }

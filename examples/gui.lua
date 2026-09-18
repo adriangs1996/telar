@@ -2,7 +2,7 @@ local telar = require("telar")
 
 return telar.config({
   api_version = 2,
-  theme = "osaka-jade",
+  theme = "shade",
   gui = {
     window = {
       titlebar = true, -- Defaults to false on macOS and true on Linux.

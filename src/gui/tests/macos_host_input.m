@@ -1,16 +1,18 @@
 #import "../macos/TelarPointerInputView.h"
 #import "../macos/TelarHostServices.h"
+#import "../../host/macos/clipboard_image.h"
 #import "../macos/TelarAccessibility.h"
 #import "../macos/text_ranges.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <sys/stat.h>
 
 typedef struct {
   telar_gui_text_context text;
   telar_gui_accessibility_node nodes[3];
   telar_gui_accessibility_tree tree;
-  telar_gui_host_request requests[4];
+  telar_gui_host_request requests[8];
   unsigned request_count, request_index, received;
   BOOL reject;
   BOOL context_pending;
@@ -216,13 +218,44 @@ int telar_test_host_input(NSView *host) {
   before = fixture.received;
   [services drain];
   if (!wait_for(capture, before + 1) || fixture.last.code != 2 || fixture.last.request_id != 103 || fixture.last.len != 0) { fprintf(stderr, "native host input assertion failed at line %d\n", __LINE__); failures++; }
-  fixture.requests[3] = (telar_gui_host_request){.kind = 1, .request_id = 104, .target_id = 41, .generation = 7};
+  [pasteboard clearContents];
+  NSBitmapImageRep *bitmap = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:8 pixelsHigh:8 bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:32 bitsPerPixel:32];
+  arc4random_buf(bitmap.bitmapData, 256);
+  NSData *png = [bitmap representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+  [pasteboard setData:png forType:NSPasteboardTypePNG];
+  [pasteboard setString:@"Image caption must not become the attachment" forType:NSPasteboardTypeString];
+  unsigned char *limited_bytes = NULL;
+  size_t limited_length = 0;
+  uint32_t limited_width = 0, limited_height = 0;
+  if (telar_clipboard_copy_png(pasteboard, &limited_bytes, &limited_length, &limited_width, &limited_height, png.length - 1, 1024 * 1024, 64) != TELAR_CLIPBOARD_TOO_LARGE || limited_bytes != NULL) { fprintf(stderr, "image source quota failed\n"); failures++; }
+  if (telar_clipboard_copy_png(pasteboard, &limited_bytes, &limited_length, &limited_width, &limited_height, 1024 * 1024, 1024 * 1024, 63) != TELAR_CLIPBOARD_TOO_LARGE || limited_bytes != NULL) { fprintf(stderr, "image pixel quota failed\n"); failures++; }
+  if (telar_clipboard_copy_png(pasteboard, &limited_bytes, &limited_length, &limited_width, &limited_height, 1024 * 1024, 1, 64) != TELAR_CLIPBOARD_TOO_LARGE || limited_bytes != NULL) { fprintf(stderr, "image PNG quota failed\n"); failures++; }
+  fixture.requests[3] = (telar_gui_host_request){.kind = 3, .request_id = 105, .target_id = 41, .generation = 7};
   fixture.request_count = 4;
+  before = fixture.received;
+  [services drain];
+  if (!wait_for(capture, before + 1) || fixture.last.code != 4 || fixture.last.request_id != 105) { fprintf(stderr, "image clipboard capture failed at line %d\n", __LINE__); failures++; }
+  NSString *image_path = [[NSString alloc] initWithBytes:fixture.last.text length:fixture.last.len encoding:NSUTF8StringEncoding];
+  NSBitmapImageRep *saved = [NSBitmapImageRep imageRepWithContentsOfFile:image_path];
+  if (saved.pixelsWide != 8 || saved.pixelsHigh != 8) { fprintf(stderr, "image clipboard dimensions failed at line %d\n", __LINE__); failures++; }
+  struct stat image_info;
+  if (image_path.length == 0 || lstat(image_path.fileSystemRepresentation, &image_info) != 0 || (image_info.st_mode & 077) != 0) { fprintf(stderr, "image clipboard permissions failed at line %d\n", __LINE__); failures++; }
+  [pasteboard clearContents];
+  [pasteboard setString:@"ordinary text" forType:NSPasteboardTypeString];
+  fixture.requests[4] = (telar_gui_host_request){.kind = 3, .request_id = 106, .target_id = 41, .generation = 7};
+  fixture.request_count = 5;
+  before = fixture.received;
+  [services drain];
+  if (!wait_for(capture, before + 1) || fixture.last.code != 0 || fixture.last.len != 13 || memcmp(fixture.last.text, "ordinary text", 13)) { fprintf(stderr, "image clipboard text fallback failed at line %d\n", __LINE__); failures++; }
+  fixture.requests[5] = (telar_gui_host_request){.kind = 3, .request_id = 104, .target_id = 41, .generation = 7};
+  fixture.request_count = 6;
   before = fixture.received;
   [services drain];
   [services stop];
   [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
   if (fixture.received != before) { fprintf(stderr, "native host input assertion failed at line %d\n", __LINE__); failures++; }
+  if (![NSFileManager.defaultManager fileExistsAtPath:image_path]) { fprintf(stderr, "image must outlive GUI service shutdown\n"); failures++; }
+  [NSFileManager.defaultManager removeItemAtPath:image_path error:NULL];
   [pasteboard releaseGlobally];
   [view stopInput];
   [view removeFromSuperview];

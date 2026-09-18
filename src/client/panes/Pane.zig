@@ -21,6 +21,11 @@ const PaneProgressType = @import("telar-core").PaneProgress;
 const max_pane_title_bytes_module = @import("telar-core").max_pane_title_bytes;
 const Pane = @This();
 const IconType = @import("../layout/icons.zig").Icon;
+const core = @import("telar-core");
+pub const ImageRemoval = @import("ComposerImageRemoval.zig");
+const GenericField = @import("../input/GenericField.zig").Type;
+
+pub const ComposerField = GenericField(4096);
 
 gpa: std.mem.Allocator,
 id: PaneIdType,
@@ -45,7 +50,22 @@ progress_state: PaneProgressStateType = .remove,
 progress_percent: ?u8 = null,
 title: []u8 = &.{},
 /// What the user is writing for the agent in this pane, owned like the title.
-composer: []u8 = &.{},
+composer_field: *ComposerField,
+composer_revision: u64 = 0,
+composer_images: ?*core.AgentImages = null,
+composer_content_revision: u64 = 0,
+kind: core.PaneKind = .terminal,
+pane_generation: u64 = 0,
+agent_thread: ?*core.AgentThreadSnapshot = null,
+agent_history: ?*@import("AgentHistoryWindow.zig") = null,
+history_intent: ?core.agent_history.Direction = null,
+history_generation: u64 = 0,
+transcript_scroll: u32 = 0,
+transcript_anchor_revision: u64 = 0,
+agent_options: ?*core.AgentOptions = null,
+options_revision: u64 = 0,
+catalog_revision: u64 = 0,
+resume_history_requested: bool = false,
 
 pub const Initial = @import("Initial.zig");
 
@@ -62,6 +82,9 @@ pub fn init(gpa: std.mem.Allocator, initial: InitialType) !Pane {
     const rows = try gpa.alloc(DamageRowType, initial.spec.size.rows);
     errdefer gpa.free(rows);
     @memset(rows, .{});
+    const composer_field = try gpa.create(ComposerField);
+    errdefer gpa.destroy(composer_field);
+    composer_field.* = .{};
     const text_metadata = try gpa.create(@import("telar-core").TextMetadata);
     errdefer gpa.destroy(text_metadata);
     text_metadata.* = try .init(gpa, initial.spec.size.rows);
@@ -72,6 +95,7 @@ pub fn init(gpa: std.mem.Allocator, initial: InitialType) !Pane {
         .location = initial.spec.location,
         .buffer = buffer,
         .damage_rows = rows,
+        .composer_field = composer_field,
         .attached = initial.attached,
         .scroll = .{ .total_rows = initial.spec.size.rows, .offset = 0 },
     };
@@ -80,7 +104,17 @@ pub fn init(gpa: std.mem.Allocator, initial: InitialType) !Pane {
 pub fn deinit(pane: *Pane) void {
     pane.gpa.free(pane.cwd);
     pane.gpa.free(pane.title);
-    pane.gpa.free(pane.composer);
+    pane.gpa.destroy(pane.composer_field);
+    if (pane.composer_images) |images| {
+        pane.gpa.destroy(images);
+    }
+    if (pane.agent_thread) |thread| {
+        pane.gpa.destroy(thread);
+    }
+    pane.clearHistory();
+    if (pane.agent_options) |options| {
+        pane.gpa.destroy(options);
+    }
     pane.gpa.free(pane.damage_rows);
     pane.text_metadata.deinit(pane.gpa);
     pane.gpa.destroy(pane.text_metadata);
@@ -232,7 +266,7 @@ pub fn titleSlice(pane: *const Pane) []const u8 {
     return pane.title;
 }
 
-pub const max_composer_bytes = 2048;
+pub const max_composer_bytes = 4096;
 
 /// Replaces the composer draft the thread surface shows.
 ///
@@ -244,11 +278,293 @@ pub fn setComposer(pane: *Pane, text: []const u8) !void {
         return error.ComposerTooLong;
     }
 
-    const replacement = if (text.len != 0) try pane.gpa.dupe(u8, text) else &[_]u8{};
-    pane.gpa.free(pane.composer);
-    pane.composer = @constCast(replacement);
+    if (!std.unicode.utf8ValidateSlice(text)) {
+        return error.InvalidUtf8;
+    }
+
+    if (std.mem.indexOfScalar(u8, text, 0) != null) {
+        return error.InvalidComposerText;
+    }
+
+    const content_changed = !std.mem.eql(u8, pane.composerSlice(), text);
+    if (pane.composer_field.replace(.{ 0, @intCast(pane.composer_field.len) }, text)) {
+        pane.composer_revision +%= 1;
+        if (content_changed) {
+            pane.composer_content_revision +%= 1;
+        }
+    }
 }
 
 pub fn composerSlice(pane: *const Pane) []const u8 {
-    return pane.composer;
+    return pane.composer_field.text();
+}
+
+/// Installs the runtime identity and retires cached state for another lifetime.
+/// Example: `_ = pane.identify(.agent, generation);`
+pub fn identify(pane: *Pane, kind: core.PaneKind, generation: u64) bool {
+    if (pane.kind == kind and pane.pane_generation == generation) {
+        return false;
+    }
+
+    if (pane.agent_thread) |thread| {
+        pane.gpa.destroy(thread);
+        pane.agent_thread = null;
+    }
+    pane.clearHistory();
+
+    pane.kind = kind;
+    pane.pane_generation = generation;
+    pane.transcript_scroll = 0;
+    if (pane.agent_options) |options| {
+        pane.gpa.destroy(options);
+        pane.agent_options = null;
+    }
+    pane.catalog_revision = 0;
+    pane.resume_history_requested = false;
+    pane.options_revision +%= 1;
+    return true;
+}
+
+/// Copies a validated snapshot only for this attached runtime lifetime.
+/// Example: `_ = try pane.applyAgentThread(snapshot);`
+pub fn applyAgentThread(pane: *Pane, snapshot: core.AgentThreadSnapshotView) !bool {
+    if (!pane.attached or pane.kind != .agent or pane.id != snapshot.pane_id or pane.pane_generation != snapshot.pane_generation) {
+        return false;
+    }
+
+    if (pane.agent_thread) |previous| {
+        if (snapshot.revision <= previous.revision) {
+            return false;
+        }
+
+        const old_id = previous.thread_id;
+        const old_len = previous.thread_id_len;
+        try snapshot.copyTo(previous);
+        if (!std.mem.eql(u8, old_id[0..old_len], previous.threadId())) {
+            pane.clearHistory();
+            pane.transcript_scroll = 0;
+            pane.resume_history_requested = false;
+        }
+    } else {
+        const replacement = try pane.gpa.create(core.AgentThreadSnapshot);
+        errdefer pane.gpa.destroy(replacement);
+        try snapshot.copyTo(replacement);
+        pane.agent_thread = replacement;
+    }
+
+    const retained = pane.agent_thread.?;
+    pane.catalog_revision = catalogRevision(retained);
+    if (retained.resumed and !pane.resume_history_requested) {
+        pane.clearHistory();
+        pane.history_intent = .older;
+        pane.resume_history_requested = true;
+    }
+    if (pane.agent_options == null or !retained.accepts(pane.agent_options.?.*)) {
+        if (retained.accepts(retained.options)) {
+            if (pane.agent_options == null) {
+                pane.agent_options = try pane.gpa.create(core.AgentOptions);
+            }
+            pane.agent_options.?.* = retained.options;
+            pane.options_revision +%= 1;
+        }
+    }
+
+    return true;
+}
+
+/// Borrows a draft's settings through an owned value. Empty values mean startup is incomplete. Example: `const options = pane.agentOptions();`
+pub fn agentOptions(pane: *const Pane) core.AgentOptions {
+    return if (pane.agent_options) |options| options.* else .{};
+}
+
+/// Applies one catalog-backed draft choice without changing another client's settings. Example: `_ = pane.changeAgentOption(.{ .access = .read_only });`
+pub fn changeAgentOption(pane: *Pane, change: @import("agent_options.zig").Change) bool {
+    const snapshot = pane.agent_thread orelse return false;
+    var options = pane.agentOptions();
+    switch (change) {
+        .model => |id| {
+            if (std.mem.eql(u8, options.modelSlice(), id)) {
+                return false;
+            }
+
+            const model = snapshot.findModel(id) orelse return false;
+            options.setModel(model.idSlice()) catch return false;
+            options.effort = model.default_effort;
+        },
+        .effort => |effort| options.effort = effort,
+        .access => |access| options.access = access,
+    }
+    if (!snapshot.accepts(options) or options.eql(pane.agentOptions())) {
+        return false;
+    }
+
+    const draft = pane.agent_options orelse return false;
+    draft.* = options;
+    pane.options_revision +%= 1;
+    return true;
+}
+
+fn catalogRevision(snapshot: *const core.AgentThreadSnapshot) u64 {
+    var hash = std.hash.Wyhash.init(0);
+    hash.update(&.{snapshot.model_count});
+    for (snapshot.models()) |model| {
+        hash.update(&.{ model.id_len, model.label_len, model.effort_count });
+        hash.update(model.idSlice());
+        hash.update(model.labelSlice());
+        for (model.efforts()) |effort| {
+            hash.update(&.{effort.id_len});
+            hash.update(effort.idSlice());
+        }
+        hash.update(&.{model.default_effort.id_len});
+        hash.update(model.default_effort.idSlice());
+    }
+    return hash.final();
+}
+
+/// Borrows image references without allocating storage for empty terminal panes.
+/// Example: `const images = pane.composerImages();`
+pub fn composerImages(pane: *const Pane) *const core.AgentImages {
+    return pane.composer_images orelse &empty_composer_images;
+}
+
+const empty_composer_images: core.AgentImages = .{};
+
+/// Changes bounded draft attachments and invalidates pending paste/send revisions.
+/// Example: `try pane.attachComposerImage("/private/tmp/image.png");`
+pub fn attachComposerImage(pane: *Pane, path: []const u8) !void {
+    try core.AgentImages.validatePath(path);
+    if (pane.composer_images == null) {
+        const images = try pane.gpa.create(core.AgentImages);
+        images.* = .{};
+        pane.composer_images = images;
+    }
+
+    try pane.composer_images.?.append(path);
+    pane.composer_revision +%= 1;
+    pane.composer_content_revision +%= 1;
+}
+
+/// Rejects stale removal controls after another edit. Example: `_ = pane.removeComposerImage(.{ .index = 0, .revision = revision });`
+pub fn removeComposerImage(pane: *Pane, removal: @import("ComposerImageRemoval.zig")) bool {
+    const images = pane.composer_images orelse return false;
+    if (removal.revision != pane.composer_revision or !images.remove(removal.index)) {
+        return false;
+    }
+
+    pane.composer_revision +%= 1;
+    pane.composer_content_revision +%= 1;
+    return true;
+}
+
+/// Clears exactly the draft accepted by the runtime. Example: `_ = pane.acceptComposer(revision);`
+pub fn acceptComposer(pane: *Pane, revision: u64) bool {
+    if (pane.composer_content_revision != revision) {
+        return false;
+    }
+
+    pane.setComposer("") catch unreachable;
+    if (pane.composerImages().count != 0) {
+        pane.composer_images.?.* = .{};
+        pane.composer_revision +%= 1;
+        pane.composer_content_revision +%= 1;
+    }
+
+    pane.clearHistory();
+    pane.transcript_scroll = 0;
+    return true;
+}
+
+/// Retires the disposable reading window; pending generations become stale.
+/// Example: `pane.clearHistory();`
+pub fn clearHistory(pane: *Pane) void {
+    if (pane.agent_history) |window| {
+        pane.gpa.destroy(window);
+        pane.agent_history = null;
+    }
+    pane.history_intent = null;
+    pane.history_generation +%= 1;
+}
+
+/// Resolves delivered history controls without falling through to newer bytes.
+/// Example: `const snapshot = pane.threadItemSource(identity) orelse return;`
+pub fn threadItemSource(pane: *const Pane, identity: u64) ?*const core.AgentThreadSnapshot {
+    if (pane.agent_history) |window| {
+        return window.findItem(identity);
+    }
+    const snapshot = pane.agent_thread orelse return null;
+    return if (snapshot.findItem(identity) != null) snapshot else null;
+}
+
+/// Retains bounded client navigation from the end of the transcript.
+/// Example: `_ = pane.scrollConversation(3);`
+pub fn scrollConversation(pane: *Pane, delta: i32) bool {
+    const next: u32 = @intCast(std.math.clamp(@as(i64, pane.transcript_scroll) + delta, 0, std.math.maxInt(u32)));
+    if (next == pane.transcript_scroll) {
+        return false;
+    }
+
+    pane.transcript_scroll = next;
+    return true;
+}
+
+/// Applies bounded editor input without allocating. Example: `_ = pane.editComposer(.backspace);`
+pub fn editComposer(pane: *Pane, command: anytype) bool {
+    const field = pane.composer_field;
+    const previous = .{ field.len, field.head, field.anchor };
+    const content_changed = switch (command) {
+        .insert => |text| replacementChangesText(field, .{ @intCast(@min(field.head, field.anchor)), @intCast(@max(field.head, field.anchor)) }, text),
+        .replace_range => |replacement| replacementChangesText(field, replacement.range, replacement.text),
+        .backspace, .delete => true,
+        else => false,
+    };
+    const changed = switch (command) {
+        .insert => |text| if (std.mem.indexOfScalar(u8, text, 0) != null) false else field.replace(.{ @intCast(@min(field.head, field.anchor)), @intCast(@max(field.head, field.anchor)) }, text),
+        .replace_range => |replacement| if (std.mem.indexOfScalar(u8, replacement.text, 0) != null) false else field.replace(replacement.range, replacement.text),
+        .select_range => |range| field.selectRange(range),
+        .select_all => action: {
+            field.selectAll();
+            break :action !std.meta.eql(previous, .{ field.len, field.head, field.anchor });
+        },
+        .backspace => action: {
+            field.backspace();
+            break :action field.len != previous[0];
+        },
+        .delete => action: {
+            field.delete();
+            break :action field.len != previous[0];
+        },
+        .move_left => |extend| action: {
+            field.moveLeft(extend);
+            break :action !std.meta.eql(previous, .{ field.len, field.head, field.anchor });
+        },
+        .move_right => |extend| action: {
+            field.moveRight(extend);
+            break :action !std.meta.eql(previous, .{ field.len, field.head, field.anchor });
+        },
+        .home => |extend| action: {
+            field.home(extend);
+            break :action !std.meta.eql(previous, .{ field.len, field.head, field.anchor });
+        },
+        .end => |extend| action: {
+            field.end(extend);
+            break :action !std.meta.eql(previous, .{ field.len, field.head, field.anchor });
+        },
+        else => false,
+    };
+    if (changed) {
+        pane.composer_revision +%= 1;
+        if (content_changed) {
+            pane.composer_content_revision +%= 1;
+        }
+    }
+
+    return changed;
+}
+
+fn replacementChangesText(field: *const ComposerField, range: [2]u32, text: []const u8) bool {
+    if (range[0] > range[1] or range[1] > field.len) {
+        return false;
+    }
+
+    return !std.mem.eql(u8, field.text()[range[0]..range[1]], text);
 }

@@ -38,6 +38,8 @@ sidebar: @import("SidebarBand.zig") = .{},
 /// The RGBA sprite page of the renderer; `null` while a fixture has none,
 /// in which case `spriteAt` draws nothing and `providerMark` finds nothing.
 sprites: ?*const SpritePage = null,
+/// Diagram requests copy their source into the client-owned deferred store.
+diagrams: ?*@import("../diagrams/Store.zig") = null,
 
 /// Draws canonical terminal cells and their cursor through the frame's retained
 /// cache. A canvas backed by another quad list cannot use that cache.
@@ -177,6 +179,16 @@ pub fn spriteTintedAt(canvas: *Canvas, bounds: Rect, paint: @import("SpritePaint
     var tint = canvas.color(paint.color, .{ 255, 255, 255 });
     tint.a *= paint.alpha;
     try canvas.quads.pushSprite(snapped, .{ .uv = page.uv(paint.sprite), .tint = tint });
+}
+
+/// Draws a complete premultiplied RGBA diagram; the caller preserves aspect ratio.
+/// Example: `try canvas.diagramAt(fitted_bounds, ready.slot);`
+pub fn diagramAt(canvas: *Canvas, bounds: Rect, slot: u8) !void {
+    if (bounds.width <= 0 or bounds.height <= 0) {
+        return;
+    }
+
+    try canvas.quads.pushDiagram(bounds, slot);
 }
 
 /// The embedded mark of a built-in provider when the canvas has a page.

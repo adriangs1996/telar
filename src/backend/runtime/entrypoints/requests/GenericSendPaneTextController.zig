@@ -50,6 +50,11 @@ pub fn Type(comptime Executor: type) type {
                     .code = .pane_exited,
                     .message = "pane already exited",
                 }),
+                .not_terminal => try controller.fail(.{
+                    .request_id = request.request_id,
+                    .code = .invalid_request,
+                    .message = "agent panes require structured agent commands",
+                }),
                 .agent_blocked => try controller.fail(.{
                     .request_id = request.request_id,
                     .code = .agent_blocked,

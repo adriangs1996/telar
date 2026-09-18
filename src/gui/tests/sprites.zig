@@ -381,7 +381,7 @@ fn expectFaviconCard(name: []const u8, bytes: []const u8) !void {
     projection.agents = &agents;
     fixture.chrome.favicons = gui.chrome.favicons;
     try fixture.paint(projection);
-    try std.testing.expectEqual(@as(usize, 2), spriteCount(renderer.quads.items()));
+    try std.testing.expectEqual(@as(usize, 3), spriteCount(renderer.quads.items()));
     var found = false;
     for (renderer.quads.items()) |item| {
         if (item.texture == quad.sprite_texture and item.u0 == renderer.sprites.?.uv(placed)[0] and item.v0 == renderer.sprites.?.uv(placed)[1]) {

@@ -23,6 +23,12 @@ test {
     _ = @import("tests/top_navigation.zig");
     _ = @import("tests/status_bar.zig");
     _ = @import("tests/widget_interaction.zig");
+    _ = @import("tests/thread_selection_keys.zig");
+    _ = @import("tests/conversation.zig");
+    _ = @import("tests/thread_work.zig");
+    _ = @import("tests/mermaid.zig");
+    _ = @import("tests/attachment_previews.zig");
+    _ = @import("diagrams/tests.zig");
     _ = Layout;
     _ = @import("input/GenericEventPool.zig");
     _ = @import("host/Services.zig");
@@ -37,6 +43,12 @@ test {
     _ = @import("tests/links.zig");
     _ = @import("tests/link_metadata.zig");
     _ = @import("tests/link_regressions.zig");
+    _ = @import("tests/message_links.zig");
+    _ = @import("tests/message_tables.zig");
+    _ = @import("tests/message_diffs.zig");
+    _ = @import("tests/agent_history.zig");
+    _ = @import("tests/thread_text_geometry.zig");
+    _ = @import("tests/thread_selection.zig");
     _ = Application;
     _ = @import("WindowIdentity.zig");
     _ = @import("tests/terminal.zig");
@@ -58,6 +70,7 @@ test {
     _ = @import("tests/scene.zig");
     _ = @import("tests/visual_language.zig");
     _ = @import("tests/sidebar_cards.zig");
+    _ = @import("tests/sidebar_workspaces.zig");
     _ = @import("tests/sprites.zig");
     _ = @import("tests/palette.zig");
     _ = @import("tests/visual_chrome.zig");

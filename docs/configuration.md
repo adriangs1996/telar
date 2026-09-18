@@ -161,15 +161,17 @@ failures, and transitions from any other state remain silent. Set
 Select a theme once at the root of the configuration:
 
 ```lua
-theme = "osaka-jade"
+theme = "shade"
 ```
 
 Each preset defines Telar's chrome roles and the native terminal's foreground,
-background, ANSI palette and cursor colors. Built-ins are `osaka-jade` (also
-spelled `osaka_jade` or `osakajade`), the default, `vesper`, `catppuccin`
-(Mocha), `tokyo-night`, and `terminal`. Osaka Jade's `panel_bg` is `default`:
+background, ANSI palette and cursor colors. Built-ins are `shade` (the default),
+`vesper`, `catppuccin` (Mocha), `tokyo-night`, and `terminal`. Shade combines
+Vesper's neutral grays and terminal palette with green chrome accents. The old
+names `osaka-jade`, `osaka_jade`, and `osakajade` remain aliases for Shade.
+Shade's `panel_bg` is `default`:
 the chrome takes the terminal background, so the TUI keeps its host background
-and the GUI paints `#111c18`. The TUI uses the chrome roles
+and the GUI paints `#101010`. The TUI uses the chrome roles
 and keeps the host terminal's palette and defaults. The GUI uses the terminal
 colors too; child truecolor and OSC overrides still apply. The `terminal`
 preset uses host-relative chrome roles and a neutral explicit palette in the
@@ -209,8 +211,7 @@ level; declaring both is an error. The earlier `gui.theme` table has moved to
 `theme.terminal`. Likewise, `gui.cursor.color` and `gui.cursor.text_color` move
 to `theme.terminal.cursor_color` and `theme.terminal.cursor_text_color`.
 
-The Osaka Jade ANSI data is the Ghostty Osaka Jade port as recorded in
-`dev/osaka-jade.lua`. The other ANSI data comes from the [Vesper terminal port](https://github.com/mbadolato/iTerm2-Color-Schemes/blob/master/ghostty/Vesper),
+Shade inherits Vesper's terminal colors unchanged. The ANSI data comes from the [Vesper terminal port](https://github.com/mbadolato/iTerm2-Color-Schemes/blob/master/ghostty/Vesper),
 [Catppuccin Mocha](https://github.com/catppuccin/ghostty/blob/main/themes/catppuccin-mocha.conf)
 and [Tokyo Night](https://github.com/folke/tokyonight.nvim/blob/main/extras/ghostty/tokyonight_night).
 Telar retains its orange Vesper cursor with background-colored text.
@@ -229,7 +230,7 @@ telar gui --config examples/gui.lua --profile presentation
 ```
 
 ```lua
-theme = "osaka-jade"
+theme = "shade"
 gui = {
   window = {
     titlebar = false, -- the macOS default; Linux defaults to true

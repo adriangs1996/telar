@@ -21,6 +21,10 @@ input: ForwarderType,
 pub fn execute(handler: *SendPaneTextHandler, command: SendPaneText) !send_pane_text.SendPaneTextResult {
     const pane = handler.panes.resolveControl(command.pane) orelse return .pane_not_found;
 
+    if (pane.kind == .agent) {
+        return .not_terminal;
+    }
+
     if (pane.exit != null) {
         return .pane_exited;
     }

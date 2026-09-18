@@ -437,7 +437,7 @@ void telar_input_services(telar_input *self) {
         telar_gui_host_request request = {0};
         if (!self->callbacks.host_request(self->context, &request)) return;
         telar_gui_input result = {.kind = 9, .code = 1, .request_id = request.request_id, .target_id = request.target_id, .generation = request.generation};
-        if (request.kind == 1 && begin_read(self, &request)) continue;
+        if ((request.kind == 1 || request.kind == 3) && begin_read(self, &request)) continue;
         if (request.kind == 2) result.code = request.len > TELAR_CLIPBOARD_LIMIT ? 2 : telar_input_clipboard(self, request.text, request.len) == 0 ? 0 : 1;
         if (!emit(self, result)) {
             self->result = result;

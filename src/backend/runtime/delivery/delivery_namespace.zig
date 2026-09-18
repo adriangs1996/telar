@@ -32,12 +32,14 @@ pub const Effect = union(enum) {
         history_result: ?*QueryResultType,
         history_output: ?*OutputResultType,
         history_stats: ?*StatsResultType,
+        agent_history: ?*@import("OwnedAgentHistoryPage.zig") = null,
     },
     resync,
     clipboard,
     client_layout,
     proxy_status,
     agent_revision: u64,
+    agent_thread: @import("AgentThreadProjection.zig"),
     system_metrics_revision: u64,
     workspace_list_revision: u64,
     foreground: ForegroundProjection,
@@ -50,6 +52,47 @@ pub const Phase = union(enum) {
     in_flight: Completion,
     closed,
 };
+
+test "agent history page stays reserved until send commit or failed client cleanup" {
+    const core = @import("telar-core");
+    const OwnedPage = @import("OwnedAgentHistoryPage.zig");
+    for ([_]bool{ false, true }) |abort| {
+        var delivery = try Delivery.init(std.testing.allocator);
+        defer delivery.deinit(std.testing.allocator);
+        var attachments: AttachmentStore = .{};
+        defer attachments.deinit();
+        var metrics: RuntimeMetrics = .{ .started_ns = 0 };
+        const page = try std.testing.allocator.create(core.AgentHistoryPage);
+        page.* = .{
+            .request_id = @enumFromInt(17),
+            .view_generation = 5,
+            .snapshot = .{ .pane_id = @enumFromInt(3), .pane_generation = 4 },
+        };
+        const owned = try std.testing.allocator.create(OwnedPage);
+        owned.* = .{ .gpa = std.testing.allocator, .value = page };
+        try delivery.enqueue(.{ .agent_history_page = owned });
+        try std.testing.expect(delivery.responses.hasAgentHistory());
+
+        const prepared = delivery.stage("page", .{ .response = .{
+            .offset = 0,
+            .history_result = null,
+            .history_output = null,
+            .history_stats = null,
+            .agent_history = owned,
+        } });
+        try std.testing.expect(delivery.responses.hasAgentHistory());
+        if (abort) {
+            delivery.abort(prepared);
+            try std.testing.expect(delivery.responses.hasAgentHistory());
+            delivery.close();
+        } else {
+            delivery.commit(.{ .prepared = prepared, .attachments = &attachments, .metrics = &metrics });
+            _ = delivery.complete({});
+        }
+
+        try std.testing.expect(!delivery.responses.hasAgentHistory());
+    }
+}
 
 /// Cuts `text` to at most `limit` bytes on a UTF-8 boundary.
 pub fn truncateUtf8(text: []const u8, limit: usize) []const u8 {
@@ -244,4 +287,55 @@ test "delivery preserves management before resync wire order" {
         .metrics = &metrics,
     })).?;
     try std.testing.expect((try decodeServer_module(second.payload)) == .resync_required);
+}
+
+test "agent conversation delivery coalesces revisions independently for reconnecting clients" {
+    var first = try Delivery.init(std.testing.allocator);
+    defer first.deinit(std.testing.allocator);
+    var second = try Delivery.init(std.testing.allocator);
+    defer second.deinit(std.testing.allocator);
+    var attachments: AttachmentStore = .{};
+    defer attachments.deinit();
+    var metrics: RuntimeMetrics = .{ .started_ns = 0 };
+    var panes: PaneStore = .{};
+    var workspaces: StateType = .{};
+    var agents: TrackerType = .{};
+    var system_metrics: SamplerType = .{};
+    var snapshot: @import("telar-core").AgentThreadSnapshot = .{ .pane_id = @enumFromInt(5), .pane_generation = 8, .revision = 1, .status = .ready };
+    var pane: @import("../../pane/Pane.zig") = undefined;
+    pane.id = snapshot.pane_id;
+    pane.generation = snapshot.pane_generation;
+    pane.close_requested = false;
+    pane.exit = null;
+    pane.agent_thread = &snapshot;
+    panes.items[0] = &pane;
+    const sources: Sources = .{
+        .panes = &panes,
+        .workspaces = ReaderType.init(&workspaces),
+        .agents = &agents,
+        .system_metrics = &system_metrics,
+        .proxy_active = false,
+        .home = null,
+    };
+    first.runtime_state_requested = true;
+    first.client_layout_sent = true;
+    first.proxy_status_sent = true;
+    first.agent_revision_sent = std.math.maxInt(u64);
+    const initial = (try first.prepare(.{ .io = std.testing.io, .attachments = &attachments, .sources = sources, .metrics = &metrics })).?;
+    try std.testing.expectEqual(@as(u64, 1), (try decodeServer_module(initial.payload)).agent_thread_snapshot.revision);
+    first.commit(.{ .prepared = initial, .attachments = &attachments, .metrics = &metrics });
+    snapshot.revision = 15;
+    _ = first.complete({});
+    const newest = (try first.prepare(.{ .io = std.testing.io, .attachments = &attachments, .sources = sources, .metrics = &metrics })).?;
+    try std.testing.expectEqual(@as(u64, 15), (try decodeServer_module(newest.payload)).agent_thread_snapshot.revision);
+    first.commit(.{ .prepared = newest, .attachments = &attachments, .metrics = &metrics });
+    _ = first.complete({});
+    second.requestAgentThread(pane.key());
+    const recovered = (try second.prepare(.{ .io = std.testing.io, .attachments = &attachments, .sources = sources, .metrics = &metrics })).?;
+    try std.testing.expectEqual(@as(u64, 15), (try decodeServer_module(recovered.payload)).agent_thread_snapshot.revision);
+    try std.testing.expectEqual(@as(u64, 15), first.agent_threads_sent[0].?.revision);
+    try std.testing.expect(second.agent_threads_sent[0] == null);
+    second.commit(.{ .prepared = recovered, .attachments = &attachments, .metrics = &metrics });
+    _ = second.complete({});
+    try std.testing.expect(second.requested_agent_thread == null);
 }

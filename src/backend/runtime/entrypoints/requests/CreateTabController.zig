@@ -27,6 +27,7 @@ pub fn init(responses: *ResponseQueueType, create_tab: CreateTabExecutorType) Co
 pub fn createTab(controller: *Controller, request: CreateTabViewType) !void {
     const result = controller.create_tab.execute(.{
         .workspace = request.workspace,
+        .kind = request.kind,
         .label = request.label,
         .size = request.size,
         .launch = request.launch,
@@ -55,6 +56,8 @@ pub fn createTab(controller: *Controller, request: CreateTabViewType) !void {
         .label = undefined,
         .label_len = @intCast(label.len),
         .root_pane_id = result.root_pane_id,
+        .kind = result.kind,
+        .pane_generation = result.pane_generation,
     };
     @memcpy(pending.label[0..label.len], label);
     try controller.responses.push(.{ .tab_created = pending });
