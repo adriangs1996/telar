@@ -88,10 +88,13 @@ returns no delivery and the route ends without another effect.
 
 `InputHandler.repeatPolicy` delegates to action routing. Only native
 `scroll_pane` actions opt in, with a 100 ms interval and the current `PaneId`
-as their owner token. Prompts, attachment modals, copy mode, agent mode and
+as their owner token. Prompts, attachment modals, copy mode and
 missing or detached panes deny repeat authority. The initial action runs
 normally before repeat authority is captured, so scroll can first exit copy
-mode through the existing native action handler.
+mode through the existing native action handler. In the GUI, agent pane scroll
+bindings use the delivered transcript's wheel policy, including its scroll
+limit, disclosure-anchor cancellation and history navigation. Both taps and
+held bindings target the focused pane and leave its composer unchanged.
 
 The client router retains one owned action, its final physical key and chord,
 its policy and its last execution timestamp. A matching binding-owned repeat
@@ -168,5 +171,8 @@ delivery.
   changed focus and copy-mode capture through the router and real adapters.
 - `src/client/application/input/action_routing.zig` proves that only
   native scroll actions receive a repeat policy and exact-pane owner token.
+- `src/gui/tests/widget_interaction.zig` proves agent scroll bindings through
+  the native input entrypoint, paced repetition, transcript bounds, stale
+  attachment rejection and preservation of composer text.
 - `name-prompt.md`, `copy-mode.md`, `pane-input.md` and `clipboard-image.md`
   prove each downstream owner and effect.

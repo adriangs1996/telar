@@ -680,6 +680,10 @@ cursor chooses the position, so this does not target an application's focused
 internal split. Missing targets and unchanged viewport offsets have no effects.
 Normal typing or paste returns a scrolled viewport to live output.
 
+In GUI agent panes, native scroll bindings move the conversation by three
+lines through the same bounds and history navigation as the wheel. They leave
+the composer unchanged and support held-key repetition.
+
 Like other native actions, invoking `scroll_pane` from copy mode first exits
 copy mode and restores its entry viewport, then applies the wheel step. The
 action is available to client Lua bindings and callbacks, but plugin worker
