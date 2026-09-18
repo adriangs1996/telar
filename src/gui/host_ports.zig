@@ -111,6 +111,7 @@ pub fn presentation(client: *Client) HostPresentationType {
         .context = client,
         .resize_fn = resizePresenter,
         .note_input_fn = noteInput,
+        .note_pane_input_fn = notePaneInput,
         .frame_interval_ns_fn = frameIntervalNs,
         .in_flight_fn = presentationInFlight,
         .delivered_geometry_fn = deliveredGeometry,
@@ -204,6 +205,19 @@ fn localTime(_: *anyopaque) LocalTimeType {
 }
 
 fn noteInput(_: *anyopaque, _: u64) void {}
+
+fn notePaneInput(context: *anyopaque, pane_id: PaneIdType, now_ns: u64) void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    const gui = host(client);
+    const model = client.model.activeTabModelConst() orelse return;
+    const pane = model.findConst(pane_id) orelse return;
+    gui.driver.frame_pacer.noteInput(.{
+        .pane_id = pane.id,
+        .attachment_generation = pane.attachment_generation,
+        .frame_id = pane.applied_frame_id,
+        .attached = pane.attached,
+    }, now_ns);
+}
 
 fn paneGraphicsVisible(context: *anyopaque, pane_id: PaneIdType) bool {
     const client: *Client = @ptrCast(@alignCast(context));

@@ -54,6 +54,7 @@ typedef enum {
 typedef enum {
     ProbeFailureInputTimeout = 16,
     ProbeFailureForegroundLost = 17,
+    ProbeFailureDrawDiagnostics = 18,
 } ProbeFailureCode;
 
 static ProbeSetupStage setup_stage = ProbeSetupWaitFixture;
@@ -78,12 +79,67 @@ static unsigned window_cycle_successes;
 static double window_task_began, window_retry_after;
 static BOOL window_floated;
 
+enum { ProbeDrawSampleCapacity = 512, ProbeDrawEventCapacity = 32 };
+typedef enum {
+    ProbeDrawRequest,
+    ProbeDrawAttempt,
+} ProbeDrawEventKind;
+
+typedef enum {
+    ProbeDrawClosed = 1 << 0,
+    ProbeDrawPreparing = 1 << 1,
+    ProbeDrawRendererBusy = 1 << 2,
+    ProbeDrawNotDirty = 1 << 3,
+    ProbeDrawNoWindow = 1 << 4,
+    ProbeDrawOccluded = 1 << 5,
+    ProbeDrawBeforeDeadline = 1 << 6,
+} ProbeDrawState;
+
+typedef struct {
+    double at, deadline_remaining;
+    unsigned kind, state;
+} ProbeDrawEvent;
+
+typedef struct {
+    unsigned sequence, draw_id;
+    double attempt, drawable_begin, drawable_end, draw, render, commit;
+} ProbeDrawSubmission;
+
+typedef struct {
+    double input, accepted, gpu;
+    unsigned requests, attempts, events, dropped, matched;
+    ProbeDrawEvent observations[ProbeDrawEventCapacity];
+    ProbeDrawSubmission submission;
+} ProbeDrawSample;
+
+static BOOL draw_diagnostics;
+static NSString *draw_diagnostic_error;
+static ProbeDrawSample *draw_samples;
+static ProbeDrawSubmission draw_context;
+static unsigned draw_serial;
+static IMP original_request_draw, original_draw_if_ready, original_draw_with_drawable, original_render_frame;
+static Ivar draw_renderer_ivar, draw_closed_ivar, draw_preparing_ivar, draw_dirty_ivar, draw_deadline_ivar;
+static IMP draw_is_busy, draw_gate_delay;
+static NSDictionary *draw_diagnostic_result(void);
+static BOOL install_draw_diagnostics(void);
+
 @interface ProbeFrame : NSObject {
 @public unsigned sequence; double gpu, work; BOOL verified;
 }
 @end
 @implementation ProbeFrame
 @end
+
+@interface ProbeDrawFrame : ProbeFrame {
+@public ProbeDrawSubmission submission;
+}
+@end
+@implementation ProbeDrawFrame
+@end
+
+static ProbeDrawSubmission *frame_submission(ProbeFrame *frame) {
+    return draw_samples ? &((ProbeDrawFrame *)frame)->submission : NULL;
+}
 
 
 static NSView *test_view(void) {
@@ -115,6 +171,7 @@ static NSString *failure_message(int failed) {
         case 15: return @"Window manager command timed out";
         case ProbeFailureInputTimeout: return @"Input did not produce its expected marker within two seconds";
         case ProbeFailureForegroundLost: return @"Benchmark host was not active with its primary window key";
+        case ProbeFailureDrawDiagnostics: return @"Requested native draw diagnostics are unsupported";
         default: return @"Unknown probe failure";
     }
 }
@@ -170,7 +227,7 @@ static void finish(int failed) {
     NSSize scene = scene_size();
     struct rusage usage = {0};
     getrusage(RUSAGE_SELF, &usage);
-    NSDictionary *result = @{
+    NSMutableDictionary *result = [@{
         @"failed": @(failed), @"error": failure_message(failed),
         @"viewport": @[@(pixel_width), @(pixel_height)],
         @"requested_viewport": @[@(requested_width), @(requested_height)],
@@ -196,7 +253,10 @@ static void finish(int failed) {
         @"host_system_cpu_seconds": @(usage.ru_stime.tv_sec + usage.ru_stime.tv_usec / 1e6),
         @"host_max_rss_bytes": @(usage.ru_maxrss),
         @"target_filter": @"marker-qualified Metal command queue",
-    };
+    } mutableCopy];
+    if (draw_diagnostics) {
+        result[@"draw_diagnostics"] = draw_diagnostic_result();
+    }
     NSError *error = nil;
     NSData *json = [NSJSONSerialization dataWithJSONObject:result options:NSJSONWritingPrettyPrinted error:&error];
     if (!json || ![json writeToFile:@(getenv("TELAR_DISPLAY_RESULT")) options:NSDataWritingAtomic error:&error]) {
@@ -265,6 +325,9 @@ static void send_key(void) {
     pending=YES;
     atomic_store(&epoch,(unsigned)count+1);
     began=CACurrentMediaTime();
+    if (draw_samples) {
+        draw_samples[count].input = began;
+    }
     if(text_input){
         [(id<NSTextInputClient>)target insertText:@"x" replacementRange:NSMakeRange(NSNotFound,0)];
     }else{
@@ -578,6 +641,16 @@ static void accept_frame(ProbeFrame *frame) {
     gpu_work_samples[count] = frame->work;
     app_active_end[count] = NSApp.isActive;
     window_key_end[count] = primary_window.isKeyWindow;
+    if (draw_samples) {
+        ProbeDrawSample *sample = &draw_samples[count];
+        sample->accepted = CACurrentMediaTime();
+        sample->gpu = frame->gpu;
+        ProbeDrawSubmission *submission = frame_submission(frame);
+        if (submission->sequence == frame->sequence && submission->draw_id) {
+            sample->submission = *submission;
+            sample->matched = YES;
+        }
+    }
     pending=NO;count++;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(25+((uint32_t)(count*1103515245u+12345u)>>16)%50)*NSEC_PER_MSEC),dispatch_get_main_queue(),^{send_key();});
 }
@@ -621,8 +694,11 @@ static ProbeReadback *prepare_readback(id<MTLTexture> texture, id<MTLCommandQueu
     ProbeReadback *r = [ProbeReadback new];
     r->texture = texture;
     r->queue = queue;
-    r->frame = [ProbeFrame new];
+    r->frame = draw_samples ? [ProbeDrawFrame new] : [ProbeFrame new];
     r->frame->sequence = atomic_load(&epoch);
+    if (draw_samples && NSThread.isMainThread && draw_context.sequence == r->frame->sequence) {
+        *frame_submission(r->frame) = draw_context;
+    }
     r->geometry = atomic_load(&geometry_epoch);
     r->known = atomic_load_explicit(&located, memory_order_acquire) &&
         pixel_width == texture.width && pixel_height == texture.height;
@@ -711,6 +787,10 @@ static void commit(id self, SEL selector) {
                 dispatch_async(dispatch_get_main_queue(), ^{ finish(13); });
             }
         }];
+        ProbeDrawSubmission *submission = frame_submission(r->frame);
+        if (submission && submission->draw_id) {
+            submission->commit = CACurrentMediaTime();
+        }
     }
     ((void(*)(id,SEL))original_commit)(self,selector);
 }
@@ -758,6 +838,16 @@ static void commit4(id self, SEL selector, const id<MTL4CommandBuffer> *buffers,
             }
         }];
     }
+    if (draw_samples) {
+        double at = CACurrentMediaTime();
+        for (NSUInteger i = 0; i < count; i++) {
+            ProbeReadback *r = objc_getAssociatedObject(buffers[i], &readback_key);
+            ProbeDrawSubmission *submission = r ? frame_submission(r->frame) : NULL;
+            if (submission && submission->draw_id) {
+                submission->commit = at;
+            }
+        }
+    }
     ((void(*)(id,SEL,const id<MTL4CommandBuffer> *,NSUInteger,id))original_commit4)(self,selector,buffers,count,options);
 }
 
@@ -769,7 +859,238 @@ static id backing_layer(id self, SEL selector) {
 
 static id next_drawable(CAMetalLayer *self,SEL selector){
     self.framebufferOnly=NO;
-    return ((id(*)(id,SEL))original_next)(self,selector);
+    BOOL observe = draw_samples && NSThread.isMainThread && draw_context.sequence && self == primary_view.layer;
+    if (observe) {
+        draw_context.drawable_begin = CACurrentMediaTime();
+    }
+    id drawable = ((id(*)(id,SEL))original_next)(self,selector);
+    if (observe) {
+        draw_context.drawable_end = CACurrentMediaTime();
+    }
+    return drawable;
+}
+
+static BOOL observing_draw(id view) {
+    return draw_samples && NSThread.isMainThread && view == primary_view &&
+        pending && !finished && count < limit;
+}
+
+static BOOL draw_bool(id view, Ivar field) {
+    BOOL value;
+    memcpy(&value, (const char *)(__bridge const void *)view + ivar_getOffset(field), sizeof(value));
+    return value;
+}
+
+// These are view-wide observations, not proof that the echo reached the model.
+// For example, background output can request a draw before the marker changes.
+static void observe_draw(id view, ProbeDrawEventKind kind) {
+    ProbeDrawSample *sample = &draw_samples[count];
+    if (kind == ProbeDrawRequest) {
+        sample->requests++;
+    } else {
+        sample->attempts++;
+    }
+
+    if (sample->events == ProbeDrawEventCapacity) {
+        sample->dropped++;
+        return;
+    }
+
+    double now = CACurrentMediaTime(), remaining;
+    if (draw_gate_delay) {
+        remaining = ((CFTimeInterval(*)(id, SEL))draw_gate_delay)(view, @selector(drawDelay));
+    } else {
+        double deadline;
+        memcpy(&deadline, (const char *)(__bridge const void *)view + ivar_getOffset(draw_deadline_ivar), sizeof(deadline));
+        remaining = MAX(0, deadline - now);
+    }
+
+    if (!isfinite(remaining) || remaining < 0) {
+        draw_diagnostic_error = @"Draw gate returned a non-finite or negative interval";
+        sample->dropped++;
+        return;
+    }
+
+    id renderer = object_getIvar(view, draw_renderer_ivar);
+    NSWindow *window = ((NSView *)view).window;
+    unsigned state = 0;
+    if (draw_bool(view, draw_closed_ivar)) {
+        state |= ProbeDrawClosed;
+    }
+
+    if (draw_bool(view, draw_preparing_ivar)) {
+        state |= ProbeDrawPreparing;
+    }
+
+    if (renderer && ((BOOL(*)(id, SEL))draw_is_busy)(renderer, @selector(isBusy))) {
+        state |= ProbeDrawRendererBusy;
+    }
+
+    if (!draw_bool(view, draw_dirty_ivar)) {
+        state |= ProbeDrawNotDirty;
+    }
+
+    if (!window) {
+        state |= ProbeDrawNoWindow;
+    }
+
+    if (window && !(window.occlusionState & NSWindowOcclusionStateVisible)) {
+        state |= ProbeDrawOccluded;
+    }
+
+    if (remaining > 0) {
+        state |= ProbeDrawBeforeDeadline;
+    }
+
+    sample->observations[sample->events++] = (ProbeDrawEvent){now, remaining, kind, state};
+}
+
+static void diagnostic_request_draw(id self, SEL selector) {
+    if (observing_draw(self)) {
+        observe_draw(self, ProbeDrawRequest);
+    }
+
+    ((void(*)(id, SEL))original_request_draw)(self, selector);
+}
+
+static void diagnostic_draw_if_ready(id self, SEL selector) {
+    if (!observing_draw(self)) {
+        ((void(*)(id, SEL))original_draw_if_ready)(self, selector);
+        return;
+    }
+
+    observe_draw(self, ProbeDrawAttempt);
+    ProbeDrawSubmission previous = draw_context;
+    draw_context = (ProbeDrawSubmission){ .sequence = (unsigned)count + 1, .attempt = CACurrentMediaTime() };
+    ((void(*)(id, SEL))original_draw_if_ready)(self, selector);
+    draw_context = previous;
+}
+
+static void diagnostic_draw_with_drawable(id self, SEL selector, id drawable) {
+    if (!observing_draw(self)) {
+        ((void(*)(id, SEL, id))original_draw_with_drawable)(self, selector, drawable);
+        return;
+    }
+
+    ProbeDrawSubmission previous = draw_context;
+    draw_context.sequence = (unsigned)count + 1;
+    draw_context.draw_id = ++draw_serial;
+    draw_context.draw = CACurrentMediaTime();
+    ((void(*)(id, SEL, id))original_draw_with_drawable)(self, selector, drawable);
+    draw_context = previous;
+}
+
+// Objective-C's selector fixes this four-argument ABI; the borrowed frame is opaque.
+static BOOL diagnostic_render_frame(id self, SEL selector, const void *frame, id drawable) {
+    if (observing_draw(primary_view) && self == object_getIvar(primary_view, draw_renderer_ivar) && draw_context.draw_id) {
+        draw_context.render = CACurrentMediaTime();
+    }
+    return ((BOOL(*)(id, SEL, const void *, id))original_render_frame)(self, selector, frame, drawable);
+}
+
+static BOOL draw_method_valid(Method method, unsigned arguments, const char *result) {
+    if (!method || method_getNumberOfArguments(method) != arguments) {
+        return NO;
+    }
+
+    char type[16] = {0};
+    method_getReturnType(method, type, sizeof(type));
+    return !strcmp(type, result);
+}
+
+static BOOL draw_ivar_valid(Ivar field, const char *type) {
+    return field && !strcmp(ivar_getTypeEncoding(field), type);
+}
+
+static BOOL install_draw_diagnostics(void) {
+    Class view = objc_getClass("TelarView"), renderer = objc_getClass("TelarMetalRenderer");
+    Method request = class_getInstanceMethod(view, @selector(requestDraw));
+    Method attempt = class_getInstanceMethod(view, @selector(drawIfReady));
+    Method draw = class_getInstanceMethod(view, @selector(drawWithDrawable:));
+    Method render = class_getInstanceMethod(renderer, @selector(renderFrame:drawable:));
+    Method busy = class_getInstanceMethod(renderer, @selector(isBusy));
+    Method delay = class_getInstanceMethod(view, @selector(drawDelay));
+    draw_renderer_ivar = class_getInstanceVariable(view, "renderer");
+    draw_closed_ivar = class_getInstanceVariable(view, "closed");
+    draw_preparing_ivar = class_getInstanceVariable(view, "preparing");
+    draw_dirty_ivar = class_getInstanceVariable(view, "dirty");
+    draw_deadline_ivar = class_getInstanceVariable(view, "next_draw");
+    BOOL supported = [display_mode isEqualToString:@"gui"] &&
+        draw_method_valid(request, 2, @encode(void)) && draw_method_valid(attempt, 2, @encode(void)) &&
+        draw_method_valid(draw, 3, @encode(void)) && draw_method_valid(render, 4, @encode(BOOL)) &&
+        draw_method_valid(busy, 2, @encode(BOOL)) && draw_renderer_ivar &&
+        ivar_getTypeEncoding(draw_renderer_ivar)[0] == '@' &&
+        draw_ivar_valid(draw_closed_ivar, @encode(BOOL)) && draw_ivar_valid(draw_preparing_ivar, @encode(BOOL)) &&
+        draw_ivar_valid(draw_dirty_ivar, @encode(BOOL)) &&
+        (delay ? draw_method_valid(delay, 2, @encode(CFTimeInterval)) : draw_ivar_valid(draw_deadline_ivar, @encode(double)));
+    if (!supported || limit > ProbeDrawSampleCapacity) {
+        draw_diagnostic_error = @"Requires Telar GUI methods, typed renderer/closed/preparing/dirty ivars, and double drawDelay or next_draw";
+        return NO;
+    }
+
+    draw_samples = calloc((size_t)limit, sizeof(*draw_samples));
+    if (!draw_samples) {
+        draw_diagnostic_error = @"Could not allocate bounded diagnostic storage";
+        return NO;
+    }
+    draw_is_busy = method_getImplementation(busy);
+    draw_gate_delay = delay ? method_getImplementation(delay) : NULL;
+    original_request_draw = method_setImplementation(request, (IMP)diagnostic_request_draw);
+    original_draw_if_ready = method_setImplementation(attempt, (IMP)diagnostic_draw_if_ready);
+    original_draw_with_drawable = method_setImplementation(draw, (IMP)diagnostic_draw_with_drawable);
+    original_render_frame = method_setImplementation(render, (IMP)diagnostic_render_frame);
+    return YES;
+}
+
+static id draw_elapsed(double at, double input) {
+    return at > 0 ? @((at - input) * 1000) : NSNull.null;
+}
+
+static NSDictionary *draw_diagnostic_result(void) {
+    NSMutableArray *samples = [NSMutableArray array];
+    unsigned total_dropped = 0, matched = 0;
+    int recorded = draw_samples ? MIN(limit, count + (pending ? 1 : 0)) : 0;
+    for (int i = 0; i < recorded; i++) {
+        ProbeDrawSample *sample = &draw_samples[i];
+        ProbeDrawSubmission *submission = &sample->submission;
+        NSMutableArray *events = [NSMutableArray array];
+        for (unsigned e = 0; e < sample->events; e++) {
+            ProbeDrawEvent *event = &sample->observations[e];
+            [events addObject:@{ @"at_ms": draw_elapsed(event->at, sample->input),
+                @"kind": event->kind == ProbeDrawRequest ? @"request_draw" : @"draw_attempt",
+                @"state_flags": @(event->state), @"deadline_remaining_ms": @(event->deadline_remaining * 1000) }];
+        }
+        total_dropped += sample->dropped;
+        matched += sample->matched;
+        NSDictionary *qualified = sample->matched ? @{
+            @"draw_id": @(submission->draw_id), @"attempt_ms": draw_elapsed(submission->attempt, sample->input),
+            @"drawable_begin_ms": draw_elapsed(submission->drawable_begin, sample->input),
+            @"drawable_end_ms": draw_elapsed(submission->drawable_end, sample->input),
+            @"draw_entry_ms": draw_elapsed(submission->draw, sample->input),
+            @"renderer_entry_ms": draw_elapsed(submission->render, sample->input),
+            @"commit_ms": draw_elapsed(submission->commit, sample->input),
+            @"gpu_callback_ms": draw_elapsed(sample->gpu, sample->input),
+            @"main_accept_ms": draw_elapsed(sample->accepted, sample->input),
+        } : @{};
+        [samples addObject:@{ @"sequence": @(i + 1), @"completed": @(i < count),
+            @"matched_submission": @(sample->matched), @"qualified_frame": qualified,
+            @"view_requests": @(sample->requests), @"view_attempts": @(sample->attempts),
+            @"view_events": events, @"view_events_dropped": @(sample->dropped) }];
+    }
+    return @{ @"enabled": @YES, @"error": draw_diagnostic_error ?: @"",
+        @"environment": @"TGB_DRAW_DIAGNOSTICS=1", @"clock": @"CACurrentMediaTime, relative to injected input",
+        @"storage_bytes": @(draw_samples ? (size_t)limit * sizeof(*draw_samples) : 0),
+        @"draw_gate_source": draw_gate_delay ? @"TelarView.drawDelay" : @"TelarView.next_draw ivar",
+        @"draw_gate_policy": draw_gate_delay ? @"Native drawDelay query; the native view owns callback-versus-fallback selection" : @"max(0, next_draw - CACurrentMediaTime)",
+        @"event_capacity_per_sample": @(ProbeDrawEventCapacity), @"matched_samples": @(matched),
+        @"events_dropped": @(total_dropped), @"samples": samples,
+        @"state_flags": @{ @"closed": @(ProbeDrawClosed), @"preparing": @(ProbeDrawPreparing),
+            @"renderer_busy": @(ProbeDrawRendererBusy), @"not_dirty": @(ProbeDrawNotDirty),
+            @"no_window": @(ProbeDrawNoWindow), @"occluded": @(ProbeDrawOccluded),
+            @"before_draw_gate": @(ProbeDrawBeforeDeadline) },
+        @"attribution": @"Only qualified_frame belongs to a submission whose expected marker was verified. View events are unqualified state snapshots, not causal echo-model updates or measured blocking durations.",
+        @"model_dirty_ms": NSNull.null,
+        @"overhead": @"Opt-in method hooks, ivar reads and timestamps; compare diagnostic runs separately from headline latency runs." };
 }
 
 __attribute__((constructor)) static void install(void){
@@ -786,6 +1107,8 @@ __attribute__((constructor)) static void install(void){
     const char *mode = getenv("TELAR_DISPLAY_MODE"), *layout = getenv("TELAR_DISPLAY_LAYOUT");
     display_mode = mode ? @(mode) : ([NSProcessInfo.processInfo.arguments containsObject:@"gui"] ? @"gui" : @"tui");
     display_layout = layout ? @(layout) : @"single";
+    const char *diagnostics = getenv("TGB_DRAW_DIAGNOSTICS");
+    draw_diagnostics = diagnostics && !strcmp(diagnostics, "1");
     const char *directory = getenv("TELAR_DISPLAY_DIRECTORY");
     display_directory = directory ? @(directory) : nil;
     const char *manager = getenv("TELAR_DISPLAY_AEROSPACE");
@@ -794,6 +1117,7 @@ __attribute__((constructor)) static void install(void){
     panes = [display_layout isEqualToString:@"single"] ? 1 : (pane_count ? (unsigned)atoi(pane_count) : 4);
     BOOL valid = [@[@"gui", @"tui", @"ghostty"] containsObject:display_mode] &&
         [@[@"single", @"splits", @"tabs"] containsObject:display_layout] && panes >= 1 && panes <= 8;
+    valid = valid && (!diagnostics || !strcmp(diagnostics, "0") || draw_diagnostics);
     const char *viewport = getenv("TELAR_DISPLAY_VIEWPORT");
     if (viewport) {
         char trailing;
@@ -802,6 +1126,10 @@ __attribute__((constructor)) static void install(void){
     }
     if (!valid) {
         dispatch_async(dispatch_get_main_queue(), ^{ finish(9); });
+        return;
+    }
+    if (draw_diagnostics && !install_draw_diagnostics()) {
+        dispatch_async(dispatch_get_main_queue(), ^{ finish(ProbeFailureDrawDiagnostics); });
         return;
     }
     id<MTLDevice> device=MTLCreateSystemDefaultDevice();probe_queue=[device newCommandQueue];

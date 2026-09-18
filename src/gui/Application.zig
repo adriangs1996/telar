@@ -8,6 +8,7 @@ const GuiClient = @import("GuiClient.zig");
 const NativeLoop = @import("NativeLoop.zig");
 const Renderer = @import("render/TerminalRenderer.zig");
 const Application = @This();
+const FramePacer = @import("FramePacer.zig");
 
 params: client.ClientInit,
 driver: NativeLoop,
@@ -76,6 +77,7 @@ pub fn run(app: *Application, title: [*:0]const u8) !u8 {
         .text_context = textContext,
         .host_request = hostRequest,
         .accessibility = accessibility,
+        .frame_delay_ns = frameDelayNs,
     };
     const result = native.telar_gui_run(title, app, &callbacks);
     if (app.failure) |err| {
@@ -150,7 +152,42 @@ fn prepare(app: *Application, viewport: native.Viewport) !u64 {
     app.cursor_clock.observe(gui.cursorTarget(), now_ns);
     app.renderer.cursor_on = app.cursor_clock.shown(now_ns);
     app.renderer.focused = app.cursor_clock.focused;
-    return gui.prepare(&app.renderer);
+    const token = try gui.prepare(&app.renderer);
+    if (token != 0) {
+        app.driver.frame_pacer.record(gui.lifecycle.active.?.delivery.commit.slice(), now_ns);
+    }
+
+    return token;
+}
+
+fn frameDelayNs(context: ?*anyopaque) callconv(.c) u64 {
+    const app = from(context);
+    var visible: [core.max_panes_per_tab]FramePacer.Pane = undefined;
+    var count: usize = 0;
+    if (app.gui) |gui| {
+        if (gui.app.model.activeTabModelConst()) |model| {
+            var layout: client.LayoutSnapshot = .{};
+            model.layout.snapshot(gui.region.area, &layout);
+            for (layout.views()) |view| {
+                if (view.surface != .terminal or view.content.w == 0 or view.content.h == 0) {
+                    continue;
+                }
+
+                const pane = model.findConst(view.pane_id) orelse continue;
+                visible[count] = .{
+                    .pane_id = pane.id,
+                    .attachment_generation = pane.attachment_generation,
+                    .frame_id = pane.applied_frame_id,
+                    .attached = pane.attached,
+                };
+                count += 1;
+            }
+        }
+    }
+
+    const now_ns = app.now();
+    const deadline = app.driver.frame_pacer.waitUntil(visible[0..count], now_ns) orelse return 0;
+    return deadline -| now_ns;
 }
 
 fn pump(context: ?*anyopaque) callconv(.c) c_int {

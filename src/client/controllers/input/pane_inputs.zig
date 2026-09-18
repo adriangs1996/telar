@@ -14,6 +14,7 @@ const PaneInputEffectType = @import("../../application/input/PaneInputEffect.zig
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const enabled_module = @import("telar-core").enabled;
 const elapsed_module = @import("telar-core").elapsed;
+const monotonic = @import("telar-core").monotonic;
 
 /// Delivers one user-input command through the application boundary.
 ///
@@ -98,6 +99,11 @@ fn enqueue(context: *anyopaque, effect: PaneInputEffectType) !void {
 
 fn record(client: *Client, started: u64, delivery: ?DeliveryType) ?DeliveryType {
     const completed = delivery orelse return null;
+
+    if (completed.byte_count != 0 and client.presentation.note_pane_input_fn != null) {
+        client.presentation.notePaneInput(completed.pane_id, monotonic(client.io));
+    }
+
     if (comptime enabled_module) {
         if (completed.source != .mouse) {
             client.telemetry.metrics.input_events += 1;

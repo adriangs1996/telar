@@ -1,0 +1,222 @@
+{
+  "completed_runs": 16,
+  "valid_runs": 16,
+  "complete": true,
+  "strata": {
+    "repeat/ansi": {
+      "pairs": [
+        {
+          "round": 0,
+          "baseline": 64.91675717127657,
+          "candidate": 72.93000571190083,
+          "ratio": 1.1234388298152675
+        },
+        {
+          "round": 1,
+          "baseline": 75.56570595049307,
+          "candidate": 77.03975149701448,
+          "ratio": 1.0195068057391952
+        },
+        {
+          "round": 2,
+          "baseline": 77.61338435633986,
+          "candidate": 78.7514612410539,
+          "ratio": 1.0146634101083505
+        },
+        {
+          "round": 3,
+          "baseline": 58.93412341106743,
+          "candidate": 74.82537697796558,
+          "ratio": 1.269644352831994
+        }
+      ],
+      "paired_rounds": 4,
+      "mib_per_second": {
+        "baseline": {
+          "median": 70.24123156088481,
+          "minimum": 58.93412341106743,
+          "maximum": 77.61338435633986
+        },
+        "candidate": {
+          "median": 75.93256423749003,
+          "minimum": 72.93000571190083,
+          "maximum": 78.7514612410539
+        }
+      },
+      "status": "passes_margin",
+      "margin": 0.95,
+      "geometric_paired_ratio": 1.1021378342920147,
+      "ratio_ci95": [
+        1.0170822248668017,
+        1.201874431954941
+      ],
+      "lower_one_sided_95": 1.0182937936804224,
+      "upper_one_sided_95": 1.2004444383826716
+    },
+    "repeat/ascii": {
+      "pairs": [
+        {
+          "round": 0,
+          "baseline": 64.08403018457953,
+          "candidate": 84.18122438228876,
+          "ratio": 1.3136069023721482
+        },
+        {
+          "round": 1,
+          "baseline": 77.66120843873972,
+          "candidate": 86.11106945338628,
+          "ratio": 1.1088041402460527
+        },
+        {
+          "round": 2,
+          "baseline": 81.92321579425122,
+          "candidate": 86.01991562655932,
+          "ratio": 1.0500065798515148
+        },
+        {
+          "round": 3,
+          "baseline": 67.18836507480545,
+          "candidate": 87.43653166602797,
+          "ratio": 1.3013641806684662
+        }
+      ],
+      "paired_rounds": 4,
+      "mib_per_second": {
+        "baseline": {
+          "median": 72.42478675677259,
+          "minimum": 64.08403018457953,
+          "maximum": 81.92321579425122
+        },
+        "candidate": {
+          "median": 86.06549253997281,
+          "minimum": 84.18122438228876,
+          "maximum": 87.43653166602797
+        }
+      },
+      "status": "passes_margin",
+      "margin": 0.95,
+      "geometric_paired_ratio": 1.1877575030486673,
+      "ratio_ci95": [
+        1.0790049318816652,
+        1.3074712120065866
+      ],
+      "lower_one_sided_95": 1.0938030608003895,
+      "upper_one_sided_95": 1.3044141223402013
+    },
+    "variable/ansi": {
+      "pairs": [
+        {
+          "round": 0,
+          "baseline": 75.88736713967322,
+          "candidate": 75.59023876128877,
+          "ratio": 0.9960846134266647
+        },
+        {
+          "round": 1,
+          "baseline": 75.76658550593436,
+          "candidate": 67.3590173792843,
+          "ratio": 0.8890332978514447
+        },
+        {
+          "round": 2,
+          "baseline": 64.70981817299412,
+          "candidate": 69.19454709128152,
+          "ratio": 1.0693052313375075
+        },
+        {
+          "round": 3,
+          "baseline": 76.01670489895166,
+          "candidate": 75.70891709526855,
+          "ratio": 0.9959510504422383
+        }
+      ],
+      "paired_rounds": 4,
+      "mib_per_second": {
+        "baseline": {
+          "median": 75.82697632280379,
+          "minimum": 64.70981817299412,
+          "maximum": 76.01670489895166
+        },
+        "candidate": {
+          "median": 72.39239292628514,
+          "minimum": 67.3590173792843,
+          "maximum": 75.70891709526855
+        }
+      },
+      "status": "inconclusive",
+      "margin": 0.95,
+      "geometric_paired_ratio": 0.9854588319286393,
+      "ratio_ci95": [
+        0.9146660897741175,
+        1.0504751111264674
+      ],
+      "lower_one_sided_95": 0.9409748385973313,
+      "upper_one_sided_95": 1.0320457780505337
+    },
+    "variable/ascii": {
+      "pairs": [
+        {
+          "round": 0,
+          "baseline": 83.89453281129138,
+          "candidate": 77.54668151801938,
+          "ratio": 0.9243353400924161
+        },
+        {
+          "round": 1,
+          "baseline": 67.13696924863716,
+          "candidate": 83.76217823544502,
+          "ratio": 1.247631210834638
+        },
+        {
+          "round": 2,
+          "baseline": 63.69339591541218,
+          "candidate": 82.056927883524,
+          "ratio": 1.2883113971894267
+        },
+        {
+          "round": 3,
+          "baseline": 84.4853027572011,
+          "candidate": 83.1513630714517,
+          "ratio": 0.984210985316784
+        }
+      ],
+      "paired_rounds": 4,
+      "mib_per_second": {
+        "baseline": {
+          "median": 75.51575102996426,
+          "minimum": 63.69339591541218,
+          "maximum": 84.4853027572011
+        },
+        "candidate": {
+          "median": 82.60414547748785,
+          "minimum": 77.54668151801938,
+          "maximum": 83.76217823544502
+        }
+      },
+      "status": "passes_margin",
+      "margin": 0.95,
+      "geometric_paired_ratio": 1.0996543874025222,
+      "ratio_ci95": [
+        0.9538034366867638,
+        1.2678081512624488
+      ],
+      "lower_one_sided_95": 0.9688879296492524,
+      "upper_one_sided_95": 1.2576792193821098
+    }
+  },
+  "all_strata_pass_margin": false,
+  "estimator": "Geometric mean of candidate/baseline ratios within complete paired rounds.",
+  "bootstrap": {
+    "samples": 10000,
+    "seed": 20260918,
+    "unit": "paired round",
+    "method": "percentile; p5 is the one-sided 95% lower bound"
+  },
+  "endpoint": "PTY write to DSR response; not GPU completion or presentation.",
+  "limitations": [
+    "Four pairs give a discrete bootstrap with fragile coverage; this is a limited operational criterion.",
+    "An interval including one is not equivalence; crossing the 0.95 margin is inconclusive.",
+    "Headless attached TUI throughput is not the native GUI endpoint."
+  ],
+  "series_valid": true
+}

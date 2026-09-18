@@ -7,6 +7,10 @@ La [segunda optimización](phase2.md) alcanza **84,81 y 78,59 MiB/s** con texto
 repetido, y **79,15 y 72,53 MiB/s** con texto variable. También registra una
 regresión de latencia bajo carga: +3,82 ms de p95 por ronda en splits y
 +1,89 ms en pestañas. El informe conserva ese coste y todas las observaciones.
+La [tercera optimización](phase3.md) reduce el p95 por ronda en **3,21 ms en
+splits** y **5,09 ms en pestañas** frente a la fase 2, y cumple el margen de
+conservación del caudal del 5% en los cuatro casos de GUI con cargas de 64 MiB.
+La ráfaga corta de ASCII variable y ANSI variable en TUI siguen inconclusos.
 Los resultados originales de este informe conservan el binario anterior.
 
 Medición local del 18 de septiembre de 2026, con las ventanas de prueba en

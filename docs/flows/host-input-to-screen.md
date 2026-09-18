@@ -482,7 +482,46 @@ captures an immutable `presentation_projection` and calls
 New patches can be applied and acknowledged while this write is pending.
 They update the same model; the next preparation captures its latest state.
 
+## Native input and drawing cadence
+
+The GUI admits native events through `Application.input`, then the window
+thread drains `NativeInput` into the shared router. After `PaneInputHandler`
+successfully admits nonempty child input, `pane_inputs.record` calls the
+optional `HostPresentation.notePaneInput` port. Local shortcuts, suppressed
+releases and rejected outbox writes grant no terminal drawing grace.
+
+`NativeLoop` owns one `FramePacer` per GUI connection. It records the target's
+pane ID, attachment generation and applied frame at input admission. A visible
+terminal pane can bypass ordinary cadence only for a newer frame of that same
+attachment, within the shared Pacer's 30 ms and 16-frame grace. Concurrent child
+output can also qualify; this is a bounded latency hint, not proof that the
+frame contains an echo. The fixed table holds at most `max_panes_per_tab`
+entries. Replacing its oldest entry loses only an optimization. Detachment or
+reattachment cannot transfer the old attachment's grace.
+
+On macOS, `TelarView.drawDelay` queries `Application.frameDelayNs` before
+acquiring a drawable. Querying does not consume budget. A nonzero preparation
+token charges the ordinary cadence and only the newer pane frames captured in
+its presentation commit. An early frame reanchors the next interval at its
+preparation time, so repeated input cannot accumulate future cadence debt.
+Ordinary output retains one frame per 60 Hz cadence slot. Linux retains its
+existing Wayland frame clock and does not query this optional native port.
+
+The native renderer and presentation lifecycle still allow one frame in
+flight. GPU completion retires only its captured commit. It does not clear a
+newer input hint, delay cell ACKs or add an output replay queue. Dirty work
+waits for the display callback when cadence blocks it; idle clients add no
+polling timer. All pacing state is disposable and is destroyed with the GUI
+connection. Native hosts without the callback retain their local cadence.
+
 ## Proof
+
+- `src/gui/tests/frame_pacer.zig` covers cadence, idle reanchoring, pure
+  queries, per-pane grace, captured revisions, expiry, bounded credits,
+  reattachment and fixed-capacity replacement.
+- `src/gui/tests/input_pacing.zig` exercises native key routing, nonempty
+  outbox admission, suppressed releases, local shortcuts, outbox rejection
+  and older GPU completion without retiring newer damage or duplicating ACKs.
 
 - `src/core/time/deadline_timer.zig` proves replacement, removal,
   parking, wakeup and token release for successful and failed workers.

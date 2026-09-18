@@ -1,0 +1,7 @@
+{
+  "archive": "evidence.tar.gz",
+  "archive_sha256": "5ebae7e4a3d85da683670d45f4af5795c4cb68eddeff8a19b2f38a0ed382e48a",
+  "files": 924,
+  "uncompressed_bytes": 6926596,
+  "scope": "Raw measurements, failed diagnostic and initial build, hashes, tools, protocols and build/test logs. Private app bundles, binaries, sockets and fixture databases are omitted."
+}

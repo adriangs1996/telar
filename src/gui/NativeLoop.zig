@@ -6,11 +6,13 @@ const native = @import("native/native.zig");
 const GuiClient = @import("GuiClient.zig");
 const Inbox = @import("gui_event.zig").Inbox;
 const Loop = @This();
+const FramePacer = @import("FramePacer.zig");
 
 io: std.Io,
 fds: [2]c_int,
 inbox: Inbox,
 configuration: @import("ConfigurationReload.zig"),
+frame_pacer: FramePacer = .{},
 
 pub fn init(io: std.Io) !Loop {
     var fds: [2]c_int = undefined;

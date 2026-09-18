@@ -10,4 +10,5 @@ pub const Callbacks = extern struct {
     text_context: ?*const fn (?*anyopaque, *native.TextContext) callconv(.c) c_int = null,
     host_request: ?*const fn (?*anyopaque, *native.HostRequest) callconv(.c) c_int = null,
     accessibility: ?*const fn (?*anyopaque, *native.AccessibilityTree) callconv(.c) c_int = null,
+    frame_delay_ns: ?*const fn (?*anyopaque) callconv(.c) u64 = null,
 };

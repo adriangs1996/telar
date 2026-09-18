@@ -1,0 +1,23 @@
+{
+  "created_utc": "2026-09-18T20:26:16.791130+00:00",
+  "source_tree": "/tmp/tgb-diagnostic-source",
+  "source_base": "bf6e130c9ac81274c405847c6baf20dd3a242382",
+  "workspace_base": "be53cc4d5e07fac6a2ab104ebd4121d2cb81a436",
+  "patch_sha256": "50b5bab05a69593454152e2897e6920f640ed97a12458c6b040c0b3793ae0a7c",
+  "binaries": {
+    "baseline": {
+      "path": "/tmp/tgb-phase2-stable/bin/telar",
+      "sha256": "f9dd3cf7a007f9cca462fb2b9050b9e07b08e5eaa4246f494c1fd1c186f6b822"
+    },
+    "candidate": {
+      "path": "/tmp/tgb-phase3-candidate/bin/telar",
+      "sha256": "72be886420aed5ff81b74ad16c4aff720a79b49591ad056897ab43a7ec00bbda"
+    },
+    "workspace": {
+      "path": "/tmp/tgb-phase3-workspace/bin/telar",
+      "sha256": "0c25af3bc4ecdd9c30184fb14c160ce054c3303d4fcf51c0102d6fe2a58414e1"
+    }
+  },
+  "build": "zig build -Doptimize=ReleaseFast --prefix /tmp/tgb-phase3-candidate -j2 --summary all",
+  "scope": "Phase3 changes on frozen phase2 source. Concurrent user GUI and documentation edits excluded from measured build; workspace build also passes."
+}

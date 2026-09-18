@@ -164,6 +164,9 @@ typedef struct {
   int (*text_context)(void *, telar_gui_text_context *);
   int (*host_request)(void *, telar_gui_host_request *);
   int (*accessibility)(void *, telar_gui_accessibility_tree *);
+  // Optional read-only submission delay. Zero admits a frame; GPU and
+  // compositor availability remain native-owned. Querying spends no budget.
+  uint64_t (*frame_delay_ns)(void *);
 } telar_gui_callbacks;
 
 int telar_gui_run(const char *title, void *context,

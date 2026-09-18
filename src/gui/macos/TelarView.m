@@ -160,8 +160,15 @@
   }
 }
 
-// Draw immediately when the frame budget permits, e.g. [self drawIfReady].
-// Otherwise the display clock, not a second timer, wakes the pending work.
+// The client query is pure; a sealed preparation consumes its frame budget.
+// Example: [self drawDelay] == 0 admits an available native drawable.
+- (CFTimeInterval)drawDelay {
+  if (callbacks.frame_delay_ns != NULL) {
+    return (CFTimeInterval)callbacks.frame_delay_ns(context) / 1000000000.0;
+  }
+  return MAX(0, next_draw - CACurrentMediaTime());
+}
+
 - (void)drawIfReady {
   if (closed || preparing || renderer.isBusy || !dirty || self.window == nil ||
       !(self.window.occlusionState & NSWindowOcclusionStateVisible)) {
@@ -171,8 +178,7 @@
     return;
   }
 
-  CFTimeInterval now = CACurrentMediaTime();
-  if (now < next_draw) {
+  if ([self drawDelay] > 0) {
     return;
   }
 
@@ -186,10 +192,13 @@
     return;
   }
 
-  // Carry the cadence forward instead of accumulating callback jitter.
-  const CFTimeInterval interval = 1.0 / 60.0;
-  next_draw =
-      now - next_draw >= interval ? now + interval : next_draw + interval;
+  if (callbacks.frame_delay_ns == NULL) {
+    // Standalone native hosts retain their local cadence fallback.
+    const CFTimeInterval interval = 1.0 / 60.0;
+    const CFTimeInterval now = CACurrentMediaTime();
+    next_draw =
+        now - next_draw >= interval ? now + interval : next_draw + interval;
+  }
   display_link.paused = YES;
   [self drawWithDrawable:drawable];
 }
