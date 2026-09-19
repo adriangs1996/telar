@@ -396,3 +396,11 @@ when watched fingerprints are unchanged. The next normal watcher cycle consumes
 the request only after successful scheduling. An already running watch may
 finish first. Existing validation, atomic adoption, trust checks and rejection
 notifications remain authoritative; the CLI reports admission, not adoption.
+
+`config show` reads the selected client’s adopted configuration. Sections are
+`client` (default), `theme`, `gui`, `input`, `runtime`, and `binding`. Binding
+indices are zero based; `input.binding_count` gives the range. Runtime values
+are the client configuration for a runtime launch, not an assertion that a
+running runtime has reconfigured itself. Lua callbacks are identified by their
+generation/reference; their executable bodies are not serialized. The response
+is JSON in both display modes. Oversized sections fail explicitly.

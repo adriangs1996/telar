@@ -18,6 +18,7 @@ const link_openings = @import("../input/link_openings.zig");
 const AgentThreadHandler = @import("../../application/agents/AgentThreadHandler.zig");
 const layout_commands = @import("layout_commands.zig");
 const config_reloads = @import("../configuration/config_reloads.zig");
+const config_queries = @import("../configuration/config_queries.zig");
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
@@ -40,6 +41,9 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .config_show => {
+            try config_queries.show(client, reply);
+        },
         .config_reload => {
             try config_reloads.request(client);
             reply.status = .admitted;

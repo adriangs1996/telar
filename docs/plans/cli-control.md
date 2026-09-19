@@ -92,7 +92,7 @@ No simulated keyboard input is a substitute for an implemented command.
 
 ## Configuration
 
-- [ ] `config show`
+- [x] `config show`
 - [x] `config reload`
 
 ## Plugins

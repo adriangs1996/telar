@@ -1002,6 +1002,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "admitted")
 
+    def test_config_show_decodes_the_adopted_configuration_section(self):
+        result = self.run_control(["config", "show", "--client", "7", "--section", "input", "--json"], lambda c: self.routed_exchange(c, action=34, target=0, status=1, text='{"binding_count":12}', input_text="input"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"binding_count": 12})
+
 
 if __name__ == "__main__":
     unittest.main()

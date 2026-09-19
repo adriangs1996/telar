@@ -54,7 +54,12 @@ fn execute(init: std.process.Init, options: Options) !u8 {
 
     var buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &buffer);
-    if (reply.action == .layout_get) {
+    if (reply.action == .config_show) {
+        const parsed = try std.json.parseFromSlice(std.json.Value, init.gpa, reply.text(), .{});
+        defer parsed.deinit();
+        try std.json.Stringify.value(parsed.value, .{ .whitespace = if (options.json) .minified else .indent_2 }, &output.interface);
+        try output.interface.writeByte('\n');
+    } else if (reply.action == .layout_get) {
         if (options.json) {
             try std.json.Stringify.value(.{ .encoding = "telar-layout-hex", .data = reply.text() }, .{}, &output.interface);
         } else {

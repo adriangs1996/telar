@@ -358,6 +358,8 @@
     "controllers/configuration/State.zig",
     "controllers/configuration/bar_updates.zig",
     "controllers/configuration/config_reloads.zig",
+    "controllers/configuration/config_queries.zig",
+    "config/Snapshot.zig",
     "controllers/configuration/lua_actions.zig",
     "controllers/configuration/plugin_actions.zig",
     "controllers/controllers.zig",

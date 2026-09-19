@@ -48,6 +48,7 @@ pub const text =
     \\         telar pane watch ID|--current [--count N] [--interval-ms N] [--lines N] [--source recent|screen] [--workspace ID --tab ID] [--jsonl] [--socket PATH]
     \\         telar proxy watch [--count N] [--jsonl] [--socket PATH]
     \\         telar config reload --client ID [--json] [--socket PATH]
+    \\         telar config show --client ID [--section client|theme|gui|input|runtime|binding] [--index N] [--json] [--socket PATH]
     \\         telar workspace select ID --client ID [--json] [--socket PATH]
     \\         telar client detach ID [--json] [--socket PATH]
     \\         telar command suggest <pane|--current> TEXT [--json] [--socket PATH]

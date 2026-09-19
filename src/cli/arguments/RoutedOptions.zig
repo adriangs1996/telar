@@ -50,6 +50,7 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[consumed..] };
     switch (action) {
+        .config_show => {},
         .config_reload => {},
         .layout_apply => self.text = std.mem.span(try cursor.require(error.MissingLayoutToken)),
         .layout_get => {},
@@ -131,6 +132,10 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
             self.text = std.mem.span(try cursor.require(error.MissingLabel));
         } else if (std.mem.eql(u8, arg, "--work") and std.mem.startsWith(u8, @tagName(self.action), "agent_view_") and self.value == 0) {
             self.value = 1;
+        } else if (std.mem.eql(u8, arg, "--section") and self.action == .config_show and self.text.len == 0) {
+            self.text = std.mem.span(try cursor.require(error.MissingSection));
+        } else if (std.mem.eql(u8, arg, "--index") and self.action == .config_show) {
+            self.value = std.fmt.parseUnsigned(u16, std.mem.span(try cursor.require(error.MissingIndex)), 10) catch return error.InvalidIndex;
         } else if (std.mem.eql(u8, arg, "--json") and !self.json) {
             self.json = true;
         } else if (std.mem.eql(u8, arg, "--socket") and self.socket == null) {
