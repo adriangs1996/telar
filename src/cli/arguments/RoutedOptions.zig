@@ -34,6 +34,10 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[2..] };
     switch (action) {
+        .pane_scroll => {
+            self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));
+            self.value = std.fmt.parseInt(i32, std.mem.span(try cursor.require(error.MissingScrollDelta)), 10) catch return error.InvalidScrollDelta;
+        },
         .pane_fullscreen => self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget))),
         .pane_resize => {
             self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));

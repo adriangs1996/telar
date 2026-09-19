@@ -49,7 +49,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [x] `pane resize`
 - [x] `pane fullscreen`
 - [ ] `pane search`
-- [ ] `pane scroll`
+- [x] `pane scroll`
 - [ ] `pane copy`
 - [ ] `pane watch`
 

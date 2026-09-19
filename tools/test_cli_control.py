@@ -843,6 +843,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["target_id"], 5)
 
+    def test_pane_scroll_routes_to_the_named_pane(self):
+        result = self.run_control(["pane", "scroll", "5", "-3", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=11, target=5, input_text="", input_value=-3))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["target_id"], 5)
+
 
 if __name__ == "__main__":
     unittest.main()

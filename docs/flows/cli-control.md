@@ -294,3 +294,8 @@ geometry handler updates both local layout and runtime pane sizes.
 
 `pane fullscreen`: Focuses the source pane and toggles fullscreen through the existing geometry
 handler. The result value is 1 when fullscreen is enabled and 0 otherwise.
+
+`pane scroll`: Changes the named pane’s client-owned scroll offset by a signed delta, without
+changing focus or sending terminal keystrokes. Terminal viewport offsets and
+native transcript offsets use their existing bounds; boundary no-ops succeed.
+An unattached pane or active copy mode rejects the operation.

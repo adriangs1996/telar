@@ -6,6 +6,9 @@ const pane_focus = @import("../panes/pane_focus.zig");
 const pane_closures = @import("../panes/pane_closures.zig");
 const Direction = @import("../../workspace/layout_support.zig").Direction;
 const pane_geometry = @import("../panes/pane_geometry.zig");
+const copy_modes = @import("../input/copy_modes.zig");
+const pane_viewports = @import("../panes/pane_viewports.zig");
+const agent_threads = @import("../agents/agent_threads.zig");
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
@@ -28,6 +31,24 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .pane_scroll => {
+            const delta = std.math.cast(i32, reply.value) orelse return error.InvalidScrollDelta;
+            const pane_id: core.PaneId = @enumFromInt(reply.target_id);
+            const tab = client.model.activeTabModelConst() orelse return error.NoActiveTab;
+            const pane = tab.findConst(pane_id) orelse return error.PaneNotFound;
+            if (!pane.attached or copy_modes.active(client)) {
+                return error.PaneViewportUnavailable;
+            }
+
+            if (pane.kind == .agent) {
+                try agent_threads.scroll(client, pane_id, @floatFromInt(delta));
+            } else {
+                var handler = pane_viewports.handler(client);
+                _ = try handler.execute(.{ .pane_id = pane_id, .target = .{ .relative = delta } });
+            }
+
+            reply.status = .applied;
+        },
         .pane_fullscreen => {
             try focusPane(client, reply.target_id);
             var handler = pane_geometry.fullscreenHandler(client);
