@@ -29,6 +29,7 @@ pub const text =
     \\       telar agent acknowledge <pane|title|--current> [--json] [--socket PATH]
     \\       telar agent clear <pane|title|--current> [--json] [--socket PATH]
     \\       telar agent rename <pane|title|--current> TITLE [--json] [--socket PATH]
+    \\       telar agent resume <pane|title|--current> CONVERSATION_ID [--json] [--socket PATH]
     \\       telar agent report-title <pane|title|--current> TITLE [--json] [--socket PATH]
     \\       telar agent report-command <pane|title|--current> started|finished COMMAND --provider NAME [--tool-call ID] [--cwd PATH] [--session ID] [--exit-code N] [--json] [--socket PATH]
     \\       telar agent report-state <pane|title|--current> working|blocked|ready|exited|settling [--blocked-reason REASON] [--event TEXT] [--session ID] [--session-file PATH] [--session-file-kind KIND] [--json] [--socket PATH]

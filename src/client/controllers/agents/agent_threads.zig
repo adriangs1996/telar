@@ -121,6 +121,7 @@ pub fn resumeConversation(client: *Client, pane_id: core.PaneId, index: u8) !voi
             .request_id = request_id,
             .pane_id = pane_id,
             .pane_generation = pending.pane_generation,
+            .expected_revision = snapshot.revision,
             .conversation_index = index,
         } },
     });

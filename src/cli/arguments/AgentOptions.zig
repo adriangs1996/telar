@@ -82,6 +82,8 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         .report_command
     else if (std.mem.eql(u8, action_text, "acknowledge"))
         .acknowledge
+    else if (std.mem.eql(u8, action_text, "resume"))
+        .resume_conversation
     else
         return error.UnknownAgentAction;
     var options: AgentOptions = .{ .action = action };
@@ -149,12 +151,16 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         index = 3;
     }
 
-    if (action == .report_session) {
+    if (action == .report_session or action == .resume_conversation) {
         if (args.len < 3) {
             return error.MissingSessionReference;
         }
 
         options.text = args[2];
+        if (action == .resume_conversation) {
+            _ = try core.RecentConversation.init(std.mem.span(args[2]), "");
+        }
+
         if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > max_agent_session_reference_bytes_module) {
             return error.InvalidSessionReference;
         }

@@ -2274,6 +2274,7 @@ test "recent conversation menu resumes by keyboard without submitting or losing 
     try session.settle();
     try std.testing.expectEqual(1, session.agent_resume_count);
     try std.testing.expectEqual(1, session.last_resume.?.conversation_index);
+    try std.testing.expectEqual(snapshot.revision, session.last_resume.?.expected_revision);
     try std.testing.expectEqual(77, session.last_resume.?.pane_generation);
     try std.testing.expectEqualStrings("Continue from yesterday", session.gui.app.model.agentPane(Session.pane_id).?.composerSlice());
     try std.testing.expectEqual(0, session.agent_prompt_count);

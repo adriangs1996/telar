@@ -1,4 +1,5 @@
 const core = @import("telar-core");
+const std = @import("std");
 const Session = @import("Session.zig");
 const PaneRef = @import("PaneRef.zig");
 const ManagedAgent = @This();
@@ -122,4 +123,35 @@ pub fn history(self: *ManagedAgent, input: AgentHistoryInput, page: *core.AgentH
     }
 
     try view.copyTo(page);
+}
+
+/// Resolves a stable conversation ID and pins the catalog revision. Example: `try managed.resumeConversation("thread-id");`
+pub fn resumeConversation(self: *ManagedAgent, conversation_id: []const u8) !void {
+    const snapshot = try self.session.gpa.create(core.AgentThreadSnapshot);
+    defer self.session.gpa.destroy(snapshot);
+    try self.read(snapshot);
+    if (!snapshot.canResume() or snapshot.recent.phase != .ready) {
+        return error.AgentCannotResume;
+    }
+
+    for (snapshot.recent.entries[0..snapshot.recent.count], 0..) |*entry, index| {
+        if (!std.mem.eql(u8, entry.idSlice(), conversation_id)) {
+            continue;
+        }
+
+        const response = try self.session.exchange(core.encodeAgentResume, core.AgentResume{
+            .request_id = .none,
+            .pane_id = try core.pane(self.pane.pane_id),
+            .pane_generation = self.pane.pane_generation,
+            .expected_revision = snapshot.revision,
+            .conversation_index = @intCast(index),
+        });
+        if (response != .request_completed) {
+            return error.UnexpectedRuntimeResponse;
+        }
+
+        return;
+    }
+
+    return error.ConversationNotFound;
 }

@@ -630,6 +630,28 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "ready")
 
+    def test_agent_resume_resolves_a_stable_id_and_pins_snapshot_revision(self):
+        def exchange(connection):
+            receive_frame(connection)
+            send_frame(connection, agent_snapshot())
+            request = receive_frame(connection)
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+            snapshot = bytes([0xAB]) + struct.pack("<QQQ", 7, 9, 12)
+            snapshot += sized16("unused-thread") + sized16("") + bytes([1, 0, 0])
+            snapshot += struct.pack("<I", 0) + sized16("") + bytes([0])
+            snapshot += struct.pack("<QBBB", 1, 1, 0, 0)
+            snapshot += bytes([1, 0, 2]) + sized16("first") + sized16("First") + sized16("wanted") + sized16("Wanted") + bytes([0])
+            snapshot += sized16("model-1") + sized16("low") + bytes([1, 1])
+            snapshot += sized16("model-1") + sized16("Test model") + bytes([1]) + sized16("low") + sized16("low")
+            send_frame(connection, snapshot)
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x32)
+            self.assertEqual(struct.unpack_from("<QQQB", request, 9), (7, 9, 12, 1))
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+
+        result = self.run_control(["agent", "resume", "7", "wanted", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

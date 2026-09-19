@@ -185,3 +185,18 @@ started report cannot carry an exit code; provider and command are required.
 then queries agent state on the same ordered connection. It returns the observed
 state only after the marker was processed; a stale generation or unchanged done
 state fails. It does not approve pending tools or send input.
+
+`telar agent resume TARGET CONVERSATION_ID [--json]` resolves a stable ID in the
+current native catalog and requires an unused, ready conversation. The request
+pins the snapshot revision; runtime authority rejects changed state before
+reserving the provider conversation. UI resume sends the same precondition.
+This changes the wire schema to generation 59 with a new golden fingerprint.
+The control remains bounded and allocation-free in the runtime request path;
+CLI snapshot storage is bounded and released on every outcome. Handler tests
+cover stale revisions, stale pane generations and duplicate open conversations.
+
+Validation: CLI socket contracts and `test-runtime`, `test-wire`, `test-client`,
+`test-gui` pass. The broad `test-schema` command also includes PTY transport
+integration; that separate run stalled and was terminated. No transport pass
+is claimed. Provider startup now honors the supplied runtime PATH, which
+restores the existing managed-checkpoint regression test on Zig 0.16.

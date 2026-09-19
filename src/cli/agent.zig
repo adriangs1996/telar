@@ -87,10 +87,12 @@ fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContex
         },
         .wait => return waitFor(session, options, output),
         .prompt => return prompt(session, options, output),
-        .interrupt, .clear, .rename => {
+        .interrupt, .clear, .rename, .resume_conversation => {
             const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
             var managed: ManagedAgent = .{ .session = session, .pane = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation } };
-            if (options.action == .rename) {
+            if (options.action == .resume_conversation) {
+                try managed.resumeConversation(std.mem.span(options.text.?));
+            } else if (options.action == .rename) {
                 const text = try std.fmt.allocPrint(session.gpa, "/rename {s}", .{std.mem.span(options.text.?)});
                 defer session.gpa.free(text);
                 try managed.prompt(.{ .text = text });

@@ -991,7 +991,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         try agent_threads.encodeAgentInterrupt(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3 }),
     ));
     helper.add(.{ .name = "agent_resume", .direction = .client, .golden_hex = golden.agent_resume }, helper.commit(
-        try @import("schema/messages/agent_thread.zig").encodeAgentResume(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .conversation_index = 1 }),
+        try @import("schema/messages/agent_thread.zig").encodeAgentResume(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .expected_revision = 4, .conversation_index = 1 }),
     ));
     helper.add(.{ .name = "agent_approval", .direction = .client, .golden_hex = golden.agent_approval }, helper.commit(
         try agent_threads.encodeAgentApproval(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .approval_id = 9, .accept = true }),
@@ -2617,7 +2617,7 @@ test "resume request bounds and recent catalog survive owned snapshot decoding" 
     try std.testing.expect(copied.canResume());
     copied.resumed = true;
     try std.testing.expect(!copied.canResume());
-    const request: core.AgentResume = .{ .request_id = @enumFromInt(7), .pane_id = snapshot.pane_id, .pane_generation = 3, .conversation_index = 0 };
+    const request: core.AgentResume = .{ .request_id = @enumFromInt(7), .pane_id = snapshot.pane_id, .pane_generation = 3, .expected_revision = snapshot.revision, .conversation_index = 0 };
     const encoded = try core.encodeAgentResume(&storage, request);
     try std.testing.expectEqualDeep(request, (try core.decodeClient(encoded)).agent_resume);
     storage[encoded.len - 1] = @import("RecentConversations.zig").capacity;

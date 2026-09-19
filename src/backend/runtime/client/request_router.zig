@@ -238,7 +238,7 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]ClientMessageType {
         .{ .acknowledge_agent = .{ .pane_id = pane_id, .pane_generation = 1 } },
         .{ .agent_prompt = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .text = "hello" } },
         .{ .agent_interrupt = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1 } },
-        .{ .agent_resume = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .conversation_index = 0 } },
+        .{ .agent_resume = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .expected_revision = 1, .conversation_index = 0 } },
         .{ .agent_approval = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .approval_id = 4, .accept = true } },
         .{ .query_agent_thread = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1 } },
         .{ .query_agent_history = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .view_generation = 1 } },
