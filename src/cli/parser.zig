@@ -1,6 +1,7 @@
 //! CLI command selection; each grammar owns its options and validation.
 
 const ServerOptions = @import("arguments/ServerOptions.zig");
+const RuntimeOptions = @import("arguments/RuntimeOptions.zig");
 const HistoryOptions = @import("arguments/HistoryOptions.zig");
 const NotificationOptions = @import("arguments/NotificationOptions.zig");
 const ConfigCheckOptions = @import("arguments/ConfigCheckOptions.zig");
@@ -41,6 +42,7 @@ pub const Cli = union(enum) {
     help,
     version,
     server: ServerOptions,
+    runtime: RuntimeOptions,
     history: HistoryOptions,
     notification: NotificationOptions,
     config_check: ConfigCheckOptions,
@@ -75,6 +77,10 @@ pub const Cli = union(enum) {
         }
 
         const first = std.mem.span(args[1]);
+        if (std.mem.eql(u8, first, "runtime")) {
+            return .{ .runtime = try RuntimeOptions.parse(args[2..]) };
+        }
+
         if (std.mem.eql(u8, first, "--help") or std.mem.eql(u8, first, "-h")) {
             return .help;
         }

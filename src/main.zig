@@ -5,6 +5,7 @@ const max_args_module = @import("telar-backend").max_args;
 const parser = @import("cli/parser.zig");
 const usage_module = @import("cli/usage.zig");
 const server_module = @import("cli/server.zig");
+const runtime_module = @import("cli/runtime.zig");
 const history_module = @import("cli/history.zig");
 const notification_module = @import("cli/notification.zig");
 const config_module = @import("cli/config.zig");
@@ -86,6 +87,7 @@ pub fn main(init: std.process.Init) !void {
         .help => try std.Io.File.stdout().writeStreamingAll(init.io, usage_module.text),
         .version => try std.Io.File.stdout().writeStreamingAll(init.io, "telar " ++ version ++ "\n"),
         .server => |options| try server_module.run(init, options),
+        .runtime => |options| try runtime_module.run(init, options),
         .history => |options| try history_module.run(init, options),
         .notification => |options| try notification_module.run(init, options),
         .config_check => |options| try config_module.runCheck(init, options),
@@ -119,6 +121,8 @@ pub fn main(init: std.process.Init) !void {
 }
 
 test {
+    _ = @import("cli/runtime.zig");
+    _ = @import("cli/arguments/RuntimeOptions.zig");
     _ = @import("cli/RuntimeConfigSelection.zig");
     _ = @import("cli/RuntimeConnector.zig");
     _ = @import("cli/agent.zig");

@@ -182,6 +182,10 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         }
 
         const run_tests = b.addRunArtifact(tests);
+        if (std.mem.eql(u8, suite.path, "src/main.zig")) {
+            b.step("test-cli", "Run command-line parser and control tests").dependOn(&run_tests.step);
+        }
+
         parallel_test_prerequisites.dependOn(&run_tests.step);
         if (std.mem.eql(u8, suite.path, "src/backend/proxy_test.zig")) {
             backend_proxy_test_step.dependOn(&run_tests.step);

@@ -34,6 +34,7 @@ const max_agent_session_title_bytes_module = @import("telar-core").max_agent_ses
 const encodeReportAgentTitle_module = @import("telar-core").encodeReportAgentTitle;
 const encodeCreateWorkspace_module = @import("telar-core").encodeCreateWorkspace;
 const raw_module = @import("telar-core").raw;
+const core = @import("telar-core");
 /// One connected control session with its owned receive buffer.
 const Session = @This();
 
@@ -91,6 +92,48 @@ fn requestId(session: *Session) RequestIdType {
     const request_id: RequestIdType = @enumFromInt(session.next_request);
     session.next_request += 1;
     return request_id;
+}
+
+/// Subscribes a disposable observer without adopting a UI's layout identity. Example: `try session.subscribeRuntime();`
+pub fn subscribeRuntime(self: *Session) !void {
+    var identity: u64 = 0;
+    while (identity == 0) {
+        self.io.random(std.mem.asBytes(&identity));
+    }
+
+    var buffer: [16]u8 = undefined;
+    try self.connection.send(self.io, try core.encodeRequestRuntimeState(&buffer, .{ .client_identity = @enumFromInt(identity) }));
+}
+
+/// Borrows one decoded response until the next receive, propagating runtime failures. Example: `const response = try session.receive();`
+pub fn receive(self: *Session) !core.ServerMessage {
+    const Event = union(enum) { response: anyerror!core.ServerMessage, timeout: anyerror!void };
+    var events: [2]Event = undefined;
+    var select: std.Io.Select(Event) = .init(self.io, &events);
+    defer select.cancelDiscard();
+    try select.concurrent(.response, receiveMessage, .{self});
+    try select.concurrent(.timeout, receiveDeadline, .{self});
+
+    return switch (try select.await()) {
+        .response => |result| result,
+        .timeout => |result| blk: {
+            try result;
+            break :blk error.RuntimeTimeout;
+        },
+    };
+}
+
+fn receiveDeadline(self: *Session) !void {
+    try self.io.sleep(.fromSeconds(30), .awake);
+}
+
+fn receiveMessage(self: *Session) !core.ServerMessage {
+    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
+    switch (response) {
+        .request_failed => |failure| return control.failureError(failure),
+        .runtime_stopping => return error.RuntimeStopping,
+        else => return response,
+    }
 }
 
 /// Fetches the current agent snapshot into owned storage.
