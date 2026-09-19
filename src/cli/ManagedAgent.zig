@@ -2,6 +2,7 @@ const core = @import("telar-core");
 const Session = @import("Session.zig");
 const PaneRef = @import("PaneRef.zig");
 const ManagedAgent = @This();
+const AgentPromptInput = @import("AgentPromptInput.zig");
 
 session: *Session,
 pane: PaneRef,
@@ -54,6 +55,23 @@ pub fn decide(self: *ManagedAgent, decision: core.AgentApprovalDecision) !void {
         .pane_generation = self.pane.pane_generation,
         .approval_id = decision.id,
         .accept = decision.accepted,
+    });
+    if (response != .request_completed) {
+        return error.UnexpectedRuntimeResponse;
+    }
+}
+
+/// Uses the live provider selection and waits for admission. Example: `try managed.prompt(.{ .text = "Run tests" });`
+pub fn prompt(self: *ManagedAgent, input: AgentPromptInput) !void {
+    const snapshot = try self.session.gpa.create(core.AgentThreadSnapshot);
+    defer self.session.gpa.destroy(snapshot);
+    try self.read(snapshot);
+    const response = try self.session.exchange(core.encodeAgentPrompt, core.AgentPrompt{
+        .request_id = .none,
+        .pane_id = try core.pane(self.pane.pane_id),
+        .pane_generation = self.pane.pane_generation,
+        .text = input.text,
+        .options = snapshot.options,
     });
     if (response != .request_completed) {
         return error.UnexpectedRuntimeResponse;

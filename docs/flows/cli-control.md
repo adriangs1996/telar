@@ -129,3 +129,8 @@ admission. The provider remains responsible for rejecting stale approval IDs.
 `telar agent reject TARGET APPROVAL_ID [--json]` sends the negative decision
 through the same generation-checked path. `accepted` in CLI output means the
 runtime admitted the command, not that the user approved the provider action.
+
+`telar agent prompt TARGET TEXT` resolves the exact pane kind through its tab
+snapshot. Managed panes receive `agent_prompt` with their live model, effort
+and access selection; terminal agents retain `send_pane_text`. A missing or
+changed generation fails before submission, with no fallback or duplicate send.

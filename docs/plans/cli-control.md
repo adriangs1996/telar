@@ -61,7 +61,7 @@ No simulated keyboard input is a substitute for an implemented command.
 ## Agents
 
 - [ ] `agent create`
-- [ ] `agent prompt for managed panes`
+- [x] `agent prompt for managed panes`
 - [ ] `agent prompt --image`
 - [ ] `agent prompt --model/--effort/--access`
 - [x] `agent interrupt`

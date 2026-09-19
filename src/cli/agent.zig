@@ -151,7 +151,12 @@ fn prompt(session: *SessionType, options: AgentOptions, output: ExecutionContext
         .pane_id = target.pane_id,
         .pane_generation = target.pane_generation,
     };
-    try session.sendText(pane, .{ .mode = .prompt, .text = std.mem.span(options.text.?) });
+    if (try isManaged(session, target)) {
+        var managed: ManagedAgent = .{ .session = session, .pane = pane };
+        try managed.prompt(.{ .text = std.mem.span(options.text.?) });
+    } else {
+        try session.sendText(pane, .{ .mode = .prompt, .text = std.mem.span(options.text.?) });
+    }
 
     if (!options.wait_after_prompt) {
         return exit_ok;
@@ -234,4 +239,21 @@ fn writeText(writer: *std.Io.Writer, text: TextType, json: bool) !void {
     if (text.truncated) {
         std.debug.print("telar agent: older rows were omitted\n", .{});
     }
+}
+
+fn isManaged(session: *SessionType, target: *const ControlAgent) !bool {
+    const location: core.TabLocation = .{ .workspace = .{ .workspace = try core.workspace(target.workspace_id) }, .tab_id = try core.tab(target.tab_id) };
+    const response = try session.exchange(core.encodeRequestTabSnapshot, core.RequestTabSnapshot{ .request_id = .none, .location = location });
+    if (response != .tab_snapshot or !std.meta.eql(response.tab_snapshot.location, location)) {
+        return error.UnexpectedRuntimeResponse;
+    }
+
+    var panes = response.tab_snapshot.panes();
+    while (try panes.next()) |pane| {
+        if (core.raw(pane.pane_id) == target.pane_id and pane.pane_generation == target.pane_generation) {
+            return pane.kind == .agent;
+        }
+    }
+
+    return error.PaneNotFound;
 }

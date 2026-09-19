@@ -421,6 +421,39 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(json.loads(result.stdout)["accepted"])
 
+    def test_agent_prompt_uses_native_protocol_for_managed_panes(self):
+        def exchange(connection):
+            for _ in range(2):
+                self.assertEqual(receive_frame(connection)[0], 0x1C)
+                send_frame(connection, agent_snapshot())
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x08)
+            send_frame(connection, bytes([0x86]) + request[1:] + struct.pack("<HQBBQ", 1, 7, 0, 1, 9))
+            query_thread(connection)
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x2D)
+            self.assertEqual(struct.unpack_from("<QQ", request, 9), (7, 9))
+            self.assertEqual(request[25:], sized16("Run tests") + sized16("model-1") + sized16("low") + bytes([1, 0]))
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+
+        result = self.run_control(["agent", "prompt", "7", "Run tests"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_agent_prompt_preserves_terminal_delivery(self):
+        def exchange(connection):
+            for _ in range(2):
+                receive_frame(connection)
+                send_frame(connection, agent_snapshot())
+            request = receive_frame(connection)
+            send_frame(connection, bytes([0x86]) + request[1:] + struct.pack("<HQBBQ", 1, 7, 0, 0, 9))
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x1E)
+            self.assertEqual(struct.unpack_from("<QQ", request, 9), (7, 9))
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+
+        result = self.run_control(["agent", "prompt", "7", "Run tests"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
