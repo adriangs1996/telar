@@ -61,14 +61,14 @@ def agent_snapshot():
     return bytes([0x96]) + struct.pack("<QH", 1, 1) + entry
 
 
-def thread_snapshot():
+def thread_snapshot(skills=None):
     text = 'Response "quoted" 🧶'.encode()
     payload = bytes([0xAB]) + struct.pack("<QQQ", 7, 9, 3)
     payload += sized16("thread-1") + sized16("turn-1") + bytes([1, 1, 1])
     item = bytes([1]) + struct.pack("<QQQBBBIBB", 1, 1, 0, 0, 2, 2, 0, 1, 1)
     item += bytes(20) + struct.pack("<IIB", 0, len(text), 1)
     payload += item + struct.pack("<I", len(text)) + text + sized16("") + bytes([0])
-    payload += struct.pack("<QBBB", 1, 1, 0, 0)  # Skills catalog.
+    payload += skills if skills is not None else struct.pack("<QBBB", 1, 1, 0, 0)
     payload += bytes([1, 0, 0, 0])  # Recent catalog and resumed flag.
     payload += sized16("model-1") + sized16("low") + bytes([1, 1])
     payload += sized16("model-1") + sized16("Test model") + bytes([1]) + sized16("low") + sized16("low")
@@ -347,6 +347,23 @@ class ControlTests(unittest.TestCase):
         catalog = json.loads(result.stdout)
         self.assertEqual(catalog["selected"], {"model": "model-1", "effort": "low", "access": "workspace"})
         self.assertEqual(catalog["models"], [{"id": "model-1", "label": "Test model", "default_effort": "low", "efforts": ["low"]}])
+
+    def test_agent_skills_preserves_catalog_metadata(self):
+        def exchange(connection):
+            receive_frame(connection)
+            send_frame(connection, agent_snapshot())
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x30)
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+            skills = struct.pack("<QBBB", 4, 1, 1, 1)
+            skills += sized16("review") + sized16("Code Review") + sized16('Review "changes"') + bytes([1])
+            send_frame(connection, thread_snapshot(skills=skills))
+
+        result = self.run_control(["agent", "skills", "7", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        catalog = json.loads(result.stdout)
+        self.assertEqual((catalog["phase"], catalog["revision"], catalog["truncated"]), ("ready", 4, True))
+        self.assertEqual(catalog["skills"], [{"name": "review", "label": "Code Review", "description": 'Review "changes"', "scope": "repo"}])
 
 
 if __name__ == "__main__":

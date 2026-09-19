@@ -72,7 +72,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [ ] `agent history`
 - [ ] `agent watch`
 - [x] `agent models`
-- [ ] `agent skills`
+- [x] `agent skills`
 - [ ] `agent conversations`
 - [ ] `agent resume`
 - [ ] `agent clear`

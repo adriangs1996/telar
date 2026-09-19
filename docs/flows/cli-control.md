@@ -110,3 +110,7 @@ complete transcript. No terminal text scraping or UI attachment is involved.
 `telar agent models TARGET [--json]` reads the native thread catalog and reports
 the selected model, effort and access alongside provider-advertised model IDs,
 labels, supported efforts and defaults. Effort identifiers are not hardcoded.
+
+`telar agent skills TARGET [--json]` reports the provider skill catalog with
+revision, loading/ready/failed phase, truncation, names, labels, descriptions
+and scopes. Empty/loading catalogs are not reported as a successful discovery.

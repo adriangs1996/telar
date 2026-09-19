@@ -97,3 +97,29 @@ pub fn models(writer: *std.Io.Writer, snapshot: *const core.AgentThreadSnapshot,
         try writer.writeAll("]}\n");
     }
 }
+
+/// Preserves loading, failure and truncation states. Example: `try agent_output.skills(writer, snapshot, true);`
+pub fn skills(writer: *std.Io.Writer, snapshot: *const core.AgentThreadSnapshot, json: bool) !void {
+    const catalog = &snapshot.skills;
+    if (json) {
+        try writer.print("{{\"revision\":{d},\"phase\":\"{s}\",\"truncated\":{},\"skills\":[", .{ catalog.revision, @tagName(catalog.phase), catalog.truncated });
+    } else {
+        try writer.print("{s}{s}\n", .{ @tagName(catalog.phase), if (catalog.truncated) " (truncated)" else "" });
+    }
+
+    for (catalog.entries[0..catalog.count], 0..) |skill, index| {
+        if (json) {
+            if (index != 0) {
+                try writer.writeByte(',');
+            }
+
+            try std.json.Stringify.value(.{ .name = skill.name(catalog), .label = skill.label(catalog), .description = skill.description(catalog), .scope = skill.scope }, .{}, writer);
+        } else {
+            try writer.print("{s}\t{s}\t{s}\n", .{ skill.name(catalog), @tagName(skill.scope), skill.description(catalog) });
+        }
+    }
+
+    if (json) {
+        try writer.writeAll("]}\n");
+    }
+}
