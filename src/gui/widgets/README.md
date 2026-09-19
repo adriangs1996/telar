@@ -386,7 +386,7 @@ copying the response still returns the original Markdown. See
 `MessageSpans` yields inline link labels with borrowed destination ranges.
 `MessageTextFlow` uses the same fragment path for fresh layout and cached replay;
 `MessageLinkButton` paints the label and registers only its clipped ink bounds.
-These passive targets retain source offsets and snapshot identity, preserve
+These targets retain source offsets and snapshot identity, preserve
 editor focus and forward wheel input to their owning transcript. Link registration
 is capped at 64 fragments per frame, with 64 registry slots reserved for ordinary
 controls.
@@ -398,6 +398,19 @@ still has the same fragment under the pointer. The tooltip fits the window,
 has no input target and requests no animation. Stale generations, replaced
 snapshots, menus, modals and pointer departure clear it. Original Markdown stays
 in the runtime snapshot and remains the source for copying.
+
+A plain left click on an absolute path or a local `file://` destination opens
+`$EDITOR` with that path as a separate argv entry in a new terminal pane beside
+the source agent. The transcript selection gesture retains the link identity
+until release; dragging cancels activation. Release validates the current
+snapshot and delivered hit before dispatching through `message_links.open`,
+`link_openings.openMessageFile` and the existing pane-split handler. `create_pane`
+carries the source tab and cwd source; `pane_opened` commits the correlated split.
+The outbox copies up to 8 KiB of argv into its existing slot storage before returning.
+Missing editors, invalid destinations and unavailable splits report a warning.
+`widget_interaction` tests the click through pane confirmation and selection
+cancellation; `tools/gui_agent_links.py` checks the actual editor process.
+
 
 Closed `mermaid` fences use `MermaidBlock` to display a retained diagram image.
 Open fences, pending work and render failures keep the original code visible.

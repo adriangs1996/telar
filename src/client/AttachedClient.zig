@@ -203,3 +203,13 @@ pub fn deinit(client: *AttachedClient) void {
     client.model.deinit();
     client.runtime_transport.deinit(gpa);
 }
+
+/// Uses the current generation so editor changes take effect after reload.
+/// Example: `const executable = client.editorExecutable();`
+pub fn editorExecutable(self: *const AttachedClient) []const u8 {
+    if (self.lua_generation) |generation| {
+        return generation.snapshot.resolveEditor(self.options.editor);
+    }
+
+    return self.options.editor;
+}

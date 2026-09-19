@@ -2438,3 +2438,73 @@ test "image preview closes with its button and backdrop and rejects obsolete ima
     try publish(session);
     try std.testing.expect(gui.widgets.image_preview == null);
 }
+
+test "clicking an agent file link creates an editor pane in its source tab" {
+    const session = try agentSession();
+    defer session.deinit();
+    var diagnostic: client.Diagnostic = .{};
+    session.gui.app.lua_generation = try client.Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { editor = '/usr/bin/nvim' } }", .source_name = "@config.lua", .number = 1 });
+    try std.testing.expectEqualStrings("", session.gui.app.options.editor);
+    try linkSnapshot(session, "Read [design](</tmp/a b '$(touch nope).md>).");
+    try publish(session);
+    const link = try messageLinkTarget(session);
+    try pressControl(session, link);
+    try session.settle();
+
+    try std.testing.expectEqual(@as(usize, 1), session.pane_creation_count);
+    try std.testing.expectEqual(@as(usize, 0), session.tab_creation_count);
+    try std.testing.expectEqual(@as(usize, 0), session.input_len);
+    const request = (try core.decodeClient(session.pane_creation_wire[0..session.pane_creation_len])).create_pane;
+    try std.testing.expectEqualDeep(Session.location, request.location);
+    try std.testing.expectEqual(Session.pane_id, request.launch.cwd_source.?);
+    var arguments = request.launch.arguments();
+    try std.testing.expectEqualStrings("/usr/bin/nvim", (try arguments.next()).?);
+    try std.testing.expectEqualStrings("/tmp/a b '$(touch nope).md", (try arguments.next()).?);
+    try std.testing.expect((try arguments.next()) == null);
+
+    var response: [128]u8 = undefined;
+    const editor_id: core.PaneId = @enumFromInt(99);
+    const opened = try core.encodePaneOpened(&response, .{ .request_id = request.request_id, .pane_id = editor_id, .location = request.location, .created = true });
+    _ = try client.server_messages.handleServerMessage(&session.gui.app, try core.decodeServer(opened));
+    try session.settle();
+    const tab = session.gui.app.model.workspace.active().?;
+    try std.testing.expectEqualDeep(Session.location, tab.location);
+    try std.testing.expectEqual(@as(usize, 2), tab.model.pane_count);
+    try std.testing.expectEqual(editor_id, tab.model.layout.focused());
+    try std.testing.expectEqual(core.PaneKind.terminal, tab.model.findConst(editor_id).?.kind);
+    try std.testing.expectEqual(core.PaneKind.agent, tab.model.findConst(Session.pane_id).?.kind);
+}
+
+test "agent file link clicks reject replaced snapshots and missing editors" {
+    const session = try agentSession();
+    defer session.deinit();
+    try linkSnapshot(session, "[design](/tmp/old.md)");
+    try publish(session);
+    const old = try messageLinkTarget(session);
+    try linkSnapshot(session, "[design](/tmp/new.md)");
+    try pressControl(session, old);
+    try session.settle();
+    try std.testing.expectEqual(@as(usize, 0), session.pane_creation_count);
+
+    try publish(session);
+    try pressControl(session, try messageLinkTarget(session));
+    try session.settle();
+    try std.testing.expectEqual(@as(usize, 0), session.pane_creation_count);
+}
+
+test "dragging an agent file link retains text selection without launching an editor" {
+    const session = try agentSession();
+    defer session.deinit();
+    session.gui.app.options.editor = "nvim";
+    try linkSnapshot(session, "[select this design document](/tmp/design.md)");
+    try publish(session);
+    const link = try messageLinkTarget(session);
+    const x = link.bounds.x + 1;
+    const y = link.bounds.y + link.bounds.height / 2;
+    try send(session, .{ .pointer = .{ .kind = .press, .x = x, .y = y } });
+    try send(session, .{ .pointer = .{ .kind = .drag, .x = x + link.bounds.width / 2, .y = y } });
+    try send(session, .{ .pointer = .{ .kind = .release, .x = x + link.bounds.width / 2, .y = y } });
+    try session.settle();
+    try std.testing.expectEqual(@as(usize, 0), session.pane_creation_count);
+    try std.testing.expect(session.gui.widgets.thread_selection.selected());
+}

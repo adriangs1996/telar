@@ -14,6 +14,7 @@ pub const max_binding_keys = 5;
 pub const max_plugins = 32;
 pub const max_plugin_path_bytes = 512;
 pub const max_history_path_bytes = 1024;
+pub const max_editor_bytes = 4096;
 pub const max_proxy_path_bytes = 1024;
 
 pub const default_proxy_intercept_hosts = [_][]const u8{

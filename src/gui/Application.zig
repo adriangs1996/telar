@@ -1,14 +1,17 @@
 //! Native window assembly. All client mutations run on the window thread;
 //! socket workers own only their outstanding transport buffers.
 const std = @import("std");
+
 const client = @import("telar-client");
 const core = @import("telar-core");
-const native = @import("native/native.zig");
+
+const FramePacer = @import("FramePacer.zig");
 const GuiClient = @import("GuiClient.zig");
+const native = @import("native/native.zig");
 const NativeLoop = @import("NativeLoop.zig");
 const Renderer = @import("render/TerminalRenderer.zig");
+
 const Application = @This();
-const FramePacer = @import("FramePacer.zig");
 
 params: client.ClientInit,
 driver: NativeLoop,
@@ -18,6 +21,9 @@ failure: ?anyerror = null,
 exit_status: ?u8 = null,
 cursor_clock: @import("CursorClock.zig") = .{},
 input_revision: u64 = 0,
+window_title: client.WindowTitleState = .{},
+hostname: [std.posix.HOST_NAME_MAX]u8 = undefined,
+hostname_len: usize = 0,
 
 pub fn init(params: client.ClientInit) !Application {
     var renderer = try Renderer.configured(
@@ -28,9 +34,14 @@ pub fn init(params: client.ClientInit) !Application {
             .theme = params.options.theme.terminal,
         },
     );
+
     errdefer renderer.deinit();
-    // Before the shared client exists the band follows the launch options.
-    renderer.sidebar_request = .{ .visible = params.options.sidebar_visible, .logical_width = params.options.gui.sidebar.width };
+
+    renderer.sidebar_request = .{
+        .visible = params.options.sidebar_visible,
+        .logical_width = params.options.gui.sidebar.width,
+    };
+
     return .{
         .params = params,
         .driver = try .init(params.io),
@@ -65,22 +76,29 @@ pub fn deinit(app: *Application) void {
 
 /// Runs the window and returns only after native GPU consumers have stopped.
 /// Example: `const status = try app.run("Telar");`
-pub fn run(app: *Application, title: [*:0]const u8) !u8 {
+pub fn run(self: *Application, title: [*:0]const u8) !u8 {
+    self.window_title = .{};
+    const hostname = std.posix.gethostname(&self.hostname) catch "";
+    self.hostname_len = hostname.len;
+
     const callbacks: native.Callbacks = .{
         .render = render,
         .pump = pump,
         .complete = complete,
         .input = input,
-        .wake_fd = app.driver.fds[0],
+        .wake_fd = self.driver.fds[0],
         .wakeup_after = wakeupAfter,
         .pointer_shape = pointerShape,
         .text_context = textContext,
         .host_request = hostRequest,
         .accessibility = accessibility,
         .frame_delay_ns = frameDelayNs,
+        .window_title = windowTitle,
     };
-    const result = native.telar_gui_run(title, app, &callbacks);
-    if (app.failure) |err| {
+
+    const result = native.telar_gui_run(title, self, &callbacks);
+
+    if (self.failure) |err| {
         return err;
     }
 
@@ -88,7 +106,51 @@ pub fn run(app: *Application, title: [*:0]const u8) !u8 {
         return error.NativeWindowFailed;
     }
 
-    return app.exit_status orelse 0;
+    return self.exit_status orelse 0;
+}
+
+fn windowTitle(context: ?*anyopaque, out: *native.WindowTitle) callconv(.c) c_int {
+    out.* = .{};
+    const app = from(context);
+    const gui = app.gui orelse return 0;
+    const model = &gui.app.model;
+    const tab_label = if (model.workspace.activeConst()) |tab|
+        tab.labelSlice()
+    else
+        "";
+
+    const changed = app.window_title.sync(
+        .{
+            .context = out,
+            .set = copyWindowTitle,
+        },
+        .{
+            .template = model.windowTitleTemplate(),
+            .tokens = .{
+                .workspace = model.workspace.workspaceName(),
+                .tab = tab_label,
+                .pane_title = model.focusedPaneTitle(),
+                .hostname = app.hostname[0..app.hostname_len],
+            },
+        },
+    ) catch |err| {
+        std.log.warn("could not prepare window title: {s}", .{@errorName(err)});
+        return 0;
+    };
+
+    return @intFromBool(changed);
+}
+
+fn copyWindowTitle(context: *anyopaque, title: []const u8) !void {
+    const out: *native.WindowTitle = @ptrCast(@alignCast(context));
+
+    if (title.len >= out.bytes.len) {
+        return error.WindowTitleTooLong;
+    }
+
+    @memcpy(out.bytes[0..title.len], title);
+    out.bytes[title.len] = 0;
+    out.len = @intCast(title.len);
 }
 
 fn from(context: ?*anyopaque) *Application {

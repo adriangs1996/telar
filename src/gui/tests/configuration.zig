@@ -372,3 +372,28 @@ test "blur radius and titlebar reload preserve the atlas and geometry through va
     try std.testing.expectEqual(@as(u32, 1), session.renderer.frame(1).titlebar);
     try std.testing.expectEqual(pixels, session.renderer.atlas.?.pixels.ptr);
 }
+
+test "editor reload overrides EDITOR and removal restores the startup fallback" {
+    var fixture = try Fixture.init("return { api_version = 2, client = { editor = '/opt/nvim' } }", null);
+    defer fixture.deinit();
+    const session = fixture.session;
+    const app = &session.gui.app;
+    const reload = &session.driver.configuration;
+    app.options.editor = "vi";
+    try std.testing.expectEqualStrings("/opt/nvim", app.editorExecutable());
+
+    try fixture.write("config.lua", "return { api_version = 2, client = { editor = '/opt/other editor' } }");
+    try fixture.wait();
+    try std.testing.expect(try reload.apply(session.gui, &session.renderer));
+    try std.testing.expectEqualStrings("/opt/other editor", app.editorExecutable());
+
+    try fixture.write("config.lua", "return { api_version = 2, client = { editor = false } }");
+    try fixture.wait();
+    _ = try reload.apply(session.gui, &session.renderer);
+    try std.testing.expectEqualStrings("/opt/other editor", app.editorExecutable());
+
+    try fixture.write("config.lua", "return { api_version = 2 }");
+    try fixture.wait();
+    try std.testing.expect(try reload.apply(session.gui, &session.renderer));
+    try std.testing.expectEqualStrings("vi", app.editorExecutable());
+}

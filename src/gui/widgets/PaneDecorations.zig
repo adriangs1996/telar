@@ -66,7 +66,7 @@ pub fn draw(decorations: PaneDecorations, canvas: *Canvas) !void {
 }
 
 fn ring(decorations: PaneDecorations, canvas: *Canvas, spec: RingSpec) !void {
-    const outer = canvas.rect(spec.view.outer);
+    const outer = decorations.frameRect(canvas, spec.view);
     const inset: Rect = .{ .x = outer.x + 1, .y = outer.y + 1, .width = @max(0, outer.width - 2), .height = @max(0, outer.height - 2) };
     try canvas.ringAt(inset, .{
         .width = canvas.chrome.px(ring_width),
@@ -91,9 +91,41 @@ fn border(decorations: PaneDecorations, canvas: *Canvas, view: client.LayoutView
         try context.hits.add(.{ .area = band, .action = .{ .intent = .{ .focus_pane = view.pane_id } } });
     }
 
-    try canvas.ringAt(canvas.rect(outer), .{
+    const original = canvas.rect(outer);
+    const frame = decorations.frameRect(canvas, view);
+    const extensions = [_]Rect{
+        .{ .x = original.x + original.width, .y = original.y, .width = frame.width - original.width, .height = original.height },
+        .{ .x = original.x, .y = original.y + original.height, .width = original.width, .height = frame.height - original.height },
+    };
+    for (extensions) |extension| {
+        try canvas.panelAt(extension);
+        try context.bands.add(.{ .area = extension, .action = .{ .intent = .{ .focus_pane = view.pane_id } } });
+    }
+
+    try canvas.ringAt(frame, .{
         .width = 1,
         .radius = canvas.chrome.px(frame_radius),
         .color = if (view.focused) canvas.theme.palette.accent else canvas.theme.palette.overlay0,
     });
+}
+
+// The grid reserves rectangular cells for gutters. Extend the trailing frame
+// into that reservation so both axes leave the smaller pixel gap, without
+// moving terminal cells or their input coordinates.
+fn frameRect(self: PaneDecorations, canvas: *const Canvas, view: client.LayoutView) Rect {
+    var frame = canvas.rect(view.outer);
+    const layout = &self.context.projection.model.?.layout;
+    const gap = layout.metrics.gutter(layout.pane_gaps);
+    const cell = canvas.metrics;
+    const minimum = @min(cell.cell_width, cell.cell_height);
+    const area = self.context.projection.geometry.area;
+    if (view.outer.x + view.outer.w < area.x + area.w) {
+        frame.width += @floatFromInt(@as(u32, gap) * (cell.cell_width - minimum));
+    }
+
+    if (view.outer.y + view.outer.h < area.y + area.h) {
+        frame.height += @floatFromInt(@as(u32, gap) * (cell.cell_height - minimum));
+    }
+
+    return frame;
 }

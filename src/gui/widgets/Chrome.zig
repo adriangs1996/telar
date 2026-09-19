@@ -129,15 +129,16 @@ pub fn pointer(chrome: *Chrome, event: client.Mouse) client.ViewInteractionComma
     return .{ .intent = buttonIntent(target.intent, event.button & 3), .consumed = true };
 }
 
-/// Routes a native pointer sample that lands in a chrome band, outside the
-/// cell grid. Returns null when no band and no band gesture owns the sample,
+/// Routes a native pointer sample that lands in a chrome band or pixel target.
+/// Returns null when no target, band or band gesture owns the sample,
 /// so the caller can map it to cells. A press acquires the gesture until
 /// its release; a press on the sidebar's resize handle turns the drag into
 /// widths, and the wheel over the sidebar scrolls its cards.
 /// Example: `if (chrome.bandPointer(event)) |command| return apply(command);`
 pub fn bandPointer(chrome: *Chrome, event: PointerEvent) ?BandCommand {
     const visible = chrome.presented();
-    const inside = visible.bands.contains(event.x, event.y);
+    const action = visible.band_hits.at(.{ event.x, event.y });
+    const inside = action != null or visible.bands.contains(event.x, event.y);
     if (chrome.band_gesture) |button| {
         if (event.kind == .release or event.kind == .drag) {
             const resize = chrome.sidebar_resize_active;
@@ -157,7 +158,6 @@ pub fn bandPointer(chrome: *Chrome, event: PointerEvent) ?BandCommand {
         return null;
     }
 
-    const action = visible.band_hits.at(.{ event.x, event.y });
     chrome.hover(action);
     if (event.kind == .scroll_up or event.kind == .scroll_down) {
         if (chrome.sidebarScrollAt(.{ event.x, event.y })) |scroll| {

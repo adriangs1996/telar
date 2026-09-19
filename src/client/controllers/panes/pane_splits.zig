@@ -102,7 +102,7 @@ fn sendSplit(context: *anyopaque, plan: PaneSplitPlanType) !void {
             .launch = .{
                 .cwd = client.options.cwd,
                 .cwd_source = plan.split.target_pane,
-                .arguments = client.options.arguments,
+                .arguments = if (plan.arguments.len != 0) plan.arguments else client.options.arguments,
             },
         } },
     });

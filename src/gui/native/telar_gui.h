@@ -17,11 +17,13 @@
 #define TELAR_GUI_RANGE_NONE UINT32_MAX
 #define TELAR_GUI_TEXT_CAPACITY 4096
 #define TELAR_GUI_ACCESSIBILITY_CAPACITY 256
+#define TELAR_GUI_TITLE_CAPACITY 256
 
 // Selection start/end mean anchor/head in UTF-8 bytes and may be reversed.
 // Replacement start/end are ordered byte ranges; RANGE_NONE means no override.
 
-// Every range is a UTF-8 byte offset. Geometry is content-relative device pixels.
+// Every range is a UTF-8 byte offset. Geometry is content-relative device
+// pixels.
 typedef struct {
   uint64_t target_id, generation, revision;
   uint32_t enabled;
@@ -32,8 +34,9 @@ typedef struct {
   double x, y, width, height;
 } telar_gui_text_context;
 
-// kind: 1 read UTF-8 clipboard, 2 write UTF-8 clipboard, 3 image with text fallback. The backend copies
-// borrowed bytes before requesting the next item. Every request completes.
+// kind: 1 read UTF-8 clipboard, 2 write UTF-8 clipboard, 3 image with text
+// fallback. The backend copies borrowed bytes before requesting the next item.
+// Every request completes.
 typedef struct {
   uint32_t kind;
   uint64_t request_id, target_id, generation;
@@ -41,11 +44,12 @@ typedef struct {
   size_t len;
 } telar_gui_host_request;
 
-// Roles: group1, button2, text_field3, label4, tab5, list6, list_item7, terminal8.
-// Flags: enabled1, focused2, selected4, editable8, multiline16, modal32.
-// Actions: press1, focus2, set_value4, set_selection8, increment16, decrement32,
-// copy64, cut128, paste256, replace_range512. Clipboard actions carry a UTF-8
-// selection. Partial edits carry replacement offsets and expected text revision.
+// Roles: group1, button2, text_field3, label4, tab5, list6, list_item7,
+// terminal8. Flags: enabled1, focused2, selected4, editable8, multiline16,
+// modal32. Actions: press1, focus2, set_value4, set_selection8, increment16,
+// decrement32, copy64, cut128, paste256, replace_range512. Clipboard actions
+// carry a UTF-8 selection. Partial edits carry replacement offsets and expected
+// text revision.
 typedef struct {
   uint64_t id, generation, parent_id;
   uint32_t role, flags, actions;
@@ -111,13 +115,13 @@ typedef struct {
 
 // Input kinds: 1 committed UTF-8 text, 2 clipboard paste, 3 semantic key,
 // 4 Unicode key with modifiers, 5 host focus (code=0 inactive, code=1 active),
-// 6 pointer: code=press1/release2/drag3/up4/down5/move6/leave7, button=left0/middle1/right2.
-// Pointer x/y are physical pixels from the content top-left. Zero physical
-// means composed text; otherwise the stable native keycode is stored plus one.
-// Key codes: 0 Unicode scalar, then enter, tab, backspace, escape, up,
-// down, left, right, home, end, delete, page-up, page-down.
-// Modifiers: shift=1, alt=2, ctrl=4; pointer events also carry super=8.
-// Phases: press=1, repeat=2, release=3.
+// 6 pointer: code=press1/release2/drag3/up4/down5/move6/leave7,
+// button=left0/middle1/right2. Pointer x/y are physical pixels from the content
+// top-left. Zero physical means composed text; otherwise the stable native
+// keycode is stored plus one. Key codes: 0 Unicode scalar, then enter, tab,
+// backspace, escape, up, down, left, right, home, end, delete, page-up,
+// page-down. Modifiers: shift=1, alt=2, ctrl=4; pointer events also carry
+// super=8. Phases: press=1, repeat=2, release=3.
 typedef struct {
   uint32_t kind, code, mods, phase;
   const uint8_t *text;
@@ -130,11 +134,12 @@ typedef struct {
   // Kind 8: scroll, positive dx right/dy down; precise=1 uses device pixels,
   // otherwise line units. phases: none0/begin1/update2/end3/cancel4.
   // scroll_kinetic=1 requests client inertia for precise finger input without
-  // system momentum. scroll_time_ms is its native wrapping millisecond timestamp.
-  // Kind 9: clipboard completion: code success0/unavailable1/too_large2/cancelled3/image_path4.
-  // Kind 10: accessibility action: code is one action bit from the node.
-  // Kind 11: delete surrounding: replacement_start/end contain before/after byte
-  // counts relative to the context's cursor. Applied before commit/preedit.
+  // system momentum. scroll_time_ms is its native wrapping millisecond
+  // timestamp. Kind 9: clipboard completion: code
+  // success0/unavailable1/too_large2/cancelled3/image_path4. Kind 10:
+  // accessibility action: code is one action bit from the node. Kind 11: delete
+  // surrounding: replacement_start/end contain before/after byte counts
+  // relative to the context's cursor. Applied before commit/preedit.
   uint64_t target_id, request_id, generation;
   uint32_t selection_start, selection_end;
   uint32_t replacement_start, replacement_end;
@@ -143,6 +148,11 @@ typedef struct {
   uint32_t scroll_kinetic, scroll_time_ms;
   uint64_t revision;
 } telar_gui_input;
+
+typedef struct {
+  uint8_t bytes[TELAR_GUI_TITLE_CAPACITY + 1];
+  uint32_t len;
+} telar_gui_window_title;
 
 typedef struct {
   void (*render)(void *, telar_gui_viewport, telar_gui_frame *);
@@ -155,18 +165,21 @@ typedef struct {
   // Optional, read-only native pointer shape, independent of GPU frames.
   // Values match core.PointerShape (0 default through 33 zoom_out).
   uint32_t (*pointer_shape)(void *);
-  // Window-thread callbacks. Copy returned slices before pumping/rendering again.
-  // Text contexts follow editing state; accessibility uses delivered geometry.
-  // A text_context result of -1 preserves the prior native cache while admitted
-  // input awaits dispatch. Zero disables it; positive publishes this snapshot.
-  // composition_active is provisional Zig state once all admitted input drained.
-  // host_request consumes one request; zero means none. Never call from workers.
+  // Window-thread callbacks. Copy returned slices before pumping/rendering
+  // again. Text contexts follow editing state; accessibility uses delivered
+  // geometry. A text_context result of -1 preserves the prior native cache
+  // while admitted input awaits dispatch. Zero disables it; positive publishes
+  // this snapshot. composition_active is provisional Zig state once all
+  // admitted input drained. host_request consumes one request; zero means none.
+  // Never call from workers.
   int (*text_context)(void *, telar_gui_text_context *);
   int (*host_request)(void *, telar_gui_host_request *);
   int (*accessibility)(void *, telar_gui_accessibility_tree *);
   // Optional read-only submission delay. Zero admits a frame; GPU and
   // compositor availability remain native-owned. Querying spends no budget.
   uint64_t (*frame_delay_ns)(void *);
+
+  int (*window_title)(void *, telar_gui_window_title *);
 } telar_gui_callbacks;
 
 int telar_gui_run(const char *title, void *context,

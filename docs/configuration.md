@@ -144,6 +144,18 @@ configured, `prefix+?` (`telar.action.suggest_command()`) opens the
 pane's working directory, its last visible rows and your request to the
 engine, and Enter pastes the answer without running it.
 
+`client.editor` selects the executable used to open local file links. For example,
+`client = { editor = "/opt/homebrew/bin/nvim" }` works without `$EDITOR` in the
+GUI environment. The value must be a nonempty executable name or path, at most
+4096 bytes. It is executed directly, with the file path as a separate argument;
+shell commands, flags and `~` expansion are not interpreted. A bare name is
+resolved using the runtime's `PATH`.
+
+The selected profile can override the base value. Removing the option restores
+the client's startup `$EDITOR`; if neither is set, opening a file reports
+`EditorUnavailable`. Reloading the configuration changes future file openings
+without restarting existing editor panes.
+
 `client.icons` accepts `"unicode"`, the default, or `"nerd-font"`. The Nerd
 Font theme uses a glyph subset embedded in Telar and does not require a Nerd
 Font in the host terminal. It needs Kitty Graphics support and RGB theme

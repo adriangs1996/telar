@@ -1,6 +1,7 @@
 //! A critically damped scalar spring, independent of frame rate and host APIs.
 //! Position and target share a coordinate system; velocity uses units/second.
 const std = @import("std");
+
 const Spring = @This();
 
 position: f64 = 0,
@@ -46,61 +47,61 @@ pub fn advance(self: *Spring, elapsed_seconds: f64) void {
 
 /// Retains position and velocity when another impulse changes the destination.
 /// Example: `spring.retarget(spring.target + wheel_distance);`
-pub fn retarget(spring: *Spring, target: f64) void {
+pub fn retarget(self: *Spring, target: f64) void {
     if (std.math.isFinite(target)) {
-        spring.target = target;
+        self.target = target;
     }
 }
 
 /// Adds release velocity without discontinuously moving the current position.
 /// Example: `spring.impulse(release_velocity - spring.velocity);`
-pub fn impulse(spring: *Spring, delta_velocity: f64) void {
-    const velocity = spring.velocity + delta_velocity;
+pub fn impulse(self: *Spring, delta_velocity: f64) void {
+    const velocity = self.velocity + delta_velocity;
     if (std.math.isFinite(velocity)) {
-        spring.velocity = velocity;
+        self.velocity = velocity;
     }
 }
 
 /// Example: `spring.reset(pointer_position);`
-pub fn reset(spring: *Spring, value: f64) void {
+pub fn reset(self: *Spring, value: f64) void {
     if (!std.math.isFinite(value)) {
         return;
     }
 
-    spring.position = value;
-    spring.target = value;
-    spring.velocity = 0;
+    self.position = value;
+    self.target = value;
+    self.velocity = 0;
 }
 
 /// Rebases layout coordinates without turning an anchor correction into motion.
 /// Example: `spring.translate(new_anchor_position - old_anchor_position);`
-pub fn translate(spring: *Spring, delta: f64) void {
-    const position = spring.position + delta;
-    const target = spring.target + delta;
+pub fn translate(self: *Spring, delta: f64) void {
+    const position = self.position + delta;
+    const target = self.target + delta;
     if (!std.math.isFinite(position) or !std.math.isFinite(target)) {
         return;
     }
 
-    spring.position = position;
-    spring.target = target;
+    self.position = position;
+    self.target = target;
 }
 
 /// Example: `if (spring.active()) clock.requestAt(next_frame_ns);`
-pub fn active(spring: Spring) bool {
-    return spring.position != spring.target or spring.velocity != 0;
+pub fn active(self: Spring) bool {
+    return self.position != self.target or self.velocity != 0;
 }
 
 /// Clips the destination and stops only velocity pointing outside the bounds.
 /// Example: `spring.constrain(0, content_height - viewport_height);`
-pub fn constrain(spring: *Spring, minimum: f64, maximum: f64) void {
+pub fn constrain(self: *Spring, minimum: f64, maximum: f64) void {
     if (!std.math.isFinite(minimum) or !std.math.isFinite(maximum) or minimum > maximum) {
         return;
     }
 
-    spring.position = std.math.clamp(spring.position, minimum, maximum);
-    spring.target = std.math.clamp(spring.target, minimum, maximum);
-    if ((spring.position == minimum and spring.velocity < 0) or (spring.position == maximum and spring.velocity > 0)) {
-        spring.velocity = 0;
+    self.position = std.math.clamp(self.position, minimum, maximum);
+    self.target = std.math.clamp(self.target, minimum, maximum);
+    if ((self.position == minimum and self.velocity < 0) or (self.position == maximum and self.velocity > 0)) {
+        self.velocity = 0;
     }
 }
 

@@ -10,6 +10,8 @@ const RectType = @import("telar-core").Rect;
 const extract_module = @import("../../links/cells.zig").extract;
 const FilePathType = @import("../../links/FilePath.zig");
 const tab_creations = @import("../tabs/tab_creations.zig");
+const pane_splits = @import("../panes/pane_splits.zig");
+const PaneId = @import("telar-core").PaneId;
 const notification_flow = @import("../notifications/notifications.zig");
 
 /// Dispatches one owned target without letting opener failures leave input.
@@ -90,7 +92,7 @@ fn targetAt(model: *MultiplexerModel, event: MouseType, area: RectType) ?TargetT
 
 fn openFile(raw_context: *anyopaque, path: FilePathType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
-    const editor = client.options.editor;
+    const editor = client.editorExecutable();
     if (editor.len == 0) {
         return error.EditorUnavailable;
     }
@@ -122,4 +124,33 @@ fn reportFailure(client: *Client, err: anyerror) !void {
         .title = "Could not open link",
         .message = @errorName(err),
     });
+}
+
+/// Opens a local message destination next to its source pane in the same tab.
+/// Example: `_ = try openMessageFile(client, pane_id, path);`
+pub fn openMessageFile(client: *Client, pane_id: PaneId, path: FilePathType) !bool {
+    openEditorPane(client, pane_id, path) catch |err| {
+        try reportFailure(client, err);
+        return false;
+    };
+
+    return true;
+}
+
+fn openEditorPane(client: *Client, pane_id: PaneId, path: FilePathType) !void {
+    const editor = client.editorExecutable();
+    if (editor.len == 0) {
+        return error.EditorUnavailable;
+    }
+
+    var handler = pane_splits.requestHandler(client);
+    const plan = try handler.execute(.{
+        .axis = .horizontal,
+        .area = client.geometry().area,
+        .target_pane = pane_id,
+        .arguments = &.{ editor, path.slice() },
+    });
+    if (plan == null) {
+        return error.PaneSplitUnavailable;
+    }
 }

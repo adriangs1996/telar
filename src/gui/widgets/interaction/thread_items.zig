@@ -3,9 +3,11 @@
 
 const std = @import("std");
 
+const core = @import("telar-core");
+
 const GuiClient = @import("../../GuiClient.zig");
 const Target = @import("Target.zig");
-const core = @import("telar-core");
+const ClipboardResult = @import("../../input/ClipboardResult.zig");
 
 /// Example: `if (!thread_items.eligible(gui, target)) return;`
 pub fn eligible(gui: *const GuiClient, target: Target) bool {
@@ -69,7 +71,7 @@ pub fn delivered(gui: *GuiClient) !void {
 }
 
 /// Native failure never displays a successful copy. Example: `thread_items.copied(gui, result);`
-pub fn copied(gui: *GuiClient, result: @import("../../input/ClipboardResult.zig")) void {
+pub fn copied(gui: *GuiClient, result: ClipboardResult) void {
     const id: @import("Id.zig") = .{ .target_id = result.target_id, .generation = result.generation };
     for (&gui.widgets.pending_thread_copies) |*slot| {
         const pending = slot.* orelse continue;

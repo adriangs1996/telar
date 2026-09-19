@@ -20,6 +20,8 @@ icon_theme: ClientTheme = .unicode,
 sidebar_rendering: SidebarRenderingType = .automatic,
 sidebar_visible: bool = true,
 pane_gaps: bool = true,
+editor_bytes: [model.max_editor_bytes]u8 = undefined,
+editor_len: u16 = 0,
 window_title_bytes: [model.max_window_title_bytes]u8 = undefined,
 window_title_len: u8 = 0,
 sound: SoundPolicy = .{},
@@ -61,4 +63,10 @@ pub fn bindingSlice(snapshot: *const Snapshot) []const model.ConfiguredBinding {
 /// ```
 pub fn windowTitle(snapshot: *const Snapshot) []const u8 {
     return snapshot.window_title_bytes[0..snapshot.window_title_len];
+}
+
+/// Chooses the configured executable before the process environment fallback.
+/// Example: `const executable = snapshot.resolveEditor(environment_editor);`
+pub fn resolveEditor(self: *const Snapshot, fallback: []const u8) []const u8 {
+    return if (self.editor_len != 0) self.editor_bytes[0..self.editor_len] else fallback;
 }

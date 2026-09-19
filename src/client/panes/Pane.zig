@@ -140,6 +140,19 @@ pub fn applyFrame(pane: *Pane, frame: FrameViewType) !AppliedType {
         null;
     const resized = pane.buffer.w != frame.cols or pane.buffer.h != frame.rows;
     if (resized and frame.base_frame_id != 0) {
+        std.log.err(
+            "pane {any}: patch frame={d} base={d}, applied={d}, incoming={d}x{d}, buffer={d}x{d}",
+            .{
+                pane.id,
+                frame.frame_id,
+                frame.base_frame_id,
+                pane.applied_frame_id,
+                frame.cols,
+                frame.rows,
+                pane.buffer.w,
+                pane.buffer.h,
+            },
+        );
         return error.PatchSizeMismatch;
     }
 

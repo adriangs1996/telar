@@ -13,7 +13,7 @@ const FrameAckType = @import("telar-core").FrameAck;
 const RequestSnapshotType = @import("telar-core").RequestSnapshot;
 const DetachPaneType = @import("telar-core").DetachPane;
 const RequestTabSnapshotType = @import("telar-core").RequestTabSnapshot;
-const CreatePaneType = @import("telar-core").CreatePane;
+const OwnedCreatePane = @import("OwnedCreatePane.zig");
 const ClosePaneType = @import("telar-core").ClosePane;
 const RequestWorkspaceSnapshotType = @import("telar-core").RequestWorkspaceSnapshot;
 const OwnedCreateTab = @import("OwnedCreateTab.zig");
@@ -69,7 +69,7 @@ pub const Message = union(enum) {
     request_snapshot: RequestSnapshotType,
     detach_pane: DetachPaneType,
     request_tab_snapshot: RequestTabSnapshotType,
-    create_pane: CreatePaneType,
+    create_pane: OwnedCreatePane,
     close_pane: ClosePaneType,
     request_workspace_snapshot: RequestWorkspaceSnapshotType,
     create_tab: OwnedCreateTab,
@@ -154,17 +154,19 @@ test "queue metadata stays small when input storage grows" {
     try std.testing.expect(@sizeOf(Outbox) < 720 * 1024);
 }
 
-test "queued launches own cwd bytes until encoding" {
+test "queued launches own cwd and transient editor arguments until encoding" {
     var outbox: Outbox = .{};
     const pane_id: PaneIdType = @enumFromInt(1);
     try outbox.push(.{ .pane_resize = .{
         .pane_id = pane_id,
         .size = .{ .cols = 20, .rows = 10 },
     } });
-    var buffer: [256]u8 = undefined;
+    var buffer: [1024]u8 = undefined;
     _ = (try outbox.beginSend(&buffer)).?;
 
     var cwd = "/work/first".*;
+    var path = ("/tmp/" ++ "a" ** 300 ++ ".md").*;
+    var arguments = [_][]const u8{ "nvim", &path };
     try outbox.push(.{ .create_pane = .{
         .request_id = @enumFromInt(2),
         .location = .{
@@ -175,15 +177,20 @@ test "queued launches own cwd bytes until encoding" {
         .launch = .{
             .cwd = &cwd,
             .cwd_source = pane_id,
-            .arguments = &.{"/bin/sh"},
+            .arguments = &arguments,
         },
     } });
+    @memset(&path, 'x');
+    arguments = .{ "bad", "bad" };
     @memset(&cwd, 'x');
 
     outbox.popSent();
     const decoded = try decodeClient_module((try outbox.beginSend(&buffer)).?);
     try std.testing.expectEqualStrings("/work/first", decoded.create_pane.launch.cwd);
     try std.testing.expectEqual(pane_id, decoded.create_pane.launch.cwd_source.?);
+    var decoded_arguments = decoded.create_pane.launch.arguments();
+    try std.testing.expectEqualStrings("nvim", (try decoded_arguments.next()).?);
+    try std.testing.expectEqualStrings("/tmp/" ++ "a" ** 300 ++ ".md", (try decoded_arguments.next()).?);
 }
 
 test "queued tab rename owns bounded label bytes until encoding" {
@@ -547,4 +554,53 @@ test "agent prompt outbox owns borrowed image paths and refuses aggregate overfl
     const depth = outbox.len;
     try std.testing.expectError(error.InvalidAgentPrompt, outbox.pushAgentPrompt(request));
     try std.testing.expectEqual(depth, outbox.len);
+}
+
+test "rejected editor argv releases its queue and launch slots" {
+    var outbox: Outbox = .{};
+    const oversized = [_]u8{'x'} ** (input_capability.max_encoded_bytes + 1);
+    for (0..max_pending_launches + 1) |_| {
+        try std.testing.expectError(error.InvalidArguments, outbox.push(.{ .create_pane = .{
+            .request_id = @enumFromInt(2),
+            .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
+            .size = .{ .cols = 20, .rows = 10 },
+            .launch = .{ .cwd = "/tmp", .arguments = &.{ "nvim", &oversized } },
+        } }));
+        try std.testing.expectEqual(@as(u8, 0), outbox.len);
+    }
+
+    try outbox.push(.{ .create_pane = .{
+        .request_id = @enumFromInt(3),
+        .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
+        .size = .{ .cols = 20, .rows = 10 },
+        .launch = .{ .cwd = "/tmp", .arguments = &.{ "nvim", "/tmp/design.md" } },
+    } });
+    var buffer: [256]u8 = undefined;
+    const request = (try decodeClient_module((try outbox.beginSend(&buffer)).?)).create_pane;
+    try std.testing.expectEqual(@as(u64, 3), @intFromEnum(request.request_id));
+    try outbox.finishSend({});
+}
+
+test "queued editor tabs retain long arguments after configuration source storage is reused" {
+    var outbox: Outbox = .{};
+    var executable = ("/opt/" ++ "editor" ** 50).*;
+    var path = "/tmp/design.md".*;
+    var arguments = [_][]const u8{ &executable, &path };
+    try outbox.pushCreateTab(.{
+        .request_id = @enumFromInt(2),
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .label = "editor",
+        .size = .{ .cols = 20, .rows = 10 },
+        .launch = .{ .cwd = "/tmp", .arguments = &arguments },
+    });
+    @memset(&executable, 'x');
+    @memset(&path, 'x');
+    arguments = .{ "bad", "bad" };
+
+    var buffer: [1024]u8 = undefined;
+    const request = (try decodeClient_module((try outbox.beginSend(&buffer)).?)).create_tab;
+    var argv = request.launch.arguments();
+    try std.testing.expectEqualStrings("/opt/" ++ "editor" ** 50, (try argv.next()).?);
+    try std.testing.expectEqualStrings("/tmp/design.md", (try argv.next()).?);
+    try outbox.finishSend({});
 }

@@ -2676,13 +2676,13 @@ pub fn togglePaneFullscreen(model: *Model, request: TogglePaneFullscreenRequestT
 /// ```
 pub fn planPaneSplit(model: *Model, request: RequestPaneSplitType) ?PaneSplitPlanType {
     const active = model.workspace.active() orelse return null;
-    const focused = active.model.focusedPane() orelse return null;
-    if (!focused.attached or !std.meta.eql(focused.location, active.location)) {
+    const target = (if (request.target_pane) |id| active.model.findConst(id) else active.model.focusedPane()) orelse return null;
+    if (!target.attached or !std.meta.eql(target.location, active.location)) {
         return null;
     }
 
-    const restore_size = active.model.contentSize(focused.id, request.area) orelse return null;
-    const prospective = active.model.prospectiveSplit(.{ .pane_id = focused.id, .axis = request.axis }, request.area) orelse
+    const restore_size = active.model.contentSize(target.id, request.area) orelse return null;
+    const prospective = active.model.prospectiveSplit(.{ .pane_id = target.id, .axis = request.axis }, request.area) orelse
         return null;
     var provisional_size = multiplexer_module.rectSize(prospective.existing_content) orelse return null;
     var new_pane_size = multiplexer_module.rectSize(prospective.new_content) orelse return null;
@@ -2691,14 +2691,15 @@ pub fn planPaneSplit(model: *Model, request: RequestPaneSplitType) ?PaneSplitPla
 
     return .{
         .split = .{
-            .target_pane = focused.id,
+            .target_pane = target.id,
             .location = active.location,
             .axis = request.axis,
             .area = request.area,
         },
-        .provisional_resize = .{ .pane_id = focused.id, .size = provisional_size },
-        .restore_resize = .{ .pane_id = focused.id, .size = restore_size },
+        .provisional_resize = .{ .pane_id = target.id, .size = provisional_size },
+        .restore_resize = .{ .pane_id = target.id, .size = restore_size },
         .new_pane_size = new_pane_size,
+        .arguments = request.arguments,
     };
 }
 

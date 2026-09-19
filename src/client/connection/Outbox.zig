@@ -57,6 +57,7 @@ const encodeCompletePaneFocus_module = @import("telar-core").encodeCompletePaneF
 const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
 const PaneResizeType = @import("telar-core").PaneResize;
 const FrameAckType = @import("telar-core").FrameAck;
+const max_argument_count = @import("telar-core").max_argument_count;
 const Outbox = @This();
 
 items: [outbox_support.capacity]outbox_support.Message = undefined,
@@ -286,7 +287,6 @@ pub fn pushCreateTab(outbox: *Outbox, request: CreateTabType) !void {
         .launch = request.launch,
     };
     @memcpy(owned.label[0..request.label.len], request.label);
-    _ = owned.ownArguments(request.launch.arguments);
     try outbox.append(.{ .create_tab = owned });
 }
 
@@ -416,18 +416,18 @@ fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
         .detach_pane => |value| encodeDetachPane_module(buffer, value),
         .request_tab_snapshot => |value| encodeRequestTabSnapshot_module(buffer, value),
         .create_pane => |value| {
-            var owned = value;
+            var scratch: [max_argument_count][]const u8 = undefined;
+            var owned = value.view(&outbox.input_bytes[outbox.head], &scratch);
             owned.launch.cwd = outbox.launchCwd(outbox.head);
             return encodeCreatePane_module(buffer, owned);
         },
         .close_pane => |value| encodeClosePane_module(buffer, value),
         .request_workspace_snapshot => |value| encodeRequestWorkspaceSnapshot_module(buffer, value),
         .create_tab => |*value| encode: {
-            var argument_scratch: [OwnedCreateTab.max_owned_arguments][]const u8 = undefined;
-            break :encode encodeCreateTab_module(
-                buffer,
-                value.view(outbox.launchCwd(outbox.head), &argument_scratch),
-            );
+            var scratch: [max_argument_count][]const u8 = undefined;
+            var owned = value.view(&outbox.input_bytes[outbox.head], &scratch);
+            owned.launch.cwd = outbox.launchCwd(outbox.head);
+            break :encode encodeCreateTab_module(buffer, owned);
         },
         .rename_tab => |*value| encodeRenameTab_module(buffer, .{
             .request_id = value.request_id,
@@ -477,8 +477,16 @@ fn append(outbox: *Outbox, message: outbox_support.Message) !void {
         null;
     errdefer if (launch_slot) |slot| outbox.releaseLaunchSlot(slot);
     const index = try outbox.reserve();
+    errdefer outbox.len -= 1;
+    var owned = message;
+    if (owned == .create_pane) {
+        try owned.create_pane.ownArguments(&outbox.input_bytes[index]);
+    } else if (owned == .create_tab) {
+        try owned.create_tab.ownArguments(&outbox.input_bytes[index]);
+    }
+
     outbox.item_launch_cwd[index] = launch_slot;
-    outbox.items[index] = message;
+    outbox.items[index] = owned;
 }
 
 fn claimLaunchCwd(outbox: *Outbox, cwd: []const u8) !u8 {

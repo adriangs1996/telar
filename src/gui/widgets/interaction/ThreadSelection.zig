@@ -1,6 +1,7 @@
 //! Disposable reader selection; source ownership remains in the pinned window.
 const Selection = @This();
 const Position = @import("ThreadTextPosition.zig");
+const MessageLinkControl = @import("MessageLinkControl.zig");
 const Owner = @import("ThreadSelectionOwner.zig");
 owner: ?Owner = null,
 release: ?Owner = null,
@@ -8,6 +9,7 @@ anchor: ?Position = null,
 head: ?Position = null,
 keyboard: bool = false,
 dragging: bool = false,
+pending_link: ?MessageLinkControl = null,
 frozen: bool = false,
 blocked_edge: bool = false,
 pointer: [2]f64 = .{ 0, 0 },
