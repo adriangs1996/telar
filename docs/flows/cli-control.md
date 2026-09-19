@@ -214,3 +214,10 @@ atomic cross-workspace snapshot. Output begins only after enumeration succeeds.
 entry from the same topology catalog, including terminals without an observed
 agent. It prints one object with a zero-based position, or exits 2 without
 partial output when absent. Explicit tab scope avoids full-runtime enumeration.
+
+## Command assistance
+
+`telar command suggest PANE|--current TEXT [--json]` asks the runtime engine
+for one command using that pane’s existing cwd/screen context. It only prints
+the suggestion. Ready exits 0, timeout exits 3, unavailable/failed exit 1; JSON
+preserves the explicit status. No terminal input follows the suggestion reply.

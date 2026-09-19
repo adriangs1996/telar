@@ -84,7 +84,7 @@ No simulated keyboard input is a substitute for an implemented command.
 
 ## Assistance
 
-- [ ] `command suggest`
+- [x] `command suggest`
 
 ## Proxy
 

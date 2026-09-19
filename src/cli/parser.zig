@@ -2,6 +2,7 @@
 
 const ServerOptions = @import("arguments/ServerOptions.zig");
 const RuntimeOptions = @import("arguments/RuntimeOptions.zig");
+const SuggestionOptions = @import("arguments/SuggestionOptions.zig");
 const TabOptions = @import("arguments/TabOptions.zig");
 const HistoryOptions = @import("arguments/HistoryOptions.zig");
 const NotificationOptions = @import("arguments/NotificationOptions.zig");
@@ -45,6 +46,7 @@ pub const Cli = union(enum) {
     server: ServerOptions,
     runtime: RuntimeOptions,
     tab: TabOptions,
+    command: SuggestionOptions,
     history: HistoryOptions,
     notification: NotificationOptions,
     config_check: ConfigCheckOptions,
@@ -79,6 +81,10 @@ pub const Cli = union(enum) {
         }
 
         const first = std.mem.span(args[1]);
+        if (std.mem.eql(u8, first, "command")) {
+            return .{ .command = try SuggestionOptions.parse(args[2..]) };
+        }
+
         if (std.mem.eql(u8, first, "tab")) {
             return .{ .tab = try TabOptions.parse(args[2..]) };
         }

@@ -696,6 +696,27 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")
 
+    def test_command_suggest_returns_a_proposal_without_executing_it(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x29)
+            self.assertEqual(request[9:], struct.pack("<Q", 7) + sized16("List files"))
+            send_frame(connection, bytes([0xA9]) + request[1:9] + bytes([0]) + sized16("ls -la"))
+            self.assertEqual(connection.recv(1), b"")
+
+        result = self.run_control(["command", "suggest", "7", "List files", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"status": "ready", "command": "ls -la"})
+
+    def test_command_suggest_preserves_engine_failure_status(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            send_frame(connection, bytes([0xA9]) + request[1:9] + bytes([1]) + sized16(""))
+
+        result = self.run_control(["command", "suggest", "7", "List files", "--json"], exchange)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads(result.stdout), {"status": "unavailable", "command": ""})
+
 
 if __name__ == "__main__":
     unittest.main()
