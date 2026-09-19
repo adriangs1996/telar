@@ -149,3 +149,22 @@ pub fn conversations(writer: *std.Io.Writer, snapshot: *const core.AgentThreadSn
         try writer.writeAll("]}\n");
     }
 }
+
+/// Shows the exact request identity required for a decision. Example: `try agent_output.approvals(writer, snapshot, true);`
+pub fn approvals(writer: *std.Io.Writer, snapshot: *const core.AgentThreadSnapshot, json: bool) !void {
+    if (json) {
+        try writer.writeByte('[');
+    }
+
+    if (snapshot.pending_approval) |*approval| {
+        if (json) {
+            try std.json.Stringify.value(.{ .id = approval.id, .kind = approval.kind, .description = approval.text() }, .{}, writer);
+        } else {
+            try writer.print("{d}\t{s}\t{s}\n", .{ approval.id, @tagName(approval.kind), approval.text() });
+        }
+    }
+
+    if (json) {
+        try writer.writeAll("]\n");
+    }
+}

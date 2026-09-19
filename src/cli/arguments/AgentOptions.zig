@@ -47,6 +47,8 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         .skills
     else if (std.mem.eql(u8, action_text, "conversations"))
         .conversations
+    else if (std.mem.eql(u8, action_text, "approvals"))
+        .approvals
     else
         return error.UnknownAgentAction;
     var options: AgentOptions = .{ .action = action };

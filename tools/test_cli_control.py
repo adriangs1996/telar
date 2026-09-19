@@ -61,13 +61,14 @@ def agent_snapshot():
     return bytes([0x96]) + struct.pack("<QH", 1, 1) + entry
 
 
-def thread_snapshot(skills=None, recent=None):
+def thread_snapshot(skills=None, recent=None, approval=None):
     text = 'Response "quoted" 🧶'.encode()
     payload = bytes([0xAB]) + struct.pack("<QQQ", 7, 9, 3)
     payload += sized16("thread-1") + sized16("turn-1") + bytes([1, 1, 1])
     item = bytes([1]) + struct.pack("<QQQBBBIBB", 1, 1, 0, 0, 2, 2, 0, 1, 1)
     item += bytes(20) + struct.pack("<IIB", 0, len(text), 1)
-    payload += item + struct.pack("<I", len(text)) + text + sized16("") + bytes([0])
+    payload += item + struct.pack("<I", len(text)) + text + sized16("")
+    payload += bytes([0]) if approval is None else bytes([1]) + approval
     payload += skills if skills is not None else struct.pack("<QBBB", 1, 1, 0, 0)
     payload += (recent if recent is not None else bytes([1, 0, 0])) + bytes([0])
     payload += sized16("model-1") + sized16("low") + bytes([1, 1])
@@ -378,6 +379,19 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         catalog = json.loads(result.stdout)
         self.assertEqual(catalog, {"phase": "ready", "has_more": True, "can_resume": False, "conversations": [{"id": "previous-thread", "title": 'Previous "work"'}]})
+
+    def test_agent_approvals_exposes_exact_pending_identity(self):
+        def exchange(connection):
+            receive_frame(connection)
+            send_frame(connection, agent_snapshot())
+            request = receive_frame(connection)
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+            approval = struct.pack("<QB", 99, 0) + sized16('Run "build"?')
+            send_frame(connection, thread_snapshot(approval=approval))
+
+        result = self.run_control(["agent", "approvals", "7", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), [{"id": 99, "kind": "command", "description": 'Run "build"?'}])
 
 
 if __name__ == "__main__":

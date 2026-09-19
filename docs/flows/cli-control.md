@@ -118,3 +118,6 @@ and scopes. Empty/loading catalogs are not reported as a successful discovery.
 `telar agent conversations TARGET [--json]` lists stable provider conversation
 IDs and titles, catalog phase, whether more entries exist and whether this
 pane can resume a conversation. It does not expose unstable catalog indices.
+
+`telar agent approvals TARGET [--json]` returns the pending approval identity,
+kind and description, or an empty array. Querying never answers the approval.

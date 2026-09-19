@@ -68,13 +68,14 @@ fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContex
             try writeAcknowledgement(output.writer, managed.pane, options.json);
             return exit_ok;
         },
-        .thread, .models, .skills, .conversations => {
+        .thread, .models, .skills, .conversations, .approvals => {
             const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
             var managed: ManagedAgent = .{ .session = session, .pane = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation } };
             const thread = try session.gpa.create(core.AgentThreadSnapshot);
             defer session.gpa.destroy(thread);
             try managed.read(thread);
             switch (options.action) {
+                .approvals => try agent_output.approvals(output.writer, thread, options.json),
                 .conversations => try agent_output.conversations(output.writer, thread, options.json),
                 .skills => try agent_output.skills(output.writer, thread, options.json),
                 .models => try agent_output.models(output.writer, thread, options.json),

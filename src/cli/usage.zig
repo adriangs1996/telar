@@ -30,6 +30,7 @@ pub const text =
     \\       telar agent models <pane|title|--current> [--json] [--socket PATH]
     \\       telar agent skills <pane|title|--current> [--json] [--socket PATH]
     \\       telar agent conversations <pane|title|--current> [--json] [--socket PATH]
+    \\       telar agent approvals <pane|title|--current> [--json] [--socket PATH]
     \\       telar pane read|send-keys <pane|--current> [options]
     \\       telar pane focus --current --direction left|right|up|down [--json]
     \\       telar workspace create --worktree BRANCH [--name NAME] [--directory DIR]
