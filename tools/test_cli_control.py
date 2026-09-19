@@ -652,6 +652,29 @@ class ControlTests(unittest.TestCase):
         result = self.run_control(["agent", "resume", "7", "wanted", "--json"], exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_pane_list_includes_terminals_and_agents_without_attachments(self):
+        def exchange(connection):
+            self.assertEqual(receive_frame(connection)[0], 0x14)
+            send_frame(connection, workspace_list())
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x0C)
+            request_id, = struct.unpack_from("<Q", request, 1)
+            tabs = struct.pack("<QHH", 8, 0, 2) + sized16("Work") + struct.pack("<H", 0)
+            send_frame(connection, workspace_snapshot(request_id, tabs=tabs, count=1))
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x08)
+            reply = bytes([0x86]) + request[1:] + struct.pack("<H", 2)
+            reply += struct.pack("<QBBQ", 5, 0, 0, 9) + struct.pack("<QBBQ", 7, 0, 1, 10)
+            send_frame(connection, reply)
+
+        result = self.run_control(["pane", "list", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        panes = json.loads(result.stdout)
+        self.assertEqual([pane["kind"] for pane in panes], ["terminal", "agent"])
+        self.assertEqual([pane["position"] for pane in panes], [0, 1])
+        self.assertEqual(panes[1]["pane_generation"], 10)
+        self.assertEqual(panes[1]["workspace_id"], 42)
+
 
 if __name__ == "__main__":
     unittest.main()

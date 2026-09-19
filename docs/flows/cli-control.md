@@ -200,3 +200,12 @@ Validation: CLI socket contracts and `test-runtime`, `test-wire`, `test-client`,
 integration; that separate run stalled and was terminated. No transport pass
 is claimed. Provider startup now honors the supplied runtime PATH, which
 restores the existing managed-checkpoint regression test on Zig 0.16.
+
+## Pane topology
+
+`telar pane list [--workspace ID [--tab ID]] [--json]` walks workspace and tab
+snapshots and lists every terminal and managed pane with its location, position,
+generation, kind and lifecycle. Queries attach to no PTY and start no runtime.
+The catalog owns copied IDs before issuing another request and is bounded by
+the runtime pane limit. Concurrent removal fails explicitly; this is not an
+atomic cross-workspace snapshot. Output begins only after enumeration succeeds.

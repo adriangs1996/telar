@@ -2,6 +2,8 @@
 //! without an attached UI client.
 
 const std = @import("std");
+const core = @import("telar-core");
+const PaneCatalog = @import("PaneCatalog.zig");
 const PaneOptions = @import("arguments/PaneOptions.zig");
 const SessionType = @import("Session.zig");
 const control = @import("control.zig");
@@ -19,7 +21,7 @@ const SnapshotType = @import("Snapshot.zig");
 /// std.process.exit(try pane.run(process_init, options));
 /// ```
 pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
-    var session = try SessionType.open(init, options.socket);
+    var session = if (options.action == .list) try SessionType.attach(init, options.socket) else try SessionType.open(init, options.socket);
     defer session.close();
     var output_buffer: [16 * 1024]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
@@ -36,6 +38,10 @@ pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
 }
 
 fn execute(session: *SessionType, options: PaneOptions, context: ExecutionContextType) !u8 {
+    if (options.action == .list) {
+        return inspect(session, options, context);
+    }
+
     const pane: PaneRefType = if (options.action == .focus)
         .{
             .pane_id = try control.currentPaneId(context.environ),
@@ -45,6 +51,7 @@ fn execute(session: *SessionType, options: PaneOptions, context: ExecutionContex
         try resolvePane(session, options.target, context.environ);
 
     switch (options.action) {
+        .list => unreachable,
         .read => {
             const text = try session.readPane(pane, .{ .rows = options.lines, .source = options.source });
             if (options.json) {
@@ -105,4 +112,32 @@ fn resolvePane(session: *SessionType, target: values.Target, environ: std.proces
     }
 
     return .{ .pane_id = pane_id, .pane_generation = 0 };
+}
+
+fn inspect(session: *SessionType, options: PaneOptions, context: ExecutionContextType) !u8 {
+    var catalog: PaneCatalog = .{
+        .session = session,
+        .workspace = if (options.workspace) |target| try core.workspace(try target.resolve(context.environ, "TELAR_WORKSPACE_ID")) else null,
+        .tab = if (options.tab) |target| try core.tab(try target.resolve(context.environ, "TELAR_TAB_ID")) else null,
+    };
+    try catalog.load();
+    if (options.json) {
+        try context.writer.writeByte('[');
+    } else {
+        try context.writer.writeAll("WORKSPACE\tTAB\tPANE\tGENERATION\tKIND\tLIFECYCLE\n");
+    }
+
+    for (catalog.entries[0..catalog.count], 0..) |*entry, index| {
+        if (options.json and index != 0) {
+            try context.writer.writeByte(',');
+        }
+
+        try entry.write(context.writer, options.json);
+    }
+
+    if (options.json) {
+        try context.writer.writeAll("]\n");
+    }
+
+    return agent.exit_ok;
 }

@@ -1,4 +1,5 @@
 const pane = @import("pane.zig");
+const entity_target = @import("entity_target.zig");
 const values = @import("values.zig");
 const PaneTextSourceType = @import("telar-core").PaneTextSource;
 const PaneDirectionType = @import("telar-core").PaneDirection;
@@ -8,7 +9,9 @@ const Cursor = @import("Cursor.zig");
 const PaneOptions = @This();
 
 action: pane.PaneAction,
-target: values.Target,
+target: values.Target = .current,
+workspace: ?entity_target.Target = null,
+tab: ?entity_target.Target = null,
 text: ?[*:0]const u8 = null,
 enter: bool = false,
 lines: u16 = 40,
@@ -29,13 +32,18 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
         .send_keys
     else if (std.mem.eql(u8, action_text, "focus"))
         .focus
+    else if (std.mem.eql(u8, action_text, "list"))
+        .list
     else
         return error.UnknownPaneAction;
-    if (args.len < 2) {
+    if (action != .list and args.len < 2) {
         return error.MissingPaneTarget;
     }
 
-    var options: PaneOptions = .{ .action = action, .target = values.Target.parse(args[1]) };
+    var options: PaneOptions = .{ .action = action };
+    if (action != .list) {
+        options.target = values.Target.parse(args[1]);
+    }
     if (options.target == .name) {
         return error.InvalidPaneId;
     }
@@ -43,7 +51,7 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
         return error.FocusRequiresCurrentPane;
     }
 
-    var index: usize = 2;
+    var index: usize = if (action == .list) 1 else 2;
     if (action == .send_keys) {
         if (args.len < 3) {
             return error.MissingSendText;
@@ -62,6 +70,18 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
         const arg = std.mem.span(argument);
         if (std.mem.eql(u8, arg, "--json")) {
             options.json = true;
+        } else if (std.mem.eql(u8, arg, "--workspace") and action == .list) {
+            if (options.workspace != null) {
+                return error.DuplicateWorkspaceOption;
+            }
+
+            options.workspace = try entity_target.Target.parse(std.mem.span(try cursor.require(error.MissingWorkspaceId)));
+        } else if (std.mem.eql(u8, arg, "--tab") and action == .list) {
+            if (options.tab != null) {
+                return error.DuplicateTabOption;
+            }
+
+            options.tab = try entity_target.Target.parse(std.mem.span(try cursor.require(error.MissingTabId)));
         } else if (std.mem.eql(u8, arg, "--enter")) {
             if (action != .send_keys) {
                 return error.UnknownPaneOption;
@@ -103,6 +123,10 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
 
     if (action == .focus and options.direction == null) {
         return error.MissingPaneDirection;
+    }
+
+    if (options.tab != null and options.workspace == null) {
+        return error.TabRequiresWorkspace;
     }
 
     return options;

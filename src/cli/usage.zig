@@ -43,6 +43,7 @@ pub const text =
     \\       telar agent approve <pane|title|--current> APPROVAL_ID [--json] [--socket PATH]
     \\       telar agent reject <pane|title|--current> APPROVAL_ID [--json] [--socket PATH]
     \\       telar pane read|send-keys <pane|--current> [options]
+    \\         telar pane list [--workspace ID [--tab ID]] [--json] [--socket PATH]
     \\       telar pane focus --current --direction left|right|up|down [--json]
     \\       telar workspace create --worktree BRANCH [--name NAME] [--directory DIR]
     \\       telar workspace create --directory DIR [--name NAME] [--json] [--socket PATH]
