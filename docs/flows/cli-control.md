@@ -291,3 +291,6 @@ pane is a successful no-op. Missing panes fail. The existing `pane focus
 `pane resize`: Focuses the source pane and moves its nearest matching split edge by Telar’s
 existing resize step. Constrained or absent split edges fail explicitly. The
 geometry handler updates both local layout and runtime pane sizes.
+
+`pane fullscreen`: Focuses the source pane and toggles fullscreen through the existing geometry
+handler. The result value is 1 when fullscreen is enabled and 0 otherwise.

@@ -34,6 +34,7 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[2..] };
     switch (action) {
+        .pane_fullscreen => self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget))),
         .pane_resize => {
             self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));
             self.text = std.mem.span(try cursor.require(error.MissingPaneDirection));

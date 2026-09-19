@@ -28,6 +28,13 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .pane_fullscreen => {
+            try focusPane(client, reply.target_id);
+            var handler = pane_geometry.fullscreenHandler(client);
+            const changed = try handler.execute(.{ .area = client.geometry().area }) orelse return error.PaneFullscreenUnavailable;
+            reply.value = @intFromBool(changed.fullscreen);
+            reply.status = .applied;
+        },
         .pane_resize => {
             const direction = std.meta.stringToEnum(Direction, reply.text()) orelse return error.InvalidPaneDirection;
             try focusPane(client, reply.target_id);
