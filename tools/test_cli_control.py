@@ -1013,6 +1013,30 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(json.loads(result.stdout)[0]["enabled"])
 
+    def test_plugin_get_collects_actions_under_the_same_configuration(self):
+        metadata = {"generation": 4, "entries": [{"path": "plugins/demo", "id": "demo", "enabled": True}]}
+        def exchange(connection):
+            self.routed_exchange(connection, action=36, target=0, status=1, text=json.dumps(metadata), input_text="demo", return_value=1)
+            request = receive_frame(connection)
+            self.assertEqual(struct.unpack_from("<Qq", request, 27), (4, 1))
+            self.assertEqual(request[43:], sized16("demo"))
+            text = json.dumps({"generation": 4, "entries": ["open"]})
+            send_frame(connection, bytes([0xAF]) + request[1:9] + struct.pack("<QQBBQq", 7, 9, 36, 1, 4, -1) + sized16(text))
+
+        result = self.run_control(["plugin", "get", "demo", "--client", "7", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["actions"], ["open"])
+
+    def test_plugin_pages_reject_a_reload_before_printing_partial_json(self):
+        def exchange(connection):
+            self.routed_exchange(connection, action=35, status=1, target=0, text='{"generation":4,"entries":[]}', return_value=1)
+            request = receive_frame(connection)
+            send_frame(connection, bytes([0xAF]) + request[1:9] + struct.pack("<QQBBQq", 7, 9, 35, 1, 4, -1) + sized16('{"generation":5,"entries":[]}'))
+
+        result = self.run_control(["plugin", "list", "--client", "7", "--json"], exchange)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+
 
 if __name__ == "__main__":
     unittest.main()

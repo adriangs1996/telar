@@ -410,3 +410,9 @@ packages. It assembles bounded pages before printing JSON, pinning the adopted
 configuration generation so a concurrent reload fails instead of mixing
 generations. Identifiers are loaded manifest IDs; disabled plugins can be
 addressed by their configured paths.
+
+`plugin get` returns configured path and enablement, plus loaded manifest
+identity, version, entrypoint, source, revision, digest, declared capabilities
+and the complete action list. Actions are paged under the same configuration
+generation. Disabled packages report configuration only; inspecting them does
+not load or execute code.

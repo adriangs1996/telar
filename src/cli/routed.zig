@@ -55,7 +55,7 @@ fn execute(init: std.process.Init, options: Options) !u8 {
 
     var buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &buffer);
-    if (reply.action == .plugin_list) {
+    if (reply.action == .plugin_list or reply.action == .plugin_get) {
         var query: PluginQuery = .{ .session = &session, .command = command };
         try query.run(reply, &output.interface);
     } else if (reply.action == .config_show) {

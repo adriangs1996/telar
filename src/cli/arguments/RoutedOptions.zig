@@ -50,6 +50,7 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[consumed..] };
     switch (action) {
+        .plugin_get => self.text = std.mem.span(try cursor.require(error.MissingPlugin)),
         .plugin_list => {},
         .config_show => {},
         .config_reload => {},

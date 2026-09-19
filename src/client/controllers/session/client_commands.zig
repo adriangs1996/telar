@@ -42,6 +42,9 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .plugin_get => {
+            try plugin_queries.get(client, reply);
+        },
         .plugin_list => {
             try plugin_queries.list(client, reply);
         },

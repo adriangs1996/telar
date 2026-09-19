@@ -14,9 +14,10 @@ pub fn run(self: *Query, first: core.ClientCommand, writer: *std.Io.Writer) !voi
     var reply = first;
     var generation: ?i64 = null;
     var pages: usize = 0;
+    const limit: usize = if (self.command.action == .plugin_get) 65 else 32;
     while (true) {
         pages += 1;
-        if (pages > 32 or reply.status != .applied) {
+        if (pages > limit or reply.status != .applied) {
             return error.InvalidPluginPage;
         }
 
@@ -44,7 +45,7 @@ pub fn run(self: *Query, first: core.ClientCommand, writer: *std.Io.Writer) !voi
             break;
         }
 
-        if (reply.value <= self.command.value or reply.value >= 32) {
+        if (reply.value <= self.command.value or reply.value >= limit) {
             return error.InvalidPluginPage;
         }
 
@@ -66,6 +67,25 @@ pub fn run(self: *Query, first: core.ClientCommand, writer: *std.Io.Writer) !voi
         }
     }
 
-    try std.json.Stringify.value(entries.items, .{}, writer);
+    if (self.command.action == .plugin_get) {
+        if (entries.items.len == 0 or entries.items[0] != .object) {
+            return error.InvalidPluginPage;
+        }
+
+        var object = entries.items[0].object;
+        var actions = std.array_list.Managed(std.json.Value).init(gpa);
+        for (entries.items[1..]) |action| {
+            if (action != .string) {
+                return error.InvalidPluginPage;
+            }
+
+            try actions.append(action);
+        }
+
+        try object.put(gpa, "actions", .{ .array = actions });
+        try std.json.Stringify.value(std.json.Value{ .object = object }, .{}, writer);
+    } else {
+        try std.json.Stringify.value(entries.items, .{}, writer);
+    }
     try writer.writeByte('\n');
 }
