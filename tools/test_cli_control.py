@@ -817,6 +817,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "admitted")
 
+    def test_pane_split_preserves_source_and_axis(self):
+        result = self.run_control(["pane", "split", "5", "vertical", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=6, target=5, input_text="vertical"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "admitted")
+
 
 if __name__ == "__main__":
     unittest.main()

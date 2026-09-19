@@ -273,3 +273,9 @@ tab is a successful no-op; absent tabs and pending snapshot gates fail explicitl
 horizontally, using the client’s launch settings and geometry. Admission fails
 when the pane is unattached, a launch is pending, or the available area cannot
 fit another pane. Runtime creation and its layout confirmation remain asynchronous.
+
+`pane split ID horizontal|vertical --client ID` focuses the named pane in the
+client’s active tab and requests its split. Horizontal means left/right; vertical
+means top/bottom. The source must exist in that tab. Focus can change even when
+creation is subsequently rejected by layout or launch admission. The split uses
+the existing provisional-resize rollback and asynchronous creation confirmation.
