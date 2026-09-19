@@ -37,6 +37,8 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         .read
     else if (std.mem.eql(u8, action_text, "report-session"))
         .report_session
+    else if (std.mem.eql(u8, action_text, "interrupt"))
+        .interrupt
     else
         return error.UnknownAgentAction;
     var options: AgentOptions = .{ .action = action };

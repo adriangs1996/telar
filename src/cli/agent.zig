@@ -10,6 +10,7 @@ const SnapshotType = @import("Snapshot.zig");
 const PaneRefType = @import("PaneRef.zig");
 const ControlAgent = @import("ControlAgent.zig");
 const TextType = @import("Text.zig");
+const ManagedAgent = @import("ManagedAgent.zig");
 
 const poll_interval_ms = 250;
 const prompt_start_grace_ms = 5_000;
@@ -58,6 +59,13 @@ fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContex
         },
         .wait => return waitFor(session, options, output),
         .prompt => return prompt(session, options, output),
+        .interrupt => {
+            const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
+            var managed: ManagedAgent = .{ .session = session, .pane = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation } };
+            try managed.interrupt();
+            try writeAcknowledgement(output.writer, managed.pane, options.json);
+            return exit_ok;
+        },
         .report_session => {
             const agent = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
             try session.reportSession(.{
@@ -75,6 +83,15 @@ fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContex
             try writeText(output.writer, text, options.json);
             return exit_ok;
         },
+    }
+}
+
+fn writeAcknowledgement(writer: *std.Io.Writer, pane: PaneRefType, json: bool) !void {
+    if (json) {
+        try std.json.Stringify.value(.{ .pane_id = pane.pane_id, .pane_generation = pane.pane_generation, .accepted = true }, .{}, writer);
+        try writer.writeByte('\n');
+    } else {
+        try writer.print("request accepted for agent pane {d}\n", .{pane.pane_id});
     }
 }
 

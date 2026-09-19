@@ -90,3 +90,12 @@ operations on an existing tab; CLI assembly only resolves the target and I/O.
 sends `move_tab`. Without an anchor it moves one position; with an anchor it
 inserts before or after that tab. Output reports the absolute zero-based
 position confirmed by `tab_moved`, including a successful no-op at an edge.
+
+## Managed agents
+
+`telar agent interrupt TARGET [--json]` resolves an agent ID, unique title or
+`--current` through the existing agent snapshot, then sends `agent_interrupt`
+with the exact pane generation. It waits for the correlated acceptance; this
+means the runtime admitted the interrupt, not that provider shutdown completed.
+Terminal panes and stale generations retain the runtime's explicit rejection.
+The socket test asserts the generation and acknowledgement boundary.

@@ -25,6 +25,7 @@ pub const text =
     \\       telar history stats [--period today|week|month|year|all]
     \\       telar notification show <title> [options]
     \\       telar agent list|get|wait|prompt|read [target] [options]
+    \\       telar agent interrupt <pane|title|--current> [--json] [--socket PATH]
     \\       telar pane read|send-keys <pane|--current> [options]
     \\       telar pane focus --current --direction left|right|up|down [--json]
     \\       telar workspace create --worktree BRANCH [--name NAME] [--directory DIR]

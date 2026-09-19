@@ -53,6 +53,14 @@ def workspace_snapshot(request_id, name="Renamed", tabs=b"", count=0):
     return bytes([0x88]) + struct.pack("<QBQ", request_id, 0, 42) + sized16(name) + struct.pack("<H", count) + tabs
 
 
+def agent_snapshot():
+    entry = struct.pack("<QQBQQHI", 7, 9, 0, 42, 8, 1, 111) + bytes(16)
+    entry += sized16("") * 3 + bytes([0, 0]) + sized16("/tmp") + bytes([2])
+    entry += sized16("codex") + sized16("Codex") + sized16("")
+    entry += bytes([0, 1, 0]) + sized16("") + struct.pack("<IBBBQqq", 0, 3, 1, 100, 1, 1, 10)
+    return bytes([0x96]) + struct.pack("<QH", 1, 1) + entry
+
+
 class ControlTests(unittest.TestCase):
     def run_control(self, arguments, exchange):
         with tempfile.TemporaryDirectory(prefix="telar-cli-", dir="/tmp") as directory:
@@ -277,6 +285,20 @@ class ControlTests(unittest.TestCase):
         result = self.run_control(["tab", "move", "8", "previous", "--relative-to", "3", "--workspace", "42", "--json"], exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["position"], 4)
+
+    def test_agent_interrupt_uses_the_observed_generation_and_waits_for_acceptance(self):
+        def exchange(connection):
+            self.assertEqual(receive_frame(connection)[0], 0x1C)
+            send_frame(connection, agent_snapshot())
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x2E)
+            request_id, pane, generation = struct.unpack_from("<QQQ", request, 1)
+            self.assertEqual((pane, generation), (7, 9))
+            send_frame(connection, bytes([0xA1]) + struct.pack("<Q", request_id))
+
+        result = self.run_control(["agent", "interrupt", "7", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"pane_id": 7, "pane_generation": 9, "accepted": True})
 
 
 if __name__ == "__main__":
