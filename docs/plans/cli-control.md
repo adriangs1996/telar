@@ -42,7 +42,7 @@ No simulated keyboard input is a substitute for an implemented command.
 
 - [x] `pane list`
 - [x] `pane get`
-- [ ] `pane create`
+- [x] `pane create`
 - [ ] `pane split`
 - [ ] `pane close`
 - [ ] `pane focus by ID`

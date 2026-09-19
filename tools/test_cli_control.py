@@ -812,6 +812,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["action"], "tab_previous")
 
+    def test_pane_create_uses_the_client_geometry(self):
+        result = self.run_control(["pane", "create", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=5, target=0))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "admitted")
+
 
 if __name__ == "__main__":
     unittest.main()

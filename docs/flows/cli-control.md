@@ -268,3 +268,8 @@ tab is a successful no-op; absent tabs and pending snapshot gates fail explicitl
 
 `tab previous --client ID` uses the existing cyclic tab selection policy. A single
 tab is a successful no-op; absent tabs and pending snapshot gates fail explicitly.
+
+`pane create --client ID` creates a terminal pane by splitting the focused pane
+horizontally, using the client’s launch settings and geometry. Admission fails
+when the pane is unattached, a launch is pending, or the available area cannot
+fit another pane. Runtime creation and its layout confirmation remain asynchronous.

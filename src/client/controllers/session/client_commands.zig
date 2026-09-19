@@ -1,4 +1,5 @@
 const tab_selections = @import("../tabs/tab_selections.zig");
+const pane_splits = @import("../panes/pane_splits.zig");
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
@@ -21,6 +22,14 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .pane_create => {
+            var handler = pane_splits.requestHandler(client);
+            if (try handler.execute(.{ .axis = .horizontal, .area = client.geometry().area }) == null) {
+                return error.PaneCreationUnavailable;
+            }
+
+            reply.status = .admitted;
+        },
         .tab_previous => {
             try selectTabOffset(client, reply, -1);
         },
