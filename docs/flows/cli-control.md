@@ -114,3 +114,7 @@ labels, supported efforts and defaults. Effort identifiers are not hardcoded.
 `telar agent skills TARGET [--json]` reports the provider skill catalog with
 revision, loading/ready/failed phase, truncation, names, labels, descriptions
 and scopes. Empty/loading catalogs are not reported as a successful discovery.
+
+`telar agent conversations TARGET [--json]` lists stable provider conversation
+IDs and titles, catalog phase, whether more entries exist and whether this
+pane can resume a conversation. It does not expose unstable catalog indices.

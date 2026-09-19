@@ -123,3 +123,29 @@ pub fn skills(writer: *std.Io.Writer, snapshot: *const core.AgentThreadSnapshot,
         try writer.writeAll("]}\n");
     }
 }
+
+/// Lists resumable provider conversations with their stable IDs. Example: `try agent_output.conversations(writer, snapshot, true);`
+pub fn conversations(writer: *std.Io.Writer, snapshot: *const core.AgentThreadSnapshot, json: bool) !void {
+    const catalog = &snapshot.recent;
+    if (json) {
+        try writer.print("{{\"phase\":\"{s}\",\"has_more\":{},\"can_resume\":{},\"conversations\":[", .{ @tagName(catalog.phase), catalog.has_more, snapshot.canResume() });
+    } else {
+        try writer.print("{s}{s}\n", .{ @tagName(catalog.phase), if (catalog.has_more) " (more available)" else "" });
+    }
+
+    for (catalog.entries[0..catalog.count], 0..) |*entry, index| {
+        if (json) {
+            if (index != 0) {
+                try writer.writeByte(',');
+            }
+
+            try std.json.Stringify.value(.{ .id = entry.idSlice(), .title = entry.titleSlice() }, .{}, writer);
+        } else {
+            try writer.print("{s}\t{s}\n", .{ entry.idSlice(), entry.titleSlice() });
+        }
+    }
+
+    if (json) {
+        try writer.writeAll("]}\n");
+    }
+}

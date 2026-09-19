@@ -61,7 +61,7 @@ def agent_snapshot():
     return bytes([0x96]) + struct.pack("<QH", 1, 1) + entry
 
 
-def thread_snapshot(skills=None):
+def thread_snapshot(skills=None, recent=None):
     text = 'Response "quoted" 🧶'.encode()
     payload = bytes([0xAB]) + struct.pack("<QQQ", 7, 9, 3)
     payload += sized16("thread-1") + sized16("turn-1") + bytes([1, 1, 1])
@@ -69,7 +69,7 @@ def thread_snapshot(skills=None):
     item += bytes(20) + struct.pack("<IIB", 0, len(text), 1)
     payload += item + struct.pack("<I", len(text)) + text + sized16("") + bytes([0])
     payload += skills if skills is not None else struct.pack("<QBBB", 1, 1, 0, 0)
-    payload += bytes([1, 0, 0, 0])  # Recent catalog and resumed flag.
+    payload += (recent if recent is not None else bytes([1, 0, 0])) + bytes([0])
     payload += sized16("model-1") + sized16("low") + bytes([1, 1])
     payload += sized16("model-1") + sized16("Test model") + bytes([1]) + sized16("low") + sized16("low")
     return payload
@@ -364,6 +364,20 @@ class ControlTests(unittest.TestCase):
         catalog = json.loads(result.stdout)
         self.assertEqual((catalog["phase"], catalog["revision"], catalog["truncated"]), ("ready", 4, True))
         self.assertEqual(catalog["skills"], [{"name": "review", "label": "Code Review", "description": 'Review "changes"', "scope": "repo"}])
+
+    def test_agent_conversations_exposes_stable_ids_and_resume_eligibility(self):
+        def exchange(connection):
+            receive_frame(connection)
+            send_frame(connection, agent_snapshot())
+            request = receive_frame(connection)
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+            recent = bytes([1, 1, 1]) + sized16("previous-thread") + sized16('Previous "work"')
+            send_frame(connection, thread_snapshot(recent=recent))
+
+        result = self.run_control(["agent", "conversations", "7", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        catalog = json.loads(result.stdout)
+        self.assertEqual(catalog, {"phase": "ready", "has_more": True, "can_resume": False, "conversations": [{"id": "previous-thread", "title": 'Previous "work"'}]})
 
 
 if __name__ == "__main__":
