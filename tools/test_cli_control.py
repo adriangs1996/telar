@@ -408,6 +408,19 @@ class ControlTests(unittest.TestCase):
         result = subprocess.run([str(BINARY), "agent", "approve", "7"], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
 
+    def test_agent_reject_sends_negative_decision_without_changing_identity(self):
+        def exchange(connection):
+            receive_frame(connection)
+            send_frame(connection, agent_snapshot())
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x2F)
+            self.assertEqual(struct.unpack_from("<QQQB", request, 9), (7, 9, 99, 0))
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+
+        result = self.run_control(["agent", "reject", "7", "99", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)["accepted"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -52,6 +52,8 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         .approvals
     else if (std.mem.eql(u8, action_text, "approve"))
         .approve
+    else if (std.mem.eql(u8, action_text, "reject"))
+        .reject
     else
         return error.UnknownAgentAction;
     var options: AgentOptions = .{ .action = action };
@@ -66,7 +68,7 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         index = 2;
     }
 
-    if (action == .approve) {
+    if (action == .approve or action == .reject) {
         if (args.len < 3) {
             return error.MissingApprovalId;
         }

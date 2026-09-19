@@ -68,10 +68,10 @@ fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContex
             try writeAcknowledgement(output.writer, managed.pane, options.json);
             return exit_ok;
         },
-        .approve => {
+        .approve, .reject => {
             const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
             var managed: ManagedAgent = .{ .session = session, .pane = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation } };
-            try managed.decide(.{ .id = options.approval_id.?, .accepted = true });
+            try managed.decide(.{ .id = options.approval_id.?, .accepted = options.action == .approve });
             try writeAcknowledgement(output.writer, managed.pane, options.json);
             return exit_ok;
         },

@@ -125,3 +125,7 @@ kind and description, or an empty array. Querying never answers the approval.
 `telar agent approve TARGET APPROVAL_ID [--json]` sends an explicit positive
 approval decision with the observed pane generation and waits for runtime
 admission. The provider remains responsible for rejecting stale approval IDs.
+
+`telar agent reject TARGET APPROVAL_ID [--json]` sends the negative decision
+through the same generation-checked path. `accepted` in CLI output means the
+runtime admitted the command, not that the user approved the provider action.
