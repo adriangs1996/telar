@@ -3,6 +3,7 @@ const pane_splits = @import("../panes/pane_splits.zig");
 const std = @import("std");
 const Axis = @import("../../workspace/layout_support.zig").Axis;
 const pane_focus = @import("../panes/pane_focus.zig");
+const pane_closures = @import("../panes/pane_closures.zig");
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
@@ -25,6 +26,15 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .pane_close => {
+            try focusPane(client, reply.target_id);
+            var handler = pane_closures.requestHandler(client);
+            if (try handler.execute() == null) {
+                return error.PaneClosureUnavailable;
+            }
+
+            reply.status = .admitted;
+        },
         .pane_split => {
             const axis = std.meta.stringToEnum(Axis, reply.text()) orelse return error.InvalidSplitAxis;
             try focusPane(client, reply.target_id);

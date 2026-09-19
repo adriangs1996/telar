@@ -279,3 +279,7 @@ client’s active tab and requests its split. Horizontal means left/right; verti
 means top/bottom. The source must exist in that tab. Focus can change even when
 creation is subsequently rejected by layout or launch admission. The split uses
 the existing provisional-resize rollback and asynchronous creation confirmation.
+
+`pane close`: Focuses an existing pane in the active tab and requests closure through the
+attachment/operation gate. `admitted` means the close request is queued; pane
+exit remains runtime authority. Focus remains changed if closure is unavailable.
