@@ -209,6 +209,23 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), {"workspace_id": 42, "name": "Renamed"})
 
+    def test_tab_list_preserves_runtime_order_and_ids(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x0C)
+            request_id, kind, workspace = struct.unpack_from("<QBQ", request, 1)
+            self.assertEqual((kind, workspace), (0, 42))
+            tabs = struct.pack("<QHH", 8, 0, 2) + sized16("Editor") + struct.pack("<H", 0)
+            tabs += struct.pack("<QHH", 3, 1, 1) + sized16("Shell") + struct.pack("<H", 0)
+            send_frame(connection, workspace_snapshot(request_id, tabs=tabs, count=2))
+
+        result = self.run_control(["tab", "list", "--workspace", "42", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        tabs = json.loads(result.stdout)
+        self.assertEqual([tab["tab_id"] for tab in tabs], [8, 3])
+        self.assertEqual([tab["position"] for tab in tabs], [0, 1])
+        self.assertEqual(tabs[0]["pane_count"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

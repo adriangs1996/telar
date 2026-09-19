@@ -63,3 +63,11 @@ for the matching request ID in `workspace_snapshot`. It reports the canonical
 name from that response. Unrelated events cannot acknowledge the mutation.
 `Session.exchange` owns a bounded send buffer and correlates typed replies;
 the socket test deliberately interleaves an unrelated response.
+
+## Tabs
+
+`telar tab list [--workspace ID] [--json]` requests `workspace_snapshot` and
+prints stable tab IDs, zero-based positions, pane counts and labels in runtime
+order. Without `--workspace`, it requires `TELAR_WORKSPACE_ID`. It never
+attaches or selects a pane. The contract test uses tab IDs whose numeric order
+differs from their positions.
