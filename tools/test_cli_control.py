@@ -933,6 +933,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "applied")
 
+    def test_agent_view_collapse_preserves_item_identity_and_work_scope(self):
+        result = self.run_control(["agent", "view", "collapse", "5", "42", "--work", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=29, target=5, status=1, input_text="42", input_value=1))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "applied")
+
 
 if __name__ == "__main__":
     unittest.main()

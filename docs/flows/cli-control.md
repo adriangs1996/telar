@@ -348,3 +348,9 @@ identity from `agent thread`. `--work` targets the item’s work-group header.
 It uses delivered targets and the existing scroll-anchor transaction; hidden,
 missing or stale targets fail, and hosts without native disclosure support fail
 explicitly. Expand a folded work group before expanding one of its hidden items.
+
+`agent view collapse` sets one visible GUI disclosure idempotently by stable item
+identity from `agent thread`. `--work` targets the item’s work-group header.
+It uses delivered targets and the existing scroll-anchor transaction; hidden,
+missing or stale targets fail, and hosts without native disclosure support fail
+explicitly. Expand a folded work group before expanding one of its hidden items.

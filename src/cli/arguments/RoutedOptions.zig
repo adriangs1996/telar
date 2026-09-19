@@ -50,6 +50,11 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[consumed..] };
     switch (action) {
+        .agent_view_collapse => {
+            self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));
+            self.text = std.mem.span(try cursor.require(error.MissingItemId));
+            _ = try positive(self.text);
+        },
         .agent_view_expand => {
             self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));
             self.text = std.mem.span(try cursor.require(error.MissingItemId));
