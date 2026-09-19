@@ -729,6 +729,27 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), [{"id": 7, "generation": 9, "identity": 11, "attachments": 2, "last_input_pane": 5, "last_input_sequence": 12}])
 
+    def test_client_get_selects_one_live_connection(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            entries = struct.pack("<QQQHQQ", 7, 9, 11, 2, 5, 12)
+            entries += struct.pack("<QQQHQQ", 8, 10, 13, 1, 6, 14)
+            send_frame(connection, bytes([0xAD]) + request[1:] + bytes([2]) + entries)
+
+        result = self.run_control(["client", "get", "8", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["generation"], 10)
+        self.assertEqual(json.loads(result.stdout)["id"], 8)
+
+    def test_client_get_missing_connection_returns_not_found(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            send_frame(connection, bytes([0xAD]) + request[1:] + bytes([0]))
+
+        result = self.run_control(["client", "get", "8", "--json"], exchange)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stdout, "")
+
 
 if __name__ == "__main__":
     unittest.main()

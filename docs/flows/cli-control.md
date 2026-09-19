@@ -231,3 +231,6 @@ or I/O in the runtime handler. CLI runtime subscriptions explicitly declare
 themselves noninteractive so observers cannot be selected as visual clients.
 The wire schema is now generation 60. Unknown counts and invalid identities
 are rejected by the codec; the golden corpus includes discovery and reply.
+
+`telar client get ID [--json]` returns one live interactive connection from
+the same bounded catalog. An absent connection exits 2 with empty stdout.
