@@ -1042,6 +1042,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "admitted")
 
+    def test_plugin_disable_uses_explicit_client_admission(self):
+        result = self.run_control(["plugin", "disable", "demo", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=38, target=0, input_text="demo"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "admitted")
+
 
 if __name__ == "__main__":
     unittest.main()

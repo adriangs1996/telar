@@ -422,3 +422,9 @@ requests asynchronous configuration reload. It does not edit Lua source or
 grant capabilities. Disabled entries use their configured path. Registry
 loading, validation and trust checks still run on the existing worker. The CLI
 reports admission; list/get distinguish adopted and requested enablement.
+
+`plugin disable` requests the same asynchronous override with enablement false.
+The fresh configuration removes bindings for that plugin before validation;
+other bindings retain their order and prefix policy. Source configuration is
+unchanged, so re-enabling restores its original bindings. Worker results still
+pass existing package identity and capability authorization after reload.

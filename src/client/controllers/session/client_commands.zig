@@ -43,6 +43,9 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .plugin_disable => {
+            try plugin_toggles.disable(client, reply);
+        },
         .plugin_enable => {
             try plugin_toggles.enable(client, reply);
         },

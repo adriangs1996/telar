@@ -46,7 +46,7 @@ pub fn apply(self: *const Overrides, snapshot: *Snapshot) void {
 
     var retained: u16 = 0;
     for (snapshot.bindings[0..snapshot.binding_count], 0..) |binding, index| {
-        if (binding.action == .plugin and self.disabled(binding.action.plugin.plugin)) {
+        if (binding.action == .plugin and self.disabled(binding.action.plugin.plugin, snapshot)) {
             continue;
         }
 
@@ -58,10 +58,14 @@ pub fn apply(self: *const Overrides, snapshot: *Snapshot) void {
     snapshot.binding_count = retained;
 }
 
-fn disabled(self: *const Overrides, id: u64) bool {
+fn disabled(self: *const Overrides, id: u64, snapshot: *const Snapshot) bool {
     for (self.items[0..self.count]) |item| {
         if (!item.spec.enabled and item.plugin_id == id) {
-            return true;
+            for (snapshot.plugins[0..snapshot.plugin_count]) |*spec| {
+                if (!spec.enabled and std.mem.eql(u8, spec.path(), item.spec.path())) {
+                    return true;
+                }
+            }
         }
     }
 
@@ -91,6 +95,11 @@ test "captured overrides are independent and disabling removes only that plugin'
     try std.testing.expectEqual(@as(u16, 1), disabled_snapshot.binding_count);
     try std.testing.expect(disabled_snapshot.bindings[0].action == .toggle_sidebar);
     try std.testing.expect(!disabled_snapshot.bindings_prefixed[0]);
+    var moved = original;
+    moved.plugins[0].path_bytes[0] = 'y';
+    captured.apply(&moved);
+    try std.testing.expectEqual(@as(u16, 2), moved.binding_count);
+    try std.testing.expect(moved.plugins[0].enabled);
     overrides.apply(&original);
     try std.testing.expect(original.plugins[0].enabled);
     try std.testing.expectEqual(@as(u16, 2), original.binding_count);

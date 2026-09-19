@@ -27,3 +27,8 @@ fn request(client: *Client, reply: *core.ClientCommand, enabled: bool) !void {
     client.reload.force_next = true;
     reply.status = .admitted;
 }
+
+/// Queues disablement and removal of the plugin's source bindings. Example: `try plugin_toggles.disable(client, reply);`
+pub fn disable(client: *Client, reply: *core.ClientCommand) !void {
+    try request(client, reply, false);
+}

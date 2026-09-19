@@ -100,7 +100,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [x] `plugin list`
 - [x] `plugin get`
 - [x] `plugin enable`
-- [ ] `plugin disable`
+- [x] `plugin disable`
 - [ ] `plugin run`
 
 ## Client presentation
