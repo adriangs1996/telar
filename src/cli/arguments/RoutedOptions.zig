@@ -20,7 +20,17 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     const group = std.mem.span(args[0]);
     const verb = std.mem.span(args[1]);
     var name_buffer: [64]u8 = undefined;
-    const name = std.fmt.bufPrint(&name_buffer, "{s}_{s}", .{ group, verb }) catch return null;
+    const nested = (std.mem.eql(u8, group, "client") and (std.mem.eql(u8, verb, "open") or std.mem.eql(u8, verb, "clipboard"))) or
+        (std.mem.eql(u8, group, "agent") and (std.mem.eql(u8, verb, "draft") or std.mem.eql(u8, verb, "view")));
+    const consumed: usize = if (nested) 3 else 2;
+    if (args.len < consumed) {
+        return error.MissingClientAction;
+    }
+
+    const name = if (nested)
+        std.fmt.bufPrint(&name_buffer, "{s}_{s}_{s}", .{ group, verb, std.mem.span(args[2]) }) catch return null
+    else
+        std.fmt.bufPrint(&name_buffer, "{s}_{s}", .{ group, verb }) catch return null;
     for (name) |*byte| {
         if (byte.* == '-') {
             byte.* = '_';
@@ -38,8 +48,9 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     }
 
     var self: RoutedOptions = .{ .action = action };
-    var cursor: Cursor = .{ .remaining = args[2..] };
+    var cursor: Cursor = .{ .remaining = args[consumed..] };
     switch (action) {
+        .client_open_goto => {},
         .agent_create => {},
         .workspace_list_collapse => {},
         .workspace_list_expand => {},

@@ -30,6 +30,7 @@ pub const text =
     \\         telar workspace-list expand --client ID [--json] [--socket PATH]
     \\         telar workspace-list collapse --client ID [--json] [--socket PATH]
     \\         telar agent create --client ID [--label TEXT] [--json] [--socket PATH]
+    \\         telar client open goto --client ID [--json] [--socket PATH]
     \\         telar workspace select ID --client ID [--json] [--socket PATH]
     \\         telar client detach ID [--json] [--socket PATH]
     \\         telar command suggest <pane|--current> TEXT [--json] [--socket PATH]

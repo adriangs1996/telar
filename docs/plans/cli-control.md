@@ -111,7 +111,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [x] `sidebar resize`
 - [x] `workspace-list expand`
 - [x] `workspace-list collapse`
-- [ ] `client open goto`
+- [x] `client open goto`
 - [ ] `client open history`
 - [ ] `client copy-mode`
 - [ ] `notification dismiss`
