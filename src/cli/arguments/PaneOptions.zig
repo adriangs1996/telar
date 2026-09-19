@@ -34,6 +34,8 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
         .focus
     else if (std.mem.eql(u8, action_text, "list"))
         .list
+    else if (std.mem.eql(u8, action_text, "get"))
+        .get
     else
         return error.UnknownPaneAction;
     if (action != .list and args.len < 2) {
@@ -70,13 +72,13 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
         const arg = std.mem.span(argument);
         if (std.mem.eql(u8, arg, "--json")) {
             options.json = true;
-        } else if (std.mem.eql(u8, arg, "--workspace") and action == .list) {
+        } else if (std.mem.eql(u8, arg, "--workspace") and (action == .list or action == .get)) {
             if (options.workspace != null) {
                 return error.DuplicateWorkspaceOption;
             }
 
             options.workspace = try entity_target.Target.parse(std.mem.span(try cursor.require(error.MissingWorkspaceId)));
-        } else if (std.mem.eql(u8, arg, "--tab") and action == .list) {
+        } else if (std.mem.eql(u8, arg, "--tab") and (action == .list or action == .get)) {
             if (options.tab != null) {
                 return error.DuplicateTabOption;
             }

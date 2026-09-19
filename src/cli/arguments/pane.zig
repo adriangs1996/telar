@@ -3,7 +3,7 @@
 const PaneDirectionType = @import("telar-core").PaneDirection;
 const std = @import("std");
 
-pub const PaneAction = enum { read, send_keys, focus, list };
+pub const PaneAction = enum { read, send_keys, focus, list, get };
 
 pub fn parsePaneDirection(value: []const u8) ?PaneDirectionType {
     if (std.mem.eql(u8, value, "left")) {

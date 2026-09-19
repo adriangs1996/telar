@@ -41,7 +41,7 @@ No simulated keyboard input is a substitute for an implemented command.
 ## Panes
 
 - [x] `pane list`
-- [ ] `pane get`
+- [x] `pane get`
 - [ ] `pane create`
 - [ ] `pane split`
 - [ ] `pane close`

@@ -675,6 +675,27 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(panes[1]["pane_generation"], 10)
         self.assertEqual(panes[1]["workspace_id"], 42)
 
+    def test_pane_get_reads_an_untracked_terminal_in_an_explicit_tab(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x08)
+            reply = bytes([0x86]) + request[1:] + struct.pack("<HQBBQ", 1, 5, 0, 0, 9)
+            send_frame(connection, reply)
+
+        args = ["pane", "get", "5", "--workspace", "42", "--tab", "8", "--json"]
+        result = self.run_control(args, exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"workspace_id": 42, "tab_id": 8, "position": 0, "pane_id": 5, "pane_generation": 9, "kind": "terminal", "lifecycle": "running"})
+
+    def test_pane_get_missing_target_produces_no_partial_json(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            send_frame(connection, bytes([0x86]) + request[1:] + struct.pack("<H", 0))
+
+        result = self.run_control(["pane", "get", "5", "--workspace", "42", "--tab", "8", "--json"], exchange)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stdout, "")
+
 
 if __name__ == "__main__":
     unittest.main()

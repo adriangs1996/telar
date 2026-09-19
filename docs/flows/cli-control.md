@@ -209,3 +209,8 @@ generation, kind and lifecycle. Queries attach to no PTY and start no runtime.
 The catalog owns copied IDs before issuing another request and is bounded by
 the runtime pane limit. Concurrent removal fails explicitly; this is not an
 atomic cross-workspace snapshot. Output begins only after enumeration succeeds.
+
+`telar pane get ID|--current [--workspace ID [--tab ID]] [--json]` selects one
+entry from the same topology catalog, including terminals without an observed
+agent. It prints one object with a zero-based position, or exits 2 without
+partial output when absent. Explicit tab scope avoids full-runtime enumeration.

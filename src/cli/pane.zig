@@ -21,7 +21,7 @@ const SnapshotType = @import("Snapshot.zig");
 /// std.process.exit(try pane.run(process_init, options));
 /// ```
 pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
-    var session = if (options.action == .list) try SessionType.attach(init, options.socket) else try SessionType.open(init, options.socket);
+    var session = if (options.action == .list or options.action == .get) try SessionType.attach(init, options.socket) else try SessionType.open(init, options.socket);
     defer session.close();
     var output_buffer: [16 * 1024]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
@@ -38,7 +38,7 @@ pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
 }
 
 fn execute(session: *SessionType, options: PaneOptions, context: ExecutionContextType) !u8 {
-    if (options.action == .list) {
+    if (options.action == .list or options.action == .get) {
         return inspect(session, options, context);
     }
 
@@ -51,7 +51,7 @@ fn execute(session: *SessionType, options: PaneOptions, context: ExecutionContex
         try resolvePane(session, options.target, context.environ);
 
     switch (options.action) {
-        .list => unreachable,
+        .list, .get => unreachable,
         .read => {
             const text = try session.readPane(pane, .{ .rows = options.lines, .source = options.source });
             if (options.json) {
@@ -121,6 +121,28 @@ fn inspect(session: *SessionType, options: PaneOptions, context: ExecutionContex
         .tab = if (options.tab) |target| try core.tab(try target.resolve(context.environ, "TELAR_TAB_ID")) else null,
     };
     try catalog.load();
+    if (options.action == .get) {
+        const wanted = switch (options.target) {
+            .current => try control.currentPaneId(context.environ),
+            .pane => |id| id,
+            .name => return error.InvalidPaneId,
+        };
+        for (catalog.entries[0..catalog.count]) |*entry| {
+            if (core.raw(entry.pane.pane_id) != wanted) {
+                continue;
+            }
+
+            try entry.write(context.writer, options.json);
+            if (options.json) {
+                try context.writer.writeByte('\n');
+            }
+
+            return agent.exit_ok;
+        }
+
+        return error.PaneNotFound;
+    }
+
     if (options.json) {
         try context.writer.writeByte('[');
     } else {
