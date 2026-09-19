@@ -66,13 +66,32 @@ pub fn prompt(self: *ManagedAgent, input: AgentPromptInput) !void {
     const snapshot = try self.session.gpa.create(core.AgentThreadSnapshot);
     defer self.session.gpa.destroy(snapshot);
     try self.read(snapshot);
+    var selection = snapshot.options;
+    if (input.model) |model_id| {
+        const model = snapshot.findModel(model_id) orelse return error.UnsupportedAgentModel;
+        try selection.setModel(model_id);
+        selection.effort = model.default_effort;
+    }
+
+    if (input.effort) |effort| {
+        selection.effort = effort;
+    }
+
+    if (input.access) |access| {
+        selection.access = access;
+    }
+
+    if (!snapshot.accepts(selection)) {
+        return error.InvalidAgentOptions;
+    }
+
     const response = try self.session.exchange(core.encodeAgentPrompt, core.AgentPrompt{
         .request_id = .none,
         .pane_id = try core.pane(self.pane.pane_id),
         .pane_generation = self.pane.pane_generation,
         .text = input.text,
         .images = input.images,
-        .options = snapshot.options,
+        .options = selection,
     });
     if (response != .request_completed) {
         return error.UnexpectedRuntimeResponse;

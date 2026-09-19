@@ -470,6 +470,35 @@ class ControlTests(unittest.TestCase):
         result = self.run_control(["agent", "prompt", "7", "", "--image", "/tmp/first.png", "--image", "/tmp/second.png"], exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_agent_prompt_validates_and_transmits_provider_options(self):
+        def exchange(connection):
+            for _ in range(2):
+                receive_frame(connection)
+                send_frame(connection, agent_snapshot())
+            request = receive_frame(connection)
+            send_frame(connection, bytes([0x86]) + request[1:] + struct.pack("<HQBBQ", 1, 7, 0, 1, 9))
+            query_thread(connection)
+            request = receive_frame(connection)
+            self.assertEqual(request[25:], sized16("Review") + sized16("model-1") + sized16("low") + bytes([0, 0]))
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+
+        result = self.run_control(["agent", "prompt", "7", "Review", "--model", "model-1", "--effort", "low", "--access", "read_only"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_agent_prompt_rejects_unknown_models_before_submission(self):
+        def exchange(connection):
+            for _ in range(2):
+                receive_frame(connection)
+                send_frame(connection, agent_snapshot())
+            request = receive_frame(connection)
+            send_frame(connection, bytes([0x86]) + request[1:] + struct.pack("<HQBBQ", 1, 7, 0, 1, 9))
+            query_thread(connection)
+            self.assertEqual(connection.recv(1), b"")
+
+        result = self.run_control(["agent", "prompt", "7", "Review", "--model", "unknown"], exchange)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("UnsupportedAgentModel", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -21,6 +21,9 @@ json: bool = false,
 socket: ?[*:0]const u8 = null,
 approval_id: ?u64 = null,
 images: core.AgentImagePaths = .{},
+model: ?[]const u8 = null,
+effort: ?core.AgentEffort = null,
+access: ?core.AgentAccess = null,
 
 pub fn parse(args: []const [*:0]const u8) !AgentOptions {
     if (args.len == 0) {
@@ -115,6 +118,27 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         const arg = std.mem.span(argument);
         if (std.mem.eql(u8, arg, "--json")) {
             options.json = true;
+        } else if (std.mem.eql(u8, arg, "--model")) {
+            if (action != .prompt or options.model != null) {
+                return error.InvalidModelOption;
+            }
+
+            const value = std.mem.span(try cursor.require(error.MissingModel));
+            var selection: core.AgentOptions = .{};
+            try selection.setModel(value);
+            options.model = value;
+        } else if (std.mem.eql(u8, arg, "--effort")) {
+            if (action != .prompt or options.effort != null) {
+                return error.InvalidEffortOption;
+            }
+
+            options.effort = try core.AgentEffort.init(std.mem.span(try cursor.require(error.MissingEffort)));
+        } else if (std.mem.eql(u8, arg, "--access")) {
+            if (action != .prompt or options.access != null) {
+                return error.InvalidAccessOption;
+            }
+
+            options.access = std.meta.stringToEnum(core.AgentAccess, std.mem.span(try cursor.require(error.MissingAccess))) orelse return error.InvalidAccess;
         } else if (std.mem.eql(u8, arg, "--image")) {
             if (action != .prompt) {
                 return error.UnknownAgentOption;

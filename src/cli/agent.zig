@@ -153,8 +153,12 @@ fn prompt(session: *SessionType, options: AgentOptions, output: ExecutionContext
     };
     if (try isManaged(session, target)) {
         var managed: ManagedAgent = .{ .session = session, .pane = pane };
-        try managed.prompt(.{ .text = std.mem.span(options.text.?), .images = options.images });
+        try managed.prompt(.{ .text = std.mem.span(options.text.?), .images = options.images, .model = options.model, .effort = options.effort, .access = options.access });
     } else {
+        if (options.model != null or options.effort != null or options.access != null) {
+            return error.OptionsRequireManagedAgent;
+        }
+
         if (options.images.count != 0) {
             return error.ImagesRequireManagedAgent;
         }

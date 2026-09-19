@@ -101,6 +101,9 @@ pub const text =
     \\  --timeout SECS   Give up after SECS seconds (wait, prompt --wait)
     \\  --wait           Wait for the agent to finish after prompting
     \\    --image PATH     Attach an absolute PNG path to a managed prompt (repeatable, maximum 4)
+    \\    --model ID       Select an advertised model for a managed prompt
+    \\    --effort ID      Select a provider-advertised effort level
+    \\    --access MODE    read_only, workspace, full_access (managed prompt)
     \\  --lines N        Rows to read (default 40, maximum 200)
     \\  --source KIND    recent (scrollback + screen) or screen
     \\  --enter          Append Enter after the sent text

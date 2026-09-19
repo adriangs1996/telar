@@ -139,3 +139,8 @@ changed generation fails before submission, with no fallback or duplicate send.
 the existing protocol validator. An empty text argument supports image-only
 submissions. Paths refer to the runtime machine; the provider performs image
 loading. Terminal panes reject image submissions before sending any text.
+
+`agent prompt --model ID --effort ID --access MODE` validates model/effort
+against the live catalog before submission. Selecting a model uses its default
+effort unless overridden; omitted options retain the current selection. Access
+is `read_only`, `workspace` or `full_access`. Terminal panes reject these flags.
