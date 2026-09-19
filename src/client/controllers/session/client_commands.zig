@@ -9,6 +9,7 @@ const pane_geometry = @import("../panes/pane_geometry.zig");
 const copy_modes = @import("../input/copy_modes.zig");
 const pane_viewports = @import("../panes/pane_viewports.zig");
 const agent_threads = @import("../agents/agent_threads.zig");
+const sidebar_toggles = @import("../notifications/sidebar_toggles.zig");
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
@@ -31,6 +32,14 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .sidebar_show => {
+            if (!client.model.sidebarVisible()) {
+                var handler = sidebar_toggles.handler(client);
+                _ = try handler.execute();
+            }
+
+            try sidebarState(client, reply);
+        },
         .sidebar_get => {
             try sidebarState(client, reply);
         },

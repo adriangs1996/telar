@@ -853,6 +853,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["width"], 32)
 
+    def test_sidebar_show_uses_explicit_client_control(self):
+        result = self.run_control(["sidebar", "show", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=13, target=0, input_text="", input_value=0))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["action"], "sidebar_show")
+
 
 if __name__ == "__main__":
     unittest.main()
