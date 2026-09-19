@@ -57,7 +57,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 103;
+const corpus_len = 104;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -1035,6 +1035,10 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     clients.entries[0] = .{ .id = 7, .generation = 9, .identity = 11, .attachments = 2, .last_input_pane = 5, .last_input_sequence = 12 };
     helper.add(.{ .name = "client_list", .direction = .server, .golden_hex = golden.client_list }, helper.commit(
         try schema.encodeClientList(helper.space(), clients),
+    ));
+
+    helper.add(.{ .name = "detach_client", .direction = .client, .golden_hex = golden.detach_client }, helper.commit(
+        try schema.encodeDetachClient(helper.space(), .{ .request_id = @enumFromInt(5), .client_id = 7, .client_generation = 9 }),
     ));
 
     std.debug.assert(index == corpus_len);

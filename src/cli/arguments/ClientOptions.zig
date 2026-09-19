@@ -2,7 +2,7 @@ const std = @import("std");
 const Cursor = @import("Cursor.zig");
 const ClientOptions = @This();
 
-pub const Action = enum { list, get };
+pub const Action = enum { list, get, detach };
 action: Action,
 target: ?u64 = null,
 json: bool = false,
@@ -16,7 +16,7 @@ pub fn parse(args: []const [*:0]const u8) !ClientOptions {
 
     var self: ClientOptions = .{ .action = std.meta.stringToEnum(Action, std.mem.span(args[0])) orelse return error.UnknownClientAction };
     var index: usize = 1;
-    if (self.action == .get) {
+    if (self.action != .list) {
         if (args.len < 2) {
             return error.MissingClientId;
         }

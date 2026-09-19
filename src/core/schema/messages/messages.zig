@@ -99,6 +99,7 @@ const tab = @import("tab.zig");
 const runtime = @import("runtime.zig");
 const workspace = @import("workspace.zig");
 const clients = @import("clients.zig");
+const DetachClient = @import("DetachClient.zig");
 const QueryClients = @import("QueryClients.zig");
 const ClientList = @import("../../ClientList.zig");
 const notification = @import("notification_support.zig");
@@ -112,6 +113,7 @@ const std = @import("std");
 
 pub const ClientMessage = union(enum) {
     query_clients: QueryClients,
+    detach_client: DetachClient,
     open_pane: OpenPaneViewType,
     pane_input: PaneInputType,
     pane_resize: PaneResizeType,
@@ -266,6 +268,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .acknowledge_agent => .{
             .acknowledge_agent = try GenericDerived(AcknowledgeAgentType).decode(&decoder),
         },
+        .detach_client => .{ .detach_client = try clients.decodeDetachClient(&decoder) },
         .query_clients => .{ .query_clients = try clients.decodeQueryClients(&decoder) },
         .query_agents => .{ .query_agents = try GenericDerived(QueryAgentsType).decode(&decoder) },
         .read_pane => .{ .read_pane = try GenericDerived(ReadPaneType).decode(&decoder) },

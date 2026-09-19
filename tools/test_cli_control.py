@@ -750,6 +750,20 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")
 
+    def test_client_detach_uses_the_discovered_generation(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            entry = struct.pack("<QQQHQQ", 7, 9, 11, 2, 5, 12)
+            send_frame(connection, bytes([0xAD]) + request[1:] + bytes([1]) + entry)
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x34)
+            self.assertEqual(struct.unpack_from("<QQ", request, 9), (7, 9))
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+
+        result = self.run_control(["client", "detach", "7", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"id": 7, "generation": 9, "detached": True})
+
 
 if __name__ == "__main__":
     unittest.main()

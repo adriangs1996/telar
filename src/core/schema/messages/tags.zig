@@ -4,6 +4,7 @@
 
 pub const ClientTag = enum(u8) {
     query_clients = 0x33,
+    detach_client = 0x34,
     open_pane = 0x01,
     pane_input = 0x02,
     pane_resize = 0x03,

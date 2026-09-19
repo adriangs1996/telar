@@ -32,6 +32,7 @@ const CopySelectionType = @import("telar-core").CopySelection;
 const ShowNotificationType = @import("telar-core").ShowNotification;
 const ClientLayoutUpdateViewType = @import("telar-core").ClientLayoutUpdateView;
 const AcknowledgeAgentType = @import("telar-core").AcknowledgeAgent;
+const DetachClient = @import("telar-core").DetachClient;
 const QueryClients = @import("telar-core").QueryClients;
 const QueryAgentsType = @import("telar-core").QueryAgents;
 const ReadPaneType = @import("telar-core").ReadPane;
@@ -85,6 +86,7 @@ pub fn classify(tag: Tag) RequestClass {
         .agent_approval,
         .query_agent_thread,
         .query_agent_history,
+        .detach_client,
         .query_clients,
         .query_agents,
         .read_pane,
@@ -165,6 +167,7 @@ const testing_handlers: GenericHandlers(RequestRouterCapture) = .{
     .show_notification = captureHandler(.show_notification, ShowNotificationType),
     .update_client_layout = captureHandler(.update_client_layout, ClientLayoutUpdateViewType),
     .acknowledge_agent = captureHandler(.acknowledge_agent, AcknowledgeAgentType),
+    .detach_client = captureHandler(.detach_client, DetachClient),
     .query_clients = captureHandler(.query_clients, QueryClients),
     .query_agents = captureHandler(.query_agents, QueryAgentsType),
     .read_pane = captureHandler(.read_pane, ReadPaneType),
@@ -245,6 +248,7 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]ClientMessageType {
         .{ .agent_approval = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .approval_id = 4, .accept = true } },
         .{ .query_agent_thread = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1 } },
         .{ .query_agent_history = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .view_generation = 1 } },
+        .{ .detach_client = .{ .request_id = request_id, .client_id = 7, .client_generation = 9 } },
         .{ .query_clients = .{ .request_id = request_id } },
         .{ .query_agents = .{ .request_id = request_id } },
         .{ .read_pane = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .rows = 40, .source = .screen } },
@@ -309,6 +313,7 @@ test "Router delegates every client tag exactly once and preserves classificatio
             .agent_approval,
             .query_agent_thread,
             .query_agent_history,
+            .detach_client,
             .query_clients,
             .query_agents,
             .read_pane,

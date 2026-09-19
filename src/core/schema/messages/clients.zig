@@ -4,6 +4,7 @@ const tags = @import("tags.zig");
 const id = @import("../id.zig");
 const Encoder = @import("../Encoder.zig");
 const Decoder = @import("../Decoder.zig");
+const DetachClient = @import("DetachClient.zig");
 const QueryClients = @import("QueryClients.zig");
 const ClientList = @import("../../ClientList.zig");
 const GenericDerived = @import("../GenericDerived.zig").Type;
@@ -87,4 +88,14 @@ test "client catalog refuses oversized counts and invalid routes" {
     var decoder = Decoder.init(encoded[1..]);
     const decoded = try decodeClientList(&decoder);
     try std.testing.expectEqualDeep(list.entries[0], decoded.entries[0]);
+}
+
+/// Requests teardown of one exact UI connection. Example: `const bytes = try clients.encodeDetachClient(buffer, request);`
+pub fn encodeDetachClient(buffer: []u8, request: DetachClient) ![]const u8 {
+    return codec.encodeDerived(@intFromEnum(tags.ClientTag.detach_client), buffer, request);
+}
+
+/// Decodes generation-scoped teardown. Example: `const request = try clients.decodeDetachClient(decoder);`
+pub fn decodeDetachClient(decoder: *Decoder) !DetachClient {
+    return GenericDerived(DetachClient).decode(decoder);
 }

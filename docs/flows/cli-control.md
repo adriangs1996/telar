@@ -234,3 +234,10 @@ are rejected by the codec; the golden corpus includes discovery and reply.
 
 `telar client get ID [--json]` returns one live interactive connection from
 the same bounded catalog. An absent connection exits 2 with empty stdout.
+
+`telar client detach ID [--json]` resolves the current connection generation,
+then requests its teardown. The runtime accepts only a separate control caller
+and an exact live UI generation. The existing teardown shuts its connection,
+releases attachments and geometry, and leaves runtime-owned processes alive.
+The handler validates before effects; stale generations and observers are
+covered by tests. Schema generation 61 adds the bounded teardown request.

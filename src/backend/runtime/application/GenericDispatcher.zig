@@ -1,3 +1,5 @@
+const ClientDetachController = @import("../entrypoints/requests/ClientDetachController.zig");
+const DetachClient = @import("telar-core").DetachClient;
 const ClientQueryController = @import("../entrypoints/requests/ClientQueryController.zig");
 const QueryClients = @import("telar-core").QueryClients;
 const GenericRuntimePort = @import("GenericRuntimePort.zig").Type;
@@ -212,6 +214,7 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             .show_notification = routeShowNotification,
             .update_client_layout = routeUpdateClientLayout,
             .acknowledge_agent = routeAcknowledgeAgent,
+            .detach_client = routeDetachClient,
             .query_clients = routeQueryClients,
             .query_agents = routeQueryAgents,
             .read_pane = routeReadPane,
@@ -831,6 +834,19 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             const now_ms = std.Io.Timestamp.now(request.application.io, .real).toMilliseconds();
 
             controller.acknowledgeAgent(acknowledgement, now_ms);
+        }
+
+        fn routeDetachClient(request: *ClientRequestContext, command: DetachClient) !void {
+            var controller: ClientDetachController = .{
+                .handler = .{ .clients = request.application.clients, .effects = .{ .context = request.application, .drop = dropControlledClient } },
+                .session = request.session,
+            };
+            try controller.detach(command);
+        }
+
+        fn dropControlledClient(raw_context: *anyopaque, key: ClientKeyType) void {
+            const application: *Application = @ptrCast(@alignCast(raw_context));
+            application.dropClient(key);
         }
 
         fn routeQueryClients(request: *ClientRequestContext, query: QueryClients) !void {

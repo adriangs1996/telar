@@ -400,3 +400,6 @@ pub const ClientList = @import("../ClientList.zig");
 pub const QueryClients = @import("messages/QueryClients.zig");
 pub const encodeQueryClients = @import("messages/clients.zig").encodeQueryClients;
 pub const encodeClientList = @import("messages/clients.zig").encodeClientList;
+
+pub const DetachClient = @import("messages/DetachClient.zig");
+pub const encodeDetachClient = @import("messages/clients.zig").encodeDetachClient;

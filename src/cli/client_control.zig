@@ -28,13 +28,28 @@ fn execute(init: std.process.Init, options: ClientOptions) !void {
     const list = response.client_list;
     var buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &buffer);
-    if (options.action == .get) {
+    if (options.action != .list) {
         for (list.entries[0..list.count]) |entry| {
             if (entry.id != options.target.?) {
                 continue;
             }
 
-            try writeOne(&output.interface, entry, options.json);
+            if (options.action == .detach) {
+                const reply = try session.exchange(core.encodeDetachClient, core.DetachClient{ .request_id = .none, .client_id = entry.id, .client_generation = entry.generation });
+                if (reply != .request_completed) {
+                    return error.UnexpectedRuntimeResponse;
+                }
+
+                if (options.json) {
+                    try std.json.Stringify.value(.{ .id = entry.id, .generation = entry.generation, .detached = true }, .{}, &output.interface);
+                    try output.interface.writeByte('\n');
+                } else {
+                    try output.interface.print("client {d} detached\n", .{entry.id});
+                }
+            } else {
+                try writeOne(&output.interface, entry, options.json);
+            }
+
             try output.interface.flush();
             return;
         }
