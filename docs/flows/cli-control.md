@@ -253,3 +253,8 @@ and target. Command and response text own at most 4096 UTF-8 bytes; queueing
 never borrows decoder storage. Socket contracts cover success, UI rejection and
 incorrect completion generations; runtime tests cover admission, ownership and
 stale/unrelated completions. Protocol generation is 62.
+
+`tab create --client ID [--label TEXT]` uses the selected client’s existing tab
+creation gate, launch configuration and workspace geometry. It returns admission
+after queuing creation; the runtime still confirms the new tab asynchronously.
+Labels preserve UTF-8. A busy or unattached client fails without claiming creation.

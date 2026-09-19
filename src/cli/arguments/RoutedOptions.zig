@@ -19,14 +19,21 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
 
     const group = std.mem.span(args[0]);
     const verb = std.mem.span(args[1]);
-    const action: core.ClientAction = if (std.mem.eql(u8, group, "workspace") and std.mem.eql(u8, verb, "select")) .workspace_select else return null;
+    var name_buffer: [64]u8 = undefined;
+    const name = std.fmt.bufPrint(&name_buffer, "{s}_{s}", .{ group, verb }) catch return null;
+    const action = std.meta.stringToEnum(core.ClientAction, name) orelse return null;
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[2..] };
-    self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));
+    switch (action) {
+        .workspace_select => self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget))),
+        .tab_create => {},
+    }
     while (cursor.next()) |argument| {
         const arg = std.mem.span(argument);
         if (std.mem.eql(u8, arg, "--client") and self.client_id == 0) {
             self.client_id = try positive(std.mem.span(try cursor.require(error.MissingClientId)));
+        } else if (std.mem.eql(u8, arg, "--label") and self.action == .tab_create and self.text.len == 0) {
+            self.text = std.mem.span(try cursor.require(error.MissingLabel));
         } else if (std.mem.eql(u8, arg, "--json") and !self.json) {
             self.json = true;
         } else if (std.mem.eql(u8, arg, "--socket") and self.socket == null) {

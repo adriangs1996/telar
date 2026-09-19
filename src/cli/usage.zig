@@ -12,6 +12,7 @@ pub const text =
     \\       telar runtime status [--json] [--socket PATH]
     \\         telar client list [--json] [--socket PATH]
     \\         telar client get ID [--json] [--socket PATH]
+    \\         telar tab create --client ID [--label TEXT] [--json] [--socket PATH]
     \\         telar workspace select ID --client ID [--json] [--socket PATH]
     \\         telar client detach ID [--json] [--socket PATH]
     \\         telar command suggest <pane|--current> TEXT [--json] [--socket PATH]
