@@ -54,7 +54,15 @@ fn execute(init: std.process.Init, options: Options) !u8 {
 
     var buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &buffer);
-    if (reply.action == .sidebar_get) {
+    if (reply.action == .agent_draft_get) {
+        if (options.json) {
+            try std.json.Stringify.value(.{ .pane_id = reply.target_id, .text = reply.text(), .image_count = reply.value }, .{}, &output.interface);
+            try output.interface.writeByte('\n');
+        } else {
+            try output.interface.writeAll(reply.text());
+            try output.interface.writeByte('\n');
+        }
+    } else if (reply.action == .sidebar_get) {
         if (options.json) {
             try std.json.Stringify.value(.{ .visible = std.mem.eql(u8, reply.text(), "visible"), .width = reply.value }, .{}, &output.interface);
             try output.interface.writeByte('\n');

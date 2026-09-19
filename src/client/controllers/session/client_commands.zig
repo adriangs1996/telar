@@ -37,6 +37,13 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .agent_draft_get => {
+            const pane_id: core.PaneId = @enumFromInt(reply.target_id);
+            const pane = client.model.agentPane(pane_id) orelse return error.AgentPaneNotAttached;
+            reply.value = pane.composerImages().count;
+            try reply.setText(pane.composerSlice());
+            reply.status = .applied;
+        },
         .client_clipboard_copy => {
             try client.host_clipboard.set(client.host_clipboard.context, reply.text());
             reply.length = 0;

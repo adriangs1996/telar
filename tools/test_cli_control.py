@@ -913,6 +913,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["action"], "client_clipboard_copy")
 
+    def test_agent_draft_get_targets_client_owned_composer(self):
+        result = self.run_control(["agent", "draft", "get", "5", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=25, target=5, status=1, input_text="", text="retained draft ü", return_value=2))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"pane_id": 5, "text": "retained draft ü", "image_count": 2})
+
 
 if __name__ == "__main__":
     unittest.main()

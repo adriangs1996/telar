@@ -331,3 +331,6 @@ Success means the bounded opener worker or tab request was admitted.
 
 `client clipboard copy copied ü`: Passes bounded UTF-8 text to the selected host’s clipboard port. The host may
 complete the clipboard write asynchronously, so the CLI reports admission.
+
+`agent draft get`: Reads the entire bounded composer text and attachment count from an attached
+native agent pane. This is client draft state, independent of runtime conversation history.
