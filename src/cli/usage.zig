@@ -35,6 +35,7 @@ pub const text =
     \\         telar client copy-mode --client ID [--json] [--socket PATH]
     \\         telar notification dismiss ID --client ID [--json] [--socket PATH]
     \\         telar client open-link URI --client ID [--json] [--socket PATH]
+    \\         telar client clipboard copy TEXT --client ID [--json] [--socket PATH]
     \\         telar workspace select ID --client ID [--json] [--socket PATH]
     \\         telar client detach ID [--json] [--socket PATH]
     \\         telar command suggest <pane|--current> TEXT [--json] [--socket PATH]

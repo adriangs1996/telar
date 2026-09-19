@@ -328,3 +328,6 @@ An already active copy mode is a successful no-op; unsupported or blocked panes 
 
 `client open-link https://example.com`: Validates and routes a link through existing file/tab and host-opener policy.
 Success means the bounded opener worker or tab request was admitted.
+
+`client clipboard copy copied ü`: Passes bounded UTF-8 text to the selected host’s clipboard port. The host may
+complete the clipboard write asynchronously, so the CLI reports admission.

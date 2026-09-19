@@ -908,6 +908,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["action"], "client_open_link")
 
+    def test_client_clipboard_copy_uses_explicit_client_control(self):
+        result = self.run_control(["client", "clipboard", "copy", "copied \u00fc", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=24, target=0, input_text="copied \u00fc", input_value=0))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["action"], "client_clipboard_copy")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -121,7 +121,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [ ] `agent draft attach`
 - [ ] `agent view expand`
 - [ ] `agent view collapse`
-- [ ] `client clipboard copy`
+- [x] `client clipboard copy`
 
 ## Diagnostics
 

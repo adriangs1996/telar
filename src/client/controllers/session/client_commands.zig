@@ -37,6 +37,11 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .client_clipboard_copy => {
+            try client.host_clipboard.set(client.host_clipboard.context, reply.text());
+            reply.length = 0;
+            reply.status = .admitted;
+        },
         .client_open_link => {
             const target = try LinkTarget.init(reply.text());
             if (!try link_openings.apply(client, target)) {
