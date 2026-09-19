@@ -360,3 +360,8 @@ coordinates and delivers it to the selected client’s clipboard. It uses the
 runtime’s existing selection size/availability checks. Success means admission;
 extraction and host clipboard delivery complete asynchronously. Native agent
 text is available through `agent thread`/`agent history` and `client clipboard copy`.
+
+`layout get --client ID` exports the active tab’s full split tree, ratios, pane
+surfaces, focused pane and fullscreen state as a bounded hexadecimal token.
+The token uses Telar’s validated layout schema and stable runtime identities;
+it is intended for `layout apply` against the same live tab and pane membership.

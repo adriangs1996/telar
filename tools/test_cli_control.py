@@ -943,6 +943,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "admitted")
 
+    def test_layout_get_emits_a_reusable_layout_token(self):
+        result = self.run_control(["layout", "get", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=31, target=0, status=1, text="0102aabb"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"encoding": "telar-layout-hex", "data": "0102aabb"})
+
 
 if __name__ == "__main__":
     unittest.main()

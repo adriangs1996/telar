@@ -16,6 +16,7 @@ const notifications = @import("../notifications/notifications.zig");
 const LinkTarget = @import("../../links/LinkTarget.zig");
 const link_openings = @import("../input/link_openings.zig");
 const AgentThreadHandler = @import("../../application/agents/AgentThreadHandler.zig");
+const layout_commands = @import("layout_commands.zig");
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
@@ -38,6 +39,9 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .layout_get => {
+            try layout_commands.get(client, reply);
+        },
         .pane_copy => {
             const selection = try core.CopySelection.fromText(@enumFromInt(reply.target_id), reply.text());
             const tab = client.model.activeTabModelConst() orelse return error.NoActiveTab;
