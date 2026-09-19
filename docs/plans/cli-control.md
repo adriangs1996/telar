@@ -80,7 +80,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [ ] `agent acknowledge`
 - [x] `agent report-state`
 - [x] `agent report-title`
-- [ ] `agent report-command`
+- [x] `agent report-command`
 
 ## Assistance
 

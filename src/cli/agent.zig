@@ -48,7 +48,7 @@ pub fn run(init: std.process.Init, options: AgentOptions) !u8 {
 }
 
 fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContextType) !u8 {
-    if (options.action == .report_title or options.action == .report_state) {
+    if (options.action == .report_title or options.action == .report_state or options.action == .report_command) {
         var reports: AgentReports = .{ .session = session, .options = options, .output = output };
         try reports.run();
         return exit_ok;
@@ -58,7 +58,7 @@ fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContex
     try session.fetchAgents(&snapshot);
 
     switch (options.action) {
-        .report_title, .report_state => unreachable,
+        .report_title, .report_state, .report_command => unreachable,
         .list => {
             try writeList(output.writer, &snapshot, options.json);
             return exit_ok;

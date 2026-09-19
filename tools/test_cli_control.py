@@ -603,6 +603,20 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(json.loads(result.stdout)["accepted"])
 
+    def test_agent_report_command_preserves_correlation_and_exit_code(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x2A)
+            self.assertEqual(struct.unpack_from("<QQ", request, 9), (7, 9))
+            expected = bytes([1]) + sized16("codex") + sized16("tool-1")
+            expected += struct.pack("<I", 8) + b"zig test" + sized16("/tmp") + sized16("thread-1") + bytes([1]) + struct.pack("<i", 2)
+            self.assertEqual(request[25:], expected)
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+
+        args = ["agent", "report-command", "--current", "finished", "zig test", "--provider", "codex", "--tool-call", "tool-1", "--cwd", "/tmp", "--session", "thread-1", "--exit-code", "2", "--json"]
+        result = self.run_control(args, exchange, {"TELAR_PANE_ID": "7", "TELAR_PANE_GENERATION": "9"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -175,3 +175,8 @@ discovery. Other targets resolve through the agent snapshot.
 working, blocked, ready, exited and settling. Optional flags preserve blocked
 reason, event text, session ID and session file kind/path. The shared wire
 validator rejects invalid state/reason combinations before any report is sent.
+
+`telar agent report-command TARGET started|finished COMMAND --provider NAME`
+reports a shell-tool observation without executing it. Optional `--tool-call`,
+`--cwd`, `--session` and `--exit-code` preserve its correlation and outcome. A
+started report cannot carry an exit code; provider and command are required.

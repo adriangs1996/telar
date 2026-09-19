@@ -2,6 +2,7 @@ const agent = @import("agent.zig");
 const core = @import("telar-core");
 const AgentHistoryInput = @import("../AgentHistoryInput.zig");
 const AgentReport = @import("../AgentReport.zig");
+const AgentCommandReport = @import("../AgentCommandReport.zig");
 const values = @import("values.zig");
 const AgentStatusType = @import("telar-core").AgentStatus;
 const PaneTextSourceType = @import("telar-core").PaneTextSource;
@@ -29,6 +30,7 @@ access: ?core.AgentAccess = null,
 history: AgentHistoryInput = .{},
 count: ?u32 = null,
 report: ?AgentReport = null,
+command_report: ?AgentCommandReport = null,
 
 pub fn parse(args: []const [*:0]const u8) !AgentOptions {
     if (args.len == 0) {
@@ -76,6 +78,8 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         .report_title
     else if (std.mem.eql(u8, action_text, "report-state"))
         .report_state
+    else if (std.mem.eql(u8, action_text, "report-command"))
+        .report_command
     else
         return error.UnknownAgentAction;
     var options: AgentOptions = .{ .action = action };
@@ -102,6 +106,23 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
 
         options.approval_id = id;
         index = 3;
+    }
+
+    if (action == .report_command) {
+        if (args.len < 4) {
+            return error.MissingCommandReport;
+        }
+
+        options.command_report = .{
+            .phase = std.meta.stringToEnum(core.AgentCommandPhase, std.mem.span(args[2])) orelse return error.InvalidCommandPhase,
+            .command = std.mem.span(args[3]),
+            .provider = "",
+            .tool_call_id = "",
+            .cwd = "",
+            .session = "",
+            .exit_code = null,
+        };
+        index = 4;
     }
 
     if (action == .report_state) {
@@ -157,6 +178,16 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         const arg = std.mem.span(argument);
         if (std.mem.eql(u8, arg, "--json") or (action == .watch and std.mem.eql(u8, arg, "--jsonl"))) {
             options.json = true;
+        } else if (std.mem.eql(u8, arg, "--provider") and action == .report_command) {
+            options.command_report.?.provider = std.mem.span(try cursor.require(error.MissingProvider));
+        } else if (std.mem.eql(u8, arg, "--tool-call") and action == .report_command) {
+            options.command_report.?.tool_call_id = std.mem.span(try cursor.require(error.MissingToolCall));
+        } else if (std.mem.eql(u8, arg, "--cwd") and action == .report_command) {
+            options.command_report.?.cwd = std.mem.span(try cursor.require(error.MissingCwd));
+        } else if (std.mem.eql(u8, arg, "--session") and action == .report_command) {
+            options.command_report.?.session = std.mem.span(try cursor.require(error.MissingSessionReference));
+        } else if (std.mem.eql(u8, arg, "--exit-code") and action == .report_command) {
+            options.command_report.?.exit_code = std.fmt.parseInt(i32, std.mem.span(try cursor.require(error.MissingExitCode)), 10) catch return error.InvalidExitCode;
         } else if (std.mem.eql(u8, arg, "--blocked-reason") and action == .report_state) {
             options.report.?.blocked_reason = std.meta.stringToEnum(core.AgentBlockedReason, std.mem.span(try cursor.require(error.MissingBlockedReason))) orelse return error.InvalidBlockedReason;
         } else if (std.mem.eql(u8, arg, "--event") and action == .report_state) {
@@ -265,6 +296,12 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
 
     if (action == .history and ((options.history.anchor.len == 0) != (options.history.anchor_turn.len == 0) or (options.history.cursor.len != 0 and options.history.anchor.len != 0))) {
         return error.InvalidHistoryPosition;
+    }
+
+    if (options.command_report) |report| {
+        if (report.provider.len == 0 or report.command.len == 0 or (report.phase == .started and report.exit_code != null)) {
+            return error.InvalidCommandReport;
+        }
     }
 
     return options;
