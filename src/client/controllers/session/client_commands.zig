@@ -32,6 +32,16 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .sidebar_resize => {
+            const width = std.math.cast(u16, reply.value) orelse return error.InvalidWidth;
+            if (width == 0) {
+                return error.InvalidWidth;
+            }
+
+            var handler = sidebar_toggles.resizeHandler(client);
+            _ = try handler.execute(.{ .exact = width });
+            try sidebarState(client, reply);
+        },
         .sidebar_hide => {
             if (client.model.sidebarVisible()) {
                 var handler = sidebar_toggles.handler(client);

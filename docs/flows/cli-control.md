@@ -305,3 +305,6 @@ An unattached pane or active copy mode rejects the operation.
 `sidebar show`: Shows the sidebar idempotently and synchronizes pane geometry through the existing controller.
 
 `sidebar hide`: Hides the sidebar idempotently and synchronizes pane geometry through the existing controller.
+
+`sidebar resize 40`: Requests an exact sidebar width. Existing host-width and minimum-width bounds
+apply, and the returned value reports the width actually committed.
