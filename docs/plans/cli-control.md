@@ -127,3 +127,9 @@ No simulated keyboard input is a substitute for an implemented command.
 
 - [x] `diagnostics logs`
 
+
+## Completion
+
+All 82 actions above are implemented and committed individually. See
+[CLI control](../flows/cli-control.md#final-validation) for command semantics,
+automated validation and remaining test-environment limitations.

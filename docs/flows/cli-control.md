@@ -1,7 +1,7 @@
 # CLI control
 
-CLI control commands reuse the runtime's typed protocol. New inspection and
-control commands connect to an existing runtime and never start a server.
+CLI control commands reuse the runtime's typed protocol. New inspection entrypoints and
+routed client commands connect to an existing runtime and never start a server.
 Legacy `agent list/get/wait/prompt/read/report-session` and `pane read/send-keys`
 retain their existing startup behavior.
 `Session` owns the connection and bounded receive buffer; decoded response
@@ -444,3 +444,34 @@ bounded to 64 KiB per file and 64 files, sorted by filename. JSON preserves
 path, component, PID, truncation and text. Symlinks and nonregular directory
 entries are skipped; opened files are checked again for type and ownership.
 These are telemetry logs, not terminal content or captured stderr.
+
+## Final validation
+
+All 82 actions in [the implementation checklist](../plans/cli-control.md) have
+individual commits on `feat/cli-control`, based on `a81a49f2`. Additional commits
+fix provider PATH handling, preserve non-starting semantics for new agent
+commands, separate client command translation by domain, and retain integration
+coverage. Runtime and clients must use the same negotiated schema (generation
+62); the handshake rejects incompatible binaries.
+
+Validated with Zig 0.16.0:
+
+- `zig build test-runtime test-wire test-client test-gui test-cli --summary all -j4`:
+  3,131 passed, one skipped; all 65 build steps succeeded.
+- `python3 tools/test_cli_control.py`: 95 socket contract and failure tests.
+- `python3 tools/test_cli_live.py`: two integration tests against isolated real
+  runtimes, including a PTY-hosted TUI and the isolated plugin worker.
+- Formatting and `codestyle` passed for all 125 changed Zig files; the client
+  module/capability boundary checker passed.
+
+The live suite covers workspace and tab mutations, pane input/read/search/watch,
+telemetry logs, client discovery/detach, sidebar controls, layout round-trip,
+pane split/close, forced config reload, and plugin enable/run/disable. All test
+sockets, configuration and persistent data live under temporary directories.
+It waits for UI negotiation before polling: existing runtime admission owns a
+single handshake slot and a new arrival can preempt an unfinished handshake.
+
+The earlier broad `test-schema` transport run stalled and was terminated;
+these results do not claim that transport integration suite passed. GUI thread
+expansion is covered by GUI tests; external provider accounts, external browser
+opening and real host clipboard delivery were not exercised by the live suite.
