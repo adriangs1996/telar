@@ -170,6 +170,27 @@ class ControlTests(unittest.TestCase):
         self.assertNotEqual(missing.returncode, 0)
         self.assertEqual(missing.stdout, "")
 
+    def test_workspace_create_directory_does_not_require_git(self):
+        with tempfile.TemporaryDirectory(prefix="telar-directory-", dir="/tmp") as directory:
+            def exchange(connection):
+                request = receive_frame(connection)
+                self.assertEqual(request[0], 0x15)
+                self.assertIn(sized16(str(Path(directory).resolve())), request)
+                self.assertIn(sized16("Existing directory"), request)
+                request_id, = struct.unpack_from("<Q", request, 1)
+                opened = bytes([0x81]) + struct.pack("<QQBQQBBQ", request_id, 8, 0, 42, 3, 1, 0, 1)
+                send_frame(connection, opened)
+
+            result = self.run_control([
+                "workspace", "create", "--directory", directory,
+                "--name", "Existing directory", "--json",
+            ], exchange)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout), {
+                "workspace_id": 42, "directory": str(Path(directory).resolve()),
+            })
+            self.assertEqual(list(Path(directory).iterdir()), [])
+
 
 if __name__ == "__main__":
     unittest.main()

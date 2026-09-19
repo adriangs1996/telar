@@ -51,3 +51,9 @@ runtime. The socket test checks interleaved events and escaped labels.
 `telar workspace get ID [--json]` selects one exact entry from that same
 snapshot. `--current` resolves `TELAR_WORKSPACE_ID`; missing or invalid context
 fails before connecting. An absent workspace fails with no partial JSON output.
+
+`telar workspace create --directory PATH [--name NAME]` validates and resolves
+an existing directory before connecting, then uses `create_workspace` with a
+shell launch. The default name is the directory basename. It never runs Git
+unless `--worktree` is supplied. Existing worktree creation keeps its original
+behavior. The socket test uses a temporary directory without a Git repository.

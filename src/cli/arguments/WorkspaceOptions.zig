@@ -68,8 +68,14 @@ pub fn parse(args: []const [*:0]const u8) !WorkspaceOptions {
         }
     }
 
-    if (action == .create and options.branch == null) {
+    if (action == .create and options.branch == null and options.directory == null) {
         return error.MissingWorktreeBranch;
+    }
+
+    if (options.directory) |directory| {
+        if (std.mem.span(directory).len == 0) {
+            return error.EmptyWorkspaceDirectory;
+        }
     }
 
     return options;
@@ -79,4 +85,11 @@ test "workspace list rejects creation options" {
     const options = try WorkspaceOptions.parse(&.{ "list", "--json" });
     try std.testing.expectEqual(workspace.WorkspaceAction.list, options.action);
     try std.testing.expectError(error.UnknownWorkspaceOption, WorkspaceOptions.parse(&.{ "list", "--worktree", "branch" }));
+}
+
+test "workspace creation supports an existing directory without a worktree" {
+    const options = try WorkspaceOptions.parse(&.{ "create", "--directory", "/tmp/project", "--name", "project" });
+    try std.testing.expect(options.branch == null);
+    try std.testing.expectEqualStrings("/tmp/project", std.mem.span(options.directory.?));
+    try std.testing.expectError(error.EmptyWorkspaceDirectory, WorkspaceOptions.parse(&.{ "create", "--directory", "" }));
 }

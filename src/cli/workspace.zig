@@ -39,15 +39,22 @@ fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Wr
         return list(init, options, writer);
     }
 
-    const branch = std.mem.span(options.branch.?);
     var directory_buffer: [4096]u8 = undefined;
     const directory = try resolveDirectory(init, options, &directory_buffer);
-    try addWorktree(init, options, directory);
+    if (options.branch != null) {
+        try addWorktree(init, options, directory);
+    }
+
+    const default_name = if (options.branch) |branch| std.mem.span(branch) else std.fs.path.basename(directory);
+    const name = if (options.name) |value| std.mem.span(value) else default_name;
+    if (name.len == 0) {
+        return error.MissingWorkspaceName;
+    }
 
     var session = try SessionType.open(init, options.socket);
     defer session.close();
     const workspace_id = try session.createWorkspace(.{
-        .name = if (options.name) |name| std.mem.span(name) else branch,
+        .name = name,
         .cwd = directory,
         .arguments = &.{shellArgument(init.minimal.environ)},
     });
@@ -120,6 +127,13 @@ fn list(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Write
 
 fn resolveDirectory(init: std.process.Init, options: WorkspaceOptions, buffer: []u8) ![]const u8 {
     if (options.directory) |directory| {
+        if (options.branch == null) {
+            var dir = try std.Io.Dir.cwd().openDir(init.io, std.mem.span(directory), .{});
+            defer dir.close(init.io);
+            const length = try dir.realPath(init.io, buffer);
+            return buffer[0..length];
+        }
+
         return std.mem.span(directory);
     }
 

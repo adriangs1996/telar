@@ -28,6 +28,7 @@ pub const text =
     \\       telar pane read|send-keys <pane|--current> [options]
     \\       telar pane focus --current --direction left|right|up|down [--json]
     \\       telar workspace create --worktree BRANCH [--name NAME] [--directory DIR]
+    \\       telar workspace create --directory DIR [--name NAME] [--json] [--socket PATH]
     \\       telar workspace list [--json] [--socket PATH]
     \\       telar workspace get <id|--current> [--json] [--socket PATH]
     \\       telar api schema [--json]
