@@ -265,3 +265,6 @@ attachment/snapshot synchronization proceeds. Unknown tabs or blocked selection 
 
 `tab next --client ID` uses the existing cyclic tab selection policy. A single
 tab is a successful no-op; absent tabs and pending snapshot gates fail explicitly.
+
+`tab previous --client ID` uses the existing cyclic tab selection policy. A single
+tab is a successful no-op; absent tabs and pending snapshot gates fail explicitly.

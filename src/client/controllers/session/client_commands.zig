@@ -21,6 +21,9 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .tab_previous => {
+            try selectTabOffset(client, reply, -1);
+        },
         .tab_next => {
             try selectTabOffset(client, reply, 1);
         },

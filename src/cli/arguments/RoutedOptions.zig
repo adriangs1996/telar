@@ -25,6 +25,7 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[2..] };
     switch (action) {
+        .tab_previous => {},
         .tab_next => {},
         .tab_select => self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget))),
         .workspace_select => self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget))),
