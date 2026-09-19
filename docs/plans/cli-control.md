@@ -109,7 +109,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [x] `sidebar show`
 - [x] `sidebar hide`
 - [x] `sidebar resize`
-- [ ] `workspace-list expand`
+- [x] `workspace-list expand`
 - [ ] `workspace-list collapse`
 - [ ] `client open goto`
 - [ ] `client open history`

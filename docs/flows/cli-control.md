@@ -308,3 +308,5 @@ An unattached pane or active copy mode rejects the operation.
 
 `sidebar resize 40`: Requests an exact sidebar width. Existing host-width and minimum-width bounds
 apply, and the returned value reports the width actually committed.
+
+`workspace-list expand`: Expands the workspace list idempotently in client model and host chrome.

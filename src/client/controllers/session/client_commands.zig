@@ -32,6 +32,13 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .workspace_list_expand => {
+            if (client.model.setWorkspaceListCollapsed(false) != null) {
+                client.chrome.setWorkspaceListCollapsed(false);
+            }
+
+            reply.status = .applied;
+        },
         .sidebar_resize => {
             const width = std.math.cast(u16, reply.value) orelse return error.InvalidWidth;
             if (width == 0) {

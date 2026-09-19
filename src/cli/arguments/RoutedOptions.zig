@@ -21,6 +21,12 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     const verb = std.mem.span(args[1]);
     var name_buffer: [64]u8 = undefined;
     const name = std.fmt.bufPrint(&name_buffer, "{s}_{s}", .{ group, verb }) catch return null;
+    for (name) |*byte| {
+        if (byte.* == '-') {
+            byte.* = '_';
+        }
+    }
+
     const action = std.meta.stringToEnum(core.ClientAction, name) orelse return null;
     if (action == .pane_focus) {
         for (args[2..]) |argument| {
@@ -34,6 +40,7 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[2..] };
     switch (action) {
+        .workspace_list_expand => {},
         .sidebar_resize => self.value = std.math.cast(u16, try positive(std.mem.span(try cursor.require(error.MissingWidth)))) orelse return error.InvalidWidth,
         .sidebar_hide => {},
         .sidebar_show => {},

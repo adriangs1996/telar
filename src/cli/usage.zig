@@ -27,6 +27,7 @@ pub const text =
     \\         telar sidebar show --client ID [--json] [--socket PATH]
     \\         telar sidebar hide --client ID [--json] [--socket PATH]
     \\         telar sidebar resize COLUMNS --client ID [--json] [--socket PATH]
+    \\         telar workspace-list expand --client ID [--json] [--socket PATH]
     \\         telar workspace select ID --client ID [--json] [--socket PATH]
     \\         telar client detach ID [--json] [--socket PATH]
     \\         telar command suggest <pane|--current> TEXT [--json] [--socket PATH]
