@@ -986,6 +986,17 @@ class ControlTests(unittest.TestCase):
         self.assertEqual([entry["text"] for entry in snapshots], ["first", "second"])
         self.assertTrue(all(entry["pane_generation"] == 9 for entry in snapshots))
 
+    def test_proxy_watch_filters_other_runtime_events(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x14)
+            send_frame(connection, agent_snapshot())
+            send_frame(connection, bytes([0x95, 1, 0, 0]))
+
+        result = self.run_control(["proxy", "watch", "--count", "1"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["type"], "proxy_status")
+
 
 if __name__ == "__main__":
     unittest.main()

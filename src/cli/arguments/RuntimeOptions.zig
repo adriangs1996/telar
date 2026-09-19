@@ -4,6 +4,7 @@ const runtime = @import("runtime.zig");
 const RuntimeOptions = @This();
 
 json: bool = false,
+proxy_only: bool = false,
 action: runtime.Action = .status,
 count: ?u32 = null,
 socket: ?[*:0]const u8 = null,

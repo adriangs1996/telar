@@ -133,6 +133,12 @@ pub const Cli = union(enum) {
             return .{ .integration = try IntegrationOptions.parse(args[2..]) };
         }
         if (std.mem.eql(u8, first, "proxy")) {
+            if (args.len > 2 and std.mem.eql(u8, std.mem.span(args[2]), "watch")) {
+                var options = try RuntimeOptions.parse(args[2..]);
+                options.proxy_only = true;
+                return .{ .runtime = options };
+            }
+
             return .{ .proxy = try ProxyOptions.parse(args[2..]) };
         }
         if (std.mem.eql(u8, first, "server")) {

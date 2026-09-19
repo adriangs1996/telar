@@ -384,3 +384,9 @@ PTY byte stream: intermediate changes between polls may be coalesced. Topology
 is read once to capture the exact pane generation; every read retains that
 generation. `--count` counts emitted changes; identical text is skipped.
 Retained rows are bounded by `--lines`, with explicit truncation metadata.
+
+`proxy watch` subscribes to runtime events and emits only proxy status, runtime
+stopping and resynchronization notices as JSON Lines. `--count` counts emitted
+events. This observes proxy status, not captured HTTP traffic. Current proxy
+configuration is startup-owned, so the initial status can be followed by an
+indefinite idle period. A resynchronization notice terminates with failure.

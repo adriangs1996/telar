@@ -88,7 +88,7 @@ No simulated keyboard input is a substitute for an implemented command.
 
 ## Proxy
 
-- [ ] `proxy watch`
+- [x] `proxy watch`
 
 ## Configuration
 

@@ -26,7 +26,8 @@ fn execute(init: std.process.Init, options: RuntimeOptions) !void {
         var count: u64 = 0;
         while (true) {
             const event = try session.nextEvent();
-            if (try runtime_events.write(&output.interface, event)) {
+            const selected = !options.proxy_only or event == .proxy_status or event == .runtime_stopping or event == .resync_required;
+            if (selected and try runtime_events.write(&output.interface, event)) {
                 count += 1;
             }
 
