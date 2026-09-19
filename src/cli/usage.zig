@@ -27,6 +27,7 @@ pub const text =
     \\       telar agent list|get|wait|prompt|read [target] [options]
     \\       telar agent interrupt <pane|title|--current> [--json] [--socket PATH]
     \\       telar agent clear <pane|title|--current> [--json] [--socket PATH]
+    \\       telar agent rename <pane|title|--current> TITLE [--json] [--socket PATH]
     \\       telar agent thread <pane|title|--current> [--json] [--socket PATH]
     \\       telar agent models <pane|title|--current> [--json] [--socket PATH]
     \\       telar agent skills <pane|title|--current> [--json] [--socket PATH]

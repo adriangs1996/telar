@@ -61,6 +61,8 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         .reject
     else if (std.mem.eql(u8, action_text, "clear"))
         .clear
+    else if (std.mem.eql(u8, action_text, "rename"))
+        .rename
     else
         return error.UnknownAgentAction;
     var options: AgentOptions = .{ .action = action };
@@ -86,6 +88,16 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         }
 
         options.approval_id = id;
+        index = 3;
+    }
+
+    if (action == .rename) {
+        if (args.len < 3) {
+            return error.MissingAgentTitle;
+        }
+
+        try core.validateSessionTitle(std.mem.span(args[2]));
+        options.text = args[2];
         index = 3;
     }
 

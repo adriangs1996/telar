@@ -61,10 +61,14 @@ fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContex
         },
         .wait => return waitFor(session, options, output),
         .prompt => return prompt(session, options, output),
-        .interrupt, .clear => {
+        .interrupt, .clear, .rename => {
             const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
             var managed: ManagedAgent = .{ .session = session, .pane = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation } };
-            if (options.action == .clear) {
+            if (options.action == .rename) {
+                const text = try std.fmt.allocPrint(session.gpa, "/rename {s}", .{std.mem.span(options.text.?)});
+                defer session.gpa.free(text);
+                try managed.prompt(.{ .text = text });
+            } else if (options.action == .clear) {
                 try managed.prompt(.{ .text = "/clear" });
             } else {
                 try managed.interrupt();

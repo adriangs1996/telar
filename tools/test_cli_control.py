@@ -513,6 +513,19 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(json.loads(result.stdout)["accepted"])
 
+    def test_agent_rename_preserves_title_in_native_command(self):
+        def exchange(connection):
+            receive_frame(connection)
+            send_frame(connection, agent_snapshot())
+            query_thread(connection)
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x2D)
+            self.assertEqual(request[25:], sized16('/rename Fix "parser"') + sized16("model-1") + sized16("low") + bytes([1, 0]))
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+
+        result = self.run_control(["agent", "rename", "7", 'Fix "parser"', "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

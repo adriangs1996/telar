@@ -149,3 +149,7 @@ is `read_only`, `workspace` or `full_access`. Terminal panes reject these flags.
 conversation command with current provider options. It starts a new conversation
 in that pane; it does not erase history or restart the pane process. Output
 acknowledges admission; provider completion remains asynchronous.
+
+`telar agent rename TARGET TITLE [--json]` validates the existing bounded title
+contract and submits native `/rename`. This renames the provider conversation;
+reporting a sidebar title is a separate operation.
