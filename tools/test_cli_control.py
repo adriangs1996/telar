@@ -158,6 +158,18 @@ class ControlTests(unittest.TestCase):
             "tab_count": 2, "branch": "feature/cli", "dirty": True,
         }])
 
+    def test_workspace_get_resolves_exact_ids_and_fails_without_partial_output(self):
+        def exchange(connection):
+            receive_frame(connection)
+            send_frame(connection, workspace_list())
+
+        found = self.run_control(["workspace", "get", "42", "--json"], exchange)
+        self.assertEqual(found.returncode, 0, found.stderr)
+        self.assertEqual(json.loads(found.stdout)["workspace_id"], 42)
+        missing = self.run_control(["workspace", "get", "99", "--json"], exchange)
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertEqual(missing.stdout, "")
+
 
 if __name__ == "__main__":
     unittest.main()

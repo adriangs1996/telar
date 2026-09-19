@@ -8,6 +8,7 @@ const SessionType = @import("Session.zig");
 const control = @import("control.zig");
 const workspace = @import("arguments/workspace.zig");
 const workspace_output = @import("workspace_output.zig");
+const core = @import("telar-core");
 
 const git_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(60) },
@@ -34,7 +35,7 @@ pub fn run(init: std.process.Init, options: WorkspaceOptions) !u8 {
 /// rooted at it. Git runs in this process with the user's environment and
 /// credentials; the runtime never executes git on the CLI's behalf.
 fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Writer) !u8 {
-    if (options.action == .list) {
+    if (options.action == .list or options.action == .get) {
         return list(init, options, writer);
     }
 
@@ -63,6 +64,7 @@ fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Wr
 }
 
 fn list(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Writer) !u8 {
+    const wanted: ?u64 = if (options.target) |target| try target.resolve(init.minimal.environ, "TELAR_WORKSPACE_ID") else null;
     var session = try SessionType.attach(init, options.socket);
     defer session.close();
     try session.subscribeRuntime();
@@ -71,6 +73,24 @@ fn list(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Write
         const response = try session.receive();
         if (response != .workspace_list) {
             continue;
+        }
+
+        if (wanted) |id| {
+            var entries = response.workspace_list.entries();
+            while (try entries.next()) |entry| {
+                if (core.raw(entry.workspace) != id) {
+                    continue;
+                }
+
+                try workspace_output.write(writer, entry, options.json);
+                if (options.json) {
+                    try writer.writeByte('\n');
+                }
+
+                return agent.exit_ok;
+            }
+
+            return error.WorkspaceNotFound;
         }
 
         if (options.json) {

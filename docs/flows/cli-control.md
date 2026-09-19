@@ -47,3 +47,7 @@ snapshot and disconnects. Each row includes the stable ID, name, directory,
 tab count, branch and dirty flag. Git metadata is the runtime's retained probe;
 the CLI does not invoke Git. JSON is an array, including `[]` for an empty
 runtime. The socket test checks interleaved events and escaped labels.
+
+`telar workspace get ID [--json]` selects one exact entry from that same
+snapshot. `--current` resolves `TELAR_WORKSPACE_ID`; missing or invalid context
+fails before connecting. An absent workspace fails with no partial JSON output.

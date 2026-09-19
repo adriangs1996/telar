@@ -1,6 +1,7 @@
 const workspace = @import("workspace.zig");
 const std = @import("std");
 const Cursor = @import("Cursor.zig");
+const entity_target = @import("entity_target.zig");
 const WorkspaceOptions = @This();
 
 action: workspace.WorkspaceAction,
@@ -9,6 +10,7 @@ name: ?[*:0]const u8 = null,
 directory: ?[*:0]const u8 = null,
 socket: ?[*:0]const u8 = null,
 json: bool = false,
+target: ?entity_target.Target = null,
 
 pub fn parse(args: []const [*:0]const u8) !WorkspaceOptions {
     if (args.len == 0) {
@@ -17,7 +19,16 @@ pub fn parse(args: []const [*:0]const u8) !WorkspaceOptions {
 
     const action = std.meta.stringToEnum(workspace.WorkspaceAction, std.mem.span(args[0])) orelse return error.UnknownWorkspaceAction;
     var options: WorkspaceOptions = .{ .action = action };
-    const index: usize = 1;
+    var index: usize = 1;
+    if (action == .get) {
+        if (args.len < 2) {
+            return error.MissingWorkspaceTarget;
+        }
+
+        options.target = try entity_target.Target.parse(std.mem.span(args[1]));
+        index = 2;
+    }
+
     var cursor: Cursor = .{ .remaining = args[index..] };
     while (cursor.next()) |argument| {
         const arg = std.mem.span(argument);
