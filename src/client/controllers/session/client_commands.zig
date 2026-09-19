@@ -1,3 +1,4 @@
+const tab_selections = @import("../tabs/tab_selections.zig");
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
@@ -20,6 +21,26 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .tab_select => {
+            const target: core.TabId = @enumFromInt(reply.target_id);
+            if (reply.target_id == 0 or client.model.tabLocation(target) == null) {
+                return error.TabNotFound;
+            }
+
+            if (client.model.activeTabLocation()) |active| {
+                if (active.tab_id == target) {
+                    reply.status = .applied;
+                    return;
+                }
+            }
+
+            var handler = tab_selections.selectionHandler(client);
+            if (try handler.execute(.{ .target = .{ .tab_id = target } }) == null) {
+                return error.ClientBusy;
+            }
+
+            reply.status = .admitted;
+        },
         .tab_create => {
             var handler = tab_creations.requestHandler(client);
             if (!try handler.execute(.{ .label = reply.text() })) {

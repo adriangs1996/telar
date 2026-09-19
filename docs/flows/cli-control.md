@@ -258,3 +258,7 @@ stale/unrelated completions. Protocol generation is 62.
 creation gate, launch configuration and workspace geometry. It returns admission
 after queuing creation; the runtime still confirms the new tab asynchronously.
 Labels preserve UTF-8. A busy or unattached client fails without claiming creation.
+
+`tab select ID --client ID` selects a tab in that client’s current workspace.
+Already selected tabs return `applied`; changes return `admitted` while pane
+attachment/snapshot synchronization proceeds. Unknown tabs or blocked selection fail.

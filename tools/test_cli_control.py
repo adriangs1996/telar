@@ -797,6 +797,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertEqual(result.stdout, "")
 
+    def test_tab_select_uses_an_explicit_tab_id(self):
+        result = self.run_control(["tab", "select", "8", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=2, target=8))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["target_id"], 8)
+
 
 if __name__ == "__main__":
     unittest.main()
