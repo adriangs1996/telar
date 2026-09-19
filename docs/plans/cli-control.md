@@ -117,7 +117,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [x] `notification dismiss`
 - [x] `client open-link`
 - [x] `agent draft get`
-- [ ] `agent draft set`
+- [x] `agent draft set`
 - [ ] `agent draft attach`
 - [ ] `agent view expand`
 - [ ] `agent view collapse`

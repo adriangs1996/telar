@@ -15,6 +15,7 @@ const history_palettes = @import("../input/history_palettes.zig");
 const notifications = @import("../notifications/notifications.zig");
 const LinkTarget = @import("../../links/LinkTarget.zig");
 const link_openings = @import("../input/link_openings.zig");
+const AgentThreadHandler = @import("../../application/agents/AgentThreadHandler.zig");
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
@@ -37,6 +38,23 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .agent_draft_set => {
+            const pane_id: core.PaneId = @enumFromInt(reply.target_id);
+            const pane = client.model.agentPane(pane_id) orelse return error.AgentPaneNotAttached;
+            if (std.mem.indexOfScalar(u8, reply.text(), 0) != null) {
+                return error.InvalidDraftText;
+            }
+
+            if (!std.mem.eql(u8, pane.composerSlice(), reply.text())) {
+                const handler: AgentThreadHandler = .{ .model = &client.model };
+                if (!handler.edit(pane_id, .{ .replace_range = .{ .range = .{ 0, @intCast(pane.composerSlice().len) }, .text = reply.text() } })) {
+                    return error.DraftEditRejected;
+                }
+            }
+
+            reply.length = 0;
+            reply.status = .applied;
+        },
         .agent_draft_get => {
             const pane_id: core.PaneId = @enumFromInt(reply.target_id);
             const pane = client.model.agentPane(pane_id) orelse return error.AgentPaneNotAttached;

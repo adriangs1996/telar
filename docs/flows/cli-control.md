@@ -334,3 +334,7 @@ complete the clipboard write asynchronously, so the CLI reports admission.
 
 `agent draft get`: Reads the entire bounded composer text and attachment count from an attached
 native agent pane. This is client draft state, independent of runtime conversation history.
+
+`agent draft set`: Atomically replaces the composer’s text through the existing editor/model
+handler. Empty text clears the draft; images remain attached. Invalid UTF-8,
+NUL or capacity failure cannot partially replace the draft.
