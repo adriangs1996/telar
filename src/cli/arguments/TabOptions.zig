@@ -8,6 +8,7 @@ action: tab.Action,
 workspace: entity_target.Target = .current,
 socket: ?[*:0]const u8 = null,
 json: bool = false,
+target: ?entity_target.Target = null,
 
 /// Parses tab commands without runtime access. Example: `try TabOptions.parse(&.{"list", "--workspace", "1"});`
 pub fn parse(args: []const [*:0]const u8) !TabOptions {
@@ -18,7 +19,17 @@ pub fn parse(args: []const [*:0]const u8) !TabOptions {
     const action = std.meta.stringToEnum(tab.Action, std.mem.span(args[0])) orelse return error.UnknownTabAction;
     var self: TabOptions = .{ .action = action };
     var workspace_seen = false;
-    var cursor: Cursor = .{ .remaining = args[1..] };
+    var index: usize = 1;
+    if (action == .get) {
+        if (args.len < 2) {
+            return error.MissingTabTarget;
+        }
+
+        self.target = try entity_target.Target.parse(std.mem.span(args[1]));
+        index = 2;
+    }
+
+    var cursor: Cursor = .{ .remaining = args[index..] };
     while (cursor.next()) |argument| {
         const arg = std.mem.span(argument);
         if (std.mem.eql(u8, arg, "--workspace")) {

@@ -71,3 +71,8 @@ prints stable tab IDs, zero-based positions, pane counts and labels in runtime
 order. Without `--workspace`, it requires `TELAR_WORKSPACE_ID`. It never
 attaches or selects a pane. The contract test uses tab IDs whose numeric order
 differs from their positions.
+
+`telar tab get ID [--workspace ID] [--json]` requests `tab_snapshot` and returns
+the tab's panel identities, generations, kinds and lifecycle states. `--current`
+resolves `TELAR_TAB_ID`. A mismatched workspace or tab in the response fails;
+querying never obtains a geometry lease or attaches to a terminal.

@@ -226,6 +226,23 @@ class ControlTests(unittest.TestCase):
         self.assertEqual([tab["position"] for tab in tabs], [0, 1])
         self.assertEqual(tabs[0]["pane_count"], 2)
 
+    def test_tab_get_reads_pane_generations_without_attachment(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x08)
+            request_id, kind, workspace, tab = struct.unpack_from("<QBQQ", request, 1)
+            self.assertEqual((kind, workspace, tab), (0, 42, 8))
+            reply = bytes([0x86]) + request[1:] + struct.pack("<H", 1)
+            reply += struct.pack("<QBBQ", 5, 0, 1, 9)
+            send_frame(connection, reply)
+
+        result = self.run_control(["tab", "get", "8", "--workspace", "42", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        tab = json.loads(result.stdout)
+        self.assertEqual(tab["tab_id"], 8)
+        self.assertEqual(tab["panes"][0]["pane_generation"], 9)
+        self.assertEqual(tab["panes"][0]["kind"], "agent")
+
 
 if __name__ == "__main__":
     unittest.main()

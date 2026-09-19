@@ -31,6 +31,7 @@ pub const text =
     \\       telar workspace create --directory DIR [--name NAME] [--json] [--socket PATH]
     \\       telar workspace list [--json] [--socket PATH]
     \\       telar tab list [--workspace ID] [--json] [--socket PATH]
+    \\       telar tab get <id|--current> [--workspace ID] [--json] [--socket PATH]
     \\       telar workspace get <id|--current> [--json] [--socket PATH]
     \\       telar workspace rename <id|--current> NAME [--json] [--socket PATH]
     \\       telar api schema [--json]

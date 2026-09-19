@@ -29,7 +29,7 @@ No simulated keyboard input is a substitute for an implemented command.
 ## Tabs
 
 - [x] `tab list`
-- [ ] `tab get`
+- [x] `tab get`
 - [ ] `tab create`
 - [ ] `tab rename`
 - [ ] `tab close`
