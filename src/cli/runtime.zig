@@ -32,11 +32,39 @@ pub fn run(init: std.process.Init, options: RuntimeOptions) !void {
     while (true) {
         switch (try session.receive()) {
             .proxy_status => |status| {
+                if (options.action != .status) {
+                    continue;
+                }
+
                 try writeStatus(&output.interface, status, options.json);
                 try output.interface.flush();
                 return;
             },
+            .system_metrics => |metrics| {
+                if (options.action != .metrics) {
+                    continue;
+                }
+
+                try writeMetrics(&output.interface, metrics, options.json);
+                try output.interface.flush();
+                return;
+            },
             else => {},
+        }
+    }
+}
+
+fn writeMetrics(writer: *std.Io.Writer, metrics: core.SystemMetrics, json: bool) !void {
+    if (json) {
+        const battery: ?u8 = if (metrics.has_battery) metrics.battery_percent else null;
+        try std.json.Stringify.value(.{ .revision = metrics.revision, .cpu_percent = metrics.cpu_percent, .memory_used_decigib = metrics.memory_used_decigib, .battery_percent = battery }, .{}, writer);
+        try writer.writeByte('\n');
+    } else {
+        try writer.print("CPU: {d}%\nMemory: {d}.{d} GiB\n", .{ metrics.cpu_percent, metrics.memory_used_decigib / 10, metrics.memory_used_decigib % 10 });
+        if (metrics.has_battery) {
+            try writer.print("Battery: {d}%\n", .{metrics.battery_percent});
+        } else {
+            try writer.writeAll("Battery: unavailable\n");
         }
     }
 }

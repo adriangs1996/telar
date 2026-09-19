@@ -31,3 +31,11 @@ shutdown emits a final event and exits successfully; a resync notice emits
 the notice and fails explicitly, allowing the caller to reconnect for a fresh
 snapshot. Closing the process closes its subscription. Idle streams have no
 timeout; finite status queries have a 30-second receive deadline.
+
+## Runtime metrics
+
+`telar runtime metrics [--json]` waits for the runtime's sampled
+`system_metrics`, ignoring unrelated initial snapshots. JSON retains the
+protocol's integer tenths-of-GiB memory unit and reports a missing battery as
+`null`. Text output converts memory to GiB with one decimal. The socket test
+verifies ordering, units, and absent-battery behavior.

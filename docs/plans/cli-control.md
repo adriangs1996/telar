@@ -10,7 +10,7 @@ No simulated keyboard input is a substitute for an implemented command.
 
 - [x] `runtime status`
 - [x] `runtime watch`
-- [ ] `runtime metrics`
+- [x] `runtime metrics`
 
 ## Clients
 

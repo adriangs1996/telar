@@ -121,6 +121,19 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), {"type": "runtime_stopping"})
 
+    def test_metrics_skips_other_snapshots_and_preserves_units(self):
+        def exchange(connection):
+            receive_frame(connection)
+            send_frame(connection, bytes([0x95, 0, 0, 0]))
+            send_frame(connection, bytes([0x97]) + struct.pack("<QB HBB", 7, 42, 123, 0, 0))
+
+        result = self.run_control(["runtime", "metrics", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {
+            "revision": 7, "cpu_percent": 42,
+            "memory_used_decigib": 123, "battery_percent": None,
+        })
+
 
 if __name__ == "__main__":
     unittest.main()

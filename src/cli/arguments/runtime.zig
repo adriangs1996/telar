@@ -1,1 +1,1 @@
-pub const Action = enum { status, watch };
+pub const Action = enum { status, watch, metrics };
