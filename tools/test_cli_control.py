@@ -764,7 +764,7 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), {"id": 7, "generation": 9, "detached": True})
 
-    def routed_exchange(self, connection, action=0, target=42, status=2, text="", generation=9, input_text="", input_value=0):
+    def routed_exchange(self, connection, action=0, target=42, status=2, text="", generation=9, input_text="", input_value=0, return_value=0):
         request = receive_frame(connection)
         self.assertEqual(request[0], 0x33)
         entry = struct.pack("<QQQHQQ", 7, 9, 11, 2, 5, 12)
@@ -774,7 +774,7 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(struct.unpack_from("<QQBBQ", request, 9), (7, 9, action, 0, target))
         self.assertEqual(struct.unpack_from("<q", request, 35)[0], input_value)
         self.assertEqual(request[43:], sized16(input_text))
-        reply = bytes([0xAF]) + request[1:9] + struct.pack("<QQBBQq", 7, generation, action, status, target, 0) + sized16(text)
+        reply = bytes([0xAF]) + request[1:9] + struct.pack("<QQBBQq", 7, generation, action, status, target, return_value) + sized16(text)
         send_frame(connection, reply)
 
     def test_tab_create_preserves_the_label_and_reports_admission(self):
@@ -847,6 +847,11 @@ class ControlTests(unittest.TestCase):
         result = self.run_control(["pane", "scroll", "5", "-3", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=11, target=5, input_text="", input_value=-3))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["target_id"], 5)
+
+    def test_sidebar_get_uses_explicit_client_control(self):
+        result = self.run_control(["sidebar", "get", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=12, target=0, input_text="", input_value=0, text="visible", return_value=32))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["width"], 32)
 
 
 if __name__ == "__main__":

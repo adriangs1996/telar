@@ -299,3 +299,5 @@ handler. The result value is 1 when fullscreen is enabled and 0 otherwise.
 changing focus or sending terminal keystrokes. Terminal viewport offsets and
 native transcript offsets use their existing bounds; boundary no-ops succeed.
 An unattached pane or active copy mode rejects the operation.
+
+`sidebar get`: Returns the selected client’s committed sidebar visibility and preferred width.

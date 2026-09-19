@@ -23,6 +23,7 @@ pub const text =
     \\         telar pane resize ID left|right|up|down --client ID [--json] [--socket PATH]
     \\         telar pane fullscreen ID --client ID [--json] [--socket PATH]
     \\         telar pane scroll ID DELTA --client ID [--json] [--socket PATH]
+    \\         telar sidebar get --client ID [--json] [--socket PATH]
     \\         telar workspace select ID --client ID [--json] [--socket PATH]
     \\         telar client detach ID [--json] [--socket PATH]
     \\         telar command suggest <pane|--current> TEXT [--json] [--socket PATH]

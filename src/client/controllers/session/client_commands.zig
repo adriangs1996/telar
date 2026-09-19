@@ -31,6 +31,9 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .sidebar_get => {
+            try sidebarState(client, reply);
+        },
         .pane_scroll => {
             const delta = std.math.cast(i32, reply.value) orelse return error.InvalidScrollDelta;
             const pane_id: core.PaneId = @enumFromInt(reply.target_id);
@@ -190,4 +193,10 @@ fn focusPane(client: *Client, target_id: u64) !void {
     if (try handler.execute(.{ .target = .{ .pane_id = pane_id }, .area = client.geometry().area }) == null) {
         return error.PaneFocusUnavailable;
     }
+}
+
+fn sidebarState(client: *const Client, reply: *core.ClientCommand) !void {
+    reply.value = client.model.sidebarWidth();
+    try reply.setText(if (client.model.sidebarVisible()) "visible" else "hidden");
+    reply.status = .applied;
 }

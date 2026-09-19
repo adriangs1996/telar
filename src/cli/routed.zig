@@ -54,7 +54,14 @@ fn execute(init: std.process.Init, options: Options) !u8 {
 
     var buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &buffer);
-    if (options.json) {
+    if (reply.action == .sidebar_get) {
+        if (options.json) {
+            try std.json.Stringify.value(.{ .visible = std.mem.eql(u8, reply.text(), "visible"), .width = reply.value }, .{}, &output.interface);
+            try output.interface.writeByte('\n');
+        } else {
+            try output.interface.print("{s} {d} columns\n", .{ reply.text(), reply.value });
+        }
+    } else if (options.json) {
         try std.json.Stringify.value(.{ .client_id = route.id, .client_generation = route.generation, .action = @tagName(reply.action), .status = @tagName(reply.status), .target_id = reply.target_id, .value = reply.value, .text = reply.text() }, .{}, &output.interface);
         try output.interface.writeByte('\n');
     } else {
