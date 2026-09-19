@@ -85,7 +85,7 @@ def query_thread(connection):
 
 
 class ControlTests(unittest.TestCase):
-    def run_control(self, arguments, exchange):
+    def run_control(self, arguments, exchange, environ=None):
         with tempfile.TemporaryDirectory(prefix="telar-cli-", dir="/tmp") as directory:
             endpoint = str(Path(directory) / "runtime.sock")
             errors = []
@@ -111,7 +111,7 @@ class ControlTests(unittest.TestCase):
                 try:
                     result = subprocess.run(
                         [str(BINARY), *arguments, "--socket", endpoint],
-                        capture_output=True, text=True, timeout=10,
+                        capture_output=True, text=True, timeout=10, env={**os.environ, **(environ or {})},
                     )
                 finally:
                     worker.join(timeout=12)
@@ -565,6 +565,30 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         events = [json.loads(line) for line in result.stdout.splitlines()]
         self.assertEqual([event["revision"] for event in events], [3, 4])
+
+    def test_agent_report_title_can_clear_an_existing_title(self):
+        def exchange(connection):
+            receive_frame(connection)
+            send_frame(connection, agent_snapshot())
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x2B)
+            self.assertEqual(struct.unpack_from("<QQ", request, 9), (7, 9))
+            self.assertEqual(request[25:], sized16(""))
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+
+        result = self.run_control(["agent", "report-title", "7", "", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)["accepted"])
+
+    def test_agent_report_title_current_needs_no_prior_discovery(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x2B)
+            self.assertEqual(struct.unpack_from("<QQ", request, 9), (7, 9))
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+
+        result = self.run_control(["agent", "report-title", "--current", "First report"], exchange, {"TELAR_PANE_ID": "7", "TELAR_PANE_GENERATION": "9"})
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == "__main__":

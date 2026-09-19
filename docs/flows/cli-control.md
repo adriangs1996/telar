@@ -165,3 +165,8 @@ thread and later runtime revisions as JSON Lines. It filters other panes, stale
 generations and duplicate revisions; updates may be coalesced by the runtime.
 There is no polling or idle timeout. Removal and resync require an explicit
 restart; runtime shutdown ends the stream. Each record flushes immediately.
+
+`telar agent report-title TARGET TITLE [--json]` reports the agent-owned title
+to the runtime; an empty title clears the report. `--current` uses both pane
+ID and generation from the environment so initial reports need no prior agent
+discovery. Other targets resolve through the agent snapshot.

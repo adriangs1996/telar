@@ -12,6 +12,7 @@ const ControlAgent = @import("ControlAgent.zig");
 const TextType = @import("Text.zig");
 const ManagedAgent = @import("ManagedAgent.zig");
 const AgentWatch = @import("AgentWatch.zig");
+const AgentReports = @import("AgentReports.zig");
 const core = @import("telar-core");
 const agent_output = @import("agent_output.zig");
 
@@ -47,10 +48,17 @@ pub fn run(init: std.process.Init, options: AgentOptions) !u8 {
 }
 
 fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContextType) !u8 {
+    if (options.action == .report_title) {
+        var reports: AgentReports = .{ .session = session, .options = options, .output = output };
+        try reports.run();
+        return exit_ok;
+    }
+
     var snapshot: SnapshotType = .{};
     try session.fetchAgents(&snapshot);
 
     switch (options.action) {
+        .report_title => unreachable,
         .list => {
             try writeList(output.writer, &snapshot, options.json);
             return exit_ok;

@@ -70,6 +70,8 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         .history
     else if (std.mem.eql(u8, action_text, "watch"))
         .watch
+    else if (std.mem.eql(u8, action_text, "report-title"))
+        .report_title
     else
         return error.UnknownAgentAction;
     var options: AgentOptions = .{ .action = action };
@@ -98,12 +100,15 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         index = 3;
     }
 
-    if (action == .rename) {
+    if (action == .rename or action == .report_title) {
         if (args.len < 3) {
             return error.MissingAgentTitle;
         }
 
-        try core.validateSessionTitle(std.mem.span(args[2]));
+        if (action == .rename or std.mem.span(args[2]).len != 0) {
+            try core.validateSessionTitle(std.mem.span(args[2]));
+        }
+
         options.text = args[2];
         index = 3;
     }
