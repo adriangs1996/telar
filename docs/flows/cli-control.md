@@ -323,3 +323,5 @@ to the existing tab creation flow, including its launch gate and geometry.
 
 `client copy-mode`: Enters terminal or native conversation copy mode through shared admission.
 An already active copy mode is a successful no-op; unsupported or blocked panes fail.
+
+`notification dismiss 5`: Dismisses one current notification and rearms its expiration timer. Missing identities fail.

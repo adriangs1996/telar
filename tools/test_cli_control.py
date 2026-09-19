@@ -898,6 +898,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["action"], "client_copy_mode")
 
+    def test_notification_dismiss_uses_explicit_client_control(self):
+        result = self.run_control(["notification", "dismiss", "5", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=22, target=5, input_text="", input_value=0))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["action"], "notification_dismiss")
+
 
 if __name__ == "__main__":
     unittest.main()

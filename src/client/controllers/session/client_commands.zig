@@ -12,6 +12,7 @@ const agent_threads = @import("../agents/agent_threads.zig");
 const sidebar_toggles = @import("../notifications/sidebar_toggles.zig");
 const name_prompts = @import("../input/name_prompts.zig");
 const history_palettes = @import("../input/history_palettes.zig");
+const notifications = @import("../notifications/notifications.zig");
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
@@ -34,6 +35,13 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .notification_dismiss => {
+            if (try notifications.dismissNow(client, @enumFromInt(reply.target_id)) == null) {
+                return error.NotificationNotFound;
+            }
+
+            reply.status = .applied;
+        },
         .client_copy_mode => {
             if (!copy_modes.active(client) and !copy_modes.enter(client)) {
                 return error.CopyModeUnavailable;
