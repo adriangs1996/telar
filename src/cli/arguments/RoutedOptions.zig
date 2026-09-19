@@ -22,9 +22,19 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     var name_buffer: [64]u8 = undefined;
     const name = std.fmt.bufPrint(&name_buffer, "{s}_{s}", .{ group, verb }) catch return null;
     const action = std.meta.stringToEnum(core.ClientAction, name) orelse return null;
+    if (action == .pane_focus) {
+        for (args[2..]) |argument| {
+            const arg = std.mem.span(argument);
+            if (std.mem.eql(u8, arg, "--current") or std.mem.eql(u8, arg, "--direction")) {
+                return null;
+            }
+        }
+    }
+
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[2..] };
     switch (action) {
+        .pane_focus => self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget))),
         .pane_close => self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget))),
         .pane_split => {
             self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));

@@ -283,3 +283,7 @@ the existing provisional-resize rollback and asynchronous creation confirmation.
 `pane close`: Focuses an existing pane in the active tab and requests closure through the
 attachment/operation gate. `admitted` means the close request is queued; pane
 exit remains runtime authority. Focus remains changed if closure is unavailable.
+
+`pane focus`: Focuses an existing pane in the selected client’s active tab. An already focused
+pane is a successful no-op. Missing panes fail. The existing `pane focus
+--current --direction DIRECTION` command retains its original routing behavior.

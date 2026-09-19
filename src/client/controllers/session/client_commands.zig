@@ -26,6 +26,10 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .pane_focus => {
+            try focusPane(client, reply.target_id);
+            reply.status = .applied;
+        },
         .pane_close => {
             try focusPane(client, reply.target_id);
             var handler = pane_closures.requestHandler(client);
