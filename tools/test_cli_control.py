@@ -903,6 +903,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["action"], "notification_dismiss")
 
+    def test_client_open_link_uses_explicit_client_control(self):
+        result = self.run_control(["client", "open-link", "https://example.com", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=23, target=0, input_text="https://example.com", input_value=0))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["action"], "client_open_link")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -325,3 +325,6 @@ to the existing tab creation flow, including its launch gate and geometry.
 An already active copy mode is a successful no-op; unsupported or blocked panes fail.
 
 `notification dismiss 5`: Dismisses one current notification and rearms its expiration timer. Missing identities fail.
+
+`client open-link https://example.com`: Validates and routes a link through existing file/tab and host-opener policy.
+Success means the bounded opener worker or tab request was admitted.

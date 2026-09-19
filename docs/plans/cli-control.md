@@ -115,7 +115,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [x] `client open history`
 - [x] `client copy-mode`
 - [x] `notification dismiss`
-- [ ] `client open-link`
+- [x] `client open-link`
 - [ ] `agent draft get`
 - [ ] `agent draft set`
 - [ ] `agent draft attach`

@@ -13,6 +13,8 @@ const sidebar_toggles = @import("../notifications/sidebar_toggles.zig");
 const name_prompts = @import("../input/name_prompts.zig");
 const history_palettes = @import("../input/history_palettes.zig");
 const notifications = @import("../notifications/notifications.zig");
+const LinkTarget = @import("../../links/LinkTarget.zig");
+const link_openings = @import("../input/link_openings.zig");
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
@@ -35,6 +37,15 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .client_open_link => {
+            const target = try LinkTarget.init(reply.text());
+            if (!try link_openings.apply(client, target)) {
+                return error.LinkOpeningUnavailable;
+            }
+
+            reply.length = 0;
+            reply.status = .admitted;
+        },
         .notification_dismiss => {
             if (try notifications.dismissNow(client, @enumFromInt(reply.target_id)) == null) {
                 return error.NotificationNotFound;
