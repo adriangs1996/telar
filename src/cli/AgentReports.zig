@@ -15,6 +15,7 @@ output: ExecutionContext,
 pub fn run(self: *AgentReports) !void {
     const pane = try self.resolve();
     switch (self.options.action) {
+        .report_state => try self.session.reportAgent(pane, self.options.report.?),
         .report_title => try self.session.reportAgentTitle(pane, std.mem.span(self.options.text.?)),
         else => return error.InvalidAgentReport,
     }

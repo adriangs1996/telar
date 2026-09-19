@@ -590,6 +590,19 @@ class ControlTests(unittest.TestCase):
         result = self.run_control(["agent", "report-title", "--current", "First report"], exchange, {"TELAR_PANE_ID": "7", "TELAR_PANE_GENERATION": "9"})
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_agent_report_state_preserves_block_reason_and_session_metadata(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x20)
+            self.assertEqual(struct.unpack_from("<QQ", request, 9), (7, 9))
+            self.assertEqual(request[25:], bytes([1]) + sized16("thread-1") + sized16("/tmp/session.jsonl") + bytes([0, 1]) + sized16("Permission needed"))
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+
+        args = ["agent", "report-state", "--current", "blocked", "--blocked-reason", "permission", "--event", "Permission needed", "--session", "thread-1", "--session-file", "/tmp/session.jsonl", "--session-file-kind", "claude_transcript", "--json"]
+        result = self.run_control(args, exchange, {"TELAR_PANE_ID": "7", "TELAR_PANE_GENERATION": "9"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)["accepted"])
+
 
 if __name__ == "__main__":
     unittest.main()

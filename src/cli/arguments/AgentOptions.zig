@@ -1,6 +1,7 @@
 const agent = @import("agent.zig");
 const core = @import("telar-core");
 const AgentHistoryInput = @import("../AgentHistoryInput.zig");
+const AgentReport = @import("../AgentReport.zig");
 const values = @import("values.zig");
 const AgentStatusType = @import("telar-core").AgentStatus;
 const PaneTextSourceType = @import("telar-core").PaneTextSource;
@@ -27,6 +28,7 @@ effort: ?core.AgentEffort = null,
 access: ?core.AgentAccess = null,
 history: AgentHistoryInput = .{},
 count: ?u32 = null,
+report: ?AgentReport = null,
 
 pub fn parse(args: []const [*:0]const u8) !AgentOptions {
     if (args.len == 0) {
@@ -72,6 +74,8 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         .watch
     else if (std.mem.eql(u8, action_text, "report-title"))
         .report_title
+    else if (std.mem.eql(u8, action_text, "report-state"))
+        .report_state
     else
         return error.UnknownAgentAction;
     var options: AgentOptions = .{ .action = action };
@@ -97,6 +101,15 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         }
 
         options.approval_id = id;
+        index = 3;
+    }
+
+    if (action == .report_state) {
+        if (args.len < 3) {
+            return error.MissingAgentState;
+        }
+
+        options.report = .{ .state = std.meta.stringToEnum(core.AgentReportState, std.mem.span(args[2])) orelse return error.InvalidAgentState };
         index = 3;
     }
 
@@ -144,6 +157,16 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         const arg = std.mem.span(argument);
         if (std.mem.eql(u8, arg, "--json") or (action == .watch and std.mem.eql(u8, arg, "--jsonl"))) {
             options.json = true;
+        } else if (std.mem.eql(u8, arg, "--blocked-reason") and action == .report_state) {
+            options.report.?.blocked_reason = std.meta.stringToEnum(core.AgentBlockedReason, std.mem.span(try cursor.require(error.MissingBlockedReason))) orelse return error.InvalidBlockedReason;
+        } else if (std.mem.eql(u8, arg, "--event") and action == .report_state) {
+            options.report.?.event = std.mem.span(try cursor.require(error.MissingAgentEvent));
+        } else if (std.mem.eql(u8, arg, "--session") and action == .report_state) {
+            options.report.?.session = std.mem.span(try cursor.require(error.MissingSessionReference));
+        } else if (std.mem.eql(u8, arg, "--session-file") and action == .report_state) {
+            options.report.?.session_file = std.mem.span(try cursor.require(error.MissingSessionFile));
+        } else if (std.mem.eql(u8, arg, "--session-file-kind") and action == .report_state) {
+            options.report.?.session_file_kind = std.meta.stringToEnum(core.AgentSessionFileKind, std.mem.span(try cursor.require(error.MissingSessionFileKind))) orelse return error.InvalidSessionFileKind;
         } else if (std.mem.eql(u8, arg, "--count") and action == .watch) {
             if (options.count != null) {
                 return error.DuplicateCountOption;
