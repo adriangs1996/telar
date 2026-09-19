@@ -5,6 +5,7 @@ const std = @import("std");
 
 const GuiClient = @import("../../GuiClient.zig");
 const Target = @import("Target.zig");
+const ThreadExpansion = @import("telar-client").ThreadExpansion;
 const core = @import("telar-core");
 
 /// Example: `if (!thread_items.eligible(gui, target)) return;`
@@ -103,4 +104,34 @@ fn snapshot(gui: *const GuiClient, target: Target) ?*const core.AgentThreadSnaps
     }
 
     return pane.threadItemSource(control.identity);
+}
+
+/// Uses delivered targets and the existing disclosure transaction. Example: `try thread_items.setExpansion(gui, request);`
+pub fn setExpansion(gui: *GuiClient, request: ThreadExpansion) !void {
+    const registry = gui.widgets.dispatcher.maps.presented();
+    for (registry.targets[0..registry.len]) |target| {
+        if (target.action != .thread_item) {
+            continue;
+        }
+
+        const control = target.action.thread_item;
+        const operation: @TypeOf(control.operation) = if (request.work) .toggle_work else .toggle;
+        if (control.pane_id != request.pane_id or control.identity != request.item_id or
+            control.operation != operation)
+        {
+            continue;
+        }
+
+        if (!eligible(gui, target)) {
+            return error.ThreadItemUnavailable;
+        }
+
+        if (gui.widgets.threadExpanded(control) != request.expanded) {
+            try activate(gui, target);
+        }
+
+        return;
+    }
+
+    return error.ThreadItemNotVisible;
 }

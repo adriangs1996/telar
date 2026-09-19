@@ -453,6 +453,7 @@
     "input/GenericTable.zig",
     "input/Hints.zig",
     "input/HostInputSource.zig",
+    "input/ThreadExpansion.zig",
     "input/Key.zig",
     "input/Mouse.zig",
     "input/Notification.zig",

@@ -342,3 +342,9 @@ NUL or capacity failure cannot partially replace the draft.
 `agent draft attach`: Attaches an absolute image path to the client draft through the existing agent
 handler. Existing image format/count bounds and errors apply. This does not
 submit the draft or upload it to the provider.
+
+`agent view expand` sets one visible GUI disclosure idempotently by stable item
+identity from `agent thread`. `--work` targets the item’s work-group header.
+It uses delivered targets and the existing scroll-anchor transaction; hidden,
+missing or stale targets fail, and hosts without native disclosure support fail
+explicitly. Expand a folded work group before expanding one of its hidden items.

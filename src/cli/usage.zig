@@ -39,6 +39,7 @@ pub const text =
     \\         telar agent draft get ID --client ID [--json] [--socket PATH]
     \\         telar agent draft set ID TEXT --client ID [--json] [--socket PATH]
     \\         telar agent draft attach ID IMAGE_PATH --client ID [--json] [--socket PATH]
+    \\         telar agent view expand PANE_ID ITEM_ID --client ID [--work] [--json] [--socket PATH]
     \\         telar workspace select ID --client ID [--json] [--socket PATH]
     \\         telar client detach ID [--json] [--socket PATH]
     \\         telar command suggest <pane|--current> TEXT [--json] [--socket PATH]

@@ -50,6 +50,11 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[consumed..] };
     switch (action) {
+        .agent_view_expand => {
+            self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));
+            self.text = std.mem.span(try cursor.require(error.MissingItemId));
+            _ = try positive(self.text);
+        },
         .agent_draft_attach => {
             self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));
             self.text = std.mem.span(try cursor.require(error.MissingText));
@@ -111,6 +116,8 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
             self.client_id = try positive(std.mem.span(try cursor.require(error.MissingClientId)));
         } else if (std.mem.eql(u8, arg, "--label") and (self.action == .tab_create or self.action == .agent_create) and self.text.len == 0) {
             self.text = std.mem.span(try cursor.require(error.MissingLabel));
+        } else if (std.mem.eql(u8, arg, "--work") and std.mem.startsWith(u8, @tagName(self.action), "agent_view_") and self.value == 0) {
+            self.value = 1;
         } else if (std.mem.eql(u8, arg, "--json") and !self.json) {
             self.json = true;
         } else if (std.mem.eql(u8, arg, "--socket") and self.socket == null) {

@@ -38,6 +38,17 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .agent_view_expand => {
+            _ = client.model.agentPane(@enumFromInt(reply.target_id)) orelse return error.AgentPaneNotAttached;
+            const item_id = std.fmt.parseUnsigned(u64, reply.text(), 10) catch return error.InvalidItemId;
+            if (item_id == 0 or (reply.value != 0 and reply.value != 1)) {
+                return error.InvalidThreadControl;
+            }
+
+            try client.host_input_source.setThreadExpansion(.{ .pane_id = @enumFromInt(reply.target_id), .item_id = item_id, .expanded = true, .work = reply.value == 1 });
+            reply.length = 0;
+            reply.status = .applied;
+        },
         .agent_draft_attach => {
             const pane_id: core.PaneId = @enumFromInt(reply.target_id);
             const pane = client.model.agentPane(pane_id) orelse return error.AgentPaneNotAttached;

@@ -1,6 +1,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
+const thread_items = @import("../widgets/interaction/thread_items.zig");
 const Dispatcher = @import("../widgets/interaction/Dispatcher.zig");
 const Target = @import("../widgets/interaction/Target.zig");
 const Id = @import("../widgets/interaction/Id.zig");
@@ -2438,4 +2439,20 @@ test "image preview closes with its button and backdrop and rejects obsolete ima
     gui.app.model.activeTabModel().?.find(Session.pane_id).?.attachment_generation += 1;
     try publish(session);
     try std.testing.expect(gui.widgets.image_preview == null);
+}
+
+test "programmatic disclosure is idempotent and rejects missing visible items" {
+    const session = try agentSession();
+    defer session.deinit();
+    try activitySnapshot(session);
+    const target = try threadItemTarget(session, 42);
+    const request: client.ThreadExpansion = .{ .pane_id = Session.pane_id, .item_id = 42, .expanded = true };
+    try thread_items.setExpansion(session.gui, request);
+    try std.testing.expect(session.gui.widgets.threadExpanded(target.action.thread_item));
+    const revision = session.gui.widgets.dispatcher.revision;
+    try thread_items.setExpansion(session.gui, request);
+    try std.testing.expectEqual(revision, session.gui.widgets.dispatcher.revision);
+    try thread_items.setExpansion(session.gui, .{ .pane_id = Session.pane_id, .item_id = 42, .expanded = false });
+    try std.testing.expect(!session.gui.widgets.threadExpanded(target.action.thread_item));
+    try std.testing.expectError(error.ThreadItemNotVisible, thread_items.setExpansion(session.gui, .{ .pane_id = Session.pane_id, .item_id = 999, .expanded = true }));
 }
