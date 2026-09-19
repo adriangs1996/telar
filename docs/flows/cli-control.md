@@ -320,3 +320,6 @@ to the existing tab creation flow, including its launch gate and geometry.
 `client open goto`: Opens the existing goto selector through its prompt admission controller.
 
 `client open history`: Opens the history palette and queues its initial query. Result delivery remains asynchronous.
+
+`client copy-mode`: Enters terminal or native conversation copy mode through shared admission.
+An already active copy mode is a successful no-op; unsupported or blocked panes fail.

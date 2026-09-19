@@ -34,6 +34,13 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .client_copy_mode => {
+            if (!copy_modes.active(client) and !copy_modes.enter(client)) {
+                return error.CopyModeUnavailable;
+            }
+
+            reply.status = .applied;
+        },
         .client_open_history => {
             if (!try history_palettes.begin(client)) {
                 return error.ClientPromptUnavailable;

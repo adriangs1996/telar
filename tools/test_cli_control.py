@@ -893,6 +893,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["action"], "client_open_history")
 
+    def test_client_copy_mode_uses_explicit_client_control(self):
+        result = self.run_control(["client", "copy-mode", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=21, target=0, input_text="", input_value=0))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["action"], "client_copy_mode")
+
 
 if __name__ == "__main__":
     unittest.main()
