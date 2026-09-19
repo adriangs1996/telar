@@ -26,6 +26,7 @@ model: ?[]const u8 = null,
 effort: ?core.AgentEffort = null,
 access: ?core.AgentAccess = null,
 history: AgentHistoryInput = .{},
+count: ?u32 = null,
 
 pub fn parse(args: []const [*:0]const u8) !AgentOptions {
     if (args.len == 0) {
@@ -67,6 +68,8 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         .rename
     else if (std.mem.eql(u8, action_text, "history"))
         .history
+    else if (std.mem.eql(u8, action_text, "watch"))
+        .watch
     else
         return error.UnknownAgentAction;
     var options: AgentOptions = .{ .action = action };
@@ -134,8 +137,17 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
     var cursor: Cursor = .{ .remaining = args[index..] };
     while (cursor.next()) |argument| {
         const arg = std.mem.span(argument);
-        if (std.mem.eql(u8, arg, "--json")) {
+        if (std.mem.eql(u8, arg, "--json") or (action == .watch and std.mem.eql(u8, arg, "--jsonl"))) {
             options.json = true;
+        } else if (std.mem.eql(u8, arg, "--count") and action == .watch) {
+            if (options.count != null) {
+                return error.DuplicateCountOption;
+            }
+
+            options.count = std.fmt.parseUnsigned(u32, std.mem.span(try cursor.require(error.MissingCount)), 10) catch return error.InvalidCount;
+            if (options.count == 0) {
+                return error.InvalidCount;
+            }
         } else if (std.mem.eql(u8, arg, "--cursor") and action == .history) {
             const value = std.mem.span(try cursor.require(error.MissingHistoryCursor));
             _ = try core.AgentHistoryCursor.init(value);

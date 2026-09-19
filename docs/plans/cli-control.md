@@ -70,7 +70,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [x] `agent reject`
 - [x] `agent thread`
 - [x] `agent history`
-- [ ] `agent watch`
+- [x] `agent watch`
 - [x] `agent models`
 - [x] `agent skills`
 - [x] `agent conversations`

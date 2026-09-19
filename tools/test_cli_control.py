@@ -544,6 +544,28 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(page["pagination"], {"before": "older-token", "after": "newer-token", "has_before": True, "has_after": False})
         self.assertEqual(page["thread"]["items"][0]["text"], 'Response "quoted" 🧶')
 
+    def test_agent_watch_filters_other_panes_generations_and_duplicate_revisions(self):
+        def exchange(connection):
+            receive_frame(connection)
+            send_frame(connection, agent_snapshot())
+            query_thread(connection)
+            self.assertEqual(receive_frame(connection)[0], 0x14)
+            send_frame(connection, thread_snapshot())
+            other = bytearray(thread_snapshot())
+            struct.pack_into("<Q", other, 1, 8)
+            send_frame(connection, other)
+            other = bytearray(thread_snapshot())
+            struct.pack_into("<Q", other, 9, 10)
+            send_frame(connection, other)
+            updated = bytearray(thread_snapshot())
+            struct.pack_into("<Q", updated, 17, 4)
+            send_frame(connection, updated)
+
+        result = self.run_control(["agent", "watch", "7", "--count", "2", "--jsonl"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        events = [json.loads(line) for line in result.stdout.splitlines()]
+        self.assertEqual([event["revision"] for event in events], [3, 4])
+
 
 if __name__ == "__main__":
     unittest.main()

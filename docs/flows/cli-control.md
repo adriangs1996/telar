@@ -159,3 +159,9 @@ reporting a sidebar title is a separate operation.
 includes opaque before/after cursors and availability flags alongside structured
 thread data. A request cannot mix a cursor with an item/turn anchor. The pane
 and view generations are checked before output; reading does not alter live state.
+
+`telar agent watch TARGET [--jsonl] [--count N]` streams the initial native
+thread and later runtime revisions as JSON Lines. It filters other panes, stale
+generations and duplicate revisions; updates may be coalesced by the runtime.
+There is no polling or idle timeout. Removal and resync require an explicit
+restart; runtime shutdown ends the stream. Each record flushes immediately.

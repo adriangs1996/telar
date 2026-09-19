@@ -11,6 +11,7 @@ const PaneRefType = @import("PaneRef.zig");
 const ControlAgent = @import("ControlAgent.zig");
 const TextType = @import("Text.zig");
 const ManagedAgent = @import("ManagedAgent.zig");
+const AgentWatch = @import("AgentWatch.zig");
 const core = @import("telar-core");
 const agent_output = @import("agent_output.zig");
 
@@ -97,6 +98,12 @@ fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContex
                 .models => try agent_output.models(output.writer, thread, options.json),
                 else => try agent_output.thread(output.writer, thread, options.json),
             }
+            return exit_ok;
+        },
+        .watch => {
+            const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
+            var watch: AgentWatch = .{ .managed = .{ .session = session, .pane = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation } }, .writer = output.writer, .count = options.count };
+            try watch.run();
             return exit_ok;
         },
         .history => {
