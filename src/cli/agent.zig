@@ -61,10 +61,15 @@ fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContex
         },
         .wait => return waitFor(session, options, output),
         .prompt => return prompt(session, options, output),
-        .interrupt => {
+        .interrupt, .clear => {
             const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
             var managed: ManagedAgent = .{ .session = session, .pane = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation } };
-            try managed.interrupt();
+            if (options.action == .clear) {
+                try managed.prompt(.{ .text = "/clear" });
+            } else {
+                try managed.interrupt();
+            }
+
             try writeAcknowledgement(output.writer, managed.pane, options.json);
             return exit_ok;
         },

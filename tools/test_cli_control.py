@@ -499,6 +499,20 @@ class ControlTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("UnsupportedAgentModel", result.stderr)
 
+    def test_agent_clear_uses_existing_conversation_command(self):
+        def exchange(connection):
+            receive_frame(connection)
+            send_frame(connection, agent_snapshot())
+            query_thread(connection)
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x2D)
+            self.assertEqual(request[25:], sized16("/clear") + sized16("model-1") + sized16("low") + bytes([1, 0]))
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+
+        result = self.run_control(["agent", "clear", "7", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)["accepted"])
+
 
 if __name__ == "__main__":
     unittest.main()

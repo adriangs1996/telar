@@ -144,3 +144,8 @@ loading. Terminal panes reject image submissions before sending any text.
 against the live catalog before submission. Selecting a model uses its default
 effort unless overridden; omitted options retain the current selection. Access
 is `read_only`, `workspace` or `full_access`. Terminal panes reject these flags.
+
+`telar agent clear TARGET [--json]` submits the existing native `/clear`
+conversation command with current provider options. It starts a new conversation
+in that pane; it does not erase history or restart the pane process. Output
+acknowledges admission; provider completion remains asynchronous.

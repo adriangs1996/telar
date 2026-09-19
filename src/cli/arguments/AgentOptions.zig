@@ -59,6 +59,8 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         .approve
     else if (std.mem.eql(u8, action_text, "reject"))
         .reject
+    else if (std.mem.eql(u8, action_text, "clear"))
+        .clear
     else
         return error.UnknownAgentAction;
     var options: AgentOptions = .{ .action = action };
