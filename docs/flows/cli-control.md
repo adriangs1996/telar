@@ -80,3 +80,8 @@ querying never obtains a geometry lease or attaches to a terminal.
 `telar tab rename ID LABEL [--workspace ID] [--json]` validates a bounded UTF-8
 label, sends `rename_tab` and reports the label acknowledged by `tab_renamed`.
 The reply must match both the request ID and the complete tab location.
+
+`telar tab close ID [--workspace ID] [--json]` sends `close_tab` and waits for
+`tab_closed`. JSON reports whether closing the final tab also retired its
+workspace. `TabControl` owns request construction and response validation for
+operations on an existing tab; CLI assembly only resolves the target and I/O.

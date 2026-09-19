@@ -2,10 +2,20 @@ const std = @import("std");
 const core = @import("telar-core");
 const Session = @import("Session.zig");
 const TabOptions = @import("arguments/TabOptions.zig");
-const pane_output = @import("pane_output.zig");
+const TabControl = @import("TabControl.zig");
+const control = @import("control.zig");
 
-/// Queries the tabs of an explicit or inherited workspace. Example: `try tab.run(init, options);`
-pub fn run(init: std.process.Init, options: TabOptions) !void {
+/// Queries the tabs of an explicit or inherited workspace. Example: `const status = tab.run(init, options);`
+pub fn run(init: std.process.Init, options: TabOptions) u8 {
+    execute(init, options) catch |err| {
+        std.debug.print("telar tab: {s}\n", .{control.describe(err)});
+        return if (err == error.RuntimeTimeout) 3 else 1;
+    };
+
+    return 0;
+}
+
+fn execute(init: std.process.Init, options: TabOptions) !void {
     const workspace = try options.workspace.resolve(init.minimal.environ, "TELAR_WORKSPACE_ID");
     var session = try Session.attach(init, options.socket);
     defer session.close();
@@ -14,30 +24,13 @@ pub fn run(init: std.process.Init, options: TabOptions) !void {
     const writer = &output.interface;
     if (options.target) |target| {
         const tab_id = try target.resolve(init.minimal.environ, "TELAR_TAB_ID");
-        const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(workspace) }, .tab_id = @enumFromInt(tab_id) };
-        if (options.action == .rename) {
-            const renamed = try session.exchange(core.encodeRenameTab, core.RenameTab{ .request_id = .none, .location = location, .label = std.mem.span(options.label.?) });
-            if (renamed != .tab_renamed or !std.meta.eql(renamed.tab_renamed.location, location)) {
-                return error.UnexpectedRuntimeResponse;
-            }
-
-            if (options.json) {
-                try std.json.Stringify.value(.{ .workspace_id = workspace, .tab_id = tab_id, .label = renamed.tab_renamed.label }, .{}, writer);
-                try writer.writeByte('\n');
-            } else {
-                try writer.print("tab {d} renamed to {s}\n", .{ tab_id, renamed.tab_renamed.label });
-            }
-
-            try writer.flush();
-            return;
-        }
-
-        const response = try session.exchange(core.encodeRequestTabSnapshot, core.RequestTabSnapshot{ .request_id = .none, .location = location });
-        if (response != .tab_snapshot or !std.meta.eql(response.tab_snapshot.location, location)) {
-            return error.UnexpectedRuntimeResponse;
-        }
-
-        try writeSnapshot(writer, response.tab_snapshot, options.json);
+        var command: TabControl = .{
+            .session = &session,
+            .writer = writer,
+            .location = .{ .workspace = .{ .workspace = @enumFromInt(workspace) }, .tab_id = @enumFromInt(tab_id) },
+            .options = options,
+        };
+        try command.execute();
         try writer.flush();
         return;
     }
@@ -82,27 +75,4 @@ pub fn run(init: std.process.Init, options: TabOptions) !void {
     }
 
     try writer.flush();
-}
-
-fn writeSnapshot(writer: *std.Io.Writer, snapshot: core.TabSnapshotView, json: bool) !void {
-    if (json) {
-        try writer.print("{{\"workspace_id\":{d},\"tab_id\":{d},\"panes\":[", .{ core.raw(snapshot.location.workspace.workspace), core.raw(snapshot.location.tab_id) });
-    } else {
-        try writer.writeAll("PANE\tGENERATION\tKIND\tLIFECYCLE\n");
-    }
-
-    var panes = snapshot.panes();
-    var first = true;
-    while (try panes.next()) |pane| {
-        if (json and !first) {
-            try writer.writeByte(',');
-        }
-
-        try pane_output.write(writer, pane, json);
-        first = false;
-    }
-
-    if (json) {
-        try writer.writeAll("]}\n");
-    }
 }

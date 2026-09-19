@@ -114,6 +114,7 @@ class ControlTests(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertFalse(endpoint.exists())
+            self.assertEqual(result.stderr.strip(), "telar runtime: FileNotFound")
 
     def test_runtime_watch_streams_updates_in_order(self):
         def exchange(connection):
@@ -253,6 +254,18 @@ class ControlTests(unittest.TestCase):
         result = self.run_control(["tab", "rename", "8", 'New "name"', "--workspace", "42", "--json"], exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), {"workspace_id": 42, "tab_id": 8, "label": 'New "name"'})
+
+    def test_tab_close_reports_workspace_retirement(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x0F)
+            send_frame(connection, bytes([0x8B]) + request[1:] + bytes([1, 0]))
+
+        result = self.run_control(["tab", "close", "8", "--workspace", "42", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {
+            "workspace_id": 42, "tab_id": 8, "closed": True, "workspace_closed": True,
+        })
 
 
 if __name__ == "__main__":

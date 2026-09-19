@@ -3,9 +3,19 @@ const core = @import("telar-core");
 const Session = @import("Session.zig");
 const RuntimeOptions = @import("arguments/RuntimeOptions.zig");
 const runtime_events = @import("runtime_events.zig");
+const control = @import("control.zig");
 
-/// Inspects an existing runtime without starting or attaching a pane. Example: `try runtime.run(init, options);`
-pub fn run(init: std.process.Init, options: RuntimeOptions) !void {
+/// Inspects an existing runtime without starting or attaching a pane. Example: `const status = runtime.run(init, options);`
+pub fn run(init: std.process.Init, options: RuntimeOptions) u8 {
+    execute(init, options) catch |err| {
+        std.debug.print("telar runtime: {s}\n", .{control.describe(err)});
+        return if (err == error.RuntimeTimeout) 3 else 1;
+    };
+
+    return 0;
+}
+
+fn execute(init: std.process.Init, options: RuntimeOptions) !void {
     var session = try Session.attach(init, options.socket);
     defer session.close();
     try session.subscribeRuntime();

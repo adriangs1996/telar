@@ -32,7 +32,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [x] `tab get`
 - [ ] `tab create`
 - [x] `tab rename`
-- [ ] `tab close`
+- [x] `tab close`
 - [ ] `tab move`
 - [ ] `tab select`
 - [ ] `tab next`
