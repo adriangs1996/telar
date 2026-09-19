@@ -377,3 +377,10 @@ The runtime captures the current pane generation at admission and preserves
 the existing bounded row turns and search deadline. UI requests still require
 attachment authority. Results contain absolute history coordinates and an
 explicit truncation flag; generation changes, deadlines and missing panes fail.
+
+`pane watch` emits changed text snapshots as JSON Lines by polling the existing
+read API, every 250 ms by default (10..60000 ms configurable). It is not a raw
+PTY byte stream: intermediate changes between polls may be coalesced. Topology
+is read once to capture the exact pane generation; every read retains that
+generation. `--count` counts emitted changes; identical text is skipped.
+Retained rows are bounded by `--lines`, with explicit truncation metadata.

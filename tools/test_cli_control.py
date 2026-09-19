@@ -968,6 +968,24 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), {"pane_id": 7, "truncated": True, "matches": [{"x": 2, "y": 33, "len": 5}, {"x": 4, "y": 77, "len": 5}]})
 
+    def test_pane_watch_skips_duplicate_text_and_pins_generation(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x08)
+            send_frame(connection, bytes([0x86]) + request[1:] + struct.pack("<HQBBQ", 1, 5, 0, 0, 9))
+            for text in ["first", "first", "second"]:
+                request = receive_frame(connection)
+                self.assertEqual(request[0], 0x1D)
+                self.assertEqual(struct.unpack_from("<QQ", request, 9), (5, 9))
+                data = text.encode()
+                send_frame(connection, bytes([0xA0]) + request[1:9] + struct.pack("<QBI", 5, 0, len(data)) + data)
+
+        result = self.run_control(["pane", "watch", "5", "--workspace", "42", "--tab", "8", "--interval-ms", "10", "--count", "2"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        snapshots = [json.loads(line) for line in result.stdout.splitlines()]
+        self.assertEqual([entry["text"] for entry in snapshots], ["first", "second"])
+        self.assertTrue(all(entry["pane_generation"] == 9 for entry in snapshots))
+
 
 if __name__ == "__main__":
     unittest.main()

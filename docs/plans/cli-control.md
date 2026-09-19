@@ -51,7 +51,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [x] `pane search`
 - [x] `pane scroll`
 - [x] `pane copy`
-- [ ] `pane watch`
+- [x] `pane watch`
 
 ## Layouts
 

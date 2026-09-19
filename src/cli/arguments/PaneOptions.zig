@@ -20,6 +20,8 @@ source: PaneTextSourceType = .recent,
 json: bool = false,
 socket: ?[*:0]const u8 = null,
 direction: ?PaneDirectionType = null,
+count: ?u32 = null,
+interval_ms: u32 = 250,
 
 pub fn parse(args: []const [*:0]const u8) !PaneOptions {
     if (args.len == 0) {
@@ -33,6 +35,8 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
         .send_keys
     else if (std.mem.eql(u8, action_text, "focus"))
         .focus
+    else if (std.mem.eql(u8, action_text, "watch"))
+        .watch
     else if (std.mem.eql(u8, action_text, "search"))
         .search
     else if (std.mem.eql(u8, action_text, "list"))
@@ -87,15 +91,15 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
     var cursor: Cursor = .{ .remaining = args[index..] };
     while (cursor.next()) |argument| {
         const arg = std.mem.span(argument);
-        if (std.mem.eql(u8, arg, "--json")) {
+        if (std.mem.eql(u8, arg, "--json") or (action == .watch and std.mem.eql(u8, arg, "--jsonl"))) {
             options.json = true;
-        } else if (std.mem.eql(u8, arg, "--workspace") and (action == .list or action == .get)) {
+        } else if (std.mem.eql(u8, arg, "--workspace") and (action == .list or action == .get or action == .watch)) {
             if (options.workspace != null) {
                 return error.DuplicateWorkspaceOption;
             }
 
             options.workspace = try entity_target.Target.parse(std.mem.span(try cursor.require(error.MissingWorkspaceId)));
-        } else if (std.mem.eql(u8, arg, "--tab") and (action == .list or action == .get)) {
+        } else if (std.mem.eql(u8, arg, "--tab") and (action == .list or action == .get or action == .watch)) {
             if (options.tab != null) {
                 return error.DuplicateTabOption;
             }
@@ -108,19 +112,29 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
 
             options.enter = true;
         } else if (std.mem.eql(u8, arg, "--lines")) {
-            if (action != .read) {
+            if (action != .read and action != .watch) {
                 return error.UnknownPaneOption;
             }
             const value = try cursor.require(error.MissingLineCount);
 
             options.lines = try values.parseLineCount(std.mem.span(value));
         } else if (std.mem.eql(u8, arg, "--source")) {
-            if (action != .read) {
+            if (action != .read and action != .watch) {
                 return error.UnknownPaneOption;
             }
             const value = try cursor.require(error.MissingTextSource);
 
             options.source = try values.parseTextSource(std.mem.span(value));
+        } else if (std.mem.eql(u8, arg, "--count") and action == .watch and options.count == null) {
+            options.count = std.fmt.parseUnsigned(u32, std.mem.span(try cursor.require(error.MissingCount)), 10) catch return error.InvalidCount;
+            if (options.count == 0) {
+                return error.InvalidCount;
+            }
+        } else if (std.mem.eql(u8, arg, "--interval-ms") and action == .watch) {
+            options.interval_ms = std.fmt.parseUnsigned(u32, std.mem.span(try cursor.require(error.MissingInterval)), 10) catch return error.InvalidInterval;
+            if (options.interval_ms < 10 or options.interval_ms > 60000) {
+                return error.InvalidInterval;
+            }
         } else if (std.mem.eql(u8, arg, "--socket")) {
             const value = try cursor.require(error.MissingSocketPath);
             if (options.socket != null) {

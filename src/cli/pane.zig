@@ -3,6 +3,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const PaneWatcher = @import("PaneWatcher.zig");
 const PaneCatalog = @import("PaneCatalog.zig");
 const PaneOptions = @import("arguments/PaneOptions.zig");
 const SessionType = @import("Session.zig");
@@ -21,7 +22,7 @@ const SnapshotType = @import("Snapshot.zig");
 /// std.process.exit(try pane.run(process_init, options));
 /// ```
 pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
-    var session = if (options.action == .list or options.action == .get or options.action == .search) try SessionType.attach(init, options.socket) else try SessionType.open(init, options.socket);
+    var session = if (options.action == .list or options.action == .get or options.action == .search or options.action == .watch) try SessionType.attach(init, options.socket) else try SessionType.open(init, options.socket);
     defer session.close();
     var output_buffer: [16 * 1024]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
@@ -42,6 +43,12 @@ fn execute(session: *SessionType, options: PaneOptions, context: ExecutionContex
         return inspect(session, options, context);
     }
 
+    if (options.action == .watch) {
+        var watcher: PaneWatcher = .{ .session = session, .options = options, .context = context };
+        try watcher.run();
+        return agent.exit_ok;
+    }
+
     const pane: PaneRefType = if (options.action == .focus)
         .{
             .pane_id = try control.currentPaneId(context.environ),
@@ -51,7 +58,7 @@ fn execute(session: *SessionType, options: PaneOptions, context: ExecutionContex
         try resolvePane(session, options.target, context.environ);
 
     switch (options.action) {
-        .list, .get => unreachable,
+        .list, .get, .watch => unreachable,
         .search => {
             const response = try session.exchange(core.encodeSearchPane, core.SearchPane{ .request_id = .none, .pane_id = @enumFromInt(pane.pane_id), .needle = std.mem.span(options.text.?) });
             if (response != .pane_matches or core.raw(response.pane_matches.pane_id) != pane.pane_id) {
