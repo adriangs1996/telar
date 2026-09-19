@@ -31,6 +31,7 @@ pub const text =
     \\       telar workspace create --directory DIR [--name NAME] [--json] [--socket PATH]
     \\       telar workspace list [--json] [--socket PATH]
     \\       telar tab close <id|--current> [--workspace ID] [--json] [--socket PATH]
+    \\       telar tab move <id|--current> previous|next [--relative-to ID] [--workspace ID] [--json] [--socket PATH]
     \\       telar tab list [--workspace ID] [--json] [--socket PATH]
     \\       telar tab get <id|--current> [--workspace ID] [--json] [--socket PATH]
     \\       telar tab rename <id|--current> LABEL [--workspace ID] [--json] [--socket PATH]

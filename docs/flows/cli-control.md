@@ -85,3 +85,8 @@ The reply must match both the request ID and the complete tab location.
 `tab_closed`. JSON reports whether closing the final tab also retired its
 workspace. `TabControl` owns request construction and response validation for
 operations on an existing tab; CLI assembly only resolves the target and I/O.
+
+`telar tab move ID previous|next [--relative-to ID] [--workspace ID] [--json]`
+sends `move_tab`. Without an anchor it moves one position; with an anchor it
+inserts before or after that tab. Output reports the absolute zero-based
+position confirmed by `tab_moved`, including a successful no-op at an edge.

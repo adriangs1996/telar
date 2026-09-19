@@ -267,6 +267,17 @@ class ControlTests(unittest.TestCase):
             "workspace_id": 42, "tab_id": 8, "closed": True, "workspace_closed": True,
         })
 
+    def test_tab_move_sends_an_anchor_and_reports_absolute_position(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x10)
+            self.assertEqual(request[26:], struct.pack("<BBQ", 0, 1, 3))
+            send_frame(connection, bytes([0x8C]) + request[1:26] + struct.pack("<H", 4))
+
+        result = self.run_control(["tab", "move", "8", "previous", "--relative-to", "3", "--workspace", "42", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["position"], 4)
+
 
 if __name__ == "__main__":
     unittest.main()

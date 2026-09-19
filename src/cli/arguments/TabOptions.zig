@@ -11,6 +11,8 @@ socket: ?[*:0]const u8 = null,
 json: bool = false,
 target: ?entity_target.Target = null,
 label: ?[*:0]const u8 = null,
+direction: ?core.TabMoveDirection = null,
+relative_to: ?core.TabId = null,
 
 /// Parses tab commands without runtime access. Example: `try TabOptions.parse(&.{"list", "--workspace", "1"});`
 pub fn parse(args: []const [*:0]const u8) !TabOptions {
@@ -45,10 +47,31 @@ pub fn parse(args: []const [*:0]const u8) !TabOptions {
         index = 3;
     }
 
+    if (action == .move) {
+        if (args.len < 3) {
+            return error.MissingMoveDirection;
+        }
+
+        self.direction = std.meta.stringToEnum(core.TabMoveDirection, std.mem.span(args[2])) orelse return error.InvalidMoveDirection;
+        index = 3;
+    }
+
     var cursor: Cursor = .{ .remaining = args[index..] };
     while (cursor.next()) |argument| {
         const arg = std.mem.span(argument);
-        if (std.mem.eql(u8, arg, "--workspace")) {
+        if (std.mem.eql(u8, arg, "--relative-to") and action == .move) {
+            if (self.relative_to != null) {
+                return error.DuplicateRelativeTarget;
+            }
+
+            const value = try cursor.require(error.MissingRelativeTarget);
+            const target = try entity_target.Target.parse(std.mem.span(value));
+            if (target != .id) {
+                return error.InvalidRelativeTarget;
+            }
+
+            self.relative_to = @enumFromInt(target.id);
+        } else if (std.mem.eql(u8, arg, "--workspace")) {
             if (workspace_seen) {
                 return error.DuplicateWorkspaceOption;
             }
@@ -74,6 +97,14 @@ pub fn parse(args: []const [*:0]const u8) !TabOptions {
     }
 
     return self;
+}
+
+test "tab move validates direction and its optional anchor" {
+    const options = try TabOptions.parse(&.{ "move", "8", "previous", "--relative-to", "3" });
+    try std.testing.expectEqual(core.TabMoveDirection.previous, options.direction.?);
+    try std.testing.expectEqual(@as(u64, 3), core.raw(options.relative_to.?));
+    try std.testing.expectError(error.InvalidMoveDirection, TabOptions.parse(&.{ "move", "8", "sideways" }));
+    try std.testing.expectError(error.UnknownTabOption, TabOptions.parse(&.{ "get", "8", "--relative-to", "3" }));
 }
 
 test "tab list requires an unambiguous valid workspace option" {

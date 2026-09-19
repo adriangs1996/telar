@@ -16,7 +16,27 @@ pub fn execute(self: *TabControl) !void {
         .get => try self.read(),
         .rename => try self.rename(),
         .close => try self.close(),
+        .move => try self.move(),
         .list => return error.InvalidTabAction,
+    }
+}
+
+fn move(self: *TabControl) !void {
+    const response = try self.session.exchange(core.encodeMoveTab, core.MoveTab{
+        .request_id = .none,
+        .location = self.location,
+        .direction = self.options.direction.?,
+        .relative_to = self.options.relative_to,
+    });
+    if (response != .tab_moved or !std.meta.eql(response.tab_moved.location, self.location)) {
+        return error.UnexpectedRuntimeResponse;
+    }
+
+    if (self.options.json) {
+        try std.json.Stringify.value(.{ .workspace_id = core.raw(self.location.workspace.workspace), .tab_id = core.raw(self.location.tab_id), .position = response.tab_moved.position }, .{}, self.writer);
+        try self.writer.writeByte('\n');
+    } else {
+        try self.writer.print("tab {d} moved to position {d}\n", .{ core.raw(self.location.tab_id), response.tab_moved.position });
     }
 }
 

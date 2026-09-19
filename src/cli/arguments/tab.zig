@@ -1,1 +1,1 @@
-pub const Action = enum { list, get, rename, close };
+pub const Action = enum { list, get, rename, close, move };
