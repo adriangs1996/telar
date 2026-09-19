@@ -31,7 +31,10 @@ pub const exit_timeout: u8 = 3;
 /// std.process.exit(try agent.run(process_init, options));
 /// ```
 pub fn run(init: std.process.Init, options: AgentOptions) !u8 {
-    var session = try SessionType.open(init, options.socket);
+    var session = switch (options.action) {
+        .list, .get, .wait, .prompt, .read, .report_session => try SessionType.open(init, options.socket),
+        else => try SessionType.attach(init, options.socket),
+    };
     defer session.close();
     var output_buffer: [16 * 1024]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
@@ -42,6 +45,7 @@ pub fn run(init: std.process.Init, options: AgentOptions) !u8 {
         std.debug.print("telar agent: {s}\n", .{control.describe(err)});
         return switch (err) {
             error.AgentNotFound, error.PaneNotFound, error.PaneExited => exit_not_found,
+            error.RuntimeTimeout => exit_timeout,
             else => exit_failure,
         };
     };

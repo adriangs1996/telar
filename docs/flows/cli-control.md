@@ -1,7 +1,9 @@
 # CLI control
 
-CLI control commands reuse the runtime's typed protocol. Read-only commands
-attach to an existing runtime and never launch a pane or start a server.
+CLI control commands reuse the runtime's typed protocol. New inspection and
+control commands connect to an existing runtime and never start a server.
+Legacy `agent list/get/wait/prompt/read/report-session` and `pane read/send-keys`
+retain their existing startup behavior.
 `Session` owns the connection and bounded receive buffer; decoded response
 slices expire on the next receive. Runtime subscriptions use a fresh nonzero
 identity and never overwrite a UI client's retained layout.

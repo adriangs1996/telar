@@ -1090,6 +1090,15 @@ class ControlTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertEqual(result.stdout, "")
 
+    def test_new_agent_commands_do_not_resurrect_a_missing_runtime(self):
+        with tempfile.TemporaryDirectory(prefix="telar-observer-", dir="/tmp") as directory:
+            endpoint = Path(directory) / "missing.sock"
+            for command in [["agent", "thread", "7"], ["agent", "interrupt", "7"], ["agent", "report-title", "7", "title"], ["agent", "watch", "7", "--count", "1"]]:
+                result = subprocess.run([str(BINARY), *command, "--socket", str(endpoint)], capture_output=True, text=True, timeout=5)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(endpoint.exists())
+                self.assertIn("FileNotFound", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
