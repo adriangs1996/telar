@@ -40,6 +40,7 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[2..] };
     switch (action) {
+        .agent_create => {},
         .workspace_list_collapse => {},
         .workspace_list_expand => {},
         .sidebar_resize => self.value = std.math.cast(u16, try positive(std.mem.span(try cursor.require(error.MissingWidth)))) orelse return error.InvalidWidth,
@@ -78,7 +79,7 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
         const arg = std.mem.span(argument);
         if (std.mem.eql(u8, arg, "--client") and self.client_id == 0) {
             self.client_id = try positive(std.mem.span(try cursor.require(error.MissingClientId)));
-        } else if (std.mem.eql(u8, arg, "--label") and self.action == .tab_create and self.text.len == 0) {
+        } else if (std.mem.eql(u8, arg, "--label") and (self.action == .tab_create or self.action == .agent_create) and self.text.len == 0) {
             self.text = std.mem.span(try cursor.require(error.MissingLabel));
         } else if (std.mem.eql(u8, arg, "--json") and !self.json) {
             self.json = true;

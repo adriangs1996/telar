@@ -32,6 +32,19 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .agent_create => {
+            if (!client.model.hostCapabilities().agent_panes) {
+                return error.AgentPanesUnsupported;
+            }
+
+            var handler = tab_creations.requestHandler(client);
+            if (!try handler.execute(.{ .kind = .agent, .label = if (reply.length == 0) "Codex" else reply.text() })) {
+                return error.ClientBusy;
+            }
+
+            reply.length = 0;
+            reply.status = .admitted;
+        },
         .workspace_list_collapse => {
             if (client.model.setWorkspaceListCollapsed(true) != null) {
                 client.chrome.setWorkspaceListCollapsed(true);

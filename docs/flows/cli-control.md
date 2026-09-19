@@ -312,3 +312,7 @@ apply, and the returned value reports the width actually committed.
 `workspace-list expand`: Expands the workspace list idempotently in client model and host chrome.
 
 `workspace-list collapse`: Collapses the workspace list idempotently in client model and host chrome.
+
+`agent create`: Creates a managed Codex pane in a new tab using a client that supports native
+agent panes. Unsupported hosts fail explicitly. Success acknowledges admission
+to the existing tab creation flow, including its launch gate and geometry.
