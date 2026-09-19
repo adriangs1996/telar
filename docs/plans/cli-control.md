@@ -107,7 +107,7 @@ No simulated keyboard input is a substitute for an implemented command.
 
 - [x] `sidebar get`
 - [x] `sidebar show`
-- [ ] `sidebar hide`
+- [x] `sidebar hide`
 - [ ] `sidebar resize`
 - [ ] `workspace-list expand`
 - [ ] `workspace-list collapse`

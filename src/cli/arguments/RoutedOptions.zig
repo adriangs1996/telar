@@ -34,6 +34,7 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[2..] };
     switch (action) {
+        .sidebar_hide => {},
         .sidebar_show => {},
         .sidebar_get => {},
         .pane_scroll => {

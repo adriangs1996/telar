@@ -32,6 +32,14 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .sidebar_hide => {
+            if (client.model.sidebarVisible()) {
+                var handler = sidebar_toggles.handler(client);
+                _ = try handler.execute();
+            }
+
+            try sidebarState(client, reply);
+        },
         .sidebar_show => {
             if (!client.model.sidebarVisible()) {
                 var handler = sidebar_toggles.handler(client);

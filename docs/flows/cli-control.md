@@ -303,3 +303,5 @@ An unattached pane or active copy mode rejects the operation.
 `sidebar get`: Returns the selected client’s committed sidebar visibility and preferred width.
 
 `sidebar show`: Shows the sidebar idempotently and synchronizes pane geometry through the existing controller.
+
+`sidebar hide`: Hides the sidebar idempotently and synchronizes pane geometry through the existing controller.
