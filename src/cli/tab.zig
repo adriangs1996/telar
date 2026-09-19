@@ -12,9 +12,26 @@ pub fn run(init: std.process.Init, options: TabOptions) !void {
     var buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &buffer);
     const writer = &output.interface;
-    if (options.action == .get) {
-        const tab_id = try options.target.?.resolve(init.minimal.environ, "TELAR_TAB_ID");
+    if (options.target) |target| {
+        const tab_id = try target.resolve(init.minimal.environ, "TELAR_TAB_ID");
         const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(workspace) }, .tab_id = @enumFromInt(tab_id) };
+        if (options.action == .rename) {
+            const renamed = try session.exchange(core.encodeRenameTab, core.RenameTab{ .request_id = .none, .location = location, .label = std.mem.span(options.label.?) });
+            if (renamed != .tab_renamed or !std.meta.eql(renamed.tab_renamed.location, location)) {
+                return error.UnexpectedRuntimeResponse;
+            }
+
+            if (options.json) {
+                try std.json.Stringify.value(.{ .workspace_id = workspace, .tab_id = tab_id, .label = renamed.tab_renamed.label }, .{}, writer);
+                try writer.writeByte('\n');
+            } else {
+                try writer.print("tab {d} renamed to {s}\n", .{ tab_id, renamed.tab_renamed.label });
+            }
+
+            try writer.flush();
+            return;
+        }
+
         const response = try session.exchange(core.encodeRequestTabSnapshot, core.RequestTabSnapshot{ .request_id = .none, .location = location });
         if (response != .tab_snapshot or !std.meta.eql(response.tab_snapshot.location, location)) {
             return error.UnexpectedRuntimeResponse;

@@ -1,1 +1,1 @@
-pub const Action = enum { list, get };
+pub const Action = enum { list, get, rename };

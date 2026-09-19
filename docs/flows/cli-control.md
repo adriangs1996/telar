@@ -76,3 +76,7 @@ differs from their positions.
 the tab's panel identities, generations, kinds and lifecycle states. `--current`
 resolves `TELAR_TAB_ID`. A mismatched workspace or tab in the response fails;
 querying never obtains a geometry lease or attaches to a terminal.
+
+`telar tab rename ID LABEL [--workspace ID] [--json]` validates a bounded UTF-8
+label, sends `rename_tab` and reports the label acknowledged by `tab_renamed`.
+The reply must match both the request ID and the complete tab location.

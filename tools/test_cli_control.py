@@ -243,6 +243,17 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(tab["panes"][0]["pane_generation"], 9)
         self.assertEqual(tab["panes"][0]["kind"], "agent")
 
+    def test_tab_rename_uses_the_runtime_confirmed_label(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x0E)
+            self.assertEqual(request[26:], sized16('New "name"'))
+            send_frame(connection, bytes([0x8A]) + request[1:26] + sized16('New "name"'))
+
+        result = self.run_control(["tab", "rename", "8", 'New "name"', "--workspace", "42", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"workspace_id": 42, "tab_id": 8, "label": 'New "name"'})
+
 
 if __name__ == "__main__":
     unittest.main()
