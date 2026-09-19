@@ -1,3 +1,4 @@
+const PluginOverrides = @import("PluginOverrides.zig");
 const std = @import("std");
 const GenerationType = @import("../config/Generation.zig");
 const RegistryType = @import("../plugins/Registry.zig");
@@ -9,6 +10,7 @@ gpa: std.mem.Allocator,
 path: []const u8,
 known_mtime_ns: i128,
 force_reload: bool = false,
+plugin_overrides: PluginOverrides = .{},
 generation_number: u64,
 profile: ?[]const u8,
 current_generation: *const GenerationType,

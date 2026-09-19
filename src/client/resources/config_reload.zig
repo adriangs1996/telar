@@ -41,6 +41,7 @@ pub fn schedule(state: *ConfigReloadState, args: ScheduleArgs) !void {
             .path = args.path,
             .known_mtime_ns = state.mtime_ns,
             .force_reload = state.force_next,
+            .plugin_overrides = state.plugin_overrides,
             .generation_number = state.next_generation,
             .profile = args.profile,
             .current_generation = args.current_generation,
@@ -132,6 +133,7 @@ pub fn wait(args: WaitArgs) anyerror!ConfigReload {
         .diagnostic = diagnostic,
         .mtime_ns = mtime_ns,
     } };
+    args.plugin_overrides.apply(&generation.snapshot);
     args.orphans.generation = generation;
     var partial: Partial = .{ .generation = generation };
     const trust = loadReloadTrustStore(args.gpa, args.io, args.trust_path) catch |err| {

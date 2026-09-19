@@ -23,7 +23,7 @@ pub fn list(client: *Client, reply: *core.ClientCommand) !void {
     if (index < count) {
         const spec = &generation.snapshot.plugins[index];
         const package = catalog.package(index);
-        try std.json.Stringify.value(.{ .index = index, .path = spec.path(), .id = if (package) |loaded| loaded.manifest.id() else null, .version = if (package) |loaded| loaded.manifest.version() else null, .enabled = spec.enabled }, .{}, &writer);
+        try std.json.Stringify.value(.{ .index = index, .path = spec.path(), .id = if (package) |loaded| loaded.manifest.id() else null, .version = if (package) |loaded| loaded.manifest.version() else null, .requested_enabled = client.reload.plugin_overrides.requested(spec.path()) orelse spec.enabled, .enabled = spec.enabled }, .{}, &writer);
     }
 
     try writer.writeAll("]}");
@@ -63,9 +63,9 @@ pub fn get(client: *Client, reply: *core.ClientCommand) !void {
             }
 
             const digest = std.fmt.bytesToHex(loaded.digest, .lower);
-            try std.json.Stringify.value(.{ .path = spec.path(), .enabled = spec.enabled, .id = loaded.manifest.id(), .version = loaded.manifest.version(), .entry = loaded.manifest.entry(), .source = loaded.manifest.source(), .revision = loaded.manifest.revision(), .digest = digest[0..], .capabilities = capabilities[0..count] }, .{}, &writer);
+            try std.json.Stringify.value(.{ .path = spec.path(), .requested_enabled = client.reload.plugin_overrides.requested(spec.path()) orelse spec.enabled, .enabled = spec.enabled, .id = loaded.manifest.id(), .version = loaded.manifest.version(), .entry = loaded.manifest.entry(), .source = loaded.manifest.source(), .revision = loaded.manifest.revision(), .digest = digest[0..], .capabilities = capabilities[0..count] }, .{}, &writer);
         } else {
-            try std.json.Stringify.value(.{ .path = spec.path(), .enabled = spec.enabled, .id = @as(?[]const u8, null) }, .{}, &writer);
+            try std.json.Stringify.value(.{ .path = spec.path(), .requested_enabled = client.reload.plugin_overrides.requested(spec.path()) orelse spec.enabled, .enabled = spec.enabled, .id = @as(?[]const u8, null) }, .{}, &writer);
         }
     } else {
         try std.json.Stringify.value(package.?.manifest.actions[page - 1].slice(), .{}, &writer);

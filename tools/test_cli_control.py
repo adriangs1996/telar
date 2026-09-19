@@ -1037,6 +1037,11 @@ class ControlTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(result.stdout, "")
 
+    def test_plugin_enable_accepts_a_disabled_configured_path(self):
+        result = self.run_control(["plugin", "enable", "plugins/paused", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=37, target=0, input_text="plugins/paused"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "admitted")
+
 
 if __name__ == "__main__":
     unittest.main()

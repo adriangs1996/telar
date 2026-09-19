@@ -416,3 +416,9 @@ identity, version, entrypoint, source, revision, digest, declared capabilities
 and the complete action list. Actions are paged under the same configuration
 generation. Disabled packages report configuration only; inspecting them does
 not load or execute code.
+
+`plugin enable` applies a client-lifetime override to a configured plugin and
+requests asynchronous configuration reload. It does not edit Lua source or
+grant capabilities. Disabled entries use their configured path. Registry
+loading, validation and trust checks still run on the existing worker. The CLI
+reports admission; list/get distinguish adopted and requested enablement.

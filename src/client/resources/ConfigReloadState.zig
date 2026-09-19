@@ -1,3 +1,4 @@
+const PluginOverrides = @import("PluginOverrides.zig");
 const Orphans = @import("Orphans.zig");
 const std = @import("std");
 /// The reload's own state on the client: the watch fingerprint, the
@@ -7,6 +8,7 @@ const State = @This();
 
 mtime_ns: i128,
 force_next: bool = false,
+plugin_overrides: PluginOverrides = .{},
 next_generation: u64 = 2,
 orphans: Orphans = .{},
 
