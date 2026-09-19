@@ -287,3 +287,7 @@ exit remains runtime authority. Focus remains changed if closure is unavailable.
 `pane focus`: Focuses an existing pane in the selected client’s active tab. An already focused
 pane is a successful no-op. Missing panes fail. The existing `pane focus
 --current --direction DIRECTION` command retains its original routing behavior.
+
+`pane resize`: Focuses the source pane and moves its nearest matching split edge by Telar’s
+existing resize step. Constrained or absent split edges fail explicitly. The
+geometry handler updates both local layout and runtime pane sizes.

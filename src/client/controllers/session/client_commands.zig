@@ -4,6 +4,8 @@ const std = @import("std");
 const Axis = @import("../../workspace/layout_support.zig").Axis;
 const pane_focus = @import("../panes/pane_focus.zig");
 const pane_closures = @import("../panes/pane_closures.zig");
+const Direction = @import("../../workspace/layout_support.zig").Direction;
+const pane_geometry = @import("../panes/pane_geometry.zig");
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
@@ -26,6 +28,17 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .pane_resize => {
+            const direction = std.meta.stringToEnum(Direction, reply.text()) orelse return error.InvalidPaneDirection;
+            try focusPane(client, reply.target_id);
+            var handler = pane_geometry.resizeHandler(client);
+            if (try handler.execute(.{ .direction = direction, .area = client.geometry().area }) == null) {
+                return error.PaneResizeUnavailable;
+            }
+
+            reply.length = 0;
+            reply.status = .applied;
+        },
         .pane_focus => {
             try focusPane(client, reply.target_id);
             reply.status = .applied;

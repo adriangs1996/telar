@@ -833,6 +833,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["target_id"], 5)
 
+    def test_pane_resize_routes_to_the_named_pane(self):
+        result = self.run_control(["pane", "resize", "5", "right", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=9, target=5, input_text="right", input_value=0))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["target_id"], 5)
+
 
 if __name__ == "__main__":
     unittest.main()

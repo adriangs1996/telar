@@ -34,6 +34,13 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[2..] };
     switch (action) {
+        .pane_resize => {
+            self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));
+            self.text = std.mem.span(try cursor.require(error.MissingPaneDirection));
+            if (std.meta.stringToEnum(core.PaneDirection, self.text) == null) {
+                return error.InvalidPaneDirection;
+            }
+        },
         .pane_focus => self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget))),
         .pane_close => self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget))),
         .pane_split => {
