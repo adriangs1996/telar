@@ -125,5 +125,5 @@ No simulated keyboard input is a substitute for an implemented command.
 
 ## Diagnostics
 
-- [ ] `diagnostics logs`
+- [x] `diagnostics logs`
 

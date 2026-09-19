@@ -1,5 +1,6 @@
 //! CLI command selection; each grammar owns its options and validation.
 
+const DiagnosticsOptions = @import("arguments/DiagnosticsOptions.zig");
 const ServerOptions = @import("arguments/ServerOptions.zig");
 const RuntimeOptions = @import("arguments/RuntimeOptions.zig");
 const RoutedOptions = @import("arguments/RoutedOptions.zig");
@@ -47,6 +48,7 @@ pub const Cli = union(enum) {
     version,
     server: ServerOptions,
     runtime: RuntimeOptions,
+    diagnostics: DiagnosticsOptions,
     tab: TabOptions,
     command: SuggestionOptions,
     client_control: ClientOptions,
@@ -101,6 +103,9 @@ pub const Cli = union(enum) {
             return .{ .tab = try TabOptions.parse(args[2..]) };
         }
 
+        if (std.mem.eql(u8, first, "diagnostics")) {
+            return .{ .diagnostics = try DiagnosticsOptions.parse(args[2..]) };
+        }
         if (std.mem.eql(u8, first, "runtime")) {
             return .{ .runtime = try RuntimeOptions.parse(args[2..]) };
         }

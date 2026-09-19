@@ -5,6 +5,7 @@ const max_args_module = @import("telar-backend").max_args;
 const parser = @import("cli/parser.zig");
 const usage_module = @import("cli/usage.zig");
 const server_module = @import("cli/server.zig");
+const diagnostics_module = @import("cli/diagnostics.zig");
 const runtime_module = @import("cli/runtime.zig");
 const routed_module = @import("cli/routed.zig");
 const client_control_module = @import("cli/client_control.zig");
@@ -91,6 +92,7 @@ pub fn main(init: std.process.Init) !void {
         .help => try std.Io.File.stdout().writeStreamingAll(init.io, usage_module.text),
         .version => try std.Io.File.stdout().writeStreamingAll(init.io, "telar " ++ version ++ "\n"),
         .server => |options| try server_module.run(init, options),
+        .diagnostics => |options| std.process.exit(diagnostics_module.run(init, options)),
         .runtime => |options| std.process.exit(runtime_module.run(init, options)),
         .routed => |options| std.process.exit(routed_module.run(init, options)),
         .client_control => |options| std.process.exit(client_control_module.run(init, options)),
@@ -131,6 +133,8 @@ pub fn main(init: std.process.Init) !void {
 test {
     _ = @import("cli/arguments/TabOptions.zig");
     _ = @import("cli/runtime.zig");
+    _ = @import("cli/DiagnosticLog.zig");
+    _ = @import("cli/arguments/DiagnosticsOptions.zig");
     _ = @import("cli/arguments/RuntimeOptions.zig");
     _ = @import("cli/RuntimeConfigSelection.zig");
     _ = @import("cli/RuntimeConnector.zig");

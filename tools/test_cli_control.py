@@ -1067,6 +1067,29 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "admitted")
 
+    def test_diagnostics_reads_only_owned_matching_regular_logs_without_a_runtime(self):
+        with tempfile.TemporaryDirectory(prefix="telar-logs-", dir="/tmp") as directory:
+            endpoint = Path(directory) / "runtime.sock"
+            log = Path(str(endpoint) + ".runtime-123.log")
+            log.write_text("first\nsecond\nthird\n")
+            Path(str(endpoint) + ".client-999.log").write_text("client\n")
+            Path(str(endpoint) + "-other.runtime-123.log").write_text("unrelated\n")
+            Path(str(endpoint) + ".runtime-124.log").symlink_to(log)
+            os.mkfifo(str(endpoint) + ".runtime-125.log")
+            result = subprocess.run([str(BINARY), "diagnostics", "logs", "--socket", str(endpoint), "--component", "runtime", "--lines", "2", "--json"], capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            logs = json.loads(result.stdout)
+            self.assertEqual(len(logs), 1)
+            self.assertEqual(logs[0]["text"], "second\nthird\n")
+            self.assertTrue(logs[0]["truncated"])
+            self.assertFalse(endpoint.exists())
+
+    def test_missing_diagnostics_returns_not_found(self):
+        with tempfile.TemporaryDirectory(prefix="telar-logs-", dir="/tmp") as directory:
+            result = subprocess.run([str(BINARY), "diagnostics", "logs", "--socket", str(Path(directory) / "missing.sock")], capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(result.stdout, "")
+
 
 if __name__ == "__main__":
     unittest.main()
