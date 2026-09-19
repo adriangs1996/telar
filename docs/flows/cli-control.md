@@ -310,3 +310,5 @@ An unattached pane or active copy mode rejects the operation.
 apply, and the returned value reports the width actually committed.
 
 `workspace-list expand`: Expands the workspace list idempotently in client model and host chrome.
+
+`workspace-list collapse`: Collapses the workspace list idempotently in client model and host chrome.

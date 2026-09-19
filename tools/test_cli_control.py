@@ -873,6 +873,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["action"], "workspace_list_expand")
 
+    def test_workspace_list_collapse_uses_explicit_client_control(self):
+        result = self.run_control(["workspace-list", "collapse", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=17, target=0, input_text="", input_value=0))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["action"], "workspace_list_collapse")
+
 
 if __name__ == "__main__":
     unittest.main()

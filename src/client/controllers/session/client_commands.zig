@@ -32,6 +32,13 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .workspace_list_collapse => {
+            if (client.model.setWorkspaceListCollapsed(true) != null) {
+                client.chrome.setWorkspaceListCollapsed(true);
+            }
+
+            reply.status = .applied;
+        },
         .workspace_list_expand => {
             if (client.model.setWorkspaceListCollapsed(false) != null) {
                 client.chrome.setWorkspaceListCollapsed(false);

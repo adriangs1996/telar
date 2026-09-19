@@ -40,6 +40,7 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[2..] };
     switch (action) {
+        .workspace_list_collapse => {},
         .workspace_list_expand => {},
         .sidebar_resize => self.value = std.math.cast(u16, try positive(std.mem.span(try cursor.require(error.MissingWidth)))) orelse return error.InvalidWidth,
         .sidebar_hide => {},
