@@ -1,5 +1,6 @@
 const std = @import("std");
 const core = @import("telar-core");
+const PluginQuery = @import("PluginQuery.zig");
 const Session = @import("Session.zig");
 const Options = @import("arguments/RoutedOptions.zig");
 const control = @import("control.zig");
@@ -54,7 +55,10 @@ fn execute(init: std.process.Init, options: Options) !u8 {
 
     var buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &buffer);
-    if (reply.action == .config_show) {
+    if (reply.action == .plugin_list) {
+        var query: PluginQuery = .{ .session = &session, .command = command };
+        try query.run(reply, &output.interface);
+    } else if (reply.action == .config_show) {
         const parsed = try std.json.parseFromSlice(std.json.Value, init.gpa, reply.text(), .{});
         defer parsed.deinit();
         try std.json.Stringify.value(parsed.value, .{ .whitespace = if (options.json) .minified else .indent_2 }, &output.interface);

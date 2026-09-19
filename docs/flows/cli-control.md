@@ -404,3 +404,9 @@ are the client configuration for a runtime launch, not an assertion that a
 running runtime has reconfigured itself. Lua callbacks are identified by their
 generation/reference; their executable bodies are not serialized. The response
 is JSON in both display modes. Oversized sections fail explicitly.
+
+`plugin list --client ID` includes disabled configured plugins as well as loaded
+packages. It assembles bounded pages before printing JSON, pinning the adopted
+configuration generation so a concurrent reload fails instead of mixing
+generations. Identifiers are loaded manifest IDs; disabled plugins can be
+addressed by their configured paths.

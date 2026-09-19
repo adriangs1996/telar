@@ -1007,6 +1007,12 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), {"binding_count": 12})
 
+    def test_plugin_list_includes_disabled_configured_packages(self):
+        page = {"generation": 4, "entries": [{"path": "plugins/paused", "id": None, "enabled": False}]}
+        result = self.run_control(["plugin", "list", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=35, target=0, status=1, text=json.dumps(page), return_value=-1))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(json.loads(result.stdout)[0]["enabled"])
+
 
 if __name__ == "__main__":
     unittest.main()

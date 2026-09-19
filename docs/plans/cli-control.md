@@ -97,7 +97,7 @@ No simulated keyboard input is a substitute for an implemented command.
 
 ## Plugins
 
-- [ ] `plugin list`
+- [x] `plugin list`
 - [ ] `plugin get`
 - [ ] `plugin enable`
 - [ ] `plugin disable`

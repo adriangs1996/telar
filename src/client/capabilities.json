@@ -362,6 +362,8 @@
     "config/Snapshot.zig",
     "controllers/configuration/lua_actions.zig",
     "controllers/configuration/plugin_actions.zig",
+    "controllers/configuration/plugin_queries.zig",
+    "plugins/ConfiguredPlugins.zig",
     "controllers/controllers.zig",
     "controllers/host/Completion.zig",
     "controllers/host/clipboard_images.zig",
