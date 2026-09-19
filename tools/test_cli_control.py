@@ -1047,6 +1047,26 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "admitted")
 
+    def test_plugin_run_resolves_the_action_and_reports_worker_admission(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x33)
+            entry = struct.pack("<QQQHQQ", 7, 9, 11, 2, 5, 12)
+            send_frame(connection, bytes([0xAD]) + request[1:9] + struct.pack("<B", 1) + entry)
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x35)
+            self.assertEqual(request[25], 39)
+            self.assertNotEqual(struct.unpack_from("<Q", request, 27)[0], 0)
+            self.assertEqual(request[43:], sized16("demo"))
+            reply = bytearray(request)
+            reply[0] = 0xAF
+            reply[26] = 2
+            send_frame(connection, bytes(reply))
+
+        result = self.run_control(["plugin", "run", "demo", "open", "--client", "7", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "admitted")
+
 
 if __name__ == "__main__":
     unittest.main()

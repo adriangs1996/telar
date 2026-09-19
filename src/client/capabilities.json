@@ -364,6 +364,7 @@
     "controllers/configuration/plugin_actions.zig",
     "controllers/configuration/plugin_queries.zig",
     "controllers/configuration/plugin_toggles.zig",
+    "controllers/configuration/plugin_invocations.zig",
     "resources/PluginOverride.zig",
     "resources/PluginOverrides.zig",
     "plugins/ConfiguredPlugins.zig",

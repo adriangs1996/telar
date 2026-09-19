@@ -428,3 +428,8 @@ The fresh configuration removes bindings for that plugin before validation;
 other bindings retain their order and prefix policy. Source configuration is
 unchanged, so re-enabling restores its original bindings. Worker results still
 pass existing package identity and capability authorization after reload.
+
+`plugin run ID|PATH ACTION --client ID` resolves a loaded plugin action and
+uses the existing isolated plugin worker. Busy, unavailable and rejected
+starts return failure. Admission is not completion: worker results continue
+through the existing digest-bound capability checks and UI notifications.

@@ -21,6 +21,7 @@ const config_reloads = @import("../configuration/config_reloads.zig");
 const config_queries = @import("../configuration/config_queries.zig");
 const plugin_queries = @import("../configuration/plugin_queries.zig");
 const plugin_toggles = @import("../configuration/plugin_toggles.zig");
+const plugin_invocations = @import("../configuration/plugin_invocations.zig");
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
@@ -43,6 +44,9 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .plugin_run => {
+            try plugin_invocations.run(client, reply);
+        },
         .plugin_disable => {
             try plugin_toggles.disable(client, reply);
         },
