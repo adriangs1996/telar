@@ -2,6 +2,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const Session = @import("Session.zig");
 const RuntimeOptions = @import("arguments/RuntimeOptions.zig");
+const runtime_events = @import("runtime_events.zig");
 
 /// Inspects an existing runtime without starting or attaching a pane. Example: `try runtime.run(init, options);`
 pub fn run(init: std.process.Init, options: RuntimeOptions) !void {
@@ -11,6 +12,23 @@ pub fn run(init: std.process.Init, options: RuntimeOptions) !void {
 
     var buffer: [4096]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &buffer);
+    if (options.action == .watch) {
+        var count: u64 = 0;
+        while (true) {
+            const event = try session.nextEvent();
+            if (try runtime_events.write(&output.interface, event)) {
+                count += 1;
+            }
+
+            if (event == .resync_required) {
+                return error.RuntimeResyncRequired;
+            }
+            if (event == .runtime_stopping or (options.count != null and count >= options.count.?)) {
+                return;
+            }
+        }
+    }
+
     while (true) {
         switch (try session.receive()) {
             .proxy_status => |status| {

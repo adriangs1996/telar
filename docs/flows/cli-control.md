@@ -21,3 +21,13 @@ a disabled proxy is active or that an uninstalled CA is trusted.
 Parser and JSON tests run under `zig build test-cli`. The socket contract and
 absence of auto-start are exercised by `python3 tools/test_cli_control.py`
 after `zig build`. These tests never connect to the user's runtime.
+
+## Runtime watch
+
+`telar runtime watch [--jsonl] [--count N]` streams global projections as JSON
+lines, flushing each event before waiting again. It retains no event history
+and does no polling. `--count` bounds the number of emitted events. Runtime
+shutdown emits a final event and exits successfully; a resync notice emits
+the notice and fails explicitly, allowing the caller to reconnect for a fresh
+snapshot. Closing the process closes its subscription. Idle streams have no
+timeout; finite status queries have a 30-second receive deadline.

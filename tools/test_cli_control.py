@@ -100,6 +100,27 @@ class ControlTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertFalse(endpoint.exists())
 
+    def test_runtime_watch_streams_updates_in_order(self):
+        def exchange(connection):
+            self.assertEqual(receive_frame(connection)[0], 0x14)
+            send_frame(connection, bytes([0x95, 0, 0, 0]))
+            send_frame(connection, bytes([0x98]) + struct.pack("<QH", 2, 0))
+
+        result = self.run_control(["runtime", "watch", "--jsonl", "--count", "2"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        events = [json.loads(line) for line in result.stdout.splitlines()]
+        self.assertEqual([event["type"] for event in events], ["proxy_status", "workspace_list"])
+        self.assertEqual(events[1]["data"], [])
+
+    def test_runtime_watch_reports_shutdown_and_exits(self):
+        def exchange(connection):
+            receive_frame(connection)
+            send_frame(connection, bytes([0x85]))
+
+        result = self.run_control(["runtime", "watch", "--jsonl"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"type": "runtime_stopping"})
+
 
 if __name__ == "__main__":
     unittest.main()

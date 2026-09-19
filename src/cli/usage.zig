@@ -10,6 +10,7 @@ pub const text =
     \\       telar server stop
     \\       telar server endpoint
     \\       telar runtime status [--json] [--socket PATH]
+    \\       telar runtime watch [--jsonl] [--count N] [--socket PATH]
     \\       telar config check [PATH] [--profile NAME]
     \\       telar plugin inspect PATH
     \\       telar plugin install PATH

@@ -128,10 +128,19 @@ fn receiveDeadline(self: *Session) !void {
 }
 
 fn receiveMessage(self: *Session) !core.ServerMessage {
+    const response = try self.nextEvent();
+    if (response == .runtime_stopping) {
+        return error.RuntimeStopping;
+    }
+
+    return response;
+}
+
+/// Waits for subscription traffic without an idle timeout. Example: `const event = try session.nextEvent();`
+pub fn nextEvent(self: *Session) !core.ServerMessage {
     const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
     switch (response) {
         .request_failed => |failure| return control.failureError(failure),
-        .runtime_stopping => return error.RuntimeStopping,
         else => return response,
     }
 }
