@@ -764,6 +764,33 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), {"id": 7, "generation": 9, "detached": True})
 
+    def routed_exchange(self, connection, action=0, target=42, status=2, text="", generation=9):
+        request = receive_frame(connection)
+        self.assertEqual(request[0], 0x33)
+        entry = struct.pack("<QQQHQQ", 7, 9, 11, 2, 5, 12)
+        send_frame(connection, bytes([0xAD]) + request[1:] + bytes([1]) + entry)
+        request = receive_frame(connection)
+        self.assertEqual(request[0], 0x35)
+        self.assertEqual(struct.unpack_from("<QQBBQ", request, 9), (7, 9, action, 0, target))
+        reply = bytes([0xAF]) + request[1:9] + struct.pack("<QQBBQq", 7, generation, action, status, target, 0) + sized16(text)
+        send_frame(connection, reply)
+
+    def test_workspace_select_routes_to_explicit_ui_generation(self):
+        result = self.run_control(["workspace", "select", "42", "--client", "7", "--json"], self.routed_exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "admitted")
+
+    def test_workspace_select_propagates_ui_rejection(self):
+        result = self.run_control(["workspace", "select", "42", "--client", "7"], lambda c: self.routed_exchange(c, status=3, text="ClientBusy"))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("ClientBusy", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_workspace_select_rejects_wrong_ui_generation(self):
+        result = self.run_control(["workspace", "select", "42", "--client", "7"], lambda c: self.routed_exchange(c, generation=10))
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+
 
 if __name__ == "__main__":
     unittest.main()

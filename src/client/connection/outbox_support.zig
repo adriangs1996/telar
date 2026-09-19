@@ -93,6 +93,7 @@ pub const Message = union(enum) {
     delete_history: DeleteHistoryType,
     read_history_output: ReadHistoryOutputType,
     suggest_command: OwnedSuggestion,
+    complete_client_command: u16,
     complete_pane_focus: CompletePaneFocusType,
 };
 
@@ -547,4 +548,23 @@ test "agent prompt outbox owns borrowed image paths and refuses aggregate overfl
     const depth = outbox.len;
     try std.testing.expectError(error.InvalidAgentPrompt, outbox.pushAgentPrompt(request));
     try std.testing.expectEqual(depth, outbox.len);
+}
+
+test "routed completions retain their text through send and recycle bounded slots" {
+    const core = @import("telar-core");
+    var outbox: Outbox = .{};
+    var reply: core.ClientCommand = .{ .request_id = @enumFromInt(5), .route = .{ .id = 7, .generation = 9 }, .action = .workspace_select, .status = .admitted, .target_id = 42 };
+    try reply.setText("retained");
+    for (0..capacity) |_| {
+        try outbox.pushClientCompletion(reply);
+    }
+
+    try std.testing.expectError(error.ClientOutboxFull, outbox.pushClientCompletion(reply));
+    try reply.setText("reused input");
+    var buffer: [core.ClientCommand.capacity + 64]u8 = undefined;
+    const decoded = try core.decodeClient((try outbox.beginSend(&buffer)).?);
+    try std.testing.expectEqualStrings("retained", decoded.complete_client_command.text());
+    try outbox.finishSend({});
+    try outbox.pushClientCompletion(reply);
+    try std.testing.expect(@sizeOf(Message) < 512);
 }

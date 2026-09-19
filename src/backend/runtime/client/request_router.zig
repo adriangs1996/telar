@@ -32,6 +32,7 @@ const CopySelectionType = @import("telar-core").CopySelection;
 const ShowNotificationType = @import("telar-core").ShowNotification;
 const ClientLayoutUpdateViewType = @import("telar-core").ClientLayoutUpdateView;
 const AcknowledgeAgentType = @import("telar-core").AcknowledgeAgent;
+const ClientCommand = @import("telar-core").ClientCommand;
 const DetachClient = @import("telar-core").DetachClient;
 const QueryClients = @import("telar-core").QueryClients;
 const QueryAgentsType = @import("telar-core").QueryAgents;
@@ -86,6 +87,7 @@ pub fn classify(tag: Tag) RequestClass {
         .agent_approval,
         .query_agent_thread,
         .query_agent_history,
+        .request_client_command,
         .detach_client,
         .query_clients,
         .query_agents,
@@ -167,6 +169,8 @@ const testing_handlers: GenericHandlers(RequestRouterCapture) = .{
     .show_notification = captureHandler(.show_notification, ShowNotificationType),
     .update_client_layout = captureHandler(.update_client_layout, ClientLayoutUpdateViewType),
     .acknowledge_agent = captureHandler(.acknowledge_agent, AcknowledgeAgentType),
+    .request_client_command = captureHandler(.request_client_command, ClientCommand),
+    .complete_client_command = captureHandler(.complete_client_command, ClientCommand),
     .detach_client = captureHandler(.detach_client, DetachClient),
     .query_clients = captureHandler(.query_clients, QueryClients),
     .query_agents = captureHandler(.query_agents, QueryAgentsType),
@@ -249,6 +253,8 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]ClientMessageType {
         .{ .query_agent_thread = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1 } },
         .{ .query_agent_history = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .view_generation = 1 } },
         .{ .detach_client = .{ .request_id = request_id, .client_id = 7, .client_generation = 9 } },
+        .{ .request_client_command = .{ .request_id = request_id, .route = .{ .id = 1, .generation = 1 }, .action = .workspace_select, .target_id = 2 } },
+        .{ .complete_client_command = .{ .request_id = request_id, .route = .{ .id = 1, .generation = 1 }, .action = .workspace_select, .target_id = 2 } },
         .{ .query_clients = .{ .request_id = request_id } },
         .{ .query_agents = .{ .request_id = request_id } },
         .{ .read_pane = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .rows = 40, .source = .screen } },
@@ -313,6 +319,7 @@ test "Router delegates every client tag exactly once and preserves classificatio
             .agent_approval,
             .query_agent_thread,
             .query_agent_history,
+            .request_client_command,
             .detach_client,
             .query_clients,
             .query_agents,

@@ -7,6 +7,7 @@ pub const client_layouts = @import("VoidAdapter.zig");
 pub const pane_clipboards = @import("VoidAdapter.zig");
 pub const pane_closures = @import("Adapter.zig");
 pub const pane_frames = @import("Adapter.zig");
+pub const client_commands = @import("VoidAdapter.zig");
 pub const pane_focus_commands = @import("VoidAdapter.zig");
 pub const pane_graphics = @import("Adapter.zig");
 pub const pane_metadata = @import("Adapter.zig");

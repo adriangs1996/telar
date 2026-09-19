@@ -24,7 +24,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [x] `workspace get`
 - [x] `workspace create --directory`
 - [x] `workspace rename`
-- [ ] `workspace select`
+- [x] `workspace select`
 
 ## Tabs
 

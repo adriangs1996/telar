@@ -5,6 +5,8 @@
 pub const ClientTag = enum(u8) {
     query_clients = 0x33,
     detach_client = 0x34,
+    request_client_command = 0x35,
+    complete_client_command = 0x36,
     open_pane = 0x01,
     pane_input = 0x02,
     pane_resize = 0x03,
@@ -59,6 +61,8 @@ pub const ClientTag = enum(u8) {
 
 pub const ServerTag = enum(u8) {
     client_list = 0xad,
+    client_command = 0xae,
+    client_command_result = 0xaf,
     pane_opened = 0x81,
     pane_frame = 0x82,
     pane_exited = 0x83,

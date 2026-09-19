@@ -403,6 +403,7 @@
     "controllers/panes/pane_splits.zig",
     "controllers/panes/pane_viewports.zig",
     "controllers/session/State.zig",
+    "controllers/session/client_commands.zig",
     "controllers/session/client_detachments.zig",
     "controllers/session/client_layouts.zig",
     "controllers/session/request_failures.zig",

@@ -241,3 +241,15 @@ and an exact live UI generation. The existing teardown shuts its connection,
 releases attachments and geometry, and leaves runtime-owned processes alive.
 The handler validates before effects; stale generations and observers are
 covered by tests. Schema generation 61 adds the bounded teardown request.
+
+`workspace select ID --client ID` discovers a live UI connection and routes to
+its exact generation. The UI uses the existing workspace selection/handoff
+controller. An already selected workspace returns `applied`; asynchronous
+handoff admission returns `admitted`, not a claim of completed attachment.
+Unknown workspaces, busy clients and disconnects fail explicitly. The runtime
+retains no presentation state from these commands. A session owns at most one
+pending command; completion must match the sender generation, request, action
+and target. Command and response text own at most 4096 UTF-8 bytes; queueing
+never borrows decoder storage. Socket contracts cover success, UI rejection and
+incorrect completion generations; runtime tests cover admission, ownership and
+stale/unrelated completions. Protocol generation is 62.

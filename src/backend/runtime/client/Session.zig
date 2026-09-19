@@ -11,6 +11,7 @@ const std = @import("std");
 const CompletePaneFocusType = @import("telar-core").CompletePaneFocus;
 const max_frame_size_module = @import("telar-core").max_frame_size;
 const read_buffer_size_module = @import("telar-core").read_buffer_size;
+const PendingClientCommand = @import("PendingClientCommand.zig");
 const Session = @This();
 
 key: ClientKey,
@@ -25,6 +26,7 @@ send_pending: bool = false,
 closing: bool = false,
 last_input_pane: PaneIdType = .invalid,
 last_input_sequence: u64 = 0,
+pending_client_command: ?PendingClientCommand = null,
 pending_pane_focus: ?PendingPaneFocus = null,
 terminal_colors: TerminalColorsType = .{},
 pending_search: ?PendingType = null,

@@ -64,6 +64,8 @@ pub fn Type(comptime Context: type, comptime handlers: GenericHandlers(Context))
                 .show_notification => |request| handlers.show_notification(router.context, request),
                 .update_client_layout => |request| handlers.update_client_layout(router.context, request),
                 .acknowledge_agent => |request| handlers.acknowledge_agent(router.context, request),
+                .request_client_command => |request| try handlers.request_client_command(router.context, request),
+                .complete_client_command => |request| try handlers.complete_client_command(router.context, request),
                 .detach_client => |request| try handlers.detach_client(router.context, request),
                 .query_clients => |request| try handlers.query_clients(router.context, request),
                 .query_agents => |request| handlers.query_agents(router.context, request),

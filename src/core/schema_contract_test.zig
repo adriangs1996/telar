@@ -57,7 +57,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 104;
+const corpus_len = 108;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -1039,6 +1039,19 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
 
     helper.add(.{ .name = "detach_client", .direction = .client, .golden_hex = golden.detach_client }, helper.commit(
         try schema.encodeDetachClient(helper.space(), .{ .request_id = @enumFromInt(5), .client_id = 7, .client_generation = 9 }),
+    ));
+
+    helper.add(.{ .name = "request_client_command", .direction = .client, .golden_hex = golden.request_client_command }, helper.commit(
+        try schema.encodeRequestClientCommand(helper.space(), .{ .request_id = @enumFromInt(5), .route = .{ .id = 7, .generation = 9 }, .action = .workspace_select, .status = .request, .target_id = 42 }),
+    ));
+    helper.add(.{ .name = "complete_client_command", .direction = .client, .golden_hex = golden.complete_client_command }, helper.commit(
+        try schema.encodeCompleteClientCommand(helper.space(), .{ .request_id = @enumFromInt(5), .route = .{ .id = 7, .generation = 9 }, .action = .workspace_select, .status = .admitted, .target_id = 42 }),
+    ));
+    helper.add(.{ .name = "client_command", .direction = .server, .golden_hex = golden.client_command }, helper.commit(
+        try schema.encodeClientCommand(helper.space(), .{ .request_id = @enumFromInt(5), .route = .{ .id = 7, .generation = 9 }, .action = .workspace_select, .status = .request, .target_id = 42 }),
+    ));
+    helper.add(.{ .name = "client_command_result", .direction = .server, .golden_hex = golden.client_command_result }, helper.commit(
+        try schema.encodeClientCommandResult(helper.space(), .{ .request_id = @enumFromInt(5), .route = .{ .id = 7, .generation = 9 }, .action = .workspace_select, .status = .admitted, .target_id = 42 }),
     ));
 
     std.debug.assert(index == corpus_len);

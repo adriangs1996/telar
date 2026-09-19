@@ -109,11 +109,16 @@ const suggestion = @import("suggestion.zig");
 const focus = @import("focus.zig");
 const frame = @import("../frame_support.zig");
 const graphics_bodies = @import("../graphics.zig");
+const ClientCommand = @import("ClientCommand.zig");
+const client_commands = @import("client_commands.zig");
 const std = @import("std");
 
 pub const ClientMessage = union(enum) {
     query_clients: QueryClients,
     detach_client: DetachClient,
+    request_client_command: ClientCommand,
+    complete_client_command: ClientCommand,
+
     open_pane: OpenPaneViewType,
     pane_input: PaneInputType,
     pane_resize: PaneResizeType,
@@ -168,6 +173,9 @@ pub const ClientMessage = union(enum) {
 
 pub const ServerMessage = union(enum) {
     client_list: ClientList,
+    client_command: ClientCommand,
+    client_command_result: ClientCommand,
+
     pane_opened: PaneOpenedType,
     agent_thread_snapshot: @import("agent_thread.zig").SnapshotView,
     agent_history_page: @import("AgentHistoryPageView.zig"),
@@ -268,6 +276,8 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .acknowledge_agent => .{
             .acknowledge_agent = try GenericDerived(AcknowledgeAgentType).decode(&decoder),
         },
+        .request_client_command => .{ .request_client_command = try client_commands.decode(&decoder) },
+        .complete_client_command => .{ .complete_client_command = try client_commands.decode(&decoder) },
         .detach_client => .{ .detach_client = try clients.decodeDetachClient(&decoder) },
         .query_clients => .{ .query_clients = try clients.decodeQueryClients(&decoder) },
         .query_agents => .{ .query_agents = try GenericDerived(QueryAgentsType).decode(&decoder) },
@@ -322,6 +332,8 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .resync_required => .{ .resync_required = try GenericDerived(ResyncRequiredType).decode(&decoder) },
         .graphics_shared_image => .{ .graphics_shared_image = try graphics_bodies.decodeSharedImage(&decoder) },
         .proxy_status => .{ .proxy_status = try GenericDerived(ProxyStatusType).decode(&decoder) },
+        .client_command => .{ .client_command = try client_commands.decode(&decoder) },
+        .client_command_result => .{ .client_command_result = try client_commands.decode(&decoder) },
         .client_list => .{ .client_list = try clients.decodeClientList(&decoder) },
         .agent_snapshot => .{ .agent_snapshot = try agent.decodeAgentSnapshot(&decoder) },
         .system_metrics => .{ .system_metrics = try GenericDerived(SystemMetricsType).decode(&decoder) },

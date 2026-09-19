@@ -34,6 +34,8 @@ const encodePaneFocusCommand_module = @import("telar-core").encodePaneFocusComma
 const encodePaneFocusResult_module = @import("telar-core").encodePaneFocusResult;
 const encodeCommandSuggestion_module = @import("telar-core").encodeCommandSuggestion;
 const QueryResultType = @import("../../history/QueryResult.zig");
+const encodeClientCommand = @import("telar-core").encodeClientCommand;
+const encodeClientCommandResult = @import("telar-core").encodeClientCommandResult;
 const std = @import("std");
 const encodeHistoryResults_module = @import("telar-core").encodeHistoryResults;
 const StateType = @import("../../workspace/State.zig");
@@ -204,6 +206,8 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
                 .text = text_storage[0..dump.len],
             });
         },
+        .client_command => |command| try encodeClientCommand(buffer, command),
+        .client_command_result => |command| try encodeClientCommandResult(buffer, command),
         .client_list => |list| try encodeClientList(buffer, list),
         .pane_focus_command => |command| try encodePaneFocusCommand_module(buffer, command),
         .pane_focus_result => |result| try encodePaneFocusResult_module(buffer, result),

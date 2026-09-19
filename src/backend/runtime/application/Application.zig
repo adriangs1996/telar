@@ -396,6 +396,7 @@ fn collectFinished(application: *Application) void {
 pub fn dropClient(application: *Application, key: ClientKeyType) void {
     const session = application.clients.resolve(key) orelse return;
     if (!session.closing) {
+        application.failClientCommandsFor(key);
         application.failPaneFocusesFor(key);
         session.closing = true;
         session.connection.shutdown(application.io);
@@ -409,6 +410,25 @@ pub fn dropClient(application: *Application, key: ClientKeyType) void {
         application.pumpAll();
     }
     application.finalizeClient(key);
+}
+
+fn failClientCommandsFor(self: *Application, key: ClientKeyType) void {
+    for (self.clients.items) |slot| {
+        const requester = slot orelse continue;
+        const pending = requester.pending_client_command orelse continue;
+        if (!std.meta.eql(pending.target, key)) {
+            continue;
+        }
+
+        requester.pending_client_command = null;
+        requester.delivery.responses.push(.{ .request_failed = .{
+            .request_id = pending.request_id,
+            .code = .invalid_request,
+            .message = "target client disconnected before confirming the operation",
+        } }) catch {
+            self.dropClient(requester.key);
+        };
+    }
 }
 
 fn failPaneFocusesFor(application: *Application, key: ClientKeyType) void {

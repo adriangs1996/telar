@@ -15,6 +15,7 @@ pub const client_layouts = @import("../controllers/session/client_layouts.zig");
 pub const pane_clipboards = @import("../controllers/panes/pane_clipboards.zig");
 pub const pane_closures = @import("../controllers/panes/pane_closures.zig");
 pub const pane_frames = @import("../controllers/panes/pane_frames.zig");
+pub const client_commands = @import("../controllers/session/client_commands.zig");
 pub const pane_focus_commands = @import("../controllers/panes/pane_focus_commands.zig");
 pub const pane_graphics = @import("../controllers/panes/pane_graphics.zig");
 pub const pane_metadata = @import("../controllers/panes/pane_metadata.zig");

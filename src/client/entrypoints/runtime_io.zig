@@ -1,5 +1,6 @@
 //! Coordinates runtime I/O completions with client input, graphics and message delivery.
 
+const ClientCommand = @import("telar-core").ClientCommand;
 const Client = @import("../AttachedClient.zig");
 const Snapshot = @import("../connection/OutboxSnapshot.zig");
 const mark_module = @import("telar-core").mark;
@@ -91,6 +92,12 @@ pub fn handleSent(client: *Client, result: anyerror!void) !void {
 /// ```zig
 /// try runtime_transport.enqueue(client, .{ .detach_pane = detach });
 /// ```
+/// Owns a routed response until its asynchronous send completes. Example: `try runtime_transport.enqueueClientCompletion(client, reply);`
+pub fn enqueueClientCompletion(client: *Client, reply: ClientCommand) !void {
+    try client.runtime_transport.outbox.pushClientCompletion(reply);
+    try pump(client);
+}
+
 pub fn enqueue(client: *Client, message: Message) !void {
     try client.runtime_transport.outbox.push(message);
     try pump(client);

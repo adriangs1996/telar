@@ -57,6 +57,8 @@ const encodeCompletePaneFocus_module = @import("telar-core").encodeCompletePaneF
 const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
 const PaneResizeType = @import("telar-core").PaneResize;
 const FrameAckType = @import("telar-core").FrameAck;
+const encodeCompleteClientCommand = @import("telar-core").encodeCompleteClientCommand;
+const ClientCommand = @import("telar-core").ClientCommand;
 const Outbox = @This();
 
 items: [outbox_support.capacity]outbox_support.Message = undefined,
@@ -100,6 +102,15 @@ pub fn snapshot(outbox: *const Outbox) Snapshot {
     };
 }
 
+/// Retains a completion outside the small per-message metadata. Example: `try outbox.pushClientCompletion(reply);`
+pub fn pushClientCompletion(self: *Outbox, reply: ClientCommand) !void {
+    try reply.validateWire();
+    const index = try self.reserve();
+    const encoded = encodeCompleteClientCommand(&self.input_bytes[index], reply) catch unreachable;
+    self.item_launch_cwd[index] = null;
+    self.items[index] = .{ .complete_client_command = @intCast(encoded.len) };
+}
+
 pub fn push(outbox: *Outbox, message: outbox_support.Message) !void {
     switch (message) {
         .pane_resize => |resize| return outbox.pushResize(resize),
@@ -119,7 +130,7 @@ pub fn push(outbox: *Outbox, message: outbox_support.Message) !void {
                 }
             }
         },
-        .pane_input, .agent_prompt, .query_agent_history, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout => unreachable,
+        .pane_input, .agent_prompt, .query_agent_history, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout, .complete_client_command => unreachable,
         else => {},
     }
     try outbox.append(message);
@@ -460,6 +471,7 @@ fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
         .delete_history => |value| encodeDeleteHistory_module(buffer, value),
         .read_history_output => |value| encodeReadHistoryOutput_module(buffer, value),
         .suggest_command => |*value| encodeSuggestCommand_module(buffer, value.view()),
+        .complete_client_command => |length| outbox.input_bytes[outbox.head][0..length],
         .complete_pane_focus => |value| encodeCompletePaneFocus_module(buffer, value),
         .agent_prompt => |*value| @import("telar-core").encodeAgentPrompt(buffer, value.view(&outbox.input_bytes[outbox.head])),
         .agent_interrupt => |value| @import("telar-core").encodeAgentInterrupt(buffer, value),
