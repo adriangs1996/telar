@@ -7,6 +7,7 @@ const agent = @import("agent.zig");
 const SessionType = @import("Session.zig");
 const control = @import("control.zig");
 const workspace = @import("arguments/workspace.zig");
+const workspace_output = @import("workspace_output.zig");
 
 const git_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(60) },
@@ -33,6 +34,10 @@ pub fn run(init: std.process.Init, options: WorkspaceOptions) !u8 {
 /// rooted at it. Git runs in this process with the user's environment and
 /// credentials; the runtime never executes git on the CLI's behalf.
 fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Writer) !u8 {
+    if (options.action == .list) {
+        return list(init, options, writer);
+    }
+
     const branch = std.mem.span(options.branch.?);
     var directory_buffer: [4096]u8 = undefined;
     const directory = try resolveDirectory(init, options, &directory_buffer);
@@ -55,6 +60,42 @@ fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Wr
     }
 
     return agent.exit_ok;
+}
+
+fn list(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Writer) !u8 {
+    var session = try SessionType.attach(init, options.socket);
+    defer session.close();
+    try session.subscribeRuntime();
+
+    while (true) {
+        const response = try session.receive();
+        if (response != .workspace_list) {
+            continue;
+        }
+
+        if (options.json) {
+            try writer.writeByte('[');
+        } else {
+            try writer.writeAll("ID\tNAME\tDIRECTORY\tTABS\tBRANCH\tGIT\n");
+        }
+
+        var entries = response.workspace_list.entries();
+        var first = true;
+        while (try entries.next()) |entry| {
+            if (options.json and !first) {
+                try writer.writeByte(',');
+            }
+
+            try workspace_output.write(writer, entry, options.json);
+            first = false;
+        }
+
+        if (options.json) {
+            try writer.writeAll("]\n");
+        }
+
+        return agent.exit_ok;
+    }
 }
 
 fn resolveDirectory(init: std.process.Init, options: WorkspaceOptions, buffer: []u8) ![]const u8 {

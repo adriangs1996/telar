@@ -2,6 +2,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const ControlAgent = @import("ControlAgent.zig");
 const control = @import("control.zig");
+const workspace_output = @import("workspace_output.zig");
 
 /// Emits one complete JSON line for an observable global event. Example: `if (try runtime_events.write(writer, event)) count += 1;`
 pub fn write(writer: *std.Io.Writer, event: core.ServerMessage) !bool {
@@ -16,7 +17,7 @@ pub fn write(writer: *std.Io.Writer, event: core.ServerMessage) !bool {
             var separator: []const u8 = "";
             while (try entries.next()) |entry| {
                 try writer.writeAll(separator);
-                try std.json.Stringify.value(.{ .workspace_id = core.raw(entry.workspace), .name = entry.name, .path = entry.path, .tab_count = entry.tab_count, .branch = entry.branch, .dirty = entry.dirty }, .{}, writer);
+                try workspace_output.write(writer, entry, true);
                 separator = ",";
             }
 

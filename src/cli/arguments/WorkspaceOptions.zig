@@ -15,16 +15,13 @@ pub fn parse(args: []const [*:0]const u8) !WorkspaceOptions {
         return error.MissingWorkspaceAction;
     }
 
-    if (!std.mem.eql(u8, std.mem.span(args[0]), "create")) {
-        return error.UnknownWorkspaceAction;
-    }
-
-    var options: WorkspaceOptions = .{ .action = .create };
+    const action = std.meta.stringToEnum(workspace.WorkspaceAction, std.mem.span(args[0])) orelse return error.UnknownWorkspaceAction;
+    var options: WorkspaceOptions = .{ .action = action };
     const index: usize = 1;
     var cursor: Cursor = .{ .remaining = args[index..] };
     while (cursor.next()) |argument| {
         const arg = std.mem.span(argument);
-        if (std.mem.eql(u8, arg, "--worktree")) {
+        if (std.mem.eql(u8, arg, "--worktree") and action == .create) {
             const value = try cursor.require(error.MissingWorktreeBranch);
             if (options.branch != null) {
                 return error.DuplicateWorktreeOption;
@@ -32,14 +29,14 @@ pub fn parse(args: []const [*:0]const u8) !WorkspaceOptions {
 
             try workspace.validateWorktreeBranch(std.mem.span(value));
             options.branch = value;
-        } else if (std.mem.eql(u8, arg, "--name")) {
+        } else if (std.mem.eql(u8, arg, "--name") and action == .create) {
             const value = try cursor.require(error.MissingWorkspaceName);
             if (options.name != null) {
                 return error.DuplicateNameOption;
             }
 
             options.name = value;
-        } else if (std.mem.eql(u8, arg, "--directory")) {
+        } else if (std.mem.eql(u8, arg, "--directory") and action == .create) {
             const value = try cursor.require(error.MissingWorktreeDirectory);
             if (options.directory != null) {
                 return error.DuplicateDirectoryOption;
@@ -60,9 +57,15 @@ pub fn parse(args: []const [*:0]const u8) !WorkspaceOptions {
         }
     }
 
-    if (options.branch == null) {
+    if (action == .create and options.branch == null) {
         return error.MissingWorktreeBranch;
     }
 
     return options;
+}
+
+test "workspace list rejects creation options" {
+    const options = try WorkspaceOptions.parse(&.{ "list", "--json" });
+    try std.testing.expectEqual(workspace.WorkspaceAction.list, options.action);
+    try std.testing.expectError(error.UnknownWorkspaceOption, WorkspaceOptions.parse(&.{ "list", "--worktree", "branch" }));
 }

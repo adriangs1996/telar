@@ -38,6 +38,17 @@ def send_frame(connection, payload):
     connection.sendall(struct.pack("<I", len(payload)) + payload)
 
 
+def sized16(text):
+    data = text.encode()
+    return struct.pack("<H", len(data)) + data
+
+
+def workspace_list():
+    entry = struct.pack("<Q", 42) + sized16('CLI "workspace"') + sized16("/tmp/project")
+    entry += struct.pack("<H", 2) + sized16("feature/cli") + bytes([1])
+    return bytes([0x98]) + struct.pack("<QH", 3, 1) + entry
+
+
 class ControlTests(unittest.TestCase):
     def run_control(self, arguments, exchange):
         with tempfile.TemporaryDirectory(prefix="telar-cli-", dir="/tmp") as directory:
@@ -133,6 +144,19 @@ class ControlTests(unittest.TestCase):
             "revision": 7, "cpu_percent": 42,
             "memory_used_decigib": 123, "battery_percent": None,
         })
+
+    def test_workspace_list_exposes_git_metadata_and_escapes_names(self):
+        def exchange(connection):
+            self.assertEqual(receive_frame(connection)[0], 0x14)
+            send_frame(connection, bytes([0x95, 0, 0, 0]))
+            send_frame(connection, workspace_list())
+
+        result = self.run_control(["workspace", "list", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), [{
+            "workspace_id": 42, "name": 'CLI "workspace"', "path": "/tmp/project",
+            "tab_count": 2, "branch": "feature/cli", "dirty": True,
+        }])
 
 
 if __name__ == "__main__":

@@ -39,3 +39,11 @@ timeout; finite status queries have a 30-second receive deadline.
 protocol's integer tenths-of-GiB memory unit and reports a missing battery as
 `null`. Text output converts memory to GiB with one decimal. The socket test
 verifies ordering, units, and absent-battery behavior.
+
+## Workspace list
+
+`telar workspace list [--json]` reads the first `workspace_list` subscription
+snapshot and disconnects. Each row includes the stable ID, name, directory,
+tab count, branch and dirty flag. Git metadata is the runtime's retained probe;
+the CLI does not invoke Git. JSON is an array, including `[]` for an empty
+runtime. The socket test checks interleaved events and escaped labels.
