@@ -338,3 +338,7 @@ native agent pane. This is client draft state, independent of runtime conversati
 `agent draft set`: Atomically replaces the composer’s text through the existing editor/model
 handler. Empty text clears the draft; images remain attached. Invalid UTF-8,
 NUL or capacity failure cannot partially replace the draft.
+
+`agent draft attach`: Attaches an absolute image path to the client draft through the existing agent
+handler. Existing image format/count bounds and errors apply. This does not
+submit the draft or upload it to the provider.

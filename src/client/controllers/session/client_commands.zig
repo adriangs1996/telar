@@ -38,6 +38,18 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .agent_draft_attach => {
+            const pane_id: core.PaneId = @enumFromInt(reply.target_id);
+            const pane = client.model.agentPane(pane_id) orelse return error.AgentPaneNotAttached;
+            const handler: AgentThreadHandler = .{ .model = &client.model };
+            if (!try handler.attachImage(pane_id, reply.text())) {
+                return error.DraftAttachmentRejected;
+            }
+
+            reply.value = pane.composerImages().count;
+            reply.length = 0;
+            reply.status = .applied;
+        },
         .agent_draft_set => {
             const pane_id: core.PaneId = @enumFromInt(reply.target_id);
             const pane = client.model.agentPane(pane_id) orelse return error.AgentPaneNotAttached;

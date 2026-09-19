@@ -50,6 +50,13 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[consumed..] };
     switch (action) {
+        .agent_draft_attach => {
+            self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));
+            self.text = std.mem.span(try cursor.require(error.MissingText));
+            if (!std.fs.path.isAbsolute(self.text)) {
+                return error.ImagePathMustBeAbsolute;
+            }
+        },
         .agent_draft_set => {
             self.target_id = try positive(std.mem.span(try cursor.require(error.MissingTarget)));
             self.text = std.mem.span(try cursor.require(error.MissingText));
