@@ -106,3 +106,7 @@ bounded owned storage. Output preserves item identities, parent relationships,
 provider references, phases, fragment boundaries, tool lifecycle and pending
 approval details. A truncation flag distinguishes a retained window from a
 complete transcript. No terminal text scraping or UI attachment is involved.
+
+`telar agent models TARGET [--json]` reads the native thread catalog and reports
+the selected model, effort and access alongside provider-advertised model IDs,
+labels, supported efforts and defaults. Effort identifiers are not hardcoded.

@@ -57,3 +57,43 @@ pub fn thread(writer: *std.Io.Writer, snapshot: *const core.AgentThreadSnapshot,
         try writer.writeAll("[Earlier content omitted.]\n");
     }
 }
+
+/// Writes the live provider catalog and selection. Example: `try agent_output.models(writer, snapshot, true);`
+pub fn models(writer: *std.Io.Writer, snapshot: *const core.AgentThreadSnapshot, json: bool) !void {
+    if (json) {
+        try writer.writeAll("{\"selected\":");
+        try std.json.Stringify.value(.{ .model = snapshot.options.modelSlice(), .effort = snapshot.options.effort.idSlice(), .access = snapshot.options.access }, .{}, writer);
+        try writer.writeAll(",\"models\":[");
+    }
+
+    for (snapshot.models(), 0..) |*model, index| {
+        if (json) {
+            if (index != 0) {
+                try writer.writeByte(',');
+            }
+
+            try writer.writeAll("{\"id\":");
+            try control.writeJsonString(writer, model.idSlice());
+            try writer.writeAll(",\"label\":");
+            try control.writeJsonString(writer, model.labelSlice());
+            try writer.writeAll(",\"default_effort\":");
+            try control.writeJsonString(writer, model.default_effort.idSlice());
+            try writer.writeAll(",\"efforts\":[");
+            for (model.efforts(), 0..) |effort, effort_index| {
+                if (effort_index != 0) {
+                    try writer.writeByte(',');
+                }
+
+                try control.writeJsonString(writer, effort.idSlice());
+            }
+
+            try writer.writeAll("]}");
+        } else {
+            try writer.print("{s}\t{s}\tdefault effort: {s}\n", .{ model.idSlice(), model.labelSlice(), model.default_effort.idSlice() });
+        }
+    }
+
+    if (json) {
+        try writer.writeAll("]}\n");
+    }
+}

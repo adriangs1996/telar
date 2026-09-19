@@ -71,7 +71,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [x] `agent thread`
 - [ ] `agent history`
 - [ ] `agent watch`
-- [ ] `agent models`
+- [x] `agent models`
 - [ ] `agent skills`
 - [ ] `agent conversations`
 - [ ] `agent resume`

@@ -336,6 +336,18 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(thread["items"][0]["text"], 'Response "quoted" 🧶')
         self.assertEqual(thread["items"][0]["phase"], "final_answer")
 
+    def test_agent_models_preserves_provider_efforts_and_selection(self):
+        def exchange(connection):
+            self.assertEqual(receive_frame(connection)[0], 0x1C)
+            send_frame(connection, agent_snapshot())
+            query_thread(connection)
+
+        result = self.run_control(["agent", "models", "7", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        catalog = json.loads(result.stdout)
+        self.assertEqual(catalog["selected"], {"model": "model-1", "effort": "low", "access": "workspace"})
+        self.assertEqual(catalog["models"], [{"id": "model-1", "label": "Test model", "default_effort": "low", "efforts": ["low"]}])
+
 
 if __name__ == "__main__":
     unittest.main()

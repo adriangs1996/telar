@@ -1,3 +1,3 @@
 //! Agent command grammar and validated options.
 
-pub const AgentAction = enum { list, get, wait, prompt, read, report_session, interrupt, thread };
+pub const AgentAction = enum { list, get, wait, prompt, read, report_session, interrupt, thread, models };
