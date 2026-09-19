@@ -318,3 +318,5 @@ agent panes. Unsupported hosts fail explicitly. Success acknowledges admission
 to the existing tab creation flow, including its launch gate and geometry.
 
 `client open goto`: Opens the existing goto selector through its prompt admission controller.
+
+`client open history`: Opens the history palette and queues its initial query. Result delivery remains asynchronous.

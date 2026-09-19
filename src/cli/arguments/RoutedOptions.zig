@@ -50,6 +50,7 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[consumed..] };
     switch (action) {
+        .client_open_history => {},
         .client_open_goto => {},
         .agent_create => {},
         .workspace_list_collapse => {},

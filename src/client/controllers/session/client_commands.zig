@@ -11,6 +11,7 @@ const pane_viewports = @import("../panes/pane_viewports.zig");
 const agent_threads = @import("../agents/agent_threads.zig");
 const sidebar_toggles = @import("../notifications/sidebar_toggles.zig");
 const name_prompts = @import("../input/name_prompts.zig");
+const history_palettes = @import("../input/history_palettes.zig");
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
@@ -33,6 +34,13 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .client_open_history => {
+            if (!try history_palettes.begin(client)) {
+                return error.ClientPromptUnavailable;
+            }
+
+            reply.status = .admitted;
+        },
         .client_open_goto => {
             if (!name_prompts.beginGotoPicker(client)) {
                 return error.ClientPromptUnavailable;

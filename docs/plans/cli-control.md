@@ -112,7 +112,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [x] `workspace-list expand`
 - [x] `workspace-list collapse`
 - [x] `client open goto`
-- [ ] `client open history`
+- [x] `client open history`
 - [ ] `client copy-mode`
 - [ ] `notification dismiss`
 - [ ] `client open-link`

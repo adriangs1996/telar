@@ -888,6 +888,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["action"], "client_open_goto")
 
+    def test_client_open_history_uses_explicit_client_control(self):
+        result = self.run_control(["client", "open", "history", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=20, target=0, input_text="", input_value=0))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["action"], "client_open_history")
+
 
 if __name__ == "__main__":
     unittest.main()
