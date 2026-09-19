@@ -68,6 +68,23 @@ fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContex
             try writeOne(output.writer, agent, options.json);
             return exit_ok;
         },
+        .acknowledge => {
+            const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
+            const pane: PaneRefType = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation };
+            try session.acknowledge(pane);
+            try session.fetchAgents(&snapshot);
+            const updated = try snapshot.resolve(.{ .pane = pane.pane_id }, output.environ) orelse return error.AgentNotFound;
+            if (updated.pane_generation != pane.pane_generation) {
+                return error.AgentNotFound;
+            }
+
+            if (updated.status == .done) {
+                return error.AgentAcknowledgementNotApplied;
+            }
+
+            try writeOne(output.writer, updated, options.json);
+            return exit_ok;
+        },
         .wait => return waitFor(session, options, output),
         .prompt => return prompt(session, options, output),
         .interrupt, .clear, .rename => {

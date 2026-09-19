@@ -413,3 +413,12 @@ pub fn nowMs(session: *const Session) i64 {
 pub fn sleepMs(session: *const Session, milliseconds: u32) void {
     session.io.sleep(.fromMilliseconds(milliseconds), .awake) catch {};
 }
+
+/// Sends a seen marker; a following query acts as an ordering barrier. Example: `try session.acknowledge(pane);`
+pub fn acknowledge(self: *Session, pane: PaneRefType) !void {
+    var buffer: [64]u8 = undefined;
+    try self.connection.send(self.io, try core.encodeAcknowledgeAgent(&buffer, .{
+        .pane_id = try core.pane(pane.pane_id),
+        .pane_generation = pane.pane_generation,
+    }));
+}

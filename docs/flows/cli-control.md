@@ -180,3 +180,8 @@ validator rejects invalid state/reason combinations before any report is sent.
 reports a shell-tool observation without executing it. Optional `--tool-call`,
 `--cwd`, `--session` and `--exit-code` preserve its correlation and outcome. A
 started report cannot carry an exit code; provider and command are required.
+
+`telar agent acknowledge TARGET [--json]` sends the exact generation seen marker,
+then queries agent state on the same ordered connection. It returns the observed
+state only after the marker was processed; a stale generation or unchanged done
+state fails. It does not approve pending tools or send input.

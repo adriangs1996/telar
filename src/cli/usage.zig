@@ -26,6 +26,7 @@ pub const text =
     \\       telar notification show <title> [options]
     \\       telar agent list|get|wait|prompt|read [target] [options]
     \\       telar agent interrupt <pane|title|--current> [--json] [--socket PATH]
+    \\       telar agent acknowledge <pane|title|--current> [--json] [--socket PATH]
     \\       telar agent clear <pane|title|--current> [--json] [--socket PATH]
     \\       telar agent rename <pane|title|--current> TITLE [--json] [--socket PATH]
     \\       telar agent report-title <pane|title|--current> TITLE [--json] [--socket PATH]

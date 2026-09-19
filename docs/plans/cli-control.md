@@ -77,7 +77,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [ ] `agent resume`
 - [x] `agent clear`
 - [x] `agent rename`
-- [ ] `agent acknowledge`
+- [x] `agent acknowledge`
 - [x] `agent report-state`
 - [x] `agent report-title`
 - [x] `agent report-command`

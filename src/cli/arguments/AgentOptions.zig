@@ -80,6 +80,8 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         .report_state
     else if (std.mem.eql(u8, action_text, "report-command"))
         .report_command
+    else if (std.mem.eql(u8, action_text, "acknowledge"))
+        .acknowledge
     else
         return error.UnknownAgentAction;
     var options: AgentOptions = .{ .action = action };

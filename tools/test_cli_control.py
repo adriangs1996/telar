@@ -53,11 +53,11 @@ def workspace_snapshot(request_id, name="Renamed", tabs=b"", count=0):
     return bytes([0x88]) + struct.pack("<QBQ", request_id, 0, 42) + sized16(name) + struct.pack("<H", count) + tabs
 
 
-def agent_snapshot():
+def agent_snapshot(status=1):
     entry = struct.pack("<QQBQQHI", 7, 9, 0, 42, 8, 1, 111) + bytes(16)
     entry += sized16("") * 3 + bytes([0, 0]) + sized16("/tmp") + bytes([2])
     entry += sized16("codex") + sized16("Codex") + sized16("")
-    entry += bytes([0, 1, 0]) + sized16("") + struct.pack("<IBBBQqq", 0, 3, 1, 100, 1, 1, 10)
+    entry += bytes([0, status, 0]) + sized16("") + struct.pack("<IBBBQqq", 0, 3, 1, 100, 1, 1, 10)
     return bytes([0x96]) + struct.pack("<QH", 1, 1) + entry
 
 
@@ -616,6 +616,19 @@ class ControlTests(unittest.TestCase):
         args = ["agent", "report-command", "--current", "finished", "zig test", "--provider", "codex", "--tool-call", "tool-1", "--cwd", "/tmp", "--session", "thread-1", "--exit-code", "2", "--json"]
         result = self.run_control(args, exchange, {"TELAR_PANE_ID": "7", "TELAR_PANE_GENERATION": "9"})
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_agent_acknowledge_queries_state_after_the_seen_marker(self):
+        def exchange(connection):
+            receive_frame(connection)
+            send_frame(connection, agent_snapshot(status=5))
+            request = receive_frame(connection)
+            self.assertEqual(request, bytes([0x1B]) + struct.pack("<QQ", 7, 9))
+            self.assertEqual(receive_frame(connection)[0], 0x1C)
+            send_frame(connection, agent_snapshot(status=3))
+
+        result = self.run_control(["agent", "acknowledge", "7", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "ready")
 
 
 if __name__ == "__main__":
