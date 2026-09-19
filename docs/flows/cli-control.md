@@ -371,3 +371,9 @@ surfaces, focus and fullscreen state. It rejects other tabs, changed pane sets,
 invalid trees and in-flight client operations before model mutation. Existing
 focus/geometry delivery synchronizes graphics and runtime sizes after commit.
 Sidebar and workspace-list preferences remain controlled by their own commands.
+
+`pane search ID TEXT` reads retained terminal history without attaching a UI.
+The runtime captures the current pane generation at admission and preserves
+the existing bounded row turns and search deadline. UI requests still require
+attachment authority. Results contain absolute history coordinates and an
+explicit truncation flag; generation changes, deadlines and missing panes fail.

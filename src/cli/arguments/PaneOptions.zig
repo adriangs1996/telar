@@ -1,3 +1,4 @@
+const max_search_needle_bytes = @import("telar-core").max_search_needle_bytes;
 const pane = @import("pane.zig");
 const entity_target = @import("entity_target.zig");
 const values = @import("values.zig");
@@ -32,6 +33,8 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
         .send_keys
     else if (std.mem.eql(u8, action_text, "focus"))
         .focus
+    else if (std.mem.eql(u8, action_text, "search"))
+        .search
     else if (std.mem.eql(u8, action_text, "list"))
         .list
     else if (std.mem.eql(u8, action_text, "get"))
@@ -54,6 +57,20 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
     }
 
     var index: usize = if (action == .list) 1 else 2;
+    if (action == .search) {
+        if (args.len < 3) {
+            return error.MissingSearchText;
+        }
+
+        options.text = args[2];
+        const text = std.mem.span(options.text.?);
+        if (text.len == 0 or text.len > max_search_needle_bytes or !std.unicode.utf8ValidateSlice(text)) {
+            return error.InvalidSearchText;
+        }
+
+        index = 3;
+    }
+
     if (action == .send_keys) {
         if (args.len < 3) {
             return error.MissingSendText;

@@ -44,6 +44,7 @@ pub const text =
     \\         telar pane copy ID X1,Y1:X2,Y2 --client ID [--json] [--socket PATH]
     \\         telar layout get --client ID [--json] [--socket PATH]
     \\         telar layout apply TOKEN --client ID [--json] [--socket PATH]
+    \\         telar pane search ID|--current TEXT [--json] [--socket PATH]
     \\         telar workspace select ID --client ID [--json] [--socket PATH]
     \\         telar client detach ID [--json] [--socket PATH]
     \\         telar command suggest <pane|--current> TEXT [--json] [--socket PATH]

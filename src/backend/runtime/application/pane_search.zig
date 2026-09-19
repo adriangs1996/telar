@@ -1,5 +1,6 @@
 //! Correlated, bounded search turns. No worker borrows terminal state.
 
+const SearchPaneTargetHandler = @import("commands/SearchPaneTargetHandler.zig");
 const SearchPaneType = @import("telar-core").SearchPane;
 const Cursor = @import("../../pane/Cursor.zig");
 const std = @import("std");
@@ -10,11 +11,12 @@ const RequestIdType = @import("telar-core").RequestId;
 /// Starts a search, replacing only this client's previous search.
 /// Example: `try start(application, session, request);`.
 pub fn start(application: anytype, session: anytype, request: SearchPaneType) !void {
-    const attachment = session.attachments.find(request.pane_id) orelse {
+    const target: SearchPaneTargetHandler = .{ .panes = &application.model.panes, .session = session };
+    const pane = target.execute(request.pane_id) orelse {
         try session.delivery.responses.push(.{ .request_failed = .{
             .request_id = request.request_id,
             .code = .pane_not_found,
-            .message = "pane is not attached",
+            .message = "pane is not available for this search",
         } });
         return;
     };
@@ -24,7 +26,7 @@ pub fn start(application: anytype, session: anytype, request: SearchPaneType) !v
 
     session.pending_search = .{
         .request_id = request.request_id,
-        .pane = attachment.pane.key(),
+        .pane = pane,
         .cursor = Cursor.init(request.needle),
         .deadline_ns = std.Io.Clock.awake.now(application.io).nanoseconds + 250 * std.time.ns_per_ms,
     };
@@ -54,7 +56,7 @@ pub fn advance(application: anytype, completion: Wake) !void {
         try application.pump(session);
         return;
     };
-    if (session.attachments.find(pane.id) == null) {
+    if (session.role != .control and session.attachments.find(pane.id) == null) {
         session.pending_search = null;
         try fail(session, wake.request_id, "Pane search target detached");
         try application.pump(session);

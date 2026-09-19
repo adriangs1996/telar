@@ -953,6 +953,21 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "applied")
 
+    def test_pane_search_returns_history_coordinates_without_attachment(self):
+        def exchange(connection):
+            receive_frame(connection)
+            send_frame(connection, agent_snapshot())
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x21)
+            self.assertEqual(struct.unpack_from("<Q", request, 9)[0], 7)
+            self.assertEqual(request[17:], sized16("error"))
+            matches = struct.pack("<HIH", 2, 33, 5) + struct.pack("<HIH", 4, 77, 5)
+            send_frame(connection, bytes([0xA3]) + request[1:9] + struct.pack("<QBH", 7, 1, 2) + matches)
+
+        result = self.run_control(["pane", "search", "7", "error", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"pane_id": 7, "truncated": True, "matches": [{"x": 2, "y": 33, "len": 5}, {"x": 4, "y": 77, "len": 5}]})
+
 
 if __name__ == "__main__":
     unittest.main()

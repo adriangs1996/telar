@@ -21,7 +21,7 @@ const SnapshotType = @import("Snapshot.zig");
 /// std.process.exit(try pane.run(process_init, options));
 /// ```
 pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
-    var session = if (options.action == .list or options.action == .get) try SessionType.attach(init, options.socket) else try SessionType.open(init, options.socket);
+    var session = if (options.action == .list or options.action == .get or options.action == .search) try SessionType.attach(init, options.socket) else try SessionType.open(init, options.socket);
     defer session.close();
     var output_buffer: [16 * 1024]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
@@ -52,6 +52,33 @@ fn execute(session: *SessionType, options: PaneOptions, context: ExecutionContex
 
     switch (options.action) {
         .list, .get => unreachable,
+        .search => {
+            const response = try session.exchange(core.encodeSearchPane, core.SearchPane{ .request_id = .none, .pane_id = @enumFromInt(pane.pane_id), .needle = std.mem.span(options.text.?) });
+            if (response != .pane_matches or core.raw(response.pane_matches.pane_id) != pane.pane_id) {
+                return error.UnexpectedRuntimeResponse;
+            }
+
+            const found = response.pane_matches;
+            var matches = found.matches();
+            if (options.json) {
+                try context.writer.print("{{\"pane_id\":{d},\"truncated\":{},\"matches\":[", .{ pane.pane_id, found.truncated });
+            }
+
+            var separator: []const u8 = "";
+            while (try matches.next()) |match| {
+                if (options.json) {
+                    try context.writer.writeAll(separator);
+                    try std.json.Stringify.value(match, .{}, context.writer);
+                    separator = ",";
+                } else {
+                    try context.writer.print("{d}:{d} length={d}\n", .{ match.y, match.x, match.len });
+                }
+            }
+
+            if (options.json) {
+                try context.writer.writeAll("]}\n");
+            }
+        },
         .read => {
             const text = try session.readPane(pane, .{ .rows = options.lines, .source = options.source });
             if (options.json) {
