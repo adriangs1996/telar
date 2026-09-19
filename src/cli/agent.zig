@@ -11,6 +11,8 @@ const PaneRefType = @import("PaneRef.zig");
 const ControlAgent = @import("ControlAgent.zig");
 const TextType = @import("Text.zig");
 const ManagedAgent = @import("ManagedAgent.zig");
+const core = @import("telar-core");
+const agent_output = @import("agent_output.zig");
 
 const poll_interval_ms = 250;
 const prompt_start_grace_ms = 5_000;
@@ -64,6 +66,15 @@ fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContex
             var managed: ManagedAgent = .{ .session = session, .pane = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation } };
             try managed.interrupt();
             try writeAcknowledgement(output.writer, managed.pane, options.json);
+            return exit_ok;
+        },
+        .thread => {
+            const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
+            var managed: ManagedAgent = .{ .session = session, .pane = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation } };
+            const thread = try session.gpa.create(core.AgentThreadSnapshot);
+            defer session.gpa.destroy(thread);
+            try managed.read(thread);
+            try agent_output.thread(output.writer, thread, options.json);
             return exit_ok;
         },
         .report_session => {

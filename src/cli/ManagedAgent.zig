@@ -1,4 +1,3 @@
-const std = @import("std");
 const core = @import("telar-core");
 const Session = @import("Session.zig");
 const PaneRef = @import("PaneRef.zig");
@@ -16,5 +15,33 @@ pub fn interrupt(self: *ManagedAgent) !void {
     });
     if (response != .request_completed) {
         return error.UnexpectedRuntimeResponse;
+    }
+}
+
+/// Copies one bounded, generation-checked conversation snapshot. Example: `try managed.read(snapshot);`
+pub fn read(self: *ManagedAgent, snapshot: *core.AgentThreadSnapshot) !void {
+    const pane_id = try core.pane(self.pane.pane_id);
+    const accepted = try self.session.exchange(core.encodeQueryAgentThread, core.QueryAgentThread{
+        .request_id = .none,
+        .pane_id = pane_id,
+        .pane_generation = self.pane.pane_generation,
+    });
+    if (accepted != .request_completed) {
+        return error.UnexpectedRuntimeResponse;
+    }
+
+    while (true) {
+        const response = try self.session.receive();
+        if (response != .agent_thread_snapshot) {
+            continue;
+        }
+
+        const view = response.agent_thread_snapshot;
+        if (view.pane_id != pane_id or view.pane_generation != self.pane.pane_generation) {
+            return error.UnexpectedRuntimeResponse;
+        }
+
+        try view.copyTo(snapshot);
+        return;
     }
 }

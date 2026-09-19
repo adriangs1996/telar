@@ -99,3 +99,10 @@ with the exact pane generation. It waits for the correlated acceptance; this
 means the runtime admitted the interrupt, not that provider shutdown completed.
 Terminal panes and stale generations retain the runtime's explicit rejection.
 The socket test asserts the generation and acknowledgement boundary.
+
+`telar agent thread TARGET [--json]` sends `query_agent_thread`, waits for
+acceptance and copies the exact pane generation's `agent_thread_snapshot` into
+bounded owned storage. Output preserves item identities, parent relationships,
+provider references, phases, fragment boundaries, tool lifecycle and pending
+approval details. A truncation flag distinguishes a retained window from a
+complete transcript. No terminal text scraping or UI attachment is involved.

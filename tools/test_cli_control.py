@@ -61,6 +61,28 @@ def agent_snapshot():
     return bytes([0x96]) + struct.pack("<QH", 1, 1) + entry
 
 
+def thread_snapshot():
+    text = 'Response "quoted" 🧶'.encode()
+    payload = bytes([0xAB]) + struct.pack("<QQQ", 7, 9, 3)
+    payload += sized16("thread-1") + sized16("turn-1") + bytes([1, 1, 1])
+    item = bytes([1]) + struct.pack("<QQQBBBIBB", 1, 1, 0, 0, 2, 2, 0, 1, 1)
+    item += bytes(20) + struct.pack("<IIB", 0, len(text), 1)
+    payload += item + struct.pack("<I", len(text)) + text + sized16("") + bytes([0])
+    payload += struct.pack("<QBBB", 1, 1, 0, 0)  # Skills catalog.
+    payload += bytes([1, 0, 0, 0])  # Recent catalog and resumed flag.
+    payload += sized16("model-1") + sized16("low") + bytes([1, 1])
+    payload += sized16("model-1") + sized16("Test model") + bytes([1]) + sized16("low") + sized16("low")
+    return payload
+
+
+def query_thread(connection):
+    request = receive_frame(connection)
+    if request[0] != 0x30:
+        raise AssertionError("Expected a typed conversation query")
+    send_frame(connection, bytes([0xA1]) + request[1:9])
+    send_frame(connection, thread_snapshot())
+
+
 class ControlTests(unittest.TestCase):
     def run_control(self, arguments, exchange):
         with tempfile.TemporaryDirectory(prefix="telar-cli-", dir="/tmp") as directory:
@@ -299,6 +321,20 @@ class ControlTests(unittest.TestCase):
         result = self.run_control(["agent", "interrupt", "7", "--json"], exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), {"pane_id": 7, "pane_generation": 9, "accepted": True})
+
+    def test_agent_thread_returns_structured_text_and_truncation(self):
+        def exchange(connection):
+            self.assertEqual(receive_frame(connection)[0], 0x1C)
+            send_frame(connection, agent_snapshot())
+            query_thread(connection)
+
+        result = self.run_control(["agent", "thread", "7", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        thread = json.loads(result.stdout)
+        self.assertEqual(thread["thread_id"], "thread-1")
+        self.assertTrue(thread["truncated"])
+        self.assertEqual(thread["items"][0]["text"], 'Response "quoted" 🧶')
+        self.assertEqual(thread["items"][0]["phase"], "final_answer")
 
 
 if __name__ == "__main__":
