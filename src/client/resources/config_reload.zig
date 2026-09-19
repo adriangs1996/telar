@@ -40,6 +40,7 @@ pub fn schedule(state: *ConfigReloadState, args: ScheduleArgs) !void {
             .gpa = args.gpa,
             .path = args.path,
             .known_mtime_ns = state.mtime_ns,
+            .force_reload = state.force_next,
             .generation_number = state.next_generation,
             .profile = args.profile,
             .current_generation = args.current_generation,
@@ -48,6 +49,7 @@ pub fn schedule(state: *ConfigReloadState, args: ScheduleArgs) !void {
             .orphans = &state.orphans,
         },
     );
+    state.force_next = false;
 }
 
 pub const Outcome = union(enum) {
@@ -114,7 +116,7 @@ pub fn wait(args: WaitArgs) anyerror!ConfigReload {
     const mtime_ns = args.current_generation.watchFingerprint(args.io, args.path) ^
         @as(i128, args.current_registry.watchFingerprint(args.gpa, args.io)) ^
         @as(i128, trustWatchFingerprint(args.io, args.trust_path));
-    if (mtime_ns == args.known_mtime_ns) {
+    if (!args.force_reload and mtime_ns == args.known_mtime_ns) {
         return .{ .unchanged = mtime_ns };
     }
     var diagnostic: DiagnosticType = .{};
@@ -241,4 +243,29 @@ test "a rejected load is freed once and reports why" {
     try std.testing.expect(state.orphans.generation == null);
     try std.testing.expect(state.orphans.registry == null);
     try std.testing.expect(state.orphans.trust == null);
+}
+
+test "forced reload survives scheduling failure and is consumed by a successful worker" {
+    const Capture = struct {
+        force: bool = false,
+        fail: bool = true,
+        fn start(raw: *anyopaque, args: WaitArgs) !void {
+            const self: *@This() = @ptrCast(@alignCast(raw));
+            self.force = args.force_reload;
+            if (self.fail) {
+                return error.WatcherBusy;
+            }
+        }
+    };
+    var capture: Capture = .{};
+    var state: ConfigReloadState = .{ .mtime_ns = 0, .force_next = true };
+    const args: ScheduleArgs = .{ .io = std.testing.io, .gpa = std.testing.allocator, .watcher = .{ .context = &capture, .start_fn = Capture.start }, .path = "/config.lua", .profile = null, .trust_path = "/trust.json", .current_generation = @ptrFromInt(@alignOf(GenerationType)), .current_registry = @ptrFromInt(@alignOf(RegistryType)) };
+    try std.testing.expectError(error.WatcherBusy, schedule(&state, args));
+    try std.testing.expect(state.force_next);
+    capture.fail = false;
+    try schedule(&state, args);
+    try std.testing.expect(capture.force);
+    try std.testing.expect(!state.force_next);
+    try schedule(&state, args);
+    try std.testing.expect(!capture.force);
 }

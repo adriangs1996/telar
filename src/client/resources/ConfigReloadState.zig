@@ -6,6 +6,7 @@ const std = @import("std");
 const State = @This();
 
 mtime_ns: i128,
+force_next: bool = false,
 next_generation: u64 = 2,
 orphans: Orphans = .{},
 

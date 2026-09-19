@@ -188,3 +188,12 @@ fn rearm(raw_context: *anyopaque) !void {
 
     try schedule(context.client);
 }
+
+/// Requests an unconditional load on the next normal worker cycle. Example: `try config_reloads.request(client);`
+pub fn request(client: *Client) !void {
+    if (client.options.config_path == null or client.options.trust_path == null or client.lua_generation == null or client.plugin_registry == null) {
+        return error.ConfigurationNotLoaded;
+    }
+
+    client.reload.force_next = true;
+}

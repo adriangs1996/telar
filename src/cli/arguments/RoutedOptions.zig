@@ -50,6 +50,7 @@ pub fn parse(args: []const [*:0]const u8) !?RoutedOptions {
     var self: RoutedOptions = .{ .action = action };
     var cursor: Cursor = .{ .remaining = args[consumed..] };
     switch (action) {
+        .config_reload => {},
         .layout_apply => self.text = std.mem.span(try cursor.require(error.MissingLayoutToken)),
         .layout_get => {},
         .pane_copy => {

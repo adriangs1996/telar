@@ -997,6 +997,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["type"], "proxy_status")
 
+    def test_config_reload_reports_async_admission(self):
+        result = self.run_control(["config", "reload", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=33, target=0))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "admitted")
+
 
 if __name__ == "__main__":
     unittest.main()

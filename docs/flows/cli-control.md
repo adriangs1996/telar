@@ -390,3 +390,9 @@ stopping and resynchronization notices as JSON Lines. `--count` counts emitted
 events. This observes proxy status, not captured HTTP traffic. Current proxy
 configuration is startup-owned, so the initial status can be followed by an
 indefinite idle period. A resynchronization notice terminates with failure.
+
+`config reload --client ID` requests an unconditional asynchronous reload even
+when watched fingerprints are unchanged. The next normal watcher cycle consumes
+the request only after successful scheduling. An already running watch may
+finish first. Existing validation, atomic adoption, trust checks and rejection
+notifications remain authoritative; the CLI reports admission, not adoption.
