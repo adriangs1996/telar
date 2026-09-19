@@ -57,3 +57,9 @@ an existing directory before connecting, then uses `create_workspace` with a
 shell launch. The default name is the directory basename. It never runs Git
 unless `--worktree` is supplied. Existing worktree creation keeps its original
 behavior. The socket test uses a temporary directory without a Git repository.
+
+`telar workspace rename ID NAME [--json]` sends `rename_workspace` and waits
+for the matching request ID in `workspace_snapshot`. It reports the canonical
+name from that response. Unrelated events cannot acknowledge the mutation.
+`Session.exchange` owns a bounded send buffer and correlates typed replies;
+the socket test deliberately interleaves an unrelated response.

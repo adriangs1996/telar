@@ -94,6 +94,31 @@ fn requestId(session: *Session) RequestIdType {
     return request_id;
 }
 
+/// Executes one correlated typed request, ignoring unrelated events. Response slices expire on the next receive.
+/// Example: `const reply = try session.exchange(core.encodeRenameWorkspace, request);`
+pub fn exchange(self: *Session, comptime encode: anytype, request_value: anytype) !core.ServerMessage {
+    var request = request_value;
+    request.request_id = self.requestId();
+    const buffer = try self.gpa.alloc(u8, core.max_frame_size);
+    defer self.gpa.free(buffer);
+    try self.connection.send(self.io, try encode(buffer, request));
+
+    while (true) {
+        const response = try self.receive();
+        switch (response) {
+            inline else => |value| {
+                if (comptime @typeInfo(@TypeOf(value)) == .@"struct") {
+                    if (comptime @hasField(@TypeOf(value), "request_id")) {
+                        if (value.request_id == request.request_id) {
+                            return response;
+                        }
+                    }
+                }
+            },
+        }
+    }
+}
+
 /// Subscribes a disposable observer without adopting a UI's layout identity. Example: `try session.subscribeRuntime();`
 pub fn subscribeRuntime(self: *Session) !void {
     var identity: u64 = 0;

@@ -31,6 +31,7 @@ pub const text =
     \\       telar workspace create --directory DIR [--name NAME] [--json] [--socket PATH]
     \\       telar workspace list [--json] [--socket PATH]
     \\       telar workspace get <id|--current> [--json] [--socket PATH]
+    \\       telar workspace rename <id|--current> NAME [--json] [--socket PATH]
     \\       telar api schema [--json]
     \\       telar integration install|uninstall|status claude|codex|pi [--settings PATH]
     \\       telar proxy trust install|uninstall|status [--ca-dir PATH] [--linux BACKEND]

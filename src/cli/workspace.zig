@@ -38,6 +38,9 @@ fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Wr
     if (options.action == .list or options.action == .get) {
         return list(init, options, writer);
     }
+    if (options.action == .rename) {
+        return rename(init, options, writer);
+    }
 
     var directory_buffer: [4096]u8 = undefined;
     const directory = try resolveDirectory(init, options, &directory_buffer);
@@ -65,6 +68,34 @@ fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Wr
         try writer.writeAll("}\n");
     } else {
         try writer.print("workspace {d} created at {s}\n", .{ workspace_id, directory });
+    }
+
+    return agent.exit_ok;
+}
+
+fn rename(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Writer) !u8 {
+    const id = try options.target.?.resolve(init.minimal.environ, "TELAR_WORKSPACE_ID");
+    var session = try SessionType.attach(init, options.socket);
+    defer session.close();
+    const response = try session.exchange(core.encodeRenameWorkspace, core.RenameWorkspace{
+        .request_id = .none,
+        .workspace = .{ .workspace = @enumFromInt(id) },
+        .name = std.mem.span(options.name.?),
+    });
+    if (response != .workspace_snapshot) {
+        return error.UnexpectedRuntimeResponse;
+    }
+
+    const snapshot = response.workspace_snapshot;
+    if (snapshot.workspace != .workspace or core.raw(snapshot.workspace.workspace) != id) {
+        return error.UnexpectedRuntimeResponse;
+    }
+
+    if (options.json) {
+        try std.json.Stringify.value(.{ .workspace_id = id, .name = snapshot.name }, .{}, writer);
+        try writer.writeByte('\n');
+    } else {
+        try writer.print("workspace {d} renamed to {s}\n", .{ id, snapshot.name });
     }
 
     return agent.exit_ok;

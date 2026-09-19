@@ -2,6 +2,7 @@ const workspace = @import("workspace.zig");
 const std = @import("std");
 const Cursor = @import("Cursor.zig");
 const entity_target = @import("entity_target.zig");
+const core = @import("telar-core");
 const WorkspaceOptions = @This();
 
 action: workspace.WorkspaceAction,
@@ -20,13 +21,27 @@ pub fn parse(args: []const [*:0]const u8) !WorkspaceOptions {
     const action = std.meta.stringToEnum(workspace.WorkspaceAction, std.mem.span(args[0])) orelse return error.UnknownWorkspaceAction;
     var options: WorkspaceOptions = .{ .action = action };
     var index: usize = 1;
-    if (action == .get) {
+    if (action == .get or action == .rename) {
         if (args.len < 2) {
             return error.MissingWorkspaceTarget;
         }
 
         options.target = try entity_target.Target.parse(std.mem.span(args[1]));
         index = 2;
+    }
+
+    if (action == .rename) {
+        if (args.len < 3) {
+            return error.MissingWorkspaceName;
+        }
+
+        const name = std.mem.span(args[2]);
+        if (name.len == 0 or name.len > core.max_workspace_name_bytes or !std.unicode.utf8ValidateSlice(name)) {
+            return error.InvalidWorkspaceName;
+        }
+
+        options.name = args[2];
+        index = 3;
     }
 
     var cursor: Cursor = .{ .remaining = args[index..] };

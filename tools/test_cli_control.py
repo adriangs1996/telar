@@ -49,6 +49,10 @@ def workspace_list():
     return bytes([0x98]) + struct.pack("<QH", 3, 1) + entry
 
 
+def workspace_snapshot(request_id, name="Renamed", tabs=b"", count=0):
+    return bytes([0x88]) + struct.pack("<QBQ", request_id, 0, 42) + sized16(name) + struct.pack("<H", count) + tabs
+
+
 class ControlTests(unittest.TestCase):
     def run_control(self, arguments, exchange):
         with tempfile.TemporaryDirectory(prefix="telar-cli-", dir="/tmp") as directory:
@@ -190,6 +194,20 @@ class ControlTests(unittest.TestCase):
                 "workspace_id": 42, "directory": str(Path(directory).resolve()),
             })
             self.assertEqual(list(Path(directory).iterdir()), [])
+
+    def test_workspace_rename_waits_for_its_correlated_response(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x16)
+            request_id, location_kind, workspace_id = struct.unpack_from("<QBQ", request, 1)
+            self.assertEqual((location_kind, workspace_id), (0, 42))
+            self.assertEqual(request[18:], sized16("Renamed"))
+            send_frame(connection, workspace_snapshot(request_id + 1, "Unrelated"))
+            send_frame(connection, workspace_snapshot(request_id))
+
+        result = self.run_control(["workspace", "rename", "42", "Renamed", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"workspace_id": 42, "name": "Renamed"})
 
 
 if __name__ == "__main__":
