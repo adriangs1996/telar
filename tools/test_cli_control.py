@@ -393,6 +393,21 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), [{"id": 99, "kind": "command", "description": 'Run "build"?'}])
 
+    def test_agent_approve_requires_and_sends_exact_approval_identity(self):
+        def exchange(connection):
+            receive_frame(connection)
+            send_frame(connection, agent_snapshot())
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x2F)
+            self.assertEqual(struct.unpack_from("<QQQB", request, 9), (7, 9, 99, 1))
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+
+        result = self.run_control(["agent", "approve", "7", "99", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)["accepted"])
+        result = subprocess.run([str(BINARY), "agent", "approve", "7"], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

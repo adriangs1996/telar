@@ -18,6 +18,7 @@ lines: u16 = 40,
 source: PaneTextSourceType = .recent,
 json: bool = false,
 socket: ?[*:0]const u8 = null,
+approval_id: ?u64 = null,
 
 pub fn parse(args: []const [*:0]const u8) !AgentOptions {
     if (args.len == 0) {
@@ -49,6 +50,8 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         .conversations
     else if (std.mem.eql(u8, action_text, "approvals"))
         .approvals
+    else if (std.mem.eql(u8, action_text, "approve"))
+        .approve
     else
         return error.UnknownAgentAction;
     var options: AgentOptions = .{ .action = action };
@@ -61,6 +64,20 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
 
         options.target = values.Target.parse(args[1]);
         index = 2;
+    }
+
+    if (action == .approve) {
+        if (args.len < 3) {
+            return error.MissingApprovalId;
+        }
+
+        const id = std.fmt.parseInt(u64, std.mem.span(args[2]), 10) catch return error.InvalidApprovalId;
+        if (id == 0) {
+            return error.InvalidApprovalId;
+        }
+
+        options.approval_id = id;
+        index = 3;
     }
 
     if (action == .report_session) {

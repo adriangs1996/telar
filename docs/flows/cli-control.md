@@ -121,3 +121,7 @@ pane can resume a conversation. It does not expose unstable catalog indices.
 
 `telar agent approvals TARGET [--json]` returns the pending approval identity,
 kind and description, or an empty array. Querying never answers the approval.
+
+`telar agent approve TARGET APPROVAL_ID [--json]` sends an explicit positive
+approval decision with the observed pane generation and waits for runtime
+admission. The provider remains responsible for rejecting stale approval IDs.

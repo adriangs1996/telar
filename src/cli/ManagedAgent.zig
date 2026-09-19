@@ -45,3 +45,17 @@ pub fn read(self: *ManagedAgent, snapshot: *core.AgentThreadSnapshot) !void {
         return;
     }
 }
+
+/// Answers one explicit approval, never an implicit current request. Example: `try managed.decide(.{ .id = 42, .accepted = true });`
+pub fn decide(self: *ManagedAgent, decision: core.AgentApprovalDecision) !void {
+    const response = try self.session.exchange(core.encodeAgentApproval, core.AgentApproval{
+        .request_id = .none,
+        .pane_id = try core.pane(self.pane.pane_id),
+        .pane_generation = self.pane.pane_generation,
+        .approval_id = decision.id,
+        .accept = decision.accepted,
+    });
+    if (response != .request_completed) {
+        return error.UnexpectedRuntimeResponse;
+    }
+}

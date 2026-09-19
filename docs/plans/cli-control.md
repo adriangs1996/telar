@@ -66,7 +66,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [ ] `agent prompt --model/--effort/--access`
 - [x] `agent interrupt`
 - [x] `agent approvals`
-- [ ] `agent approve`
+- [x] `agent approve`
 - [ ] `agent reject`
 - [x] `agent thread`
 - [ ] `agent history`
