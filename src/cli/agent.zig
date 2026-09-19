@@ -99,6 +99,15 @@ fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContex
             }
             return exit_ok;
         },
+        .history => {
+            const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
+            var managed: ManagedAgent = .{ .session = session, .pane = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation } };
+            const page = try session.gpa.create(core.AgentHistoryPage);
+            defer session.gpa.destroy(page);
+            try managed.history(options.history, page);
+            try agent_output.history(output.writer, page, options.json);
+            return exit_ok;
+        },
         .report_session => {
             const agent = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
             try session.reportSession(.{

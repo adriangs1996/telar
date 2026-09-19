@@ -1,5 +1,6 @@
 const agent = @import("agent.zig");
 const core = @import("telar-core");
+const AgentHistoryInput = @import("../AgentHistoryInput.zig");
 const values = @import("values.zig");
 const AgentStatusType = @import("telar-core").AgentStatus;
 const PaneTextSourceType = @import("telar-core").PaneTextSource;
@@ -24,6 +25,7 @@ images: core.AgentImagePaths = .{},
 model: ?[]const u8 = null,
 effort: ?core.AgentEffort = null,
 access: ?core.AgentAccess = null,
+history: AgentHistoryInput = .{},
 
 pub fn parse(args: []const [*:0]const u8) !AgentOptions {
     if (args.len == 0) {
@@ -63,6 +65,8 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         .clear
     else if (std.mem.eql(u8, action_text, "rename"))
         .rename
+    else if (std.mem.eql(u8, action_text, "history"))
+        .history
     else
         return error.UnknownAgentAction;
     var options: AgentOptions = .{ .action = action };
@@ -132,6 +136,16 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         const arg = std.mem.span(argument);
         if (std.mem.eql(u8, arg, "--json")) {
             options.json = true;
+        } else if (std.mem.eql(u8, arg, "--cursor") and action == .history) {
+            const value = std.mem.span(try cursor.require(error.MissingHistoryCursor));
+            _ = try core.AgentHistoryCursor.init(value);
+            options.history.cursor = value;
+        } else if (std.mem.eql(u8, arg, "--anchor") and action == .history) {
+            options.history.anchor = std.mem.span(try cursor.require(error.MissingHistoryAnchor));
+        } else if (std.mem.eql(u8, arg, "--anchor-turn") and action == .history) {
+            options.history.anchor_turn = std.mem.span(try cursor.require(error.MissingHistoryAnchor));
+        } else if (std.mem.eql(u8, arg, "--direction") and action == .history) {
+            options.history.direction = std.meta.stringToEnum(core.agent_history.Direction, std.mem.span(try cursor.require(error.MissingHistoryDirection))) orelse return error.InvalidHistoryDirection;
         } else if (std.mem.eql(u8, arg, "--model")) {
             if (action != .prompt or options.model != null) {
                 return error.InvalidModelOption;
@@ -207,6 +221,10 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
 
     if (action == .prompt and std.mem.span(options.text.?).len == 0 and options.images.count == 0) {
         return error.InvalidPromptText;
+    }
+
+    if (action == .history and ((options.history.anchor.len == 0) != (options.history.anchor_turn.len == 0) or (options.history.cursor.len != 0 and options.history.anchor.len != 0))) {
+        return error.InvalidHistoryPosition;
     }
 
     return options;

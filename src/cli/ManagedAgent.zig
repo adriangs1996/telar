@@ -3,6 +3,7 @@ const Session = @import("Session.zig");
 const PaneRef = @import("PaneRef.zig");
 const ManagedAgent = @This();
 const AgentPromptInput = @import("AgentPromptInput.zig");
+const AgentHistoryInput = @import("AgentHistoryInput.zig");
 
 session: *Session,
 pane: PaneRef,
@@ -96,4 +97,29 @@ pub fn prompt(self: *ManagedAgent, input: AgentPromptInput) !void {
     if (response != .request_completed) {
         return error.UnexpectedRuntimeResponse;
     }
+}
+
+/// Fetches one independent provider page. Example: `try managed.history(.{ .cursor = next }, page);`
+pub fn history(self: *ManagedAgent, input: AgentHistoryInput, page: *core.AgentHistoryPage) !void {
+    const initial_view_generation = 1;
+    const response = try self.session.exchange(core.encodeQueryAgentHistory, core.QueryAgentHistory{
+        .request_id = .none,
+        .pane_id = try core.pane(self.pane.pane_id),
+        .pane_generation = self.pane.pane_generation,
+        .view_generation = initial_view_generation,
+        .cursor = input.cursor,
+        .anchor = input.anchor,
+        .anchor_turn = input.anchor_turn,
+        .direction = input.direction,
+    });
+    if (response != .agent_history_page) {
+        return error.UnexpectedRuntimeResponse;
+    }
+
+    const view = response.agent_history_page;
+    if (core.raw(view.snapshot.pane_id) != self.pane.pane_id or view.snapshot.pane_generation != self.pane.pane_generation or view.view_generation != initial_view_generation) {
+        return error.UnexpectedRuntimeResponse;
+    }
+
+    try view.copyTo(page);
 }

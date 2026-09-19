@@ -168,3 +168,19 @@ pub fn approvals(writer: *std.Io.Writer, snapshot: *const core.AgentThreadSnapsh
         try writer.writeAll("]\n");
     }
 }
+
+/// Writes provider pagination separately from the retained live window. Example: `try agent_output.history(writer, page, true);`
+pub fn history(writer: *std.Io.Writer, page: *const core.AgentHistoryPage, json: bool) !void {
+    if (json) {
+        try writer.writeAll("{\"pagination\":");
+        try std.json.Stringify.value(.{ .before = page.before.slice(), .after = page.after.slice(), .has_before = page.has_before, .has_after = page.has_after }, .{}, writer);
+        try writer.writeAll(",\"thread\":");
+    }
+
+    try thread(writer, &page.snapshot, json);
+    if (json) {
+        try writer.writeAll("}\n");
+    } else {
+        try writer.print("before: {s} ({})\nafter: {s} ({})\n", .{ page.before.slice(), page.has_before, page.after.slice(), page.has_after });
+    }
+}

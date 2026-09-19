@@ -153,3 +153,9 @@ acknowledges admission; provider completion remains asynchronous.
 `telar agent rename TARGET TITLE [--json]` validates the existing bounded title
 contract and submits native `/rename`. This renames the provider conversation;
 reporting a sidebar title is a separate operation.
+
+`telar agent history TARGET [--cursor TOKEN | --anchor ID --anchor-turn ID]
+[--direction older|newer] [--json]` reads one correlated provider page. JSON
+includes opaque before/after cursors and availability flags alongside structured
+thread data. A request cannot mix a cursor with an item/turn anchor. The pane
+and view generations are checked before output; reading does not alter live state.

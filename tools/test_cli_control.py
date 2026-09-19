@@ -526,6 +526,24 @@ class ControlTests(unittest.TestCase):
         result = self.run_control(["agent", "rename", "7", 'Fix "parser"', "--json"], exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_agent_history_preserves_pagination_and_conversation_data(self):
+        def exchange(connection):
+            receive_frame(connection)
+            send_frame(connection, agent_snapshot())
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x31)
+            self.assertEqual(struct.unpack_from("<QQQB", request, 9), (7, 9, 1, 1))
+            self.assertEqual(request[34:], sized16("opaque-cursor") + sized16("") + sized16(""))
+            page = bytes([0xAC]) + request[1:9] + struct.pack("<QBB", 1, 1, 0)
+            page += sized16("older-token") + sized16("newer-token") + thread_snapshot()[1:]
+            send_frame(connection, page)
+
+        result = self.run_control(["agent", "history", "7", "--cursor", "opaque-cursor", "--direction", "newer", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        page = json.loads(result.stdout)
+        self.assertEqual(page["pagination"], {"before": "older-token", "after": "newer-token", "has_before": True, "has_after": False})
+        self.assertEqual(page["thread"]["items"][0]["text"], 'Response "quoted" 🧶')
+
 
 if __name__ == "__main__":
     unittest.main()
