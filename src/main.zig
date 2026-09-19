@@ -6,6 +6,7 @@ const parser = @import("cli/parser.zig");
 const usage_module = @import("cli/usage.zig");
 const server_module = @import("cli/server.zig");
 const runtime_module = @import("cli/runtime.zig");
+const client_control_module = @import("cli/client_control.zig");
 const suggestion_module = @import("cli/suggestion.zig");
 const tab_module = @import("cli/tab.zig");
 const history_module = @import("cli/history.zig");
@@ -90,6 +91,7 @@ pub fn main(init: std.process.Init) !void {
         .version => try std.Io.File.stdout().writeStreamingAll(init.io, "telar " ++ version ++ "\n"),
         .server => |options| try server_module.run(init, options),
         .runtime => |options| std.process.exit(runtime_module.run(init, options)),
+        .client_control => |options| std.process.exit(client_control_module.run(init, options)),
         .command => |options| std.process.exit(suggestion_module.run(init, options)),
         .tab => |options| std.process.exit(tab_module.run(init, options)),
         .history => |options| try history_module.run(init, options),

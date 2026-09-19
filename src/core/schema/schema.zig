@@ -394,3 +394,9 @@ pub const QueryAgentHistory = @import("messages/QueryAgentHistory.zig");
 pub const AgentHistoryPageView = @import("messages/AgentHistoryPageView.zig");
 pub const encodeQueryAgentHistory = @import("messages/agent_history.zig").encodeQueryAgentHistory;
 pub const encodeAgentHistoryPage = @import("messages/agent_history.zig").encodeAgentHistoryPage;
+
+pub const ClientDescriptor = @import("../ClientDescriptor.zig");
+pub const ClientList = @import("../ClientList.zig");
+pub const QueryClients = @import("messages/QueryClients.zig");
+pub const encodeQueryClients = @import("messages/clients.zig").encodeQueryClients;
+pub const encodeClientList = @import("messages/clients.zig").encodeClientList;

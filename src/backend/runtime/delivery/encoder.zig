@@ -1,5 +1,6 @@
 //! Runtime protocol projection from authoritative state.
 
+const encodeClientList = @import("telar-core").encodeClientList;
 const EncodeContext = @import("EncodeContext.zig");
 const response_queue = @import("response_queue.zig");
 const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
@@ -203,6 +204,7 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
                 .text = text_storage[0..dump.len],
             });
         },
+        .client_list => |list| try encodeClientList(buffer, list),
         .pane_focus_command => |command| try encodePaneFocusCommand_module(buffer, command),
         .pane_focus_result => |result| try encodePaneFocusResult_module(buffer, result),
         .command_suggestion => |*suggested| try encodeCommandSuggestion_module(buffer, .{

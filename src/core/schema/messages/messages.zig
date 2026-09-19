@@ -98,6 +98,9 @@ const history = @import("history.zig");
 const tab = @import("tab.zig");
 const runtime = @import("runtime.zig");
 const workspace = @import("workspace.zig");
+const clients = @import("clients.zig");
+const QueryClients = @import("QueryClients.zig");
+const ClientList = @import("../../ClientList.zig");
 const notification = @import("notification_support.zig");
 const layout = @import("layout.zig");
 const agent = @import("agent.zig");
@@ -108,6 +111,7 @@ const graphics_bodies = @import("../graphics.zig");
 const std = @import("std");
 
 pub const ClientMessage = union(enum) {
+    query_clients: QueryClients,
     open_pane: OpenPaneViewType,
     pane_input: PaneInputType,
     pane_resize: PaneResizeType,
@@ -161,6 +165,7 @@ pub const ClientMessage = union(enum) {
 };
 
 pub const ServerMessage = union(enum) {
+    client_list: ClientList,
     pane_opened: PaneOpenedType,
     agent_thread_snapshot: @import("agent_thread.zig").SnapshotView,
     agent_history_page: @import("AgentHistoryPageView.zig"),
@@ -261,6 +266,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .acknowledge_agent => .{
             .acknowledge_agent = try GenericDerived(AcknowledgeAgentType).decode(&decoder),
         },
+        .query_clients => .{ .query_clients = try clients.decodeQueryClients(&decoder) },
         .query_agents => .{ .query_agents = try GenericDerived(QueryAgentsType).decode(&decoder) },
         .read_pane => .{ .read_pane = try GenericDerived(ReadPaneType).decode(&decoder) },
         .send_pane_text => .{ .send_pane_text = try pane.decodeSendPaneText(&decoder) },
@@ -313,6 +319,7 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .resync_required => .{ .resync_required = try GenericDerived(ResyncRequiredType).decode(&decoder) },
         .graphics_shared_image => .{ .graphics_shared_image = try graphics_bodies.decodeSharedImage(&decoder) },
         .proxy_status => .{ .proxy_status = try GenericDerived(ProxyStatusType).decode(&decoder) },
+        .client_list => .{ .client_list = try clients.decodeClientList(&decoder) },
         .agent_snapshot => .{ .agent_snapshot = try agent.decodeAgentSnapshot(&decoder) },
         .system_metrics => .{ .system_metrics = try GenericDerived(SystemMetricsType).decode(&decoder) },
         .workspace_list => .{ .workspace_list = try workspace.decodeWorkspaceList(&decoder) },

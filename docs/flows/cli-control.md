@@ -221,3 +221,13 @@ partial output when absent. Explicit tab scope avoids full-runtime enumeration.
 for one command using that pane’s existing cwd/screen context. It only prints
 the suggestion. Ready exits 0, timeout exits 3, unavailable/failed exit 1; JSON
 preserves the explicit status. No terminal input follows the suggestion reply.
+
+## Interactive clients
+
+`telar client list [--json]` queries active UI connections with their exact
+connection generation, retained identity, attachment count and last input pane.
+The bounded catalog copies at most eight records and performs no allocation
+or I/O in the runtime handler. CLI runtime subscriptions explicitly declare
+themselves noninteractive so observers cannot be selected as visual clients.
+The wire schema is now generation 60. Unknown counts and invalid identities
+are rejected by the codec; the golden corpus includes discovery and reply.

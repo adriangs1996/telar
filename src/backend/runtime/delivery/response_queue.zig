@@ -1,5 +1,6 @@
 //! Bounded, priority-aware responses awaiting one client session's writer.
 
+const ClientList = @import("telar-core").ClientList;
 const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
 const PaneOpenedType = @import("telar-core").PaneOpened;
 const PendingFailure = @import("PendingFailure.zig");
@@ -31,6 +32,7 @@ const RequestIdType = @import("telar-core").RequestId;
 pub const capacity = max_panes_per_tab * 2;
 
 pub const PendingResponse = union(enum) {
+    client_list: ClientList,
     pane_opened: PaneOpenedType,
     request_failed: PendingFailure,
     tab_snapshot: PendingTabSnapshot,

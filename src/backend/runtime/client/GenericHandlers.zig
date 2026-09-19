@@ -26,6 +26,7 @@ const CopySelectionType = @import("telar-core").CopySelection;
 const ShowNotificationType = @import("telar-core").ShowNotification;
 const ClientLayoutUpdateViewType = @import("telar-core").ClientLayoutUpdateView;
 const AcknowledgeAgentType = @import("telar-core").AcknowledgeAgent;
+const QueryClients = @import("telar-core").QueryClients;
 const QueryAgentsType = @import("telar-core").QueryAgents;
 const ReadPaneType = @import("telar-core").ReadPane;
 const SendPaneTextType = @import("telar-core").SendPaneText;
@@ -84,6 +85,7 @@ pub fn Type(comptime Context: type) type {
         show_notification: *const fn (*Context, ShowNotificationType) anyerror!void,
         update_client_layout: *const fn (*Context, ClientLayoutUpdateViewType) anyerror!void,
         acknowledge_agent: *const fn (*Context, AcknowledgeAgentType) anyerror!void,
+        query_clients: *const fn (*Context, QueryClients) anyerror!void,
         query_agents: *const fn (*Context, QueryAgentsType) anyerror!void,
         read_pane: *const fn (*Context, ReadPaneType) anyerror!void,
         send_pane_text: *const fn (*Context, SendPaneTextType) anyerror!void,

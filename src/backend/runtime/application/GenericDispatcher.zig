@@ -1,3 +1,5 @@
+const ClientQueryController = @import("../entrypoints/requests/ClientQueryController.zig");
+const QueryClients = @import("telar-core").QueryClients;
 const GenericRuntimePort = @import("GenericRuntimePort.zig").Type;
 const Session = @import("../client/Session.zig");
 const Repository = @import("../../workspace/Repository.zig");
@@ -210,6 +212,7 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             .show_notification = routeShowNotification,
             .update_client_layout = routeUpdateClientLayout,
             .acknowledge_agent = routeAcknowledgeAgent,
+            .query_clients = routeQueryClients,
             .query_agents = routeQueryAgents,
             .read_pane = routeReadPane,
             .send_pane_text = routeSendPaneText,
@@ -828,6 +831,11 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             const now_ms = std.Io.Timestamp.now(request.application.io, .real).toMilliseconds();
 
             controller.acknowledgeAgent(acknowledgement, now_ms);
+        }
+
+        fn routeQueryClients(request: *ClientRequestContext, query: QueryClients) !void {
+            var controller: ClientQueryController = .{ .handler = .{ .clients = request.application.clients }, .responses = &request.session.delivery.responses };
+            try controller.query(query);
         }
 
         fn routeQueryAgents(request: *ClientRequestContext, query: QueryAgentsType) !void {

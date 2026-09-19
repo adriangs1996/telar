@@ -124,7 +124,8 @@ class ControlTests(unittest.TestCase):
         def exchange(connection):
             request = receive_frame(connection)
             self.assertEqual(request[0], 0x14)
-            self.assertEqual(len(request), 9)
+            self.assertEqual(len(request), 10)
+            self.assertEqual(request[-1], 0)
             self.assertNotEqual(request[1:], bytes(8))
             send_frame(connection, bytes([0x95, 1, 1, 0]))
 
@@ -716,6 +717,17 @@ class ControlTests(unittest.TestCase):
         result = self.run_control(["command", "suggest", "7", "List files", "--json"], exchange)
         self.assertEqual(result.returncode, 1)
         self.assertEqual(json.loads(result.stdout), {"status": "unavailable", "command": ""})
+
+    def test_client_list_preserves_connection_and_retained_identities(self):
+        def exchange(connection):
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x33)
+            entry = struct.pack("<QQQHQQ", 7, 9, 11, 2, 5, 12)
+            send_frame(connection, bytes([0xAD]) + request[1:] + bytes([1]) + entry)
+
+        result = self.run_control(["client", "list", "--json"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), [{"id": 7, "generation": 9, "identity": 11, "attachments": 2, "last_input_pane": 5, "last_input_sequence": 12}])
 
 
 if __name__ == "__main__":

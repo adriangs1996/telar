@@ -3,6 +3,7 @@
 //! from the wrong side never decodes as a valid message.
 
 pub const ClientTag = enum(u8) {
+    query_clients = 0x33,
     open_pane = 0x01,
     pane_input = 0x02,
     pane_resize = 0x03,
@@ -56,6 +57,7 @@ pub const ClientTag = enum(u8) {
 };
 
 pub const ServerTag = enum(u8) {
+    client_list = 0xad,
     pane_opened = 0x81,
     pane_frame = 0x82,
     pane_exited = 0x83,

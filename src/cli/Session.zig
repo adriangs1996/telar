@@ -127,7 +127,7 @@ pub fn subscribeRuntime(self: *Session) !void {
     }
 
     var buffer: [16]u8 = undefined;
-    try self.connection.send(self.io, try core.encodeRequestRuntimeState(&buffer, .{ .client_identity = @enumFromInt(identity) }));
+    try self.connection.send(self.io, try core.encodeRequestRuntimeState(&buffer, .{ .client_identity = @enumFromInt(identity), .interactive = false }));
 }
 
 /// Borrows one decoded response until the next receive, propagating runtime failures. Example: `const response = try session.receive();`

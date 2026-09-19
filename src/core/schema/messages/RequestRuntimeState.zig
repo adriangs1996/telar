@@ -2,6 +2,7 @@ const types = @import("../types.zig");
 const RequestRuntimeState = @This();
 
 client_identity: types.ClientIdentity,
+interactive: bool = true,
 
 /// Rejects identities that cannot own retained runtime state.
 ///

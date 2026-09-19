@@ -14,7 +14,7 @@ No simulated keyboard input is a substitute for an implemented command.
 
 ## Clients
 
-- [ ] `client list`
+- [x] `client list`
 - [ ] `client get`
 - [ ] `client detach`
 

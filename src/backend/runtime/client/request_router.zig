@@ -32,6 +32,7 @@ const CopySelectionType = @import("telar-core").CopySelection;
 const ShowNotificationType = @import("telar-core").ShowNotification;
 const ClientLayoutUpdateViewType = @import("telar-core").ClientLayoutUpdateView;
 const AcknowledgeAgentType = @import("telar-core").AcknowledgeAgent;
+const QueryClients = @import("telar-core").QueryClients;
 const QueryAgentsType = @import("telar-core").QueryAgents;
 const ReadPaneType = @import("telar-core").ReadPane;
 const SendPaneTextType = @import("telar-core").SendPaneText;
@@ -84,6 +85,7 @@ pub fn classify(tag: Tag) RequestClass {
         .agent_approval,
         .query_agent_thread,
         .query_agent_history,
+        .query_clients,
         .query_agents,
         .read_pane,
         .send_pane_text,
@@ -163,6 +165,7 @@ const testing_handlers: GenericHandlers(RequestRouterCapture) = .{
     .show_notification = captureHandler(.show_notification, ShowNotificationType),
     .update_client_layout = captureHandler(.update_client_layout, ClientLayoutUpdateViewType),
     .acknowledge_agent = captureHandler(.acknowledge_agent, AcknowledgeAgentType),
+    .query_clients = captureHandler(.query_clients, QueryClients),
     .query_agents = captureHandler(.query_agents, QueryAgentsType),
     .read_pane = captureHandler(.read_pane, ReadPaneType),
     .send_pane_text = captureHandler(.send_pane_text, SendPaneTextType),
@@ -242,6 +245,7 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]ClientMessageType {
         .{ .agent_approval = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .approval_id = 4, .accept = true } },
         .{ .query_agent_thread = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1 } },
         .{ .query_agent_history = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .view_generation = 1 } },
+        .{ .query_clients = .{ .request_id = request_id } },
         .{ .query_agents = .{ .request_id = request_id } },
         .{ .read_pane = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .rows = 40, .source = .screen } },
         .{ .send_pane_text = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .mode = .prompt, .text = "ls" } },
@@ -305,6 +309,7 @@ test "Router delegates every client tag exactly once and preserves classificatio
             .agent_approval,
             .query_agent_thread,
             .query_agent_history,
+            .query_clients,
             .query_agents,
             .read_pane,
             .send_pane_text,
@@ -342,4 +347,18 @@ test "Router propagates handler failure without a second delegation" {
 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expectEqual(Tag.move_tab, capture.last.?);
+}
+
+/// Resolves observer subscriptions before a session acquires a role. Example: `const role = classifyMessage(message);`
+pub fn classifyMessage(message: ClientMessageType) RequestClass {
+    if (message == .request_runtime_state and !message.request_runtime_state.interactive) {
+        return .control;
+    }
+
+    return classify(std.meta.activeTag(message));
+}
+
+test "runtime observers cannot be mistaken for interactive clients" {
+    try std.testing.expectEqual(RequestClass.control, classifyMessage(.{ .request_runtime_state = .{ .client_identity = @enumFromInt(1), .interactive = false } }));
+    try std.testing.expectEqual(RequestClass.ui, classifyMessage(.{ .request_runtime_state = .{ .client_identity = @enumFromInt(1) } }));
 }

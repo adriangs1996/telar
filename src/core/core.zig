@@ -493,3 +493,9 @@ pub const RecentConversations = @import("RecentConversations.zig");
 pub const AgentSkills = @import("AgentSkills.zig");
 pub const AgentSkill = @import("AgentSkill.zig");
 pub const AgentCommand = @import("AgentCommand.zig");
+
+pub const ClientDescriptor = @import("ClientDescriptor.zig");
+pub const ClientList = @import("ClientList.zig");
+pub const QueryClients = @import("schema/messages/QueryClients.zig");
+pub const encodeQueryClients = @import("schema/messages/clients.zig").encodeQueryClients;
+pub const encodeClientList = @import("schema/messages/clients.zig").encodeClientList;

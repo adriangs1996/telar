@@ -92,7 +92,7 @@ pub fn dispatch(client: anytype, message: ServerMessageType, comptime Adapters: 
         .history_pruned => |confirmation| _ = try history_palettes.pruned(client, confirmation),
         .history_output => |output| _ = history_palettes.output(client, output),
         .command_suggestion => |suggested| _ = try suggestions.apply(client, suggested),
-        .pane_text, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
+        .client_list, .pane_text, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
         .proxy_status => |status| _ = try proxy_status.apply(client, status),
         .agent_snapshot => |snapshot| _ = try agent_snapshots.apply(client, snapshot),
         .system_metrics => |metrics| _ = try system_metrics.apply(client, metrics),

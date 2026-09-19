@@ -73,12 +73,14 @@ pub fn encodeRequestRuntimeState(buffer: []u8, message: RequestRuntimeState) ![]
     var encoder = EncoderType.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.request_runtime_state));
     try encoder.writeInt(u64, @intFromEnum(message.client_identity));
+    try encoder.writeByte(@intFromBool(message.interactive));
     return encoder.finish();
 }
 
 pub fn decodeRequestRuntimeState(decoder: *DecoderType) !RequestRuntimeState {
     const request: RequestRuntimeState = .{
         .client_identity = @enumFromInt(try decoder.readInt(u64)),
+        .interactive = try decoder.readBool(),
     };
     try request.validateWire();
     return request;

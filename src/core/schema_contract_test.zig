@@ -57,7 +57,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 101;
+const corpus_len = 103;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -1026,6 +1026,15 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     };
     helper.add(.{ .name = "agent_history_page", .direction = .server, .golden_hex = golden.agent_history_page }, helper.commit(
         try agent_history.encodeAgentHistoryPage(helper.space(), &history_page),
+    ));
+
+    helper.add(.{ .name = "query_clients", .direction = .client, .golden_hex = golden.query_clients }, helper.commit(
+        try schema.encodeQueryClients(helper.space(), .{ .request_id = @enumFromInt(5) }),
+    ));
+    var clients: schema.ClientList = .{ .request_id = @enumFromInt(5), .count = 1 };
+    clients.entries[0] = .{ .id = 7, .generation = 9, .identity = 11, .attachments = 2, .last_input_pane = 5, .last_input_sequence = 12 };
+    helper.add(.{ .name = "client_list", .direction = .server, .golden_hex = golden.client_list }, helper.commit(
+        try schema.encodeClientList(helper.space(), clients),
     ));
 
     std.debug.assert(index == corpus_len);
