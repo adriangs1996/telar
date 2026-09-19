@@ -38,6 +38,18 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .pane_copy => {
+            const selection = try core.CopySelection.fromText(@enumFromInt(reply.target_id), reply.text());
+            const tab = client.model.activeTabModelConst() orelse return error.NoActiveTab;
+            const pane = tab.findConst(selection.pane_id) orelse return error.PaneNotFound;
+            if (!pane.attached or pane.kind != .terminal) {
+                return error.TerminalPaneNotAttached;
+            }
+
+            try runtime_transport.enqueue(client, .{ .copy_selection = selection });
+            reply.length = 0;
+            reply.status = .admitted;
+        },
         .agent_view_collapse => {
             _ = client.model.agentPane(@enumFromInt(reply.target_id)) orelse return error.AgentPaneNotAttached;
             const item_id = std.fmt.parseUnsigned(u64, reply.text(), 10) catch return error.InvalidItemId;

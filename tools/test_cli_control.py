@@ -938,6 +938,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "applied")
 
+    def test_pane_copy_preserves_absolute_history_coordinates(self):
+        result = self.run_control(["pane", "copy", "5", "0,1000:79,1002", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=30, target=5, input_text="0,1000:79,1002"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "admitted")
+
 
 if __name__ == "__main__":
     unittest.main()

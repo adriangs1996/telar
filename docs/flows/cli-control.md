@@ -354,3 +354,9 @@ identity from `agent thread`. `--work` targets the item’s work-group header.
 It uses delivered targets and the existing scroll-anchor transaction; hidden,
 missing or stale targets fail, and hosts without native disclosure support fail
 explicitly. Expand a folded work group before expanding one of its hidden items.
+
+`pane copy` requests an inclusive terminal text selection in absolute history
+coordinates and delivers it to the selected client’s clipboard. It uses the
+runtime’s existing selection size/availability checks. Success means admission;
+extraction and host clipboard delivery complete asynchronously. Native agent
+text is available through `agent thread`/`agent history` and `client clipboard copy`.
