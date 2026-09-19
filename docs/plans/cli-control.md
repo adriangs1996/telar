@@ -62,7 +62,7 @@ No simulated keyboard input is a substitute for an implemented command.
 
 - [ ] `agent create`
 - [x] `agent prompt for managed panes`
-- [ ] `agent prompt --image`
+- [x] `agent prompt --image`
 - [ ] `agent prompt --model/--effort/--access`
 - [x] `agent interrupt`
 - [x] `agent approvals`

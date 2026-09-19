@@ -100,6 +100,7 @@ pub const text =
     \\  --until STATUS   done, ready, blocked, working, failed (wait)
     \\  --timeout SECS   Give up after SECS seconds (wait, prompt --wait)
     \\  --wait           Wait for the agent to finish after prompting
+    \\    --image PATH     Attach an absolute PNG path to a managed prompt (repeatable, maximum 4)
     \\  --lines N        Rows to read (default 40, maximum 200)
     \\  --source KIND    recent (scrollback + screen) or screen
     \\  --enter          Append Enter after the sent text

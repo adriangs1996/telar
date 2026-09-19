@@ -454,6 +454,22 @@ class ControlTests(unittest.TestCase):
         result = self.run_control(["agent", "prompt", "7", "Run tests"], exchange)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_agent_prompt_transmits_image_paths_without_terminal_paste(self):
+        def exchange(connection):
+            for _ in range(2):
+                receive_frame(connection)
+                send_frame(connection, agent_snapshot())
+            request = receive_frame(connection)
+            send_frame(connection, bytes([0x86]) + request[1:] + struct.pack("<HQBBQ", 1, 7, 0, 1, 9))
+            query_thread(connection)
+            request = receive_frame(connection)
+            self.assertEqual(request[0], 0x2D)
+            self.assertEqual(request[25:], sized16("") + sized16("model-1") + sized16("low") + bytes([1, 2]) + sized16("/tmp/first.png") + sized16("/tmp/second.png"))
+            send_frame(connection, bytes([0xA1]) + request[1:9])
+
+        result = self.run_control(["agent", "prompt", "7", "", "--image", "/tmp/first.png", "--image", "/tmp/second.png"], exchange)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

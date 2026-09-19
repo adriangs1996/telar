@@ -134,3 +134,8 @@ runtime admitted the command, not that the user approved the provider action.
 snapshot. Managed panes receive `agent_prompt` with their live model, effort
 and access selection; terminal agents retain `send_pane_text`. A missing or
 changed generation fails before submission, with no fallback or duplicate send.
+
+`agent prompt --image /absolute/path.png` accepts up to four image paths using
+the existing protocol validator. An empty text argument supports image-only
+submissions. Paths refer to the runtime machine; the provider performs image
+loading. Terminal panes reject image submissions before sending any text.

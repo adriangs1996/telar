@@ -71,6 +71,7 @@ pub fn prompt(self: *ManagedAgent, input: AgentPromptInput) !void {
         .pane_id = try core.pane(self.pane.pane_id),
         .pane_generation = self.pane.pane_generation,
         .text = input.text,
+        .images = input.images,
         .options = snapshot.options,
     });
     if (response != .request_completed) {

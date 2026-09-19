@@ -1,4 +1,5 @@
 const agent = @import("agent.zig");
+const core = @import("telar-core");
 const values = @import("values.zig");
 const AgentStatusType = @import("telar-core").AgentStatus;
 const PaneTextSourceType = @import("telar-core").PaneTextSource;
@@ -19,6 +20,7 @@ source: PaneTextSourceType = .recent,
 json: bool = false,
 socket: ?[*:0]const u8 = null,
 approval_id: ?u64 = null,
+images: core.AgentImagePaths = .{},
 
 pub fn parse(args: []const [*:0]const u8) !AgentOptions {
     if (args.len == 0) {
@@ -101,7 +103,7 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         }
 
         options.text = args[2];
-        if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > max_pane_text_input_bytes_module) {
+        if (std.mem.span(options.text.?).len > max_pane_text_input_bytes_module) {
             return error.InvalidPromptText;
         }
 
@@ -113,6 +115,12 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         const arg = std.mem.span(argument);
         if (std.mem.eql(u8, arg, "--json")) {
             options.json = true;
+        } else if (std.mem.eql(u8, arg, "--image")) {
+            if (action != .prompt) {
+                return error.UnknownAgentOption;
+            }
+
+            try options.images.append(std.mem.span(try cursor.require(error.MissingImagePath)));
         } else if (std.mem.eql(u8, arg, "--wait")) {
             if (action != .prompt) {
                 return error.UnknownAgentOption;
@@ -157,6 +165,10 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         } else {
             return error.UnknownAgentOption;
         }
+    }
+
+    if (action == .prompt and std.mem.span(options.text.?).len == 0 and options.images.count == 0) {
+        return error.InvalidPromptText;
     }
 
     return options;
