@@ -365,3 +365,9 @@ text is available through `agent thread`/`agent history` and `client clipboard c
 surfaces, focused pane and fullscreen state as a bounded hexadecimal token.
 The token uses Telar’s validated layout schema and stable runtime identities;
 it is intended for `layout apply` against the same live tab and pane membership.
+
+`layout apply TOKEN --client ID` restores the active tab’s split tree, pane
+surfaces, focus and fullscreen state. It rejects other tabs, changed pane sets,
+invalid trees and in-flight client operations before model mutation. Existing
+focus/geometry delivery synchronizes graphics and runtime sizes after commit.
+Sidebar and workspace-list preferences remain controlled by their own commands.

@@ -56,7 +56,7 @@ No simulated keyboard input is a substitute for an implemented command.
 ## Layouts
 
 - [x] `layout get`
-- [ ] `layout apply`
+- [x] `layout apply`
 
 ## Agents
 

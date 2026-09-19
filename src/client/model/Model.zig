@@ -120,6 +120,7 @@ const TabCreationType = @import("TabCreation.zig");
 const RemoveTabType = @import("RemoveTab.zig");
 const RemovedPanesType = @import("RemovedPanes.zig");
 const TabSelectionType = @import("TabSelection.zig");
+const PaneLayoutRequest = @import("PaneLayoutRequest.zig");
 const Model = @This();
 
 workspace: TabsModel,
@@ -3054,4 +3055,27 @@ pub fn selectTab(model: *Model, target: model_types.TabSelectionTarget) !?TabSel
         .panes_revision = model.panes_revision,
         .copy_revision = model.copy_revision,
     };
+}
+
+/// Replaces only a matching active tab layout after validating all members. Example: `const change = try model.applyPaneLayout(request);`
+pub fn applyPaneLayout(self: *Model, request: PaneLayoutRequest) !PaneFocusType {
+    const active = self.workspace.active() orelse return error.NoActiveTab;
+    if (!std.meta.eql(active.location, request.location)) {
+        return error.LayoutTabMismatch;
+    }
+
+    const previous = active.model.layout.focused() orelse return error.NoFocusedPane;
+    for (request.panes.ids) |pane_id| {
+        const pane = active.model.findConst(pane_id) orelse return error.LayoutPaneMismatch;
+        if (pane.kind == .agent and request.layout.surface(pane_id) != .thread) {
+            return error.InvalidAgentSurface;
+        }
+    }
+
+    if (!active.model.restoreSavedLayout(request.layout, request.panes)) {
+        return error.LayoutPaneMismatch;
+    }
+
+    self.panes_revision +%= 1;
+    return .{ .location = active.location, .previous = previous, .focused = request.panes.focused, .geometry_changed = true, .panes_revision = self.panes_revision };
 }

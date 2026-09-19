@@ -459,3 +459,23 @@ fn commitSplit(target: PaneIdType, location: TabLocationType, axis: layout_mod.A
         .area = .{ .w = 40, .h = 10 },
     };
 }
+
+test "applying layouts rejects foreign membership before changing focus or geometry" {
+    var model = ModelType.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: TabLocationType = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
+    const first: PaneIdType = @enumFromInt(1);
+    const second: PaneIdType = @enumFromInt(2);
+    const area: RectType = .{ .w = 80, .h = 24 };
+    try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
+    try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
+    const saved = model.workspace.active().?.model.layout;
+    const before = model.version();
+    try std.testing.expectError(error.LayoutPaneMismatch, model.applyPaneLayout(.{ .location = location, .layout = saved, .panes = .{ .ids = &.{ first, @enumFromInt(99) }, .focused = first }, .area = area }));
+    try std.testing.expectEqualDeep(before, model.version());
+    try std.testing.expectEqual(second, model.workspace.activeConst().?.model.layout.focused().?);
+    const change = try model.applyPaneLayout(.{ .location = location, .layout = saved, .panes = .{ .ids = &.{ first, second }, .focused = first }, .area = area });
+    try std.testing.expectEqual(first, change.focused);
+    try std.testing.expect(change.geometry_changed);
+    try std.testing.expectEqual(before.panes + 1, model.version().panes);
+}

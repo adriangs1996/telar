@@ -39,6 +39,9 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .layout_apply => {
+            try layout_commands.apply(client, reply);
+        },
         .layout_get => {
             try layout_commands.get(client, reply);
         },
