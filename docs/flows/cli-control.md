@@ -262,3 +262,6 @@ Labels preserve UTF-8. A busy or unattached client fails without claiming creati
 `tab select ID --client ID` selects a tab in that client’s current workspace.
 Already selected tabs return `applied`; changes return `admitted` while pane
 attachment/snapshot synchronization proceeds. Unknown tabs or blocked selection fail.
+
+`tab next --client ID` uses the existing cyclic tab selection policy. A single
+tab is a successful no-op; absent tabs and pending snapshot gates fail explicitly.

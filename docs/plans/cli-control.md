@@ -35,7 +35,7 @@ No simulated keyboard input is a substitute for an implemented command.
 - [x] `tab close`
 - [x] `tab move`
 - [x] `tab select`
-- [ ] `tab next`
+- [x] `tab next`
 - [ ] `tab previous`
 
 ## Panes

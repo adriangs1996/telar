@@ -802,6 +802,11 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["target_id"], 8)
 
+    def test_tab_next_routes_cyclic_navigation(self):
+        result = self.run_control(["tab", "next", "--client", "7", "--json"], lambda c: self.routed_exchange(c, action=3, target=0))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["action"], "tab_next")
+
 
 if __name__ == "__main__":
     unittest.main()

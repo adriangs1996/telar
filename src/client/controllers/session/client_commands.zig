@@ -21,6 +21,9 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
     }
 
     switch (reply.action) {
+        .tab_next => {
+            try selectTabOffset(client, reply, 1);
+        },
         .tab_select => {
             const target: core.TabId = @enumFromInt(reply.target_id);
             if (reply.target_id == 0 or client.model.tabLocation(target) == null) {
@@ -74,4 +77,18 @@ fn execute(client: *Client, reply: *core.ClientCommand) !void {
             reply.status = .admitted;
         },
     }
+}
+
+fn selectTabOffset(client: *Client, reply: *core.ClientCommand, offset: isize) !void {
+    if (client.model.activeTabLocation() == null) {
+        return error.NoActiveTab;
+    }
+
+    var handler = tab_selections.selectionHandler(client);
+    if (handler.snapshots.pending(handler.snapshots.context)) {
+        return error.ClientBusy;
+    }
+
+    const change = try handler.execute(.{ .target = .{ .offset = offset } });
+    reply.status = if (change == null) .applied else .admitted;
 }
