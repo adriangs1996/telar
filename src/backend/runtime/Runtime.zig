@@ -43,7 +43,7 @@ pub fn start(runtime: *Runtime, initialization: InitializationType, comptime fai
     runtime.loop.init(runtime.resources.io(), initialization.options.stop);
     errdefer runtime.loop.cancel();
 
-    runtime.application = try runtime.composeApplication(initialization.options);
+    try runtime.composeApplication(initialization.options);
     errdefer {
         runtime.application.shutdownStep(.stop_panes);
         runtime.loop.cancel();
@@ -74,8 +74,8 @@ fn scheduleInitialEvents(runtime: *Runtime) !void {
     try initial_sources.schedule();
 }
 
-fn composeApplication(runtime: *Runtime, options: OptionsType) !ApplicationType {
-    return ApplicationType.init(.{
+fn composeApplication(runtime: *Runtime, options: OptionsType) !void {
+    try runtime.application.init(.{
         .io = runtime.resources.io(),
         .gpa = runtime.resources.gpa,
         .heap = &runtime.resources.heap,

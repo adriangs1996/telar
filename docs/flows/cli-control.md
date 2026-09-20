@@ -254,7 +254,7 @@ pending command; completion must match the sender generation, request, action
 and target. Command and response text own at most 4096 UTF-8 bytes; queueing
 never borrows decoder storage. Socket contracts cover success, UI rejection and
 incorrect completion generations; runtime tests cover admission, ownership and
-stale/unrelated completions. Protocol generation is 62.
+stale/unrelated completions. Protocol generation is 63.
 
 `tab create --client ID [--label TEXT]` uses the selected client’s existing tab
 creation gate, launch configuration and workspace geometry. It returns admission
@@ -452,7 +452,7 @@ individual commits on `feat/cli-control`, based on `a81a49f2`. Additional commit
 fix provider PATH handling, preserve non-starting semantics for new agent
 commands, separate client command translation by domain, and retain integration
 coverage. Runtime and clients must use the same negotiated schema (generation
-62); the handshake rejects incompatible binaries.
+63); the handshake rejects incompatible binaries.
 
 Validated with Zig 0.16.0:
 
@@ -475,3 +475,16 @@ The earlier broad `test-schema` transport run stalled and was terminated;
 these results do not claim that transport integration suite passed. GUI thread
 expansion is covered by GUI tests; external provider accounts, external browser
 opening and real host clipboard delivery were not exercised by the live suite.
+
+## Integration with main
+
+The CLI API and the existing change-review API coexist in protocol generation
+63. CLI control retains request tags `0x33..0x36` and response tags
+`0xad..0xaf`; change review uses `0x37..0x39`, `0xb0`, and `0xb1`. Golden
+fixtures and the negotiated fingerprint cover both message families.
+
+Application startup initializes its final runtime-owned storage directly.
+This avoids large return-value temporaries when CLI message buffers and review
+state coexist, and preserves the checkpoint restart/shutdown regressions.
+The merge is checked with runtime, wire, CLI, client and GUI tests, the CLI
+socket contracts, and isolated live runtime/client integration.

@@ -81,10 +81,33 @@ test "window titles use a host port and retry failed changes without a terminal 
     try std.testing.expectError(error.TitleFailed, state.sync(sink, input));
     try std.testing.expect(!state.ever_sent);
     capture.fail = false;
-    try state.sync(sink, input);
-    try state.sync(sink, input);
+
+    try std.testing.expect(try state.sync(sink, input));
+    try std.testing.expect(!try state.sync(sink, input));
+
     try std.testing.expectEqual(@as(usize, 1), capture.count);
     try std.testing.expectEqualStrings("café", capture.text[0..capture.len]);
+
+    const cleared: SyncInput = .{
+        .template = "{workspace}",
+        .tokens = .{},
+    };
+
+    try std.testing.expect(try state.sync(sink, cleared));
+    try std.testing.expectEqual(@as(usize, 0), capture.len);
+    try std.testing.expect(!try state.sync(sink, cleared));
+
+    try std.testing.expect(!try state.sync(
+        sink,
+        .{
+            .template = "",
+            .tokens = .{
+                .workspace = "ignored",
+            },
+        },
+    ));
+
+    try std.testing.expectEqual(@as(usize, 2), capture.count);
 }
 
 test "window title truncation preserves complete Unicode and excludes host control bytes" {

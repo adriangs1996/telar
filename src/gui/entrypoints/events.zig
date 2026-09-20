@@ -44,6 +44,8 @@ fn dispatch(gui: *GuiClient, event: Message) !?u8 {
         .path_completion => |result| try client.controllers.path_completions.complete(&gui.app, result),
         .favicon => |result| gui.landFavicon(result),
         .diagram_ready => gui.landDiagram(),
+        .syntax_ready => gui.landSyntax(),
+        .change_review_ready => gui.landChangeReview(),
         .plugin_result => |result| {
             if (try client.controllers.plugin_actions.complete(&gui.app, result)) {
                 return 0;
@@ -56,7 +58,7 @@ fn dispatch(gui: *GuiClient, event: Message) !?u8 {
 
 fn pathFor(event: Message) core.Path {
     return switch (event) {
-        .configuration_ready, .notification_tick, .bar_tick, .bar_command, .plugin_result, .link_opened, .path_completion, .favicon, .diagram_ready => .observation,
+        .configuration_ready, .notification_tick, .bar_tick, .bar_command, .plugin_result, .link_opened, .path_completion, .favicon, .diagram_ready, .syntax_ready, .change_review_ready => .observation,
         else => .interactive,
     };
 }

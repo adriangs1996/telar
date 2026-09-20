@@ -57,7 +57,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 108;
+const corpus_len = 113;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -1052,6 +1052,26 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     ));
     helper.add(.{ .name = "client_command_result", .direction = .server, .golden_hex = golden.client_command_result }, helper.commit(
         try schema.encodeClientCommandResult(helper.space(), .{ .request_id = @enumFromInt(5), .route = .{ .id = 7, .generation = 9 }, .action = .workspace_select, .status = .admitted, .target_id = 42 }),
+    ));
+
+    const review = @import("schema/messages/change_review.zig");
+    helper.add(.{ .name = "query_change_review", .direction = .client, .golden_hex = golden.query_change_review }, helper.commit(
+        try review.encodeQueryChangeReview(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .edition_id = 2 }),
+    ));
+    helper.add(.{ .name = "change_review_command", .direction = .client, .golden_hex = golden.change_review_command }, helper.commit(
+        try review.encodeChangeReviewCommand(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .edition_id = 2, .expected_revision = 4, .action = .save_comment, .path = "file.zig", .first_line = 1, .last_line = 1, .body = "review" }),
+    ));
+    helper.add(.{ .name = "report_change_review_sample", .direction = .client, .golden_hex = golden.report_change_review_sample }, helper.commit(
+        try review.encodeReportChangeReviewSample(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .provider = .codex, .session = "thread", .tool_call_id = "edit", .phase = .before, .path = "file.zig", .exists = true, .content = "before\n" }),
+    ));
+    var review_snapshot: @import("schema/messages/ChangeReviewSnapshotView.zig") = .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .revision = 4, .edition_id = 2, .latest_edition_id = 3, .previous_edition_id = 1, .next_edition_id = 3, .patch = "Updated file.zig\n@@ -1 +1 @@\n-a\n+b\n", .comment_count = 1 };
+    review_snapshot.comment_storage[0] = .{ .id = 7, .path = "file.zig", .first_line = 1, .last_line = 1, .body = "review" };
+    helper.add(.{ .name = "change_review_snapshot", .direction = .server, .golden_hex = golden.change_review_snapshot }, helper.commit(
+        try review.encodeChangeReviewSnapshot(helper.space(), review_snapshot),
+    ));
+
+    helper.add(.{ .name = "change_review_changed", .direction = .server, .golden_hex = golden.change_review_changed }, helper.commit(
+        try review.encodeChangeReviewChanged(helper.space(), .{ .pane_id = @enumFromInt(5), .pane_generation = 3, .session = "thread", .latest_edition_id = 2 }),
     ));
 
     std.debug.assert(index == corpus_len);

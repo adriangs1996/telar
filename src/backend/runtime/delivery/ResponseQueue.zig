@@ -41,6 +41,7 @@ pub fn pushOrDrop(queue: *ResponseQueue, response: response_queue.PendingRespons
         switch (response) {
             .history_result => |result| result.deinit(),
             .agent_history_page => |result| result.deinit(),
+            .change_review => |result| result.deinit(),
             .history_output => |result| result.deinit(),
             .history_stats => |result| result.deinit(),
             .tab_closed => |closed| {
@@ -94,9 +95,19 @@ pub fn reserveNotificationShown(queue: *ResponseQueue, request_id: RequestIdType
 /// Includes prepared responses until their send transaction commits.
 /// Example: `if (queue.hasAgentHistory()) return error.AgentHistoryBusy;`.
 pub fn hasAgentHistory(queue: *const ResponseQueue) bool {
-    for (0..queue.len) |offset| {
-        const index = (@as(usize, queue.head) + offset) % queue.items.len;
-        if (queue.items[index] == .agent_history_page) {
+    return queue.contains(.agent_history_page);
+}
+
+/// Keeps one owned review result reserved through socket send admission.
+/// Example: `if (queue.hasChangeReview()) return error.ReviewBusy;`.
+pub fn hasChangeReview(self: *const ResponseQueue) bool {
+    return self.contains(.change_review);
+}
+
+fn contains(self: *const ResponseQueue, tag: std.meta.Tag(response_queue.PendingResponse)) bool {
+    for (0..self.len) |offset| {
+        const index = (@as(usize, self.head) + offset) % self.items.len;
+        if (std.meta.activeTag(self.items[index]) == tag) {
             return true;
         }
     }
@@ -160,6 +171,7 @@ pub fn clear(queue: *ResponseQueue) void {
         switch (response.*) {
             .history_result => |result| result.deinit(),
             .agent_history_page => |result| result.deinit(),
+            .change_review => |result| result.deinit(),
             .history_output => |result| result.deinit(),
             .history_stats => |result| result.deinit(),
             else => {},

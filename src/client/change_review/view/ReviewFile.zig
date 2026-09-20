@@ -1,0 +1,7 @@
+path: []const u8,
+start: usize,
+end: usize,
+first: usize,
+last: usize,
+counts: [2]u32,
+reviewed: bool = false,

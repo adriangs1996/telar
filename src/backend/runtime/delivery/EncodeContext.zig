@@ -1,3 +1,4 @@
+const ReviewResult = @import("../../change_review/Result.zig");
 const PaneStoreType = @import("../../pane/PaneStore.zig");
 const ReaderType = @import("../../workspace/Reader.zig");
 const QueryResultType = @import("../../history/QueryResult.zig");
@@ -12,3 +13,5 @@ history_result: *?*QueryResultType,
 history_output: *?*OutputResultType,
 history_stats: *?*StatsResultType,
 agent_history: ?*?*@import("OwnedAgentHistoryPage.zig") = null,
+
+change_review: ?*?*ReviewResult = null,

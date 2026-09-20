@@ -140,6 +140,16 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
         ),
         .notification_shown => |shown| try encodeNotificationShown_module(buffer, shown),
         .agent_sound => |sound| try encodeAgentSound_module(buffer, sound),
+        .change_review => |result| payload: {
+            if (context.change_review) |owned| {
+                owned.* = result;
+            }
+            if (result.len > buffer.len) {
+                return error.NoSpaceLeft;
+            }
+            @memcpy(buffer[0..result.len], result.bytes[0..result.len]);
+            break :payload buffer[0..result.len];
+        },
         .agent_history_page => |result| payload: {
             if (context.agent_history) |owned| {
                 owned.* = result;

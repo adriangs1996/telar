@@ -1,0 +1,3 @@
+The bundled Kotlin highlight query derives from nvim-treesitter under Apache-2.0.
+Source: https://github.com/nvim-treesitter/nvim-treesitter/blob/f8ab59861eed4a1c168505e3433462ed800f2bae/queries/kotlin/highlights.scm
+The ast-grep grammar itself is MIT licensed; see LICENSE.

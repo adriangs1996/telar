@@ -7,6 +7,7 @@ const TerminalTheme = @import("../appearance/TerminalTheme.zig");
 const Overrides = @import("../appearance/Overrides.zig");
 const themes = @import("../appearance/theme_support.zig");
 const Color = @import("telar-core").Color;
+const SyntaxRole = @import("../syntax/role.zig").Role;
 const Parser = @This();
 
 state: *lua.lua_State,
@@ -56,7 +57,7 @@ pub fn parse(parser: Parser, index: c_int, initial: Theme) !Theme {
         return parser.invalid("config.theme must be a name or table");
     }
 
-    try value.ensureOnlyFields(parser.state, .{ .index = absolute, .allowed = &.{ "base", "colors", "terminal" }, .path = "config.theme" }, parser.diagnostic);
+    try value.ensureOnlyFields(parser.state, .{ .index = absolute, .allowed = &.{ "base", "colors", "terminal", "syntax" }, .path = "config.theme" }, parser.diagnostic);
     var result = initial;
     _ = lua.lua_getfield(parser.state, absolute, "base");
     if (lua.lua_type(parser.state, -1) != lua.LUA_TNIL) {
@@ -79,7 +80,57 @@ pub fn parse(parser: Parser, index: c_int, initial: Theme) !Theme {
         result.terminal = try parser.terminal(result.terminal);
     }
     value.pop(parser.state, 1);
+
+    _ = lua.lua_getfield(parser.state, absolute, "syntax");
+    if (lua.lua_type(parser.state, -1) != lua.LUA_TNIL) {
+        try parser.syntax(&result);
+    }
+    value.pop(parser.state, 1);
     return result;
+}
+
+fn syntax(self: Parser, theme: *Theme) !void {
+    if (lua.lua_type(self.state, -1) != lua.LUA_TTABLE) {
+        return self.invalid("theme.syntax must be a table of syntax roles");
+    }
+
+    const index = lua.lua_absindex(self.state, -1);
+    lua.lua_pushnil(self.state);
+    while (lua.lua_next(self.state, index) != 0) {
+        const key = value.string(self.state, -2) orelse return self.invalid("theme.syntax roles must be strings");
+        const role = std.meta.stringToEnum(SyntaxRole, key) orelse {
+            self.diagnostic.set("unknown syntax role '{s}'", .{key});
+            return error.InvalidConfig;
+        };
+        var style = theme.syntaxStyle(role);
+        if (lua.lua_type(self.state, -1) == lua.LUA_TTABLE) {
+            try value.ensureOnlyFields(self.state, .{ .index = -1, .allowed = &.{ "fg", "italic", "bold" }, .path = "theme.syntax style" }, self.diagnostic);
+            const entry = lua.lua_absindex(self.state, -1);
+            _ = lua.lua_getfield(self.state, entry, "fg");
+            if (lua.lua_type(self.state, -1) != lua.LUA_TNIL) {
+                style.color = try self.color(key);
+            }
+            value.pop(self.state, 1);
+
+            inline for (.{ "italic", "bold" }) |field| {
+                _ = lua.lua_getfield(self.state, entry, field);
+                const kind = lua.lua_type(self.state, -1);
+                if (kind != lua.LUA_TNIL) {
+                    if (kind != lua.LUA_TBOOLEAN) {
+                        return self.invalid("theme.syntax italic and bold must be booleans");
+                    }
+
+                    @field(style, field) = lua.lua_toboolean(self.state, -1) != 0;
+                }
+                value.pop(self.state, 1);
+            }
+        } else {
+            style.color = try self.color(key);
+        }
+
+        theme.syntax_styles.set(role, style);
+        value.pop(self.state, 1);
+    }
 }
 
 /// Appearance variants use the same complete theme and retain profile inheritance.

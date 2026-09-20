@@ -144,6 +144,18 @@ configured, `prefix+?` (`telar.action.suggest_command()`) opens the
 pane's working directory, its last visible rows and your request to the
 engine, and Enter pastes the answer without running it.
 
+`client.editor` selects the executable used to open local file links. For example,
+`client = { editor = "/opt/homebrew/bin/nvim" }` works without `$EDITOR` in the
+GUI environment. The value must be a nonempty executable name or path, at most
+4096 bytes. It is executed directly, with the file path as a separate argument;
+shell commands, flags and `~` expansion are not interpreted. A bare name is
+resolved using the runtime's `PATH`.
+
+The selected profile can override the base value. Removing the option restores
+the client's startup `$EDITOR`; if neither is set, opening a file reports
+`EditorUnavailable`. Reloading the configuration changes future file openings
+without restarting existing editor panes.
+
 `client.icons` accepts `"unicode"`, the default, or `"nerd-font"`. The Nerd
 Font theme uses a glyph subset embedded in Telar and does not require a Nerd
 Font in the host terminal. It needs Kitty Graphics support and RGB theme
@@ -177,15 +189,36 @@ colors too; child truecolor and OSC overrides still apply. The `terminal`
 preset uses host-relative chrome roles and a neutral explicit palette in the
 GUI, which has no exterior terminal to inherit from.
 
-To customize a preset, use the table form. Both sections are optional:
+To customize a preset, use the table form. Each section is optional:
 
 ```lua
 theme = telar.theme({
   base = "vesper",
   colors = { accent = "#a8c98c" },
   terminal = { background = "#111c18", cursor_color = "#a8c98c" },
+  syntax = {
+    keyword = "#a0a0a0",
+    func = "#a8c98c",
+    parameter = { fg = "#add0c5", italic = true },
+  },
 })
 ```
+
+`syntax` overrides code colors and styles independently of chrome and ANSI.
+Its roles are `plain`, `keyword`, `string`, `number`, `comment`, `constant`,
+`builtin_constant`, `builtin`, `func`, `type`, `parameter`, `property`,
+`namespace`, `operator` and `punctuation`. A role accepts a color string or a
+table with `fg`, `italic` and `bold`. Omitted fields inherit their current
+values; selecting a new preset replaces the complete theme. Colors accept
+`#RRGGBB` or `"default"`.
+
+Shade defines explicit syntax styles from the Osaka Jade Neovim palette:
+gray keywords, green functions, pale green types, peach numbers and italic
+mint parameters. Other presets derive unspecified roles from their chrome
+palette. Explicit `syntax` values take precedence over these defaults.
+The native diff viewer uses bundled Tree-sitter grammars and highlight queries.
+Available categories depend on each language's query; defining a style does
+not enable LSP semantic analysis. Theme changes recolor retained tokens.
 
 `colors` overrides chrome roles such as `accent`, `panel_bg`, `text` and
 `surface0`. These accept `#RRGGBB` or `"default"`. `terminal` accepts explicit

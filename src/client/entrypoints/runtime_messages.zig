@@ -33,6 +33,20 @@ pub fn dispatch(client: anytype, message: ServerMessageType, comptime Adapters: 
     const workspace_snapshots = Adapters.workspace_snapshots;
 
     switch (message) {
+        .change_review_changed => |notification| {
+            if (@hasDecl(Adapters, "change_review")) {
+                _ = Adapters.change_review.changed(client, notification);
+            } else {
+                return error.ChangeReviewUnsupported;
+            }
+        },
+        .change_review_snapshot => |snapshot| {
+            if (@hasDecl(Adapters, "change_review")) {
+                _ = try Adapters.change_review.apply(client, snapshot);
+            } else {
+                return error.ChangeReviewUnsupported;
+            }
+        },
         .agent_history_page => |page| {
             if (@hasDecl(Adapters, "agent_history")) {
                 _ = try Adapters.agent_history.apply(client, page);

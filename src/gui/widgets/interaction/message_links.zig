@@ -1,4 +1,6 @@
 //! Resolves delivered Markdown hits against their exact live message snapshot.
+const client = @import("telar-client");
+const PointerRouting = @import("../../input/PointerRouting.zig");
 const std = @import("std");
 const GuiClient = @import("../../GuiClient.zig");
 const Target = @import("Target.zig");
@@ -48,7 +50,7 @@ pub fn refresh(gui: *GuiClient) void {
     const state = &gui.widgets;
     const event = gui.input.pointer.hover.event;
     const target: ?Target = if (event) |pointer| state.dispatcher.maps.presented().at(.{ pointer.x, pointer.y }) else null;
-    if (!gui.focused or state.thread_selection.dragging or state.tab_drag.captured or gui.app.model.name_prompt.active() or state.dispatcher.maps.presented().modal_layer != 0 or state.composer_menu.selector != null or event == null or target == null or target.?.action != .message_link or !@import("../../input/PointerRouting.zig").geometryMatches(&gui.app)) {
+    if (!gui.focused or state.thread_selection.dragging or state.tab_drag.captured or gui.app.model.name_prompt.active() or state.dispatcher.maps.presented().modal_layer != 0 or state.composer_menu.selector != null or event == null or target == null or target.?.action != .message_link or !PointerRouting.geometryMatches(&gui.app)) {
         clear(gui);
         return;
     }
@@ -79,4 +81,26 @@ pub fn clear(gui: *GuiClient) void {
         gui.widgets.message_link_preview = null;
         gui.widgets.dispatcher.revision +%= 1;
     }
+}
+
+/// Opens only a still-current local destination after a completed click.
+/// Example: `try message_links.open(gui, control);`
+pub fn open(gui: *GuiClient, control: Control) !void {
+    if (!PointerRouting.geometryMatches(&gui.app) or gui.app.model.name_prompt.active() or gui.widgets.composer_menu.selector != null) {
+        return;
+    }
+
+    const source = destination(gui, control) orelse return;
+    const decoded = Destination.init(source) catch return;
+    const text = decoded.text();
+    if (!std.mem.startsWith(u8, text, "/") and !std.ascii.startsWithIgnoreCase(text, "file:")) {
+        return;
+    }
+
+    const path = client.FilePath.fromDestination(text) catch |err| {
+        try client.controllers.notifications.publishNow(&gui.app, .{ .level = .warning, .title = "Could not open link", .message = @errorName(err) });
+        return;
+    };
+    _ = try client.controllers.link_openings.openMessageFile(&gui.app, control.owner.pane_id, path);
+    clear(gui);
 }

@@ -6,6 +6,63 @@ const Session = @import("Session.zig");
 const Regions = @import("../widgets/Regions.zig");
 const HitMap = @import("../widgets/HitMap.zig");
 const bar_regions = @import("../widgets/bar_regions.zig");
+const Rect = @import("../render/Rect.zig");
+
+test "native pane frames use the smaller pixel gutter on both axes" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    const model = fixture.session.gui.app.model.activeTabModel().?;
+    const second: core.PaneId = @enumFromInt(20);
+    const third: core.PaneId = @enumFromInt(21);
+    const area = fixture.projection().geometry.area;
+    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = area });
+    try model.split(.{ .existing_pane = second, .new_pane = third, .location = Session.location, .axis = .vertical, .area = area });
+    const renderer = &fixture.session.renderer;
+    for ([_][2]u16{ .{ 9, 19 }, .{ 19, 9 }, .{ 12, 12 } }) |cell| {
+        renderer.metrics.cell_width = cell[0];
+        renderer.metrics.cell_height = cell[1];
+        try fixture.resize(120, 40);
+        for ([_]bool{ true, false }) |gaps| {
+            _ = model.layout.setPaneGaps(gaps);
+            const projection = fixture.projection();
+            try fixture.paint(projection);
+            var layout: client.LayoutSnapshot = .{};
+            model.layout.snapshot(projection.geometry.area, &layout);
+            var frames: [3]Rect = undefined;
+            for (layout.views(), &frames) |view, *frame| {
+                const original = renderer.metrics.rect(renderer.origin, view.outer);
+                var found = false;
+                for (renderer.quads.items()) |quad| {
+                    if (quad.border == 1 and quad.x == original.x and quad.y == original.y) {
+                        frame.* = .{ .x = quad.x, .y = quad.y, .width = quad.width, .height = quad.height };
+                        found = true;
+                        break;
+                    }
+                }
+
+                try std.testing.expect(found);
+                const content = renderer.metrics.rect(renderer.origin, view.content);
+                try std.testing.expect(frame.x <= content.x and frame.y <= content.y);
+                try std.testing.expect(frame.x + frame.width >= content.x + content.width);
+                try std.testing.expect(frame.y + frame.height >= content.y + content.height);
+                if (frame.width > original.width or frame.height > original.height) {
+                    const point = if (frame.width > original.width)
+                        Rect{ .x = original.x + original.width, .y = original.y, .width = 1, .height = 1 }
+                    else
+                        Rect{ .x = original.x, .y = original.y + original.height, .width = 1, .height = 1 };
+                    try std.testing.expectEqualDeep(client.Intent{ .focus_pane = view.pane_id }, fixture.clickBand(point, 0).intent);
+                }
+            }
+
+            const expected: f32 = if (gaps) @floatFromInt(@min(cell[0], cell[1])) else 0;
+            try std.testing.expectEqual(expected, frames[1].x - frames[0].x - frames[0].width);
+            try std.testing.expectEqual(expected, frames[2].y - frames[1].y - frames[1].height);
+            const workbench = renderer.metrics.rect(renderer.origin, projection.geometry.area);
+            try std.testing.expectEqual(workbench.x + workbench.width, frames[2].x + frames[2].width);
+            try std.testing.expectEqual(workbench.y + workbench.height, frames[2].y + frames[2].height);
+        }
+    }
+}
 
 test "native chrome geometry gives the workbench every grid cell of every host" {
     for ([_]u16{ 1, 2, 3, 10, 40 }) |height| {

@@ -532,7 +532,7 @@ fn parseClient(generation: *Generation, index: c_int, diagnostic: *DiagnosticTyp
     }
     try lua_value.ensureOnlyFields(state, .{
         .index = absolute,
-        .allowed = &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "history" },
+        .allowed = &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "editor", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "history" },
         .path = "config.client",
     }, diagnostic);
 
@@ -577,6 +577,24 @@ fn parseClient(generation: *Generation, index: c_int, diagnostic: *DiagnosticTyp
             return error.InvalidConfig;
         }
         generation.snapshot.pane_gaps = lua_api.c.lua_toboolean(state, -1) != 0;
+    }
+    lua_value.pop(state, 1);
+
+    _ = lua_api.c.lua_getfield(state, absolute, "editor");
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
+        const editor = lua_value.string(state, -1) orelse {
+            lua_value.pop(state, 1);
+            diagnostic.set("config.client.editor must be a string", .{});
+            return error.InvalidConfig;
+        };
+        if (editor.len == 0 or editor.len > config_model.max_editor_bytes or !std.unicode.utf8ValidateSlice(editor) or generation_support.hasControlBytes(editor)) {
+            lua_value.pop(state, 1);
+            diagnostic.set("config.client.editor must be a nonempty executable name or path of at most {d} bytes", .{config_model.max_editor_bytes});
+            return error.InvalidConfig;
+        }
+
+        @memcpy(generation.snapshot.editor_bytes[0..editor.len], editor);
+        generation.snapshot.editor_len = @intCast(editor.len);
     }
     lua_value.pop(state, 1);
 

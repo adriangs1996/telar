@@ -59,6 +59,8 @@ const PaneResizeType = @import("telar-core").PaneResize;
 const FrameAckType = @import("telar-core").FrameAck;
 const encodeCompleteClientCommand = @import("telar-core").encodeCompleteClientCommand;
 const ClientCommand = @import("telar-core").ClientCommand;
+const max_argument_count = @import("telar-core").max_argument_count;
+const core = @import("telar-core");
 const Outbox = @This();
 
 items: [outbox_support.capacity]outbox_support.Message = undefined,
@@ -130,7 +132,7 @@ pub fn push(outbox: *Outbox, message: outbox_support.Message) !void {
                 }
             }
         },
-        .pane_input, .agent_prompt, .query_agent_history, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout, .complete_client_command => unreachable,
+        .pane_input, .agent_prompt, .query_agent_history, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout, .query_change_review, .change_review_command, .complete_client_command => unreachable,
         else => {},
     }
     try outbox.append(message);
@@ -220,6 +222,28 @@ pub fn pushAgentHistory(outbox: *Outbox, query: @import("telar-core").QueryAgent
     @memcpy(outbox.input_bytes[index][query.cursor.len + query.anchor.len ..][0..query.anchor_turn.len], query.anchor_turn);
 }
 
+/// Owns the complete encoded command in an existing byte slot before input returns.
+/// Example: `try outbox.pushChangeReviewCommand(command);`
+pub fn pushChangeReviewCommand(self: *Outbox, command: core.ChangeReviewCommand) !void {
+    try self.pushReview(command);
+}
+
+/// Owns the provider conversation identity before a review changes or closes.
+/// Example: `try outbox.pushChangeReviewQuery(query);`
+pub fn pushChangeReviewQuery(self: *Outbox, query: core.QueryChangeReview) !void {
+    try self.pushReview(query);
+}
+
+fn pushReview(self: *Outbox, value: anytype) !void {
+    const query = @TypeOf(value) == core.QueryChangeReview;
+    var scratch: [root.max_encoded_bytes]u8 = undefined;
+    const encoded = if (query) try core.encodeQueryChangeReview(&scratch, value) else try core.encodeChangeReviewCommand(&scratch, value);
+    const index = try self.reserve();
+    self.item_launch_cwd[index] = null;
+    self.items[index] = if (query) .{ .query_change_review = @intCast(encoded.len) } else .{ .change_review_command = @intCast(encoded.len) };
+    @memcpy(self.input_bytes[index][0..encoded.len], encoded);
+}
+
 /// Reserves a whole bounded paste before copying any chunk into the queue.
 /// Example: `try outbox.pushInputBatch(pane_id, encoded_paste);`.
 pub fn pushInputBatch(outbox: *Outbox, pane_id: PaneIdType, bytes: []const u8) !void {
@@ -297,7 +321,6 @@ pub fn pushCreateTab(outbox: *Outbox, request: CreateTabType) !void {
         .launch = request.launch,
     };
     @memcpy(owned.label[0..request.label.len], request.label);
-    _ = owned.ownArguments(request.launch.arguments);
     try outbox.append(.{ .create_tab = owned });
 }
 
@@ -427,18 +450,18 @@ fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
         .detach_pane => |value| encodeDetachPane_module(buffer, value),
         .request_tab_snapshot => |value| encodeRequestTabSnapshot_module(buffer, value),
         .create_pane => |value| {
-            var owned = value;
+            var scratch: [max_argument_count][]const u8 = undefined;
+            var owned = value.view(&outbox.input_bytes[outbox.head], &scratch);
             owned.launch.cwd = outbox.launchCwd(outbox.head);
             return encodeCreatePane_module(buffer, owned);
         },
         .close_pane => |value| encodeClosePane_module(buffer, value),
         .request_workspace_snapshot => |value| encodeRequestWorkspaceSnapshot_module(buffer, value),
         .create_tab => |*value| encode: {
-            var argument_scratch: [OwnedCreateTab.max_owned_arguments][]const u8 = undefined;
-            break :encode encodeCreateTab_module(
-                buffer,
-                value.view(outbox.launchCwd(outbox.head), &argument_scratch),
-            );
+            var scratch: [max_argument_count][]const u8 = undefined;
+            var owned = value.view(&outbox.input_bytes[outbox.head], &scratch);
+            owned.launch.cwd = outbox.launchCwd(outbox.head);
+            break :encode encodeCreateTab_module(buffer, owned);
         },
         .rename_tab => |*value| encodeRenameTab_module(buffer, .{
             .request_id = value.request_id,
@@ -477,6 +500,7 @@ fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
         .agent_interrupt => |value| @import("telar-core").encodeAgentInterrupt(buffer, value),
         .agent_resume => |value| @import("telar-core").encodeAgentResume(buffer, value),
         .agent_approval => |value| @import("telar-core").encodeAgentApproval(buffer, value),
+        .query_change_review, .change_review_command => |len| outbox.input_bytes[outbox.head][0..len],
         .query_agent_thread => |value| @import("telar-core").encodeQueryAgentThread(buffer, value),
         .query_agent_history => |*value| @import("telar-core").encodeQueryAgentHistory(buffer, value.view(&outbox.input_bytes[outbox.head])),
     };
@@ -489,8 +513,16 @@ fn append(outbox: *Outbox, message: outbox_support.Message) !void {
         null;
     errdefer if (launch_slot) |slot| outbox.releaseLaunchSlot(slot);
     const index = try outbox.reserve();
+    errdefer outbox.len -= 1;
+    var owned = message;
+    if (owned == .create_pane) {
+        try owned.create_pane.ownArguments(&outbox.input_bytes[index]);
+    } else if (owned == .create_tab) {
+        try owned.create_tab.ownArguments(&outbox.input_bytes[index]);
+    }
+
     outbox.item_launch_cwd[index] = launch_slot;
-    outbox.items[index] = message;
+    outbox.items[index] = owned;
 }
 
 fn claimLaunchCwd(outbox: *Outbox, cwd: []const u8) !u8 {

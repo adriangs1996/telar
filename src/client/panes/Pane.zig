@@ -1,5 +1,6 @@
 const InitialType = @import("Initial.zig");
 const std = @import("std");
+const builtin = @import("builtin");
 const PaneIdType = @import("telar-core").PaneId;
 const TabLocationType = @import("telar-core").TabLocation;
 const BufferType = @import("telar-core").Buffer;
@@ -140,6 +141,22 @@ pub fn applyFrame(pane: *Pane, frame: FrameViewType) !AppliedType {
         null;
     const resized = pane.buffer.w != frame.cols or pane.buffer.h != frame.rows;
     if (resized and frame.base_frame_id != 0) {
+        if (!builtin.is_test) {
+            std.log.err(
+                "pane {any}: patch frame={d} base={d}, applied={d}, incoming={d}x{d}, buffer={d}x{d}",
+                .{
+                    pane.id,
+                    frame.frame_id,
+                    frame.base_frame_id,
+                    pane.applied_frame_id,
+                    frame.cols,
+                    frame.rows,
+                    pane.buffer.w,
+                    pane.buffer.h,
+                },
+            );
+        }
+
         return error.PatchSizeMismatch;
     }
 

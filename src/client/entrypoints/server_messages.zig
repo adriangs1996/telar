@@ -6,6 +6,7 @@ const Client = @import("../AttachedClient.zig");
 const ServerMessageType = @import("telar-core").ServerMessage;
 const dispatch_module = @import("runtime_messages.zig").dispatch;
 
+pub const change_review = @import("../controllers/change_review/change_review.zig");
 pub const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
 pub const agent_snapshots = @import("../controllers/agents/agent_snapshots.zig");
 pub const agent_history = @import("../controllers/agents/agent_history.zig");

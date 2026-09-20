@@ -36,76 +36,10 @@ const FrameClock = @import("src/gui/animation/FrameClock.zig");
 const Services = @import("src/gui/host/Services.zig");
 const GenericEventPool = @import("src/gui/input/GenericEventPool.zig").Type;
 
-// Put your widget and its state here. Other widgets can be declared in this
-// same file and composed by draw through their own draw(canvas) methods.
-const MyWidget = struct {
-    host: Services = .{},
-
-    /// Draws synchronously; the GPU retains only renderer-owned frame resources.
-    /// Register each interactive part with its painted bounds and a distinct
-    /// custom action. The dispatcher then owns focus, hover and pointer capture.
-    /// Example: try widget.draw(canvas);
-    pub fn draw(widget: *const MyWidget, canvas: *Canvas) !void {
-        _ = widget;
-        const bounds: Rect = .{ .x = 0, .y = 0, .width = @floatFromInt(canvas.viewport[0]), .height = @floatFromInt(canvas.viewport[1]) };
-        _ = try canvas.widgets.?.dispatcher.add(.{
-            .id = .{ .generation = 1 },
-            .bounds = bounds,
-            .action = .{ .custom = 1 },
-            .role = 6,
-        });
-
-        // Replace this label with your own drawing and widget composition.
-        _ = try canvas.textAt(bounds, .{ .text = "MyWidget", .face = .sans, .size = .body });
-
-        // Animated widgets sample canvas.animation and request their next frame,
-        // for example: const step = canvas.animation.?.step(16_666_667);
-    }
-
-    /// Receives semantic events and their delivered target. Text is borrowed
-    /// until this call returns; copy it into your state if you need to keep it.
-    /// Return true when your state changed and should be drawn again.
-    /// Example: const changed = try widget.input(event, route);
-    pub fn input(widget: *MyWidget, event: Event, route: Route) !bool {
-        _ = widget;
-        _ = route;
-        switch (event) {
-            .key => |key| {
-                _ = key;
-            },
-            .text => |text| {
-                _ = text;
-            },
-            .pointer => |pointer| {
-                _ = pointer;
-            },
-            .scroll => |scroll| {
-                _ = scroll;
-            },
-            else => {},
-        }
-
-        return false;
-    }
-
-    /// An editor supplies current UTF-8 text, byte selection and delivered caret
-    /// geometry here. The host copies this synchronous borrow for native IME.
-    /// Example: if (widget.textContext(out)) publishTextContext(out);
-    pub fn textContext(widget: *const MyWidget, out: *native.TextContext) bool {
-        _ = widget;
-        out.* = .{};
-        return false;
-    }
-
-    /// Exposes your widget's native roles and actions. Any node storage must
-    /// belong to the widget; the host copies it before this call returns.
-    /// Example: if (widget.accessibility(out)) publishAccessibility(out);
-    pub fn accessibility(widget: *const MyWidget, out: *native.AccessibilityTree) bool {
-        _ = widget;
-        out.* = .{};
-        return false;
-    }
-};
+const Fixture = @import("src/gui/experiments/review/fixture.zig");
+const LiveReview = @import("src/gui/experiments/review/live_review.zig");
+const LiveBridge = @import("src/gui/experiments/review/LiveBridge.zig");
+const MyWidget = @import("src/gui/change_review/Widget.zig");
 
 const Completion = struct { token: u64, delivered: bool };
 
@@ -160,6 +94,7 @@ const Runner = struct {
     io: std.Io,
     renderer: Renderer,
     widget: MyWidget = .{},
+    live: ?*LiveBridge = null,
     widgets: WidgetState = .{},
     inbox: Inbox = .{},
     animation: FrameClock = .{},
@@ -178,12 +113,17 @@ const Runner = struct {
         if (native.telar_gui_pipe(&runner.fds) != 0) {
             return error.NativeWakePipeFailed;
         }
+        errdefer native.telar_gui_close_pipe(&runner.fds);
+        try Fixture.prepare(&runner.widget, gpa, io);
 
         return runner;
     }
 
     fn deinit(runner: *Runner) void {
         // The native loop has stopped its consumers before these buffers die.
+        if (runner.live) |bridge| {
+            bridge.deinit();
+        }
         native.telar_gui_close_pipe(&runner.fds);
         runner.renderer.deinit();
     }
@@ -244,6 +184,7 @@ const Runner = struct {
         const revision = runner.widgets.dispatcher.revision;
         runner.widgets.dispatcher.present(result.delivered);
         runner.widgets.editors.present(result.delivered);
+        runner.widget.present(result.delivered);
         if (result.delivered and !runner.focus_initialized) {
             runner.focus_initialized = true;
             const registry = runner.widgets.dispatcher.maps.presented();
@@ -267,7 +208,7 @@ const Runner = struct {
 
         const revision = runner.widgets.dispatcher.revision;
         defer runner.dirty = runner.dirty or revision != runner.widgets.dispatcher.revision;
-        var route = runner.widgets.dispatcher.route(event);
+        var route = if (event == .key and runner.widget.ownsKey(event.key)) runner.widgets.dispatcher.editorKey(event.key) else runner.widgets.dispatcher.route(event);
         if (event == .accessibility) {
             const action = event.accessibility;
             route.target = runner.widgets.dispatcher.maps.presented().find(.{ .target_id = action.target_id, .generation = action.generation }) orelse return;
@@ -308,6 +249,10 @@ pub fn main(init: std.process.Init) !void {
     defer init.gpa.destroy(runner);
     runner.* = try Runner.init(init.gpa, init.io);
     defer runner.deinit();
+    if (std.process.Environ.getPosix(init.minimal.environ, "TELAR_REVIEW_SOCKET")) |path| {
+        runner.live = try LiveBridge.open(init, .{ .path = path, .wake_fd = runner.fds[1] });
+        try LiveReview.load(&runner.widget, runner.live.?.initial.?);
+    }
     const callbacks: native.Callbacks = .{
         .render = render,
         .pump = pump,
@@ -383,6 +328,7 @@ fn pump(context: ?*anyopaque) callconv(.c) c_int {
         return 0;
     }
 
+    runner.dirty = (if (runner.live) |bridge| LiveReview.pump(&runner.widget, bridge) else false) or runner.dirty;
     return @intFromBool(runner.dirty or runner.animation.requestPreparation(runner.now()));
 }
 
@@ -444,6 +390,7 @@ pub fn addBuild(b: *std.Build, app: @import("build/Application.zig")) void {
     module.addImport("telar-client", app.modules.client);
     module.addImport("assets", app.modules.assets);
     module.addImport("freetype", app.modules.freetype);
+    module.addObjectFile(app.modules.syntax_library.?);
     module.addCSourceFile(.{ .file = b.path("src/gui/native/wake.c"), .flags = &.{} });
     if (os == .macos) {
         @import("build/macos_gui.zig").add(b, module, app.coverage.enabled);
@@ -459,7 +406,7 @@ pub fn addBuild(b: *std.Build, app: @import("build/Application.zig")) void {
         run.addArgs(args);
     }
     b.step("run-widget", "Run your widget with Telar's native GUI plumbing").dependOn(&run.step);
-    const tests = b.addTest(.{ .root_module = module, .filters = &.{"widget runner"} });
+    const tests = b.addTest(.{ .root_module = module, .filters = &.{ "widget runner", "review prototype" } });
     b.step("test-widget", "Check widget runner input and presentation ownership").dependOn(&b.addRunArtifact(tests).step);
 }
 
@@ -490,11 +437,14 @@ test "widget runner retains resources and delivered geometry until matching comp
 
     const resized = try runner.prepare(.{ .width = 320, .height = 200, .scale = 1 });
     try runner.inbox.push(.{ .pointer = .{ .kind = .press, .x = 700, .y = 400 } });
+    try runner.inbox.drain(runner);
+    // The click still uses the old delivered geometry while resize is in flight.
+    try std.testing.expect(runner.widgets.dispatcher.captures[0] != null);
     complete(runner, resized.token, 1);
     complete(runner, resized.token, 1);
     _ = pump(runner);
-    // The click preceded completion and therefore hit the old 800x480 widget.
-    try std.testing.expect(runner.widgets.dispatcher.captures[0] != null);
+    // A code fragment retired by wrapping sinks its eventual pointer release.
+    try std.testing.expect(runner.widgets.dispatcher.captures[0] != null or runner.widgets.dispatcher.discarded[0]);
     try std.testing.expectEqual(@as(f32, 320), runner.widgets.dispatcher.maps.presented().targets[0].bounds.width);
     try std.testing.expect(runner.dirty);
 
@@ -529,4 +479,139 @@ test "widget runner copies native payloads and reserves completion capacity" {
     try runner.inbox.drain(runner);
     try std.testing.expectEqual(@as(usize, 0), runner.inbox.len);
     try runner.inbox.push(.{ .paste = "reused" });
+}
+
+const review_actions = @import("src/gui/change_review/action.zig");
+const ReviewInput = @import("src/gui/change_review/input.zig");
+const ReviewTarget = @import("src/gui/widgets/interaction/Target.zig");
+
+fn reviewFrame(runner: *Runner) !void {
+    const frame = try runner.prepare(.{ .width = 1100, .height = 720, .scale = 1 });
+    runner.finish(.{ .token = frame.token, .delivered = true });
+}
+
+test "review prototype native editor keeps navigation text literal and rejects retired owners" {
+    const runner = try testRunner();
+    defer std.testing.allocator.destroy(runner);
+    defer runner.deinit();
+    try reviewFrame(runner);
+    try runner.dispatch(.{ .text = .{ .bytes = "j" } });
+    try runner.dispatch(.{ .text = .{ .bytes = "c" } });
+    const anchor = runner.widget.model.comments[0].anchor;
+    try reviewFrame(runner);
+    const target = runner.widgets.dispatcher.focusedTarget().?;
+    try std.testing.expectEqual(review_actions.Kind.editor, review_actions.kind(target.action.custom).?);
+    try runner.dispatch(.{ .text = .{ .bytes = "c j k n p t · café 界" } });
+    try std.testing.expectEqualStrings("c j k n p t · café 界", runner.widget.model.comments[0].body.text());
+    try std.testing.expectEqual(anchor.last, runner.widget.model.head);
+    var context: native.TextContext = .{};
+    try std.testing.expect(runner.widget.textContext(&context));
+    try std.testing.expectEqualStrings(runner.widget.model.comments[0].body.text(), context.text.?[0..context.len]);
+    try runner.dispatch(.{ .key = .{ .code = .enter, .mods = .{ .super = true } } });
+    try std.testing.expect(runner.widget.model.editing == null);
+    try std.testing.expect(!runner.widget.model.comments[0].draft);
+    try std.testing.expect(!try runner.widget.input(.{ .text = .{ .bytes = "late" } }, .{ .target = target, .consumed = true }));
+    try std.testing.expectEqualDeep(anchor, runner.widget.model.comments[0].anchor);
+    try reviewFrame(runner);
+    ReviewInput.activate(&runner.widget, .{ .kind = .simulate });
+    ReviewInput.activate(&runner.widget, .{ .kind = .version });
+    try reviewFrame(runner);
+    try std.testing.expectEqual(@as(usize, 1), runner.widget.model.revision);
+    try std.testing.expectEqualDeep(anchor, runner.widget.model.comments[0].anchor);
+    ReviewInput.activate(&runner.widget, .{ .kind = .version });
+    try reviewFrame(runner);
+    try std.testing.expectEqualStrings("c j k n p t · café 界", runner.widget.model.comments[0].body.text());
+}
+
+test "review prototype composition cancellation capacity and clipboard preserve committed drafts" {
+    const runner = try testRunner();
+    defer std.testing.allocator.destroy(runner);
+    defer runner.deinit();
+    try reviewFrame(runner);
+    try runner.dispatch(.{ .text = .{ .bytes = "c" } });
+    try reviewFrame(runner);
+    try runner.dispatch(.{ .text = .{ .bytes = "base" } });
+    const target = runner.widgets.dispatcher.focusedTarget().?;
+    try runner.dispatch(.{ .composition = .{ .target_id = target.id.target_id, .generation = target.id.generation, .text = "界", .selection_start = 3, .selection_end = 3 } });
+    try reviewFrame(runner);
+    try std.testing.expectEqualStrings("base", runner.widget.model.comments[0].body.text());
+    try runner.dispatch(.{ .key = .{ .code = .escape } });
+    try std.testing.expect(runner.widget.model.editing != null);
+    try std.testing.expect(runner.widgets.preedit.owner == null);
+    const large: [2049]u8 = @splat('a');
+    try runner.dispatch(.{ .paste = &large });
+    try std.testing.expectEqualStrings("base", runner.widget.model.comments[0].body.text());
+    try runner.dispatch(.{ .key = .{ .code = .{ .char = .{ .bytes = .{ 'v', 0, 0, 0 }, .len = 1 } }, .mods = .{ .super = true } } });
+    var request: native.HostRequest = .{};
+    try std.testing.expect(runner.widget.host.next(&request));
+    try runner.dispatch(.{ .text = .{ .bytes = " changed" } });
+    try runner.dispatch(.{ .clipboard = .{ .request_id = request.request_id, .target_id = request.target_id, .generation = request.generation, .text = "late paste", .status = .success } });
+    try std.testing.expectEqualStrings("base changed", runner.widget.model.comments[0].body.text());
+    try runner.dispatch(.{ .key = .{ .code = .escape } });
+    try std.testing.expect(runner.widget.model.editing == null);
+    try std.testing.expect(runner.widget.model.comments[0].draft);
+}
+
+test "review prototype gutter selection uses delivered rows and copies code without diff markers" {
+    const runner = try testRunner();
+    defer std.testing.allocator.destroy(runner);
+    defer runner.deinit();
+    try reviewFrame(runner);
+    var source_target: ?ReviewTarget = null;
+    const registry = runner.widgets.dispatcher.maps.presented();
+    for (registry.targets[0..registry.len]) |target| {
+        if (target.action == .custom and review_actions.kind(target.action.custom) == .code) {
+            source_target = target;
+            break;
+        }
+    }
+    const target = source_target.?;
+    try runner.dispatch(.{ .pointer = .{ .kind = .press, .x = target.bounds.x, .y = target.bounds.y + 3 } });
+    try runner.dispatch(.{ .pointer = .{ .kind = .drag, .x = target.bounds.x + runner.widget.cell * 2, .y = target.bounds.y + 3 } });
+    try runner.dispatch(.{ .pointer = .{ .kind = .release, .x = target.bounds.x + runner.widget.cell * 2, .y = target.bounds.y + 3 } });
+    try runner.dispatch(.{ .key = .{ .code = .{ .char = .{ .bytes = .{ 'c', 0, 0, 0 }, .len = 1 } }, .mods = .{ .super = true } } });
+    var request: native.HostRequest = .{};
+    try std.testing.expect(runner.widget.host.next(&request));
+    try std.testing.expectEqualStrings("fn", request.text.?[0..request.len]);
+    ReviewInput.activate(&runner.widget, .{ .kind = .next });
+    try std.testing.expectEqual(@as(usize, 1), runner.widget.model.file);
+}
+
+test "review prototype visual motions comment on ranges and escape restores single line navigation" {
+    const runner = try testRunner();
+    defer std.testing.allocator.destroy(runner);
+    defer runner.deinit();
+    try reviewFrame(runner);
+    try runner.dispatch(.{ .text = .{ .bytes = "j" } });
+    const start = runner.widget.model.head;
+    try runner.dispatch(.{ .text = .{ .bytes = "v" } });
+    try runner.dispatch(.{ .text = .{ .bytes = "j" } });
+    try runner.dispatch(.{ .key = .{ .code = .down } });
+    try std.testing.expect(runner.widget.model.visual);
+    try std.testing.expectEqual(start, runner.widget.model.tail);
+    try std.testing.expectEqual(start + 2, runner.widget.model.head);
+    try runner.dispatch(.{ .text = .{ .bytes = "k" } });
+    try std.testing.expectEqual(start + 1, runner.widget.model.head);
+    try runner.dispatch(.{ .text = .{ .bytes = "c" } });
+    const anchor = runner.widget.model.comments[0].anchor;
+    try std.testing.expectEqual(start, anchor.first);
+    try std.testing.expectEqual(start + 1, anchor.last);
+    try std.testing.expect(!runner.widget.model.visual);
+    try reviewFrame(runner);
+    try runner.dispatch(.{ .text = .{ .bytes = "v" } });
+    try std.testing.expectEqualStrings("v", runner.widget.model.comments[0].body.text());
+    try runner.dispatch(.{ .key = .{ .code = .enter, .mods = .{ .super = true } } });
+    try std.testing.expectEqualDeep(anchor, runner.widget.model.comments[0].anchor);
+    try reviewFrame(runner);
+    try runner.dispatch(.{ .text = .{ .bytes = "v" } });
+    try runner.dispatch(.{ .text = .{ .bytes = "j" } });
+    try runner.dispatch(.{ .key = .{ .code = .escape } });
+    try std.testing.expect(!runner.widget.model.visual);
+    try std.testing.expectEqual(runner.widget.model.head, runner.widget.model.tail);
+    try runner.dispatch(.{ .text = .{ .bytes = "j" } });
+    try std.testing.expectEqual(runner.widget.model.head, runner.widget.model.tail);
+}
+
+test {
+    _ = @import("src/gui/experiments/review/live_review_test.zig");
 }

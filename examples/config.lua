@@ -69,6 +69,7 @@ return telar.config({
   }),
 
   client = {
+    editor = "nvim", -- Executable name or path; takes precedence over $EDITOR.
     prefix = "ctrl+s",
     icons = "nerd-font",
     sidebar = { visible = true, renderer = "automatic" },

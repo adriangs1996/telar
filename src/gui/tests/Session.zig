@@ -27,6 +27,10 @@ agent_prompt_len: usize = 0,
 agent_images: core.AgentImages = .{},
 agent_request_id: core.RequestId = @enumFromInt(1),
 agent_tab_count: usize = 0,
+tab_creation_count: usize = 0,
+pane_creation_count: usize = 0,
+pane_creation_wire: [8192]u8 = undefined,
+pane_creation_len: usize = 0,
 approval_count: usize = 0,
 last_approval: ?core.AgentApproval = null,
 
@@ -130,7 +134,13 @@ pub fn settle(session: *Session) !void {
                 session.agent_images = try core.AgentImages.copy(value.images);
                 session.agent_request_id = value.request_id;
             },
+            .create_pane => {
+                session.pane_creation_count += 1;
+                @memcpy(session.pane_creation_wire[0..bytes.len], bytes);
+                session.pane_creation_len = bytes.len;
+            },
             .create_tab => |value| {
+                session.tab_creation_count += 1;
                 session.agent_tab_count += @intFromBool(value.kind == .agent);
             },
             .agent_approval => |value| {

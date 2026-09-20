@@ -7,6 +7,7 @@ pub const InputEvent = @import("InputEvent.zig").InputEvent;
 pub const Callbacks = @import("Callbacks.zig").Callbacks;
 pub const TextContext = @import("TextContext.zig").TextContext;
 pub const HostRequest = @import("HostRequest.zig").HostRequest;
+pub const WindowTitle = @import("WindowTitle.zig").WindowTitle;
 pub const AccessibilityNode = @import("AccessibilityNode.zig").AccessibilityNode;
 pub const AccessibilityTree = @import("AccessibilityTree.zig").AccessibilityTree;
 

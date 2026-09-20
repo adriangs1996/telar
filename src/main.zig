@@ -21,6 +21,7 @@ const pane_module = @import("cli/pane.zig");
 const workspace_module = @import("cli/workspace.zig");
 const api_module = @import("cli/api.zig");
 const hook_module = @import("cli/hook.zig");
+const review_module = @import("cli/review.zig");
 const integration_support = @import("cli/integration_support.zig");
 const proxy_module = @import("cli/proxy.zig");
 const skill_module = @import("cli/skill.zig");
@@ -109,6 +110,7 @@ pub fn main(init: std.process.Init) !void {
         .workspace => |options| std.process.exit(try workspace_module.run(init, options)),
         .api => |options| try api_module.run(init, options),
         .hook => |options| try hook_module.run(init, options),
+        .review => |options| std.process.exit(try review_module.run(init, options)),
         .integration => |options| std.process.exit(try integration_support.run(init, options)),
         .proxy => |options| std.process.exit(try proxy_module.run(init, options)),
         .skill => try skill_module.run(init),

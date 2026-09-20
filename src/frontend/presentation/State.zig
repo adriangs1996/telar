@@ -44,11 +44,22 @@ pub fn sync(state: *State, writer: *std.Io.Writer, input: SyncInput) !void {
     }
 
     var complete = input.tokens;
+
     if (complete.hostname.len == 0) {
         state.ensureHostname();
         complete.hostname = state.hostnameSlice();
     }
-    try state.title.sync(.{ .context = writer, .set = setTitle }, .{ .template = input.template, .tokens = complete });
+
+    _ = try state.title.sync(
+        .{
+            .context = writer,
+            .set = setTitle,
+        },
+        .{
+            .template = input.template,
+            .tokens = complete,
+        },
+    );
 }
 
 fn setTitle(context: *anyopaque, title: []const u8) !void {

@@ -2,6 +2,14 @@ const std = @import("std");
 const Fixture = @import("ConversationFixture.zig");
 const Text = @import("../widgets/MessageText.zig");
 const Paint = @import("../widgets/DiffPaint.zig");
+const client = @import("telar-client");
+const Canvas = @import("../widgets/Canvas.zig");
+const Color = @import("../render/Color.zig");
+const colors = @import("../render/cell_colors.zig");
+const CoreColor = @import("telar-core").Color;
+const Rect = @import("../render/Rect.zig");
+const Quad = @import("../render/Quad.zig").Quad;
+const SyntaxPaint = @import("../widgets/SyntaxPaint.zig");
 
 const source = "Updated /project/src/runtime.zig\n@@ -1409,3 +1409,4 @@\n const pane = workspace.find(id);\n-try pane.scroll(100);\n+try pane.scroll(0);\n+try pane.render(\"Café 界 🙂\");\n return pane;\nAdded src/new.zig\n@@ -0,0 +1 @@\n+const ready = true;\n";
 
@@ -83,6 +91,7 @@ test "diff source coordinates exclude generated gutters and preserve Unicode thr
 test "warm diff measurement and drawing allocate nothing and fenced patches reuse the painter" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
+    try fixture.enableSyntax(source);
     var canvas = fixture.canvas();
     var text = message("```patch\n" ++ source ++ "```\n");
     text.code = false;
@@ -100,4 +109,89 @@ test "warm diff measurement and drawing allocate nothing and fenced patches reus
     fixture.quads.clear();
     try text.draw(&canvas);
     try std.testing.expectEqual(@as(usize, 0), failing.allocated_bytes);
+}
+
+test "diff syntax follows every theme and recolors existing source after palette overrides" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    var canvas = fixture.canvas();
+    const text = message("Updated file.zig\n@@ -0,0 +1 @@\n+const x = 42; // comment\n");
+    try fixture.enableSyntax(text.text);
+    canvas.syntax = fixture.syntax;
+    inline for (std.meta.tags(client.theme_support.Builtin)) |theme| {
+        canvas.theme = client.theme_support.builtin(theme);
+        fixture.quads.clear();
+        try text.draw(&canvas);
+        try expectInk(&canvas, canvas.theme.syntax(.keyword));
+        try expectInk(&canvas, canvas.theme.syntax(.number));
+        try expectInk(&canvas, canvas.theme.syntax(.comment));
+    }
+
+    const override: CoreColor = .{ .rgb = .{ 17, 37, 227 } };
+    canvas.theme.syntax_styles.set(.keyword, .{ .color = override });
+    fixture.quads.clear();
+    try text.draw(&canvas);
+    try expectInk(&canvas, override);
+}
+
+fn expectInk(canvas: *const Canvas, color: CoreColor) !void {
+    const foreground = canvas.theme.terminal.foreground;
+    const expected = colors.withPalette(color, Color.rgb(foreground[0], foreground[1], foreground[2]), &canvas.theme.terminal.palette);
+    for (canvas.quads.items()) |quad| {
+        if (quad.a == 1 and @abs(quad.r - expected.r) < 0.001 and @abs(quad.g - expected.g) < 0.001 and @abs(quad.b - expected.b) < 0.001) {
+            return;
+        }
+    }
+
+    return error.ExpectedSyntaxInk;
+}
+
+test "syntax painting preserves grapheme positions and wrapped string roles" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    var canvas = fixture.canvas();
+    const code = "const café = \"e\u{301}界 🙂\";";
+    const area: Rect = .{ .x = 0, .y = 0, .width = 500, .height = 22 };
+    _ = try canvas.textAt(area, .{ .text = code, .color = canvas.theme.palette.text });
+    const original = try std.testing.allocator.dupe(Quad, fixture.quads.items());
+    defer std.testing.allocator.free(original);
+    fixture.quads.clear();
+    var roles: [code.len]client.SyntaxRole = @splat(.plain);
+    const offset = std.mem.indexOf(u8, code, "e\u{301}").?;
+    @memset(roles[offset .. code.len - 2], .string);
+    var paint: SyntaxPaint = .{ .source = code, .roles = &roles };
+    try paint.draw(&canvas, .{ .bounds = area, .text = code });
+    try std.testing.expectEqual(original.len, fixture.quads.items().len);
+    for (original, fixture.quads.items()) |before, after| {
+        try std.testing.expectEqual(before.x, after.x);
+        try std.testing.expectEqual(before.y, after.y);
+        try std.testing.expectEqual(before.width, after.width);
+        try std.testing.expectEqual(before.height, after.height);
+    }
+
+    fixture.quads.clear();
+    paint = .{ .source = code, .roles = &roles };
+    try paint.draw(&canvas, .{ .bounds = area, .text = code[offset .. code.len - 2] });
+    try expectInk(&canvas, canvas.theme.palette.green);
+}
+
+test "syntax painting applies theme italics and bold through the existing text renderer" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    var canvas = fixture.canvas();
+    const code = "\"context\"";
+    const area: Rect = .{ .x = 0, .y = 0, .width = 500, .height = 22 };
+    var style = canvas.theme.syntaxStyle(.parameter);
+    style.bold = true;
+    canvas.theme.syntax_styles.set(.string, style);
+    _ = try canvas.textAt(area, .{ .text = code, .color = style.color, .italic = style.italic, .bold = style.bold });
+    const expected = try std.testing.allocator.dupe(Quad, fixture.quads.items());
+    defer std.testing.allocator.free(expected);
+    fixture.quads.clear();
+    const shapes = fixture.atlas.shape_calls;
+    const roles: [code.len]client.SyntaxRole = @splat(.string);
+    var paint: SyntaxPaint = .{ .source = code, .roles = &roles };
+    try paint.draw(&canvas, .{ .bounds = area, .text = code });
+    try std.testing.expectEqualDeep(expected, fixture.quads.items());
+    try std.testing.expectEqual(shapes, fixture.atlas.shape_calls);
 }

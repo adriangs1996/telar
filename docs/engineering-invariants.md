@@ -21,8 +21,7 @@ A design is incomplete while any item is unknown.
 ## Code organization and tracing
 
 - A capability directory owns one cohesive abstraction or one indivisible set
-  of invariants. Its supported public files define the import boundary; a
-  directory-level `root.zig` is not required.
+  of invariants. Its supported public files define the import boundary.
 - Code outside a capability imports only its public entries, not its internal
   helpers. Process and module dependency direction remains enforced.
 - Apply [Zig source layout](zig-source-layout.md) to concrete structs, generic

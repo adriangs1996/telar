@@ -68,6 +68,8 @@ fn apply(handler: *HandleRequestFailureHandler, command: Command) !request_failu
         .agent_control,
         .agent_query,
         .agent_history,
+        .change_review_query,
+        .change_review_command,
         => {},
     }
 

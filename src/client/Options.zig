@@ -42,5 +42,5 @@ plugin_registry: ?*RegistryType = null,
 trust_store: ?*TrustStoreType = null,
 trust_path: ?[]const u8 = null,
 profile: ?[]const u8 = null,
-/// Executable used for local `file://` links. Empty disables file opening.
+/// Environment fallback for local file links; client.editor takes precedence.
 editor: []const u8 = "",

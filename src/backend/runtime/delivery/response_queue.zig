@@ -2,6 +2,7 @@
 
 const ClientCommand = @import("telar-core").ClientCommand;
 const ClientList = @import("telar-core").ClientList;
+const ReviewResult = @import("../../change_review/Result.zig");
 const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
 const PaneOpenedType = @import("telar-core").PaneOpened;
 const PendingFailure = @import("PendingFailure.zig");
@@ -48,6 +49,7 @@ pub const PendingResponse = union(enum) {
     notification_shown: NotificationShownType,
     agent_sound: AgentSoundNotificationType,
     history_result: *QueryResultType,
+    change_review: *ReviewResult,
     agent_history_page: *@import("OwnedAgentHistoryPage.zig"),
     request_completed: RequestCompletedType,
     pane_text: PendingPaneText,

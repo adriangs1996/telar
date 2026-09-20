@@ -2,6 +2,7 @@
 
 const ClientCommand = @import("telar-core").ClientCommand;
 const Client = @import("../AttachedClient.zig");
+const core = @import("telar-core");
 const Snapshot = @import("../connection/OutboxSnapshot.zig");
 const mark_module = @import("telar-core").mark;
 const server_messages = @import("server_messages.zig");
@@ -169,6 +170,20 @@ pub fn enqueueAgentPrompt(client: *Client, request: @import("telar-core").AgentP
 /// Example: `try runtime_io.enqueueAgentHistory(client, request);`
 pub fn enqueueAgentHistory(client: *Client, request: @import("telar-core").QueryAgentHistory) !void {
     try client.runtime_transport.outbox.pushAgentHistory(request);
+    try pump(client);
+}
+
+/// Pins a query to copied provider session bytes before the view can change.
+/// Example: `try runtime_io.enqueueChangeReviewQuery(client, query);`
+pub fn enqueueChangeReviewQuery(client: *Client, query: core.QueryChangeReview) !void {
+    try client.runtime_transport.outbox.pushChangeReviewQuery(query);
+    try pump(client);
+}
+
+/// Copies comment and path bytes before the originating editor can mutate them.
+/// Example: `try runtime_io.enqueueChangeReviewCommand(client, request);`
+pub fn enqueueChangeReviewCommand(client: *Client, request: core.ChangeReviewCommand) !void {
+    try client.runtime_transport.outbox.pushChangeReviewCommand(request);
     try pump(client);
 }
 

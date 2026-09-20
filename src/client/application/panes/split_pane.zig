@@ -157,3 +157,21 @@ test "RecoverPaneSplitHandler propagates resize failure without model mutation" 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
+
+test "editor pane split targets the requested pane despite different keyboard focus" {
+    var testing = try SplitPaneTestingModel.init();
+    defer testing.deinit();
+    const other: PaneIdType = @enumFromInt(2);
+    const tab = testing.model.workspace.active().?;
+    try tab.model.split(.{ .existing_pane = testing.pane_id, .new_pane = other, .location = testing.location, .axis = .horizontal, .area = testing.area });
+    _ = tab.model.focusPane(other);
+    var capture: SplitPaneRequestCapture = .{};
+    var handler: RequestPaneSplitHandler = .{ .model = testing.model, .gate = capture.gate(), .effects = capture.port() };
+    const plan = (try handler.execute(.{ .axis = .horizontal, .area = testing.area, .target_pane = testing.pane_id, .arguments = &.{ "nvim", "/tmp/design.md" } })).?;
+
+    try std.testing.expectEqual(testing.pane_id, plan.split.target_pane);
+    try std.testing.expectEqualDeep(testing.location, plan.split.location);
+    try std.testing.expectEqualStrings("/tmp/design.md", plan.arguments[1]);
+    try std.testing.expectEqual(other, tab.model.layout.focused());
+    try std.testing.expect((try handler.execute(.{ .axis = .horizontal, .area = testing.area, .target_pane = @enumFromInt(99) })) == null);
+}

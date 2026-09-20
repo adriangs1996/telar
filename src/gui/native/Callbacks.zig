@@ -1,4 +1,5 @@
 const native = @import("native.zig");
+
 pub const Callbacks = extern struct {
     render: *const fn (?*anyopaque, native.Viewport, *native.Frame) callconv(.c) void,
     pump: *const fn (?*anyopaque) callconv(.c) c_int,
@@ -11,4 +12,5 @@ pub const Callbacks = extern struct {
     host_request: ?*const fn (?*anyopaque, *native.HostRequest) callconv(.c) c_int = null,
     accessibility: ?*const fn (?*anyopaque, *native.AccessibilityTree) callconv(.c) c_int = null,
     frame_delay_ns: ?*const fn (?*anyopaque) callconv(.c) u64 = null,
+    window_title: ?*const fn (?*anyopaque, *native.WindowTitle) callconv(.c) c_int = null,
 };

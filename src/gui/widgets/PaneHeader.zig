@@ -10,6 +10,7 @@ const Rect = @import("../render/Rect.zig");
 const attention = @import("attention.zig");
 const Canvas = @import("Canvas.zig");
 const PaneProgress = @import("PaneProgress.zig");
+const ChangeReviewButton = @import("ChangeReviewButton.zig");
 const PaneHeader = @This();
 
 context: *const Context,
@@ -30,6 +31,7 @@ pub fn draw(header: PaneHeader, canvas: *Canvas) !void {
     }
 
     var band: Rect = .{ .x = row.x + chrome.px(8), .y = row.y, .width = @max(0, row.width - 2 * chrome.px(8)), .height = band_height };
+    band.width -= try (ChangeReviewButton{ .area = band, .pane_id = header.pane.id, .generation = header.pane.attachment_generation }).draw(canvas);
     var index_storage: [8]u8 = undefined;
     const index_text = std.fmt.bufPrint(&index_storage, "{d}", .{header.index}) catch unreachable;
     const index_width = try canvas.measure(.{ .text = index_text, .bold = true, .face = .sans, .size = .body });

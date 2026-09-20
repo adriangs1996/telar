@@ -690,15 +690,18 @@ test "Codex slash rename updates metadata only after provider success and never 
 test "Codex slash clear keeps the old transcript until a new thread is ready" {
     var codex = init();
     try ready(&codex);
+    codex.metadata.review_latest_edition_id = 12;
     codex.transcript.update(.{ .role = .assistant, .text = "Previous conversation", .complete = true });
     const line = (try commandText(&codex, "/clear")).?;
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, line, .{});
     defer parsed.deinit();
     try std.testing.expectEqualStrings("thread/start", parsed.value.object.get("method").?.string);
     try std.testing.expectEqualStrings("thread-1", codex.transcript.value.threadId());
+    try std.testing.expectEqual(@as(u64, 12), codex.metadata.review_latest_edition_id);
     try std.testing.expectEqual(@as(u8, 1), codex.transcript.value.item_count);
     _ = try receive(&codex, "{\"id\":3,\"result\":{\"thread\":{\"id\":\"thread-2\"},\"model\":\"fake-model\",\"reasoningEffort\":\"low\",\"approvalPolicy\":\"untrusted\",\"approvalsReviewer\":\"user\",\"sandbox\":{\"type\":\"workspaceWrite\"}}}");
     try std.testing.expectEqualStrings("thread-2", codex.transcript.value.threadId());
+    try std.testing.expectEqual(@as(u64, 0), codex.metadata.review_latest_edition_id);
     try std.testing.expectEqual(@as(u8, 0), codex.transcript.value.item_count);
     try std.testing.expectEqual(.ready, codex.transcript.value.status);
     try std.testing.expect(codex.transcript.value.canResume());

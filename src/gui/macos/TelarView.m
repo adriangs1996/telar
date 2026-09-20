@@ -1,9 +1,9 @@
 #import "TelarView.h"
-#import "TelarMetalRenderer.h"
-#import "TelarWindowBackground.h"
-#import "TelarWindow.h"
-#import "TelarHostServices.h"
 #import "TelarAccessibility.h"
+#import "TelarHostServices.h"
+#import "TelarMetalRenderer.h"
+#import "TelarWindow.h"
+#import "TelarWindowBackground.h"
 #import <QuartzCore/CADisplayLink.h>
 #include <string.h>
 
@@ -36,8 +36,13 @@
 
   context = render_context;
   callbacks = *callback_table;
-  host_services = [[TelarHostServices alloc] initWithContext:context callbacks:&callbacks pasteboard:NSPasteboard.generalPasteboard];
-  accessibility = [[TelarAccessibility alloc] initWithView:self context:context callbacks:&callbacks];
+  host_services = [[TelarHostServices alloc]
+      initWithContext:context
+            callbacks:&callbacks
+           pasteboard:NSPasteboard.generalPasteboard];
+  accessibility = [[TelarAccessibility alloc] initWithView:self
+                                                   context:context
+                                                 callbacks:&callbacks];
   __weak TelarView *weak = self;
 
   renderer = [[TelarMetalRenderer alloc]
@@ -139,10 +144,12 @@
   dispatch_resume(wake_source);
 
   animation_source = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
-                                             dispatch_get_main_queue());
+                                            dispatch_get_main_queue());
   dispatch_source_set_timer(animation_source, DISPATCH_TIME_FOREVER,
                             DISPATCH_TIME_FOREVER, 0);
-  dispatch_source_set_event_handler(animation_source, ^{ [weak pumpEvents]; });
+  dispatch_source_set_event_handler(animation_source, ^{
+    [weak pumpEvents];
+  });
   dispatch_resume(animation_source);
   [self scheduleWake];
 }
@@ -172,7 +179,8 @@
 - (void)drawIfReady {
   if (closed || preparing || renderer.isBusy || !dirty || self.window == nil ||
       !(self.window.occlusionState & NSWindowOcclusionStateVisible)) {
-    if (self.window != nil && !(self.window.occlusionState & NSWindowOcclusionStateVisible)) {
+    if (self.window != nil &&
+        !(self.window.occlusionState & NSWindowOcclusionStateVisible)) {
       display_link.paused = YES;
     }
     return;
@@ -295,9 +303,37 @@
       (self.window.occlusionState & NSWindowOcclusionStateVisible)) {
     delay = callbacks.wakeup_after(context);
   }
-  dispatch_source_set_timer(animation_source,
-      delay ? dispatch_time(DISPATCH_TIME_NOW, (int64_t)delay * NSEC_PER_MSEC) : DISPATCH_TIME_FOREVER,
+  dispatch_source_set_timer(
+      animation_source,
+      delay ? dispatch_time(DISPATCH_TIME_NOW, (int64_t)delay * NSEC_PER_MSEC)
+            : DISPATCH_TIME_FOREVER,
       DISPATCH_TIME_FOREVER, 0);
+}
+
+- (void)refreshWindowTitle {
+  if (self.window == nil || callbacks.window_title == NULL) {
+    return;
+  }
+
+  telar_gui_window_title update = {0};
+
+  if (callbacks.window_title(context, &update) <= 0) {
+    return;
+  }
+
+  if (update.len > TELAR_GUI_TITLE_CAPACITY) {
+    return;
+  }
+
+  NSString *title = [[NSString alloc] initWithBytes:update.bytes
+                                             length:update.len
+                                           encoding:NSUTF8StringEncoding];
+
+  if (title == nil) {
+    return;
+  }
+
+  self.window.title = title;
 }
 
 - (void)pumpEvents {
@@ -305,33 +341,54 @@
     return;
   }
   int result = callbacks.pump(context);
+
   if (result < 0) {
     [self.window close];
     return;
   }
+
+  [self refreshWindowTitle];
   [host_services drain];
   [self refreshTextContext];
   [accessibility refresh];
   [self refreshPointerCursor];
+
   if (dirty || result > 0) {
     [self requestDraw];
   }
+
   [self scheduleWake];
 }
 
 - (int)copyTextContext:(telar_gui_text_context *)output {
-  return !closed && callbacks.text_context != NULL ? callbacks.text_context(context, output) : 0;
+  return !closed && callbacks.text_context != NULL
+             ? callbacks.text_context(context, output)
+             : 0;
 }
 
-- (BOOL)isAccessibilityElement { return YES; }
-- (NSAccessibilityRole)accessibilityRole { return NSAccessibilityGroupRole; }
-- (NSString *)accessibilityLabel { return self.window.title; }
-- (NSArray *)accessibilityChildren { return [accessibility children]; }
-- (id)accessibilityFocusedUIElement { return [accessibility focusedElement] ?: self; }
-- (id)accessibilityHitTest:(NSPoint)point { return [accessibility hitTest:point] ?: self; }
+- (BOOL)isAccessibilityElement {
+  return YES;
+}
+- (NSAccessibilityRole)accessibilityRole {
+  return NSAccessibilityGroupRole;
+}
+- (NSString *)accessibilityLabel {
+  return self.window.title;
+}
+- (NSArray *)accessibilityChildren {
+  return [accessibility children];
+}
+- (id)accessibilityFocusedUIElement {
+  return [accessibility focusedElement] ?: self;
+}
+- (id)accessibilityHitTest:(NSPoint)point {
+  return [accessibility hitTest:point] ?: self;
+}
 
 - (uint32_t)desiredPointerShape {
-  return !closed && callbacks.pointer_shape != NULL ? callbacks.pointer_shape(context) : 0;
+  return !closed && callbacks.pointer_shape != NULL
+             ? callbacks.pointer_shape(context)
+             : 0;
 }
 
 - (void)windowDidBecomeKey:(NSNotification *)notification {
@@ -345,7 +402,8 @@
   [self releasePressedKeys];
   [self resetPointer];
   if (!closed) {
-    callbacks.input(context, (telar_gui_input){.kind = 5, .code = 0, .phase = 1});
+    callbacks.input(context,
+                    (telar_gui_input){.kind = 5, .code = 0, .phase = 1});
     [self requestDraw];
     [self scheduleWake];
   }

@@ -4,6 +4,7 @@ const core = @import("telar-core");
 const Metadata = @This();
 
 revision: u64 = 0,
+review_latest_edition_id: u64 = 0,
 buffer: [core.max_agent_session_title_bytes]u8 = undefined,
 len: u8 = 0,
 

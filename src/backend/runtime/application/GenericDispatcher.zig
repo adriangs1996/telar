@@ -4,6 +4,11 @@ const ClientDetachController = @import("../entrypoints/requests/ClientDetachCont
 const DetachClient = @import("telar-core").DetachClient;
 const ClientQueryController = @import("../entrypoints/requests/ClientQueryController.zig");
 const QueryClients = @import("telar-core").QueryClients;
+const ChangeReviewHandler = @import("commands/ChangeReviewHandler.zig");
+const ChangeReviewController = @import("../entrypoints/requests/ChangeReviewController.zig");
+const QueryChangeReview = @import("telar-core").QueryChangeReview;
+const ChangeReviewCommand = @import("telar-core").ChangeReviewCommand;
+const ReportChangeReviewSample = @import("telar-core").ReportChangeReviewSample;
 const GenericRuntimePort = @import("GenericRuntimePort.zig").Type;
 const Session = @import("../client/Session.zig");
 const Repository = @import("../../workspace/Repository.zig");
@@ -198,6 +203,9 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             .agent_interrupt = routeAgentInterrupt,
             .agent_resume = routeAgentResume,
             .agent_approval = routeAgentApproval,
+            .query_change_review = routeQueryChangeReview,
+            .change_review_command = routeChangeReviewCommand,
+            .report_change_review_sample = routeReportChangeReviewSample,
             .query_agent_thread = routeQueryAgentThread,
             .query_agent_history = routeQueryAgentHistory,
             .create_tab = routeCreateTab,
@@ -593,6 +601,24 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             var controller = WorkspaceSnapshotController.init(&request.session.delivery.responses, handler.executor());
 
             try controller.requestWorkspaceSnapshot(snapshot);
+        }
+
+        fn routeQueryChangeReview(request: *ClientRequestContext, message: QueryChangeReview) !void {
+            var handler: ChangeReviewHandler = .{ .application = request.application, .client = request.session };
+            var controller: ChangeReviewController = .{ .handler = &handler, .delivery = &request.session.delivery };
+            try controller.handle(message);
+        }
+
+        fn routeChangeReviewCommand(request: *ClientRequestContext, message: ChangeReviewCommand) !void {
+            var handler: ChangeReviewHandler = .{ .application = request.application, .client = request.session };
+            var controller: ChangeReviewController = .{ .handler = &handler, .delivery = &request.session.delivery };
+            try controller.handle(message);
+        }
+
+        fn routeReportChangeReviewSample(request: *ClientRequestContext, message: ReportChangeReviewSample) !void {
+            var handler: ChangeReviewHandler = .{ .application = request.application, .client = request.session };
+            var controller: ChangeReviewController = .{ .handler = &handler, .delivery = &request.session.delivery };
+            try controller.handle(message);
         }
 
         fn routeAgentPrompt(request: *ClientRequestContext, message: @import("telar-core").AgentPrompt) !void {

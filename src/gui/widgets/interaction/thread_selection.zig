@@ -7,6 +7,7 @@ const Event = @import("../../input/event.zig").Event;
 const Target = @import("Target.zig");
 const Position = @import("ThreadTextPosition.zig");
 const Geometry = @import("ThreadTextGeometry.zig");
+const message_links = @import("message_links.zig");
 const Selection = @import("ThreadSelection.zig");
 
 /// Enters through the semantic action port, preserving configured bindings.
@@ -176,17 +177,25 @@ fn pointer(gui: *GuiClient, event: @import("../../input/PointerEvent.zig"), targ
         selection.anchor = previous orelse at;
         selection.head = at;
         selection.dragging = true;
+        if (hit.action == .message_link and event.mods == 0) {
+            selection.pending_link = hit.action.message_link;
+        }
+
         selection.pointer = .{ event.x, event.y };
         gui.widgets.cancelComposition();
         gui.widgets.dispatcher.captures[0] = container.id;
         _ = gui.widgets.dispatcher.focus(container.id);
         const model = gui.app.model.activeTabModel() orelse return true;
         _ = try client.controllers.view_interactions.apply(&gui.app, model, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
-        @import("message_links.zig").clear(gui);
+        message_links.clear(gui);
         gui.widgets.dispatcher.revision +%= 1;
         return true;
     }
     if ((event.kind == .drag or event.kind == .release) and selection.dragging) {
+        if (event.kind == .drag) {
+            selection.pending_link = null;
+        }
+
         const owner = selection.owner orelse return true;
         const container = transcript(gui, owner.pane_id) orelse {
             _ = leave(gui);
@@ -203,6 +212,14 @@ fn pointer(gui: *GuiClient, event: @import("../../input/PointerEvent.zig"), targ
         if (event.kind == .release) {
             selection.dragging = false;
             selection.outside = 0;
+            const pending_link = selection.pending_link;
+            selection.pending_link = null;
+            if (pending_link) |link| {
+                const hit = gui.widgets.dispatcher.maps.presented().at(selection.pointer);
+                if (!selection.selected() and hit != null and hit.?.action == .message_link and std.meta.eql(hit.?.action.message_link, link)) {
+                    try message_links.open(gui, link);
+                }
+            }
         }
         gui.widgets.dispatcher.revision +%= 1;
         return true;

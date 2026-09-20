@@ -4,10 +4,9 @@ const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
 const TerminalSizeType = @import("telar-core").TerminalSize;
 const LaunchType = @import("telar-core").Launch;
 const CreateTabType = @import("telar-core").CreateTab;
+const OwnedArguments = @import("OwnedArguments.zig");
+const max_argument_count = @import("telar-core").max_argument_count;
 const OwnedCreateTab = @This();
-
-pub const max_owned_arguments = 8;
-const max_owned_argument_bytes = 224;
 
 request_id: RequestIdType,
 kind: @import("telar-core").PaneKind = .terminal,
@@ -16,51 +15,27 @@ label: [max_tab_label_bytes_module]u8 = undefined,
 label_len: u8,
 size: TerminalSizeType,
 launch: LaunchType,
-/// NUL-free bytes of a bounded owned argv; zero count borrows
-/// `launch.arguments`, which is only safe for process-lifetime slices.
-argument_storage: [max_owned_argument_bytes]u8 = undefined,
-argument_lens: [max_owned_arguments]u8 = undefined,
-argument_count: u8 = 0,
+arguments: OwnedArguments = .{},
 
-pub fn ownArguments(value: *OwnedCreateTab, arguments: []const []const u8) bool {
-    if (arguments.len == 0 or arguments.len > max_owned_arguments) {
-        return false;
-    }
-    var total: usize = 0;
-    for (arguments) |argument| total += argument.len;
-    if (total > max_owned_argument_bytes) {
-        return false;
-    }
-
-    var offset: usize = 0;
-    for (arguments, 0..) |argument, index| {
-        @memcpy(value.argument_storage[offset .. offset + argument.len], argument);
-        value.argument_lens[index] = @intCast(argument.len);
-        offset += argument.len;
-    }
-    value.argument_count = @intCast(arguments.len);
-    return true;
+/// Owns transient command arguments before configuration can be replaced.
+/// Example: `try pending.ownArguments(slot_bytes);`
+pub fn ownArguments(self: *OwnedCreateTab, bytes: []u8) !void {
+    self.arguments = try OwnedArguments.copy(self.launch.arguments, bytes);
+    self.launch.arguments = &.{};
 }
 
-pub fn view(value: *const OwnedCreateTab, cwd: []const u8, scratch: *[max_owned_arguments][]const u8) CreateTabType {
-    var launch = value.launch;
-    launch.cwd = cwd;
-    if (value.argument_count != 0) {
-        var offset: usize = 0;
-        for (0..value.argument_count) |index| {
-            const len = value.argument_lens[index];
-            scratch[index] = value.argument_storage[offset .. offset + len];
-            offset += len;
-        }
-        launch.arguments = scratch[0..value.argument_count];
-    }
+/// Borrows owned launch arguments while encoding one request.
+/// Example: `const request = pending.view(slot_bytes, &scratch);`
+pub fn view(self: *const OwnedCreateTab, bytes: []const u8, scratch: *[max_argument_count][]const u8) CreateTabType {
+    var launch = self.launch;
+    launch.arguments = self.arguments.view(bytes, scratch);
 
     return .{
-        .kind = value.kind,
-        .request_id = value.request_id,
-        .workspace = value.workspace,
-        .label = value.label[0..value.label_len],
-        .size = value.size,
+        .kind = self.kind,
+        .request_id = self.request_id,
+        .workspace = self.workspace,
+        .label = self.label[0..self.label_len],
+        .size = self.size,
         .launch = launch,
     };
 }

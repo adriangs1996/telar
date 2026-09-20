@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capture native Markdown link labels and hover previews using a fake Codex."""
+"""Verify native Markdown file clicks, labels and previews using a fake Codex."""
 
 import argparse
 import json
@@ -17,7 +17,7 @@ LONG_LABEL = ('Read the complete explanation of input dispatch ordering across n
               'interactive geometry after window resize')
 RESPONSE = f'''## Links in an agent response
 
-Inspect [`input`](/Users/adriangonzalez/sandbox/telar/run_widget.zig:346) in the source.
+Inspect [`input`](FILE_DESTINATION) in the source.
 
 Read the [documentation](https://example.com/docs?foo=1&bar=2) for the protocol.
 
@@ -78,7 +78,19 @@ def main():
     args = parser.parse_args()
     binary, directory = args.binary.resolve(), args.directory.resolve()
     directory.mkdir(mode=0o700, parents=True, exist_ok=False)
-    (directory / 'response.txt').write_text(RESPONSE)
+    document = directory / "design with spaces.md"
+    document.write_text("# Editor link fixture\n")
+    response = RESPONSE.replace('FILE_DESTINATION', '<' + str(document) + '>')
+    (directory / 'response.txt').write_text(response)
+    editor = directory / 'editor'
+    editor.write_text(f'#!{sys.executable}\n' + """import json, os, pathlib, sys, time
+root = pathlib.Path(os.environ['FAKE_CODEX_DIRECTORY'])
+(root / 'editor-arguments.json').write_text(json.dumps(sys.argv[1:]))
+print('EDITOR OPENED: ' + sys.argv[1], flush=True)
+while True:
+    time.sleep(1)
+""")
+    editor.chmod(0o700)
     fixture = FAKE_CODEX[:FAKE_CODEX.index('def turn():')] + SIMPLE_TURN + FAKE_CODEX[FAKE_CODEX.index('for line in sys.stdin:'):]
     fake = directory / 'codex'
     fake.write_text(f'#!{sys.executable}\n' + fixture)
@@ -96,7 +108,7 @@ def main():
                     '-framework', 'AppKit', str(driver), '-o', str(library)], check=True)
     env = {key: value for key, value in os.environ.items() if not key.startswith('TELAR_')}
     env.update(TELAR_SOCKET=str(directory / 'runtime.sock'), TELAR_HISTORY=str(directory / 'history.db'),
-               FAKE_CODEX_DIRECTORY=str(directory), PATH=str(directory) + os.pathsep + env.get('PATH', ''))
+               FAKE_CODEX_DIRECTORY=str(directory), EDITOR=str(editor), PATH=str(directory) + os.pathsep + env.get('PATH', ''))
     subprocess.run([str(binary), 'server', '--background', '--no-config'], env=env, cwd=directory, check=True)
     try:
         actions = Actions(directory)
@@ -124,8 +136,14 @@ def main():
         actions.capture('tooltip-cleared')
         actions.items.append(dict(click_label='Copy response'))
         actions.items.extend([{}] * 3)
-        actions.items.append(dict(expect_clipboard=RESPONSE))
+        actions.items.append(dict(expect_clipboard=response))
+        actions.items.append(dict(pointer='press', control='input'))
+        actions.items.append(dict(pointer='release', control='input'))
+        actions.items.append(dict(wait=str(directory / 'editor-arguments.json')))
+        actions.items.extend([{}] * 8)
+        actions.capture('editor-pane')
         exercise(binary, directory, env, library, actions, 'links')
+        assert json.loads((directory / 'editor-arguments.json').read_text()) == [str(document)]
 
         controls = json.loads((directory / 'controls.json').read_text())
         labels = [control['label'] for control in controls]
@@ -138,7 +156,7 @@ def main():
         assert sum(message.get('method') == 'turn/start' for message in requests) == 1
         result = dict(fake_provider=True, model_calls=0, plain_labels=True, code_label_without_backticks=True,
                       wrapped_fragment_rows=len({round(control['y'], 2) for control in wrapped}),
-                      copy_preserves_original_markdown=True, tooltip_visual_review_required=True,
+                      copy_preserves_original_markdown=True, local_file_opens_editor=True, tooltip_visual_review_required=True,
                       screenshots=sorted(path.name for path in directory.glob('*.png')))
         (directory / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
         print(json.dumps(result, indent=2))

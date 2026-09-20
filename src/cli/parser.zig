@@ -18,6 +18,7 @@ const PaneOptions = @import("arguments/PaneOptions.zig");
 const WorkspaceOptions = @import("arguments/WorkspaceOptions.zig");
 const ApiOptions = @import("arguments/ApiOptions.zig");
 const HookOptions = @import("arguments/HookOptions.zig");
+const ReviewOptions = @import("arguments/ReviewOptions.zig");
 const IntegrationOptions = @import("arguments/IntegrationOptions.zig");
 const ProxyOptions = @import("arguments/ProxyOptions.zig");
 const RunOptions = @import("arguments/RunOptions.zig");
@@ -64,6 +65,7 @@ pub const Cli = union(enum) {
     workspace: WorkspaceOptions,
     api: ApiOptions,
     hook: HookOptions,
+    review: ReviewOptions,
     integration: IntegrationOptions,
     proxy: ProxyOptions,
     skill,
@@ -133,6 +135,9 @@ pub const Cli = union(enum) {
         }
         if (std.mem.eql(u8, first, "hook")) {
             return .{ .hook = try HookOptions.parse(args[2..]) };
+        }
+        if (std.mem.eql(u8, first, "review")) {
+            return .{ .review = try ReviewOptions.parse(args[2..]) };
         }
         if (std.mem.eql(u8, first, "integration")) {
             return .{ .integration = try IntegrationOptions.parse(args[2..]) };

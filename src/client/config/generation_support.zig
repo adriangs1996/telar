@@ -1450,3 +1450,32 @@ test "client history match mode parses fuzzy or fts only" {
     var invalid: Diagnostic = .{};
     try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &invalid }, .{ .source = "return { api_version = 2, client = { history = { match = \"regex\" } } }", .source_name = "@config.lua", .number = 1 }));
 }
+
+test "editor configuration owns its path and profiles override the environment fallback" {
+    var diagnostic: Diagnostic = .{};
+    const source = "return { api_version = 2, client = { editor = '/opt/My Editor/nvim' }, profiles = { remote = { client = { editor = 'vi' } } } }";
+    const base = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
+    defer base.deinit();
+    try std.testing.expectEqualStrings("/opt/My Editor/nvim", base.snapshot.resolveEditor("emacs"));
+    try std.testing.expectEqualStrings("/opt/My Editor/nvim", base.snapshot.resolveEditor(""));
+
+    const profile = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 2, .profile = "remote" });
+    defer profile.deinit();
+    try std.testing.expectEqualStrings("vi", profile.snapshot.resolveEditor("emacs"));
+
+    const defaults = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2 }", .source_name = "@config.lua", .number = 3 });
+    defer defaults.deinit();
+    try std.testing.expectEqualStrings("emacs", defaults.snapshot.resolveEditor("emacs"));
+    try std.testing.expectEqualStrings("", defaults.snapshot.resolveEditor(""));
+}
+
+test "editor configuration rejects invalid executables before adoption" {
+    const invalid = [_][]const u8{ "false", "42", "{}", "''", "'a' .. string.char(0) .. 'b'", "'a' .. string.char(10)", "string.char(255)", "string.rep('a', 4097)" };
+    for (invalid) |value| {
+        var diagnostic: Diagnostic = .{};
+        const source = try std.fmt.allocPrint(std.testing.allocator, "return {{ api_version = 2, client = {{ editor = {s} }} }}", .{value});
+        defer std.testing.allocator.free(source);
+        try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 }));
+        try std.testing.expect(std.mem.startsWith(u8, diagnostic.message(), "config.client.editor must be"));
+    }
+}
