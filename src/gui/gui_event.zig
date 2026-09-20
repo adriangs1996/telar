@@ -17,6 +17,8 @@ pub const Message = union(enum) {
     path_completion: client.PathCompletionCompletion,
     favicon: client.FaviconCompletion,
     diagram_ready,
+    syntax_ready,
+    change_review_ready,
     link_opened: anyerror!void,
 };
 

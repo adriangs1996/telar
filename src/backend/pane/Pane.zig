@@ -284,6 +284,7 @@ pub fn create(resources: CreationResourcesType, request: CreationRequestType) !*
             .cwd = launch_cwd,
             .environment = resources.environment,
             .restore_conversation = request.restore_conversation,
+            .review_service = resources.review_service,
         });
         pane.session = .{ .agent = .{ .io = io, .session = managed } };
         pane.agent_thread = snapshot;

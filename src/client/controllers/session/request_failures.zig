@@ -1,6 +1,7 @@
 //! Adapts rejected runtime requests to client recovery and notification use cases.
 
 const Client = @import("../../AttachedClient.zig");
+const change_review = @import("../change_review/change_review.zig");
 const RequestFailedType = @import("telar-core").RequestFailed;
 const ApplicationSessionRequestFailureOutcome = @import("../../application/session/request_failure.zig").Outcome;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
@@ -33,6 +34,7 @@ pub fn apply(client: *Client, failure: RequestFailedType) !ApplicationSessionReq
         return error.UnexpectedRequestFailure;
     };
     if (continuation == .ignored) {
+        change_review.retired(client, failure.request_id);
         (@import("../../application/agents/AgentHistoryHandler.zig"){ .model = &client.model }).retired();
     }
     if (continuation == .agent_history) {
@@ -41,6 +43,14 @@ pub fn apply(client: *Client, failure: RequestFailedType) !ApplicationSessionReq
         if (!history.failed(continuation.agent_history, failure.message)) {
             return .ignored;
         }
+    }
+    switch (continuation) {
+        .change_review_query, .change_review_command => |operation| {
+            if (!change_review.failed(client, operation, failure.message)) {
+                return .ignored;
+            }
+        },
+        else => {},
     }
     var use_case = handler(client);
     const outcome = try use_case.execute(.{

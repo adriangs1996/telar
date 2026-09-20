@@ -8,6 +8,7 @@ const Canvas = @import("Canvas.zig");
 const Layout = @import("../layout/Layout.zig");
 const LayoutItem = @import("../layout/Item.zig");
 const PixelButton = @import("PixelButton.zig");
+const ChangeReviewButton = @import("ChangeReviewButton.zig");
 const TopBar = @This();
 
 context: *const Context,
@@ -23,7 +24,7 @@ pub fn draw(widget: TopBar, canvas: *Canvas) !void {
     const chrome = canvas.chrome;
     try canvas.panelAt(widget.area);
 
-    const content = (Layout{
+    var content = (Layout{
         .area = widget.area,
         .padding = .{
             .left = chrome.px(8),
@@ -35,6 +36,19 @@ pub fn draw(widget: TopBar, canvas: *Canvas) !void {
     const gap = @min(chrome.px(8), @max(0, content.width - toggle_width) / 2);
     const free = @max(0, content.width - toggle_width - 2 * gap);
     const control_height = @min(content.height, chrome.px(26));
+
+    // The slot depends only on window geometry, so detach, split and focus do
+    // not animate the tabs or move delivered workspace targets underneath input.
+    if (content.width >= chrome.px(160)) {
+        if (widget.context.projection.model) |model| {
+            if (model.focusedPaneConst()) |pane| {
+                if (pane.attached and pane.pane_generation != 0) {
+                    _ = try (ChangeReviewButton{ .area = content, .pane_id = pane.id, .generation = pane.attachment_generation, .placement = .top_bar }).draw(canvas);
+                }
+            }
+        }
+        content.width -= chrome.px(36);
+    }
 
     var children = [_]LayoutItem{
         .{

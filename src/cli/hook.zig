@@ -6,6 +6,7 @@
 
 const AgentProviderType = @import("telar-core").AgentProvider;
 const ToolHookInput = @import("ToolHookInput.zig");
+const hook_review = @import("hook_review.zig");
 const CommandReport = @import("CommandReport.zig");
 const AgentCommandPhaseType = @import("telar-core").AgentCommandPhase;
 const std = @import("std");
@@ -324,7 +325,7 @@ pub fn run(init: std.process.Init, options: HookOptionsType) !void {
         .claude => {
             const parsed = std.json.parseFromSlice(ClaudeHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
             defer parsed.deinit();
-            const command = mapToolCommand(.claude, .{
+            const tool: ToolHookInput = .{
                 .event = parsed.value.hook_event_name,
                 .agent_id = parsed.value.agent_id,
                 .tool_name = parsed.value.tool_name,
@@ -333,13 +334,15 @@ pub fn run(init: std.process.Init, options: HookOptionsType) !void {
                 .cwd = parsed.value.cwd,
                 .session = parsed.value.session_id,
                 .exit_code = if (std.mem.eql(u8, parsed.value.hook_event_name, "PostToolUse")) 0 else null,
-            });
+            };
+            const command = mapToolCommand(.claude, tool);
             var title_buffer: [max_agent_session_title_bytes_module]u8 = undefined;
             var event_buffer: hook_event.Buffer = undefined;
             sendReports(init, target, .{
                 .lifecycle = mapClaudeHook(parsed.value, &event_buffer),
                 .command = command,
                 .title = mapClaudeTitle(&title_buffer, parsed.value),
+                .review = .{ .provider = .claude, .input = tool },
             });
         },
         .codex => {
@@ -350,7 +353,7 @@ pub fn run(init: std.process.Init, options: HookOptionsType) !void {
             if (codexHome(environ, &home_buffer)) |home| {
                 parsed.value.state_database = codexStateDatabase(init.io, home, &database_buffer) orelse "";
             }
-            const command = mapToolCommand(.codex, .{
+            const tool: ToolHookInput = .{
                 .event = parsed.value.hook_event_name,
                 .agent_id = parsed.value.agent_id,
                 .tool_name = parsed.value.tool_name,
@@ -359,9 +362,10 @@ pub fn run(init: std.process.Init, options: HookOptionsType) !void {
                 .cwd = parsed.value.cwd,
                 .session = parsed.value.session_id,
                 .exit_code = null,
-            });
+            };
+            const command = mapToolCommand(.codex, tool);
             var event_buffer: hook_event.Buffer = undefined;
-            sendReports(init, target, .{ .lifecycle = mapCodexHook(parsed.value, &event_buffer), .command = command });
+            sendReports(init, target, .{ .lifecycle = mapCodexHook(parsed.value, &event_buffer), .command = command, .review = .{ .provider = .codex, .input = tool } });
         },
         .pi => {
             const parsed = std.json.parseFromSlice(PiHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
@@ -386,7 +390,7 @@ pub fn run(init: std.process.Init, options: HookOptionsType) !void {
 }
 
 fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
-    if (reports.lifecycle == null and reports.command == null and reports.title == null) {
+    if (reports.lifecycle == null and reports.command == null and reports.title == null and reports.review == null) {
         return;
     }
 
@@ -405,6 +409,9 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
             .session_file_kind = lifecycle.session_file_kind,
         }) catch return;
     }
+    if (reports.review) |review| {
+        hook_review.capture(&session, pane, review);
+    }
     if (reports.title) |title| {
         session.reportAgentTitle(pane, title) catch return;
     }
@@ -418,6 +425,9 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
             .session = tool.session,
             .exit_code = tool.exit_code,
         }) catch return;
+    }
+    if (reports.review) |review| {
+        hook_review.feedback(&session, pane, review) catch {};
     }
 }
 

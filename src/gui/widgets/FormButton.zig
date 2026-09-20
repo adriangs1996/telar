@@ -13,6 +13,7 @@ namespace: u64,
 primary: bool = false,
 quiet: bool = false,
 enabled: bool = true,
+layer: u8 = 1,
 
 /// Buttons activate on release inside their delivered bounds. Keyboard
 /// equivalents remain with the form's editor, so clicking does not steal it.
@@ -22,7 +23,7 @@ pub fn draw(button: FormButton, canvas: *Canvas) !void {
         return;
     }
 
-    const target = (Target{ .id = .{ .generation = button.generation }, .namespace = button.namespace, .bounds = button.bounds, .action = button.action, .layer = 1, .focusable = false, .enabled = button.enabled }).labelled(button.label orelse button.text);
+    const target = (Target{ .id = .{ .generation = button.generation }, .namespace = button.namespace, .bounds = button.bounds, .action = button.action, .layer = button.layer, .focusable = false, .enabled = button.enabled }).labelled(button.label orelse button.text);
     var hovered = false;
     var pressed = false;
     if (canvas.widgets) |state| {

@@ -1,4 +1,5 @@
 //! Event-driven conversation projection. The provider worker owns JSON and pipes.
+const change_review = @import("change_review.zig");
 const std = @import("std");
 const Pane = @import("../../pane/Pane.zig");
 const Changed = @import("AgentThreadChanged.zig");
@@ -29,8 +30,13 @@ pub fn handle(application: *Application, completion: Changed) !bool {
     const previous_id = snapshot.thread_id;
     const previous_len = snapshot.thread_id_len;
     if (pane.session.agent.session.snapshot(application.io, snapshot)) |metadata| {
-        if (!std.mem.eql(u8, previous_id[0..previous_len], snapshot.threadId())) {
+        const session_changed = !std.mem.eql(u8, previous_id[0..previous_len], snapshot.threadId());
+        if (session_changed) {
             application.noteSessionChange();
+        }
+        if (session_changed or metadata.review_latest_edition_id != pane.session.agent.review_latest_edition_id) {
+            change_review.publish(application, .{ .pane_id = pane.id, .pane_generation = pane.generation, .session = snapshot.threadId(), .latest_edition_id = if (session_changed) 0 else metadata.review_latest_edition_id });
+            pane.session.agent.review_latest_edition_id = if (session_changed) 0 else metadata.review_latest_edition_id;
         }
 
         const now = std.Io.Timestamp.now(application.io, .real).toMilliseconds();

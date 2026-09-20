@@ -54,6 +54,7 @@ pub fn builtin(name: Builtin) ThemeType {
     return .{
         .base = name,
         .terminal = terminal(name),
+        .syntax_styles = syntax(name),
         .palette = switch (name) {
             .shade => builtin(.vesper).withOverrides(.{
                 .accent = rgb24c(0xa8c98c),
@@ -145,6 +146,22 @@ pub fn builtin(name: Builtin) ThemeType {
     };
 }
 
+fn syntax(name: Builtin) ThemeType.SyntaxStyles {
+    var result: ThemeType.SyntaxStyles = .initFill(null);
+    if (name != .shade) {
+        return result;
+    }
+
+    // Adrian's osaka-jade syntax palette; ANSI and chrome remain independent.
+    const roles = .{ .plain, .keyword, .string, .number, .comment, .constant, .builtin_constant, .builtin, .func, .type, .parameter, .property, .namespace, .operator, .punctuation };
+    const colors = [_]u24{ 0xd1d1cf, 0xa0a0a0, 0x91b99a, 0xe6b99d, 0x304a39, 0xc3cea0, 0xe6b99d, 0xa8c98c, 0xa8c98c, 0xc3cea0, 0xadd0c5, 0xbbc8b5, 0xc4b3c5, 0xa0a0a0, 0xa0a0a0 };
+    inline for (roles, colors) |role, color| {
+        result.set(role, .{ .color = rgb24c(color), .italic = role == .parameter });
+    }
+
+    return result;
+}
+
 fn terminal(name: Builtin) @import("TerminalTheme.zig") {
     // Palette sources are recorded in docs/configuration.md. These are ANSI
     // colors, not a positional conversion of the chrome's semantic roles.
@@ -225,6 +242,24 @@ test "Shade is the default theme and its panel takes the terminal background" {
     try std.testing.expectEqualDeep(vesper.palette.overlay1, default_theme.palette.overlay1);
     try std.testing.expectEqualDeep(rgb(35, 35, 35), default_theme.palette.surface0);
     try std.testing.expectEqualDeep(rgb(52, 52, 52), default_theme.palette.surface1);
+}
+
+test "Shade syntax reproduces Osaka Jade roles without changing ANSI or chrome" {
+    const theme = builtin(.shade);
+    try std.testing.expectEqualDeep(rgb24c(0xa0a0a0), theme.syntax(.keyword));
+    try std.testing.expectEqualDeep(rgb24c(0xa8c98c), theme.syntax(.func));
+    try std.testing.expectEqualDeep(theme.syntax(.func), theme.syntax(.builtin));
+    try std.testing.expectEqualDeep(rgb24c(0xc3cea0), theme.syntax(.type));
+    try std.testing.expectEqualDeep(rgb24c(0xe6b99d), theme.syntax(.number));
+    try std.testing.expectEqualDeep(rgb24c(0xd1d1cf), theme.syntax(.plain));
+    try std.testing.expectEqualDeep(rgb24c(0x304a39), theme.syntax(.comment));
+    try std.testing.expectEqualDeep(rgb24c(0xadd0c5), theme.syntax(.parameter));
+    try std.testing.expect(theme.syntaxStyle(.parameter).italic);
+    try std.testing.expect(!theme.syntaxStyle(.keyword).italic);
+    const recolored = theme.withOverrides(.{ .text = rgb24c(0xff0000), .mauve = rgb24c(0x00ff00) });
+    try std.testing.expectEqualDeep(theme.syntax_styles, recolored.syntax_styles);
+    const fallback = builtin(.catppuccin).withOverrides(.{ .mauve = rgb24c(0x123456) });
+    try std.testing.expectEqualDeep(rgb24c(0x123456), fallback.syntax(.keyword));
 }
 
 test "Vesper stays available with its defining colors" {

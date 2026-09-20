@@ -1,3 +1,4 @@
+const change_review = @import("../change_review.zig");
 const GenericAgentDispatcher = @import("GenericAgentDispatcher.zig").Type;
 const GenericClientDispatcher = @import("GenericClientDispatcher.zig").Type;
 const GenericHistoryDispatcher = @import("GenericHistoryDispatcher.zig").Type;
@@ -87,6 +88,7 @@ pub fn Type(comptime Application: type) type {
                 .agent_description => |result| {
                     AgentEvents.handleDescription(application, result);
                 },
+                .change_review_completed => |job| change_review.complete(application, job),
                 .agent_history_completed => |job| @import("../agent_history.zig").complete(application, job),
                 .agent_thread_changed => |result| {
                     if (try @import("../agent_threads.zig").handle(application, result)) {

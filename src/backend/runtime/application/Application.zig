@@ -1,3 +1,6 @@
+const ReviewJobs = @import("../../change_review/Jobs.zig");
+const ReviewService = @import("../../change_review/Service.zig");
+const AdmittedReview = @import("../../change_review/Admitted.zig");
 const std = @import("std");
 const HeapType = @import("telar-core").Heap;
 const event = @import("../event.zig");
@@ -78,6 +81,9 @@ metrics: RuntimeMetricsType,
 session: ApplicationState = .{},
 session_name_probe_in_flight: bool = false,
 agent_history_jobs: @import("AgentHistoryJobs.zig") = .{},
+review_jobs: ReviewJobs = .{},
+review_service: ?*ReviewService = null,
+review_admitted: [max_panes_per_tab]?AdmittedReview = @splat(null),
 input_sequence: u64 = 0,
 cell_timer: DeadlineScheduler = .{},
 
@@ -90,7 +96,12 @@ pub fn init(initialization: Initialization) !Application {
     var executable_path: [std.fs.max_path_bytes]u8 = undefined;
     const executable_path_len = try std.process.executablePath(initialization.io, &executable_path);
 
+    var review_directory: [std.fs.max_path_bytes]u8 = undefined;
+    const review_path = try std.fmt.bufPrint(&review_directory, "{s}/change-reviews", .{std.fs.path.dirname(initialization.session_path orelse initialization.socket_path) orelse return error.InvalidReviewStorage});
+    const review_service = try ReviewService.init(initialization.gpa, review_path);
+    errdefer review_service.deinit();
     return .{
+        .review_service = review_service,
         .io = initialization.io,
         .gpa = initialization.gpa,
         .heap = initialization.heap,
@@ -161,6 +172,11 @@ pub fn shutdownStep(application: *Application, step: application_namespace.Shutd
         .destroy_panes => application.model.panes.deinit(),
         .destroy_workspaces => {
             application.agent_history_jobs.deinitJoined();
+            application.review_jobs.deinitJoined();
+            if (application.review_service) |service| {
+                service.deinit();
+                application.review_service = null;
+            }
             application.model.client_layouts.deinit();
             application_namespace.deinitWorkspaces(application);
         },
@@ -216,6 +232,7 @@ pub fn launchPane(application: *Application, request: LaunchRequestType) !*PaneT
         .gpa = application.gpa,
         .select = application.select,
         .history_service = application.history_service,
+        .review_service = application.review_service,
         .inherited_environment = application.inherited_environment,
         .socket_path = application.socket_path,
         .executable_path = application.executable_path[0..application.executable_path_len],

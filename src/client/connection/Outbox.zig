@@ -58,6 +58,7 @@ const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
 const PaneResizeType = @import("telar-core").PaneResize;
 const FrameAckType = @import("telar-core").FrameAck;
 const max_argument_count = @import("telar-core").max_argument_count;
+const core = @import("telar-core");
 const Outbox = @This();
 
 items: [outbox_support.capacity]outbox_support.Message = undefined,
@@ -120,7 +121,7 @@ pub fn push(outbox: *Outbox, message: outbox_support.Message) !void {
                 }
             }
         },
-        .pane_input, .agent_prompt, .query_agent_history, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout => unreachable,
+        .pane_input, .agent_prompt, .query_agent_history, .query_change_review, .change_review_command, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout => unreachable,
         else => {},
     }
     try outbox.append(message);
@@ -208,6 +209,28 @@ pub fn pushAgentHistory(outbox: *Outbox, query: @import("telar-core").QueryAgent
     @memcpy(outbox.input_bytes[index][0..query.cursor.len], query.cursor);
     @memcpy(outbox.input_bytes[index][query.cursor.len..][0..query.anchor.len], query.anchor);
     @memcpy(outbox.input_bytes[index][query.cursor.len + query.anchor.len ..][0..query.anchor_turn.len], query.anchor_turn);
+}
+
+/// Owns the complete encoded command in an existing byte slot before input returns.
+/// Example: `try outbox.pushChangeReviewCommand(command);`
+pub fn pushChangeReviewCommand(self: *Outbox, command: core.ChangeReviewCommand) !void {
+    try self.pushReview(command);
+}
+
+/// Owns the provider conversation identity before a review changes or closes.
+/// Example: `try outbox.pushChangeReviewQuery(query);`
+pub fn pushChangeReviewQuery(self: *Outbox, query: core.QueryChangeReview) !void {
+    try self.pushReview(query);
+}
+
+fn pushReview(self: *Outbox, value: anytype) !void {
+    const query = @TypeOf(value) == core.QueryChangeReview;
+    var scratch: [root.max_encoded_bytes]u8 = undefined;
+    const encoded = if (query) try core.encodeQueryChangeReview(&scratch, value) else try core.encodeChangeReviewCommand(&scratch, value);
+    const index = try self.reserve();
+    self.item_launch_cwd[index] = null;
+    self.items[index] = if (query) .{ .query_change_review = @intCast(encoded.len) } else .{ .change_review_command = @intCast(encoded.len) };
+    @memcpy(self.input_bytes[index][0..encoded.len], encoded);
 }
 
 /// Reserves a whole bounded paste before copying any chunk into the queue.
@@ -465,6 +488,7 @@ fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
         .agent_interrupt => |value| @import("telar-core").encodeAgentInterrupt(buffer, value),
         .agent_resume => |value| @import("telar-core").encodeAgentResume(buffer, value),
         .agent_approval => |value| @import("telar-core").encodeAgentApproval(buffer, value),
+        .query_change_review, .change_review_command => |len| outbox.input_bytes[outbox.head][0..len],
         .query_agent_thread => |value| @import("telar-core").encodeQueryAgentThread(buffer, value),
         .query_agent_history => |*value| @import("telar-core").encodeQueryAgentHistory(buffer, value.view(&outbox.input_bytes[outbox.head])),
     };

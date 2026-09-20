@@ -137,11 +137,72 @@ resolves for restore. Uninstall deletes the file only when it starts with
 the Telar marker line, so a user's own extension at that path is never
 touched.
 
+## File change review
+
+Claude Code `Write` and `Edit`, and Codex `apply_patch`, also record before/after
+file evidence through `report_change_review_sample`. This works in ordinary
+terminal panes using their inherited pane ID, generation and provider session.
+It does not require launching the agent in Telar's agent mode.
+
+Review reads expose the canonical provider session. Mutations carry that same
+session as well as the pane generation and expected revision, so resuming a
+different thread in the same pane cannot redirect a pending comment. CLI
+callers can also pin reads and edits with `--session SESSION`.
+
+The hook subprocess reads files before returning from `PreToolUse` and after
+`PostToolUse`; the runtime receives bounded bytes rather than doing filesystem
+work while handling input. Claude declares its path in `tool_input.file_path`.
+Codex declares paths in the Add/Update/Delete/Move headers of
+`tool_input.command`. Telar reads those headers to identify files; it does not
+apply the patch or parse source languages. These shapes follow the
+[Claude hook reference](https://code.claude.com/docs/en/hooks) and
+[Codex hook reference](https://developers.openai.com/es-419/docs/hooks).
+
+Each tool can declare at most 32 distinct paths, and each file sample is capped
+at 24 KiB. Every path component rejects symlinks. Files must be regular UTF-8
+text, with stable size and modification metadata during the read. Empty files
+and absent files are distinct. Binary, oversized, inaccessible and unstable
+files are omitted rather than truncated. Traversal components and malformed or
+oversized path lists are rejected. An unmatched after sample supplies no base
+from which Telar can claim a diff.
+
+These editions are labeled `observed_snapshot`: they capture the transition
+around the named tool, but another process might write the same file between
+the snapshots. Telar does not use the working tree's Git diff to attribute
+unrelated changes. Shell commands and unrecognized tools are not automatically
+captured. Pi's current asynchronous extension delivery cannot guarantee a
+before snapshot, so it does not advertise this capture capability.
+
+Only explicitly submitted review feedback is sent to the agent. On the next
+`PreToolUse`, `PostToolUse` or `UserPromptSubmit`, the hook fetches feedback for
+its exact provider/session and emits official
+`hookSpecificOutput.additionalContext` JSON. It acknowledges the feedback ID
+after flushing stdout. This hands feedback to the provider; it is not evidence
+that the model has acted on it. A lost acknowledgement or concurrent hooks can
+repeat the same ID, so delivery has at-least-once semantics. Telar never types
+review text into an ordinary pane's PTY and does not wake an idle agent with
+an unsolicited turn.
+
+Other cooperative integrations can use the same runtime API explicitly:
+
+```sh
+telar review feedback --current --provider codex --session SESSION --json
+telar review ack --current --provider codex --session SESSION --feedback-id ID
+```
+
+The feedback read does not consume it; the adapter acknowledges only after
+accepting it. `telar review list/show/comment/delete/submit/reviewed` provides
+the inspection and review actions from the terminal. `comment` accepts
+`--edition`, `--file`, `--first`, `--last`, `--body` and optional `--before`;
+`--revision` makes the optimistic revision check explicit. Both the CLI and
+hooks attach to an existing runtime and never start an orphaned one.
+
 ## Ownership
 
 `telar hook` never fails loudly: outside a pane, with a malformed payload or
-an unreachable runtime it exits 0, so the agent is unaffected. It sends at
-most one bounded lifecycle request and one bounded command request, then exits.
+an unreachable runtime it exits 0, so the agent is unaffected. Lifecycle,
+command and title reports remain bounded; supported file tools add at most
+32 file samples, and cooperative feedback adds one read and acknowledgement.
 
 The runtime keeps the report as `Agent.report`, the first evidence
 `chooseEvidence` consults while it is valid. Its reason and event line are

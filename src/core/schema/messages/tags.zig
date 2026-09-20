@@ -53,9 +53,14 @@ pub const ClientTag = enum(u8) {
     query_agent_thread = 0x30,
     query_agent_history = 0x31,
     agent_resume = 0x32,
+    query_change_review = 0x33,
+    change_review_command = 0x34,
+    report_change_review_sample = 0x35,
 };
 
 pub const ServerTag = enum(u8) {
+    change_review_snapshot = 0xad,
+    change_review_changed = 0xae,
     pane_opened = 0x81,
     pane_frame = 0x82,
     pane_exited = 0x83,

@@ -40,6 +40,7 @@ pub const Action = union(enum) {
     intent: @import("telar-client").Intent,
     text_field: Field,
     composer: @import("telar-core").PaneId,
+    change_review: @import("telar-core").PaneId,
     transcript: @import("telar-core").PaneId,
     thread_item: @import("ThreadItemControl.zig"),
     message_link: @import("MessageLinkControl.zig"),
@@ -57,7 +58,7 @@ pub const Action = union(enum) {
 /// Example: `const pane_id = target.paneId() orelse return;`
 pub fn paneId(target: Target) ?@import("telar-core").PaneId {
     return switch (target.action) {
-        .composer, .transcript => |id| id,
+        .composer, .transcript, .change_review => |id| id,
         .agent_control => |control| control.pane_id,
         .thread_item => |control| control.pane_id,
         .message_link => |control| control.owner.pane_id,
@@ -71,7 +72,7 @@ pub fn paneId(target: Target) ?@import("telar-core").PaneId {
 /// Example: `if (target.activatable()) exposePressAction();`
 pub fn activatable(target: Target) bool {
     return switch (target.action) {
-        .intent, .prompt, .complete_path, .history, .agent_control, .composer_selector, .composer_choice, .composer_completion, .thread_item => true,
+        .change_review, .intent, .prompt, .complete_path, .history, .agent_control, .composer_selector, .composer_choice, .composer_completion, .thread_item => true,
         else => false,
     };
 }

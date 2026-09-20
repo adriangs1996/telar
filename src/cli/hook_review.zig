@@ -1,0 +1,99 @@
+//! File evidence and cooperative feedback for agents in ordinary terminal panes.
+const std = @import("std");
+const Session = @import("Session.zig");
+const PaneRef = @import("PaneRef.zig");
+const ReviewHookReport = @import("ReviewHookReport.zig");
+const ReviewHookFiles = @import("ReviewHookFiles.zig");
+const ReviewFileSample = @import("ReviewFileSample.zig");
+const review = @import("telar-core").change_review;
+const ChangeReviewCommand = @import("telar-core").ChangeReviewCommand;
+const paneId = @import("telar-core").pane;
+const control = @import("control.zig");
+
+/// Runs only inside the hook subprocess; failed evidence never becomes a diff.
+/// Example: `hook_review.capture(session, pane, report);`
+pub fn capture(session: *Session, pane: PaneRef, report: ReviewHookReport) void {
+    const input = report.input;
+    const phase: review.SamplePhase = if (std.mem.eql(u8, input.event, "PreToolUse")) .before else if (std.mem.eql(u8, input.event, "PostToolUse")) .after else return;
+    if (input.session.len == 0 or input.session.len > review.max_identity_bytes or input.tool_call_id.len > review.max_identity_bytes) {
+        return;
+    }
+
+    const files = ReviewHookFiles.collect(report.provider, input) catch return;
+    var sample: ReviewFileSample = .{};
+    for (files.paths[0..files.count]) |path| {
+        const absolute = if (std.fs.path.isAbsolute(path)) session.gpa.dupe(u8, path) catch continue else std.fs.path.join(session.gpa, &.{ input.cwd, path }) catch continue;
+        defer session.gpa.free(absolute);
+        if (absolute.len > review.max_path_bytes) {
+            continue;
+        }
+
+        sample.read(session.io, absolute) catch continue;
+        session.reportReviewSample(.{
+            .request_id = .none,
+            .pane_id = paneId(pane.pane_id) catch return,
+            .pane_generation = pane.pane_generation,
+            .provider = report.provider,
+            .session = input.session,
+            .tool_call_id = input.tool_call_id,
+            .phase = phase,
+            .path = absolute,
+            .exists = sample.exists,
+            .content = sample.storage[0..sample.len],
+        }) catch return;
+    }
+}
+
+/// Delivers only explicitly submitted feedback through the provider's hook API.
+/// Example: `try hook_review.feedback(session, pane, report);`
+pub fn feedback(session: *Session, pane: PaneRef, report: ReviewHookReport) !void {
+    const input = report.input;
+    if (report.provider == .pi or input.session.len == 0 or (input.agent_id != null and input.agent_id.?.len != 0)) {
+        return;
+    }
+
+    if (!std.mem.eql(u8, input.event, "PreToolUse") and !std.mem.eql(u8, input.event, "PostToolUse") and !std.mem.eql(u8, input.event, "UserPromptSubmit")) {
+        return;
+    }
+
+    var command = ChangeReviewCommand{
+        .request_id = .none,
+        .pane_id = try paneId(pane.pane_id),
+        .pane_generation = pane.pane_generation,
+        .action = .feedback,
+        .provider = report.provider,
+        .session = input.session,
+    };
+    const pending = try session.commandReview(command);
+    if (pending.feedback_id == 0 or pending.feedback.len == 0) {
+        return;
+    }
+
+    var output_buffer: [1024]u8 = undefined;
+    var output = std.Io.File.stdout().writerStreaming(session.io, &output_buffer);
+    try writeFeedback(&output.interface, input.event, pending.feedback);
+    try output.interface.flush();
+    command.action = .ack_feedback;
+    command.edition_id = pending.edition_id;
+    command.feedback_id = pending.feedback_id;
+    _ = try session.commandReview(command);
+}
+
+fn writeFeedback(writer: *std.Io.Writer, event: []const u8, text: []const u8) !void {
+    try writer.writeAll("{\"hookSpecificOutput\":{\"hookEventName\":");
+    try control.writeJsonString(writer, event);
+    try writer.writeAll(",\"additionalContext\":");
+    try control.writeJsonString(writer, text);
+    try writer.writeAll("}}\n");
+}
+
+test "review hook feedback is valid official JSON and preserves Unicode and newlines" {
+    var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer output.deinit();
+    try writeFeedback(&output.writer, "PostToolUse", "Review #7: café\n\"quote\"\\path");
+    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, output.written(), .{});
+    defer parsed.deinit();
+    const specific = parsed.value.object.get("hookSpecificOutput").?.object;
+    try std.testing.expectEqualStrings("PostToolUse", specific.get("hookEventName").?.string);
+    try std.testing.expectEqualStrings("Review #7: café\n\"quote\"\\path", specific.get("additionalContext").?.string);
+}

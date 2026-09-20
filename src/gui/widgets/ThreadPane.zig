@@ -2,6 +2,7 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
+const ChangeReviewButton = @import("ChangeReviewButton.zig");
 const ThreadPane = @This();
 
 area: core.Rect,
@@ -28,8 +29,10 @@ pub fn draw(widget: ThreadPane, canvas: *Canvas) !void {
     const status = if (widget.thread.transcript) |snapshot| snapshot.status else .starting;
     const status_text = @import("thread_status.zig").text(widget.thread.transcript);
     const title = if (widget.thread.agent) |agent| agent.displayName() else if (widget.thread.kind == .agent) "Codex" else "Conversation";
-    const status_width = @min(layout.header.width / 2, try canvas.measure(.{ .text = status_text, .face = .sans, .size = .small }) + canvas.chrome.px(18));
-    const resume_width = if (widget.thread.transcript) |snapshot| if (snapshot.canResume()) @min(canvas.chrome.px(220), layout.header.width * 0.55) else @as(f32, 0) else @as(f32, 0);
+    var header = layout.header;
+    header.width -= try (ChangeReviewButton{ .area = header, .pane_id = widget.thread.pane_id, .generation = widget.thread.attachment_generation, .placement = .thread_header }).draw(canvas);
+    const status_width = @min(header.width / 2, try canvas.measure(.{ .text = status_text, .face = .sans, .size = .small }) + canvas.chrome.px(18));
+    const resume_width = if (widget.thread.transcript) |snapshot| if (snapshot.canResume()) @min(canvas.chrome.px(220), header.width * 0.55) else @as(f32, 0) else @as(f32, 0);
     if (resume_width > 0) {
         const recent = &widget.thread.transcript.?.recent;
         const label: []const u8 = switch (recent.phase) {
@@ -38,7 +41,7 @@ pub fn draw(widget: ThreadPane, canvas: *Canvas) !void {
             .ready => if (recent.count == 0) "No recent conversations" else "Resume conversation…",
         };
         try (@import("ComposerTrigger.zig"){
-            .bounds = .{ .x = layout.header.x + layout.header.width - status_width - resume_width, .y = layout.header.y, .width = resume_width, .height = layout.header.height },
+            .bounds = .{ .x = header.x + header.width - status_width - resume_width, .y = header.y, .width = resume_width, .height = header.height },
             .selector = .{ .pane_id = widget.thread.pane_id, .kind = .recent, .catalog_revision = widget.thread.catalog_revision, .options_revision = widget.thread.options_revision },
             .generation = widget.thread.attachment_generation,
             .label = label,
@@ -46,8 +49,8 @@ pub fn draw(widget: ThreadPane, canvas: *Canvas) !void {
         }).draw(canvas);
     }
 
-    _ = try canvas.textAt(.{ .x = layout.header.x, .y = layout.header.y, .width = @max(0, layout.header.width - status_width - resume_width), .height = layout.header.height }, .{ .text = title, .face = .sans, .size = .title, .bold = true, .color = palette.text });
-    try (@import("ActivityText.zig"){ .bounds = .{ .x = layout.header.x + layout.header.width - status_width, .y = layout.header.y, .width = status_width, .height = layout.header.height }, .label = .{ .text = status_text, .face = .sans, .size = .small, .color = if (status == .blocked) palette.yellow else if (status == .failed) palette.red else palette.subtext0 }, .active = @import("thread_status.zig").active(widget.thread.transcript) }).draw(canvas);
+    _ = try canvas.textAt(.{ .x = header.x, .y = header.y, .width = @max(0, header.width - status_width - resume_width), .height = header.height }, .{ .text = title, .face = .sans, .size = .title, .bold = true, .color = palette.text });
+    try (@import("ActivityText.zig"){ .bounds = .{ .x = header.x + header.width - status_width, .y = header.y, .width = status_width, .height = header.height }, .label = .{ .text = status_text, .face = .sans, .size = .small, .color = if (status == .blocked) palette.yellow else if (status == .failed) palette.red else palette.subtext0 }, .active = @import("thread_status.zig").active(widget.thread.transcript) }).draw(canvas);
     var request: ?*const core.AgentApprovalRequest = null;
     if (canvas.widgets) |state| {
         if (state.approval_review) |review| {

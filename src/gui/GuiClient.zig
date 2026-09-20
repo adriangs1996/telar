@@ -11,6 +11,9 @@ const native = @import("native/native.zig");
 const selection = @import("render/copy_selection.zig");
 const State = @import("widgets/interaction/State.zig");
 const Chrome = @import("widgets/Chrome.zig");
+const SyntaxService = @import("syntax/Service.zig");
+const ReviewPanel = @import("change_review/Panel.zig");
+const review_dispatch = @import("change_review/dispatch.zig");
 
 const GuiClient = @This();
 
@@ -31,6 +34,8 @@ overlays: @import("widgets/overlays/Overlays.zig") = .{},
 lifecycle: client.PresentationLifecycleState = .{},
 graphics_store: @import("graphics_delivery.zig").Store,
 diagrams: @import("diagrams/Service.zig"),
+syntax: SyntaxService,
+review: *ReviewPanel,
 
 pub fn of(app: *client.AttachedClient) *GuiClient {
     return @fieldParentPtr("app", app);
@@ -42,6 +47,8 @@ pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
     const input = try NativeInput.init(.{ .prefix = params.options.prefix, .bindings = params.options.bindings, .escape_timeout_ns = params.options.input_escape_timeout_ns, .sequence_timeout_ns = params.options.input_sequence_timeout_ns });
     const gui = try params.gpa.create(GuiClient);
     errdefer params.gpa.destroy(gui);
+    const review = try params.gpa.create(ReviewPanel);
+    errdefer params.gpa.destroy(review);
     try client.AttachedClient.init(&gui.app, params);
     // Native chrome uses the shared semantic projection, never TUI Kitty output.
     gui.app.options.sidebar_renderer_locked = true;
@@ -61,6 +68,11 @@ pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
     gui.lifecycle = .{};
     gui.graphics_store = .init(params.gpa);
     gui.diagrams = .init(params.gpa);
+    gui.syntax = .{ .allocator = params.gpa };
+    gui.review = review;
+    gui.review.* = .{ .allocator = params.gpa };
+    gui.review.widget.host_port = &gui.host;
+    gui.review.widget.widgets = &gui.widgets;
     gui.app.sound_port = host_ports.sound(&gui.app);
     gui.app.notifier = host_ports.notifier(&gui.app);
     gui.app.link_opener = host_ports.links(&gui.app);
@@ -95,6 +107,7 @@ pub fn deinit(gui: *GuiClient) void {
     gui.diagrams.deinit();
     gui.chrome.favicons.deinit(gpa);
     gui.widgets.deinit();
+    gpa.destroy(gui.review);
     gui.app.deinit();
     gpa.destroy(gui);
 }
@@ -297,6 +310,9 @@ pub fn complete(gui: *GuiClient, token: u64, delivered: bool) !void {
     gui.overlays.present(delivered);
     @import("widgets/interaction/routing.zig").reconcileFocus(gui);
     gui.widgets.present(delivered);
+    if (gui.review.active) {
+        gui.review.widget.present(delivered);
+    }
     @import("widgets/interaction/routing.zig").reconcileFocus(gui);
     gui.input.pointer.hover.present(delivered);
     const delivery = gui.lifecycle.complete(@enumFromInt(token), if (delivered) .delivered else .failed) orelse return;
@@ -347,16 +363,21 @@ pub fn prepare(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.zig"
     try @import("widgets/interaction/thread_scroll.zig").advance(gui, gui.chrome.now_ns);
     try @import("widgets/interaction/thread_selection.zig").prepare(gui);
     gui.diagrams.beginFrame();
+    gui.syntax.beginFrame();
+    try gui.review.synchronize(&gui.app);
+    gui.review.widget.theme_override = gui.theme;
 
     gui.refreshPointer();
     try gui.resolveFavicons(renderer);
     const projected = gui.projection();
     const observed = gui.observation();
     _ = gui.lifecycle.observe(observed);
-    var scene: @import("render/Scene.zig") = .{ .terminal = renderer, .chrome = &gui.chrome, .overlays = &gui.overlays, .theme = gui.theme, .link = if (gui.input.pointer.hover.link) |*hit| hit else null, .widgets = &gui.widgets, .diagrams = &gui.diagrams.store };
+    var scene: @import("render/Scene.zig") = .{ .terminal = renderer, .chrome = &gui.chrome, .overlays = &gui.overlays, .theme = gui.theme, .link = if (gui.input.pointer.hover.link) |*hit| hit else null, .widgets = &gui.widgets, .diagrams = &gui.diagrams.store, .syntax = &gui.syntax.store, .review = if (gui.review.active) &gui.review.widget else null };
     const commit = try scene.prepare(projected);
     const diagram_revision = gui.diagrams.store.revision;
     gui.diagrams.start(&gui.driver.inbox);
+    gui.syntax.start(&gui.driver.inbox);
+    gui.review.start(.{ .app = &gui.app, .inbox = &gui.driver.inbox });
     renderer.diagrams = gui.diagrams.store.textures();
     if (gui.diagrams.store.revision != diagram_revision) {
         gui.chrome.invalidate();
@@ -371,6 +392,34 @@ pub fn prepare(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.zig"
 pub fn landDiagram(gui: *GuiClient) void {
     gui.diagrams.notify();
     gui.chrome.invalidate();
+}
+
+/// The inbox synchronizes completed tokens; adoption waits for frame preparation.
+/// Example: `gui.landSyntax();`
+pub fn landSyntax(self: *GuiClient) void {
+    self.syntax.notify();
+    self.chrome.invalidate();
+}
+
+/// Opens a runtime review for either a terminal pane or a managed agent.
+/// Example: `try gui.openChangeReview(pane_id);`
+pub fn openChangeReview(self: *GuiClient, pane_id: core.PaneId) !void {
+    try self.review.open(&self.app, pane_id);
+    try self.input.pointer.cancel(&self.app);
+    self.input.pointer.invalidateGestures();
+    self.widgets.dispatcher.cancel();
+    self.widgets.cancelComposition();
+    self.widgets.tab_drag.cancel();
+    self.chrome.cancelPointer();
+    self.overlays.cancelPointer();
+    self.chrome.invalidate();
+}
+
+/// Inbox completion releases the worker's immutable patch for the next frame.
+/// Example: `gui.landChangeReview();`
+pub fn landChangeReview(self: *GuiClient) void {
+    self.review.notify();
+    self.chrome.invalidate();
 }
 
 /// Lands one favicon lookup from the inbox; the next preparation places it.
@@ -415,38 +464,64 @@ pub fn observation(gui: *const GuiClient) client.Observation {
 }
 
 fn ingress(gui: *const GuiClient) client.PresentationIngress {
-    return .{ .input_routing = gui.input.presentation_revision, .view_interaction = gui.chrome.revision +% gui.input.pointer.hover.revision +% gui.widgets.dispatcher.revision };
+    return .{ .input_routing = gui.input.presentation_revision, .view_interaction = gui.chrome.revision +% gui.input.pointer.hover.revision +% gui.widgets.dispatcher.revision +% gui.app.change_review.version };
 }
 
 /// Routes delivered widget targets before falling back to terminal input.
 /// Example: `if (try gui.widgetInput(event)) return;`
 pub fn widgetInput(gui: *GuiClient, event: @import("input/event.zig").Event) !bool {
+    if (gui.review.active) {
+        if (try @import("widgets/interaction/routing.zig").continueFallback(gui, event)) {
+            return true;
+        }
+        defer gui.chrome.invalidate();
+        return review_dispatch.apply(&gui.review.widget, event);
+    }
     return @import("widgets/interaction/routing.zig").apply(gui, event);
 }
 
 /// Example: `const captured = try gui.beginWidgetPaste();`
 pub fn beginWidgetPaste(gui: *GuiClient) !bool {
+    if (gui.review.active) {
+        gui.review.beginPaste();
+        return true;
+    }
     return @import("widgets/interaction/routing.zig").beginPaste(gui);
 }
 
 /// Example: `try gui.widgetPaste(bytes);`
 pub fn widgetPaste(gui: *GuiClient, bytes: []const u8) !void {
+    if (gui.review.paste_generation != null) {
+        gui.review.appendPaste(bytes);
+        return;
+    }
     try @import("widgets/interaction/routing.zig").paste(gui, bytes);
 }
 
 /// Example: `try gui.endWidgetPaste();`
 pub fn endWidgetPaste(gui: *GuiClient) !void {
+    if (gui.review.paste_generation != null) {
+        try gui.review.endPaste();
+        gui.chrome.invalidate();
+        return;
+    }
     try @import("widgets/interaction/routing.zig").endPaste(gui);
 }
 
 /// Publishes current editing state with the delivered caret geometry.
 /// Example: `if (gui.widgetTextContext(&context)) publish(context);`
 pub fn widgetTextContext(gui: *GuiClient, output: *native.TextContext) bool {
+    if (gui.review.active) {
+        return gui.review.widget.textContext(output);
+    }
     return @import("widgets/interaction/host_context.zig").text(gui, output);
 }
 
 /// Publishes owned widget semantics using delivered geometry.
 /// Example: `if (gui.widgetAccessibility(&tree)) publish(tree);`
 pub fn widgetAccessibility(gui: *GuiClient, output: *native.AccessibilityTree) bool {
+    if (gui.review.active) {
+        return gui.review.widget.accessibility(output);
+    }
     return @import("widgets/interaction/host_context.zig").accessibility(gui, output);
 }

@@ -9,6 +9,7 @@ pub fn forAction(projection: *const client.Projection, action: Action) []const u
         .custom => "Agents",
         .text_field => |field| if (field == .name) "Name or query" else "Working directory",
         .composer => "Message to agent",
+        .change_review => "Review changes",
         .transcript => "Conversation",
         .message_link => "Link",
         .thread_item => |control| if (control.operation == .copy) "Copy message" else "Show activity details",

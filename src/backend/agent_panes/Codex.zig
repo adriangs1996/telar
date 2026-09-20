@@ -519,6 +519,7 @@ fn finishCommand(codex: *Codex, result: std.json.Value) !void {
     codex.completed_turn_id_len = 0;
     codex.children = .{};
     codex.children.setRoot(id);
+    codex.metadata.review_latest_edition_id = 0;
     codex.metadata.applyName(protocol.field(thread_value, "name"));
     codex.command_request = null;
     codex.pending_options = null;

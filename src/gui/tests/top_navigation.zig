@@ -363,7 +363,7 @@ test "moving workspaces to the sidebar preserves every tab bound across sidebar 
         try std.testing.expect(first_tab.x > top.width / 2);
         try std.testing.expect(first_tab.x + first_tab.width <= second_tab.x);
         try std.testing.expect(second_tab.x + second_tab.width <= plus.x);
-        try std.testing.expect(top.width - (plus.x + plus.width) <= 12);
+        try std.testing.expect(top.width - (plus.x + plus.width) <= 12 + 36);
         try std.testing.expect(workspace.y >= top.height and first_tab.y < top.height);
         try std.testing.expectEqual(top.height, second_tab.y + second_tab.height);
 
