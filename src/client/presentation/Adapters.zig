@@ -7,6 +7,7 @@ pub const notifications = @import("Unsupported.zig");
 pub const client_layouts = @import("UnsupportedVoid.zig");
 pub const pane_clipboards = @import("UnsupportedVoid.zig");
 pub const pane_closures = @import("Unsupported.zig");
+pub const client_commands = @import("UnsupportedVoid.zig");
 pub const pane_focus_commands = @import("UnsupportedVoid.zig");
 pub const pane_graphics = @import("Unsupported.zig");
 pub const pane_metadata = @import("Unsupported.zig");

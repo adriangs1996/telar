@@ -1,3 +1,9 @@
+const ClientCommandController = @import("../entrypoints/requests/ClientCommandController.zig");
+const ClientCommand = @import("telar-core").ClientCommand;
+const ClientDetachController = @import("../entrypoints/requests/ClientDetachController.zig");
+const DetachClient = @import("telar-core").DetachClient;
+const ClientQueryController = @import("../entrypoints/requests/ClientQueryController.zig");
+const QueryClients = @import("telar-core").QueryClients;
 const ChangeReviewHandler = @import("commands/ChangeReviewHandler.zig");
 const ChangeReviewController = @import("../entrypoints/requests/ChangeReviewController.zig");
 const QueryChangeReview = @import("telar-core").QueryChangeReview;
@@ -218,6 +224,10 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             .show_notification = routeShowNotification,
             .update_client_layout = routeUpdateClientLayout,
             .acknowledge_agent = routeAcknowledgeAgent,
+            .request_client_command = routeClientCommand,
+            .complete_client_command = completeClientCommand,
+            .detach_client = routeDetachClient,
+            .query_clients = routeQueryClients,
             .query_agents = routeQueryAgents,
             .read_pane = routeReadPane,
             .send_pane_text = routeSendPaneText,
@@ -854,6 +864,43 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             const now_ms = std.Io.Timestamp.now(request.application.io, .real).toMilliseconds();
 
             controller.acknowledgeAgent(acknowledgement, now_ms);
+        }
+
+        fn clientCommandController(request: *ClientRequestContext) ClientCommandController {
+            return .{ .handler = .{ .clients = request.application.clients, .effects = .{ .context = request.application, .pump = pumpControlledClient } }, .session = request.session };
+        }
+
+        fn pumpControlledClient(raw: *anyopaque, session: *Session) !void {
+            const application: *Application = @ptrCast(@alignCast(raw));
+            try application.pump(session);
+        }
+
+        fn routeClientCommand(request: *ClientRequestContext, command: ClientCommand) !void {
+            var controller = clientCommandController(request);
+            try controller.request(command);
+        }
+
+        fn completeClientCommand(request: *ClientRequestContext, command: ClientCommand) !void {
+            var controller = clientCommandController(request);
+            try controller.complete(command);
+        }
+
+        fn routeDetachClient(request: *ClientRequestContext, command: DetachClient) !void {
+            var controller: ClientDetachController = .{
+                .handler = .{ .clients = request.application.clients, .effects = .{ .context = request.application, .drop = dropControlledClient } },
+                .session = request.session,
+            };
+            try controller.detach(command);
+        }
+
+        fn dropControlledClient(raw_context: *anyopaque, key: ClientKeyType) void {
+            const application: *Application = @ptrCast(@alignCast(raw_context));
+            application.dropClient(key);
+        }
+
+        fn routeQueryClients(request: *ClientRequestContext, query: QueryClients) !void {
+            var controller: ClientQueryController = .{ .handler = .{ .clients = request.application.clients }, .responses = &request.session.delivery.responses };
+            try controller.query(query);
         }
 
         fn routeQueryAgents(request: *ClientRequestContext, query: QueryAgentsType) !void {

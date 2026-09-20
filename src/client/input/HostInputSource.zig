@@ -3,8 +3,10 @@ const RouterConfigType = @import("RouterConfig.zig");
 /// backpressure, hands it replayed bytes a prompt must decode, and gives it
 /// the bindings a reloaded configuration compiled. Native conversation readers
 /// can own copy mode without creating a terminal-cell selection.
+const ThreadExpansion = @import("ThreadExpansion.zig");
 const HostInputSource = @This();
 
+set_thread_expansion_fn: ?*const fn (*anyopaque, ThreadExpansion) anyerror!void = null,
 context: *anyopaque,
 resume_read_fn: *const fn (*anyopaque) anyerror!void,
 route_prompt_bytes_fn: *const fn (*anyopaque, []const u8) anyerror!void,
@@ -51,4 +53,10 @@ pub fn routePromptBytes(port: HostInputSource, bytes: []const u8) !void {
 /// still cannot compile them keeps its previous bindings.
 pub fn adoptBindings(port: HostInputSource, config: RouterConfigType) void {
     port.adopt_bindings_fn(port.context, config);
+}
+
+/// Sets one visible native disclosure without emulating input. Example: `try port.setThreadExpansion(request);`
+pub fn setThreadExpansion(self: HostInputSource, request: ThreadExpansion) !void {
+    const set = self.set_thread_expansion_fn orelse return error.ThreadDisclosureUnsupported;
+    try set(self.context, request);
 }

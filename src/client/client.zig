@@ -54,6 +54,7 @@ pub const HostChrome = @import("presentation/HostChrome.zig");
 pub const HostClipboard = @import("application/panes/Clipboard.zig");
 pub const HostClock = @import("resources/HostClock.zig");
 pub const HostGraphics = @import("graphics/HostGraphics.zig");
+pub const ThreadExpansion = @import("input/ThreadExpansion.zig");
 pub const HostInputSource = @import("input/HostInputSource.zig");
 pub const HostNotifier = @import("notifications/HostNotifier.zig");
 pub const HostPresentation = @import("presentation/HostPresentation.zig");

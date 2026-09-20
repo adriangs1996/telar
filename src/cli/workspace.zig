@@ -7,6 +7,8 @@ const agent = @import("agent.zig");
 const SessionType = @import("Session.zig");
 const control = @import("control.zig");
 const workspace = @import("arguments/workspace.zig");
+const workspace_output = @import("workspace_output.zig");
+const core = @import("telar-core");
 
 const git_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(60) },
@@ -33,15 +35,29 @@ pub fn run(init: std.process.Init, options: WorkspaceOptions) !u8 {
 /// rooted at it. Git runs in this process with the user's environment and
 /// credentials; the runtime never executes git on the CLI's behalf.
 fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Writer) !u8 {
-    const branch = std.mem.span(options.branch.?);
+    if (options.action == .list or options.action == .get) {
+        return list(init, options, writer);
+    }
+    if (options.action == .rename) {
+        return rename(init, options, writer);
+    }
+
     var directory_buffer: [4096]u8 = undefined;
     const directory = try resolveDirectory(init, options, &directory_buffer);
-    try addWorktree(init, options, directory);
+    if (options.branch != null) {
+        try addWorktree(init, options, directory);
+    }
+
+    const default_name = if (options.branch) |branch| std.mem.span(branch) else std.fs.path.basename(directory);
+    const name = if (options.name) |value| std.mem.span(value) else default_name;
+    if (name.len == 0) {
+        return error.MissingWorkspaceName;
+    }
 
     var session = try SessionType.open(init, options.socket);
     defer session.close();
     const workspace_id = try session.createWorkspace(.{
-        .name = if (options.name) |name| std.mem.span(name) else branch,
+        .name = name,
         .cwd = directory,
         .arguments = &.{shellArgument(init.minimal.environ)},
     });
@@ -57,8 +73,98 @@ fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Wr
     return agent.exit_ok;
 }
 
+fn rename(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Writer) !u8 {
+    const id = try options.target.?.resolve(init.minimal.environ, "TELAR_WORKSPACE_ID");
+    var session = try SessionType.attach(init, options.socket);
+    defer session.close();
+    const response = try session.exchange(core.encodeRenameWorkspace, core.RenameWorkspace{
+        .request_id = .none,
+        .workspace = .{ .workspace = @enumFromInt(id) },
+        .name = std.mem.span(options.name.?),
+    });
+    if (response != .workspace_snapshot) {
+        return error.UnexpectedRuntimeResponse;
+    }
+
+    const snapshot = response.workspace_snapshot;
+    if (snapshot.workspace != .workspace or core.raw(snapshot.workspace.workspace) != id) {
+        return error.UnexpectedRuntimeResponse;
+    }
+
+    if (options.json) {
+        try std.json.Stringify.value(.{ .workspace_id = id, .name = snapshot.name }, .{}, writer);
+        try writer.writeByte('\n');
+    } else {
+        try writer.print("workspace {d} renamed to {s}\n", .{ id, snapshot.name });
+    }
+
+    return agent.exit_ok;
+}
+
+fn list(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Writer) !u8 {
+    const wanted: ?u64 = if (options.target) |target| try target.resolve(init.minimal.environ, "TELAR_WORKSPACE_ID") else null;
+    var session = try SessionType.attach(init, options.socket);
+    defer session.close();
+    try session.subscribeRuntime();
+
+    while (true) {
+        const response = try session.receive();
+        if (response != .workspace_list) {
+            continue;
+        }
+
+        if (wanted) |id| {
+            var entries = response.workspace_list.entries();
+            while (try entries.next()) |entry| {
+                if (core.raw(entry.workspace) != id) {
+                    continue;
+                }
+
+                try workspace_output.write(writer, entry, options.json);
+                if (options.json) {
+                    try writer.writeByte('\n');
+                }
+
+                return agent.exit_ok;
+            }
+
+            return error.WorkspaceNotFound;
+        }
+
+        if (options.json) {
+            try writer.writeByte('[');
+        } else {
+            try writer.writeAll("ID\tNAME\tDIRECTORY\tTABS\tBRANCH\tGIT\n");
+        }
+
+        var entries = response.workspace_list.entries();
+        var first = true;
+        while (try entries.next()) |entry| {
+            if (options.json and !first) {
+                try writer.writeByte(',');
+            }
+
+            try workspace_output.write(writer, entry, options.json);
+            first = false;
+        }
+
+        if (options.json) {
+            try writer.writeAll("]\n");
+        }
+
+        return agent.exit_ok;
+    }
+}
+
 fn resolveDirectory(init: std.process.Init, options: WorkspaceOptions, buffer: []u8) ![]const u8 {
     if (options.directory) |directory| {
+        if (options.branch == null) {
+            var dir = try std.Io.Dir.cwd().openDir(init.io, std.mem.span(directory), .{});
+            defer dir.close(init.io);
+            const length = try dir.realPath(init.io, buffer);
+            return buffer[0..length];
+        }
+
         return std.mem.span(directory);
     }
 

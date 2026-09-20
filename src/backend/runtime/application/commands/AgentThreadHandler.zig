@@ -31,13 +31,13 @@ pub fn execute(handler: *@This(), operation: Operation) !PaneKey {
         .interrupt => session.interrupt(handler.io),
         .approval => |decision| session.approve(handler.io, decision),
         .query => true,
-        .resume_conversation => |index| blk: {
+        .resume_conversation => |selection| blk: {
             const snapshot = pane.agent_thread orelse return error.InvalidConversation;
-            if (!snapshot.canResume() or snapshot.recent.phase != .ready or index >= snapshot.recent.count) {
+            if (snapshot.revision != selection.revision or !snapshot.canResume() or snapshot.recent.phase != .ready or selection.index >= snapshot.recent.count) {
                 return error.InvalidConversation;
             }
 
-            const entry = snapshot.recent.entries[index];
+            const entry = snapshot.recent.entries[selection.index];
             for (handler.panes.items) |slot| {
                 const other = slot orelse continue;
                 if (other == pane or other.kind != .agent or other.exit != null) {
@@ -191,8 +191,9 @@ test "resume authority rejects stale selections and reserves a conversation acro
     var handler: @This() = .{ .io = io, .panes = &panes };
     var stale = fixture.pane.key();
     stale.generation += 1;
-    try std.testing.expectError(error.PaneNotFound, handler.execute(.{ .pane = stale, .action = .{ .resume_conversation = 0 } }));
-    try std.testing.expectError(error.InvalidConversation, handler.execute(.{ .pane = fixture.pane.key(), .action = .{ .resume_conversation = 1 } }));
-    _ = try handler.execute(.{ .pane = fixture.pane.key(), .action = .{ .resume_conversation = 0 } });
-    try std.testing.expectError(error.ConversationAlreadyOpen, handler.execute(.{ .pane = second.key(), .action = .{ .resume_conversation = 0 } }));
+    try std.testing.expectError(error.PaneNotFound, handler.execute(.{ .pane = stale, .action = .{ .resume_conversation = .{ .index = 0, .revision = snapshots[0].revision } } }));
+    try std.testing.expectError(error.InvalidConversation, handler.execute(.{ .pane = fixture.pane.key(), .action = .{ .resume_conversation = .{ .index = 1, .revision = snapshots[0].revision } } }));
+    try std.testing.expectError(error.InvalidConversation, handler.execute(.{ .pane = fixture.pane.key(), .action = .{ .resume_conversation = .{ .index = 0, .revision = snapshots[0].revision + 1 } } }));
+    _ = try handler.execute(.{ .pane = fixture.pane.key(), .action = .{ .resume_conversation = .{ .index = 0, .revision = snapshots[0].revision } } });
+    try std.testing.expectError(error.ConversationAlreadyOpen, handler.execute(.{ .pane = second.key(), .action = .{ .resume_conversation = .{ .index = 0, .revision = snapshots[1].revision } } }));
 }

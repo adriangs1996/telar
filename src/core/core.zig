@@ -494,6 +494,21 @@ pub const AgentSkills = @import("AgentSkills.zig");
 pub const AgentSkill = @import("AgentSkill.zig");
 pub const AgentCommand = @import("AgentCommand.zig");
 
+pub const ClientDescriptor = @import("ClientDescriptor.zig");
+pub const ClientList = @import("ClientList.zig");
+pub const QueryClients = @import("schema/messages/QueryClients.zig");
+pub const encodeQueryClients = @import("schema/messages/clients.zig").encodeQueryClients;
+pub const encodeClientList = @import("schema/messages/clients.zig").encodeClientList;
+
+pub const DetachClient = @import("schema/messages/DetachClient.zig");
+pub const encodeDetachClient = @import("schema/messages/clients.zig").encodeDetachClient;
+
+pub const ClientCommand = @import("schema/messages/ClientCommand.zig");
+pub const ClientAction = @import("schema/messages/client_actions.zig").Action;
+pub const encodeRequestClientCommand = @import("schema/messages/client_commands.zig").encodeRequestClientCommand;
+pub const encodeCompleteClientCommand = @import("schema/messages/client_commands.zig").encodeCompleteClientCommand;
+pub const encodeClientCommand = @import("schema/messages/client_commands.zig").encodeClientCommand;
+pub const encodeClientCommandResult = @import("schema/messages/client_commands.zig").encodeClientCommandResult;
 pub const change_review = @import("change_review.zig");
 pub const ChangeReviewComment = @import("ChangeReviewComment.zig");
 pub const ChangeReviewDiffLines = @import("change_review/DiffLines.zig");

@@ -15,7 +15,7 @@ pub fn handle(controller: *@This(), request: anytype) !void {
     else if (T == core.AgentInterrupt)
         .interrupt
     else if (T == core.AgentResume)
-        .{ .resume_conversation = request.conversation_index }
+        .{ .resume_conversation = .{ .index = request.conversation_index, .revision = request.expected_revision } }
     else if (T == core.AgentApproval)
         .{ .approval = .{ .id = request.approval_id, .accepted = request.accept } }
     else if (T == core.QueryAgentThread)

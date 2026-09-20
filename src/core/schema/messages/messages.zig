@@ -98,6 +98,10 @@ const history = @import("history.zig");
 const tab = @import("tab.zig");
 const runtime = @import("runtime.zig");
 const workspace = @import("workspace.zig");
+const clients = @import("clients.zig");
+const DetachClient = @import("DetachClient.zig");
+const QueryClients = @import("QueryClients.zig");
+const ClientList = @import("../../ClientList.zig");
 const notification = @import("notification_support.zig");
 const layout = @import("layout.zig");
 const agent = @import("agent.zig");
@@ -105,9 +109,16 @@ const suggestion = @import("suggestion.zig");
 const focus = @import("focus.zig");
 const frame = @import("../frame_support.zig");
 const graphics_bodies = @import("../graphics.zig");
+const ClientCommand = @import("ClientCommand.zig");
+const client_commands = @import("client_commands.zig");
 const std = @import("std");
 
 pub const ClientMessage = union(enum) {
+    query_clients: QueryClients,
+    detach_client: DetachClient,
+    request_client_command: ClientCommand,
+    complete_client_command: ClientCommand,
+
     query_change_review: @import("QueryChangeReview.zig"),
     change_review_command: @import("ChangeReviewCommand.zig"),
     report_change_review_sample: @import("ReportChangeReviewSample.zig"),
@@ -167,6 +178,10 @@ const ChangeReviewChanged = @import("ChangeReviewChanged.zig");
 const change_review = @import("change_review.zig");
 
 pub const ServerMessage = union(enum) {
+    client_list: ClientList,
+    client_command: ClientCommand,
+    client_command_result: ClientCommand,
+
     change_review_changed: ChangeReviewChanged,
     change_review_snapshot: @import("ChangeReviewSnapshotView.zig"),
     pane_opened: PaneOpenedType,
@@ -272,6 +287,10 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .acknowledge_agent => .{
             .acknowledge_agent = try GenericDerived(AcknowledgeAgentType).decode(&decoder),
         },
+        .request_client_command => .{ .request_client_command = try client_commands.decode(&decoder) },
+        .complete_client_command => .{ .complete_client_command = try client_commands.decode(&decoder) },
+        .detach_client => .{ .detach_client = try clients.decodeDetachClient(&decoder) },
+        .query_clients => .{ .query_clients = try clients.decodeQueryClients(&decoder) },
         .query_agents => .{ .query_agents = try GenericDerived(QueryAgentsType).decode(&decoder) },
         .read_pane => .{ .read_pane = try GenericDerived(ReadPaneType).decode(&decoder) },
         .send_pane_text => .{ .send_pane_text = try pane.decodeSendPaneText(&decoder) },
@@ -326,6 +345,9 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .resync_required => .{ .resync_required = try GenericDerived(ResyncRequiredType).decode(&decoder) },
         .graphics_shared_image => .{ .graphics_shared_image = try graphics_bodies.decodeSharedImage(&decoder) },
         .proxy_status => .{ .proxy_status = try GenericDerived(ProxyStatusType).decode(&decoder) },
+        .client_command => .{ .client_command = try client_commands.decode(&decoder) },
+        .client_command_result => .{ .client_command_result = try client_commands.decode(&decoder) },
+        .client_list => .{ .client_list = try clients.decodeClientList(&decoder) },
         .agent_snapshot => .{ .agent_snapshot = try agent.decodeAgentSnapshot(&decoder) },
         .system_metrics => .{ .system_metrics = try GenericDerived(SystemMetricsType).decode(&decoder) },
         .workspace_list => .{ .workspace_list = try workspace.decodeWorkspaceList(&decoder) },

@@ -1,0 +1,6 @@
+id: u64,
+generation: u64,
+identity: u64,
+attachments: u16,
+last_input_pane: u64,
+last_input_sequence: u64,

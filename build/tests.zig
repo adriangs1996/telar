@@ -105,6 +105,7 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
 
     const transport_test_step = b.step("test-transport", "Run the local transport tests");
     const schema_test_step = b.step("test-schema", "Run the shared protocol schema tests");
+    const wire_test_step = b.step("test-wire", "Run wire contracts without PTY integration tests");
     const frontend_test_step = b.step("test-frontend", "Run the frontend package tests");
     const release_step = b.step(
         "verify-release",
@@ -182,6 +183,16 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         }
 
         const run_tests = b.addRunArtifact(tests);
+        if (suite.schema) {
+            wire_test_step.dependOn(&run_tests.step);
+        }
+        if (std.mem.eql(u8, suite.path, "src/backend/backend.zig")) {
+            b.step("test-runtime", "Run backend runtime and provider tests").dependOn(&run_tests.step);
+        }
+        if (std.mem.eql(u8, suite.path, "src/main.zig")) {
+            b.step("test-cli", "Run command-line parser and control tests").dependOn(&run_tests.step);
+        }
+
         parallel_test_prerequisites.dependOn(&run_tests.step);
         if (std.mem.eql(u8, suite.path, "src/backend/proxy_test.zig")) {
             backend_proxy_test_step.dependOn(&run_tests.step);

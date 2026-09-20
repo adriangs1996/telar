@@ -3,6 +3,10 @@
 //! from the wrong side never decodes as a valid message.
 
 pub const ClientTag = enum(u8) {
+    query_clients = 0x33,
+    detach_client = 0x34,
+    request_client_command = 0x35,
+    complete_client_command = 0x36,
     open_pane = 0x01,
     pane_input = 0x02,
     pane_resize = 0x03,
@@ -53,14 +57,17 @@ pub const ClientTag = enum(u8) {
     query_agent_thread = 0x30,
     query_agent_history = 0x31,
     agent_resume = 0x32,
-    query_change_review = 0x33,
-    change_review_command = 0x34,
-    report_change_review_sample = 0x35,
+    query_change_review = 0x37,
+    change_review_command = 0x38,
+    report_change_review_sample = 0x39,
 };
 
 pub const ServerTag = enum(u8) {
-    change_review_snapshot = 0xad,
-    change_review_changed = 0xae,
+    client_list = 0xad,
+    client_command = 0xae,
+    client_command_result = 0xaf,
+    change_review_snapshot = 0xb0,
+    change_review_changed = 0xb1,
     pane_opened = 0x81,
     pane_frame = 0x82,
     pane_exited = 0x83,

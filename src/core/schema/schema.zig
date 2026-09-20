@@ -395,6 +395,21 @@ pub const AgentHistoryPageView = @import("messages/AgentHistoryPageView.zig");
 pub const encodeQueryAgentHistory = @import("messages/agent_history.zig").encodeQueryAgentHistory;
 pub const encodeAgentHistoryPage = @import("messages/agent_history.zig").encodeAgentHistoryPage;
 
+pub const ClientDescriptor = @import("../ClientDescriptor.zig");
+pub const ClientList = @import("../ClientList.zig");
+pub const QueryClients = @import("messages/QueryClients.zig");
+pub const encodeQueryClients = @import("messages/clients.zig").encodeQueryClients;
+pub const encodeClientList = @import("messages/clients.zig").encodeClientList;
+
+pub const DetachClient = @import("messages/DetachClient.zig");
+pub const encodeDetachClient = @import("messages/clients.zig").encodeDetachClient;
+
+pub const ClientCommand = @import("messages/ClientCommand.zig");
+pub const ClientAction = @import("messages/client_actions.zig").Action;
+pub const encodeRequestClientCommand = @import("messages/client_commands.zig").encodeRequestClientCommand;
+pub const encodeCompleteClientCommand = @import("messages/client_commands.zig").encodeCompleteClientCommand;
+pub const encodeClientCommand = @import("messages/client_commands.zig").encodeClientCommand;
+pub const encodeClientCommandResult = @import("messages/client_commands.zig").encodeClientCommandResult;
 pub const QueryChangeReview = @import("messages/QueryChangeReview.zig");
 pub const ChangeReviewCommand = @import("messages/ChangeReviewCommand.zig");
 pub const ReportChangeReviewSample = @import("messages/ReportChangeReviewSample.zig");

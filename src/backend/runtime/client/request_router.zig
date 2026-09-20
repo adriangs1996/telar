@@ -32,6 +32,9 @@ const CopySelectionType = @import("telar-core").CopySelection;
 const ShowNotificationType = @import("telar-core").ShowNotification;
 const ClientLayoutUpdateViewType = @import("telar-core").ClientLayoutUpdateView;
 const AcknowledgeAgentType = @import("telar-core").AcknowledgeAgent;
+const ClientCommand = @import("telar-core").ClientCommand;
+const DetachClient = @import("telar-core").DetachClient;
+const QueryClients = @import("telar-core").QueryClients;
 const QueryAgentsType = @import("telar-core").QueryAgents;
 const ReadPaneType = @import("telar-core").ReadPane;
 const SendPaneTextType = @import("telar-core").SendPaneText;
@@ -87,7 +90,11 @@ pub fn classify(tag: Tag) RequestClass {
         .report_change_review_sample,
         .query_agent_thread,
         .query_agent_history,
+        .request_client_command,
+        .detach_client,
+        .query_clients,
         .query_agents,
+        .search_pane,
         .read_pane,
         .send_pane_text,
         .report_agent_session,
@@ -169,6 +176,10 @@ const testing_handlers: GenericHandlers(RequestRouterCapture) = .{
     .show_notification = captureHandler(.show_notification, ShowNotificationType),
     .update_client_layout = captureHandler(.update_client_layout, ClientLayoutUpdateViewType),
     .acknowledge_agent = captureHandler(.acknowledge_agent, AcknowledgeAgentType),
+    .request_client_command = captureHandler(.request_client_command, ClientCommand),
+    .complete_client_command = captureHandler(.complete_client_command, ClientCommand),
+    .detach_client = captureHandler(.detach_client, DetachClient),
+    .query_clients = captureHandler(.query_clients, QueryClients),
     .query_agents = captureHandler(.query_agents, QueryAgentsType),
     .read_pane = captureHandler(.read_pane, ReadPaneType),
     .send_pane_text = captureHandler(.send_pane_text, SendPaneTextType),
@@ -244,13 +255,17 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]ClientMessageType {
         .{ .acknowledge_agent = .{ .pane_id = pane_id, .pane_generation = 1 } },
         .{ .agent_prompt = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .text = "hello" } },
         .{ .agent_interrupt = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1 } },
-        .{ .agent_resume = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .conversation_index = 0 } },
+        .{ .agent_resume = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .expected_revision = 1, .conversation_index = 0 } },
         .{ .agent_approval = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .approval_id = 4, .accept = true } },
         .{ .query_change_review = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1 } },
         .{ .change_review_command = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .action = .feedback } },
         .{ .report_change_review_sample = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .provider = .codex, .session = "thread", .tool_call_id = "edit", .phase = .before, .path = "file.zig", .exists = true, .content = "before" } },
         .{ .query_agent_thread = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1 } },
         .{ .query_agent_history = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .view_generation = 1 } },
+        .{ .detach_client = .{ .request_id = request_id, .client_id = 7, .client_generation = 9 } },
+        .{ .request_client_command = .{ .request_id = request_id, .route = .{ .id = 1, .generation = 1 }, .action = .workspace_select, .target_id = 2 } },
+        .{ .complete_client_command = .{ .request_id = request_id, .route = .{ .id = 1, .generation = 1 }, .action = .workspace_select, .target_id = 2 } },
+        .{ .query_clients = .{ .request_id = request_id } },
         .{ .query_agents = .{ .request_id = request_id } },
         .{ .read_pane = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .rows = 40, .source = .screen } },
         .{ .send_pane_text = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .mode = .prompt, .text = "ls" } },
@@ -317,7 +332,11 @@ test "Router delegates every client tag exactly once and preserves classificatio
             .report_change_review_sample,
             .query_agent_thread,
             .query_agent_history,
+            .request_client_command,
+            .detach_client,
+            .query_clients,
             .query_agents,
+            .search_pane,
             .read_pane,
             .send_pane_text,
             .report_agent_session,
@@ -354,4 +373,18 @@ test "Router propagates handler failure without a second delegation" {
 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expectEqual(Tag.move_tab, capture.last.?);
+}
+
+/// Resolves observer subscriptions before a session acquires a role. Example: `const role = classifyMessage(message);`
+pub fn classifyMessage(message: ClientMessageType) RequestClass {
+    if (message == .request_runtime_state and !message.request_runtime_state.interactive) {
+        return .control;
+    }
+
+    return classify(std.meta.activeTag(message));
+}
+
+test "runtime observers cannot be mistaken for interactive clients" {
+    try std.testing.expectEqual(RequestClass.control, classifyMessage(.{ .request_runtime_state = .{ .client_identity = @enumFromInt(1), .interactive = false } }));
+    try std.testing.expectEqual(RequestClass.ui, classifyMessage(.{ .request_runtime_state = .{ .client_identity = @enumFromInt(1) } }));
 }

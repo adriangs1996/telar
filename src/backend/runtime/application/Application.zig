@@ -90,9 +90,9 @@ cell_timer: DeadlineScheduler = .{},
 /// Composes application state from stable, runtime-owned capabilities.
 ///
 /// ```zig
-/// const application = try Application.init(initialization);
+/// try application.init(initialization);
 /// ```
-pub fn init(initialization: Initialization) !Application {
+pub fn init(self: *Application, initialization: Initialization) !void {
     var executable_path: [std.fs.max_path_bytes]u8 = undefined;
     const executable_path_len = try std.process.executablePath(initialization.io, &executable_path);
 
@@ -100,7 +100,7 @@ pub fn init(initialization: Initialization) !Application {
     const review_path = try std.fmt.bufPrint(&review_directory, "{s}/change-reviews", .{std.fs.path.dirname(initialization.session_path orelse initialization.socket_path) orelse return error.InvalidReviewStorage});
     const review_service = try ReviewService.init(initialization.gpa, review_path);
     errdefer review_service.deinit();
-    return .{
+    self.* = .{
         .review_service = review_service,
         .io = initialization.io,
         .gpa = initialization.gpa,
@@ -413,6 +413,7 @@ fn collectFinished(application: *Application) void {
 pub fn dropClient(application: *Application, key: ClientKeyType) void {
     const session = application.clients.resolve(key) orelse return;
     if (!session.closing) {
+        application.failClientCommandsFor(key);
         application.failPaneFocusesFor(key);
         session.closing = true;
         session.connection.shutdown(application.io);
@@ -426,6 +427,25 @@ pub fn dropClient(application: *Application, key: ClientKeyType) void {
         application.pumpAll();
     }
     application.finalizeClient(key);
+}
+
+fn failClientCommandsFor(self: *Application, key: ClientKeyType) void {
+    for (self.clients.items) |slot| {
+        const requester = slot orelse continue;
+        const pending = requester.pending_client_command orelse continue;
+        if (!std.meta.eql(pending.target, key)) {
+            continue;
+        }
+
+        requester.pending_client_command = null;
+        requester.delivery.responses.push(.{ .request_failed = .{
+            .request_id = pending.request_id,
+            .code = .invalid_request,
+            .message = "target client disconnected before confirming the operation",
+        } }) catch {
+            self.dropClient(requester.key);
+        };
+    }
 }
 
 fn failPaneFocusesFor(application: *Application, key: ClientKeyType) void {

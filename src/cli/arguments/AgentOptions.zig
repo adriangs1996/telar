@@ -1,4 +1,8 @@
 const agent = @import("agent.zig");
+const core = @import("telar-core");
+const AgentHistoryInput = @import("../AgentHistoryInput.zig");
+const AgentReport = @import("../AgentReport.zig");
+const AgentCommandReport = @import("../AgentCommandReport.zig");
 const values = @import("values.zig");
 const AgentStatusType = @import("telar-core").AgentStatus;
 const PaneTextSourceType = @import("telar-core").PaneTextSource;
@@ -18,6 +22,15 @@ lines: u16 = 40,
 source: PaneTextSourceType = .recent,
 json: bool = false,
 socket: ?[*:0]const u8 = null,
+approval_id: ?u64 = null,
+images: core.AgentImagePaths = .{},
+model: ?[]const u8 = null,
+effort: ?core.AgentEffort = null,
+access: ?core.AgentAccess = null,
+history: AgentHistoryInput = .{},
+count: ?u32 = null,
+report: ?AgentReport = null,
+command_report: ?AgentCommandReport = null,
 
 pub fn parse(args: []const [*:0]const u8) !AgentOptions {
     if (args.len == 0) {
@@ -37,6 +50,40 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         .read
     else if (std.mem.eql(u8, action_text, "report-session"))
         .report_session
+    else if (std.mem.eql(u8, action_text, "interrupt"))
+        .interrupt
+    else if (std.mem.eql(u8, action_text, "thread"))
+        .thread
+    else if (std.mem.eql(u8, action_text, "models"))
+        .models
+    else if (std.mem.eql(u8, action_text, "skills"))
+        .skills
+    else if (std.mem.eql(u8, action_text, "conversations"))
+        .conversations
+    else if (std.mem.eql(u8, action_text, "approvals"))
+        .approvals
+    else if (std.mem.eql(u8, action_text, "approve"))
+        .approve
+    else if (std.mem.eql(u8, action_text, "reject"))
+        .reject
+    else if (std.mem.eql(u8, action_text, "clear"))
+        .clear
+    else if (std.mem.eql(u8, action_text, "rename"))
+        .rename
+    else if (std.mem.eql(u8, action_text, "history"))
+        .history
+    else if (std.mem.eql(u8, action_text, "watch"))
+        .watch
+    else if (std.mem.eql(u8, action_text, "report-title"))
+        .report_title
+    else if (std.mem.eql(u8, action_text, "report-state"))
+        .report_state
+    else if (std.mem.eql(u8, action_text, "report-command"))
+        .report_command
+    else if (std.mem.eql(u8, action_text, "acknowledge"))
+        .acknowledge
+    else if (std.mem.eql(u8, action_text, "resume"))
+        .resume_conversation
     else
         return error.UnknownAgentAction;
     var options: AgentOptions = .{ .action = action };
@@ -51,12 +98,69 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         index = 2;
     }
 
-    if (action == .report_session) {
+    if (action == .approve or action == .reject) {
+        if (args.len < 3) {
+            return error.MissingApprovalId;
+        }
+
+        const id = std.fmt.parseInt(u64, std.mem.span(args[2]), 10) catch return error.InvalidApprovalId;
+        if (id == 0) {
+            return error.InvalidApprovalId;
+        }
+
+        options.approval_id = id;
+        index = 3;
+    }
+
+    if (action == .report_command) {
+        if (args.len < 4) {
+            return error.MissingCommandReport;
+        }
+
+        options.command_report = .{
+            .phase = std.meta.stringToEnum(core.AgentCommandPhase, std.mem.span(args[2])) orelse return error.InvalidCommandPhase,
+            .command = std.mem.span(args[3]),
+            .provider = "",
+            .tool_call_id = "",
+            .cwd = "",
+            .session = "",
+            .exit_code = null,
+        };
+        index = 4;
+    }
+
+    if (action == .report_state) {
+        if (args.len < 3) {
+            return error.MissingAgentState;
+        }
+
+        options.report = .{ .state = std.meta.stringToEnum(core.AgentReportState, std.mem.span(args[2])) orelse return error.InvalidAgentState };
+        index = 3;
+    }
+
+    if (action == .rename or action == .report_title) {
+        if (args.len < 3) {
+            return error.MissingAgentTitle;
+        }
+
+        if (action == .rename or std.mem.span(args[2]).len != 0) {
+            try core.validateSessionTitle(std.mem.span(args[2]));
+        }
+
+        options.text = args[2];
+        index = 3;
+    }
+
+    if (action == .report_session or action == .resume_conversation) {
         if (args.len < 3) {
             return error.MissingSessionReference;
         }
 
         options.text = args[2];
+        if (action == .resume_conversation) {
+            _ = try core.RecentConversation.init(std.mem.span(args[2]), "");
+        }
+
         if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > max_agent_session_reference_bytes_module) {
             return error.InvalidSessionReference;
         }
@@ -70,7 +174,7 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         }
 
         options.text = args[2];
-        if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > max_pane_text_input_bytes_module) {
+        if (std.mem.span(options.text.?).len > max_pane_text_input_bytes_module) {
             return error.InvalidPromptText;
         }
 
@@ -80,8 +184,74 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
     var cursor: Cursor = .{ .remaining = args[index..] };
     while (cursor.next()) |argument| {
         const arg = std.mem.span(argument);
-        if (std.mem.eql(u8, arg, "--json")) {
+        if (std.mem.eql(u8, arg, "--json") or (action == .watch and std.mem.eql(u8, arg, "--jsonl"))) {
             options.json = true;
+        } else if (std.mem.eql(u8, arg, "--provider") and action == .report_command) {
+            options.command_report.?.provider = std.mem.span(try cursor.require(error.MissingProvider));
+        } else if (std.mem.eql(u8, arg, "--tool-call") and action == .report_command) {
+            options.command_report.?.tool_call_id = std.mem.span(try cursor.require(error.MissingToolCall));
+        } else if (std.mem.eql(u8, arg, "--cwd") and action == .report_command) {
+            options.command_report.?.cwd = std.mem.span(try cursor.require(error.MissingCwd));
+        } else if (std.mem.eql(u8, arg, "--session") and action == .report_command) {
+            options.command_report.?.session = std.mem.span(try cursor.require(error.MissingSessionReference));
+        } else if (std.mem.eql(u8, arg, "--exit-code") and action == .report_command) {
+            options.command_report.?.exit_code = std.fmt.parseInt(i32, std.mem.span(try cursor.require(error.MissingExitCode)), 10) catch return error.InvalidExitCode;
+        } else if (std.mem.eql(u8, arg, "--blocked-reason") and action == .report_state) {
+            options.report.?.blocked_reason = std.meta.stringToEnum(core.AgentBlockedReason, std.mem.span(try cursor.require(error.MissingBlockedReason))) orelse return error.InvalidBlockedReason;
+        } else if (std.mem.eql(u8, arg, "--event") and action == .report_state) {
+            options.report.?.event = std.mem.span(try cursor.require(error.MissingAgentEvent));
+        } else if (std.mem.eql(u8, arg, "--session") and action == .report_state) {
+            options.report.?.session = std.mem.span(try cursor.require(error.MissingSessionReference));
+        } else if (std.mem.eql(u8, arg, "--session-file") and action == .report_state) {
+            options.report.?.session_file = std.mem.span(try cursor.require(error.MissingSessionFile));
+        } else if (std.mem.eql(u8, arg, "--session-file-kind") and action == .report_state) {
+            options.report.?.session_file_kind = std.meta.stringToEnum(core.AgentSessionFileKind, std.mem.span(try cursor.require(error.MissingSessionFileKind))) orelse return error.InvalidSessionFileKind;
+        } else if (std.mem.eql(u8, arg, "--count") and action == .watch) {
+            if (options.count != null) {
+                return error.DuplicateCountOption;
+            }
+
+            options.count = std.fmt.parseUnsigned(u32, std.mem.span(try cursor.require(error.MissingCount)), 10) catch return error.InvalidCount;
+            if (options.count == 0) {
+                return error.InvalidCount;
+            }
+        } else if (std.mem.eql(u8, arg, "--cursor") and action == .history) {
+            const value = std.mem.span(try cursor.require(error.MissingHistoryCursor));
+            _ = try core.AgentHistoryCursor.init(value);
+            options.history.cursor = value;
+        } else if (std.mem.eql(u8, arg, "--anchor") and action == .history) {
+            options.history.anchor = std.mem.span(try cursor.require(error.MissingHistoryAnchor));
+        } else if (std.mem.eql(u8, arg, "--anchor-turn") and action == .history) {
+            options.history.anchor_turn = std.mem.span(try cursor.require(error.MissingHistoryAnchor));
+        } else if (std.mem.eql(u8, arg, "--direction") and action == .history) {
+            options.history.direction = std.meta.stringToEnum(core.agent_history.Direction, std.mem.span(try cursor.require(error.MissingHistoryDirection))) orelse return error.InvalidHistoryDirection;
+        } else if (std.mem.eql(u8, arg, "--model")) {
+            if (action != .prompt or options.model != null) {
+                return error.InvalidModelOption;
+            }
+
+            const value = std.mem.span(try cursor.require(error.MissingModel));
+            var selection: core.AgentOptions = .{};
+            try selection.setModel(value);
+            options.model = value;
+        } else if (std.mem.eql(u8, arg, "--effort")) {
+            if (action != .prompt or options.effort != null) {
+                return error.InvalidEffortOption;
+            }
+
+            options.effort = try core.AgentEffort.init(std.mem.span(try cursor.require(error.MissingEffort)));
+        } else if (std.mem.eql(u8, arg, "--access")) {
+            if (action != .prompt or options.access != null) {
+                return error.InvalidAccessOption;
+            }
+
+            options.access = std.meta.stringToEnum(core.AgentAccess, std.mem.span(try cursor.require(error.MissingAccess))) orelse return error.InvalidAccess;
+        } else if (std.mem.eql(u8, arg, "--image")) {
+            if (action != .prompt) {
+                return error.UnknownAgentOption;
+            }
+
+            try options.images.append(std.mem.span(try cursor.require(error.MissingImagePath)));
         } else if (std.mem.eql(u8, arg, "--wait")) {
             if (action != .prompt) {
                 return error.UnknownAgentOption;
@@ -125,6 +295,20 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
             options.socket = value;
         } else {
             return error.UnknownAgentOption;
+        }
+    }
+
+    if (action == .prompt and std.mem.span(options.text.?).len == 0 and options.images.count == 0) {
+        return error.InvalidPromptText;
+    }
+
+    if (action == .history and ((options.history.anchor.len == 0) != (options.history.anchor_turn.len == 0) or (options.history.cursor.len != 0 and options.history.anchor.len != 0))) {
+        return error.InvalidHistoryPosition;
+    }
+
+    if (options.command_report) |report| {
+        if (report.provider.len == 0 or report.command.len == 0 or (report.phase == .started and report.exit_code != null)) {
+            return error.InvalidCommandReport;
         }
     }
 

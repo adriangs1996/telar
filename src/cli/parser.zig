@@ -1,6 +1,12 @@
 //! CLI command selection; each grammar owns its options and validation.
 
+const DiagnosticsOptions = @import("arguments/DiagnosticsOptions.zig");
 const ServerOptions = @import("arguments/ServerOptions.zig");
+const RuntimeOptions = @import("arguments/RuntimeOptions.zig");
+const RoutedOptions = @import("arguments/RoutedOptions.zig");
+const ClientOptions = @import("arguments/ClientOptions.zig");
+const SuggestionOptions = @import("arguments/SuggestionOptions.zig");
+const TabOptions = @import("arguments/TabOptions.zig");
 const HistoryOptions = @import("arguments/HistoryOptions.zig");
 const NotificationOptions = @import("arguments/NotificationOptions.zig");
 const ConfigCheckOptions = @import("arguments/ConfigCheckOptions.zig");
@@ -42,6 +48,12 @@ pub const Cli = union(enum) {
     help,
     version,
     server: ServerOptions,
+    runtime: RuntimeOptions,
+    diagnostics: DiagnosticsOptions,
+    tab: TabOptions,
+    command: SuggestionOptions,
+    client_control: ClientOptions,
+    routed: RoutedOptions,
     history: HistoryOptions,
     notification: NotificationOptions,
     config_check: ConfigCheckOptions,
@@ -76,7 +88,30 @@ pub const Cli = union(enum) {
             return .{ .run = try RunOptions.parse(&.{}, environ) };
         }
 
+        if (try RoutedOptions.parse(args[1..])) |options| {
+            return .{ .routed = options };
+        }
+
         const first = std.mem.span(args[1]);
+        if (std.mem.eql(u8, first, "client")) {
+            return .{ .client_control = try ClientOptions.parse(args[2..]) };
+        }
+
+        if (std.mem.eql(u8, first, "command")) {
+            return .{ .command = try SuggestionOptions.parse(args[2..]) };
+        }
+
+        if (std.mem.eql(u8, first, "tab")) {
+            return .{ .tab = try TabOptions.parse(args[2..]) };
+        }
+
+        if (std.mem.eql(u8, first, "diagnostics")) {
+            return .{ .diagnostics = try DiagnosticsOptions.parse(args[2..]) };
+        }
+        if (std.mem.eql(u8, first, "runtime")) {
+            return .{ .runtime = try RuntimeOptions.parse(args[2..]) };
+        }
+
         if (std.mem.eql(u8, first, "--help") or std.mem.eql(u8, first, "-h")) {
             return .help;
         }
@@ -108,6 +143,12 @@ pub const Cli = union(enum) {
             return .{ .integration = try IntegrationOptions.parse(args[2..]) };
         }
         if (std.mem.eql(u8, first, "proxy")) {
+            if (args.len > 2 and std.mem.eql(u8, std.mem.span(args[2]), "watch")) {
+                var options = try RuntimeOptions.parse(args[2..]);
+                options.proxy_only = true;
+                return .{ .runtime = options };
+            }
+
             return .{ .proxy = try ProxyOptions.parse(args[2..]) };
         }
         if (std.mem.eql(u8, first, "server")) {

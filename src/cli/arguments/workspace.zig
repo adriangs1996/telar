@@ -4,7 +4,7 @@ const std = @import("std");
 
 pub const max_worktree_branch_bytes = 200;
 
-pub const WorkspaceAction = enum { create };
+pub const WorkspaceAction = enum { create, list, get, rename };
 
 pub fn validateWorktreeBranch(branch: []const u8) !void {
     if (branch.len == 0 or branch.len > max_worktree_branch_bytes) {

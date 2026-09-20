@@ -93,7 +93,7 @@ pub fn Type(comptime Application: type) type {
             }
 
             if (session.role == .undecided) {
-                session.role = switch (request_router.classify(std.meta.activeTag(message))) {
+                session.role = switch (request_router.classifyMessage(message)) {
                     .ui => .ui,
                     .control => .control,
                 };

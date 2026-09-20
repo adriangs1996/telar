@@ -2,6 +2,9 @@
 //! without an attached UI client.
 
 const std = @import("std");
+const core = @import("telar-core");
+const PaneWatcher = @import("PaneWatcher.zig");
+const PaneCatalog = @import("PaneCatalog.zig");
 const PaneOptions = @import("arguments/PaneOptions.zig");
 const SessionType = @import("Session.zig");
 const control = @import("control.zig");
@@ -19,7 +22,7 @@ const SnapshotType = @import("Snapshot.zig");
 /// std.process.exit(try pane.run(process_init, options));
 /// ```
 pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
-    var session = try SessionType.open(init, options.socket);
+    var session = if (options.action == .list or options.action == .get or options.action == .search or options.action == .watch) try SessionType.attach(init, options.socket) else try SessionType.open(init, options.socket);
     defer session.close();
     var output_buffer: [16 * 1024]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
@@ -36,6 +39,16 @@ pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
 }
 
 fn execute(session: *SessionType, options: PaneOptions, context: ExecutionContextType) !u8 {
+    if (options.action == .list or options.action == .get) {
+        return inspect(session, options, context);
+    }
+
+    if (options.action == .watch) {
+        var watcher: PaneWatcher = .{ .session = session, .options = options, .context = context };
+        try watcher.run();
+        return agent.exit_ok;
+    }
+
     const pane: PaneRefType = if (options.action == .focus)
         .{
             .pane_id = try control.currentPaneId(context.environ),
@@ -45,6 +58,34 @@ fn execute(session: *SessionType, options: PaneOptions, context: ExecutionContex
         try resolvePane(session, options.target, context.environ);
 
     switch (options.action) {
+        .list, .get, .watch => unreachable,
+        .search => {
+            const response = try session.exchange(core.encodeSearchPane, core.SearchPane{ .request_id = .none, .pane_id = @enumFromInt(pane.pane_id), .needle = std.mem.span(options.text.?) });
+            if (response != .pane_matches or core.raw(response.pane_matches.pane_id) != pane.pane_id) {
+                return error.UnexpectedRuntimeResponse;
+            }
+
+            const found = response.pane_matches;
+            var matches = found.matches();
+            if (options.json) {
+                try context.writer.print("{{\"pane_id\":{d},\"truncated\":{},\"matches\":[", .{ pane.pane_id, found.truncated });
+            }
+
+            var separator: []const u8 = "";
+            while (try matches.next()) |match| {
+                if (options.json) {
+                    try context.writer.writeAll(separator);
+                    try std.json.Stringify.value(match, .{}, context.writer);
+                    separator = ",";
+                } else {
+                    try context.writer.print("{d}:{d} length={d}\n", .{ match.y, match.x, match.len });
+                }
+            }
+
+            if (options.json) {
+                try context.writer.writeAll("]}\n");
+            }
+        },
         .read => {
             const text = try session.readPane(pane, .{ .rows = options.lines, .source = options.source });
             if (options.json) {
@@ -105,4 +146,54 @@ fn resolvePane(session: *SessionType, target: values.Target, environ: std.proces
     }
 
     return .{ .pane_id = pane_id, .pane_generation = 0 };
+}
+
+fn inspect(session: *SessionType, options: PaneOptions, context: ExecutionContextType) !u8 {
+    var catalog: PaneCatalog = .{
+        .session = session,
+        .workspace = if (options.workspace) |target| try core.workspace(try target.resolve(context.environ, "TELAR_WORKSPACE_ID")) else null,
+        .tab = if (options.tab) |target| try core.tab(try target.resolve(context.environ, "TELAR_TAB_ID")) else null,
+    };
+    try catalog.load();
+    if (options.action == .get) {
+        const wanted = switch (options.target) {
+            .current => try control.currentPaneId(context.environ),
+            .pane => |id| id,
+            .name => return error.InvalidPaneId,
+        };
+        for (catalog.entries[0..catalog.count]) |*entry| {
+            if (core.raw(entry.pane.pane_id) != wanted) {
+                continue;
+            }
+
+            try entry.write(context.writer, options.json);
+            if (options.json) {
+                try context.writer.writeByte('\n');
+            }
+
+            return agent.exit_ok;
+        }
+
+        return error.PaneNotFound;
+    }
+
+    if (options.json) {
+        try context.writer.writeByte('[');
+    } else {
+        try context.writer.writeAll("WORKSPACE\tTAB\tPANE\tGENERATION\tKIND\tLIFECYCLE\n");
+    }
+
+    for (catalog.entries[0..catalog.count], 0..) |*entry, index| {
+        if (options.json and index != 0) {
+            try context.writer.writeByte(',');
+        }
+
+        try entry.write(context.writer, options.json);
+    }
+
+    if (options.json) {
+        try context.writer.writeAll("]\n");
+    }
+
+    return agent.exit_ok;
 }

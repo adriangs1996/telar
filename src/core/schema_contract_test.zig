@@ -57,7 +57,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 106;
+const corpus_len = 113;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -991,7 +991,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         try agent_threads.encodeAgentInterrupt(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3 }),
     ));
     helper.add(.{ .name = "agent_resume", .direction = .client, .golden_hex = golden.agent_resume }, helper.commit(
-        try @import("schema/messages/agent_thread.zig").encodeAgentResume(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .conversation_index = 1 }),
+        try @import("schema/messages/agent_thread.zig").encodeAgentResume(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .expected_revision = 4, .conversation_index = 1 }),
     ));
     helper.add(.{ .name = "agent_approval", .direction = .client, .golden_hex = golden.agent_approval }, helper.commit(
         try agent_threads.encodeAgentApproval(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .approval_id = 9, .accept = true }),
@@ -1026,6 +1026,32 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     };
     helper.add(.{ .name = "agent_history_page", .direction = .server, .golden_hex = golden.agent_history_page }, helper.commit(
         try agent_history.encodeAgentHistoryPage(helper.space(), &history_page),
+    ));
+
+    helper.add(.{ .name = "query_clients", .direction = .client, .golden_hex = golden.query_clients }, helper.commit(
+        try schema.encodeQueryClients(helper.space(), .{ .request_id = @enumFromInt(5) }),
+    ));
+    var clients: schema.ClientList = .{ .request_id = @enumFromInt(5), .count = 1 };
+    clients.entries[0] = .{ .id = 7, .generation = 9, .identity = 11, .attachments = 2, .last_input_pane = 5, .last_input_sequence = 12 };
+    helper.add(.{ .name = "client_list", .direction = .server, .golden_hex = golden.client_list }, helper.commit(
+        try schema.encodeClientList(helper.space(), clients),
+    ));
+
+    helper.add(.{ .name = "detach_client", .direction = .client, .golden_hex = golden.detach_client }, helper.commit(
+        try schema.encodeDetachClient(helper.space(), .{ .request_id = @enumFromInt(5), .client_id = 7, .client_generation = 9 }),
+    ));
+
+    helper.add(.{ .name = "request_client_command", .direction = .client, .golden_hex = golden.request_client_command }, helper.commit(
+        try schema.encodeRequestClientCommand(helper.space(), .{ .request_id = @enumFromInt(5), .route = .{ .id = 7, .generation = 9 }, .action = .workspace_select, .status = .request, .target_id = 42 }),
+    ));
+    helper.add(.{ .name = "complete_client_command", .direction = .client, .golden_hex = golden.complete_client_command }, helper.commit(
+        try schema.encodeCompleteClientCommand(helper.space(), .{ .request_id = @enumFromInt(5), .route = .{ .id = 7, .generation = 9 }, .action = .workspace_select, .status = .admitted, .target_id = 42 }),
+    ));
+    helper.add(.{ .name = "client_command", .direction = .server, .golden_hex = golden.client_command }, helper.commit(
+        try schema.encodeClientCommand(helper.space(), .{ .request_id = @enumFromInt(5), .route = .{ .id = 7, .generation = 9 }, .action = .workspace_select, .status = .request, .target_id = 42 }),
+    ));
+    helper.add(.{ .name = "client_command_result", .direction = .server, .golden_hex = golden.client_command_result }, helper.commit(
+        try schema.encodeClientCommandResult(helper.space(), .{ .request_id = @enumFromInt(5), .route = .{ .id = 7, .generation = 9 }, .action = .workspace_select, .status = .admitted, .target_id = 42 }),
     ));
 
     const review = @import("schema/messages/change_review.zig");
@@ -2637,7 +2663,7 @@ test "resume request bounds and recent catalog survive owned snapshot decoding" 
     try std.testing.expect(copied.canResume());
     copied.resumed = true;
     try std.testing.expect(!copied.canResume());
-    const request: core.AgentResume = .{ .request_id = @enumFromInt(7), .pane_id = snapshot.pane_id, .pane_generation = 3, .conversation_index = 0 };
+    const request: core.AgentResume = .{ .request_id = @enumFromInt(7), .pane_id = snapshot.pane_id, .pane_generation = 3, .expected_revision = snapshot.revision, .conversation_index = 0 };
     const encoded = try core.encodeAgentResume(&storage, request);
     try std.testing.expectEqualDeep(request, (try core.decodeClient(encoded)).agent_resume);
     storage[encoded.len - 1] = @import("RecentConversations.zig").capacity;

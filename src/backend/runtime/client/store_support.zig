@@ -3,7 +3,8 @@
 const Store = @import("Store.zig");
 const std = @import("std");
 
-pub const max_clients = 8;
+const ClientList = @import("telar-core").ClientList;
+pub const max_clients = ClientList.capacity;
 
 test "Store rejects exhausted identities before allocating a session" {
     var store: Store = .{ .next_id = std.math.maxInt(u64) };

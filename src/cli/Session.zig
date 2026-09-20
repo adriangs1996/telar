@@ -34,6 +34,7 @@ const max_agent_session_title_bytes_module = @import("telar-core").max_agent_ses
 const encodeReportAgentTitle_module = @import("telar-core").encodeReportAgentTitle;
 const encodeCreateWorkspace_module = @import("telar-core").encodeCreateWorkspace;
 const raw_module = @import("telar-core").raw;
+const core = @import("telar-core");
 const ChangeReviewCommand = @import("telar-core").ChangeReviewCommand;
 const ChangeReviewSnapshotView = @import("telar-core").ChangeReviewSnapshotView;
 const ReportChangeReviewSample = @import("telar-core").ReportChangeReviewSample;
@@ -99,6 +100,82 @@ fn requestId(session: *Session) RequestIdType {
     const request_id: RequestIdType = @enumFromInt(session.next_request);
     session.next_request += 1;
     return request_id;
+}
+
+/// Executes one correlated typed request, ignoring unrelated events. Response slices expire on the next receive.
+/// Example: `const reply = try session.exchange(core.encodeRenameWorkspace, request);`
+pub fn exchange(self: *Session, comptime encode: anytype, request_value: anytype) !core.ServerMessage {
+    var request = request_value;
+    request.request_id = self.requestId();
+    const buffer = try self.gpa.alloc(u8, core.max_frame_size);
+    defer self.gpa.free(buffer);
+    try self.connection.send(self.io, try encode(buffer, request));
+
+    while (true) {
+        const response = try self.receive();
+        switch (response) {
+            inline else => |value| {
+                if (comptime @typeInfo(@TypeOf(value)) == .@"struct") {
+                    if (comptime @hasField(@TypeOf(value), "request_id")) {
+                        if (value.request_id == request.request_id) {
+                            return response;
+                        }
+                    }
+                }
+            },
+        }
+    }
+}
+
+/// Subscribes a disposable observer without adopting a UI's layout identity. Example: `try session.subscribeRuntime();`
+pub fn subscribeRuntime(self: *Session) !void {
+    var identity: u64 = 0;
+    while (identity == 0) {
+        self.io.random(std.mem.asBytes(&identity));
+    }
+
+    var buffer: [16]u8 = undefined;
+    try self.connection.send(self.io, try core.encodeRequestRuntimeState(&buffer, .{ .client_identity = @enumFromInt(identity), .interactive = false }));
+}
+
+/// Borrows one decoded response until the next receive, propagating runtime failures. Example: `const response = try session.receive();`
+pub fn receive(self: *Session) !core.ServerMessage {
+    const Event = union(enum) { response: anyerror!core.ServerMessage, timeout: anyerror!void };
+    var events: [2]Event = undefined;
+    var select: std.Io.Select(Event) = .init(self.io, &events);
+    defer select.cancelDiscard();
+    try select.concurrent(.response, receiveMessage, .{self});
+    try select.concurrent(.timeout, receiveDeadline, .{self});
+
+    return switch (try select.await()) {
+        .response => |result| result,
+        .timeout => |result| blk: {
+            try result;
+            break :blk error.RuntimeTimeout;
+        },
+    };
+}
+
+fn receiveDeadline(self: *Session) !void {
+    try self.io.sleep(.fromSeconds(30), .awake);
+}
+
+fn receiveMessage(self: *Session) !core.ServerMessage {
+    const response = try self.nextEvent();
+    if (response == .runtime_stopping) {
+        return error.RuntimeStopping;
+    }
+
+    return response;
+}
+
+/// Waits for subscription traffic without an idle timeout. Example: `const event = try session.nextEvent();`
+pub fn nextEvent(self: *Session) !core.ServerMessage {
+    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
+    switch (response) {
+        .request_failed => |failure| return control.failureError(failure),
+        else => return response,
+    }
 }
 
 /// Reads one immutable edition; returned strings borrow the next receive buffer.
@@ -404,4 +481,13 @@ pub fn nowMs(session: *const Session) i64 {
 
 pub fn sleepMs(session: *const Session, milliseconds: u32) void {
     session.io.sleep(.fromMilliseconds(milliseconds), .awake) catch {};
+}
+
+/// Sends a seen marker; a following query acts as an ordering barrier. Example: `try session.acknowledge(pane);`
+pub fn acknowledge(self: *Session, pane: PaneRefType) !void {
+    var buffer: [64]u8 = undefined;
+    try self.connection.send(self.io, try core.encodeAcknowledgeAgent(&buffer, .{
+        .pane_id = try core.pane(pane.pane_id),
+        .pane_generation = pane.pane_generation,
+    }));
 }
