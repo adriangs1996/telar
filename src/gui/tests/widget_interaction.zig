@@ -7,6 +7,7 @@ const Id = @import("../widgets/interaction/Id.zig");
 const Session = @import("Session.zig");
 const native = @import("../native/native.zig");
 const Event = @import("../input/event.zig").Event;
+const routing = @import("../widgets/interaction/routing.zig");
 
 fn control(value: u64, x: f32) Target {
     return .{ .bounds = .{ .x = x, .y = 0, .width = 10, .height = 10 }, .action = .{ .custom = value } };
@@ -2437,4 +2438,45 @@ test "image preview closes with its button and backdrop and rejects obsolete ima
     gui.app.model.activeTabModel().?.find(Session.pane_id).?.attachment_generation += 1;
     try publish(session);
     try std.testing.expect(gui.widgets.image_preview == null);
+}
+
+test "review changes is visible in a single terminal pane and rejects retired attachments" {
+    const session = try initSession();
+    defer session.deinit();
+    const gui = session.gui;
+    const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
+    _ = pane.identify(.terminal, 77);
+    try publish(session);
+    const registry = gui.widgets.dispatcher.maps.presented();
+    var review: ?Target = null;
+    for (registry.targets[0..registry.len]) |target| {
+        if (target.action == .change_review) {
+            review = target;
+            break;
+        }
+    }
+    const target = review orelse return error.MissingChangeReviewButton;
+    try std.testing.expectEqualStrings("Review changes", target.label[0..target.label_len]);
+    try std.testing.expect(target.activatable());
+    try std.testing.expect(routing.eligible(gui, target));
+    try std.testing.expectEqual(target.id, registry.at(.{ target.bounds.x + target.bounds.width / 2, target.bounds.y + target.bounds.height / 2 }).?.id);
+    pane.attachment_generation += 1;
+    try std.testing.expect(!routing.eligible(gui, target));
+}
+
+test "managed review header controls retain separate identities and visible hit bounds" {
+    const session = try agentSession();
+    defer session.deinit();
+    try publish(session);
+    const registry = session.gui.widgets.dispatcher.maps.presented();
+    var count: usize = 0;
+    for (registry.targets[0..registry.len]) |target| {
+        if (target.action != .change_review) {
+            continue;
+        }
+        count += 1;
+        try std.testing.expect(routing.eligible(session.gui, target));
+        try std.testing.expectEqual(target.id, registry.at(.{ target.bounds.x + target.bounds.width / 2, target.bounds.y + target.bounds.height / 2 }).?.id);
+    }
+    try std.testing.expect(count > 0);
 }

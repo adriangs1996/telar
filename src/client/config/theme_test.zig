@@ -1,4 +1,5 @@
 const std = @import("std");
+const Color = @import("telar-core").Color;
 const Generation = @import("Generation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 const themes = @import("../appearance/theme_support.zig");
@@ -82,6 +83,34 @@ test "the default generation selects Shade and the Lua spellings agree" {
     }
 }
 
+test "syntax styles inherit through profiles independently of chrome and terminal colors" {
+    const source =
+        \\return { api_version = 2,
+        \\  theme = { base = "shade", syntax = {
+        \\    keyword = "#112233", parameter = { fg = "#445566", italic = true },
+        \\    comment = { bold = true }
+        \\  } },
+        \\  profiles = {
+        \\    custom = { theme = { syntax = { parameter = { italic = false } } } },
+        \\    reset = { theme = "catppuccin" }
+        \\  }
+        \\}
+    ;
+    const generation = try load(source, "custom");
+    defer generation.deinit();
+    const theme = generation.snapshot.theme;
+    try std.testing.expectEqualDeep(Color{ .rgb = .{ 0x11, 0x22, 0x33 } }, theme.syntax(.keyword));
+    try std.testing.expectEqualDeep(Color{ .rgb = .{ 0x44, 0x55, 0x66 } }, theme.syntax(.parameter));
+    try std.testing.expect(!theme.syntaxStyle(.parameter).italic);
+    try std.testing.expect(theme.syntaxStyle(.comment).bold);
+    try std.testing.expectEqualDeep(themes.builtin(.shade).syntax(.comment), theme.syntax(.comment));
+    try std.testing.expectEqualDeep(themes.builtin(.shade).palette, theme.palette);
+    try std.testing.expectEqualDeep(themes.builtin(.shade).terminal, theme.terminal);
+    const reset = try load(source, "reset");
+    defer reset.deinit();
+    try std.testing.expectEqualDeep(themes.builtin(.catppuccin), reset.snapshot.theme);
+}
+
 test "legacy client theme spelling selects the same complete preset" {
     const old = try load("return { api_version = 2, client = { theme = 'catppuccin' } }", null);
     defer old.deinit();
@@ -92,11 +121,12 @@ test "legacy client theme spelling selects the same complete preset" {
 
 test "invalid or ambiguous themes reject the whole generation including unused profiles" {
     const invalid = [_][]const u8{
-        "theme = 'missing'",                               "theme = false",                           "theme = { base = false }",                                   "theme = { typo = 1 }",
-        "theme = 'vesper', client = { theme = 'vesper' }", "theme = { terminal = false }",            "theme = { terminal = { foreground = 'default' } }",          "theme = { terminal = { background = '#ff_fff' } }",
-        "theme = { terminal = { cursor_color = 7 } }",     "theme = { terminal = { palette = {} } }", "theme = { terminal = { palette = { extra = '#123456' } } }", "theme = { terminal = { cursor_text_color = 'default' } }",
-        "theme = { colors = { wrong = '#123456' } }",      "theme = { colors = 3 }",                  "profiles = { unused = { theme = 'missing' } }",              "profiles = { unused = { theme = 'vesper', client = { theme = 'catppuccin' } } }",
-        "gui = { theme = { background = '#123456' } }",
+        "theme = 'missing'",                                       "theme = false",                                     "theme = { base = false }",                                      "theme = { typo = 1 }",
+        "theme = 'vesper', client = { theme = 'vesper' }",         "theme = { terminal = false }",                      "theme = { terminal = { foreground = 'default' } }",             "theme = { terminal = { background = '#ff_fff' } }",
+        "theme = { terminal = { cursor_color = 7 } }",             "theme = { terminal = { palette = {} } }",           "theme = { terminal = { palette = { extra = '#123456' } } }",    "theme = { terminal = { cursor_text_color = 'default' } }",
+        "theme = { colors = { wrong = '#123456' } }",              "theme = { colors = 3 }",                            "profiles = { unused = { theme = 'missing' } }",                 "profiles = { unused = { theme = 'vesper', client = { theme = 'catppuccin' } } }",
+        "gui = { theme = { background = '#123456' } }",            "theme = { syntax = false }",                        "theme = { syntax = { unknown = '#123456' } }",                  "theme = { syntax = { keyword = '#invalid' } }",
+        "theme = { syntax = { parameter = { italic = 'yes' } } }", "theme = { syntax = { parameter = { bold = 1 } } }", "theme = { syntax = { keyword = { background = '#123456' } } }",
     };
     for (invalid) |fields| {
         var buffer: [512]u8 = undefined;

@@ -331,6 +331,9 @@ __attribute__((constructor)) static void install(void) {
         [NSTimer scheduledTimerWithTimeInterval:0.15 repeats:YES block:^(NSTimer *timer) {
             if (index == actions.count) { [timer invalidate]; [window close]; return; }
             NSDictionary *action = actions[index];
+            if (action[@"approve_label"] && find_control([view accessibilityChildren], action[@"approve_label"]) != nil) {
+                click_control(view, action[@"approve_label"]);
+            }
             const BOOL cursor_pending = action[@"assert_pointer"] != nil &&
                 ([view desiredPointerShape] != [action[@"assert_pointer"] unsignedIntValue] ||
                  (action[@"native_cursor"] != nil && ![native_cursor() isEqualToString:action[@"native_cursor"]]));
@@ -339,12 +342,16 @@ __attribute__((constructor)) static void install(void) {
                 abort();
             }
             if ((action[@"wait"] && ![NSFileManager.defaultManager fileExistsAtPath:action[@"wait"]]) ||
+                (action[@"wait_label"] && find_control([view accessibilityChildren], action[@"wait_label"]) == nil) ||
                 ([action[@"wait_marker"] boolValue] && !marker_valid) ||
                 (action[@"wait_diagrams"] && diagram_count < [action[@"wait_diagrams"] unsignedIntValue]) || cursor_pending) {
+                if (action[@"retry_label"] && waiting % 7 == 6 && find_control([view accessibilityChildren], action[@"retry_label"]) != nil) {
+                    click_control(view, action[@"retry_label"]);
+                }
                 const NSUInteger limit = action[@"wait_seconds"] ? MAX(1, [action[@"wait_seconds"] unsignedIntegerValue]) * 7 : 80;
                 if (++waiting > limit) {
                     fprintf(stderr, "GUI action %lu timed out: %s\n", (unsigned long)index, [action.description UTF8String]);
-                    if (action[@"assert_pointer"]) fprintf(stderr, "pointer state: %s\n", [pointer_record(view).description UTF8String]);
+                    fprintf(stderr, "native state: %s\n", [pointer_record(view).description UTF8String]);
                     abort();
                 }
                 return;

@@ -20,6 +20,7 @@ pub const PointerEvent = @import("input/PointerEvent.zig");
 pub const TextInput = @import("input/TextInput.zig");
 
 test {
+    _ = @import("tests/change_review.zig");
     _ = @import("tests/frame_pacer.zig");
     _ = @import("tests/input_pacing.zig");
     _ = @import("tests/top_navigation.zig");
@@ -31,6 +32,7 @@ test {
     _ = @import("tests/mermaid.zig");
     _ = @import("tests/attachment_previews.zig");
     _ = @import("diagrams/tests.zig");
+    _ = @import("syntax/tests.zig");
     _ = Layout;
     _ = @import("input/GenericEventPool.zig");
     _ = @import("host/Services.zig");

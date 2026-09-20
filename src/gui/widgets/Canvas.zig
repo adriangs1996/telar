@@ -16,6 +16,7 @@ const LabelPlacement = @import("LabelPlacement.zig");
 const SpritePage = @import("../image/SpritePage.zig");
 const Sprite = @import("../image/Sprite.zig");
 const Canvas = @This();
+const SyntaxStore = @import("../syntax/Store.zig");
 
 widgets: ?*@import("interaction/State.zig") = null,
 /// The specialized cell cache is available to terminal widgets in a GUI frame.
@@ -40,6 +41,7 @@ sidebar: @import("SidebarBand.zig") = .{},
 sprites: ?*const SpritePage = null,
 /// Diagram requests copy their source into the client-owned deferred store.
 diagrams: ?*@import("../diagrams/Store.zig") = null,
+syntax: ?*SyntaxStore = null,
 
 /// Draws canonical terminal cells and their cursor through the frame's retained
 /// cache. A canvas backed by another quad list cannot use that cache.

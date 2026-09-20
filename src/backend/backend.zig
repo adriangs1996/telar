@@ -35,6 +35,7 @@ pub const run = @import("plugins/host_support.zig").run;
 pub const serve = @import("runtime/instance.zig").serve;
 
 test {
+    _ = @import("change_review/Service.zig");
     _ = @import("agent_panes/HistoryOptions.zig");
     _ = @import("runtime/application/AgentHistoryJobs.zig");
     _ = @import("agent/Agent.zig");

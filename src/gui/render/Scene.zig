@@ -2,6 +2,8 @@
 const client = @import("telar-client");
 const Canvas = @import("../widgets/Canvas.zig");
 const Composition = @import("../widgets/Composition.zig");
+const SyntaxStore = @import("../syntax/Store.zig");
+const ReviewWidget = @import("../change_review/Widget.zig");
 const Scene = @This();
 
 terminal: *@import("TerminalRenderer.zig"),
@@ -11,6 +13,8 @@ theme: client.ColorTheme,
 link: ?*const @import("../input/LinkHit.zig") = null,
 widgets: ?*@import("../widgets/interaction/State.zig") = null,
 diagrams: ?*@import("../diagrams/Store.zig") = null,
+syntax: ?*SyntaxStore = null,
+review: ?*ReviewWidget = null,
 
 /// Nothing retained by a layer may borrow the projection after this returns.
 /// Example: `const commit = try scene.prepare(projection);`
@@ -22,6 +26,7 @@ pub fn prepare(scene: *Scene, projection: client.Projection) !client.Presentatio
     canvas.animation = &scene.chrome.animation;
     canvas.widgets = scene.widgets;
     canvas.diagrams = scene.diagrams;
+    canvas.syntax = scene.syntax;
     if (scene.widgets) |widgets| {
         widgets.begin(projection.prompt != null);
         widgets.prompt_generation = if (projection.prompt) |prompt| prompt.generation else 0;
@@ -31,7 +36,12 @@ pub fn prepare(scene: *Scene, projection: client.Projection) !client.Presentatio
     const widgets = try composition.render(&projection);
     try widgets.draw(&canvas);
 
-    if (scene.widgets) |state| {
+    if (scene.review) |review| {
+        if (scene.widgets) |state| {
+            state.begin(true);
+        }
+        try review.draw(&canvas);
+    } else if (scene.widgets) |state| {
         try state.overlays(&canvas, scene.overlays);
         try @import("../widgets/overlays/ImagePreview.zig").drawCurrent(&canvas);
         if (state.message_link_preview) |*preview| {

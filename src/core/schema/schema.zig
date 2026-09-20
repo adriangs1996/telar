@@ -394,3 +394,12 @@ pub const QueryAgentHistory = @import("messages/QueryAgentHistory.zig");
 pub const AgentHistoryPageView = @import("messages/AgentHistoryPageView.zig");
 pub const encodeQueryAgentHistory = @import("messages/agent_history.zig").encodeQueryAgentHistory;
 pub const encodeAgentHistoryPage = @import("messages/agent_history.zig").encodeAgentHistoryPage;
+
+pub const QueryChangeReview = @import("messages/QueryChangeReview.zig");
+pub const ChangeReviewCommand = @import("messages/ChangeReviewCommand.zig");
+pub const ReportChangeReviewSample = @import("messages/ReportChangeReviewSample.zig");
+pub const ChangeReviewSnapshotView = @import("messages/ChangeReviewSnapshotView.zig");
+pub const encodeQueryChangeReview = @import("messages/change_review.zig").encodeQueryChangeReview;
+pub const encodeChangeReviewCommand = @import("messages/change_review.zig").encodeChangeReviewCommand;
+pub const encodeReportChangeReviewSample = @import("messages/change_review.zig").encodeReportChangeReviewSample;
+pub const encodeChangeReviewSnapshot = @import("messages/change_review.zig").encodeChangeReviewSnapshot;

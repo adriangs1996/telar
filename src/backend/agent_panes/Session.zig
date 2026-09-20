@@ -1,3 +1,6 @@
+const ReviewService = @import("../change_review/Service.zig");
+const ReviewContext = @import("../change_review/Context.zig");
+const ItemNormalizer = @import("ItemNormalizer.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Options = @import("Options.zig");
@@ -11,6 +14,7 @@ const HistoryOptions = @import("HistoryOptions.zig");
 const Session = @This();
 
 gpa: std.mem.Allocator,
+review_service: ?*ReviewService = null,
 history_options: *HistoryOptions,
 startup_timeout_ms: u32,
 worker: ?std.Io.Future(void) = null,
@@ -70,6 +74,7 @@ pub fn init(io: std.Io, gpa: std.mem.Allocator, options: Options) !*Session {
 
     session.* = .{
         .gpa = gpa,
+        .review_service = options.review_service,
         .history_options = history_options,
         .startup_timeout_ms = options.startup_timeout_ms,
         .published = .{ .pane_id = options.pane_id, .pane_generation = options.pane_generation },
@@ -326,6 +331,7 @@ fn runProvider(session: *Session, io: std.Io) !void {
                     try write(io, child.stdin.?, reply);
                 }
 
+                session.captureReview(io, parsed.value);
                 session.publish(io);
                 try select.concurrent(.line, Stream.next, .{ &session.stream, io });
             },
@@ -450,4 +456,33 @@ test {
     _ = @import("adversarial_test.zig");
     _ = @import("session_test.zig");
     _ = @import("ProviderHistory.zig");
+}
+
+fn captureReview(self: *Session, io: std.Io, value: std.json.Value) void {
+    const service = self.review_service orelse return;
+    if (!protocol.is(protocol.field(value, "method"), "item/completed") or self.codex.thread_id_len == 0) {
+        return;
+    }
+    const params = protocol.field(value, "params");
+    const item = protocol.field(params, "item");
+    if (!protocol.is(protocol.field(item, "type"), "fileChange")) {
+        return;
+    }
+    const thread = protocol.string(protocol.field(params, "threadId"));
+    if (!std.mem.eql(u8, thread, self.codex.thread_id[0..self.codex.thread_id_len])) {
+        return;
+    }
+    var buffer: [core.change_review.max_patch_bytes]u8 = undefined;
+    var normalizer: ItemNormalizer = .{ .body_buffer = &buffer };
+    const update = normalizer.item(item, true) orelse return;
+    if (update.truncated or self.stream.truncated or update.status != .completed) {
+        _ = service.dropped.fetchAdd(1, .monotonic);
+        return;
+    }
+    const context = ReviewContext.init(.{ .id = self.published.pane_id, .generation = self.published.pane_generation }, .codex, thread) catch return;
+    const latest = service.recordProvider(io, .{ .context = context, .turn = protocol.string(protocol.field(params, "turnId")), .item = update.id, .patch = update.text }) catch {
+        _ = service.dropped.fetchAdd(1, .monotonic);
+        return;
+    };
+    self.codex.metadata.review_latest_edition_id = latest;
 }

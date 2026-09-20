@@ -173,7 +173,7 @@ pub fn apply(gui: *GuiClient, event: Event) !bool {
     switch (target.action) {
         .text_field, .composer => try editor(gui, target, event),
         .transcript, .message_link, .composer_completion => {},
-        .agent_control, .composer_selector, .composer_choice, .thread_item => {
+        .change_review, .agent_control, .composer_selector, .composer_choice, .thread_item => {
             if (target.action == .thread_item and try threadItemKey(gui, target, event)) {
                 return true;
             }
@@ -292,11 +292,26 @@ fn editingRevision(gui: *const GuiClient) u64 {
     return gui.app.model.name_prompt.version();
 }
 
+/// Completes held terminal input before a modal consumes newly pressed keys.
+/// Example: `if (try routing.continueFallback(gui, event)) return true;`
+pub fn continueFallback(gui: *GuiClient, event: Event) !bool {
+    switch (event) {
+        .key => |key| if (key.phase == .press) {
+            return false;
+        },
+        .text => |text| if (text.phase == .press) {
+            return false;
+        },
+        else => return false,
+    }
+    return routeAgentBinding(gui, event);
+}
+
 fn routeAgentBinding(gui: *GuiClient, event: Event) !bool {
     const key: client.Key = switch (event) {
         .key => |value| value.terminalKey(),
         .text => |value| blk: {
-            if (value.physical == null or value.bytes.len == 0 or value.bytes.len > 4 or gui.widgets.preedit.owner != null) {
+            if (value.physical == null or value.bytes.len == 0 or value.bytes.len > 4 or (value.phase == .press and gui.widgets.preedit.owner != null)) {
                 return false;
             }
 
@@ -459,7 +474,7 @@ pub fn eligible(gui: *const GuiClient, target: Target) bool {
     }
 
     const pane_id = switch (target.action) {
-        .composer => |id| id,
+        .composer, .change_review => |id| id,
         .transcript => |id| id,
         .agent_control => |control| control.pane_id,
         .message_link => |control| control.owner.pane_id,
@@ -467,7 +482,7 @@ pub fn eligible(gui: *const GuiClient, target: Target) bool {
     };
     const model = gui.app.model.activeTabModelConst() orelse return false;
     const pane = model.findConst(pane_id) orelse return false;
-    return target.layer == 0 and pane.attached and pane.kind == .agent and pane.attachment_generation == target.id.generation;
+    return target.layer == 0 and pane.attached and (target.action == .change_review or pane.kind == .agent) and pane.attachment_generation == target.id.generation;
 }
 
 fn focus(gui: *GuiClient, target: Target) !void {
@@ -736,6 +751,7 @@ fn scrollDirectory(gui: *GuiClient, target: Target, event: Event) !void {
 fn activateControl(gui: *GuiClient, target: Target) !void {
     gui.widgets.cancelComposition();
     switch (target.action) {
+        .change_review => |pane_id| try gui.openChangeReview(pane_id),
         .composer_completion => try @import("completions.zig").activate(gui, target),
         .composer_selector, .composer_choice => try @import("composer_menu.zig").activate(gui, target),
         .thread_item => {

@@ -38,6 +38,8 @@ pub fn notification(command: Command) InputType {
 
 fn failureTitle(continuation: client_requests.Continuation) []const u8 {
     return switch (continuation) {
+        .change_review_query => "Could not load change review",
+        .change_review_command => "Could not update change review",
         .agent_prompt => "Could not send prompt",
         .agent_control => "Could not update agent",
         .agent_query => "Could not load conversation",
@@ -60,6 +62,7 @@ fn failureTitle(continuation: client_requests.Continuation) []const u8 {
 fn notificationTarget(continuation: client_requests.Continuation) notifications.Target {
     return switch (continuation) {
         .agent_history => |operation| .{ .focus_pane = operation.owner.pane_id },
+        .change_review_query, .change_review_command => |operation| .{ .focus_pane = operation.pane_id },
         .agent_prompt, .agent_control, .agent_query => |operation| .{ .focus_pane = operation.pane_id },
         .split => |split| .{ .focus_pane = split.target_pane },
         .close_pane, .attach_pane => |operation| .{ .select_tab = operation.location.tab_id },

@@ -34,6 +34,13 @@ const max_agent_session_title_bytes_module = @import("telar-core").max_agent_ses
 const encodeReportAgentTitle_module = @import("telar-core").encodeReportAgentTitle;
 const encodeCreateWorkspace_module = @import("telar-core").encodeCreateWorkspace;
 const raw_module = @import("telar-core").raw;
+const ChangeReviewCommand = @import("telar-core").ChangeReviewCommand;
+const ChangeReviewSnapshotView = @import("telar-core").ChangeReviewSnapshotView;
+const ReportChangeReviewSample = @import("telar-core").ReportChangeReviewSample;
+const encodeQueryChangeReview = @import("telar-core").encodeQueryChangeReview;
+const encodeChangeReviewCommand = @import("telar-core").encodeChangeReviewCommand;
+const encodeReportChangeReviewSample = @import("telar-core").encodeReportChangeReviewSample;
+const ReviewSelection = @import("ReviewSelection.zig");
 /// One connected control session with its owned receive buffer.
 const Session = @This();
 
@@ -42,6 +49,7 @@ gpa: std.mem.Allocator,
 connection: SocketChannelType,
 receive_buffer: []u8,
 next_request: u64 = 1,
+review_failure: ?[]const u8 = null,
 
 /// Connects to the runtime named by the CLI socket option or the process
 /// environment, starting it when necessary.
@@ -91,6 +99,67 @@ fn requestId(session: *Session) RequestIdType {
     const request_id: RequestIdType = @enumFromInt(session.next_request);
     session.next_request += 1;
     return request_id;
+}
+
+/// Reads one immutable edition; returned strings borrow the next receive buffer.
+/// Example: `const review = try session.fetchReview(pane, .{});`
+pub fn fetchReview(self: *Session, pane: PaneRefType, selection: ReviewSelection) !ChangeReviewSnapshotView {
+    self.review_failure = null;
+    const id = self.requestId();
+    var buffer: [256]u8 = undefined;
+    try self.connection.send(self.io, try encodeQueryChangeReview(&buffer, .{
+        .request_id = id,
+        .pane_id = try pane_module(pane.pane_id),
+        .pane_generation = pane.pane_generation,
+        .edition_id = selection.edition,
+        .session = selection.session,
+    }));
+    return self.receiveReview(id);
+}
+
+/// Issues an explicit review action, replacing only its transport request ID.
+/// Example: `const review = try session.commandReview(command);`
+pub fn commandReview(self: *Session, command: ChangeReviewCommand) !ChangeReviewSnapshotView {
+    self.review_failure = null;
+    var request = command;
+    request.request_id = self.requestId();
+    var buffer: [16 * 1024]u8 = undefined;
+    try self.connection.send(self.io, try encodeChangeReviewCommand(&buffer, request));
+    return self.receiveReview(request.request_id);
+}
+
+/// Records evidence already read by the hook process, without runtime file I/O.
+/// Example: `try session.reportReviewSample(sample);`
+pub fn reportReviewSample(self: *Session, sample: ReportChangeReviewSample) !void {
+    var request = sample;
+    request.request_id = self.requestId();
+    var buffer: [32 * 1024]u8 = undefined;
+    try self.connection.send(self.io, try encodeReportChangeReviewSample(&buffer, request));
+    const response = try decodeServer_module(try self.connection.receive(self.io, self.receive_buffer));
+    switch (response) {
+        .request_completed => |completed| if (completed.request_id != request.request_id) {
+            return error.UnexpectedRuntimeResponse;
+        },
+        .request_failed => |failure| return control.failureError(failure),
+        else => return error.UnexpectedRuntimeResponse,
+    }
+}
+
+fn receiveReview(self: *Session, id: RequestIdType) !ChangeReviewSnapshotView {
+    const response = try decodeServer_module(try self.connection.receive(self.io, self.receive_buffer));
+    const review = switch (response) {
+        .change_review_snapshot => |view| view,
+        .request_failed => |failure| {
+            self.review_failure = failure.message;
+            return control.failureError(failure);
+        },
+        else => return error.UnexpectedRuntimeResponse,
+    };
+    if (review.request_id != id) {
+        return error.UnexpectedRuntimeResponse;
+    }
+
+    return review;
 }
 
 /// Fetches the current agent snapshot into owned storage.

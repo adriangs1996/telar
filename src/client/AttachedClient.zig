@@ -55,6 +55,7 @@ const HostClockType = @import("resources/HostClock.zig");
 const HostInputSourceType = @import("input/HostInputSource.zig");
 const TransportDriverType = @import("connection/TransportDriver.zig");
 const ConfigReloadWatcherType = @import("resources/ConfigReloadWatcher.zig");
+const ChangeReviewSession = @import("change_review/Session.zig");
 
 comptime {
     std.debug.assert(max_expression_paste_bytes_module + 16 <= max_encoded_bytes);
@@ -93,6 +94,7 @@ clipboard_capture_resources: CaptureResourcesType = .{},
 link_opening: OpeningType = .{},
 link_pointer: PointerType = .{},
 request_lifecycle: LifecycleState = .{},
+change_review: ChangeReviewSession = .{},
 sidebar_animation_scheduler: SchedulerType = .{},
 notification_scheduler: SchedulerType = .{},
 bar_updates: BarUpdatesState = .{},

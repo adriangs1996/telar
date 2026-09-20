@@ -3,8 +3,12 @@ const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const Label = @import("Label.zig");
-const Line = @import("DiffLine.zig");
-const Lines = @import("DiffLines.zig");
+const Line = @import("telar-core").ChangeReviewDiffLine;
+const Lines = @import("telar-core").ChangeReviewDiffLines;
+const SyntaxPaint = @import("SyntaxPaint.zig");
+const DiffAnnotations = @import("DiffAnnotations.zig");
+const DiffRow = @import("DiffRow.zig");
+const SyntaxRole = @import("telar-client").SyntaxRole;
 const Paint = @This();
 
 canvas: *Canvas,
@@ -16,12 +20,16 @@ source_start: usize,
 paint: bool,
 y: f32 = 0,
 digits: usize = 3,
+syntax_paint: SyntaxPaint = .{},
+roles: ?[]const SyntaxRole = null,
+annotations: ?DiffAnnotations = null,
 
 /// Measures all lines but paints and retains selectable geometry only in view.
 /// Example: `const height = try diff.layout();`
 pub fn layout(widget: *Paint) !f32 {
     widget.y = widget.bounds.y;
     widget.digits = 3;
+    widget.syntax_paint = .{ .source = widget.text, .roles = widget.roles orelse if (widget.paint) (if (widget.canvas.syntax) |store| store.request(widget.text) else null) else null };
     var scan: Lines = .{ .text = widget.text };
     var maximum: u32 = 0;
     while (scan.next()) |line| {
@@ -158,7 +166,15 @@ fn code(widget: *Paint, line: Line) !void {
 
         try canvas.fillAt(.{ .x = area.x + gutter - 1, .y = area.y, .width = 1, .height = row }, palette.surface1);
         const text_area: Rect = .{ .x = area.x + gutter + padding / 2, .y = area.y, .width = @max(0, area.width - gutter - padding), .height = row };
+        if (widget.annotations) |annotations| {
+            try annotations.row(annotations.context, canvas, .{ .line = line, .fragment = text, .bounds = area, .code = text_area, .paint = widget.paint });
+        }
         try widget.literal(text_area, text);
+    }
+
+    if (widget.annotations) |annotations| {
+        const area = widget.rowBounds(0);
+        widget.y += try annotations.after(annotations.context, canvas, DiffRow{ .line = line, .fragment = line.text, .bounds = area, .code = area, .paint = widget.paint });
     }
 }
 
@@ -176,7 +192,7 @@ fn literal(widget: *Paint, area: Rect, text: []const u8) !void {
         }
     }
 
-    _ = try canvas.textAt(area, .{ .text = text, .color = canvas.theme.palette.text });
+    try widget.syntax_paint.draw(canvas, .{ .bounds = area, .text = text });
 }
 
 fn fitted(widget: *Paint, area: Rect, original: Label) !void {

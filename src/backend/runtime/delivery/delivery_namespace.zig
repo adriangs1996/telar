@@ -1,5 +1,7 @@
 //! Bounded runtime-to-client delivery policy and logical send transaction.
 
+const ReviewResult = @import("../../change_review/Result.zig");
+const PendingReviewChanged = @import("PendingReviewChanged.zig");
 const QueryResultType = @import("../../history/QueryResult.zig");
 const OutputResultType = @import("../../history/OutputResult.zig");
 const StatsResultType = @import("../../history/StatsResult.zig");
@@ -33,6 +35,7 @@ pub const Effect = union(enum) {
         history_output: ?*OutputResultType,
         history_stats: ?*StatsResultType,
         agent_history: ?*@import("OwnedAgentHistoryPage.zig") = null,
+        change_review: ?*ReviewResult = null,
     },
     resync,
     clipboard,
@@ -40,6 +43,7 @@ pub const Effect = union(enum) {
     proxy_status,
     agent_revision: u64,
     agent_thread: @import("AgentThreadProjection.zig"),
+    review_change: struct { slot: u8, change: PendingReviewChanged },
     system_metrics_revision: u64,
     workspace_list_revision: u64,
     foreground: ForegroundProjection,
@@ -91,6 +95,38 @@ test "agent history page stays reserved until send commit or failed client clean
         }
 
         try std.testing.expect(!delivery.responses.hasAgentHistory());
+    }
+}
+
+test "review response remains reserved across a prepared send until commit or client cleanup" {
+    for ([_]bool{ false, true }) |abort| {
+        var delivery = try Delivery.init(std.testing.allocator);
+        defer delivery.deinit(std.testing.allocator);
+        var attachments: AttachmentStore = .{};
+        defer attachments.deinit();
+        var metrics: RuntimeMetrics = .{ .started_ns = 0 };
+        const result = try ReviewResult.init(std.testing.allocator);
+        try delivery.enqueue(.{ .change_review = result });
+        try std.testing.expect(delivery.responses.hasChangeReview());
+
+        const prepared = delivery.stage("review", .{ .response = .{
+            .offset = 0,
+            .history_result = null,
+            .history_output = null,
+            .history_stats = null,
+            .change_review = result,
+        } });
+        try std.testing.expect(delivery.responses.hasChangeReview());
+        if (abort) {
+            delivery.abort(prepared);
+            try std.testing.expect(delivery.responses.hasChangeReview());
+            delivery.close();
+        } else {
+            delivery.commit(.{ .prepared = prepared, .attachments = &attachments, .metrics = &metrics });
+            _ = delivery.complete({});
+        }
+
+        try std.testing.expect(!delivery.responses.hasChangeReview());
     }
 }
 
