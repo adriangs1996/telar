@@ -60,7 +60,10 @@ mientras los handlers siguen conociendo `Screen`, `View` o `kitty.Store`.
 | `src/frontend/client/presentation/presentation_lifecycle.zig` | Ya diferencia preparar salida, escribirla y confirmar la presentación. Hay que conservar esa distinción. |
 
 La dirección continúa el [ADR de presentación por versiones][presentation-adr].
-No reemplaza los [controllers y handlers existentes][handlers-adr].
+Este plan conservaba los [controllers y handlers existentes][handlers-adr].
+La obligación de mantener esa separación quedó sustituida por
+[ADR 0016](../adr/0016-follow-operations-from-process-entrypoints.md); el nuevo
+refactor sigue operaciones directas desde los entrypoints.
 
 ## Dependencias objetivo
 

@@ -1,15 +1,15 @@
 # Client request lifecycle
 
-This flow starts when a client adapter sends a request that expects one
+This flow starts when a concrete client operation sends a request that expects one
 terminal runtime response. It ends when that response consumes its typed
 continuation, canonical lifecycle makes it stale, or the client dies.
 
 ## Boundary
 
-`request_lifecycle.State` owns two disposable client values:
+`connection/LifecycleState` owns two disposable client values:
 
 - the next nonzero request identity;
-- one fixed `requests.Tracker` of typed continuations.
+- one fixed `connection/Tracker` of typed continuations.
 
 The tracker has `schema.max_panes_per_tab + 8` slots and allocates nothing.
 Generated identities start at 2 because bootstrap owns identity 1. Zero marks
@@ -17,19 +17,20 @@ an autonomous runtime lifecycle message, and `maxInt(u64)` is a terminal
 sentinel rather than a reusable identity.
 
 This state does not decide whether a tab move, pane split or snapshot is valid.
-Each client adapter constructs its protocol message and validates the matching
-response. Application handlers receive typed values without request IDs.
+Each operation constructs its protocol message and validates the matching
+response. It translates accepted wire values into model commands in the same
+function; the model does not own request IDs.
 
 ## Starting a request
 
 ```text
-client use-case effect
+concrete client operation
         |
 request_lifecycle.nextId
         |
 check one tracker slot and request-ID space
         |
-adapter constructs message and Continuation
+operation constructs message and Continuation
         |
 request_lifecycle.deliver
         |
@@ -48,14 +49,18 @@ Renames, launches and notifications use delivery functions that call the
 outbox's owned-copy entrypoints. Fixed-size requests use `deliver` directly.
 The request lifecycle never borrows text beyond the synchronous call.
 
-Tab close is the one preflight that needs two consecutive identities. Its
-failure path may request a canonical tab snapshot after close delivery fails.
+Tab close and workspace handoff preflight two consecutive identities. Their
+failure paths may request a canonical tab snapshot after provisional attachment
+delivery fails.
 `ensureCanStart(client, 2)` proves both identities and one tracker slot exist
 before provisional attachment effects begin.
 
-Bootstrap registers `initial_open` before `runtime_transport.State.bootstrap`
-sends its synchronous frames. No read starts until that registration and all
-three bootstrap writes finish.
+`RuntimeTransportState.bootstrap` queues graphics/color configuration and the
+runtime-state subscription through the ordinary send actor. Reads are already
+armed. The later `client_layout_snapshot` enters `client_layouts.apply`, which
+restores geometry and registers the fixed `initial_open` continuation before
+enqueueing its corresponding open request. Registration and send admission use
+the same rollback rule as other requests.
 
 ## Consuming a response
 
@@ -64,21 +69,21 @@ runtime_transport.handleRead
         |
 decoded terminal response
         |
-slice adapter -> request_lifecycle.consume(request_id)
+operation -> request_lifecycle.consume(request_id)
         |
 typed Continuation
         |
 verify request kind and exact target
         |
-application handler
+operation
 ```
 
-`consume` removes a known continuation before the adapter validates its type or
+`consume` removes a known continuation before the operation validates its type or
 target. An incompatible, malformed or replayed terminal response therefore
 cannot reuse the same request. An unknown identity is a protocol error.
 
-Runtime `request_failed` follows the same rule. The adapter consumes the
-continuation once, then the failure use case chooses recovery, notification or
+Runtime `request_failed` follows the same rule. `request_failures.apply` consumes the
+continuation once, then chooses recovery, notification or
 fatal client shutdown.
 
 ## Canonical retirement
@@ -106,10 +111,11 @@ Client destruction drops every continuation. Runtime-owned panes, tabs and
 workspaces remain valid, and a new client rebuilds its projection from
 snapshots.
 
-## Proof
+## Validation
 
-- `src/client/connection/request_lifecycle.zig` proves identity bounds, recovery
-  preflight and refusal before tracker overflow.
+- `src/client/connection/LifecycleState.zig` owns identity bounds and preflight;
+  frontend tab/handoff integration tests exercise refusal before provisional
+  effects and reserve capacity for recovery.
 - `src/client/connection/requests.zig` proves single consumption, group and pane
   lookup, exact close completion and stale-retirement exceptions.
 - `request delivery rolls correlation back when transport is full` in

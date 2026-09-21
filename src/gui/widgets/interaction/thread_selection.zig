@@ -59,7 +59,7 @@ pub fn leave(gui: *GuiClient) bool {
 pub fn prepare(gui: *GuiClient) !void {
     const selection = &gui.widgets.thread_selection;
     if (selection.release) |owner| {
-        client.agent_history.unfreeze(&gui.app, owner.pane_id, owner.attachment_generation);
+        client.agent_history.unfreeze(&gui.app.model, owner.pane_id, owner.attachment_generation);
         selection.release = null;
     }
     const owner = selection.owner orelse return;
@@ -71,15 +71,15 @@ pub fn prepare(gui: *GuiClient) !void {
     if (!current or head == null or !valid(gui, head.?)) {
         cancel(gui);
         if (selection.release) |released| {
-            client.agent_history.unfreeze(&gui.app, released.pane_id, released.attachment_generation);
+            client.agent_history.unfreeze(&gui.app.model, released.pane_id, released.attachment_generation);
             selection.release = null;
         }
         return;
     }
     if (selection.retains(owner.pane_id) and !selection.frozen) {
-        selection.frozen = client.agent_history.freeze(&gui.app, owner.pane_id, owner.attachment_generation) catch |err| {
+        selection.frozen = client.agent_history.freeze(&gui.app.model, owner.pane_id, owner.attachment_generation) catch |err| {
             _ = leave(gui);
-            try client.controllers.notifications.publishNow(&gui.app, .{ .level = .failure, .title = "Could not select messages", .message = @errorName(err) });
+            try client.operations.notifications.publishNow(&gui.app, .{ .level = .failure, .title = "Could not select messages", .message = @errorName(err) });
             return;
         };
         if (!selection.frozen) {
@@ -87,7 +87,7 @@ pub fn prepare(gui: *GuiClient) !void {
             return;
         }
     } else if (!selection.retains(owner.pane_id) and selection.frozen) {
-        client.agent_history.unfreeze(&gui.app, owner.pane_id, owner.attachment_generation);
+        client.agent_history.unfreeze(&gui.app.model, owner.pane_id, owner.attachment_generation);
         selection.frozen = false;
     }
     if (selection.dragging and selection.outside != 0) {
@@ -186,7 +186,7 @@ fn pointer(gui: *GuiClient, event: @import("../../input/PointerEvent.zig"), targ
         gui.widgets.dispatcher.captures[0] = container.id;
         _ = gui.widgets.dispatcher.focus(container.id);
         const model = gui.app.model.activeTabModel() orelse return true;
-        _ = try client.controllers.view_interactions.apply(&gui.app, model, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
+        _ = try client.operations.view_interactions.apply(&gui.app, model, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
         message_links.clear(gui);
         gui.widgets.dispatcher.revision +%= 1;
         return true;

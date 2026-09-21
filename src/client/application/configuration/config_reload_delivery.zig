@@ -2,12 +2,7 @@
 
 const DiagnosticType = @import("../../config/Diagnostic.zig");
 const ConfigurationCommitType = @import("../../model/ConfigurationCommit.zig");
-const ModelType = @import("../../model/Model.zig");
-const Capture = @import("Capture.zig");
-const DeliverConfigReloadHandler = @import("DeliverConfigReloadHandler.zig");
 const std = @import("std");
-const VersionType = @import("../../model/Version.zig");
-const notification_capability = @import("../../notifications/notifications.zig");
 
 pub const Resolution = union(enum) {
     unchanged,
@@ -44,10 +39,6 @@ pub fn testingCommit() ConfigurationCommitType {
     };
 }
 
-fn deliveryHandler(model: *ModelType, capture: *Capture) DeliverConfigReloadHandler {
-    return .{ .model = model, .effects = capture.effects() };
-}
-
 fn makeDiagnostic(text: []const u8) DiagnosticType {
     var value: DiagnosticType = .{};
     value.set("{s}", .{text});
@@ -61,125 +52,4 @@ fn invalidDiagnostic() DiagnosticType {
     value.len = 1;
 
     return value;
-}
-
-test "DeliverConfigReloadHandler rearms an unchanged reload without other effects" {
-    var model = ModelType.init(std.testing.allocator, true);
-    defer model.deinit();
-    var capture: Capture = .{ .model = &model };
-    var handler = deliveryHandler(&model, &capture);
-
-    try std.testing.expect(try handler.execute(.unchanged) == .unchanged);
-
-    try std.testing.expectEqualSlices(Event, &.{.rearm}, capture.eventSlice());
-    try std.testing.expectEqualDeep(VersionType{}, model.version());
-}
-
-test "DeliverConfigReloadHandler commits a rejection before notifying and rearming" {
-    var model = ModelType.init(std.testing.allocator, true);
-    defer model.deinit();
-    var capture: Capture = .{ .model = &model };
-    var handler = deliveryHandler(&model, &capture);
-
-    try std.testing.expect(try handler.execute(.{ .rejected = makeDiagnostic("invalid keymap") }) == .rejected);
-
-    try std.testing.expectEqualSlices(
-        Event,
-        &.{ .publish_notification, .rearm },
-        capture.eventSlice(),
-    );
-    try std.testing.expectEqualStrings("invalid keymap", model.diagnostic().?);
-    try std.testing.expectEqual(notification_capability.Level.failure, capture.notification.?.level);
-    try std.testing.expectEqualStrings("Configuration rejected", capture.notification.?.title);
-    try std.testing.expectEqual(@as(u64, 7 * std.time.ns_per_s), capture.notification.?.duration_ns);
-    try std.testing.expect(capture.diagnostic_observed);
-    try std.testing.expectEqual(VersionType{ .diagnostic = 1 }, model.version());
-}
-
-test "DeliverConfigReloadHandler uses the explicit invalid diagnostic fallback" {
-    var model = ModelType.init(std.testing.allocator, true);
-    defer model.deinit();
-    var capture: Capture = .{ .model = &model };
-    var handler = deliveryHandler(&model, &capture);
-
-    _ = try handler.execute(.{ .rejected = invalidDiagnostic() });
-
-    try std.testing.expectEqualStrings(
-        "configuration reload failed: invalid diagnostic text",
-        model.diagnostic().?,
-    );
-    try std.testing.expect(capture.diagnostic_observed);
-}
-
-test "DeliverConfigReloadHandler publishes success after adoption and before rearming" {
-    var model = ModelType.init(std.testing.allocator, true);
-    defer model.deinit();
-    var capture: Capture = .{ .model = &model };
-    var handler = deliveryHandler(&model, &capture);
-
-    const outcome = try handler.execute(.adopted);
-
-    try std.testing.expectEqualDeep(testingCommit(), outcome.adopted);
-    try std.testing.expectEqualSlices(
-        Event,
-        &.{ .apply_adoption, .publish_notification, .rearm },
-        capture.eventSlice(),
-    );
-    try std.testing.expectEqual(notification_capability.Level.success, capture.notification.?.level);
-    try std.testing.expectEqualStrings("Configuration reloaded", capture.notification.?.title);
-    try std.testing.expectEqualStrings("The new settings are active", capture.notification.?.message);
-    try std.testing.expect(!capture.diagnostic_observed);
-}
-
-test "DeliverConfigReloadHandler preserves each completed stage after failures" {
-    const Scenario = struct {
-        failure: Failure,
-        expected_error: anyerror,
-        expected_events: []const Event,
-    };
-    const scenarios = [_]Scenario{
-        .{
-            .failure = .apply_adoption,
-            .expected_error = error.ConfigurationAdoptionFailed,
-            .expected_events = &.{.apply_adoption},
-        },
-        .{
-            .failure = .publish_notification,
-            .expected_error = error.NotificationPublicationFailed,
-            .expected_events = &.{ .apply_adoption, .publish_notification },
-        },
-        .{
-            .failure = .rearm,
-            .expected_error = error.ConfigReloadRearmFailed,
-            .expected_events = &.{ .apply_adoption, .publish_notification, .rearm },
-        },
-    };
-
-    for (scenarios) |scenario| {
-        var model = ModelType.init(std.testing.allocator, true);
-        defer model.deinit();
-        var capture: Capture = .{ .model = &model, .failure = scenario.failure };
-        var handler = deliveryHandler(&model, &capture);
-
-        try std.testing.expectError(scenario.expected_error, handler.execute(.adopted));
-
-        try std.testing.expectEqualSlices(Event, scenario.expected_events, capture.eventSlice());
-    }
-}
-
-test "DeliverConfigReloadHandler retains a rejected diagnostic when notification fails" {
-    var model = ModelType.init(std.testing.allocator, true);
-    defer model.deinit();
-    var capture: Capture = .{ .model = &model, .failure = .publish_notification };
-    var handler = deliveryHandler(&model, &capture);
-
-    try std.testing.expectError(
-        error.NotificationPublicationFailed,
-        handler.execute(.{ .rejected = makeDiagnostic("reload rejected") }),
-    );
-
-    try std.testing.expectEqualSlices(Event, &.{.publish_notification}, capture.eventSlice());
-    try std.testing.expectEqualStrings("reload rejected", model.diagnostic().?);
-    try std.testing.expect(capture.diagnostic_observed);
-    try std.testing.expectEqual(VersionType{ .diagnostic = 1 }, model.version());
 }

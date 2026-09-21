@@ -59,6 +59,61 @@ pub const Event = union(enum) {
     stopped: anyerror!void,
 };
 
+/// Releases values transferred into an event that teardown will not dispatch.
+/// Retained jobs and borrowed buffers are released by their owners after join.
+/// Example: `discard(completed, io);` after `select.cancel()`.
+pub fn discard(completed: Event, io: std.Io) void {
+    switch (completed) {
+        .accepted => |result| {
+            var connection = result catch return;
+            connection.deinit(io);
+        },
+        .history_response => |result| switch (result catch return) {
+            .query_result => |value| value.deinit(),
+            .output_result => |value| value.deinit(),
+            .stats_result => |value| value.deinit(),
+            .failed, .pruned => {},
+        },
+        .proxy_capture => |result| {
+            const half = result catch return;
+            half.deinit();
+        },
+        .plugin_effects => |result| {
+            const effects = result catch return;
+            effects.deinit();
+        },
+        // These pointers name slots still retained by Application.
+        .change_review_completed, .agent_history_completed, .editor_opened => {},
+        // Other events contain values or borrows whose owners outlive the join.
+        .handshaken,
+        .client_message,
+        .client_sent,
+        .cell_publication_due,
+        .pane_input_written,
+        .pane_response_written,
+        .pane_output,
+        .pane_ingested,
+        .pane_observed,
+        .pane_media,
+        .pane_exit,
+        .pane_search,
+        .telemetry_tick,
+        .telemetry_written,
+        .proxy_event,
+        .agent_tick,
+        .agent_description,
+        .engine_response,
+        .agent_thread_changed,
+        .metrics_tick,
+        .metrics_sampled,
+        .checkpoint_written,
+        .git_status,
+        .session_name,
+        .stopped,
+        => {},
+    }
+}
+
 /// Returns the latency budget used to diagnose one event while it is handled.
 ///
 /// ```zig

@@ -67,7 +67,7 @@ Client teardown first cancels every select task, then closes the sink. Release
 builds and clients whose sink cannot be created schedule no telemetry work.
 Neither condition changes semantic state or visible presentation.
 
-## Proof
+## Validation
 
 - `src/frontend/client/resources/telemetry.zig` proves the bounded projection, one-write
   token, coalescence, deferred shutdown and write-failure recovery.

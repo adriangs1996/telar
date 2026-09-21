@@ -16,7 +16,7 @@ native, Lua, plugin or pointer sidebar action
         |
 client_actions.apply
         |
-ToggleSidebarHandler / ResizeSidebarHandler
+sidebar_toggles.toggle / sidebar_toggles.resize
         |
 ClientModel toggle or width commit
         |
@@ -24,7 +24,7 @@ sidebar_toggles
         |
 sidebar_projection.apply
         |
-DeliverSidebarLayoutHandler
+sidebar_projection.apply
         |                         |
 View projection and pane_resize  presentation_lifecycle.observe
         |                         |
@@ -43,13 +43,14 @@ view projection.
 
 ## Effects and presentation
 
-After the commit, `DeliverSidebarLayoutHandler` verifies visibility, width and
+After the commit, `sidebar_projection.apply` verifies visibility, width and
 chrome revision. It projects both values into `View`, invalidates graphics
 placements and publishes the resulting size for every attached pane in the
 active tab, in that order. With no active workspace it completes after the
-first two effects. Configuration reload reaches the same handler through the
-`sidebar_projection` adapter after its model transaction. The adapter supplies
-only view, graphics and geometry ports. This immediate projection gives
+first two effects. Configuration reload calls the same
+`sidebar_projection.apply` operation after its model transaction. That function
+calls the chrome and graphics service ports and `pane_geometry.offerAttached`
+directly. This immediate projection gives
 geometry effects the same workbench that the next frame will show.
 
 Neither the use case nor the adapter requests a frame. After the input event,
@@ -74,7 +75,7 @@ The `pane_resize` protocol has no success response. A runtime rejection leaves
 the previous PTY size intact and increments runtime telemetry; it does not
 roll back the client preference.
 
-## Proof
+## Validation
 
 - `src/client/model/Model.zig` proves source-of-truth ownership, no-op
   assignment and chrome-revision isolation.
@@ -83,7 +84,7 @@ roll back the client preference.
 - `src/client/application/notifications/sidebar_layout_delivery.zig` proves
   exact commit validation, complete effect order, empty-workspace behavior and
   partial geometry failures.
-- `src/client/controllers/notifications/sidebar_projection.zig` wires the physical ports shared
+- `src/client/operations/notifications/sidebar_projection.zig` wires the physical ports shared
   with configuration reload.
 - `src/frontend/client/presentation/view.zig` proves toggle and separator-drag
   intents without mutating semantic state.

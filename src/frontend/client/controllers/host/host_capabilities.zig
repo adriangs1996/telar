@@ -10,10 +10,9 @@ const wait_module = @import("telar-client").wait;
 const HostCommitType = @import("telar-client").HostCommit;
 const term = @import("../../../presentation/screen_support.zig");
 const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
-const HandlerType = @import("telar-client").HostCapabilitiesHandler;
 const HostCapabilityObservationType = @import("telar-client").HostCapabilityObservation;
 const HostCapabilitySupportType = @import("telar-client").HostCapabilitySupport;
-const host_resources = @import("telar-client").controllers.host_resources;
+const host_resources = @import("telar-client").operations.host_resources;
 const std = @import("std");
 
 /// Starts the exterior-terminal probes through one owner.
@@ -94,9 +93,7 @@ pub fn observe(client: *Client, response: term.Event.TerminalResponse) !?HostCom
     }
 
     const observation = translate(response) orelse return null;
-    var use_case = handler(client);
-
-    return use_case.observe(observation);
+    return host_resources.observe(client, observation);
 }
 
 /// Settles unanswered probes and projects their fallback resources.
@@ -105,25 +102,13 @@ pub fn observe(client: *Client, response: term.Event.TerminalResponse) !?HostCom
 /// _ = try expire(client);
 /// ```
 pub fn expire(client: *Client) !?HostCommitType {
-    var use_case = handler(client);
-
     const capabilities = negotiation.settledCapabilities(client.model.hostCapabilities());
 
     if (host(client).host_negotiation.zlib_support == .unknown) {
         host(client).host_negotiation.zlib_support = .unsupported;
     }
 
-    return use_case.reconcile(capabilities);
-}
-
-fn handler(client: *Client) HandlerType {
-    return .{
-        .model = &client.model,
-        .effects = .{
-            .context = client,
-            .deliver = deliverResources,
-        },
-    };
+    return host_resources.reconcile(client, capabilities);
 }
 
 /// Translates one parser reply into a protocol-free host observation.
@@ -154,12 +139,6 @@ pub fn translate(response: term.Event.TerminalResponse) ?HostCapabilityObservati
 
 fn support(supported: bool) HostCapabilitySupportType {
     return if (supported) .supported else .unsupported;
-}
-
-fn deliverResources(raw_context: *anyopaque, commit: HostCommitType) !void {
-    const client: *Client = @ptrCast(@alignCast(raw_context));
-
-    try host_resources.deliver(client, commit);
 }
 
 test "Kitty probe replies translate by reserved image identity" {

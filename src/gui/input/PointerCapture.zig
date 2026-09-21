@@ -72,7 +72,7 @@ pub fn deliver(capture: *Capture, app: *client.AttachedClient, event: client.Mou
         return;
     }
 
-    try client.controllers.pane_mouse_inputs.reportRetained(app, .{
+    try client.operations.pane_mouse_inputs.reportRetained(app, .{
         .plan = plan,
         .command = .{ .event = projected, .exterior_pixels = true, .cell_width_px = capture.cell_width, .cell_height_px = capture.cell_height },
     });

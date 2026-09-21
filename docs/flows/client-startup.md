@@ -1,7 +1,7 @@
 # Client startup
 
 This flow starts after `run` has opened the host terminal and constructed one
-heap-stable `Client`. It negotiates host colors before subscribing to the runtime
+heap-stable `TerminalClient` embedding `AttachedClient`. It negotiates host colors before subscribing to the runtime
 state that triggers the first pane opening. See [terminal colors](terminal-colors.md)
 for probe ownership and early-input bounds.
 
@@ -13,7 +13,7 @@ launch values remain owned by the heap-stable client until the runtime answers
 with its retained layout.
 
 ```text
-run -> Client.init
+run -> TerminalClient.init
         |
 client_startup.start
         |
@@ -21,7 +21,7 @@ validate workbench geometry
         |
 start host probes and TTY input, arm asynchronous event sources
         |
-run -> select.await -> client_events
+run -> inbox.wait -> events.update / dispatch
         |
 OSC 10/11 results or 250 ms deadline
         |
@@ -42,10 +42,12 @@ open_pane(restored pane or default launch)
 pane activation -> replay retained input
 ```
 
-The startup controller owns the negotiation gate and bootstrap ordering. The
-layout controller continues to restore the runtime snapshot and request the
-initial pane without knowing about probes. `run` waits for `client_events`
-outcomes; individual adapters own their tokens and rearming policy.
+`controllers/session/client_startup.zig` is the TUI startup adapter. It owns
+the negotiation gate and bootstrap order. The common
+`operations/session/client_layouts.apply` restores runtime layout and requests
+the initial pane without knowing about terminal probes. `run` waits on the
+inbox and calls `events.update`; each resource owner keeps its own token and
+rearming policy.
 
 ## Validation and handshake
 
@@ -53,7 +55,7 @@ Startup derives the initial pane size from the current workbench. An empty
 workbench returns `TerminalTooSmall` before request correlation or transport
 state changes.
 
-After color negotiation settles, `runtime_transport.State.bootstrap` reserves
+After color negotiation settles, `RuntimeTransportState.bootstrap` reserves
 space for three FIFO messages before changing its bounded outbox:
 
 1. `configure_graphics` with this client's shared-memory support;
@@ -77,13 +79,13 @@ read, one TTY read, the host-capability deadline, telemetry, configured bar
 deadlines and configuration reload. Adapters with disabled configuration
 schedule no worker. Each active adapter owns its bounded pending token.
 
-Any startup error aborts the disposable client. `Client.deinit` cancels tasks
-before freeing client buffers, and its defer runs before `run` destroys the
-watcher. Telar does not retry an uncertain partial handshake inside the same
+Any startup error aborts the disposable client. `TerminalClient.deinit` closes
+and joins inbox producers before freeing client buffers; its defer runs before
+`run` destroys the watcher. Telar does not retry an uncertain partial handshake inside the same
 client; the runtime remains the authority and a later client reconnects from
 snapshots.
 
-## Proof
+## Validation
 
 - `client startup validates geometry before request registration` proves that
   an invalid workbench changes neither correlation nor transport state.

@@ -4,6 +4,8 @@ status: accepted
 
 # Organize capabilities around explicit entrypoints
 
+The controller/handler refinement below was superseded by [ADR 0016](0016-follow-operations-from-process-entrypoints.md). Follow its direct-operation rules for new and migrated flows.
+
 Telar must make both state ownership and user-visible flows discoverable. We
 organize state and invariants into capability namespaces, while every external
 event enters a process through one explicit entrypoint. This preserves the
@@ -33,15 +35,11 @@ asynchronous entrypoints may be named by event source inside
 `entrypoints/events`. Siblings at one level do not mix capability names with
 architectural roles.
 
-Client and runtime event loops classify events and delegate immediately to
-explicit boundary entrypoints. A simple event may be handled there directly.
-For a client mutation separated under
-[ADR 0006](0006-separate-request-controllers-from-command-handlers.md), a
-request controller owns wire translation and response delivery while an
-application command handler owns domain orchestration, ordering, transaction
-policy, rollback and domain event publication. Both use capability APIs and do
-not mutate their representations directly. Protocol messages connect
-entrypoints across the process boundary.
+Client and runtime event loops classify events and call named operations
+through direct functions. Following [ADR 0016](0016-follow-operations-from-process-entrypoints.md),
+the operation keeps its request, completion and recovery together; no
+controller/handler/executor sequence is required. Protocol messages connect
+these operations across the process boundary.
 
 User-visible flows are named separately from capabilities because one flow may
 cross several owners, asynchronous events and both processes. Each flow records

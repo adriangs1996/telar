@@ -13,16 +13,16 @@ View.handleMouse -> AgentKey
        |
 InputHandler.mouse
        |
-agent_navigation.apply
+operations/agents/agent_navigation.apply
        |
-NavigateAgentHandler -> ClientModel.planAgentNavigation
+ClientModel.planAgentNavigation
        |
-       +-- local tab -> SelectTabHandler -> FocusPaneHandler
+       +-- local tab -> tab_selections.select -> pane_focus.apply
        |
-       +-- remote pane -> RequestWorkspaceHandoffHandler
+       +-- remote pane -> workspace_handoffs.requestPane
 ```
 
-The application handler owns the branch and local ordering. A pane in an
+The operation owns the branch and local ordering. A pane in an
 inactive local tab selects that tab before focus. If tab selection is blocked
 by a pending canonical snapshot, focus does not run against the old active
 tab. A pane outside the projected workspace requests a handoff only when no
@@ -33,8 +33,8 @@ effect. Worktree agents carry no ordinary-workspace fallback. If the remembered
 remote pane vanished, only agents from an ordinary workspace can use the
 handoff flow's workspace retry.
 
-The handler does not draw. Local selection and focus commit their own
-`ClientModel.Version` dimensions through existing handlers. A remote handoff
+The operation does not draw. Local selection and focus commit their own
+`ClientModel.Version` dimensions through existing operations. A remote handoff
 commits the normal empty workspace transition after its protocol messages enter
 the outbox. `Presenter` observes either result at the event boundary.
 
@@ -52,14 +52,15 @@ Canonical pane reconciliation validates membership before applying the tree
 and consumes only that tab's cache entry. Other tabs remain available for later
 selection. See [Client layout persistence](client-layout-persistence.md).
 
-## Proof
+## Validation
 
 - `src/client/model/Model.zig` resolves exact generations and local or
   remote plans without exposing the agent replica.
-- `src/client/application/agents/agent_navigation.zig` proves selection
-  before focus, stale and pending suppression, and effect failure ordering.
-- `src/client/controllers/agents/agent_navigation.zig` wires the plan
-  to tab, focus and handoff adapters.
+- `src/client/operations/agents/agent_navigation.zig` applies selection before
+  focus and calls the concrete tab, focus and handoff operations.
+- `src/frontend/client/tests/notifications_and_agents.zig` and
+  `src/frontend/client/tests/synchronization.zig` exercise stale/pending
+  suppression and navigation order on the real client.
 - `src/frontend/client/tests/synchronization.zig` proves local fullscreen focus,
   direct pane handoff and a workspace round trip into a previously inactive
   fullscreen tab through the substituted runtime socket. The requested pane

@@ -28,7 +28,7 @@ pub fn activate(gui: *GuiClient, target: Target) !void {
             gui.widgets.thread_anchor.capture(.{ .control = control, .baseline = pane.transcript_scroll, .offset = target.thread_header_offset });
             gui.widgets.thread_expansions.toggle(control);
             if (control.operation == .toggle_work and gui.widgets.threadExpanded(control)) {
-                @import("telar-client").agent_history.revealWork(&gui.app, pane.id, control.source_key);
+                @import("telar-client").agent_history.revealWork(&gui.app.model, pane.id, control.source_key);
             }
             gui.widgets.dispatcher.revision +%= 1;
         },

@@ -96,7 +96,7 @@ reconnecting seeds a new one from the runtime replica.
 No new IPC messages, runtime state or wire schema are needed for this cache
 retention. Fullscreen rendering still follows [Pane fullscreen](pane-fullscreen.md).
 
-## Proof
+## Validation
 
 - `runtime retains a terminal layout across client reconnection` crosses two
   real frontend connections and one live runtime.

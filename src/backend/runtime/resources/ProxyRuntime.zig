@@ -169,7 +169,7 @@ pub fn metrics(runtime: *const Runtime) Snapshot {
 /// canceled by the runtime's event scheduler.
 ///
 /// ```zig
-/// select.cancelDiscard();
+/// loop.cancel();
 /// proxy_runtime.deinit();
 /// ```
 pub fn deinit(runtime: *Runtime) void {

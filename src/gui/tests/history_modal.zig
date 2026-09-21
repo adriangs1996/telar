@@ -172,24 +172,23 @@ test "history application selection rejects unrelated prompts and out of range r
     defer std.testing.allocator.destroy(model);
     model.* = .init(std.testing.allocator, true);
     defer model.deinit();
-    const handler: client.HistoryBrowserHandler = .{ .model = model };
     try model.history_palette.prepare(std.testing.allocator);
-    try std.testing.expect(handler.requestPage(1, .global));
-    try std.testing.expect(handler.apply(.{ .request_id = 1, .entries = &entries, .snapshot_id = 9, .has_more = false, .now_ms = 2000 }));
+    try std.testing.expect(client.history_browser.requestPage(model, 1, .global));
+    try std.testing.expect(client.history_browser.apply(model, .{ .request_id = 1, .entries = &entries, .snapshot_id = 9, .has_more = false, .now_ms = 2000 }));
     const revision = model.history_palette.version();
-    try std.testing.expect(!handler.select(1, revision));
+    try std.testing.expect(!client.history_browser.select(model, 1, revision));
     model.name_prompt.begin(.history_palette);
-    try std.testing.expect(!handler.select(2, revision));
-    try std.testing.expect(!handler.select(1, revision -| 1));
+    try std.testing.expect(!client.history_browser.select(model, 2, revision));
+    try std.testing.expect(!client.history_browser.select(model, 1, revision -| 1));
     _ = model.name_prompt.apply(.toggle_inspection);
     _ = model.name_prompt.apply(.page_down);
     const before = model.name_prompt.version();
-    try std.testing.expect(handler.select(1, revision));
+    try std.testing.expect(client.history_browser.select(model, 1, revision));
     try std.testing.expectEqual(before + 1, model.name_prompt.version());
     try std.testing.expectEqual(@as(u16, 1), model.name_prompt.currentConst().?.selection());
     try std.testing.expectEqual(@as(u32, 0), model.name_prompt.currentConst().?.detailScroll());
     model.name_prompt.begin(.goto_picker);
-    try std.testing.expect(!handler.select(0, revision));
+    try std.testing.expect(!client.history_browser.select(model, 0, revision));
 }
 
 test "native history wheel accumulates precise movement and bounds inspector scrolling" {

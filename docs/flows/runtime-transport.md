@@ -19,16 +19,17 @@ terminal state.
 - one allocation-free `Outbox` with fixed message and copied-byte storage;
 - one receive token, while `Outbox` owns the single send token.
 
-The state does not own request correlation. `request_lifecycle.State` decides
+The state does not own request correlation. `connection/LifecycleState` decides
 which typed continuation may consume a reply. Transport only preserves framed
 delivery, bounded storage and I/O ordering. See
 [Client request lifecycle](request-lifecycle.md).
 
 I/O completion orchestration lives in `client/entrypoints/runtime_io.zig`.
-It connects transport state to graphics credit, host input and runtime-message
-controllers. `connection/runtime_transport.zig` never imports `Client` or a
-controller. Existing local aliases named `runtime_transport` in controllers
-refer to this event adapter for enqueue and scheduling operations.
+It connects transport state to graphics credit, host input and server-message
+dispatch. `connection/RuntimeTransportState.zig` owns framing and queue state
+without importing `AttachedClient`. Local aliases named `runtime_transport` in
+client operations refer to the concrete `runtime_io` entrypoint for enqueue
+and scheduling.
 
 ## Bootstrap
 
@@ -40,13 +41,16 @@ atomically to the ordinary outbox, in order:
 2. `configure_terminal_colors`, so terminal queries use the host defaults;
 3. `request_runtime_state`, so reconnectable replicas can be rebuilt.
 
-The send actor writes these messages independently of reception. The initial
+Bootstrap only queues messages. The fresh GUI then calls `runtime_io.pump`
+explicitly to start the send actor; it does not rely on the side effect of a
+graphics-credit flush. The TUI finishes its color probes before queuing the
+same bootstrap. The send actor writes independently of reception. The initial
 runtime layout determines the subsequent `open_pane` transaction.
 
 ## Outbound path
 
 ```text
-client slice effect
+concrete client operation
        |
 request_lifecycle.deliver / runtime_transport.enqueueInput
        |
@@ -90,7 +94,7 @@ runtime_transport.handleRead
        |
 server_messages.handleServerMessage
        |
-client slice adapter -> ClientModel or disposable resources
+concrete client operation -> ClientModel or disposable resources
        |
 graphics credit flush -> next runtime read
 ```
@@ -102,18 +106,18 @@ outcome or an error leaves no new read behind.
 
 Transport does not inspect a decoded message after dispatch. Message-specific
 recovery, user notification and last-resort error reporting belong to the
-selected slice adapter; in particular, `request_failures` owns reporting the
+selected operation; in particular, `request_failures` owns reporting the
 runtime's bounded rejection text.
 
-Decoded slices borrow the receive buffer only for this entrypoint. Slice
-adapters must copy any bytes that outlive dispatch. A new read starts only
+Decoded slices borrow the receive buffer only for this entrypoint. Operations
+must copy any bytes that outlive dispatch. A new read starts only
 after dispatch and credit handling finish, so it cannot overwrite borrowed
 wire data early.
 
 ## Destruction and failures
 
-The host closes its inbox and joins producers before `State.deinit` frees either frame
-buffer. The caller still owns and closes the `SocketChannel` after `client.run`
+The host closes its inbox and joins producers before `RuntimeTransportState.deinit` frees either frame
+buffer. The caller still owns and closes the `SocketChannel` after the owning host loop
 returns.
 
 If inbox admission or task creation refuses a read or write actor, transport releases the token it
@@ -122,7 +126,7 @@ queue ownership for cleanup and propagates the error. Telar does not retry an
 uncertain partial socket write inside the same client session. Dispatch errors
 propagate without transport classifying their original message.
 
-## Proof
+## Validation
 
 - `src/client/connection/runtime_transport.zig` checks partial-allocation cleanup
   and the exact three-frame bootstrap order over a real socketpair.

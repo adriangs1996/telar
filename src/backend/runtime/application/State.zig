@@ -80,7 +80,7 @@ pub fn completeWrite(state: *State, result: anyerror!void) void {
 /// Releases a write whose worker has been joined and whose completion was
 /// discarded during shutdown. Its outcome is unknown; the final write must
 /// replace it before the model is destroyed.
-/// Example: `state.discardJoinedWrite();` after `select.cancelDiscard()`.
+/// Example: `state.discardJoinedWrite();` after `loop.cancel()`.
 pub fn discardJoinedWrite(state: *State) void {
     if (state.releaseWrite()) {
         state.dirty = true;

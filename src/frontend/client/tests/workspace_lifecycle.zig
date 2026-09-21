@@ -13,7 +13,8 @@ const decodeServer_module = @import("telar-core").decodeServer;
 const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const support = @import("support.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const workspace_handoffs = @import("telar-client").controllers.workspace_handoffs;
+const workspace_creations = @import("telar-client").operations.workspace_creations;
+const workspace_handoffs = @import("telar-client").operations.workspace_handoffs;
 const PaneTargetType = @import("telar-core").PaneTarget;
 const RequestIdType = @import("telar-core").RequestId;
 const encodeTabSnapshot_module = @import("telar-core").encodeTabSnapshot;
@@ -171,4 +172,74 @@ test "a failed workspace creation preserves the current projection" {
     try std.testing.expectEqualDeep(location_before_failure, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) != null);
     try std.testing.expect(client.notification_scheduler.pending);
+}
+
+test "workspace creation validates names before request ownership or projection mutation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.request_lifecycle.tracker = .{};
+    const version = client.model.version();
+    const next_request = client.request_lifecycle.next_request_id;
+
+    try std.testing.expectError(error.InvalidWorkspaceName, workspace_creations.request(client, .{ .name = "" }));
+    try std.testing.expectError(error.InvalidWorkspaceName, workspace_creations.request(client, .{ .name = "bad\nname" }));
+    try std.testing.expectError(error.InvalidUtf8, workspace_creations.request(client, .{ .name = "\xff" }));
+
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(next_request, client.request_lifecycle.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+}
+
+test "workspace creation outbox failure releases correlation and retains the current workspace" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.request_lifecycle.tracker = .{};
+    while (client.runtime_transport.outbox.hasCapacity()) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    }
+    const version = client.model.version();
+
+    try std.testing.expectError(error.ClientOutboxFull, workspace_creations.request(client, .{ .name = "agents" }));
+
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
+    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+}
+
+test "canonical workspace replacement survives failure to deliver activation snapshots" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.request_lifecycle.tracker = .{};
+    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .create_workspace = .{ .cols = 80, .rows = 20 } });
+    while (client.runtime_transport.outbox.hasCapacity()) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    }
+    const location: TabLocationType = .{ .workspace = .{ .workspace = @enumFromInt(2) }, .tab_id = @enumFromInt(5) };
+    var payload: [128]u8 = undefined;
+    const opened = try encodePaneOpened_module(&payload, .{
+        .request_id = @enumFromInt(4),
+        .pane_id = @enumFromInt(30),
+        .location = location,
+        .created = true,
+    });
+
+    try std.testing.expectError(error.ClientOutboxFull, server_messages.handleServerMessage(client, try decodeServer_module(opened)));
+
+    try std.testing.expectEqualDeep(location, client.model.activeTabLocation().?);
+    try std.testing.expect(client.model.workspace.findPane(@enumFromInt(30)).?.attached);
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.navigation_history.find(TestHarness.bootstrap_location.workspace).?.location);
+    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectError(error.UnexpectedRequest, server_messages.handleServerMessage(client, try decodeServer_module(opened)));
 }

@@ -5,7 +5,7 @@ const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
 const OutcomeType = @import("telar-client").Outcome;
-const config_reloads = @import("telar-client").controllers.config_reloads;
+const config_reloads = @import("telar-client").operations.config_reloads;
 const DiagnosticType = @import("telar-client").Diagnostic;
 const support = @import("support.zig");
 const VersionType = @import("telar-client").Version;
@@ -14,18 +14,19 @@ const parseKey_module = @import("telar-client").parseKey;
 const SnapshotType = @import("telar-client").SoundSnapshot;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const capacity_module = @import("telar-client").capacity;
-const bar_updates = @import("telar-client").controllers.bar_updates;
+const bar_updates = @import("telar-client").operations.bar_updates;
 const EffectBatchType = @import("telar-client").EffectBatch;
-const plugin_actions = @import("telar-client").controllers.plugin_actions;
+const plugin_actions = @import("telar-client").operations.plugin_actions;
 const WorkerResultType = @import("telar-client").WorkerResult;
 const stableId_module = @import("telar-core").stableId;
-const name_prompts = @import("telar-client").controllers.name_prompts;
+const name_prompts = @import("telar-client").operations.name_prompts;
 const InputHandler = @import("../resources/InputHandler.zig");
+const Action = @import("telar-client").Action;
 const ControlType = @import("telar-client").Control;
-const client_actions = @import("telar-client").controllers.actions;
+const client_actions = @import("telar-client").operations.actions;
 const CaptureType = @import("telar-client").Capture;
-const clipboard_images = @import("telar-client").controllers.clipboard_images;
-const active_pane_resources = @import("telar-client").controllers.active_pane_resources;
+const clipboard_images = @import("telar-client").operations.clipboard_images;
+const active_pane_resources = @import("telar-client").operations.active_pane_resources;
 
 test "config reload outcomes that carry no new generation" {
     var harness: TestHarness = undefined;
@@ -476,13 +477,20 @@ test "name prompt suppresses a configured action before source dispatch" {
     const outbox_len = client.runtime_transport.outbox.len;
     var handler: InputHandler = .{ .client = client };
 
-    const control = try handler.action(.toggle_sidebar);
-
-    try std.testing.expect(control == .continue_routing);
-    try std.testing.expect(client.model.name_prompt.active());
-    try std.testing.expect(client.model.sidebarVisible());
-    try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
+    const suppressed = [_]Action{
+        .toggle_sidebar,
+        .{ .lua_callback = .{ .generation = 1, .id = 1 } },
+        .{ .lua_expr = .{ .generation = 1, .id = 1 } },
+        .{ .plugin = .{ .plugin = 1, .action = 1 } },
+    };
+    for (suppressed) |action| {
+        const control = try handler.action(action);
+        try std.testing.expect(control == .continue_routing);
+        try std.testing.expect(client.model.name_prompt.active());
+        try std.testing.expect(client.model.sidebarVisible());
+        try std.testing.expectEqualDeep(version, client.model.version());
+        try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
+    }
 }
 
 test "Lua callback applies a validated batch through model observation" {

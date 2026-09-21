@@ -66,7 +66,7 @@ test "hiding the only animated widget removes its frame deadline" {
     }} });
     const version = app.model.version();
     try std.testing.expectEqual(.host, app.timers.animation_clock);
-    try std.testing.expectEqual(.active, try client.controllers.sidebar_animations.synchronize(app));
+    try std.testing.expectEqual(.active, try client.operations.sidebar_animations.synchronize(app));
     try std.testing.expect(!app.sidebar_animation_scheduler.pending);
     try std.testing.expectEqual(version, app.model.version());
 
@@ -79,7 +79,7 @@ test "hiding the only animated widget removes its frame deadline" {
     fixture.chrome.now_ns += std.time.ns_per_s;
     projection = fixture.projection();
     try fixture.paint(projection);
-    _ = try client.controllers.sidebar_animations.synchronize(app);
+    _ = try client.operations.sidebar_animations.synchronize(app);
     try std.testing.expect(!app.sidebar_animation_scheduler.pending);
     try std.testing.expectEqual(@as(u32, 0), fixture.chrome.animation.wakeupAfter(fixture.chrome.now_ns));
     try std.testing.expect(!fixture.chrome.animation.due(std.math.maxInt(u64)));

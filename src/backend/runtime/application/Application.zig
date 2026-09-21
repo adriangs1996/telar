@@ -1,3 +1,5 @@
+const requests = @import("requests.zig");
+const events = @import("events.zig");
 const ReviewJobs = @import("../../change_review/Jobs.zig");
 const ReviewService = @import("../../change_review/Service.zig");
 const AdmittedReview = @import("../../change_review/Admitted.zig");
@@ -134,56 +136,59 @@ pub fn init(self: *Application, initialization: Initialization) !void {
     };
 }
 
-/// Performs the application-owned part of one ordered runtime shutdown step.
-///
-/// ```zig
-/// application.shutdownStep(.stop_client_connections);
-/// ```
-pub fn shutdownStep(application: *Application, step: application_namespace.ShutdownStep) void {
-    switch (step) {
-        .stop_client_connections => {
-            for (&application.clients.items) |*slot| {
-                if (slot.*) |session| {
-                    session.connection.shutdown(application.io);
-                }
-            }
-        },
-        .stop_pending_admission => {
-            if (application.client_admission.pendingConnection()) |pending| {
-                pending.shutdown(application.io);
-            }
-        },
-        .stop_panes => application.model.panes.shutdown(),
-        .persist_session => {
-            application.session.discardJoinedWrite();
-            application_namespace.SessionCheckpoint.writeNow(application);
-        },
-        .destroy_pending_admission => {
-            if (application.client_admission.pendingConnection()) |pending| {
-                pending.deinit(application.io);
-            }
-        },
-        .release_client_actor_claims => {
-            for (&application.clients.items) |*slot| {
-                if (slot.*) |session| {
-                    session.read_pending = false;
-                    session.send_pending = false;
-                }
-            }
-        },
-        .destroy_client_sessions => application.clients.deinit(application.io, application.gpa),
-        .destroy_panes => application.model.panes.deinit(),
-        .destroy_workspaces => {
-            application.agent_history_jobs.deinitJoined();
-            application.review_jobs.deinitJoined();
-            if (application.review_service) |service| {
-                service.deinit();
-                application.review_service = null;
-            }
-            application.model.client_layouts.deinit();
-            application_namespace.deinitWorkspaces(application);
-        },
+/// Unblocks client actors without releasing the connections they borrow.
+/// Example: `application.stopClientConnections(); runtime.loop.cancel();`.
+pub fn stopClientConnections(self: *Application) void {
+    for (self.clients.items) |slot| {
+        if (slot) |session| {
+            session.connection.shutdown(self.io);
+        }
     }
+
+    if (self.client_admission.pendingConnection()) |pending| {
+        pending.shutdown(self.io);
+    }
+}
+
+/// Releases connection storage after every client actor has joined.
+/// Example: `runtime.loop.cancel(); application.deinitClients();`.
+pub fn deinitClients(self: *Application) void {
+    if (self.client_admission.isPending()) {
+        var pending = self.client_admission.takePending();
+        pending.deinit(self.io);
+    }
+
+    for (self.clients.items) |slot| {
+        if (slot) |session| {
+            session.read_pending = false;
+            session.send_pending = false;
+            session.search_scheduled = false;
+        }
+    }
+
+    self.clients.deinit(self.io, self.gpa);
+}
+
+/// Persists the final state after the previous checkpoint writer has joined.
+/// Example: `runtime.loop.cancel(); application.persistSession();`.
+pub fn persistSession(self: *Application) void {
+    self.session.discardJoinedWrite();
+    application_namespace.SessionCheckpoint.writeNow(self);
+}
+
+/// Releases pane and workspace state after their actors have joined.
+/// Example: `application.deinitClients(); application.deinitModel();`.
+pub fn deinitModel(self: *Application) void {
+    self.model.panes.deinit();
+    self.agent_history_jobs.deinitJoined();
+    self.review_jobs.deinitJoined();
+    if (self.review_service) |service| {
+        service.deinit();
+        self.review_service = null;
+    }
+
+    self.model.client_layouts.deinit();
+    application_namespace.deinitWorkspaces(self);
 }
 
 /// Reaps lifecycle work that became collectible after an actor completed.
@@ -263,7 +268,7 @@ pub fn queueRestoredInput(application: *Application, pane: *PaneType, bytes: []c
     }
 
     _ = pane.queuePtyInput(bytes);
-    try application_namespace.RuntimeEvents.schedulePaneInput(application, pane);
+    try events.panes.Io.scheduleInput(application, pane);
 }
 
 /// Hands a checkpointed title to the agent that will resume in a restored
@@ -473,7 +478,7 @@ fn failPaneFocusesFor(application: *Application, key: ClientKeyType) void {
     }
 }
 
-/// Removes a closing client once no read or write actor still owns it.
+/// Removes a closing client after its read, write and search slots retire.
 ///
 /// ```zig
 /// application.finalizeClient(client);
@@ -481,7 +486,7 @@ fn failPaneFocusesFor(application: *Application, key: ClientKeyType) void {
 pub fn finalizeClient(application: *Application, key: ClientKeyType) void {
     const session = application.clients.resolve(key) orelse return;
 
-    if (!session.closing or session.read_pending or session.send_pending) {
+    if (!session.closing or session.read_pending or session.send_pending or session.search_scheduled) {
         return;
     }
 
@@ -838,7 +843,7 @@ pub fn pump(application: *Application, session: *Session) !void {
     for (0..max_panes_per_tab) |index| {
         const attachment = session.attachments.at(index) orelse continue;
         if (attachment.pane.media.hasPending()) {
-            try application_namespace.RuntimeEvents.schedulePaneMedia(application, attachment.pane);
+            try events.panes.Projection.scheduleMedia(application, attachment.pane);
         }
     }
 
@@ -848,7 +853,7 @@ pub fn pump(application: *Application, session: *Session) !void {
         return;
     };
     try application.scheduleCellPublication();
-    try application_namespace.Operations.startSessionSend(application, session, prepared.payload);
+    try events.clients.startSend(application, session, prepared.payload);
     session.delivery.commit(.{
         .prepared = prepared,
         .attachments = &session.attachments,
@@ -896,5 +901,5 @@ pub fn cellPublicationDue(application: *Application, result: anyerror!void) !voi
 /// try application.dispatchClientMessage(session, message);
 /// ```
 pub fn dispatchClientMessage(application: *Application, session: *Session, message: ClientMessageType) !void {
-    return application_namespace.RequestDispatcher.dispatch(application, session, message);
+    return requests.dispatch(application, session, message);
 }

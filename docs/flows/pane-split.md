@@ -1,122 +1,101 @@
 # Pane split
 
 A split is a runtime pane launch with a client-owned layout intention. The
-runtime decides whether the pane exists; the client decides where that pane is
-shown. The provisional resize sent before launch is an effect, not a model
-commit.
+runtime decides whether the pane exists; the client decides where it is shown.
+The client operation is [pane_splits.zig](../../src/client/operations/panes/pane_splits.zig):
+`request`, `confirm`, `recover`.
 
-## Flow
+## Request
+
+Start with the process table in [entrypoints.md](../entrypoints.md). In the GUI,
+`GuiClient.update` dispatches `.input_ready`, and native binding resolution
+reaches `actions.apply`. Its `.split_pane` case directly calls
+`pane_splits.request`. The default `<prefix> %` maps to `.horizontal`: the new
+pane is to the right of the original.
 
 ```text
-client_actions.apply
-        |
-RequestPaneSplitHandler
-        |
-ClientModel.planPaneSplit
-        |
-pane_resize target -> create_pane -> runtime socket
-        |
-create_pane.Controller -> CreatePaneHandler
-        |
-launch pane -> attach client -> PendingPaneOpened
-        |
-schema.pane_opened -> client socket
-        |
-pane_openings.apply
-        |
-DeliverPaneOpenHandler
-        |
-ConfirmPaneSplitHandler
-        |
-ClientModel.commitPaneSplit
-        |
-PaneSplitCommit
-        |
-DeliverPaneSplitConfirmationHandler
-        |
-active geometry / inactive detach / stale recovery
+actions.apply(.split_pane)
+  → pane_splits.request
+      → model.planPaneSplit
+      → enqueue provisional pane_resize
+      → sendRequest: retain correlation and enqueue create_pane
 ```
 
-`ClientModel.planPaneSplit` reads the active, focused and attached pane plus
-the current workbench geometry. It returns the exact tab identity, target pane,
-axis, request-time workbench, provisional target size, restoration size and
-new-pane size. Planning does not alter `ClientModel.Version`, so the request
-does not schedule a frame. Retaining that workbench with the continuation means
-a host resize while launch is in flight cannot invalidate accepted geometry.
+Planning retains the exact tab, target pane, axis and request-time workbench.
+It computes the provisional size, original restoration size and new pane size
+without changing the layout revision. A pending pane operation suppresses a
+second request. Local delivery or request-registration failure attempts to
+restore the original size and propagates failure.
 
-`RequestPaneSplitHandler` owns the provisional protocol conversation. It sends
-the target resize before `create_pane`; any local delivery failure restores the
-pre-request size. The request tracker stores the exact target, tab, axis and
-request-time workbench. `pane_openings.apply` consumes that continuation once,
-translates it to a request-ID-free value and rejects unrelated continuations.
-`DeliverPaneOpenHandler` selects the split confirmation port and combines the
-translated response with the retained request.
+Editor-driven splits call the same operation with an explicit target pane and
+command arguments; they do not substitute the current keyboard focus.
 
-## Runtime confirmation
+## Completion
 
-The backend commits pane launch before replying and identifies a successful
-`create_pane` with `created = true`. `ConfirmPaneSplitHandler` rejects a reply
-with a different tab, the original target identity or `created = false` before
-the model changes.
+The runtime dispatches `.create_pane` from `requests.dispatch` directly to
+`operations/panes.routeCreatePane`. It commits creation before attachment and
+answers with `pane_opened` or `request_failed`.
 
-An active-tab confirmation adds and focuses the created pane, marks it attached
-and advances the pane revision once. The commit captures the request-time area,
-the workspace, tabs, active-tab and pane revisions, plus the exact tab-local
-layout revision. `DeliverPaneSplitConfirmationHandler` validates that state,
-then resizes attached panes and synchronizes focus. It does not invalidate the
-view or request a draw. `presentation_lifecycle.observe` notices the revision
-after the server event and folds the change into the paced frame loop.
+```text
+runtime_io.handleRead
+  → server_messages.handleServerMessage
+      → pane_openings.apply: consume request identity once
+          → pane_splits.confirm
+              → model.commitPaneSplit
+              → active geometry / inactive detach / stale cleanup
+```
 
-An inactive-tab confirmation records membership but leaves the created pane
-detached and advances no visible revision. Its tab-local layout revision makes
-the commit exact even though `Version.panes` is unchanged. The delivery handler
-sends `detach_pane` for the attachment created by the runtime and then hides any
-pane graphics. Returning to that tab uses its canonical snapshot and normal
-attachment flow.
+`confirm` rejects a different tab, the original pane identity or
+`created = false` before changing the model. It applies the freshly computed
+commit immediately; there is no separate effect API accepting retained or
+caller-constructed commits.
 
-## Races and recovery
+- Active tab: add and focus the pane, mark it attached, then offer attached
+  geometry and synchronize active resources. An effect failure preserves the
+  committed runtime creation.
+- Inactive tab: record membership without a visible revision, send detach,
+  then hide graphics. Switching back uses canonical snapshot and attachment.
+- Retired tab: leave the pane unrepresented, detach its runtime attachment and
+  coalesce a workspace snapshot request if still observing that workspace.
+  Reject an identity already represented in the current model before detaching.
 
-Pane exit and snapshot reconciliation retain a pending split continuation. A
-late success carries a new runtime pane identity that the client must either
-adopt or explicitly detach; replacing the continuation with `ignored` would
-lose that cleanup identity.
+No explicit draw is issued here. Presentation observes the committed model.
+Pane geometry and active resource synchronization are concrete operations in
+`operations/panes`, called immediately after committing the layout.
 
-If the target pane disappears while launch is in flight but its tab remains,
-the confirmation adds the created pane deterministically to that exact tab.
-If the tab itself disappears, the model returns a stale commit without adding
-the pane. The delivery handler validates that the identity remains
-unrepresented, detaches the runtime attachment and requests one coalesced
-workspace snapshot when the client still observes the same workspace. The
-adapter supplies only detach, graphics, geometry and request-lifecycle ports.
+## Failure and races
 
-A failed request passes through `HandleRequestFailureHandler`, which delegates
-size restoration to `RecoverPaneSplitHandler`. Recovery changes size only when
-the exact requested target is still attached in the active tab. An inactive
-target needs no restoration because tab selection detached it. A retired
-target or tab is stale: it receives neither rollback nor an obsolete failure
-notification.
+`request_failures.apply` consumes a failed request. Its concrete switch
+calls `pane_splits.recover` directly before publishing a failure notice.
+Recovery resolves the retained target against current state: resize an attached
+active target, leave an inactive target alone, and suppress obsolete failure
+notifications for a retired target or tab.
 
-## Bounds and proof
+Pane exit and snapshot reconciliation preserve pending split correlation. A
+late success introduces a new runtime identity that must be adopted or detached.
+If only the original target disappeared, the surviving tab adopts the new pane.
+If its tab disappeared, the stale cleanup above applies.
 
-The split adds no queue. It occupies the existing singleton `pane_operation`
-request slot, and every plan and commit is fixed-size. Provisional resizes use
-the coalescing outbox, so a local restore replaces obsolete unsent resize work
-when possible.
+The operation adds no queue. It uses the existing bounded request tracker and
+coalescing outbox. Request-time geometry remains attached to the continuation
+when the host is resized during launch.
 
-- `frontend/client/application/split_pane.zig` checks request ordering,
-  restoration, exact confirmation, commit-before-effects and recovery gating.
-- `frontend/client/application/pane_open_delivery.zig` checks successful-open
-  routing, retired work and delivery failure propagation.
-- `frontend/client/application/pane_split_confirmation_delivery.zig` checks
-  all three dispositions, exact revisions and layout identity, effect order,
-  recovery coalescence and partial failure semantics.
-- `frontend/client/model.zig` checks target-exit, inactive-tab and retired-tab
-  transitions plus version ownership.
-- `frontend/client/requests.zig` checks that lifecycle retirement preserves
-  split correlation.
-- `frontend/client/client_test.zig` checks protocol delivery, presenter
-  observation, inactive detachment, stale-tab refresh and exact failure
-  recovery.
-- `backend/runtime/commands/create_pane.zig` and
-  `backend/runtime/controllers/create_pane.zig` check the runtime launch and
-  attachment transaction.
+## Behavioral checks
+
+- [`gui/tests/navigation.zig`](../../src/gui/tests/navigation.zig): the real
+  `acceptInput`/`update` path creates the request; a correlated server event
+  enters `update` and produces the horizontal layout.
+- [`frontend/client/tests/pane_splits.zig`](../../src/frontend/client/tests/pane_splits.zig):
+  pending-request gating, local restoration, invalid replies, committed state
+  after effect failure, late identity protection and recovery delivery failure.
+- [`frontend/client/tests/pane_lifecycle.zig`](../../src/frontend/client/tests/pane_lifecycle.zig):
+  active/inactive/retired tabs, vanished targets, presentation observation and
+  stale failure suppression.
+- [`frontend/client/tests/synchronization.zig`](../../src/frontend/client/tests/synchronization.zig):
+  correlation is consumed once; unrelated replies are rejected; cwd inheritance.
+- Model, request tracker and backend create-pane tests retain their ownership,
+  transaction and lifecycle coverage.
+
+Tests specific to injected callback ordering or fabricated detached commits
+were removed with those APIs. Behavior that remains reachable is tested through
+the concrete client and transport.

@@ -1,134 +1,60 @@
 # Pane frame
 
-A pane frame is the runtime's bounded screen projection for one client
-attachment. The client validates and applies that projection to owned state,
-then acknowledges it before synchronizing client-only resources. Presentation
-consumes the latest model independently. The runtime remains authoritative for
-terminal history and waits for application ACKs before publishing dependent
-patches; it does not wait for a host write or GPU completion.
-
-## Client boundary
+A frame is the runtime's bounded screen projection for one client attachment.
+The client owns validated cells before acknowledging application. Presentation
+then consumes the latest model independently of runtime patch publication.
 
 ```text
-schema.pane_frame
-       |
-server_messages dispatcher
-       |
-pane_frames adapter
-       |
-ApplyPaneFrameHandler
-       |
-ClientModel.applyPaneFrame
-       |
-multiplexer.Model.applyFrame + copy-mode reconciliation
-       |
-PaneFrameOutcome
-       |
-       +-- detached -> no effects
-       +-- resync   -> request_snapshot
-       +-- applied  -> ClientModel.Version.frame
-                              |
-                           frame_ack
-                              |
-                    DeliverPaneFrameHandler
-                              |
-                    validate exact commit
-                              |
-                    graphics + active resources + telemetry
-                              |
-                    presentation_lifecycle.observe
-                              |
-                     host completion -> retire captured damage
+entrypoints/server_messages.handleServerMessage(.pane_frame)
+  -> operations/panes/pane_frames.apply
+     -> Model.applyPaneFrame
+        -> multiplexer / Pane.applyFrame and copy-state reconciliation
+     -> detached: no effects
+     -> broken base: request_snapshot
+     -> applied: frame_ack, graphics visibility, active resources
+        -> telemetry and attachment-prompt reconciliation
+  -> adapter observes presentation revisions
+  -> successful host completion retires exact captured damage
 ```
 
-`ClientModel.applyPaneFrame` owns the semantic transaction. It resolves pane
-membership, rejects frames for unknown panes, ignores frames made stale by
-detach and compares patch bases with the last applied frame. A broken base
-returns the pane identity and known frame id without changing the model.
+The model resolves pane membership, ignores detached frames and compares patch
+bases with the last applied frame. A broken base returns the known frame ID
+without mutation. Valid frames commit owned cells, cursor, child modes, scroll
+and copy-state pruning, then advance the frame revision even when visible cells
+are unchanged. Failed application does not publish a revision.
 
-A valid frame applies cells, cursor, mouse mode, input modes and scroll state
-through `multiplexer.Model.applyFrame`, which delegates identity/base admission,
-cell ownership, damage and child modes to `telar-client.panes.Pane.applyFrame`.
-That pane capability has no renderer dependency. `ClientModel` also reconciles
-active copy state against retained-history pruning before publishing one frame revision. The
-returned commit contains values only: pane and tab identity, frame id,
-visibility, snapshot status, applied work and the exact workspace, tab,
-active-tab, pane and frame revisions.
+`pane_frames.apply` enqueues the ACK before synchronizing graphics and active
+resources. A newly enabled child focus-report mode can therefore receive its
+focus-in after application acknowledgement. The operation keeps commit and
+ordered delivery in the same synchronous call; callers cannot substitute an
+older frame commit between them.
 
-Every successfully applied frame advances `ClientModel.Version.frame`, even
-when it changes no visible cell. This lets presentation retire exact revisions
-without dropping damage received during an older flight. Failed application,
-broken bases and detached frames do not advance it.
+ACK failure preserves owned cells and pending presentation damage. Later
+resource failure preserves both that commit and any completed effects. These
+errors reach the client loop; reconnect repairs disposable resources. The
+runtime retains its per-pane bound of one unacknowledged patch, independently
+of host write or GPU completion. One blocked client cannot hold another client's
+presentation hostage.
 
-## Effects and failure policy
+Presentation observes the model revision after the event and folds it into
+paced work. Preparing a frame seals one bounded commit; successful completion
+calls `operations/session/presentation_delivery.apply`. It filters retired
+attachment generations and retires only exact pending frame IDs. It sends no
+cell ACK. Frame N+1 can be applied and acknowledged while N is being presented,
+leaving N+1 damage pending for the next preparation.
 
-`ApplyPaneFrameHandler` runs recovery or post-commit effects according to the
-model outcome. The `pane_frames` adapter maps a broken base to
-`request_snapshot`. After a valid commit it enqueues `frame_ack` through the
-bounded shared outbox, then delegates to `DeliverPaneFrameHandler`, which
-rejects stale identity, topology, frame and visibility state before ordering
-physical graphics visibility and active-pane resource synchronization. The
-adapter implements those ports through the
-graphics store and `DeliverActivePaneResourcesHandler`, then records frame
-telemetry against the committed state. A focused pane that has just enabled
-focus events receives one focus-in. Report state advances no presentation
-revision.
+A reconstructed pane may reuse a wire frame ID but has a new client attachment
+generation. An old host completion cannot clear that pane's damage. Failed or
+cancelled host delivery clears no model damage and never claims presentation.
 
-No use case or protocol adapter requests a draw. If a resource effect fails,
-the applied frame and copy-state reconciliation remain committed. Rolling them
-back would invent a second client state after the runtime frame was already
-accepted; reconnect or canonical reconciliation repairs disposable resources.
-ACK enqueue failure propagates without rolling back owned cells or clearing
-pending presentation damage. Socket reads and writes retain their independent
-bounded buffers. A non-reading client still cannot block another client or the
-PTY: runtime publication remains limited to one unacknowledged patch per pane.
-
-## Presentation and acknowledgement
-
-After each event, `client_events` publishes the latest model version through
-`presentation_lifecycle.observe`. `Presenter` compares that value with the
-version it last observed and folds all pending revisions into one paced draw.
-Frame application records only semantic pane damage in the multiplexer. The
-presenter-owned compositor decides whether the immutable projection needs full
-or incremental composition.
-
-`Presenter.presentDue` composes the active model and prepares the terminal cell
-diff. The common presentation lifecycle seals one owned commit and returns its
-token. Only successful host-write completion releases that commit to the shared
-application handler. It filters attachment generations and retires exact
-pending frame IDs. It sends no cell ACK. While a host write or GPU submission
-is in flight, incoming patches update the same owned model and accumulate
-damage. Once the consumer releases its storage, the next draw captures the
-latest state. There is no queue of intermediate presentations.
-
-The model allocates attachment generations across detach, reattach and workspace
-reconstruction. An old completion cannot retire a new attachment with an equal
-wire frame ID. Receiving frame N+1 while N is being delivered acknowledges N+1
-and leaves N+1's damage pending. The headless adapter tests these rules through
-the same handlers and outbox without terminal resources.
-
-## Proof
-
-- `src/client/model/Model.zig` and `src/client/model/tests/` proves atomic screen and copy-state commit,
-  exact revisions, stale detach handling, base recovery and failed-apply
-  behavior.
-- `src/client/application/panes/pane_frame.zig` proves effect selection,
-  commit-before-effect ordering and failure policy.
-- `src/client/application/panes/pane_frame_delivery.zig` proves exact
-  post-commit validation, graphics idempotence, resource ordering and partial
-  failure semantics.
-- `src/frontend/client/tests/pane_updates.zig` and `src/client/presentation/headless_tests.zig` test recovery IPC, resource
-  synchronization, presenter-owned scheduling and acknowledgement before
-  presentation. `src/frontend/client/tests/presentation.zig` and
-  `src/gui/tests/terminal.zig` exercise ACKs while host consumers are busy,
-  failed delivery, immutable consumer storage and subsequent damage retirement.
-- `src/client/panes/tests.zig` proves owned cells, child modes, base and identity
-  rejection, resize admission, stale presentation retirement, allocation-free
-  same-size patches and allocation-failure cleanup without a terminal.
-- `src/frontend/workspace/multiplexer.zig` retains composition and integration
-  tests against that shared pane capability.
-- `src/backend/runtime/attachment/CellSync.zig` and transport integration tests prove
-  diff publication against acknowledged bases.
+Source: `src/client/operations/panes/pane_frames.zig`,
+`src/client/model/Model.zig`, `src/client/panes/Pane.zig`, and
+`src/client/operations/session/presentation_delivery.zig`.
+Tests: `src/frontend/client/tests/pane_updates.zig`,
+`src/client/presentation/headless_tests.zig`,
+`src/frontend/client/tests/presentation.zig`, `src/gui/tests/terminal.zig`,
+and `src/client/panes/tests.zig` cover base recovery, ACK ordering, busy/failed
+consumers, owned buffers, allocation failures and attachment-generation ABA.
 
 ## Terminal text metadata
 

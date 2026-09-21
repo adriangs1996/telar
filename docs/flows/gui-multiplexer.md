@@ -2,7 +2,7 @@
 
 The GUI renders the shared client's semantic projection. Workspace and tab
 requests, pane splits, focus, resize, fullscreen, copy mode, history and prompt
-editing use the same handlers as the TUI. Native code owns window input and GPU
+editing use the same concrete operations as the TUI. Native code owns window input and GPU
 delivery; it does not reproduce those state transitions.
 
 ## Composition
@@ -147,7 +147,7 @@ terminal cells. Modal gestures cannot fall through to panes behind them.
 
 `GuiClient.update` is the sole consumer of GUI completions. It dispatches
 socket input, native input, presentation, configuration, binding deadlines,
-notifications, bar jobs and plugin jobs to the shared controllers. Host workers
+notifications, bar jobs and plugin jobs to concrete shared operations. Host workers
 use the existing inbox/outbox execution model. Layout replication is observed
 once after a bounded turn.
 

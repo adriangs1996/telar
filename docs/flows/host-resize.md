@@ -16,11 +16,11 @@ SIGWINCH or Windows size poll
               |
       one TTY measurement
               |
-      ResizeHostHandler
+      host_resources.apply
               |
      ClientModel.reconcileHost
               |
- DeliverHostResourcesHandler
+     host_resources.deliver
               |
  screen, view, sidebar and graphics effects
               |
@@ -56,15 +56,14 @@ value outside the model.
 
 ## Effects and failure
 
-`ResizeHostHandler` commits before delivering its `HostCommit`.
-`DeliverHostResourcesHandler` rejects empty or stale commits before effects and
-owns their exact order. A grid change resizes the presenter's front and back
+`host_resources.apply` commits before delivering its `HostCommit`.
+`host_resources.deliver` rejects empty or stale commits before effects and
+calls the host ports directly in order. A grid change resizes the presenter's front and back
 buffers and then the client view. A changed cell size configures pixel-aware
 sidebar resources. Every accepted geometry invalidates physical graphics
-placements before pane geometry is offered. `host_resources` implements these
-ports for one concrete client and delegates active-tab selection to
-`OfferActivePaneGeometryHandler`; the resize adapter contains no resource
-policy.
+placements before pane geometry is offered. Shared policy lives in
+`src/client/operations/host/host_resources.zig`; GUI and TUI provide the host
+ports. There is no intermediate handler or host-effect callback table.
 
 The model commit remains active if buffer allocation, sidebar configuration or
 the bounded client outbox fails. The error terminates that client session;
@@ -84,7 +83,7 @@ After successful synchronization, `host_resizes.handle` asks
 `host_capabilities.refresh` to query the host. That adapter refreshes window and
 cell pixels after a font or display-scale change, and issues OSC 10/11 when no
 color probe is pending. The resize adapter then rearms the same `ResizeWatcher`. Neither the
-handler nor its adapter requests a draw.
+resize adapter nor the common host-resource operation requests a draw.
 
 At the client-loop boundary, `presentation_lifecycle.observe` publishes
 `Version.host` and `Version.host_capabilities`. The presenter compares them
@@ -92,23 +91,24 @@ with the versions last painted and folds a change into its paced frame. A fully
 repeated measurement still sends the two pixel queries and rearms the watcher,
 but schedules no frame.
 
-## Proof
+## Validation
 
 - `src/client/workspace/tabs.zig` proves that current and future tabs share
   one cell geometry.
 - `src/client/model/Model.zig` proves validation, atomic capability and
   geometry commits, no-op behavior and isolated host revisions.
-- `src/client/application/host/host_resize.zig` proves commit-before-
-  delivery ordering and retained commits after delivery failure.
-- `src/client/application/host/host_resource_delivery.zig` proves exact
-  branch ordering, no-op policy, stale-commit rejection and partial failures.
+- `src/frontend/client/tests/host_resources.zig` proves commit-before-delivery,
+  exact branch ordering, no-op policy, stale-commit rejection and failures at
+  each fallible host port.
+- `src/frontend/client/tests/host_interaction.zig` proves real resource changes,
+  pane-size delivery and retained commits after outbox saturation.
 - `src/frontend/client/controllers/host/host_resizes.zig` owns platform measurement, pixel
   refresh requests and watcher rearming.
-- `src/client/controllers/host/host_resources.zig` implements the physical host effect
-  ports shared by resize and capability delivery.
-- `src/client/controllers/panes/pane_geometry.zig` owns translation and bounded delivery
+- `src/client/operations/host/host_resources.zig` owns ordered resource delivery
+  shared by resize and capability observations.
+- `src/client/operations/panes/pane_geometry.zig` owns translation and bounded delivery
   of visible attached pane sizes.
-- `src/client/application/panes/pane_attachment_requests.zig` proves
+- `src/client/operations/tabs/tab_snapshots.zig` proves
   that a resize attaches only detached panes with content, once each, after a
   crowded layout left them detached.
 - `src/frontend/client/tests/` proves exact pane geometry,

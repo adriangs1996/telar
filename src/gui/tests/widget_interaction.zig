@@ -227,7 +227,7 @@ test "whole widget paste preserves selection when its bounded field cannot hold 
     const gui = session.gui;
     gui.app.model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "keep" } });
     try publish(session);
-    _ = try client.controllers.name_prompts.handleInput(&gui.app, .{ .command = .select_all });
+    _ = try client.operations.name_prompts.handleInput(&gui.app, .{ .command = .select_all });
     try send(session, .{ .paste = "a" ** 8192 ++ "tail" });
     const prompt = gui.app.model.name_prompt.currentConst().?;
     try std.testing.expectEqualStrings("keep", prompt.field.text());
@@ -312,7 +312,7 @@ test "cut waits for matching host success and preserves text on failure or inter
     try publish(session);
     const target = try editorTarget(session, .name);
     for ([_]@import("../input/ClipboardResult.zig").Status{ .unavailable, .cancelled, .success }) |status| {
-        _ = try client.controllers.name_prompts.handleInput(&gui.app, .{ .command = .select_all });
+        _ = try client.operations.name_prompts.handleInput(&gui.app, .{ .command = .select_all });
         try send(session, .{ .key = .{ .code = .{ .char = .init("x") }, .mods = .{ .super = true } } });
         try std.testing.expectEqualStrings("keep", gui.app.model.name_prompt.currentConst().?.field.text());
         var request: native.HostRequest = .{};
@@ -324,7 +324,7 @@ test "cut waits for matching host success and preserves text on failure or inter
     }
 
     try send(session, .{ .text = .{ .bytes = "original" } });
-    _ = try client.controllers.name_prompts.handleInput(&gui.app, .{ .command = .select_all });
+    _ = try client.operations.name_prompts.handleInput(&gui.app, .{ .command = .select_all });
     try send(session, .{ .key = .{ .code = .{ .char = .init("x") }, .mods = .{ .ctrl = true } } });
     var request: native.HostRequest = .{};
     try std.testing.expect(gui.host.next(&request));
@@ -347,7 +347,7 @@ test "clipboard capacity leaves cut selection intact and composition follows out
         try gui.requestClipboardRead(target.id.target_id, target.id.generation);
     }
 
-    _ = try client.controllers.name_prompts.handleInput(&gui.app, .{ .command = .select_all });
+    _ = try client.operations.name_prompts.handleInput(&gui.app, .{ .command = .select_all });
     try send(session, .{ .key = .{ .code = .{ .char = .init("x") }, .mods = .{ .ctrl = true } } });
     try std.testing.expectEqualStrings("keep", gui.app.model.name_prompt.currentConst().?.field.selected());
     try send(session, .{ .composition = .{ .target_id = target.id.target_id, .generation = target.id.generation, .text = "temp", .selection_start = 4, .selection_end = 4 } });
@@ -438,7 +438,7 @@ test "accessibility widget focus cancels terminal prefix without transferring it
     try std.testing.expectEqual(@as(usize, 0), gui.input.router.leases.len);
     try gui.focus(false);
     try gui.focus(true);
-    _ = try client.controllers.name_prompts.handleInput(&gui.app, .{ .command = .cancel });
+    _ = try client.operations.name_prompts.handleInput(&gui.app, .{ .command = .cancel });
     try publish(session);
     try send(session, .{ .text = .{ .bytes = "c" } });
     try session.settle();
@@ -642,7 +642,7 @@ test "native tab drag sends one anchored move after release and waits for runtim
     try std.testing.expectEqual(core.TabMoveDirection.previous, request.direction);
     try std.testing.expectEqual(@as(?usize, 2), session.gui.app.model.workspace.indexOf(third));
     try session.settle();
-    _ = try client.controllers.tab_moves.apply(&session.gui.app, .{ .request_id = request.request_id, .location = request.location, .position = 0 });
+    _ = try client.operations.tab_moves.apply(&session.gui.app, .{ .request_id = request.request_id, .location = request.location, .position = 0 });
     try std.testing.expectEqual(@as(?usize, 0), session.gui.app.model.workspace.indexOf(third));
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }

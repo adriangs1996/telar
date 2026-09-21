@@ -1,6 +1,6 @@
 //! One favicon lookup the adapter runs off the interactive path: the
 //! workspace root is copied in full so the worker borrows nothing.
-const ExecutionIdType = @import("../controllers/workspaces/FaviconsState.zig").ExecutionId;
+const ExecutionIdType = @import("../operations/workspaces/FaviconsState.zig").ExecutionId;
 const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const max_cwd_bytes = @import("telar-core").max_cwd_bytes;
 const Job = @This();

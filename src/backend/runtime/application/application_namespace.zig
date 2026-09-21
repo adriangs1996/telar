@@ -6,9 +6,6 @@ const GenericGitStatusObserver = @import("GenericGitStatusObserver.zig").Type;
 const GenericSessionNameObserver = @import("GenericSessionNameObserver.zig").Type;
 const GenericState = @import("../client/GenericState.zig").Type;
 const SocketChannelType = @import("telar-core").SocketChannel;
-const GenericEventDispatcher = @import("event_dispatcher/GenericEventDispatcher.zig").Type;
-const GenericScheduler = @import("GenericScheduler.zig").Type;
-const GenericDispatcher = @import("GenericDispatcher.zig").Type;
 const runtime_event = @import("../event.zig");
 const PaneFixtureType = @import("../tests/PaneFixture.zig");
 const SessionType = @import("../client/Session.zig");
@@ -26,32 +23,7 @@ pub const SessionNameObserver = GenericSessionNameObserver(Application);
 
 pub const ClientAdmissionState = GenericState(SocketChannelType);
 
-pub const ShutdownStep = enum {
-    stop_client_connections,
-    stop_pending_admission,
-    stop_panes,
-    persist_session,
-    destroy_pending_admission,
-    release_client_actor_claims,
-    destroy_client_sessions,
-    destroy_panes,
-    destroy_workspaces,
-};
-
-pub const RuntimeEvents = GenericEventDispatcher(Application);
-pub const Operations = GenericScheduler(Application);
-pub const RequestDispatcher = GenericDispatcher(Application, Operations.request_runtime_port);
-pub const EventResources = RuntimeEvents.EventResources;
-
-/// Delegates one runtime event to the capability that owns it and reports
-/// whether a requested shutdown has reached every client.
-///
-/// ```zig
-/// const should_stop = try handle(&application, event, resources);
-/// ```
-pub fn handle(application: *Application, event: runtime_event.Event, resources: EventResources) !bool {
-    return RuntimeEvents.handle(application, event, resources);
-}
+pub const RequestDispatcher = @import("requests.zig");
 
 pub fn deinitWorkspaces(application: *Application) void {
     var repository = application.workspaceRepository();

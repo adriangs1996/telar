@@ -11,7 +11,7 @@ telar agent wait 7 --until done
         |
 cli.control.Session.open  (--socket, TELAR_SOCKET, TELAR_SOCKET_PATH, default)
         |
-schema.query_agents ----> request_router (control) -> QueryAgentsController
+schema.query_agents ----> requests.dispatch (control) -> agents.routeQueryAgents
         |                          |
         |                 Delivery.requestAgentSnapshot
         |                          |
@@ -25,13 +25,13 @@ status == until ? exit 0 : sleep 250 ms, repeat until --timeout (exit 3)
 ```text
 telar agent prompt 7 "run the tests"
         |
-schema.send_pane_text{mode = prompt} -> SendPaneTextController
+schema.send_pane_text{mode = prompt} -> panes.routeSendPaneText
         |
-SendPaneTextHandler: PaneStore.resolve(exact generation)
+panes.routeSendPaneText: PaneStore.resolve(exact generation)
         |            Tracker.projectedStatus == blocked -> request_failed agent_blocked
         |            bracketed paste framing if the child enabled mode 2004, then Enter
         |
-pane_input.Forwarder.forward  (history observer first, then the PTY queue)
+operations/panes.forwardInput  (history observer first, then the PTY queue)
         |
 schema.request_completed
 ```
@@ -39,7 +39,7 @@ schema.request_completed
 ```text
 telar pane read 7 --lines 40 --source recent
         |
-schema.read_pane -> read_pane.Controller queues PendingPaneText
+schema.read_pane -> operations/panes.routeReadPane queues PendingPaneText
         |
 encoder.encodeResponse resolves the pane at send time
         |
@@ -56,7 +56,8 @@ cost of a wait is one enriched snapshot every 250 ms on one control session.
 
 `send_pane_text` resolves the pane by exact generation from the store rather
 than from an attachment, because control clients attach nothing. The
-attachment-independent half of pane input lives in `pane_input.Forwarder` and
+attachment-independent half of pane input lives in the concrete
+`forwardInput` function in `src/backend/runtime/application/operations/panes.zig` and
 is shared with attached-client input, so history observation still precedes
 the PTY queue for both.
 
@@ -86,13 +87,13 @@ design: a nested `telar server` must not inherit the outer listener as its own
 endpoint. The CLI resolves `--socket`, then `TELAR_SOCKET`, then
 `TELAR_SOCKET_PATH`, then the managed default.
 
-## Proof
+## Validation
 
 - `src/core/schema_contract_test.zig` pins `query_agents`, `read_pane`,
   `send_pane_text`, `pane_text` and `request_completed`.
-- `src/backend/runtime/tests/send_pane_text_test.zig` proves prompt framing,
+- `src/backend/runtime/tests/requests_test.zig` proves prompt framing,
   raw passthrough, blocked refusal and stale-generation rejection through the
-  controller and the real PTY queue.
+  concrete request operation and the real PTY queue.
 - `src/backend/runtime/tests/read_pane_test.zig` proves row selection,
   truncation and late binding through the encoder.
 - `src/backend/runtime/application/pane_launcher.zig` proves the identity

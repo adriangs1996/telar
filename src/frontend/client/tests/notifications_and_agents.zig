@@ -2,6 +2,10 @@
 
 const TerminalClient = @import("../TerminalClient.zig");
 const host = TerminalClient.of;
+const HostNotificationDelivery = @import("telar-client").Delivery;
+const HostNotificationInput = @import("telar-client").NotificationInput;
+const AgentSnapshotEntry = @import("telar-core").AgentSnapshotEntry;
+const notification_capacity = @import("telar-client").max_items;
 const TestHarness = @import("TestHarness.zig");
 const encodeRequestFailed_module = @import("telar-core").encodeRequestFailed;
 const server_messages = @import("telar-client").server_messages;
@@ -10,13 +14,13 @@ const std = @import("std");
 const NotificationsRootTarget = @import("telar-client").NotificationTarget;
 const RequestIdType = @import("telar-core").RequestId;
 const encodeNotification_module = @import("telar-core").encodeNotification;
-const notification_flow = @import("telar-client").controllers.notifications;
+const notification_flow = @import("telar-client").operations.notifications;
 const LevelType = @import("telar-client").Level;
 const transition_duration_ns_module = @import("telar-client").transition_duration_ns;
 const runtime_transport = @import("telar-client").runtime_io;
 const NotificationType = @import("telar-client").Notification;
 const ControlType = @import("telar-client").Control;
-const client_actions = @import("telar-client").controllers.actions;
+const client_actions = @import("telar-client").operations.actions;
 const request_lifecycle = @import("telar-client").request_lifecycle;
 const NotificationLevelType = @import("telar-core").NotificationLevel;
 const NotificationTargetType = @import("telar-core").NotificationTarget;
@@ -40,10 +44,10 @@ const PaneTargetType = @import("telar-core").PaneTarget;
 const encodeAgentSnapshot_module = @import("telar-core").encodeAgentSnapshot;
 const VersionType = @import("telar-client").Version;
 const support = @import("support.zig");
-const sidebar_animations = @import("telar-client").controllers.sidebar_animations;
+const sidebar_animations = @import("telar-client").operations.sidebar_animations;
 const encodeAgentSound_module = @import("telar-core").encodeAgentSound;
-const agent_sounds = @import("telar-client").controllers.agent_sounds;
-const ApplicationAgentsAgentSoundOutcome = @import("telar-client").ApplicationAgentsAgentSoundOutcome;
+const agent_sounds = @import("telar-client").operations.agent_sounds;
+const ApplicationAgentsAgentSoundOutcome = @import("telar-client").operations.agent_sounds.Outcome;
 const AgentSoundType = @import("telar-core").AgentSound;
 const playback_support = @import("telar-client").sound_playback_support;
 const SnapshotType = @import("telar-client").SoundSnapshot;
@@ -110,6 +114,40 @@ test "a failed snapshot request is fatal after consuming its continuation" {
         server_messages.handleServerMessage(client, try decodeServer_module(failed)),
     );
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
+}
+
+test "a vanished remembered pane retries its workspace once before failing fatally" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const request_id: RequestIdType = @enumFromInt(4);
+    const workspace: WorkspaceIdType = @enumFromInt(7);
+    try client.request_lifecycle.tracker.add(request_id, .{ .initial_open = .{ .fallback_workspace = workspace } });
+    var payload: [256]u8 = undefined;
+    const failed = try encodeRequestFailed_module(&payload, .{
+        .request_id = request_id,
+        .code = .pane_not_found,
+        .message = "remembered pane disappeared",
+    });
+
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(failed));
+    try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
+    try harness.settle();
+    var outbound: [512]u8 = undefined;
+    const retried = try harness.nextClientMessage(&outbound);
+    try std.testing.expect(retried == .open_pane);
+    try std.testing.expectEqualDeep(PaneTargetType{ .workspace = workspace }, retried.open_pane.target);
+    const retry_failed = try encodeRequestFailed_module(&payload, .{
+        .request_id = retried.open_pane.request_id,
+        .code = .pane_not_found,
+        .message = "workspace no longer has a pane",
+    });
+
+    try std.testing.expectError(error.RuntimeRequestFailed, server_messages.handleServerMessage(client, try decodeServer_module(retry_failed)));
+    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
 }
 
@@ -883,4 +921,187 @@ test "agent sound completion releases a failed worker before scheduling its succ
     }, client.sound_playback.snapshot());
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
+}
+
+test "sound scheduling failure releases its token and does not poison a later request" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    var payload: [512]u8 = undefined;
+    const initial = try support.encodeTestingAgentSnapshot(&payload, 1, .ready);
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(initial));
+    var calls: usize = 0;
+    const sound_port = client.sound_port;
+    client.sound_port = .{ .context = &calls, .play = failSoundScheduling };
+    const version = client.model.version();
+    const message = try encodeAgentSound_module(&payload, .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .pane_generation = 1,
+        .sound = .ready,
+    });
+
+    try std.testing.expectError(error.SoundSchedulingFailed, server_messages.handleServerMessage(client, try decodeServer_module(message)));
+
+    try std.testing.expectEqual(@as(usize, 1), calls);
+    try std.testing.expect(!client.sound_playback.snapshot().active);
+    try std.testing.expect(client.sound_playback.snapshot().queued == null);
+    try std.testing.expectEqualDeep(version, client.model.version());
+    client.sound_port = sound_port;
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(message));
+    try std.testing.expect(client.sound_playback.snapshot().active);
+}
+
+test "agent snapshot limits alert publication while retaining every canonical status change" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    var entries: [notification_capacity + 2]AgentSnapshotEntry = undefined;
+    for (&entries, 0..) |*entry, index| {
+        entry.* = .{
+            .pane_id = @enumFromInt(index + 1),
+            .pane_generation = 1,
+            .location = TestHarness.bootstrap_location,
+            .pane_index = @intCast(index + 1),
+            .process_id = 42,
+            .session_id = @splat(0),
+            .provider = .claude,
+            .display_name = "Claude",
+            .status = .ready,
+            .source = .screen,
+            .authority = .active,
+            .confidence = 1,
+            .sequence = 1,
+            .observed_at_ms = 1,
+            .expires_at_ms = 2,
+        };
+    }
+    var payload: [8192]u8 = undefined;
+    const initial = try encodeAgentSnapshot_module(&payload, .{ .revision = 1, .entries = &entries });
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(initial));
+    for (&entries) |*entry| {
+        entry.status = .blocked;
+        entry.sequence = 2;
+    }
+    const changed = try encodeAgentSnapshot_module(&payload, .{ .revision = 2, .entries = &entries });
+
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(changed));
+
+    try std.testing.expectEqual(@as(u64, notification_capacity), client.model.version().notifications);
+    try std.testing.expectEqual(notification_capacity, client.model.notificationSnapshot().count);
+    try std.testing.expectEqual(entries.len, client.model.agentSnapshot().count);
+    for (entries) |entry| {
+        try std.testing.expectEqual(entry.status, client.model.agentSnapshot().find(.{ .pane_id = entry.pane_id, .pane_generation = entry.pane_generation }).?.status);
+    }
+    const version = client.model.version();
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(changed));
+    try std.testing.expectEqualDeep(version, client.model.version());
+}
+
+test "agent alert host failure preserves the canonical snapshot and owned notification without replay" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    var payload: [512]u8 = undefined;
+    const initial = try support.encodeTestingAgentSnapshot(&payload, 1, .ready);
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(initial));
+    var calls: usize = 0;
+    client.notification_delivery = .system;
+    client.notifier = .{ .context = &calls, .deliver = failHostNotification };
+    const changed = try support.encodeTestingAgentSnapshot(&payload, 2, .blocked);
+
+    try std.testing.expectError(error.HostNotificationFailed, server_messages.handleServerMessage(client, try decodeServer_module(changed)));
+
+    try std.testing.expectEqual(@as(usize, 1), calls);
+    try std.testing.expectEqual(@as(u64, 2), client.model.agentSnapshot().revision);
+    try std.testing.expectEqual(LevelType.warning, client.model.notificationSnapshot().itemAt(0).?.level);
+    try std.testing.expect(client.notification_scheduler.pending);
+    const version = client.model.version();
+    _ = try server_messages.handleServerMessage(client, try decodeServer_module(changed));
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(@as(usize, 1), calls);
+}
+
+test "attachment rejection consumes correlation but does not notify when recovery delivery fails" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.request_lifecycle.tracker = .{};
+    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached = false;
+    const request_id = try request_lifecycle.nextId(client);
+    try client.request_lifecycle.tracker.add(request_id, .{ .attach_pane = .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .location = TestHarness.bootstrap_location,
+    } });
+    while (client.runtime_transport.outbox.hasCapacity()) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    }
+    const version = client.model.version();
+    var payload: [256]u8 = undefined;
+    const failed = try encodeRequestFailed_module(&payload, .{
+        .request_id = request_id,
+        .code = .pane_not_found,
+        .message = "pane disappeared",
+    });
+
+    try std.testing.expectError(error.ClientOutboxFull, server_messages.handleServerMessage(client, try decodeServer_module(failed)));
+
+    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
+    try std.testing.expectError(error.UnexpectedRequestFailure, server_messages.handleServerMessage(client, try decodeServer_module(failed)));
+}
+
+test "request failure retains canonical recovery when host notification delivery fails" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.request_lifecycle.tracker = .{};
+    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached = false;
+    const request_id = try request_lifecycle.nextId(client);
+    try client.request_lifecycle.tracker.add(request_id, .{ .attach_pane = .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .location = TestHarness.bootstrap_location,
+    } });
+    var calls: usize = 0;
+    client.notification_delivery = .system;
+    client.notifier = .{ .context = &calls, .deliver = failHostNotification };
+    var payload: [256]u8 = undefined;
+    const failed = try encodeRequestFailed_module(&payload, .{
+        .request_id = request_id,
+        .code = .pane_not_found,
+        .message = "pane disappeared",
+    });
+
+    try std.testing.expectError(error.HostNotificationFailed, server_messages.handleServerMessage(client, try decodeServer_module(failed)));
+
+    try std.testing.expectEqual(@as(usize, 1), calls);
+    try std.testing.expect(request_lifecycle.has(client, .tab_snapshot));
+    try std.testing.expectEqual(@as(u8, 1), client.model.notificationSnapshot().count);
+    try std.testing.expectEqualStrings("pane disappeared", client.model.notificationSnapshot().itemAt(0).?.message());
+    try std.testing.expectError(error.UnexpectedRequestFailure, server_messages.handleServerMessage(client, try decodeServer_module(failed)));
+    try std.testing.expectEqual(@as(usize, 1), calls);
+    try harness.settle();
+    var outgoing: [256]u8 = undefined;
+    const recovery = try harness.nextClientMessage(&outgoing);
+    try std.testing.expect(recovery == .request_tab_snapshot);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, recovery.request_tab_snapshot.location);
+}
+
+fn failSoundScheduling(context: *anyopaque, _: AgentSoundType) !void {
+    const calls: *usize = @ptrCast(@alignCast(context));
+    calls.* += 1;
+    return error.SoundSchedulingFailed;
+}
+
+fn failHostNotification(context: *anyopaque, _: HostNotificationDelivery, _: HostNotificationInput) !void {
+    const calls: *usize = @ptrCast(@alignCast(context));
+    calls.* += 1;
+    return error.HostNotificationFailed;
 }

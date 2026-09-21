@@ -1,7 +1,8 @@
 # Capability map
 
 Telar is organized by process ownership, then by capability. This map locates
-state and behavior; the maps in `docs/flows/` trace external events. Directory
+state and behavior. Start at [entrypoints.md](entrypoints.md) to follow an
+operation; the maps in `docs/flows/` trace external events. Directory
 locations below are not permission to import every file they contain.
 
 Concrete types and generic families follow [Zig source layout](zig-source-layout.md).
@@ -73,12 +74,10 @@ results.
 | Model | `src/backend/runtime/application/RuntimeModel.zig` | Authoritative semantic state |
 | Pane launcher | `src/backend/runtime/application/GenericPaneLauncher.zig` | Pane creation and actor startup transaction |
 | Event sources | `src/backend/runtime/Sources.zig` | Arm infrastructure work |
-| Event dispatcher | `src/backend/runtime/application/event_dispatcher/GenericEventDispatcher.zig` | Classify completions and delegate |
-| Scheduler | `src/backend/runtime/application/GenericScheduler.zig` | Start bounded asynchronous work |
-| Request dispatch | `src/backend/runtime/application/request_dispatch.zig` | Request-scoped controllers and handlers |
-| Commands and queries | `src/backend/runtime/application/commands/`, `src/backend/runtime/application/queries/` | Synchronous use cases and reads |
+| Event dispatch | `Runtime.update` in `src/backend/runtime/Runtime.zig` | Exhaustive completion dispatch to concrete operations |
+| Request dispatch | `src/backend/runtime/application/requests.zig` | Exhaustive wire-message switch |
+| Operations | `src/backend/runtime/application/operations/` | Concrete request validation, state changes, response and failure policy |
 | Coordinators | `src/backend/runtime/application/coordinators/` | Description work and evidence expiry |
-| Request entrypoints | `src/backend/runtime/entrypoints/requests/` | Wire translation, errors and responses |
 | Event entrypoints | `src/backend/runtime/entrypoints/events/` | Actor and resource completion policy |
 | Attachment | `src/backend/runtime/attachment/` | Per-client projection and acknowledgement |
 | Client coordination | `src/backend/runtime/client/` | Admission, routing and send completion |
@@ -97,10 +96,10 @@ neither runtime truth nor a common instance of navigation or focus.
 | Capability | Location | Owns |
 | --- | --- | --- |
 | Attached client | `src/client/AttachedClient.zig` | Shared aggregate: model, transport, configuration, plugins, host ports |
-| Controllers | `src/client/controllers/` | Slice adapters wiring handlers to the model and host ports |
+| Operations | `src/client/operations/` | Concrete policies, state mutations, request correlation and host delivery |
 | Model | `src/client/model/Model.zig` | Disposable semantic state and transitions |
-| Application | `src/client/application/` | Command handlers and narrow effect ports |
-| Entrypoints | `src/client/entrypoints/runtime_messages.zig` | Synchronous decoded-message dispatch |
+| Domain values and algorithms | `src/client/application/` | Operation inputs, outcomes and cohesive state algorithms; no required dispatch layer |
+| Entrypoints | `src/client/entrypoints/server_messages.zig` | Synchronous decoded-message dispatch |
 | Panes | `src/client/panes/` | Cells, damage, child modes and attachment-aware commits |
 | Workspace | `src/client/workspace/` | Tabs, splits, navigation and explicit geometry |
 | Input | `src/client/input/` | Semantic values, bindings, leases, editing and child encoding |
@@ -132,8 +131,10 @@ neither runtime truth nor a common instance of navigation or focus.
 | Widgets | `src/frontend/widgets/` | Chrome and interaction surfaces |
 | Platform | `src/frontend/platform/` | Host TTY and resize adapters |
 
-Shared handlers receive their model and named ports, never the concrete TUI
-aggregate. `presentation_projection` supplies host context and exposes physical
+Shared operations receive `AttachedClient` or their model and named ports,
+never the concrete TUI aggregate. Host mutation and resource delivery live
+together in `operations/host/host_resources.zig`, without an intermediate
+handler or effects table. `presentation_projection` supplies host context and exposes physical
 resources separately. `Presenter` owns prepared rendering caches; the shared
 lifecycle owns observed, prepared and delivered revisions. Host output retains
 sealed bytes and the completion token. None of these file moves changes the
@@ -164,7 +165,7 @@ Principal internal edges remain:
 
 ```text
 frontend/client    -> client behavior and concrete TUI capabilities
-client/application -> shared model and narrow effect ports
+client/operations  -> shared model, domain algorithms, transport and host ports
 frontend/input     -> presentation
 frontend/workspace -> input, presentation, ui
 frontend/widgets   -> agents, workspace, attachments, ui
@@ -183,8 +184,10 @@ or adding an export does not supply one.
 
 ## Process entrypoints
 
-The event owners classify completions and delegate. Controllers translate the
-protocol; handlers retain ordering, mutation and rescheduling policy.
+The event owners classify completions and delegate to a directly callable
+operation. Keep protocol translation at that boundary and ordering, mutation
+and rescheduling policy together. Internal operations use ordinary functions
+and concrete state. Ports represent host or asynchronous implementation boundaries.
 
 ### Client
 
@@ -208,14 +211,15 @@ protocol; handlers retain ordering, mutation and rescheduling policy.
 
 ### Runtime
 
-`Runtime.run` handles stop completion and delegates other events through the
-application dispatcher. Specialized dispatchers handle client, agent, history,
-observability and pane events.
+`Runtime.run` consumes events and calls `Runtime.update`. Its exhaustive switch
+names client, agent, history, observation, pane and lifecycle operations directly.
+Client wire requests enter `application/requests.zig`, which selects concrete
+functions in `application/operations/`.
 
 | Event | Owner below `src/backend/runtime/` |
 | --- | --- |
 | Accept / handshake | `client/admission.zig` |
-| Client read | `application/event_dispatcher/client.zig` |
+| Client read | `application/event_dispatcher/client_events.zig` |
 | Client write | `client/send_coordinator.zig` |
 | History result | `entrypoints/events/history_response.zig` |
 | Proxy observation / exchange | `entrypoints/events/proxy_observation.zig`, `entrypoints/events/proxy_capture.zig` |

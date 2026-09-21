@@ -27,88 +27,47 @@ existing reset policy rather than blocking PTY input.
 ## Client boundary
 
 ```text
-schema.graphics_*
-       |
-server_messages dispatcher
-       |
-pane_graphics adapter
-       |
-ReconcilePaneGraphicsHandler
-       |
-       +-- physical command --> kitty.Store
-       |                              |
-       |                    ingressVersion
-       |
-       +-- derived fallback --> ClientModel.setPaneGraphicsFallback
-       |                              |
-       |                    Version.pane_graphics
-       |
-       +-- revision break --> request_graphics_snapshot
-       |
-       +-- shared-map error --> configure_graphics(shared=false)
-                                      |
-                             request_graphics_snapshot
+entrypoints/server_messages.handleServerMessage(.graphics_*)
+  -> operations/panes/pane_graphics.apply
+     -> graphics.apply (physical resource store)
+     -> changed: Model.setPaneGraphicsFallback
+     -> revision break: request_graphics_snapshot
+     -> shared-map failure: configure_graphics(shared=false), then snapshot
+  -> adapter observes model and graphics ingress revisions
 
-committed Kitty capability
-       |
-SyncPaneGraphicsFallbacksHandler
-       |
-       +-- physical presence query --> pane_graphics adapter --> kitty.Store
-       |
-       +-- derived fallback --> ClientModel.setPaneGraphicsFallback
-
-presentation_lifecycle.observe
-       |
-Presenter observes model version + graphics ingress version
-       |
-paced cell pass (+ pane control escapes in the same update)
-       |
-bounded bulk media pass
+committed host capability
+  -> pane_graphics.syncFallbacks
+  -> bounded pane traversal -> Model.setPaneGraphicsFallback
 ```
 
-`server_messages` only translates the decoded union variant into a typed
-application command. `ReconcilePaneGraphicsHandler` applies the physical
-resource first, reads the committed host capability and then commits the
-derived fallback. It does not request a draw.
+`pane_graphics.apply` translates physical ingress results into semantic fallback
+or runtime recovery directly. The resource store owns allocations, shared
+mappings, quotas, image identities and transmission damage. Accepted ingress
+advances its physical revision; stale deltas and rejected operations do not.
+The presenter observes this revision independently of the model, including when
+supported graphics cause no fallback change.
 
-`kitty.Store` remains outside `ClientModel`. It owns allocations, shared
-memory mappings, quotas, host image identifiers and transmission damage. Every
-accepted runtime graphics message advances `ingressVersion`. Stale deltas and
-failed operations do not. The presenter observes that revision independently
-from semantic model versions, so a supported host still schedules the cell
-pass that must precede media work even when no fallback changes.
+Only `Model.setPaneGraphicsFallback` commits cell fallback. A changed value
+advances the pane-graphics revision; unknown panes and repeats do nothing.
+`syncFallbacks` uses the committed host capability. Supported hosts clear
+fallback without querying physical presence; other capability states query
+once per pane. The traversal uses fixed workspace/pane bounds.
 
-The fallback flag is semantic client state because cell composition reads it.
-Only `ClientModel.setPaneGraphicsFallback` may change it. A real change
-advances `Version.pane_graphics`; unknown panes and repeated values are no-ops.
-The presenter-owned compositor detects the changed immutable pane projection.
-Capability negotiation enters `SyncPaneGraphicsFallbacksHandler`. The handler
-owns the bounded model traversal and fallback decision. Its adapter effect only
-answers whether `kitty.Store` contains graphics for one pane. Supported hosts
-clear every fallback without querying the physical store; unknown or
-unsupported hosts query once per pane. The adapter never mutates `AppState`.
+A graphics revision break requests a canonical snapshot without changing
+fallback. Snapshot begin clears the physical replica; resource/placement
+messages rebuild it at one revision, and end removes incomplete resources.
+A failed shared mapping first disables shared transfer and then requests the
+snapshot, so the runtime can resend bounded pixel chunks. Failure of the later
+enqueue preserves the already requested downgrade.
 
 ## Host replies
 
 The shared transmission asks the host for a reply. `InputHandler.terminalResponse`
-hands every Kitty reply first to the capability controller, which consumes
+hands every Kitty reply first to the host-capability operation, which consumes
 the probe identities, then to `kitty.Store.noteHostReply` for exterior pane
 image ids: `OK` marks the object consumed, an error reclaims the name and
 retransmits inline, and either bumps the graphics ingress so the next paced
 frame retires or resends. Unknown ids change nothing.
-
-## Ordering and recovery
-
-A graphics revision break does not mutate the fallback. The handler asks for
-one canonical pane graphics snapshot. Snapshot begin clears the physical pane
-replica, image and placement messages rebuild it at one revision, and snapshot
-end removes incomplete resources.
-
-If a declared shared-memory image cannot be mapped, the client first sends
-`configure_graphics(shared=false)` and then requests a snapshot. The runtime
-therefore rebuilds the pane with bounded pixel chunks instead of repeating the
-failed transport. Failure to enqueue the later snapshot does not undo the
-already requested downgrade.
 
 ## Budget and bounds
 
@@ -135,23 +94,12 @@ The socket dispatcher is still the decoded message entrypoint. This slice
 separates ownership and scheduling policy; moving bulk ingestion behind a
 dedicated media queue is a separate scheduling change.
 
-## Proof
+## Verification
 
-- `src/backend/media/png.zig` checks decoder allocation failures, quotas,
-  malformed data and pixel conversion.
-- `src/backend/media/png_test.zig` exercises PNG commands through the media
-  processor with fragmented PTY input and Pi's chunk sizes.
-- `src/transport_integration_test.zig` verifies a real child PNG transmission
-  reaches the client as RGBA and survives snapshot resynchronization.
-
-- `src/frontend/graphics/kitty.zig` proves quotas, revision recovery, stale
-  suppression, snapshot validation and exact ingress versions.
-- `src/client/model/Model.zig` proves fallback ownership, no-op behavior and
-  isolated semantic versions.
-- `src/client/application/panes/pane_graphics.zig` proves resource-before-
-  model ordering, committed-capability policy, bounded fallback traversal,
-  repeated-value suppression, recovery selection and downgrade ordering.
-- `src/frontend/client/tests/` proves protocol recovery, physical-only
-  presenter observation and shared-memory downgrade ordering.
-- `src/frontend/client/presentation/Presenter.zig` proves that use cases do not choose when
-  to paint and that semantic and physical revisions fold into one paced frame.
+Source: `src/client/operations/panes/pane_graphics.zig` and its concrete
+`graphics` service port on `AttachedClient`.
+`src/frontend/client/tests/graphics_and_clipboard.zig` checks recovery IPC,
+physical-only presentation observation and downgrade-before-resync ordering.
+Resource-store and model tests cover quotas, stale revisions, fallback ownership
+and no-op semantics. Runtime PNG tests and `src/transport_integration_test.zig`
+cover fragmented PNG ingestion, RGBA delivery and snapshot reconstruction.

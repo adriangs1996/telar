@@ -58,11 +58,13 @@ pub fn completeStop(loop: *Loop, result: anyerror!void) !bool {
     };
 }
 
-/// Cancels every scheduled actor and discards pending completions.
+/// Joins every scheduled actor, then releases undispatched event ownership.
 ///
 /// ```zig
 /// loop.cancel();
 /// ```
 pub fn cancel(loop: *Loop) void {
-    loop.select.cancelDiscard();
+    while (loop.select.cancel()) |completed| {
+        event.discard(completed, loop.select.io);
+    }
 }

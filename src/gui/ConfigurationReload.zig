@@ -6,7 +6,7 @@ const native = @import("native/native.zig");
 const Renderer = @import("render/TerminalRenderer.zig");
 const GuiClient = @import("GuiClient.zig");
 const Request = @import("ConfigurationRequest.zig");
-const reloads = client.controllers.config_reloads;
+const reloads = client.operations.config_reloads;
 const font_rendering = @import("text/font_rendering.zig");
 const Reload = @This();
 

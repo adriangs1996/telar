@@ -38,7 +38,7 @@ One listing runs at a time. Every keystroke replaces the wanted query; a
 listing that completes for a superseded query is discarded and the wanted one
 starts, so a burst of typing costs at most one stale listing. Results are
 identified by execution id, never by pointer, and the worker's heap result is
-released by the controller. Closing the form clears the list.
+released by the completion operation. Closing the form clears the list.
 
 ### Missing directories
 
@@ -58,7 +58,7 @@ native action or tab-bar intent
         |
 name_prompts.begin*
         |
-OpenNamePromptHandler
+name_prompts
         |
 name_prompt.State.begin
         |
@@ -66,9 +66,9 @@ ClientModel.Version.prompt
 
 host key input                     streamed paste phase
         |                                  |
-key_routing adapter                 paste_routing adapter
+key_routing.apply                 paste_routing adapter
         |                                  |
-KeyRoutingHandler -> prompt    PasteRoutingHandler -> prompt owner
+key_routing.apply -> prompt    paste_routing -> prompt owner
         |                                  |
 key or replayed bytes -> term.parse       paste_start / paste_text / paste_end
         |                                  |
@@ -78,25 +78,26 @@ key or replayed bytes -> term.parse       paste_start / paste_text / paste_end
                          |
                   semantic Command
         |
-NamePromptHandler.execute -> name_prompt.State.apply
+name_prompts.handleInput -> name_prompt.State.apply
 ```
 
-`OpenNamePromptHandler` owns opening eligibility and canonical initialization.
+`name_prompts` owns opening eligibility and canonical initialization.
 It rejects every intent while copy mode or a pane paste owns input, resolves
 the current workspace or requested tab and copies its canonical name into the
 bounded field. Workspace creation also requires no pending request and an
-attached focused pane that can supply the launch directory. The adapter only
-translates native or tab-bar intent and reports whether a request is pending.
+attached focused pane that can supply the launch directory. Native and tab-bar
+input call these concrete opening functions; the functions read request state
+and mutate the prompt through the model.
 
 `ClientModel` owns prompt, copy-mode and pane-paste authority. For streamed
 paste, `paste_routing` snapshots those modes plus the attachment modal and
-`PasteRoutingHandler` selects one owner. A paste that starts in the prompt
+`paste_routing` selects one owner. A paste that starts in the prompt
 records `Prompt.pasting`; its later chunks and closing boundary stay with that
-editor. For normal host keys, `KeyRoutingHandler` selects prompt authority
+editor. For normal host keys, `key_routing.apply` selects prompt authority
 before copy mode or pane input. `capturesKeys` bypasses configured bindings
 while the prompt is active. Mouse input and configured actions are suppressed
-in that interval. `PointerRoutingHandler` receives no pointer authority, while
-`ActionRoutingHandler` returns before selecting a native, Lua or plugin effect.
+in that interval. `pointer_routing.apply` receives no pointer authority, while
+`action_routing.apply` returns before selecting a native, Lua or plugin effect.
 See [Key routing](key-routing.md).
 
 The terminal adapter translates bytes into semantic editor commands. The state
@@ -112,7 +113,7 @@ name_prompt.State.apply(.submit)
         |
 borrowed Submission(target, name)
         |
-NamePromptHandler
+name_prompts.handleInput
         |
 name_prompts submit effect
         |
@@ -123,7 +124,7 @@ bounded outbox copies the name
 accepted -> name_prompt.State.finish
 ```
 
-The application handler keeps the prompt alive while the synchronous effect
+The operation keeps the prompt alive while the synchronous effect
 uses its borrowed text. It closes the exact prompt only after the selected
 request use case accepts the operation. A gate returning `false` leaves the
 prompt open. An outbox or transport error also leaves it open and propagates
@@ -145,7 +146,7 @@ cursor but stores no prompt target, text or paste state and makes no lifecycle
 decision. Multiple edits before a frame replace obsolete visual work with the
 latest model state.
 
-## Proof
+## Validation
 
 - `src/client/model/name_prompt.zig` proves bounded editing, revisions,
   cancellation and exact-target completion.
@@ -153,7 +154,7 @@ latest model state.
   prompt retention after blocked or failed submissions.
 - `src/client/application/input/name_prompt_opening.zig` proves input
   authority, workspace-creation gating, target resolution and canonical text.
-- `src/client/controllers/input/name_prompts.zig` proves terminal parsing, bracketed
+- `src/client/operations/input/name_prompts.zig` proves terminal parsing, bracketed
   paste handling and the zero-length incomplete-sequence regression.
 - `src/client/application/input/paste_routing.zig` proves exclusive prompt
   or pane ownership and ignored unowned phases.

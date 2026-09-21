@@ -6,10 +6,10 @@ prompt, copy mode or the focused pane. Repeat and release retain that owner.
 The decision happens
 before editor parsing, copy movement, child encoding or media scheduling.
 
-This is client-owned interactive-path policy. `KeyRoutingHandler` uses fixed
-values and retains no command or authority snapshot. A prompt key uses a
+This is client-owned interactive-path policy. `key_routing.apply` uses fixed
+values and retains no command beyond the synchronous operation. A prompt key uses a
 32-byte stack buffer. Raw bytes come from the router's bounded 4 KiB output,
-and `PaneInputHandler` enforces its 8 KiB command limit before enqueueing.
+and `pane_inputs.send` enforces its 8 KiB command limit before enqueueing.
 
 ## End-to-end path
 
@@ -22,15 +22,15 @@ semantic key or replayed bytes
       |
 InputHandler.key / forward
       |
-key_routing adapter
+key_routing.apply
       |
-KeyRoutingHandler + authority snapshot + physical lease
+key_routing.apply + authority snapshot + physical lease
       |
       +----------------+----------------+----------------+
       |                |                |                |
 attachment modal   name prompt       copy mode        exact pane
       |                |                |                |
-optional close    neutral encoding   CopyModeHandler  PaneInputHandler
+optional close    neutral encoding   copy_modes  pane_inputs.send
                                                         |
                                               confirmed Ctrl+V delivery
                                                         |
@@ -41,9 +41,9 @@ optional close    neutral encoding   CopyModeHandler  PaneInputHandler
 `keybind.Router`. It delegates each value. It does not inspect client owners,
 encode prompt keys, invoke copy mode, send pane input or recognize `Ctrl+V`.
 
-The adapter takes one synchronous authority snapshot from `View` and
-`ClientModel`. It wires the selected effect to existing use cases. The
-application handler owns priority, exclusivity and follow-up order.
+`key_routing.apply` reads current authority and retained physical leases, then
+calls the selected concrete operation. Priority, exclusivity and follow-up order
+are visible in the same module.
 
 ## Capture and ownership
 
@@ -81,7 +81,7 @@ The modal does not claim these prior buffered bytes. Its active capture applies
 to new semantic keys.
 
 A selected owner failure propagates and never falls through to another owner.
-If the pane target disappeared or is exclusively owned, `PaneInputHandler`
+If the pane target disappeared or is exclusively owned, `pane_inputs.send`
 returns no delivery and the route ends without another effect.
 
 ## Held scroll bindings
@@ -91,7 +91,7 @@ returns no delivery and the route ends without another effect.
 as their owner token. Prompts, attachment modals, copy mode and
 missing or detached panes deny repeat authority. The initial action runs
 normally before repeat authority is captured, so scroll can first exit copy
-mode through the existing native action handler. In the GUI, agent pane scroll
+mode through the existing native action dispatch. In the GUI, agent pane scroll
 bindings use the delivered transcript's wheel policy, including its scroll
 limit, disclosure-anchor cancellation and history navigation. Both taps and
 held bindings target the focused pane and leave its composer unchanged.
@@ -119,8 +119,8 @@ Legacy press-only input retains its old behavior. See
 
 ## Clipboard preview order
 
-Only an unmodified `Ctrl+V` is eligible for local image inspection. The handler
-first waits for `PaneInputHandler` to accept the input into the client outbox.
+Only an unmodified `Ctrl+V` is eligible for local image inspection. The operation
+first waits for `pane_inputs.send` to accept the input into the client outbox.
 It starts the preview only after that confirmed delivery. A missing pane never
 starts a preview.
 
@@ -132,7 +132,7 @@ path. See [Clipboard image preview](clipboard-image.md).
 
 ## State, presentation and failure
 
-The authority snapshot is valid only for a new press's synchronous handler
+The authority snapshot is valid only for a new press's synchronous operation
 call. Active leases are client input state and survive configuration-router
 replacement. Modal,
 prompt and copy effects resolve their current owner again through their
@@ -150,11 +150,11 @@ word and line deletion bindings. Clipboard media follows its independent
 ingress version.
 
 Prompt, copy and pane failures preserve the transaction rules of their
-existing handlers. The key router does not retry or reinterpret a failed
+existing operations. The key router does not retry or reinterpret a failed
 owner. A preview failure is the only swallowed error, and it occurs after pane
 delivery.
 
-## Proof
+## Validation
 
 - `src/client/application/input/key_routing.zig` proves capture authority,
   semantic and byte priority, exact-pane leases, prompt repeat ownership,

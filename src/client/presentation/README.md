@@ -12,11 +12,11 @@ input decoding and host services. Pane cells do not prescribe a cell-based GUI.
 `LifecycleState.observe` coalesces revisions. `LifecycleState.begin` seals one
 prepared commit and returns a token. `LifecycleState.complete` consumes that
 exact token once. Only a
-successful completion returns a delivery for `DeliverPresentationHandler`.
+successful completion returns a delivery for `presentation_delivery.apply`.
 Preparation, failed delivery and cancellation never retire model damage.
 Obsolete tokens cannot consume a replacement flight. Receiving newer cells does
 not invalidate an older successful delivery: it retires only captured damage
-and leaves newer damage pending. Cell ACKs are sent by `ApplyPaneFrameHandler`
+and leaves newer damage pending. Cell ACKs are sent by `pane_frames.apply`
 after validation and application to owned model storage, before host-resource
 effects. Receiving bytes alone, a broken base, failed application or a detached
 frame never produces an ACK.
@@ -68,7 +68,7 @@ resources. It is a presentation test adapter, not a second full CLI or an
 implementation of untested host services.
 
 `headless_tests.zig` uses the shared bounded inbox and assembles real workspace, frame, resource-delivery,
-input and presentation handlers with the shared decoded-message entrypoint and
+input and presentation operations with the shared decoded-message entrypoint and
 outbox. Unwired message adapters fail explicitly. Tests cover delayed input,
 borrowed wire reuse, invalid bases, reattachment and workspace reconstruction,
 stale completions, geometry ABA, independent graphics credits, independent clients, capacity

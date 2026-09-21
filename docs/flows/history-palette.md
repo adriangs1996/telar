@@ -11,8 +11,9 @@ The runtime owns SQLite history and captured output. The client owns the search,
 loaded page, selection, inspection and scroll. Closing the client does not delete
 history. No database work runs in the input handler.
 
-`controllers/input/history_palettes.zig` translates UI and protocol requests.
-`application/input/history_browser.zig` coordinates transitions through the
+`src/client/operations/input/history_palettes.zig` owns UI requests,
+correlation, wire delivery and response application. It calls concrete bounded
+algorithms in `src/client/application/input/history_browser.zig` against the
 history and prompt model APIs. `widgets/history_browser.zig` renders cells with
 the existing theme, grapheme handling and screen diff. It does not emit terminal
 sequences or resize the child PTY.
@@ -20,9 +21,9 @@ sequences or resize the child PTY.
 The external flow is:
 
 ```text
-history_palette action -> history_palettes.begin -> application handler
+history_palette action -> operations/input/history_palettes.begin
   -> query_history -> runtime history_query -> observation worker -> SQLite
-  -> history_results -> runtime_messages -> history_palettes.apply
+  -> history_results -> entrypoints/server_messages -> history_palettes.apply
   -> bounded model commit -> Version.history -> presenter -> history widget
 ```
 
@@ -91,7 +92,7 @@ error rather than a partial input batch.
 Enter pastes the complete selected command. `client.history.enter = "run"`
 inverts that default; Shift+Enter always performs the other action. Admission
 checks complete command ownership and outbox capacity before closing the
-prompt. Delivery then uses the ordinary pane-input application handler because
+prompt. Delivery then uses the ordinary pane-input operation because
 focused input is unavailable while a prompt owns it.
 
 Commands larger than one input message reserve all required 8192-byte chunks

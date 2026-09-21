@@ -308,17 +308,17 @@ retryable, without polling the provider on every rendered frame.
 
 | Trigger | Client entrypoint | Wire request | Runtime owner |
 | --- | --- | --- | --- |
-| `prefix + a` | `agent_threads.create` and tab creation handlers | `create_tab` with kind `agent` | `CreateTabController`, `CreateTabHandler`, pane launcher |
-| Composer edit | GUI widget routing, `AgentThreadHandler.edit` | none | client pane composer |
+| `prefix + a` | `agent_threads.create` → `tab_creations.request` | `create_tab` with kind `agent` | `operations/tabs.routeCreateTab`, pane launcher |
+| Composer edit | GUI widget routing, `agent_threads.edit` | none | client pane composer |
 | Model, effort or access choice | `agent_threads.selectModel`, `selectEffort`, `selectAccess` | included in the next `agent_prompt` | client draft, then runtime/provider validation |
-| Enter or Send | `agent_threads.submit` | `agent_prompt` | `AgentThreadController`, `AgentThreadHandler`, provider worker |
+| Enter or Send | `agent_threads.submit` | `agent_prompt` | `requests.dispatch`, `agent_threads`, provider worker |
 | `/` or `$` completion | `completions`, `CompletionState`, `CompletionMenu` | none | client draft and delivered widget identities |
 | `/clear` or `/rename` | `completions.submit`, `agent_threads.submit` | `agent_prompt` | `Codex.runCommand`, provider response, retained snapshot |
 | Skill catalog refresh | provider `skills/changed`, `skills/list` | `agent_thread_snapshot` | `SkillCatalog`, provider worker |
 | Stop | `agent_threads.interrupt` | `agent_interrupt` | same runtime control path |
 | Approve or Decline | `agent_threads.approve` | `agent_approval` | same runtime control path |
 | Attach or reconnect | `agent_threads.query` | `query_agent_thread` | retained runtime snapshot |
-| Scroll beyond the reading window | `agent_history` controller | `query_agent_history` / `agent_history_page` | bounded reader, per-client delivery |
+| Scroll beyond the reading window | `operations/agents/agent_history` | `query_agent_history` / `agent_history_page` | bounded reader, per-client delivery |
 | Provider output | provider worker, runtime change receiver | `agent_thread_snapshot` | client model, `ThreadView`, GUI `ThreadPane` |
 
 The runtime pane owns either a PTY session or a managed agent session over
@@ -477,7 +477,7 @@ titles of 160 bytes. Listing uses the existing provider record and parsing
 quotas. Listing failure does not prevent starting a new conversation.
 
 The client sends `AgentResume` with the pane generation and selected index.
-`AgentThreadController` translates it; `AgentThreadHandler` verifies that the
+`requests.dispatch` translates it; `agent_threads` verifies that the
 pane has no user turns and that another managed pane has not already claimed
 the conversation. `Session.resumeConversation` reserves its identifier before
 enqueueing the provider command, excluding concurrent prompts and resumes.

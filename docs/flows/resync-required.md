@@ -1,92 +1,42 @@
 # Resync required
 
-The runtime sends `schema.resync_required` when a bounded client response queue
-cannot retain a canonical tab change. Delivery records one affected workspace
-instead of blocking runtime work. It sends pending management replies first,
-then emits the fixed-size resync message with the workspace closure state and
-its canonical predecessor when one survives.
-
-## Client boundary
+When a bounded runtime response queue cannot retain a canonical tab change,
+it records the affected workspace instead of blocking runtime work. Pending
+management replies precede the fixed resync message, which records workspace
+closure and a surviving canonical predecessor when applicable.
 
 ```text
-schema.resync_required
-        |
-server_messages.handleServerMessage
-        |
-resync_requirements.apply
-        |
-current projection + pending snapshot -> typed Command
-        |
-HandleResyncRequiredHandler
-        |
-coalesce, request snapshot, request handoff, or exit
+entrypoints/server_messages.handleServerMessage(.resync_required)
+  -> operations/session/resync_requirements.apply
+     -> surviving workspace: verify identity, coalesce or request snapshot
+     -> closed workspace: forget bookmark, request predecessor or return exit
 ```
 
-`resync_requirements.apply` is the protocol adapter. It reads the current
-workspace identity and whether the fixed request tracker already contains a
-workspace snapshot. It also connects the handler to navigation history,
-snapshot delivery and the existing workspace handoff use case.
+The concrete operation reads `AttachedClient` state and performs the decision
+and request directly. Its four results are `coalesced`, `snapshot_requested`,
+`handoff_requested` and `exit`. Server dispatch maps only `exit` to status zero.
 
-`HandleResyncRequiredHandler` owns the client policy. It does not know
-`Client`, request IDs, the outbox or presentation. It returns one of four
-outcomes:
+A surviving-workspace notice must match the current projection. Missing or
+mismatched identity returns `UnexpectedResync` without effects. A pending
+workspace snapshot coalesces the notice. Otherwise `request_lifecycle` registers
+and queues one request; failed enqueue removes its correlation so a later
+notice can retry. Requesting repair changes no model revision and schedules
+no draw. The correlated reply enters `workspace_snapshots.apply`.
 
-- `coalesced` means an equivalent workspace snapshot is already in flight.
-- `snapshot_requested` means the client queued canonical reconciliation.
-- `handoff_requested` means the runtime removed the workspace and supplied a
-  surviving predecessor.
-- `exit` means the runtime has no workspace left for this client to follow.
+Closure first forgets the invalid bookmark. With a predecessor it calls
+`workspace_handoffs.requestWorkspace`, whose admission, capacity, ordered
+retirement, repair and departure rules still apply. Failure leaves the closed
+bookmark forgotten. Without a predecessor it returns exit without mutating the
+model merely to draw a final frame.
 
-The event loop maps only `exit` to process status `0`.
+The wire, tracker, outbox and history use their existing fixed bounds. Resync
+adds no queue or timer. Client death drops outstanding conversations; runtime
+membership survives and a fresh client can reconstruct its projection.
 
-## Current workspace reconciliation
-
-A resync for a surviving workspace must name the client's current projection.
-A missing or different projection is `UnexpectedResync` and produces no
-effect. A matching request queues one `request_workspace_snapshot` unless the
-tracker already contains that request group. Repeated requirements then
-coalesce without allocating another request ID or outbox entry.
-
-The request itself does not mutate `ClientModel.Version` and does not ask for a
-draw. The correlated workspace snapshot follows the normal
-`ApplyWorkspaceSnapshotHandler` path. The presenter observes only the version
-committed by that later canonical reconciliation.
-
-## Closed workspace
-
-When the runtime reports that the workspace disappeared, the handler first
-forgets its navigation bookmark. The bookmark is invalid runtime identity and
-stays forgotten if the next effect fails.
-
-If the message contains a predecessor, the handler delegates to the existing
-workspace handoff request. That use case owns detach ordering, local recovery,
-model departure and resource release. If no predecessor survives, the handler
-returns `exit` after forgetting the bookmark. It does not mutate the model just
-to render a final frame that the client will never present.
-
-## Bounds and lifetime
-
-The wire message contains only fixed-size values. The flow adds no queue,
-timer or allocation. It reuses the request tracker bounded by
-`schema.max_panes_per_tab + 8`, the outbox bounded by
-`schema.max_panes_per_tab + 16`, and navigation history bounded by
-`schema.max_workspace_list_entries`.
-
-All of that state belongs to the disposable client. Client death drops pending
-snapshot and handoff conversations. The runtime keeps canonical workspace,
-tab and pane state, so a new client can rebuild its projection.
-
-## Proof
-
-- `src/client/application/session/resync_required.zig` proves workspace
-  validation, snapshot coalescence, closure policy, effect order and failure
-  retention.
-- `src/client/controllers/session/resync_requirements.zig` owns client-state translation
-  and concrete snapshot, history and handoff effects.
-- `src/frontend/client/tests/` proves bounded request delivery,
-  mismatched-workspace rejection, predecessor handoff, final exit and presenter
-  silence through the real adapters.
-- `src/backend/runtime/delivery/response_queue.zig` and
-  `src/backend/runtime/delivery/` prove bounded loss accounting and resync
-  wire order.
-- `src/core/schema/schema.zig` proves closure and predecessor validation.
+Source: `src/client/operations/session/resync_requirements.zig`,
+`src/client/connection/request_lifecycle.zig`, and
+`src/client/operations/workspaces/workspace_handoffs.zig`.
+Tests: `src/frontend/client/tests/synchronization.zig` and `tab_lifecycle.zig`
+cover matching identity, coalescence, full-outbox retry, closed-bookmark retention
+on failure, predecessor handoff and exit. Runtime response-queue and schema
+tests cover bounded loss reporting and valid closure/predecessor payloads.

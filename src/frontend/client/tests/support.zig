@@ -15,7 +15,7 @@ const GenerationType = @import("telar-client").Generation;
 const RegistryType = @import("telar-client").Registry;
 const TrustStoreType = @import("telar-core").TrustStore;
 const ActionType = @import("telar-client").Action;
-const config_reloads = @import("telar-client").controllers.config_reloads;
+const config_reloads = @import("telar-client").operations.config_reloads;
 const CallbackContextType = @import("telar-client").CallbackContext;
 const TestingPlugin = @import("TestingPlugin.zig");
 const parseManifest_module = @import("telar-core").parseManifest;
@@ -25,7 +25,7 @@ const TargetType = @import("telar-client").AttachmentTarget;
 const AgentProviderType = @import("telar-core").AgentProvider;
 const AgentInputType = @import("telar-client").AgentInput;
 const builtin_table_module = @import("telar-core").builtin_table;
-const active_pane_resources = @import("telar-client").controllers.active_pane_resources;
+const active_pane_resources = @import("telar-client").operations.active_pane_resources;
 const ClipboardCaptureType = @import("telar-client").ClipboardCapture;
 const CaptureType = @import("telar-client").Capture;
 

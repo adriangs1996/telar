@@ -1,0 +1,298 @@
+//! Runtime protocol contracts exercised through the concrete application dispatch.
+
+const std = @import("std");
+const core = @import("telar-core");
+const LaunchTestFault = @import("../application/LaunchTestFault.zig");
+const RequestFixture = @import("RequestFixture.zig");
+
+const missing_pane: core.PaneId = @enumFromInt(99);
+const missing_location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(99) }, .tab_id = @enumFromInt(99) };
+
+fn expectFailure(fixture: *RequestFixture, code: core.FailureCode) !void {
+    const response = fixture.response() orelse return error.MissingFailure;
+    try std.testing.expect(response.* == .request_failed);
+    try std.testing.expectEqual(code, response.request_failed.code);
+    try std.testing.expectEqual(@as(core.RequestId, @enumFromInt(41)), response.request_failed.request_id);
+    fixture.clearResponses();
+}
+
+test "runtime dispatch counts stale one-way pane requests exactly once" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const messages = [_]core.ClientMessage{
+        .{ .pane_input = .{ .pane_id = missing_pane, .bytes = "private" } },
+        .{ .pane_resize = .{ .pane_id = missing_pane, .size = .{ .cols = 40, .rows = 10 } } },
+        .{ .request_snapshot = .{ .pane_id = missing_pane, .known_frame_id = 0 } },
+        .{ .detach_pane = .{ .pane_id = missing_pane } },
+        .{ .request_graphics_snapshot = .{ .pane_id = missing_pane } },
+        .{ .graphics_credit = .{ .pane_id = missing_pane, .bytes = 1 } },
+        .{ .set_pane_viewport = .{ .pane_id = missing_pane, .offset = 10 } },
+    };
+    for (messages, 1..) |message, count| {
+        try fixture.send(message);
+        try std.testing.expectEqual(@as(u64, count), fixture.runtime.application.metrics.stale_client_messages);
+        try std.testing.expect(fixture.response() == null);
+    }
+    try std.testing.expectEqual(@as(u64, 0), fixture.session.last_input_sequence);
+}
+
+test "runtime dispatch maps unavailable panes and tab snapshots to correlated failures" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const messages = [_]core.ClientMessage{
+        .{ .open_pane = .{ .request_id = @enumFromInt(41), .target = .{ .pane = missing_pane }, .size = .{ .cols = 20, .rows = 5 }, .launch = null } },
+        .{ .close_pane = .{ .request_id = @enumFromInt(41), .pane_id = missing_pane } },
+        .{ .request_tab_snapshot = .{ .request_id = @enumFromInt(41), .location = missing_location } },
+        .{ .close_tab = .{ .request_id = @enumFromInt(41), .location = missing_location } },
+    };
+    for (messages) |message| {
+        try fixture.send(message);
+        try expectFailure(&fixture, if (message == .request_tab_snapshot or message == .close_tab) .tab_not_found else .pane_not_found);
+    }
+}
+
+test "runtime dispatch rejects an unavailable workspace without creating one" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const initial_revision = fixture.runtime.application.workspaceReader().revision();
+    try fixture.send(.{ .request_workspace_snapshot = .{ .request_id = @enumFromInt(41), .workspace = missing_location.workspace } });
+    try expectFailure(&fixture, .workspace_not_found);
+    try std.testing.expectEqual(initial_revision, fixture.runtime.application.workspaceReader().revision());
+}
+
+test "runtime dispatch preserves a committed pane when its reply queue is full" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const first = try fixture.openPane();
+    const count = fixture.runtime.application.model.panes.count;
+    try fixture.fillResponses();
+    var launch_buffer: [64]u8 = undefined;
+
+    try std.testing.expectError(error.ResponseQueueFull, fixture.send(.{ .create_pane = .{
+        .request_id = @enumFromInt(41),
+        .location = first.location,
+        .size = .{ .cols = 30, .rows = 8 },
+        .launch = try RequestFixture.sleepLaunch(&launch_buffer),
+    } }));
+    try std.testing.expectEqual(count + 1, fixture.runtime.application.model.panes.count);
+    try std.testing.expectEqual(@as(usize, 2), fixture.session.attachments.count);
+}
+
+test "runtime dispatch retains tab rename after response backpressure" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    try fixture.fillResponses();
+
+    try std.testing.expectError(error.ResponseQueueFull, fixture.send(.{ .rename_tab = .{
+        .request_id = @enumFromInt(41),
+        .location = pane.location,
+        .label = "logs",
+    } }));
+    try std.testing.expectEqualStrings("logs", fixture.runtime.application.workspaceReader().tabLabel(pane.location).?);
+}
+
+test "runtime dispatch validates graphics credits against exact outstanding bytes" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    const attachment = fixture.session.attachments.find(pane.id).?;
+    const capacity = core.max_image_bytes_per_pane;
+    attachment.graphics.credit = capacity - 16;
+    try fixture.send(.{ .graphics_credit = .{ .pane_id = pane.id, .bytes = 16 } });
+    try std.testing.expectEqual(capacity, attachment.graphics.credit);
+    for ([_]u64{ 0, 1, std.math.maxInt(u64) }, 1..) |bytes, count| {
+        try fixture.send(.{ .graphics_credit = .{ .pane_id = pane.id, .bytes = bytes } });
+        try std.testing.expectEqual(capacity, attachment.graphics.credit);
+        try std.testing.expectEqual(@as(u64, count), fixture.runtime.application.metrics.stale_client_messages);
+    }
+}
+
+test "runtime dispatch keeps graphics configuration scoped to one connection" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    const other = try fixture.addClient();
+    try fixture.send(.{ .configure_graphics = .{ .shared = true } });
+    try std.testing.expect(fixture.session.attachments.shared_graphics);
+    try std.testing.expect(!other.attachments.shared_graphics);
+    try std.testing.expect(fixture.session.attachments.find(pane.id) != null);
+    try fixture.send(.{ .configure_graphics = .{ .shared = false } });
+    try std.testing.expect(!fixture.session.attachments.shared_graphics);
+    try std.testing.expectEqual(@as(u64, 0), fixture.runtime.application.metrics.stale_client_messages);
+}
+
+test "runtime stop records its first initiator and remains idempotent" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    try fixture.send(.runtime_stop);
+    try fixture.send(.runtime_stop);
+    try std.testing.expect(fixture.runtime.application.shutdown.isRequested());
+    try std.testing.expectEqualDeep(fixture.session.key, fixture.runtime.application.shutdown.initiator.?);
+    try std.testing.expect(fixture.session.delivery.stopping());
+}
+
+test "runtime dispatch admits multiple viewers but preserves one geometry owner" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    const other = try fixture.addClient();
+    const initial_size = pane.size;
+    const requested_size: core.TerminalSize = .{ .cols = 44, .rows = 12 };
+    try fixture.sendTo(other, .{ .open_pane = .{
+        .request_id = @enumFromInt(41),
+        .target = .{ .pane = pane.id },
+        .size = requested_size,
+        .launch = null,
+    } });
+    try std.testing.expect(other.attachments.find(pane.id) != null);
+    try std.testing.expectEqualDeep(initial_size, pane.size);
+    try fixture.sendTo(other, .{ .pane_resize = .{ .pane_id = pane.id, .size = requested_size } });
+    try std.testing.expectEqual(@as(u64, 1), fixture.runtime.application.metrics.geometry_rejections);
+    try std.testing.expectEqualDeep(initial_size, pane.size);
+
+    try fixture.send(.{ .detach_pane = .{ .pane_id = pane.id } });
+    try fixture.sendTo(other, .{ .pane_resize = .{ .pane_id = pane.id, .size = requested_size } });
+    try std.testing.expectEqualDeep(requested_size, pane.size);
+    try std.testing.expectEqual(@as(u64, 1), fixture.runtime.application.metrics.geometry_rejections);
+}
+
+test "runtime dispatch defers geometry changes while output owns the terminal" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    const initial_size = pane.size;
+    const requested_size: core.TerminalSize = .{ .cols = 44, .rows = 12 };
+    pane.ingest_pending = true;
+    defer pane.ingest_pending = false;
+    try fixture.send(.{ .pane_resize = .{ .pane_id = pane.id, .size = requested_size } });
+    try std.testing.expectEqualDeep(initial_size, pane.size);
+    try std.testing.expectEqualDeep(requested_size, pane.pending_size.?);
+    try std.testing.expectEqual(@as(u64, 0), fixture.runtime.application.metrics.geometry_rejections);
+}
+
+test "runtime dispatch rolls back a tab when post-spawn registration fails" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    const reader = fixture.runtime.application.workspaceReader();
+    const initial_tabs = reader.totalTabs();
+    const initial_revision = reader.revision();
+    var fault: LaunchTestFault = .{ .phase = .pane_registration };
+    fixture.runtime.application.launch_fault = &fault;
+    defer fixture.runtime.application.launch_fault = null;
+    var launch_buffer: [64]u8 = undefined;
+    try fixture.send(.{ .create_tab = .{
+        .request_id = @enumFromInt(41),
+        .workspace = pane.location.workspace,
+        .label = "failed launch",
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = try RequestFixture.sleepLaunch(&launch_buffer),
+    } });
+    try expectFailure(&fixture, .spawn_failed);
+    try std.testing.expect(fault.claimed.load(.acquire));
+    try std.testing.expectEqual(initial_tabs, reader.totalTabs());
+    try std.testing.expectEqual(initial_revision, reader.revision());
+    try std.testing.expectEqual(@as(usize, 1), fixture.runtime.application.model.panes.count);
+    try std.testing.expectEqual(@as(usize, 1), fixture.session.attachments.count);
+}
+
+test "runtime dispatch reserves notification confirmation before publishing" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const other = try fixture.addClient();
+    try fixture.fillResponses();
+    try std.testing.expectError(error.ResponseQueueFull, fixture.send(.{ .show_notification = .{
+        .request_id = @enumFromInt(41),
+        .notification = .{ .title = "must not leak" },
+    } }));
+    try std.testing.expect(other.delivery.responses.peek() == null);
+}
+
+test "runtime dispatch rejects exited pane input without assigning recent-input authority" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    pane.exit = .{ .exited = 0 };
+    defer pane.exit = null;
+    try fixture.send(.{ .pane_input = .{ .pane_id = pane.id, .bytes = "ignored" } });
+    try std.testing.expectEqual(@as(u64, 1), fixture.runtime.application.metrics.stale_client_messages);
+    try std.testing.expectEqual(@as(u64, 0), fixture.session.last_input_sequence);
+    try std.testing.expectEqual(core.PaneId.invalid, fixture.session.last_input_pane);
+}
+
+test "runtime dispatch rejects agent controls on terminals and retired pane generations" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    for ([_]u64{ pane.generation, pane.generation + 1 }) |generation| {
+        const controls = [_]core.ClientMessage{
+            .{ .agent_prompt = .{ .request_id = @enumFromInt(41), .pane_id = pane.id, .pane_generation = generation, .text = "private prompt" } },
+            .{ .agent_interrupt = .{ .request_id = @enumFromInt(41), .pane_id = pane.id, .pane_generation = generation } },
+            .{ .agent_approval = .{ .request_id = @enumFromInt(41), .pane_id = pane.id, .pane_generation = generation, .approval_id = 1, .accept = true } },
+            .{ .agent_resume = .{ .request_id = @enumFromInt(41), .pane_id = pane.id, .pane_generation = generation, .expected_revision = 1, .conversation_index = 0 } },
+            .{ .query_agent_thread = .{ .request_id = @enumFromInt(41), .pane_id = pane.id, .pane_generation = generation } },
+        };
+        for (controls) |control| {
+            try fixture.send(control);
+            try expectFailure(&fixture, if (generation == pane.generation) .invalid_request else .pane_not_found);
+        }
+    }
+    try std.testing.expect(pane.agent_thread == null);
+    try std.testing.expect(pane.input_queue.nextChunk() == null);
+    try std.testing.expect(!pane.close_requested);
+}
+
+test "runtime dispatch owns routed command text and keeps its exact pending correlation" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    fixture.session.role = .control;
+    const target = try fixture.addClient();
+    target.delivery.client_identity = @enumFromInt(99);
+    var command: core.ClientCommand = .{
+        .request_id = @enumFromInt(41),
+        .route = .{ .id = target.key.id, .generation = target.key.generation + 1 },
+        .action = .agent_draft_set,
+        .target_id = 12,
+    };
+    try command.setText("original draft");
+    try fixture.send(.{ .request_client_command = command });
+    try expectFailure(&fixture, .invalid_request);
+    try std.testing.expect(target.delivery.responses.peek() == null);
+    try std.testing.expect(fixture.session.pending_client_command == null);
+
+    command.route.generation = target.key.generation;
+    try fixture.send(.{ .request_client_command = command });
+    try command.setText("changed draft");
+    var reply = target.delivery.responses.peek().?.client_command;
+    try std.testing.expectEqualStrings("original draft", reply.text());
+    try std.testing.expectEqual(fixture.session.key.id, reply.route.id);
+    try std.testing.expectEqual(fixture.session.key.generation, reply.route.generation);
+    target.delivery.responses.clear();
+
+    reply.status = .applied;
+    reply.request_id = @enumFromInt(42);
+    try fixture.sendTo(target, .{ .complete_client_command = reply });
+    try std.testing.expect(fixture.session.pending_client_command != null);
+    try std.testing.expect(fixture.response() == null);
+    reply.request_id = @enumFromInt(41);
+    try fixture.sendTo(target, .{ .complete_client_command = reply });
+    try std.testing.expect(fixture.session.pending_client_command == null);
+    try std.testing.expectEqual(target.key.id, fixture.response().?.client_command_result.route.id);
+    try std.testing.expectEqualStrings("original draft", fixture.response().?.client_command_result.text());
+}

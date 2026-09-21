@@ -60,12 +60,11 @@ runtime begins accepting mutations and receives owned persistence records or
 checkpoints after semantic changes. Ordinary runtime queries continue reading
 the in-memory model.
 
-Aggregates do not save themselves. An application command handler validates and
-applies a command through capability, aggregate and repository APIs, then
-submits any resulting persistable change to the persistence capability. A
-request controller remains responsible for translating the client protocol and
-delivering its result. Each operation must state whether client confirmation
-requires durable commit or whether bounded write-behind is acceptable. A
+Aggregates do not save themselves. The owning operation validates and applies
+changes through capability APIs, then submits resulting persistable changes to
+the persistence capability and delivers its result. [ADR 0016](0016-follow-operations-from-process-entrypoints.md)
+removes the formerly required controller/handler split. Each operation must
+state whether client confirmation requires durable commit or whether bounded write-behind is acceptable. A
 durable commit runs in a worker and never blocks the event loop. Failure policy,
 retry bounds and unsaved-state reporting belong to that operation's contract.
 

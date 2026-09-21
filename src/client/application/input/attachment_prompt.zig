@@ -4,12 +4,6 @@ const AgentAttachmentMarkersType = @import("telar-core").AgentAttachmentMarkers;
 const types = @import("../../attachments/types.zig");
 const Key = @import("../../input/Key.zig");
 const std = @import("std");
-const DismissCapture = @import("DismissCapture.zig");
-const DismissAttachmentHandler = @import("DismissAttachmentHandler.zig");
-const ModelType = @import("../../model/Model.zig");
-const TargetType = @import("../../attachments/AttachmentTarget.zig");
-const ObserveCapture = @import("ObserveCapture.zig");
-const ObservePaneInputHandler = @import("ObservePaneInputHandler.zig");
 
 /// Maps the marker scheme an agent's manifest declares to the client policy
 /// that binds previews to prompt markers.
@@ -106,52 +100,4 @@ test "Pi path markers yield to word and line deletion keys" {
     try std.testing.expect(editsMarkers(.pasted_path, .{ .code = .{ .char = .init("k") }, .mods = .{ .ctrl = true } }));
     try std.testing.expect(!editsMarkers(.pasted_path, .{ .code = .{ .char = .init("v") }, .mods = .{ .ctrl = true } }));
     try std.testing.expect(!editsMarkers(.pasted_path, .{ .code = .{ .char = .init("a") } }));
-}
-
-test "preview dismissal deletes the child marker before retiring local media" {
-    var capture: DismissCapture = .{ .layout_changed = true };
-    var handler: DismissAttachmentHandler = .{ .effects = capture.effects() };
-
-    try std.testing.expect(try handler.execute(@enumFromInt(3)));
-    try std.testing.expectEqualSlices(Event, &.{ .plan, .deliver, .remove }, capture.events[0..capture.count]);
-
-    capture = .{ .plan_available = false };
-    handler = .{ .effects = capture.effects() };
-    try std.testing.expect(!try handler.execute(@enumFromInt(3)));
-    try std.testing.expectEqualSlices(Event, &.{.plan}, capture.events[0..capture.count]);
-}
-
-test "pane input mirrors marker deletion and submission into preview state" {
-    var model = ModelType.init(std.testing.allocator, true);
-    defer model.deinit();
-    const target: TargetType = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 };
-    var capture: ObserveCapture = .{ .target = target, .marker = @enumFromInt(3) };
-    var handler: ObservePaneInputHandler = .{ .model = &model, .effects = capture.effects() };
-
-    try std.testing.expect(!handler.execute(target.pane_id, .{ .key = .{ .code = .backspace } }));
-    try std.testing.expectEqual(@as(types.Id, @enumFromInt(3)), capture.removed.?);
-
-    _ = try model.beginClipboardCapture(target);
-    try std.testing.expect(handler.execute(target.pane_id, .{ .key = .{ .code = .enter } }));
-    try std.testing.expect(capture.prompt_removed);
-    try std.testing.expect(model.clipboardCapture() == null);
-
-    _ = try model.beginClipboardCapture(target);
-    capture.marker = null;
-    capture.pending_marker = true;
-    try std.testing.expect(!handler.execute(target.pane_id, .{ .key = .{ .code = .delete } }));
-    try std.testing.expect(model.clipboardCapture() == null);
-}
-
-test "an Enter the editor turns into a newline keeps previews and the capture" {
-    var model = ModelType.init(std.testing.allocator, true);
-    defer model.deinit();
-    const target: TargetType = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 };
-    var capture: ObserveCapture = .{ .target = target, .continues = true };
-    var handler: ObservePaneInputHandler = .{ .model = &model, .effects = capture.effects() };
-
-    _ = try model.beginClipboardCapture(target);
-    try std.testing.expect(!handler.execute(target.pane_id, .{ .key = .{ .code = .enter } }));
-    try std.testing.expect(!capture.prompt_removed);
-    try std.testing.expect(model.clipboardCapture() != null);
 }

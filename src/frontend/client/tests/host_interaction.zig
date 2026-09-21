@@ -22,10 +22,10 @@ const client_events = @import("../entrypoints/events.zig");
 const support = @import("support.zig");
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
 const parseKey_module = @import("telar-client").parseKey;
-const client_actions = @import("telar-client").controllers.actions;
+const client_actions = @import("telar-client").operations.actions;
 const ActionType = @import("telar-client").Action;
 const ControlType = @import("telar-client").Control;
-const name_prompts = @import("telar-client").controllers.name_prompts;
+const name_prompts = @import("telar-client").operations.name_prompts;
 
 test "host resize commits before resources and presents by model version" {
     var harness: TestHarness = undefined;
@@ -319,7 +319,7 @@ test "TUI inbox drains a finite FIFO batch and observes presentation once" {
         try terminal.inbox.post(.{ .notified = {} });
     }
 
-    try std.testing.expect(try client_events.drain(client, support.clientEventResourcesForTest(&heap)) == .keep_running);
+    try std.testing.expect(try client_events.update(client, support.clientEventResourcesForTest(&heap)) == .keep_running);
     const stats = terminal.inbox.snapshot();
     try std.testing.expect(stats.consumed >= 1 and stats.consumed <= 32);
     try std.testing.expect(stats.depth >= 8);

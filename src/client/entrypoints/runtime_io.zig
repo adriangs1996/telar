@@ -225,7 +225,9 @@ pub fn flushGraphicsCredits(client: *Client) !void {
     try pump(client);
 }
 
-fn pump(client: *Client) !void {
+/// Starts the next queued frame unless a send already owns the buffer.
+/// Example: `try runtime_io.pump(client);` after queuing a bootstrap.
+pub fn pump(client: *Client) !void {
     const state = &client.runtime_transport;
     const payload = try state.prepareSend() orelse return;
     client.transport_driver.startSend(state, payload) catch |err| {

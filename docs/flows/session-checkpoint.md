@@ -174,7 +174,7 @@ the parked title.
 path is `session.ckpt` next to the history database. `persist = false` keeps
 the session volatile.
 
-## Proof
+## Validation
 
 - `src/backend/persistence/checkpoint.zig` proves the record round trip,
   version 1 compatibility, title validation and rejection of corrupt,

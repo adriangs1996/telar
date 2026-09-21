@@ -9,31 +9,12 @@ nor its transition rules.
 ## End-to-end path
 
 ```text
-runtime proxy service configuration
-             |
-runtime Delivery.prepare
-             |
-schema.proxy_status
-             |
-server_messages dispatcher
-             |
-proxy_status adapter
-             |
-ApplyProxyStatusHandler
-             |
-ClientModel.reconcileProxyStatus
-             |
-ProxyStatusCommit + Version.proxy_status
-             |
-DeliverProxyStatusHandler
-             |
-post-commit notification
-             |
-presentation_lifecycle.observe
-             |
-Presenter -> View.render(proxy_tls_active, proxy_tls_scope, proxy_system_trusted)
-             |
-widgets.top_bar
+runtime proxy configuration → runtime delivery → proxy_status
+  → server_messages.handleServerMessage
+  → proxy_status.apply
+      model.reconcileProxyStatus
+      notification for a changed transition
+  → presentation observation → top-bar projection
 ```
 
 The proxy configuration does not change during one runtime process. After a
@@ -45,21 +26,15 @@ state.
 
 ## Client transaction
 
-`proxy_status.apply` maps the decoded message into
-`ApplyProxyStatusHandler`. The handler asks `ClientModel` to reconcile the
-triple. An equal value is a no-op. A changed value advances
-`Version.proxy_status` exactly once and returns the previous and current state
-plus the local revision before and after the change in a typed commit.
+`proxy_status.apply` asks the model to reconcile the decoded triple. Equal
+values are no-ops. A changed value advances the proxy revision and returns the
+previous and current state. The same function selects the notification and
+calls `notifications.publishNow` immediately.
 
-The apply handler delegates only a changed commit.
-`DeliverProxyStatusHandler` validates the exact current state, one-step local
-revision and transition before mapping it to a notification. Enabling the
-proxy produces a warning; disabling it produces an informational notice. A
-trust-only change reports installation or removal without claiming that
-interception changed.
-The adapter supplies only physical publication. A notification failure does
-not roll back the committed replica. Neither the dispatcher nor either handler
-calls `Presenter`.
+Enabling interception produces a warning; disabling it produces an informational
+notice. Trust-only changes describe trust installation or removal. A publication
+failure preserves the committed replica. No intermediate delivery object or
+host callback decides the transition; the event loop observes its revisions.
 
 ## Presentation and recovery
 
@@ -82,19 +57,10 @@ cursor sends the process's current value, which reconstructs the badge and
 announces activation when needed. The replica and its render mapping allocate
 nothing.
 
-## Proof
+## Validation
 
-- `src/backend/runtime/delivery/delivery_namespace.zig` proves one committed status delivery per
-  client connection.
-- `src/core/schema/schema.zig` defines the bounded active, scope, and trust state.
-- `src/client/model/Model.zig` proves idempotence and isolated versioning.
-- `src/client/application/agents/proxy_status.zig` proves commit-before-
-  delivery ordering, duplicate suppression and retained commits after delivery
-  failure.
-- `src/client/application/agents/proxy_status_delivery.zig` proves exact
-  transition validation, notification policy and retained commits after
-  publication failure.
-- `src/frontend/client/tests/notifications_and_agents.zig` proves protocol adaptation, duplicate
-  suppression, notifications and presenter-owned badge projection.
-- `src/frontend/widgets/top_bar.zig` proves the interception badge retains
-  reserved space independently of workspace navigation.
+Model observation tests cover idempotence and isolated revisions. Runtime
+delivery tests cover one committed status delivery per connection. The concrete
+client suite in `src/frontend/client/tests/notifications_and_agents.zig` covers
+wire adaptation, duplicate suppression, notification policy and the badge's
+presentation. Top-bar tests cover independent reserved badge space.

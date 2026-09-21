@@ -90,7 +90,7 @@ pub fn run(init: std.process.Init, connection: *SocketChannelType, options: Opti
 
     while (true) {
         try terminal.inbox.wait();
-        switch (try client_events.drain(client, .{
+        switch (try client_events.update(client, .{
             .tty = &tty,
             .resize_watcher = &watcher,
             .heap = &heap,

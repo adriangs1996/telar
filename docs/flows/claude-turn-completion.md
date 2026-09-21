@@ -93,7 +93,7 @@ The `proxy_claude_*` telemetry counters locate a missing transition without
 recording headers or payloads. Their interpretation is documented in
 [`proxy-tls.md`](../proxy-tls.md#agent-state).
 
-## Proof
+## Validation
 
 - `HTTP1 Claude request bodies refine route candidates before publication`
   covers startup, bodyless, and primary request classification at the service

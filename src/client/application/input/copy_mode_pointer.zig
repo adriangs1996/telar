@@ -1,10 +1,7 @@
 //! Application policy for keyboard copy mode and captured mouse selections.
 
 const PointType = @import("telar-core").Point;
-const CopyModePointerEffectsCapture = @import("CopyModePointerEffectsCapture.zig");
-const CopyModePointerHandler = @import("CopyModePointerHandler.zig");
 const std = @import("std");
-const PointerMotionType = @import("../../input/PointerMotion.zig");
 
 pub const Authority = union(enum) {
     unowned,
@@ -37,90 +34,3 @@ pub const Failure = enum {
     leave,
     vertical,
 };
-
-test "mouse selection consumes unrelated buttons and clips through resolved pane coordinates" {
-    var capture: CopyModePointerEffectsCapture = .{};
-    var handler: CopyModePointerHandler = .{ .effects = capture.effects() };
-    const authority: Authority = .{ .selection = .{ .dragging = true, .position = .{ .x = 0, .y = 9 } } };
-    try std.testing.expectEqual(Outcome.consumed, try handler.execute(.{ .kind = .release, .left_button = false }, authority));
-    try std.testing.expectEqual(@as(usize, 0), capture.event_count);
-    try std.testing.expectEqual(Outcome.moved, try handler.execute(.{ .kind = .release }, authority));
-    try std.testing.expectEqualDeep(PointerMotionType{ .position = .{ .x = 0, .y = 9 }, .release = true }, capture.motion.?);
-}
-
-test "missing selection geometry cancels before releasing its physical gesture" {
-    var capture: CopyModePointerEffectsCapture = .{};
-    var handler: CopyModePointerHandler = .{ .effects = capture.effects() };
-    const authority: Authority = .{ .selection = .{ .dragging = true, .position = null } };
-    try std.testing.expectEqual(Outcome.consumed, try handler.execute(.{ .kind = .drag }, authority));
-    try std.testing.expectEqual(@as(usize, 0), capture.event_count);
-    try std.testing.expectEqual(Outcome.consumed, try handler.execute(.{ .kind = .release }, authority));
-    try std.testing.expectEqualSlices(Event, &.{.cancel_pointer}, capture.events[0..capture.event_count]);
-}
-
-test "copy-mode pointer leaves unowned input for later routing" {
-    var capture: CopyModePointerEffectsCapture = .{};
-    var handler: CopyModePointerHandler = .{ .effects = capture.effects() };
-
-    try std.testing.expectEqual(
-        Outcome.unowned,
-        try handler.execute(.{ .kind = .press }, .unowned),
-    );
-    try std.testing.expectEqual(@as(usize, 0), capture.event_count);
-}
-
-test "copy-mode pointer consumes non-wheel and outside-wheel input" {
-    var capture: CopyModePointerEffectsCapture = .{};
-    var handler: CopyModePointerHandler = .{ .effects = capture.effects() };
-
-    try std.testing.expectEqual(
-        Outcome.consumed,
-        try handler.execute(.{ .kind = .press }, .{ .owned = .{ .pointer_inside = true } }),
-    );
-    try std.testing.expectEqual(
-        Outcome.consumed,
-        try handler.execute(.{ .kind = .scroll_up }, .{ .owned = .{ .pointer_inside = false } }),
-    );
-    try std.testing.expectEqual(@as(usize, 0), capture.event_count);
-}
-
-test "copy-mode pointer moves three rows for each inside wheel direction" {
-    var capture: CopyModePointerEffectsCapture = .{};
-    var handler: CopyModePointerHandler = .{ .effects = capture.effects() };
-    const authority: Authority = .{ .owned = .{ .pointer_inside = true } };
-
-    try std.testing.expectEqual(Outcome.moved, try handler.execute(.{ .kind = .scroll_up }, authority));
-    try std.testing.expectEqualSlices(Event, &.{.vertical}, capture.events[0..capture.event_count]);
-    try std.testing.expectEqual(@as(i32, -3), capture.delta);
-
-    capture = .{};
-    handler = .{ .effects = capture.effects() };
-    try std.testing.expectEqual(Outcome.moved, try handler.execute(.{ .kind = .scroll_down }, authority));
-    try std.testing.expectEqualSlices(Event, &.{.vertical}, capture.events[0..capture.event_count]);
-    try std.testing.expectEqual(@as(i32, 3), capture.delta);
-}
-
-test "copy-mode pointer exits a missing target and propagates selected failures" {
-    var capture: CopyModePointerEffectsCapture = .{};
-    var handler: CopyModePointerHandler = .{ .effects = capture.effects() };
-    const missing: Authority = .target_missing;
-
-    try std.testing.expectEqual(Outcome.exited, try handler.execute(.{ .kind = .move }, missing));
-    try std.testing.expectEqualSlices(Event, &.{.leave}, capture.events[0..capture.event_count]);
-
-    capture = .{ .failure = .leave };
-    handler = .{ .effects = capture.effects() };
-    try std.testing.expectError(
-        error.CopyModeLeaveFailed,
-        handler.execute(.{ .kind = .move }, missing),
-    );
-    try std.testing.expectEqualSlices(Event, &.{.leave}, capture.events[0..capture.event_count]);
-
-    capture = .{ .failure = .vertical };
-    handler = .{ .effects = capture.effects() };
-    try std.testing.expectError(
-        error.CopyModeMovementFailed,
-        handler.execute(.{ .kind = .scroll_up }, .{ .owned = .{ .pointer_inside = true } }),
-    );
-    try std.testing.expectEqualSlices(Event, &.{.vertical}, capture.events[0..capture.event_count]);
-}

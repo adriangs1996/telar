@@ -12,8 +12,8 @@ const host_inputs = @import("../input/host_inputs.zig");
 const host_resizes = @import("../host/host_resizes.zig");
 const runtime_transport = @import("telar-client").runtime_io;
 const client_telemetry = @import("../../resources/telemetry.zig");
-const bar_updates = @import("telar-client").controllers.bar_updates;
-const config_reloads = @import("telar-client").controllers.config_reloads;
+const bar_updates = @import("telar-client").operations.bar_updates;
+const config_reloads = @import("telar-client").operations.config_reloads;
 const supportsSharedMemory_module = @import("telar-client").supportsSharedMemory;
 
 /// Starts host negotiation and arms I/O without opening a child before its

@@ -1,5 +1,44 @@
 const std = @import("std");
 const Session = @import("Session.zig");
+const core = @import("telar-core");
+const client = @import("telar-client");
+
+test "native startup sends the ordered bootstrap without graphics credits or a server reply" {
+    const session = try Session.init();
+    defer session.deinit();
+    const app = &session.gui.app;
+    const colors: core.TerminalColors = .{ .foreground = .{ 210, 211, 212 }, .background = .{ 20, 21, 22 } };
+    try std.testing.expect(app.graphics.peekCredit() == null);
+
+    try session.gui.start(colors);
+
+    try std.testing.expect(app.startup.phase == .opening);
+    try std.testing.expect(app.runtime_transport.receive_pending);
+    try std.testing.expectEqualDeep(colors, app.model.hostCapabilities().terminal_colors);
+    try std.testing.expect(app.model.hostCapabilities().agent_panes);
+    try std.testing.expectEqual(client.Support.supported, app.model.hostCapabilities().pointer_pixels);
+    const graphics = try core.decodeClient(session.pending.?);
+    try std.testing.expect(graphics == .configure_graphics);
+    try std.testing.expect(!graphics.configure_graphics.shared);
+
+    session.pending = null;
+    try client.runtime_io.handleSent(app, {});
+    const configured = try core.decodeClient(session.pending.?);
+    try std.testing.expect(configured == .configure_terminal_colors);
+    try std.testing.expectEqualDeep(colors, configured.configure_terminal_colors);
+
+    session.pending = null;
+    try client.runtime_io.handleSent(app, {});
+    const request = try core.decodeClient(session.pending.?);
+    try std.testing.expect(request == .request_runtime_state);
+    try std.testing.expectEqual(app.client_identity, request.request_runtime_state.client_identity);
+
+    session.pending = null;
+    try client.runtime_io.handleSent(app, {});
+    try std.testing.expect(session.pending == null);
+    try std.testing.expectEqual(@as(usize, 0), app.runtime_transport.outbox.len);
+    try std.testing.expect(app.startup.phase == .opening);
+}
 
 test "GUI font metrics apply size spacing and display scale once" {
     const Renderer = @import("../render/TerminalRenderer.zig");
@@ -69,7 +108,6 @@ test "background opacity preserves cell ink cursor and explicit backgrounds" {
 }
 
 test "native font lookup resolves installed faces and fails explicitly for missing families" {
-    const client = @import("telar-client");
     const Source = @import("../text/FontSource.zig");
     const Atlas = @import("../text/GlyphAtlas.zig");
     var family: client.FontFamily = .{};
@@ -86,7 +124,6 @@ test "native font lookup resolves installed faces and fails explicitly for missi
 }
 
 test "cursor shapes focus and blink reuse retained ink without changing the atlas" {
-    const core = @import("telar-core");
     const session = try Session.init();
     defer session.deinit();
     try session.bootstrap();

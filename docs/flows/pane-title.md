@@ -17,7 +17,7 @@ Attachment.prepareTitle (lane after cwd and foreground)
         |
 schema.pane_title
         |
-runtime_messages -> pane_metadata.applyTitle
+entrypoints/server_messages -> operations/panes/pane_metadata.applyTitle
         |
 ClientModel.updatePaneMetadata(.title) -> multiplexer.Model.setPaneTitle
         |
@@ -59,7 +59,7 @@ frame flush already in progress.
 Bar callbacks receive `context.pane_title` for the focused pane of the active
 tab.
 
-## Proof
+## Validation
 
 - `src/backend/runtime/tests/pane_title_test.zig` proves capture, sanitizing,
   clearing, delivery and revision bookkeeping through a real attachment.

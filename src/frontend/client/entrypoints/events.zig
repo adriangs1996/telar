@@ -15,16 +15,16 @@ const host_capabilities = @import("../controllers/host/host_capabilities.zig");
 const host_resizes = @import("../controllers/host/host_resizes.zig");
 const runtime_transport = @import("telar-client").runtime_io;
 const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
-const sidebar_animations = @import("telar-client").controllers.sidebar_animations;
-const notifications = @import("telar-client").controllers.notifications;
-const bar_updates = @import("telar-client").controllers.bar_updates;
-const path_completions = @import("telar-client").controllers.path_completions;
-const agent_sounds = @import("telar-client").controllers.agent_sounds;
+const sidebar_animations = @import("telar-client").operations.sidebar_animations;
+const notifications = @import("telar-client").operations.notifications;
+const bar_updates = @import("telar-client").operations.bar_updates;
+const path_completions = @import("telar-client").operations.path_completions;
+const agent_sounds = @import("telar-client").operations.agent_sounds;
 const client_telemetry = @import("../resources/telemetry.zig");
-const config_reloads = @import("telar-client").controllers.config_reloads;
-const plugin_actions = @import("telar-client").controllers.plugin_actions;
-const clipboard_images = @import("telar-client").controllers.clipboard_images;
-const link_openings = @import("telar-client").controllers.link_openings;
+const config_reloads = @import("telar-client").operations.config_reloads;
+const plugin_actions = @import("telar-client").operations.plugin_actions;
+const clipboard_images = @import("telar-client").operations.clipboard_images;
+const link_openings = @import("telar-client").operations.link_openings;
 const PathType = @import("telar-core").Path;
 
 const EventTag = std.meta.Tag(TerminalClient.ClientEvent);
@@ -51,8 +51,8 @@ pub fn handle(client: *Client, event: TerminalClient.ClientEvent, resources: Res
 }
 
 /// Consumes only this turn's admitted work, then derives one presentation.
-/// Example: `const outcome = try events.drain(client, resources);`
-pub fn drain(client: *Client, resources: Resources) !Outcome {
+/// Example: `const outcome = try events.update(client, resources);`
+pub fn update(client: *Client, resources: Resources) !Outcome {
     const inbox = &host(client).inbox;
     var turn = try inbox.begin();
     defer inbox.end();
@@ -82,19 +82,6 @@ fn dispatch(client: *Client, event: TerminalClient.ClientEvent, resources: Resou
     const path = enter_module(pathFor(@as(EventTag, event)));
     defer path.restore();
 
-    switch (try route(client, event, resources)) {
-        .keep_running => {
-            if (try client_startup.advance(client)) {
-                return .{ .exit = 0 };
-            }
-        },
-        .exit => |status| return .{ .exit = status },
-    }
-
-    return .keep_running;
-}
-
-fn route(client: *Client, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
     switch (event) {
         .input => |result| {
             if (try host_inputs.handleOwnedRead(client, result)) {
@@ -146,6 +133,10 @@ fn route(client: *Client, event: TerminalClient.ClientEvent, resources: Resource
         .clipboard_image => |result| try clipboard_images.complete(client, result),
         .link_opened => |result| try link_openings.complete(client, result),
         .path_completion => |completion| try path_completions.complete(client, completion),
+    }
+
+    if (try client_startup.advance(client)) {
+        return .{ .exit = 0 };
     }
 
     return .keep_running;

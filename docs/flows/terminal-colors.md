@@ -7,7 +7,7 @@ transparency.
 
 ## Ownership and flow
 
-`controllers/host/host_capabilities.zig` owns issuing host probes, translating
+`src/frontend/client/controllers/host/host_capabilities.zig` owns issuing host probes, translating
 replies and settling expiry. `resources/host_negotiation.zig` retains one
 250 ms probe window, records each color once and rejects unsolicited or expired
 color reports. Resizes always refresh pixel geometry; overlapping color probes
@@ -45,8 +45,9 @@ used to select the client UI theme.
 
 ## Runtime authority
 
-The request controller delegates to the terminal-colors command handler. The
-handler commits the session's colors before updating any workspace. The runtime
+`requests.dispatch` calls `operations/graphics.routeConfigureTerminalColors`
+in the runtime. That concrete operation commits the session's colors before
+updating any workspace. The runtime
 checks existing geometry ownership without acquiring a lease on behalf of a
 spectator. A new lease applies the new owner's defaults to existing panes.
 `Application.launchPane` selects that owner's colors for every launch path,
@@ -101,7 +102,7 @@ Colors are not added to persistence by this change. Updating terminal defaults
 also cannot force an already-running application to discard a cached failed
 color query.
 
-## Proof
+## Validation
 
 - PTY integration through `zig build run --color on` and `--color off`: neither
   mode injects color overrides; panes retain `COLORTERM=truecolor` and answer

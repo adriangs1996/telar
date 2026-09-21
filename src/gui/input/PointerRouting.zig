@@ -113,7 +113,7 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
                     const target = if (geometryMatches(app) and pointer.hover.openable()) pointer.link_gesture.finish(pointer.hover.link, app.model.version()) else null;
                     pointer.link_gesture.cancel();
                     if (target) |selected| {
-                        _ = try client.controllers.link_openings.apply(app, selected);
+                        _ = try client.operations.link_openings.apply(app, selected);
                     }
                 }
 
@@ -130,7 +130,7 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
         }
     }
 
-    const outcome = try client.controllers.pointer_routing.apply(app, mouse);
+    const outcome = try client.operations.pointer_routing.apply(app, mouse);
     if (event.interruptsKeys()) {
         pointer.hover.dirty = true;
     }
@@ -173,7 +173,7 @@ fn bandRoute(app: *client.AttachedClient, event: Event) !void {
     }
 
     const model = app.model.activeTabModel() orelse return;
-    _ = try client.controllers.view_interactions.apply(app, model, command.interaction);
+    _ = try client.operations.view_interactions.apply(app, model, command.interaction);
 }
 
 /// Closes existing gestures on focus loss, without assigning their releases
@@ -201,7 +201,7 @@ pub fn cancel(pointer: *Routing, app: *client.AttachedClient) !void {
                 var released = pointer.last[0];
                 released.kind = .release;
                 released.button = 0;
-                _ = try client.controllers.copy_mode_pointer.apply(app, model, released);
+                _ = try client.operations.copy_mode_pointer.apply(app, model, released);
             }
         }
     }

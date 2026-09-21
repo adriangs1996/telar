@@ -37,7 +37,7 @@ previous projection and simply retry after the interval.
 full name and a detached head to its short hash, without running git; the
 subprocess is only consulted for cleanliness.
 
-## Proof
+## Validation
 
 - `src/backend/runtime/application/GenericGitStatusObserver.zig` proves HEAD parsing.
 - `src/backend/workspace/workspace_support.zig` proves bounded storage and change

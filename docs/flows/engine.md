@@ -68,7 +68,7 @@ and acts on four records: the prompt reply (`type = "response"`,
 event is skipped without inspection, so a newer Pi that adds events keeps
 working, and a Pi that renames one of these four degrades to a timeout.
 
-## Proof
+## Validation
 
 - `src/backend/engine/rpc.zig` proves encoding, escaping and record
   classification.

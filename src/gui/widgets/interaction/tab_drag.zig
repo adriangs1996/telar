@@ -1,4 +1,5 @@
 //! Native tab gestures use only the dispatcher's delivered control geometry.
+const tab_moves = @import("telar-client").operations.tab_moves;
 const GuiClient = @import("../../GuiClient.zig");
 const Event = @import("../../input/event.zig").Event;
 const Target = @import("Target.zig");
@@ -66,8 +67,7 @@ pub fn apply(gui: *GuiClient, event: Event, owner: ?Target) !bool {
     state.dispatcher.revision +%= 1;
     if (pointer.kind == .release) {
         if (drag.finish()) |move| {
-            var handler = @import("telar-client").controllers.tab_moves.requestHandler(&gui.app);
-            if (try handler.execute(.{ .location = move.location, .direction = move.direction, .relative_to = move.relative_to })) {
+            if (try tab_moves.request(&gui.app, .{ .location = move.location, .direction = move.direction, .relative_to = move.relative_to })) {
                 state.tab_drop_pending = move;
             }
         }

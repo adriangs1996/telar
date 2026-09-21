@@ -1,141 +1,47 @@
 # Tab rename
 
-The runtime owns the canonical tab label. The client edits a bounded candidate,
-sends it with a stable tab identity, then changes its replica only after the
-runtime confirms the label.
-
-An empty canonical label selects automatic naming: each client displays its
-focused pane's foreground application and icon. A rename always supplies a
-non-empty canonical label and disables automatic naming. Renaming to the same
-text currently displayed is still a change when the previous canonical label
-was empty. Reconciliation compares `Tab.canonicalLabel()`, while prompts and
-navigation display `Tab.labelSlice()`.
-
-This is an interactive flow. Labels must contain between one and
-`schema.max_tab_label_bytes` bytes, valid UTF-8 and no control bytes. The prompt,
-outbox and runtime response queue use fixed storage. The continuation retains
-only `TabLocation`; the outbox copies the candidate before the prompt closes.
-No borrowed label crosses the asynchronous boundary.
-
-## Request
+The runtime owns the canonical label. The client prompt edits a candidate and
+closes only after a locally accepted request; it does not rename the replica.
 
 ```text
-name prompt
-        |
-InputHandler -> name_prompts.handleInput
-        |
-NamePromptHandler -> name_prompts submit effect
-        |
-RequestRenameTabHandler
-        |
-TabRenameIntent
-        |
-owned rename_tab request and typed continuation
-        |
-runtime socket
+operations/input/name_prompts.handleInput
+  -> operations/tabs/tab_renames.request
+     -> pending-operation gate, validate label, resolve exact target
+     -> request_lifecycle.deliverRename -> owned rename_tab
+  -> runtime canonical rename -> tab_renamed
+  -> entrypoints/server_messages.handleServerMessage
+  -> tab_renames.apply
+     -> consume and verify exact rename continuation
+     -> Model.renameTab
+  -> adapter observes presentation revisions
 ```
 
-`RequestRenameTabHandler` rejects another pending tab operation, validates the
-candidate and resolves the prompt's tab ID to its complete location. The target
-may be inactive. A valid request passes a borrowed label only to the synchronous
-adapter callback.
+Names require valid UTF-8, no control bytes and one through
+`schema.max_tab_label_bytes` bytes. The target may be inactive. The outbox copies
+the borrowed candidate before prompt closure and retains only stable correlation.
+A busy lifecycle or vanished target leaves the prompt open; invalid text and
+local enqueue errors also preserve it. Failed delivery removes provisional
+correlation and changes no canonical tab state.
 
-The adapter allocates the request identity, records the expected location and
-copies the label into the bounded outbox. Local enqueue does not mutate the
-canonical tab replica. `NamePromptHandler` closes the model-owned prompt only
-after the request adapter accepts it into the outbox.
+An empty canonical label selects automatic naming. Manual rename supplies a
+nonempty label and disables it, even if that label equals the currently
+displayed automatic text. Reconciliation compares `canonicalLabel()`;
+presentation uses `labelSlice()`.
 
-## Runtime command
+The runtime commits its owned label before replying and marks other observing
+clients for resync. The requesting client accepts the reply's label, which can
+differ from the submitted candidate. The model copies it before wire storage
+is released. A real change advances only the tab revision; an identical
+canonical label advances nothing and preserves active identity.
 
-```text
-Server.dispatchClientMessage
-        |
-tab.Controller.renameTab
-        |
-RenameTabHandler
-        |
-Workspace.renameTab
-        |
-owned TabRenamed event and tab_renamed response
-```
+Unknown correlation, wrong continuation/location and rejected canonical payloads
+cannot rename a tab. Known correlation is consumed before these checks, so
+replay cannot apply later. A correlated runtime failure preserves the old label
+and publishes the runtime notice. Reconnect rebuilds labels from snapshots.
 
-The runtime handler resolves the workspace aggregate, commits the new label and
-then publishes an owned `TabRenamed` event. The controller copies that canonical
-label into its response queue. A missing tab or invalid label becomes
-`request_failed`.
-
-The requesting client receives `tab_renamed`. The runtime marks other clients
-that observe the workspace for resynchronization. Those clients obtain the new
-label from a workspace snapshot and never consume another client's request
-identity.
-
-## Confirmation and presentation
-
-```text
-tab_renamed(rename_tab continuation)
-        |
-tab_renames.apply
-        |
-validate exact TabLocation
-        |
-ConfirmTabRenameHandler
-        |
-ClientModel.renameTab
-        |
-presentation_lifecycle.observe
-```
-
-The dispatcher only delegates the decoded response. `tab_renames.apply`
-consumes the continuation, requires its `rename_tab` type and verifies the
-exact location before translating the wire payload into a confirmation. The
-adapter removes the request identity before it invokes
-`ConfirmTabRenameHandler`. The handler applies the runtime label, which may
-differ from the candidate sent by the prompt, and the model copies it before
-the borrowed response storage is released.
-
-A changed label advances only `tabs_revision`. An identical canonical label is
-a semantic no-op and changes no version. Neither case changes active-tab
-identity. The use cases do not invalidate the view or request a draw.
-`client_events` publishes a changed model version to `Presenter`, which schedules
-the frame.
-
-## Failure and recovery
-
-An invalid local label fails before the adapter sees it. A pending operation or
-missing prompt target emits nothing. In both suppressed cases the prompt stays
-open. A local enqueue failure also leaves the prompt open and removes any
-provisional continuation.
-
-A correlated `request_failed` preserves the current label and model version,
-then reports the runtime message through the notification flow. An unknown
-request, a continuation of another type, a response for another tab or a
-canonical payload the model cannot accept becomes `UnexpectedTabRenamed` and
-cannot mutate the replica. Once found, the continuation is consumed before
-these checks, so a rejected or replayed response cannot be applied later.
-Reconnection rebuilds labels from the canonical workspace snapshot, so the
-client never replays a rename.
-
-## Proof
-
-- `src/client/controllers/tabs/tab_renames.zig` proves one-time response correlation,
-  exact identity validation, wire translation and protocol error mapping.
-- `src/client/application/tabs/rename_tab.zig` proves local validation,
-  gating, exact target resolution, delivery failure and canonical confirmation.
-- `src/client/model/name_prompt.zig`,
-  `src/client/application/input/name_prompt.zig` and
-  `src/client/controllers/input/name_prompts.zig` prove editor ownership, submit ordering
-  and prompt retention.
-- `src/client/connection/outbox_support.zig` proves bounded storage and ownership of
-  queued label bytes.
-- `src/client/workspace/tabs.zig` proves canonical label validation and
-  no-op detection.
-- `src/client/model/Model.zig` proves collection and active-identity version
-  semantics.
-- `src/frontend/client/tests/` proves prompt lifetime, wire
-  correlation, runtime authority, failure notification and presenter pacing.
-- `src/backend/runtime/application/commands/rename_tab.zig` and
-  `src/backend/runtime/entrypoints/requests/rename_tab.zig` prove commit ordering, owned events
-  and expected runtime errors.
-- `runtime owns the complete tab lifecycle` in
-  `src/transport_integration_test.zig` proves persistence across the process
-  boundary and a later workspace snapshot.
+Source: `src/client/operations/tabs/tab_renames.zig` and
+`src/client/operations/input/name_prompts.zig`.
+Tests: `src/frontend/client/tests/renaming_and_telemetry.zig`,
+`tab_lifecycle.zig`, `src/client/model/tests/tabs.zig`, and
+`src/client/connection/outbox_support.zig` cover prompt lifetime, owned bytes,
+correlation, canonical no-ops and presentation boundaries.

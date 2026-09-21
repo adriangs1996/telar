@@ -2,75 +2,31 @@
 
 The client diagnostic is one disposable, bounded banner shared by Lua actions,
 configuration reloads and plugin execution. Producers decide the message and
-whether a separate notification is useful. One application handler owns every
-state transition.
-
-## Boundary
+whether it also needs a notification.
 
 ```text
-Lua invocation/validation -> LuaActionHandler ----------------------+
-configuration rejection -> DeliverConfigReloadHandler -------------+--> ClientDiagnosticHandler
-plugin start/completion -> DeliverPluginActionStart/Completion -----+             |
-                                                                         validate primary value
-                                                                                  |
-                                                                        optional safe fallback
-                                                                                  |
-                                                        ClientModel.replaceDiagnostic / clearDiagnostic
-                                                                                  |
-                                                                      Version.diagnostic
-                                                                                  |
-                                                                 client_events -> Presenter
-
-config/plugin delivery -> bounded notification input -> adapter publishNow
+lua_actions.execute / config_reloads / plugin_actions
+  → client_diagnostic.replace(model, replacement)
+      validate primary text; optionally validate the explicit fallback
+      model.replaceDiagnostic
+  → producer may publish a notification from the committed banner
+  → event-loop presentation observes the diagnostic revision
 ```
 
-Every producer composes `ClientDiagnosticHandler` directly inside the
-application layer. Lua owns invocation and validation failures,
-`DeliverConfigReloadHandler` owns configuration rejection, and the two plugin
-delivery handlers own resolution, worker and authorization failures. No client
-adapter formats or mutates diagnostic model state.
+The helper is a function over the model. Producers clear successful prior
+failures with `model.clearDiagnostic`. There is no diagnostic object to assemble
+or erased callback to invoke.
 
-Notification publication is a separate use case. Configuration and plugin
-delivery handlers first commit the banner, construct a bounded notification
-input from that committed value and pass it to a physical publication port.
-The adapter only supplies `notifications.publishNow`. Lua failures
-intentionally publish only the banner. A notification failure cannot roll back
-diagnostic state.
+`Diagnostic` retains at most 512 bytes and validates length and UTF-8 before
+mutation. If both the primary value and explicit fallback are invalid, the old
+banner survives. Equal text is a no-op. A real replacement or removal advances
+the diagnostic revision once. `formatted` uses a bounded buffer and a static
+fallback when formatting does not fit.
 
-## Validation and revisions
+Configuration and plugin operations commit the banner before publishing a
+notification. Notification failure preserves it. Lua failures publish the banner
+without a second notification. The model owns no drawing or timer scheduling.
 
-`config.Diagnostic` stores at most 512 bytes. `ClientDiagnosticHandler.replace`
-passes the primary value to `ClientModel`, which validates its declared length
-and UTF-8 before mutation. A producer may supply one explicit bounded fallback
-for malformed external text. The handler uses it only after primary validation
-fails; a malformed fallback returns `InvalidClientDiagnostic` and preserves the
-previous value.
-
-Equal text is a no-op. Empty text and `clear` remove a visible diagnostic once.
-Each actual replacement or removal advances `Version.diagnostic` exactly once;
-validation failure and repeated state advance nothing. `formatted` writes into
-the fixed diagnostic buffer and falls back to the existing static
-`configuration error` text if formatting exceeds it.
-
-Successful Lua evaluation, accepted configuration adoption and authorized
-plugin effect application clear an older banner through the same handler. The
-diagnostic handler never requests a frame. `client_events` publishes the model
-version and `Presenter` folds a real diagnostic revision into its paced frame.
-
-## Bounds and proof
-
-The transition allocates nothing, copies only fixed-capacity values and runs
-independently of notification timers or runtime transport.
-
-- `src/client/model/Model.zig` proves UTF-8 and length validation, equality,
-  clear behavior and isolated diagnostic revisions.
-- `src/client/application/configuration/client_diagnostic.zig` proves valid commit,
-  explicit fallback, preservation after two malformed values and idempotent
-  clear.
-- `src/client/application/input/lua_action.zig` proves failure fallback and
-  clear-before-effects ordering through the shared handler.
-- `src/client/application/configuration/config_reload_delivery.zig` and
-  `plugin_action_delivery.zig` prove diagnostic-before-notification ordering
-  and preservation after publication failure.
-- `src/frontend/client/tests/` proves configuration, Lua and plugin
-  outcomes plus presenter observation on a real client.
+Validation lives in the model's configuration tests,
+`src/client/application/configuration/client_diagnostic.zig`, and the real
+configuration/Lua/plugin flows in `src/frontend/client/tests/configuration.zig`.

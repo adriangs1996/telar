@@ -4,8 +4,6 @@ const std = @import("std");
 const core = @import("telar-core");
 const PaneFixture = @import("PaneFixture.zig");
 const Attachment = @import("../attachment/Attachment.zig");
-const PaneInputHandler = @import("../application/commands/PaneInputHandler.zig");
-const PaneInputTestScheduleCapture = @import("PaneInputTestScheduleCapture.zig");
 
 const frame_buffer_size = 16 * 1024;
 const TestInterval = enum(u64) { elapsed = 1, deferred = std.time.ns_per_hour };
@@ -143,60 +141,6 @@ test "pane EOF publishes deferred cells before its exit message" {
 
     try std.testing.expect((try attachment.prepareExit(&buffer)) != null);
     try std.testing.expect(fixture.attachments.cellDeadline() == null);
-}
-
-test "input grants only its pane a bounded number of immediate publication frames" {
-    var fixture: PaneFixture = .{};
-    try fixture.init();
-    defer fixture.deinit();
-
-    const background_pane = try fixture.createPane(try core.pane(@intFromEnum(TestPane.background)));
-    defer {
-        background_pane.session.shutdown();
-        background_pane.destroy();
-    }
-
-    var background = try Attachment.init(std.testing.allocator, background_pane);
-    defer background.deinit();
-    const target = fixture.attachments.find(fixture.pane.id).?;
-    var target_buffer: [frame_buffer_size]u8 = undefined;
-    var background_buffer: [frame_buffer_size]u8 = undefined;
-    try establishBaseline(&fixture, target, &target_buffer);
-    try establishBaseline(&fixture, &background, &background_buffer);
-    deferPublication(target);
-    deferPublication(&background);
-    target.cell_pacer.input_grace = @intFromEnum(TestInterval.deferred);
-    target.cell_pacer.input_frames = @intFromEnum(GraceBudget.limited);
-
-    var capture: PaneInputTestScheduleCapture = .{ .expected_input = "x" };
-    var handler: PaneInputHandler = .{
-        .io = std.testing.io,
-        .attachments = &fixture.attachments,
-        .metrics = &fixture.metrics,
-        .agent_input = null,
-        .scheduler = capture.scheduler(),
-    };
-    _ = try handler.execute(.{ .pane_id = fixture.pane.id, .bytes = "x" });
-    try std.testing.expect(fixture.pane.cell_input_ns != null);
-    try std.testing.expect(background_pane.cell_input_ns == null);
-
-    _ = try background_pane.ingest(std.testing.io, "flood");
-    try std.testing.expect((try nextFrame(&fixture, &background, &background_buffer)) == null);
-    const background_deadline = background.cell_deadline_ns.?;
-
-    for (0..@intFromEnum(GraceBudget.limited)) |_| {
-        _ = try fixture.pane.ingest(std.testing.io, "x");
-        const frame = (try nextFrame(&fixture, target, &target_buffer)).?;
-        try std.testing.expect(target.cell_deadline_ns == null);
-        try acknowledge(target, frame);
-    }
-
-    try std.testing.expectEqual(@as(u32, 0), target.cell_pacer.input_frames_left);
-    _ = try fixture.pane.ingest(std.testing.io, "z");
-    try std.testing.expect((try nextFrame(&fixture, target, &target_buffer)) == null);
-    try std.testing.expect(target.cell_deadline_ns != null);
-    try std.testing.expect((try nextFrame(&fixture, &background, &background_buffer)) == null);
-    try std.testing.expectEqual(background_deadline, background.cell_deadline_ns.?);
 }
 
 test "clients pace independently and an unacknowledged frame never advances its baseline" {

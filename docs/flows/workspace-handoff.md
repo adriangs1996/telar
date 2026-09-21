@@ -1,216 +1,83 @@
 # Workspace handoff
 
-A workspace handoff replaces one disposable client projection with another.
-The runtime remains authoritative for pane and workspace existence; the client
-owns navigation history, the explicit empty transition between projections,
-and when each committed model version reaches the terminal.
-
-## Request and departure
+A handoff replaces one disposable client projection with another. The runtime
+owns membership; the client owns bookmarks, retained layout and a visible empty
+state while the existing target opens.
 
 ```text
-workspace position or identity -> SelectWorkspaceHandler --+
-                                                           |
-sidebar agent, resync or workspace closure ----------------+
-                                                           |
-                                      PlanWorkspaceHandoffHandler
-                                                           |
-                                     AdmitWorkspaceHandoffHandler
-                                                           |
-                                      RequestWorkspaceHandoffHandler
-                                                           |
-                                      PrepareWorkspaceHandoffHandler
-                                                           |
-                               RetireWorkspaceAttachmentsHandler
-                                                           |
-                             detach attachments -> schema.open_pane
-                                                           |
-ClientModel.departWorkspace
-                                                           |
-ReleaseWorkspaceResourcesHandler
-                                                           |
-presentation_lifecycle.observe -> present empty client model
+operations/input/actions, agent navigation, resync or canonical tab closure
+  -> operations/workspaces/workspace_handoffs
+     -> selectWorkspace / requestWorkspace / requestPane / followWorkspace
+     -> request: target, admission and bounded preflight
+        -> tab_attachments.detach for each captured tab
+        -> correlated open_pane
+        -> Model.departWorkspace
+        -> workspace_transitions.release
+  -> adapter observes the empty projection
+
+pane_opened(initial_open continuation)
+  -> operations/panes/pane_openings.apply
+  -> workspace_handoffs.arrival / confirm
+     -> Model.arriveWorkspace
+     -> workspace_transitions.activate
+        -> active resources, host input, workspace snapshot, tab snapshot
+  -> adapter observes the arrived projection
 ```
 
-`SelectWorkspaceHandler` resolves positions and stable identities through the
-committed workspace-list replica. It suppresses unknown, already active and
-request-blocked selections without changing client state. This policy is
-shared by configured actions, workspace-list clicks and notification targets.
+Selection resolves a position/identity through the model's committed workspace
+list. Unknown, already active or blocked choices are suppressed. A workspace
+request prefers its remembered pane and retains the workspace as fallback.
+An explicit pane request preserves that identity and supplied fallback without
+consulting bookmarks. Agent navigation owns the local-versus-remote decision.
 
-`PlanWorkspaceHandoffHandler` owns outbound targeting. A workspace request
-prefers its last focused pane when one is bookmarked and always retains the
-workspace identity as recovery fallback. Without a bookmark it targets the
-workspace directly. An explicit pane request is preserved exactly and does not
-query navigation history; a sidebar agent supplies a fallback only when the
-pane belongs to an ordinary workspace. [Agent navigation](agent-navigation.md)
-owns that local-or-remote decision. The `workspace_handoffs` adapter exposes
-only a remembered-pane lookup and executes the resulting plan.
+Ordinary requests require an idle lifecycle. `followWorkspace` bypasses obsolete
+pending requests only after canonical state has already left an empty projection;
+a live projection cannot use this authority. Resync for a closed workspace
+forgets that bookmark before attempting ordinary predecessor handoff, so failure
+cannot restore a runtime identity that disappeared.
 
-`AdmitWorkspaceHandoffHandler` owns the two valid request authorities. A
-requested departure must observe an idle request lifecycle before any
-preflight or effect. A canonical follow ignores stale continuations only after
-the model has already committed an empty projection; attempting it from a live
-workspace is rejected before capacity checks or attachment retirement. The
-adapter supplies the real pending-request query and only translates its entry
-point to one of these authorities.
+Preflight checks two available request IDs (open and synchronous repair) before
+checking outbox capacity for paste-end, valid focus-out, every attached or
+pending-open detach, and the open. It shares `tab_attachments.requiredCapacity`
+with tab close. Failure occurs before any provisional effect and requests no
+repair because nothing changed.
 
-`HandleResyncRequiredHandler` also requests a handoff when the runtime reports
-that the projected workspace disappeared. It forgets the closed workspace's
-bookmark first and uses the runtime's canonical predecessor as the target. A
-failed handoff cannot restore identity that no longer exists.
+After admission, stable tab/pane order determines detach order. Paste finishes
+and focus-out precedes detach; all detaches precede the new open on the same
+socket. A local detach/open failure keeps the original semantic projection,
+restores active graphics in order and requests a coalesced tab snapshot. A
+failure of that repair never replaces the original request error.
 
-`PrepareWorkspaceHandoffHandler` is a preflight-only boundary. It first checks
-that two consecutive request identities remain: one for `open_pane` and one
-for synchronous snapshot recovery. It then checks that the fixed outbox has
-room for a required paste-closing marker, focus-out, every detach and the final
-open. Request exhaustion stops before delivery queries; outbox exhaustion stops
-before any client authority or attachment changes. Neither failure requests a
-repair because there is nothing to repair.
+Only a locally accepted open permits `Model.departWorkspace`. Departure captures
+the bookmark and bounded retired pane identities and retains reconciled layouts
+for active and inactive tabs. It advances workspace/tab/active-tab/pane revisions
+once, then releases local resources silently. The presenter can render that
+empty model once; waiting for the reply does not create a redraw loop.
 
-The capacity calculation reserves focus-out only when the reported pane still
-exists, remains attached and has focus events enabled. Every attached pane and
-every unattached pane with an attachment request in flight reserves a detach
-slot. The per-tab count is owned by the same retirement rule used by tab
-closure, so both flows reserve identical paste, focus and attachment
-deliveries.
+Arrival consumes exact correlation. Saved bookmark geometry is accepted only
+for the confirmed tab, while the model prefers that tab's exact retained layout.
+`Model.arriveWorkspace` requires an empty projection and constructs root/pane
+transactionally before committing. The confirmed pane remains the intended
+focus. Canonical tab reconciliation restores the tree only if its pane set
+matches; otherwise deterministic runtime order wins. Each successful tab
+reconciliation consumes only that tab's retained-layout entry.
 
-After preflight, `RetireWorkspaceAttachmentsHandler` delegates each tab to
-`RetireTabAttachmentsHandler`, which closes the paste and delivers detaches in
-tab and pane order before `open_pane`; socket order prevents the new attachment
-from preceding retirement of the old ones. `workspace_handoffs` supplies only
-request and outbox capacity plus the physical paste, focus, attachment and
-graphics ports. A local retirement or open failure does not commit departure
-and requests a canonical tab snapshot to repair provisional attachment
-effects.
+Activation validates root identity, attachment and revision deltas, then
+synchronizes resources, resumes input, and requests workspace then tab snapshots.
+Post-commit delivery errors preserve the arrived model.
 
-`RestoreWorkspaceHandoffHandler` owns that local recovery. It captures the
-still-active tab, restores graphics for its panes in stable order and then
-delegates canonical repair to `RequestTabSnapshotRecoveryHandler`, which
-coalesces an existing tab snapshot or requests the exact location once. A
-restoration failure preserves completed physical effects but never replaces
-the original detach or open error returned by the handoff request.
+A remembered-pane `pane_not_found` failure reaches `workspace_handoffs.recover`.
+It forgets the bookmark and retries once against the workspace. The retry has
+no fallback, so another failure is fatal rather than an unbounded loop. Other
+codes or missing fallback also propagate `RuntimeRequestFailed`.
 
-Only after `open_pane` is accepted locally does `ClientModel.departWorkspace`
-commit the empty model. It captures the source workspace, focused tab, focused
-pane, active client-owned layout and every pane identity in fixed-capacity
-values. Before discarding the projection, it also retains all reconciled tab
-layouts in `ClientModel.saved_layouts`, including inactive tabs. It then advances
-the affected workspace, tab, active-tab and pane revisions once.
-`ReleaseWorkspaceResourcesHandler` copies the bookmark into navigation history
-and gives every retired pane identity to `ReleasePaneResourcesHandler`.
-`RetireReportedPaneFocusHandler` then removes any remaining stale reporting
-context without emitting child input.
+Departure and preflight use bounded stores and add no queue. Arrival makes the
+normal pane buffer/bootstrap allocations before committing. Runtime panes
+survive client failure and reconnect.
 
-The use case neither invalidates the view nor requests a draw. `client_events`
-publishes `ClientModel.Version` to `Presenter`, which presents the empty model
-as a normal blank cell grid and records that version. Re-observing it schedules
-nothing, so an outstanding runtime reply cannot produce a 60 Hz redraw loop.
-
-## Confirmation and arrival
-
-```text
-open_pane.Controller -> OpenPaneHandler
-        |
-schema.pane_opened -> client socket
-        |
-pane_openings.apply
-        |
-DeliverPaneOpenHandler
-        |
-PlanWorkspaceArrivalHandler
-        |
-ConfirmWorkspaceHandoffHandler
-        |
-ClientModel.arriveWorkspace
-        |
-WorkspaceActivation
-        |
-ActivateWorkspaceHandler
-        |
-focus sync -> input read -> workspace snapshot -> tab snapshot
-        |
-presentation_lifecycle.observe -> present arrived workspace
-```
-
-The `initial_open` continuation correlates the runtime response.
-`pane_openings.apply` consumes it once, removes its request identity and
-translates it to the narrow application continuation. `DeliverPaneOpenHandler`
-selects the handoff-arrival port. Before the commit,
-`PlanWorkspaceArrivalHandler` constructs the shared arrival and copies a saved
-layout only when its exact tab identity matches the confirmed location. The
-adapter only translates the bookmark returned by navigation history.
-
-`ClientModel.arriveWorkspace` accepts only an empty model. The tab store builds
-the root tab and confirmed pane transactionally before publishing them. The
-model prefers the exact tab's retained layout over the workspace bookmark's
-fallback tree, stages it with the confirmed pane as focus and advances all four
-semantic dimensions once. It returns a `WorkspaceActivation` carrying every pre/post semantic
-revision and the exact copy revision transition. Construction failure therefore
-preserves the prior empty model and every revision.
-
-`ActivateWorkspaceHandler` runs after the commit. It validates the active pane
-and root, the current revisions, every one-step semantic delta and the exact
-copy release. It then synchronizes attachment geometry and
-`ClientModel.reported_pane_focus`, schedules host input, and requests canonical
-workspace and tab snapshots in order. The tab snapshot restores the saved
-split tree only if the runtime still reports exactly the retained pane set;
-otherwise normal deterministic display order wins. Snapshot preparation keeps
-an already staged explicit pane focus instead of replacing it with saved focus.
-Successful reconciliation consumes only that tab's cache entry. Delivery failure
-does not roll the confirmed model back.
-
-The dispatcher does not draw the arrival. The presenter observes its new
-version independently. Its compositor detects the new immutable source and
-dimensions and folds one complete composition into the paced frame loop.
-
-## Stale bookmark recovery
-
-A handoff that targets a remembered pane retains its containing workspace in
-the continuation. If the runtime reports `pane_not_found`,
-`HandleRequestFailureHandler` delegates to `RecoverWorkspaceHandoffHandler`,
-which forgets that bookmark and retries once with a workspace target. The
-client remains in its already presented empty version; the retry is not
-another model transition.
-
-A missing fallback or any other failure code is unrecoverable and propagates
-as `RuntimeRequestFailed`. The workspace retry carries no fallback, so another
-failure cannot form a retry loop.
-
-## Bounds and proof
-
-The handoff adds no queue, and departure allocates nothing. It scans the
-bounded tab and pane stores, returns pane identities in
-`RemovedWorkspacePanes`, and reuses the existing fixed request tracker and
-outbox. Arrival reuses the empty fixed tab store; only the confirmed pane's
-normal cell buffer and damage-row bootstrap allocations occur before commit.
-
-- `src/client/application/workspaces/workspace_handoff.zig` checks selection,
-  gating, request ordering, local recovery, commit-before-effects and exact
-  retry conditions.
-- `src/client/application/workspaces/workspace_handoff_targeting.zig` checks
-  bookmarked and direct workspace targets plus exact pane fallback handling.
-- `src/client/application/workspaces/workspace_handoff_admission.zig` checks
-  pending-request admission and empty-projection canonical following.
-- `src/client/application/workspaces/workspace_arrival_planning.zig` checks
-  shared arrival construction and exact saved-layout identity.
-- `src/client/application/panes/pane_open_delivery.zig` checks
-  successful-open routing, retired work and delivery failure propagation.
-- `src/client/application/workspaces/workspace_handoff_preparation.zig` checks
-  request-identity and delivery-capacity accounting, pending attachments and
-  rejection before effects.
-- `src/client/application/workspaces/workspace_attachment_retirement.zig` checks
-  stable multi-tab retirement, empty projections and partial detach failures.
-- `src/client/application/workspaces/workspace_handoff_restoration.zig` checks
-  active-pane graphics order, snapshot coalescence and partial recovery
-  failures.
-- `src/client/application/workspaces/workspace_transition_delivery.zig` checks
-  resource retirement, exact activation validation, ordered snapshot requests
-  and partial failures.
-- `src/client/model/Model.zig` checks idempotent departure, bounded capture,
-  atomic arrival, rejected arrival and saved-layout staging.
-- `src/frontend/client/tests/` checks protocol order, navigation and
-  resource cleanup, request and outbox preflight, the presented empty version,
-  confirmed arrival and stale-pane fallback.
-- `src/frontend/client/presentation/Presenter.zig` owns both empty and populated model
-  presentation; neither handoff use case contains a draw decision.
-- `src/backend/runtime/entrypoints/requests/open_pane.zig` checks authoritative target
-  resolution, attachment and exact failure mapping.
+Source: `src/client/operations/workspaces/workspace_handoffs.zig`,
+`workspace_transitions.zig`, `src/client/operations/tabs/tab_attachments.zig`.
+Tests: `src/frontend/client/tests/synchronization.zig`,
+`workspace_lifecycle.zig`, `notifications_and_agents.zig`, and
+`src/client/model/tests/workspaces.zig` cover preflight, partial failure,
+bookmarks/layout round trips, empty-state presentation, arrival and bounded retry.

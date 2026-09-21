@@ -15,7 +15,7 @@ Agent.visibleStatus  (seen = false)  -> AgentStatus.done
 Tracker revision -> Delivery.prepare -> schema.agent_sound (working -> done)
                                      -> schema.agent_snapshot
         |
-ClientModel.reconcileAgentSnapshot -> DeliverAgentSnapshotHandler
+agent_snapshots.apply -> ClientModel.reconcileAgentSnapshot
         |
 active_pane_resources.synchronizeAttachments
         |
@@ -23,7 +23,7 @@ ClientModel.takeAgentAcknowledgement  (focused pane, status done, once)
         |
 outbox.acknowledge_agent -> schema.AcknowledgeAgent
         |
-request_router -> routeAcknowledgeAgent -> AcknowledgeAgentHandler
+Runtime.update -> requests.dispatch -> agents.routeAcknowledgeAgent
         |
 Tracker.acknowledge -> Agent.acknowledge (seen = true) -> reproject -> ready
         |
@@ -40,7 +40,7 @@ authority are untouched: `done` is a presentation of `ready`, never a new
 evidence source.
 
 `Tracker.acknowledge` resolves the exact pane generation. An unknown or stale
-generation returns `unknown_agent` and the controller counts it as a stale
+generation returns `unknown_agent` and the concrete runtime operation counts it as a stale
 client message. An agent that is already seen returns `unchanged` and the
 revision does not move. Only a real transition reprojects and bumps the
 revision that delivery uses to send the next snapshot.
@@ -60,25 +60,25 @@ completion. `acknowledged_agent` is operational state with no presentation
 revision; it resets when the same agent leaves `done`, so a later completion is
 acknowledged again.
 
-`DeliverActivePaneResourcesHandler.synchronizeAttachments` asks the model
+`active_pane_resources.synchronizeAttachments` asks the model
 first and emits the `acknowledge_agent` effect before touching the attachment
 shelf. Every path that can change which pane the user is looking at already
-enters this handler: pane focus, tab and workspace transitions, frames and
-agent snapshots. The adapter enqueues `schema.AcknowledgeAgent` through the
+enters this operation: pane focus, tab and workspace transitions, frames and
+agent snapshots. It enqueues `schema.AcknowledgeAgent` through the
 fixed outbox; the request has no response.
 
 Alerts follow the semantic: `done` publishes the success notification that
 `ready` used to publish, and the flip back to `ready` after acknowledgement is
 silent.
 
-## Proof
+## Validation
 
 - `src/backend/history/observer_support.zig` replays quoted status text, every byte
   boundary of a synchronized Codex redraw, unchanged ready repaints, and
   input-only batches.
 - `src/backend/history/codex_screen.zig` covers drafts, cursor ownership,
   remapped interrupt keys, and disabled animations without consulting colors.
-- `src/backend/runtime/entrypoints/events/pane/observation.zig` combines PTY
+- `src/backend/runtime/tests/observation_events_test.zig` combines PTY
   frames with continuing Stop hooks and proves exactly one final sound. It
   also rejects a delayed ready result older than the current report.
 - `src/backend/agent/tracker_support.zig` covers active work versus settlement,
@@ -90,13 +90,14 @@ silent.
   settlement and shutdown.
 
 - `src/backend/agent/Agent.zig` proves the unseen window and its reset.
-- `src/backend/runtime/tests/acknowledge_agent_test.zig` proves the
-  controller-to-tracker path, idempotence, stale generations and re-arming
+- `src/backend/runtime/tests/requests_test.zig` proves the
+  request-to-tracker path, idempotence, stale generations and re-arming
   after a new turn.
-- `src/backend/runtime/entrypoints/requests/acknowledge_agent.zig` proves
-  stale accounting.
+- `src/backend/runtime/application/operations/agents.zig` contains the direct
+  acknowledgement operation and stale accounting.
 - `src/core/schema_contract_test.zig` pins the `acknowledge_agent` bytes.
 - `src/client/model/tests/observations.zig` proves once-per-completion
   acknowledgement and its reset.
-- `src/client/application/panes/active_pane_resource_delivery.zig`
-  proves the effect precedes attachment synchronization.
+- `src/client/operations/panes/active_pane_resources.zig` enqueues acknowledgement
+  before attachment synchronization; client notification/agent integration
+  tests exercise the operation against the real model and outbox.

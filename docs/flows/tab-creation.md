@@ -1,148 +1,60 @@
 # Tab creation
 
-The runtime creates tabs and root panes. The client plans the request from its
-current projection, then commits only the canonical `tab_created` response.
-
-## Request
+The runtime creates tabs and root panes. The client requests a tab from its
+current projection and adopts only a canonical reply.
 
 ```text
-new-tab action
-        |
-RequestTabCreationHandler
-        |
-ClientModel.planTabCreation
-        |
-owned outbox create_tab
-        |
-runtime socket
+operations/input/actions.apply
+  -> operations/tabs/tab_creations.request
+     -> pending-operation gate, label validation, Model.planTabCreation
+     -> request_lifecycle.deliverCreateTab -> owned create_tab outbox entry
+  -> runtime creates tab/root and returns tab_created
+  -> entrypoints/server_messages.handleServerMessage
+  -> tab_creations.apply
+     -> consume exact create_tab correlation
+     -> Model.createTab
+     -> tab_attachments.detach(previous)
+     -> active_pane_resources.synchronize
+     -> request agent conversation when applicable
+  -> adapter observes presentation revisions
 ```
 
-`command_tab` enters the same flow with a bounded argv and optional label
-copied inline by the action; the intent's arguments replace the client's
-default launch command and the tab closes itself when that command exits.
+Planning requires an attached focused source and supplies its workspace and
+CWD identity. `command_tab` carries a bounded argv and optional label, replacing
+the default launch command. Workbench size and launch configuration are copied
+into the request. The outbox owns name, CWD and argument bytes before the input
+event returns. No provisional tab or presentation version is created.
 
-The request handler rejects another pending tab operation and requires an
-attached focused pane in the active tab. The model returns only the current
-workspace identity and cwd source. Planning does not mutate the tab collection
-or advance a model version.
+An empty canonical label means automatic naming from the client's focused
+foreground process. Explicit labels always win. Creation, snapshots and
+checkpoints preserve that distinction; old checkpoints with nonempty labels
+retain them because they did not record whether a name was automatic.
 
-The adapter adds the workbench size and launch configuration. An empty label
-keeps the canonical tab label empty, marking automatic naming. Each client
-derives its displayed name and icon from the foreground application in its
-focused pane. An explicit label always wins, including a user-chosen `main` or
-`tab 45`. The outbox copies a supplied label and launch cwd into bounded storage
-before the input event returns. A local delivery failure leaves the model
-unchanged.
+Runtime launch/authority failures discard the provisional tab. After successful
+launch the runtime commits/publishes it before attachment; a later attachment
+failure cannot undo canonical state. The successful reply contains runtime
+location, position, label and root identity.
 
-The first tab of a new workspace uses the same empty marker. Creation events,
-workspace snapshots and checkpoints preserve it. Checkpoint version 3 permits
-empty labels; restored non-empty labels from earlier versions retain their
-names because those versions did not record whether a name was user-chosen.
+`tab_creations.apply` consumes correlation once and requires the expected
+workspace. It constructs the root with the nonzero size retained from the
+request, even if host geometry changed meanwhile. Model construction is atomic:
+invalid or duplicate state preserves the previous tab and revisions. Valid
+construction publishes the new active tab before resource effects.
 
-The continuation retains the requested workspace and terminal size. Those are
-the facts needed to validate and apply the eventual response; it retains no
-borrowed UI or model pointers.
+The same call then retires the previous tab's captured paste, reported focus
+and attachments in order, before synchronizing the new root. A resource error
+keeps the confirmed tab and completed effects. The runtime already owns that
+tab, so client rollback would invent a false projection.
 
-## Runtime transaction
+A failed request releases correlation and preserves the old projection.
+Runtime rejection becomes an owned failure notice. Unknown, incompatible,
+wrong-workspace or replayed replies cannot mutate tabs. Presentation observes
+model revisions; this operation does not draw.
 
-```text
-CreateTabController
-        |
-find workspace -> validate launch authority -> reserve tab identity
-        |
-create provisional tab -> launch root pane
-        |
-record and publish tab -> attach root pane -> tab_created
-```
-
-`CreateTabHandler` removes the provisional tab if authority or pane launch
-fails. It records and publishes the tab only after the root pane is running.
-An attachment failure occurs after that commit and cannot remove authoritative
-runtime state.
-
-The controller maps expected command failures to `request_failed`. A successful
-response carries the runtime-generated location, position, label and root pane
-identity.
-
-## Confirmation
-
-```text
-tab_created(create_tab continuation)
-        |
-tab_creations.apply
-        |
-ConfirmTabCreationHandler
-        |
-ClientModel.createTab
-        |
-TabCreation
-        |
-DeliverTabCreationHandler
-        |
-detach previous tab -> synchronize root-pane focus
-        |
-presentation_lifecycle.observe -> paced presentation
-```
-
-`tab_creations.apply` consumes the typed continuation once and requires the
-response workspace to match it. The controller translates `schema.TabCreated`
-into the confirmation command and uses the terminal size sent with the request,
-not the current workbench. A host resize while the request is in flight cannot
-give the client root pane different initial dimensions from the runtime.
-
-The command has no request ID. Its label is borrowed only during the
-synchronous commit; the workspace model copies it into bounded tab storage
-before the handler returns.
-
-`ClientModel.createTab` constructs and inserts the confirmed tab before
-publishing it as active. Rejection preserves the existing tab and every model
-revision. A successful `TabCreation` captures both tab identities, the created
-root and position, both layout revisions, the pre-commit tab, active-tab and
-copy revisions, whether invalid copy mode was released, and the resulting
-workspace, tab, active-tab, pane and copy revisions.
-
-`DeliverTabCreationHandler` validates that exact commit before any disposable
-effect. It requires the created tab to remain active at its canonical position,
-the predecessor and created layouts to match, and the created tab to contain
-only its attached focused root pane. It then composes
-`RetireTabAttachmentsHandler` to detach the predecessor, closing its captured
-paste and reported focus before its panes detach and committing their
-operational flags last. Only after retirement completes does it synchronize
-attachment geometry and focus reporting with the new root pane. A delivery
-failure preserves the confirmed tab because the runtime already owns it; work
-completed before the failure is not rolled back.
-
-`tab_creations` owns response correlation and wire translation. Its delivery
-callback supplies paste, focus, attachment and active-resource ports, but it no
-longer looks tabs up or decides the post-commit sequence.
-
-The use cases do not invalidate the view or request a draw. `client_events`
-publishes `ClientModel.Version` to `Presenter`, which schedules one paced frame
-for the changed model dimensions.
-
-## Failure behavior and proof
-
-A correlated `request_failed` consumes the continuation, preserves the current
-projection and shows the runtime message as a notification. It no longer ends
-the client. An unknown request ID, incompatible continuation or response for
-another workspace is a protocol error. Every known continuation is consumed
-before rejection. A duplicate tab fails in the model without detaching the
-active tab.
-
-- `src/client/application/tabs/create_tab.zig` proves request gating,
-  label validation, exact planning, no provisional mutation,
-  commit-before-delivery and post-commit failure behavior.
-- `src/client/application/tabs/tab_creation_delivery.zig` proves exact
-  revision, identity, root and layout validation, attachment-before-resource
-  order, ABA rejection and partial failure semantics.
-- `src/client/controllers/tabs/tab_creations.zig` owns response correlation and
-  wire-to-command translation plus physical port wiring.
-- `src/client/model/Model.zig` proves attached-source planning,
-  transactional insertion, identity checks and exact version changes.
-- `src/client/connection/outbox_support.zig` proves queued creation owns its label,
-  cwd and argument bytes until encoding.
-- `src/frontend/client/tests/` proves request correlation, preserved
-  geometry, failure notification, attachment order and presenter observation.
-- `src/backend/runtime/application/commands/create_tab.zig` and
-  `src/backend/runtime/entrypoints/requests/create_tab.zig` prove runtime rollback,
-  commit ordering and expected wire failures.
+Source: `src/client/operations/tabs/tab_creations.zig` and
+`src/client/operations/tabs/tab_attachments.zig`.
+Tests: `src/frontend/client/tests/tab_lifecycle.zig`,
+`src/client/model/tests/tabs.zig`, `src/client/connection/outbox_support.zig`,
+and runtime/transport tab-lifecycle tests. The frontend suite includes invalid
+labels, full-outbox correlation rollback and a confirmed creation whose later
+attachment retirement fails.

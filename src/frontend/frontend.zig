@@ -60,6 +60,9 @@ test {
     _ = @import("client/tests/graphics_and_clipboard.zig");
     _ = @import("client/tests/history_browser.zig");
     _ = @import("client/tests/host_interaction.zig");
+    _ = @import("client/tests/host_resources.zig");
+    _ = @import("client/tests/input_operations.zig");
+    _ = @import("client/tests/pane_splits.zig");
     _ = @import("client/tests/input.zig");
     _ = @import("client/tests/mouse_selection.zig");
     _ = @import("client/tests/notifications_and_agents.zig");

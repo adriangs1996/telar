@@ -16,7 +16,7 @@ accepted agent snapshot
         |
 agent_snapshots adapter
         |
-SidebarAnimationHandler.synchronize
+sidebar_animations.synchronize
         |
 sidebar_animations scheduler, one pending timer
         |
@@ -24,7 +24,7 @@ ClientEvent.sidebar_animation_tick
         |
 sidebar_animations.handleTick
         |
-SidebarAnimationHandler.tick
+sidebar_animations.tick
         |
 ClientModel.advanceSidebarAnimation
         |
@@ -35,13 +35,13 @@ presentation_lifecycle.observe
 Presenter -> View.render(frame)
 ```
 
-`SidebarAnimationHandler.synchronize` checks model policy and asks the
+`sidebar_animations.synchronize` checks model policy and asks the
 scheduler for a future tick without changing the frame. The scheduler's
 `pending` bit coalesces repeated agent snapshots and rearm attempts into one
 select task.
 
 When the timer completes, `sidebar_animations.handleTick` first releases the
-pending token. `SidebarAnimationHandler.tick` then advances the frame if a
+pending token. `sidebar_animations.tick` then advances the frame if a
 working agent still exists and rearms the scheduler. If every agent has left
 `working`, the tick is a semantic no-op and the loop stops.
 
@@ -71,14 +71,14 @@ Runtime processes and PTYs continue running. Reconnection starts a fresh client
 model, and the next current agent snapshot starts a new animation loop when
 needed.
 
-## Proof
+## Validation
 
 - `src/client/model/Model.zig` proves active-only frame advancement and
   isolated versioning.
 - `src/client/application/notifications/sidebar_animation.zig` proves inactive
   no-ops, synchronization without mutation, commit-before-rearm ordering and
   retained commits after effect failure.
-- `src/client/controllers/notifications/sidebar_animations.zig` owns the single pending timer
+- `src/client/operations/notifications/sidebar_animations.zig` owns the single pending timer
   and releases it before handling completion.
 - `src/frontend/client/presentation/Presenter.zig` observes the dedicated revision and
   supplies the model frame to the view.

@@ -2,7 +2,7 @@
 
 Input, IPC, deadlines and worker completions enter a client-owned inbox. The
 TUI, GUI and headless test driver use `client/execution/GenericInbox`. Their
-consumers classify messages and delegate to existing handlers. Only that
+consumers classify messages and delegate to existing operations. Only that
 consumer may mutate the client model or prepare a presentation.
 
 ## Admission and ownership
@@ -21,7 +21,7 @@ inbox teardown.
 `ProducerTicket` contains a slot and generation. Publication accepts it once.
 An old or duplicate ticket cannot publish into a reused slot. Admission and
 publication hold a mutex only around fixed inbox metadata and value copies;
-neither socket I/O nor application handlers execute while that mutex is held. The
+neither socket I/O nor operations execute while that mutex is held. The
 optional wake callback must only signal a nonblocking host endpoint.
 
 Messages own values or carry an explicit borrow from a producer resource:
@@ -65,7 +65,7 @@ workers; their completions carry results rather than heavy work to execute.
 
 ## Host consumers
 
-`frontend/client/run` sleeps on `inbox.wait`, then calls `events.drain`.
+`frontend/client/run` sleeps on `inbox.wait`, then calls `events.update`.
 `events` classifies each message into its diagnostic path and delegates to the
 existing adapter. Startup may advance after each message. A successful batch
 observes layout and presentation once; unchanged versions schedule no frame.
@@ -78,7 +78,7 @@ use its task group. `ConfigurationReload` reserves a slot for its font/watch
 worker, retaining its own join and staged-resource lifetime. Native callbacks
 publish input readiness, focus and presentation completion. The window-thread
 consumer is `GuiClient.update`, which classifies events and calls the shared
-runtime/config handlers directly. `NativeLoop` owns transport and wake resources,
+runtime/config operations directly. `NativeLoop` owns transport and wake resources,
 not dispatch policy. `GuiClient.acceptInput` copies native input into the bounded
 queue; `GuiClient.prepare` seals a frame and `GuiClient.complete` consumes the
 GPU result from the inbox.
@@ -91,7 +91,7 @@ viewport change. Linux requests a surface frame callback only after admitting
 a nonzero token, avoiding a callback wait with no surface commit.
 
 `presentation/Fixture` is the headless driver. It uses the same inbox, decoder,
-domain handlers, outbox and presentation lifecycle. Tests can delay messages
+production operations, outbox and presentation lifecycle. Tests can delay messages
 and presentation independently. It remains a controllable test adapter rather
 than a second CLI with unimplemented host services.
 
@@ -117,7 +117,7 @@ bytes describe the inbox itself; the separate payload owners above remain
 charged to their own budgets. Wakes count signal attempts, not kernel wakeups;
 the native endpoint can coalesce several signals into one host callback.
 
-## Proof
+## Validation
 
 - `execution/inbox_tests.zig`: full reservations, failed admission, stale and
   duplicate tickets, finite drains, time budgets, coalescing, concurrent

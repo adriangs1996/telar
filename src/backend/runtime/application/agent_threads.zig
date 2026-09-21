@@ -7,6 +7,8 @@ const Application = @import("Application.zig");
 const identity = @import("coordinators/agent_identity.zig");
 const ManagedState = @import("../../agent/ManagedState.zig");
 
+const agent_operations = @import("operations/agents.zig");
+const agent_events = @import("event_dispatcher/agent_events.zig");
 /// Waits without polling while the pane retains its lifecycle actor claim.
 /// Example: `try select.concurrent(.agent_thread_changed, waitForChange, .{ io, pane });`.
 pub fn waitForChange(io: std.Io, pane: *Pane) Changed {
@@ -43,8 +45,7 @@ pub fn handle(application: *Application, completion: Changed) !bool {
         _ = application.model.agents.observeManaged(identity.fromPane(pane), ManagedState.fromSnapshot(snapshot, now));
         if (metadata.revision != pane.session.agent.metadata_revision) {
             if (metadata.nameSlice()) |name| {
-                var handler: @import("commands/ReportAgentTitleHandler.zig") = .{ .panes = &application.model.panes, .agents = &application.model.agents };
-                if (handler.execute(.{ .pane = pane.key(), .title = name }) == .recorded) {
+                if (agent_operations.reportAgentTitle(application, .{ .pane = pane.key(), .title = name }) == .recorded) {
                     const title = application.model.agents.durableTitle(pane.key());
                     _ = application.history_service.setSessionTitle(application.io, .{
                         .id = pane.history_session_id,
@@ -59,7 +60,7 @@ pub fn handle(application: *Application, completion: Changed) !bool {
             pane.session.agent.metadata_revision = metadata.revision;
         }
 
-        @import("event_dispatcher/GenericAgentDispatcher.zig").Type(Application).scheduleDescription(application);
+        agent_events.scheduleDescription(application);
         application.pumpAll();
     }
 

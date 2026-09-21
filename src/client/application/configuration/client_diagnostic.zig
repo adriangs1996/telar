@@ -1,9 +1,10 @@
 //! Application policy for the shared bounded client diagnostic banner.
 
+const Replacement = @import("Replacement.zig");
+const types = @import("../../model/types.zig");
 const DiagnosticType = @import("../../config/Diagnostic.zig");
 const ModelType = @import("../../model/Model.zig");
 const std = @import("std");
-const ClientDiagnosticHandler = @import("ClientDiagnosticHandler.zig");
 const VersionType = @import("../../model/Version.zig");
 
 /// Formats one bounded diagnostic value without mutating client state.
@@ -33,25 +34,23 @@ fn oversizedDiagnostic() DiagnosticType {
     return diagnostic;
 }
 
-test "ClientDiagnosticHandler commits valid text once" {
+test "diagnostic commits valid text once" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var handler: ClientDiagnosticHandler = .{ .model = &model };
     const diagnostic = formatted("plugin failed: {s}", .{"denied"});
 
-    try std.testing.expect(try handler.replace(.{ .diagnostic = diagnostic }) == .changed);
-    try std.testing.expect(try handler.replace(.{ .diagnostic = diagnostic }) == .unchanged);
+    try std.testing.expect(try replace(&model, .{ .diagnostic = diagnostic }) == .changed);
+    try std.testing.expect(try replace(&model, .{ .diagnostic = diagnostic }) == .unchanged);
 
     try std.testing.expectEqualStrings("plugin failed: denied", model.diagnostic().?);
     try std.testing.expectEqual(VersionType{ .diagnostic = 1 }, model.version());
 }
 
-test "ClientDiagnosticHandler replaces an oversized value with an explicit fallback" {
+test "diagnostic replaces an oversized value with an explicit fallback" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var handler: ClientDiagnosticHandler = .{ .model = &model };
 
-    try std.testing.expect(try handler.replace(.{
+    try std.testing.expect(try replace(&model, .{
         .diagnostic = oversizedDiagnostic(),
         .invalid_fallback = formatted("configuration failed", .{}),
     }) == .changed);
@@ -60,14 +59,13 @@ test "ClientDiagnosticHandler replaces an oversized value with an explicit fallb
     try std.testing.expectEqual(VersionType{ .diagnostic = 1 }, model.version());
 }
 
-test "ClientDiagnosticHandler preserves state when primary and fallback are malformed" {
+test "diagnostic preserves state when primary and fallback are malformed" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var handler: ClientDiagnosticHandler = .{ .model = &model };
-    _ = try handler.replace(.{ .diagnostic = formatted("preserved", .{}) });
+    _ = try replace(&model, .{ .diagnostic = formatted("preserved", .{}) });
     const version = model.version();
 
-    try std.testing.expectError(error.InvalidClientDiagnostic, handler.replace(.{
+    try std.testing.expectError(error.InvalidClientDiagnostic, replace(&model, .{
         .diagnostic = invalidDiagnostic(),
         .invalid_fallback = invalidDiagnostic(),
     }));
@@ -76,15 +74,24 @@ test "ClientDiagnosticHandler preserves state when primary and fallback are malf
     try std.testing.expectEqualDeep(version, model.version());
 }
 
-test "ClientDiagnosticHandler clears visible text once" {
+test "diagnostic clears visible text once" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var handler: ClientDiagnosticHandler = .{ .model = &model };
-    _ = try handler.replace(.{ .diagnostic = formatted("resolved", .{}) });
+    _ = try replace(&model, .{ .diagnostic = formatted("resolved", .{}) });
 
-    try std.testing.expect(handler.clear() == .changed);
-    try std.testing.expect(handler.clear() == .unchanged);
+    try std.testing.expect(model.clearDiagnostic() == .changed);
+    try std.testing.expect(model.clearDiagnostic() == .unchanged);
 
     try std.testing.expect(model.diagnostic() == null);
     try std.testing.expectEqual(VersionType{ .diagnostic = 2 }, model.version());
+}
+
+/// Validates replacement text before committing. Example: `_ = try replace(model, .{ .diagnostic = value });`.
+pub fn replace(model: *ModelType, replacement: Replacement) !types.Change {
+    return model.replaceDiagnostic(replacement.diagnostic) catch |err| switch (err) {
+        error.InvalidClientDiagnostic => if (replacement.invalid_fallback) |fallback|
+            model.replaceDiagnostic(fallback)
+        else
+            error.InvalidClientDiagnostic,
+    };
 }

@@ -7,31 +7,14 @@ validation and sidebar presentation. The view owns no second semantic copy.
 ## End-to-end path
 
 ```text
-backend agent.Tracker revision
-             |
-runtime Delivery.prepare
-             |
-schema.agent_snapshot
-             |
-server_messages dispatcher
-             |
-agent_snapshots adapter
-             |
-ApplyAgentSnapshotHandler
-             |
-ClientModel.reconcileAgentSnapshot
-             |
-agents.Snapshot + Version.agents
-             |
-DeliverAgentSnapshotHandler
-             |
-attachment sync + actionable alerts
-             |
-SidebarAnimationHandler.synchronize
-             |
-presentation_lifecycle.observe
-             |
-Presenter -> View.render(agents)
+runtime tracker → runtime delivery → agent_snapshot
+  → server_messages.handleServerMessage
+  → agent_snapshots.apply
+      model.reconcileAgentSnapshot
+      active_pane_resources.synchronizeAttachments
+      bounded notifications
+      sidebar_animations.synchronize
+  → event-loop presentation observation
 ```
 
 Runtime delivery enriches each current agent with canonical workspace, tab,
@@ -39,10 +22,8 @@ pane position and bounded display labels immediately before encoding. Its
 per-client revision cursor sends the latest snapshot instead of replaying
 intermediate revisions.
 
-`agent_snapshots.apply` copies borrowed wire values into fixed stack inputs and
-supplies only concrete client ports. `ApplyAgentSnapshotHandler` owns the model
-commit and delegates its exact result to `DeliverAgentSnapshotHandler`. The
-adapter contains no transition, alert or ordering policy.
+`agent_snapshots.apply` copies borrowed wire values into bounded inputs, commits
+the model and delivers the dependent resources in one synchronous operation.
 
 ## Model transaction
 
@@ -54,8 +35,7 @@ leave the previous snapshot and `Version.agents` unchanged.
 Each accepted newer snapshot advances the local agent version exactly once.
 During the transaction, the model compares exact pane generations with the
 previous snapshot and returns status changes only for identities that already
-existed. The commit carries the local revision before and after replacement so
-delivery can prove that it represents exactly one accepted snapshot. New
+existed. The commit carries the local revision and status changes for immediate delivery. New
 agents do not look like transitions.
 
 The model also exposes bounded semantic queries. Input asks for an
@@ -67,20 +47,17 @@ focus or remote handoff selected from that plan.
 
 ## Effects and presentation
 
-After validating the runtime revision, entry count, one-step local revision and
-every reported current identity, the delivery handler enters
-`DeliverActivePaneResourcesHandler.synchronizeAttachments`. It reconciles the
-attachment shelf and re-offers pane geometry only if the shelf appeared,
-disappeared or moved to another pane, delegating active-tab selection to
-`OfferActivePaneGeometryHandler`; it cannot emit child focus reports. Delivery
-then translates transitions to `blocked`, `done` or `failed` into notification
-inputs and emits at most the notification center capacity. Failure in a
-delivery stage does not roll back the committed runtime state.
+After the model accepts a newer snapshot, the operation calls
+`active_pane_resources.synchronizeAttachments`. A shelf geometry change calls
+`pane_geometry.offerActive`. This attachment-only synchronization does not
+emit child focus reports. The operation then translates transitions to
+`blocked`, `done` and `failed` into owned notifications, bounded by the center's
+capacity. It finally calls `sidebar_animations.synchronize` to arm working-agent
+animation without advancing a frame during snapshot application.
 
-Finally, the same delivery handler invokes the separate sidebar-animation use
-case. A working agent ensures that one future tick is armed; a snapshot does
-not advance the visible animation frame. Animation ownership and timer failure
-are documented in [Sidebar animation](sidebar-animation.md).
+Failure stops later delivery stages and preserves the canonical agent revision.
+There is no public callback boundary between the commit and its delivery.
+[Sidebar animation](sidebar-animation.md) describes the separate timer lifetime.
 
 The snapshot itself does not request a draw. At the event boundary,
 `presentation_lifecycle.observe` publishes the current version. `Presenter` compares
@@ -105,26 +82,12 @@ Malformed wire data is rejected before the adapter. The domain storage still
 validates its public input independently; any rejection preserves the last
 usable replica and its local version.
 
-## Proof
+## Validation
 
-- `src/client/agents/snapshot_support.zig` proves bounded ownership, stale rejection,
-  exact identity lookup and atomic validation failure.
-- `src/client/model/Model.zig` proves isolated versioning, transition
-  detection, navigation, attachment eligibility and immutable queries.
-- `src/client/application/agents/agent_snapshot.zig` proves atomic commit
-  before exact delivery, stale suppression and retained commits on delivery
-  failure.
-- `src/client/application/agents/agent_snapshot_delivery.zig` proves exact
-  commit validation, attachment-alert-animation ordering, alert policy and
-  bounds, and failure cutoffs.
-- `src/client/application/panes/active_pane_resource_delivery.zig` proves
-  attachment-only synchronization and conditional geometry delivery.
-- `src/client/application/notifications/sidebar_animation.zig` and
-  `src/client/controllers/notifications/sidebar_animations.zig` separate active-state policy
-  from the single pending timer.
-- `src/frontend/widgets/sidebar.zig` proves local pane-index projection does
-  not mutate the runtime replica.
-- `src/frontend/client/tests/` proves protocol adaptation,
-  presenter-owned drawing, alert content and exact sound identity validation.
-- `src/backend/runtime/delivery/` proves runtime enrichment and per-client
-  revision delivery.
+Agent snapshot/model tests cover ownership, duplicate identities, bounded text,
+revision rejection and transition detection. The real client tests in
+`src/frontend/client/tests/notifications_and_agents.zig` cover wire admission,
+alert limits, exact sound identity, attachment synchronization and retained
+canonical state after host-publication failure. Renderer tests cover derived
+pane labels without mutating the replica. Runtime delivery tests cover per-client
+revision cursors and enrichment.

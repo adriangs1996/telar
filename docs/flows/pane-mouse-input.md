@@ -29,7 +29,7 @@ pointer_routing adapter
         |
 prompt/model authority + raw pixels -> host cells
         |
-PointerRoutingHandler
+pointer_routing.apply
         |
 copy_mode_pointer
         |
@@ -37,7 +37,7 @@ unowned only
         |
 View.handleMouse
         |
-DispatchViewInteractionHandler
+view_interactions.apply
         |
 inside workbench and unconsumed
         |
@@ -47,7 +47,7 @@ unowned only
         |
 pane_mouse_inputs adapter
         |
-PaneMouseHandler
+pane_mouse_inputs.apply
         |
 multiplexer.Model.planPaneMouse
         |
@@ -57,9 +57,9 @@ multiplexer.Model.planPaneMouse
         |                   |                    |
 pane_viewports       three cursor keys       SGR encoding
         |                   |                    |
-SetPaneViewportHandler      +---------+----------+
+pane_viewports.apply      +---------+----------+
                                       |
-                              PaneInputHandler
+                              pane_inputs.send
                                       |
                               runtime attachment
 ```
@@ -70,12 +70,12 @@ client, except for a captured selection gesture, or no active model exists,
 and converts supported raw pixel coordinates
 to host cells. It captures one active model pointer for the synchronous call.
 
-`PointerRoutingHandler` owns the order between the four policies.
+`pointer_routing.apply` owns the order between the four policies.
 It gives `copy_mode_pointer` first refusal, then asks the view to resolve client
 chrome, then offers pane content to `link_openings`. It reaches
 `pane_mouse_inputs` only while the normalized pointer is inside the
 post-interaction workbench and neither the view nor a link consumed it.
-`CopyModePointerHandler` still owns copy-mode policy. See
+`copy_mode_pointer.apply` still owns copy-mode policy. See
 [Copy mode](copy-mode.md).
 
 A consumed view command ends the event. Pane focus is different: the focus
@@ -83,7 +83,7 @@ command commits first, then the same press may continue to the newly focused
 child. View-local hover, scroll and modal changes advance their own revision
 before later effects run.
 
-Neither `InputHandler` nor `PointerRoutingHandler` inspects pane mouse modes,
+Neither `InputHandler` nor `pointer_routing.apply` inspects pane mouse modes,
 chooses scroll policy, encodes SGR bytes or sends IPC.
 
 ## Pane plan
@@ -97,7 +97,7 @@ dropped unless the pointer lies inside its content rectangle.
 
 The result copies the pane identity, content rectangle, mouse protocol,
 alternate-screen scroll flag and live-bottom state. It does not expose pane
-storage to the application handler. Planning does not advance a client model
+storage to the operation. Planning does not advance a client model
 revision.
 
 ## Focused scroll entry
@@ -107,11 +107,11 @@ host binding or client Lua action
         |
 InputHandler.action -> action_routing -> actions
         |
-NativeActionHandler, then scroll_pane dispatch
+actions.apply, then scroll_pane dispatch
         |
 pane_mouse_inputs.apply(.focused_scroll)
         |
-PaneMouseHandler -> Plans.resolve(Command)
+pane_mouse_inputs.apply -> Plans.resolve(Command)
         |
 planFocusedPaneMouse -> Resolved { plan, pointer }
         |
@@ -126,13 +126,13 @@ wheel event at the first content cell with button 64 or 65 and no modifiers.
 Pixel reports use host cell dimensions and the existing cell-center fallback,
 not raw pointer pixels. Empty pane content produces no resolution.
 
-`NativeActionHandler` exits any active copy mode before dispatching this action,
+`actions.apply` exits any active copy mode before dispatching this action,
 restoring its entry viewport before the step. Plugin worker effects explicitly
 reject `scroll_pane`; client Lua bindings and callbacks use native dispatch.
 
 ## Application policy
 
-`PaneMouseHandler` resolves a plan and normalized pointer command, then chooses
+`pane_mouse_inputs.apply` resolves a plan and normalized pointer command, then chooses
 at most one effect. Its policy does not distinguish physical and synthetic
 wheel events.
 
@@ -145,14 +145,15 @@ wheel events.
 - Every other untracked wheel moves the client viewport by three rows.
 - Other untracked non-wheel events are ignored.
 
-The handler knows these rules but does not know how to mutate a viewport,
-encode a report or reach the runtime.
+`pane_mouse_inputs.apply` selects the effect and delivers it through concrete
+viewport, copy-selection and pane-input operations. Mouse encoding remains in
+the bounded protocol helper; it does not mutate model state.
 
 ## Effects and coordinates
 
 `pane_mouse_inputs` applies the selected effect through existing use cases.
-Viewport movement goes through `SetPaneViewportHandler`. Alternate-screen keys
-and reports go through `PaneInputHandler` with the mouse source, so neither
+Viewport movement goes through `pane_viewports.apply`. Alternate-screen keys
+and reports go through `pane_inputs.send` with the mouse source, so neither
 restores scrollback.
 
 Cell reports use coordinates relative to the pane content. If the child asks
@@ -171,7 +172,7 @@ state. A viewport effect advances `ClientModel.Version.viewport` only when the
 offset changes. `Presenter` observes that revision on the paced loop and
 recomposes the affected projection. No use case requests a draw directly.
 
-## Proof
+## Validation
 
 - `src/frontend/workspace/multiplexer.zig` proves focused button ownership,
   pointer-local wheel targeting, focus-only scroll targeting, empty-target
@@ -181,7 +182,7 @@ recomposes the affected projection. No use case requests a draw directly.
 - `src/client/application/input/pane_mouse.zig` proves tracked-event,
   viewport and alternate-scroll selection, the live-bottom gate, ignored
   events and effect failure propagation.
-- `src/client/controllers/input/pane_mouse_inputs.zig` proves exact
+- `src/client/operations/input/pane_mouse_inputs.zig` proves exact
   raw-pixel and cell-center SGR encoding.
 - `src/frontend/client/tests/input.zig` proves default scroll bindings through
   host byte routing, focus rather than hover, synthetic SGR cell/pixel reports,

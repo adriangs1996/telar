@@ -44,7 +44,7 @@ The client never starts a runtime locally in remote mode, and
 `--config`/`--profile` affect only the local client: the remote runtime reads
 its own configuration.
 
-## Proof
+## Validation
 
 - `src/cli/remote.zig` tests destination validation and hashing.
 - `src/cli/remote_discovery.zig` tests bounded discovery and malformed paths.

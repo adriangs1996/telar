@@ -31,7 +31,7 @@ pub fn init(source: []const u8, profile: ?[]const u8) !Fixture {
     session.gui.app.options.config_path = path;
     session.gui.app.options.trust_path = trust_path;
     session.gui.app.options.profile = profile;
-    _ = try client.controllers.config_reloads.apply(&session.gui.app, try fixture.adoption());
+    _ = try client.operations.config_reloads.apply(&session.gui.app, try fixture.adoption());
     const generation = session.gui.app.lua_generation.?;
     const renderer = try Renderer.configured(gpa, io, .{ .config = generation.snapshot.gui, .theme = generation.snapshot.theme.terminal, .viewport = viewport });
     session.renderer.deinit();
@@ -42,7 +42,7 @@ pub fn init(source: []const u8, profile: ?[]const u8) !Fixture {
         @as(i128, session.gui.app.plugin_registry.?.watchFingerprint(gpa, io)) ^
         @as(i128, client.config_reload.trustWatchFingerprint(io, trust_path));
     session.driver.configuration.observe(renderer.config, viewport);
-    try client.controllers.config_reloads.schedule(&session.gui.app);
+    try client.operations.config_reloads.schedule(&session.gui.app);
     return fixture;
 }
 

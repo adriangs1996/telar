@@ -7,17 +7,6 @@ const client_requests = @import("../../connection/requests.zig");
 const notifications = @import("../../notifications/notifications.zig");
 const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const TabLocationType = @import("telar-core").TabLocation;
-const RequestFailureEffectsCapture = @import("RequestFailureEffectsCapture.zig");
-
-pub const SplitRecovery = enum {
-    current,
-    stale,
-};
-
-pub const InitialOpenRecovery = enum {
-    retried,
-    unrecoverable,
-};
 
 pub const Outcome = enum {
     ignored,
@@ -83,15 +72,6 @@ fn workspaceNotificationTarget(location: WorkspaceLocationType) notifications.Ta
     };
 }
 
-pub const EffectEvent = enum {
-    split,
-    attachment,
-    close_tab,
-    initial_open,
-    publish,
-    report,
-};
-
 const testing_location: TabLocationType = .{
     .workspace = .{ .workspace = @enumFromInt(1) },
     .tab_id = @enumFromInt(2),
@@ -103,125 +83,6 @@ fn testingCommand(continuation: client_requests.Continuation) Command {
         .code = .internal,
         .message = "runtime rejected request",
     };
-}
-
-test "request failure ignores retired work and classifies snapshot loss as fatal" {
-    var capture: RequestFailureEffectsCapture = .{};
-    var handler = capture.handler();
-
-    try std.testing.expectEqual(Outcome.ignored, try handler.execute(testingCommand(.ignored)));
-    try std.testing.expectEqual(
-        Outcome.fatal,
-        try handler.execute(testingCommand(.{ .workspace_snapshot = testing_location.workspace })),
-    );
-    try std.testing.expectEqual(
-        Outcome.fatal,
-        try handler.execute(testingCommand(.{ .tab_snapshot = testing_location })),
-    );
-    try std.testing.expectEqualSlices(
-        EffectEvent,
-        &.{ .report, .report },
-        capture.events[0..capture.event_count],
-    );
-    try std.testing.expectEqualStrings("runtime rejected request", capture.reported_message.?);
-}
-
-test "request failure retries a vanished remembered pane once" {
-    var capture: RequestFailureEffectsCapture = .{};
-    var handler = capture.handler();
-    var command = testingCommand(.{ .initial_open = .{ .fallback_workspace = @enumFromInt(7) } });
-    command.code = .pane_not_found;
-
-    try std.testing.expectEqual(Outcome.recovered, try handler.execute(command));
-    try std.testing.expectEqualSlices(EffectEvent, &.{.initial_open}, capture.events[0..capture.event_count]);
-    try std.testing.expect(capture.notification == null);
-    try std.testing.expect(capture.reported_message == null);
-
-    capture.reset();
-    capture.initial_open_recovery = .unrecoverable;
-    command.code = .internal;
-
-    try std.testing.expectEqual(Outcome.fatal, try handler.execute(command));
-    try std.testing.expectEqualSlices(
-        EffectEvent,
-        &.{ .initial_open, .report },
-        capture.events[0..capture.event_count],
-    );
-    try std.testing.expect(capture.notification == null);
-    try std.testing.expectEqualStrings("runtime rejected request", capture.reported_message.?);
-}
-
-test "request failure suppresses a stale split after recovery" {
-    const continuation: client_requests.Continuation = .{ .split = .{
-        .target_pane = @enumFromInt(3),
-        .location = testing_location,
-        .axis = .horizontal,
-        .area = .{ .w = 40, .h = 10 },
-    } };
-    var capture: RequestFailureEffectsCapture = .{};
-    var handler = capture.handler();
-
-    try std.testing.expectEqual(Outcome.notified, try handler.execute(testingCommand(continuation)));
-    try std.testing.expectEqualSlices(
-        EffectEvent,
-        &.{ .split, .publish },
-        capture.events[0..capture.event_count],
-    );
-    try std.testing.expectEqualStrings("Could not split pane", capture.notification.?.title);
-    try std.testing.expectEqualDeep(
-        notifications.Target{ .focus_pane = @enumFromInt(3) },
-        capture.notification.?.target,
-    );
-
-    capture.reset();
-    capture.split_recovery = .stale;
-
-    try std.testing.expectEqual(Outcome.ignored, try handler.execute(testingCommand(continuation)));
-    try std.testing.expectEqualSlices(EffectEvent, &.{.split}, capture.events[0..capture.event_count]);
-    try std.testing.expect(capture.notification == null);
-}
-
-test "request failure refreshes only a missing pane attachment" {
-    const continuation: client_requests.Continuation = .{ .attach_pane = .{
-        .pane_id = @enumFromInt(3),
-        .location = testing_location,
-    } };
-    var capture: RequestFailureEffectsCapture = .{};
-    var handler = capture.handler();
-    var command = testingCommand(continuation);
-
-    try std.testing.expectEqual(Outcome.notified, try handler.execute(command));
-    try std.testing.expectEqualSlices(EffectEvent, &.{.publish}, capture.events[0..capture.event_count]);
-
-    capture.reset();
-    command.code = .pane_not_found;
-
-    try std.testing.expectEqual(Outcome.notified, try handler.execute(command));
-    try std.testing.expectEqualSlices(
-        EffectEvent,
-        &.{ .attachment, .publish },
-        capture.events[0..capture.event_count],
-    );
-}
-
-test "request failure restores a rejected tab close before notifying" {
-    var capture: RequestFailureEffectsCapture = .{};
-    var handler = capture.handler();
-
-    try std.testing.expectEqual(
-        Outcome.notified,
-        try handler.execute(testingCommand(.{ .close_tab = testing_location })),
-    );
-    try std.testing.expectEqualSlices(
-        EffectEvent,
-        &.{ .close_tab, .publish },
-        capture.events[0..capture.event_count],
-    );
-    try std.testing.expectEqualStrings("Could not close tab", capture.notification.?.title);
-    try std.testing.expectEqualDeep(
-        notifications.Target{ .select_tab = testing_location.tab_id },
-        capture.notification.?.target,
-    );
 }
 
 test "request failure maps direct notification titles and targets" {
@@ -271,47 +132,10 @@ test "request failure maps direct notification titles and targets" {
     };
 
     for (cases) |case| {
-        var capture: RequestFailureEffectsCapture = .{};
-        var handler = capture.handler();
-
-        try std.testing.expectEqual(Outcome.notified, try handler.execute(testingCommand(case.continuation)));
-        try std.testing.expectEqualSlices(EffectEvent, &.{.publish}, capture.events[0..capture.event_count]);
-        try std.testing.expectEqualStrings(case.title, capture.notification.?.title);
-        try std.testing.expectEqualStrings("runtime rejected request", capture.notification.?.message);
-        try std.testing.expectEqualDeep(case.target, capture.notification.?.target);
-        try std.testing.expectEqual(@as(u64, 7 * std.time.ns_per_s), capture.notification.?.duration_ns);
+        const input = notification(testingCommand(case.continuation));
+        try std.testing.expectEqualStrings(case.title, input.title);
+        try std.testing.expectEqualStrings("runtime rejected request", input.message);
+        try std.testing.expectEqualDeep(case.target, input.target);
+        try std.testing.expectEqual(@as(u64, 7 * std.time.ns_per_s), input.duration_ns);
     }
-}
-
-test "request failure does not notify after recovery failure" {
-    var capture: RequestFailureEffectsCapture = .{ .fail_recovery = true };
-    var handler = capture.handler();
-
-    try std.testing.expectError(
-        error.RecoveryFailed,
-        handler.execute(testingCommand(.{ .close_tab = testing_location })),
-    );
-    try std.testing.expectEqualSlices(
-        EffectEvent,
-        &.{ .close_tab, .report },
-        capture.events[0..capture.event_count],
-    );
-    try std.testing.expect(capture.notification == null);
-    try std.testing.expectEqualStrings("runtime rejected request", capture.reported_message.?);
-}
-
-test "request failure retains recovery when notification publication fails" {
-    var capture: RequestFailureEffectsCapture = .{ .fail_notification = true };
-    var handler = capture.handler();
-
-    try std.testing.expectError(
-        error.NotificationFailed,
-        handler.execute(testingCommand(.{ .close_tab = testing_location })),
-    );
-    try std.testing.expectEqualSlices(
-        EffectEvent,
-        &.{ .close_tab, .publish, .report },
-        capture.events[0..capture.event_count],
-    );
-    try std.testing.expectEqualStrings("runtime rejected request", capture.reported_message.?);
 }

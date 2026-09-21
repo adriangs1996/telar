@@ -31,6 +31,7 @@ Narrow host ports and a controllable headless presentation adapter test the
 actual shared handlers without any of those changes.
 
 This refines [presentation by versions](0007-drive-client-presentation-from-model-versions.md)
-and preserves [controller/handler separation](0006-separate-request-controllers-from-command-handlers.md).
+and preserves shared ownership across adapters. The former controller/handler
+requirement is superseded by [direct operations](0016-follow-operations-from-process-entrypoints.md).
 The native renderer and any event-loop rewrite remain separate work. Performance
 acceptance follows the measured gates, not the architectural decision.

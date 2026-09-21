@@ -1,55 +1,40 @@
 # Client detach
 
-The detach action ends only the current client. Runtime panes, PTYs and their
-terminal state remain alive for a later attachment.
-
-## Flow
+Detach ends this client only. Runtime panes, PTYs and terminal state remain
+available for another attachment.
 
 ```text
-semantic detach action
-        |
-client_actions.apply
-        |
-client_detachments.apply
-        |
-DetachClientHandler
-        |
-RetireTabAttachmentsHandler for every tab identity
-        |
-finish captured paste -> report focus-out -> detach_pane messages
-        |
-mark local attachments hidden and detached
-        |
-return Control.stop
+operations/input/actions.apply(.detach)
+  -> operations/session/client_detachments.apply
+     -> capture bounded stable TabLocation list
+     -> operations/tabs/tab_attachments.detach for each location
+        -> finish tab-owned paste
+        -> tab-owned focus-out
+        -> detach, retire pending correlation, hide graphics per pane
+        -> Model.commitTabDetachment
+  -> return Control.stop to the event loop
 ```
 
-`DetachClientHandler` captures every current `TabLocation` in stable client
-order before the first effect, then delivers each identity through one port.
-`client_detachments.apply` supplies that port by composing
-`RetireTabAttachmentsHandler`, which finishes a captured bracketed paste and
-reports focus-out before it enqueues that tab's `detach_pane` messages. Pending
-attachment requests are retired so a late confirmation cannot restore client
-ownership. `ClientModel` validates and commits the fixed detachment plan only
-after every per-tab effect succeeds.
+`client_detachments.apply` captures tab locations before the first effect and
+walks them in stable client order. `tab_attachments.detach` plans one exact tab,
+then applies its effects in paste/focus/pane order. Pending opens also receive a
+detach and their continuations become ignored, so late confirmations cannot
+revive ownership. The model commits attachment flags and retires pending frames
+only after that tab's effects complete.
 
-The operation advances no `ClientModel.Version` and schedules no frame. The
-event loop exits after every detach enters the bounded runtime outbox. Client
-shutdown then drains no further UI work and destroys only disposable state.
+Detachment advances no semantic presentation version and requests no frame.
+The stop directive is returned only after every requested detach enters the
+bounded runtime outbox. Disconnect itself also retires the connection's runtime
+attachments; no PTY shutdown is requested.
 
-If the outbox rejects any message, the action returns the error instead of
-stopping. Earlier paste, focus, detach, continuation or graphics effects remain
-applied, while attachment flags for that tab remain uncommitted. The client
-session terminates through the normal error path, while the runtime keeps all
-panes valid.
+A delivery error propagates instead of returning stop. Earlier effects remain
+applied; a partially processed tab does not claim all its flags detached. The
+normal error path terminates the client and destroys disposable resources while
+the runtime continues.
 
-## Proof
-
-- `src/client/application/tabs/tab_attachment_retirement.zig` proves
-  paste, focus, pane and final model-commit ordering for one tab.
-- `src/client/application/session/client_detachment.zig` proves stable
-  whole-client planning, empty state and partial failure behavior.
-- `src/client/controllers/tabs/tab_attachments.zig` binds the concrete client effects.
-- `src/client/controllers/session/client_detachments.zig` binds the per-tab retirement
-  port without owning traversal policy.
-- `src/frontend/client/tests/` proves stable multi-tab delivery,
-  local attachment cleanup, version silence and the final stop control.
+Source: `src/client/operations/session/client_detachments.zig` and
+`src/client/operations/tabs/tab_attachments.zig`.
+Tests: `src/frontend/client/tests/pane_lifecycle.zig` covers stable multi-tab
+wire order, local attachment cleanup, exact paste/focus ownership, version
+silence and the final stop directive. Tab close/handoff tests exercise capacity
+checks and partial failures in the same attachment retirement operation.

@@ -1,114 +1,47 @@
 # Pane resize
 
-Pane layout belongs to one disposable client. The client may offer new pane
-sizes to the runtime, but the runtime applies them only when that client holds
-the workspace geometry lease.
-
-Resize runs on the interactive path. Direction lookup walks the fixed layout
-tree, and delivery uses the fixed client outbox. The flow allocates no queue
-and waits for no runtime response.
-
-## Client transition
+The client owns split geometry. The runtime accepts offered PTY sizes only from
+the workspace geometry owner. Follow the action directly into the operation:
 
 ```text
-native, Lua or plugin resize action
-        |
-client_actions.apply
-        |
-ResizePane { direction, area }
-        |
-ResizePaneHandler
-        |
-ClientModel.resizePane
-        |
-DeliverPaneGeometryHandler
-        |
-OfferPaneGeometryHandler
-        |                         |
-pane_resize messages             presentation_lifecycle.observe
-        |                         |
-runtime socket                   Presenter
+operations/input/actions.apply
+  -> operations/panes/pane_geometry.resize
+     -> Model.resizePane
+     -> validate committed location, focus, fullscreen and pane revision
+     -> host_graphics.invalidatePlacements
+     -> pane_geometry.offerAttached
+     -> tab_snapshots.attachActive
+  -> adapter observes presentation revisions
 ```
 
-The shared action dispatcher translates the direction and supplies the current
-workbench rectangle. It does not inspect layout nodes, invalidate graphics or
-request a frame.
+`Model.resizePane` moves the nearest split edge on the requested axis. Missing
+axes, bounded ratios and rectangles without usable content produce no change.
+A commit advances the pane revision. Fullscreen keeps its split tree, so a
+resize while fullscreen changes the hidden tiled layout.
 
-`ClientModel.resizePane` moves the nearest split edge on the requested axis by
-the layout's bounded step. It rejects an absent active tab, a missing matching
-axis, a ratio at its limit, or a rectangle that would leave a pane without a
-usable content cell. A commit advances only `ClientModel.Version.panes` and
-returns the exact tab, focused pane, pane revision and request-time area.
+`offerAttached` computes one bounded layout snapshot and applies the attachment
+shelf reservation only to its owner. It emits one `pane_resize` per attached
+pane with visible content; fullscreen selects its focused pane. Cell pixel
+metrics come from the tab model. `offerActive` selects the current tab and
+reuses this implementation, returning silently for an empty client.
 
-Fullscreen does not destroy the tiled tree. A resize made while fullscreen
-changes that hidden tree and becomes visible after fullscreen ends. This is
-the existing client behavior, now owned by the model transition.
+After offering sizes, `tab_snapshots.attachActive` requests newly visible
+detached panes whose canonical membership has been loaded. It skips already
+pending requests. The fixed outbox replaces obsolete unsent resizes for the
+same pane instead of building a replay queue.
 
-## Geometry effects and presentation
+The runtime verifies the attachment and geometry lease before applying or
+deferring the PTY resize. The protocol has no success acknowledgement. The
+resulting cell snapshot respects synchronized-output blocks; expiry or EOF
+releases pending work even if no later output arrives.
 
-`DeliverPaneGeometryHandler` verifies the exact active tab, focused pane,
-fullscreen state and committed pane revision before it touches resources. It
-invalidates host graphics placements and delegates selection to
-`OfferPaneGeometryHandler`. That handler computes one bounded layout snapshot
-and applies the current attachment reservation. The reservation shortens only
-its owning pane, leaving neighboring pane rectangles unchanged. The handler
-then emits one semantic `PaneResize` for each attached pane with visible
-content. A tiled layout normally selects every attached pane; a fullscreen
-layout selects only the focused pane. The concrete adapter only enqueues those
-commands.
+Layout commits before delivery. Outbox failure retains that layout and any
+completed effects, then reaches the client error path. Runtime rejection leaves
+the PTY size unchanged. A reconnect reconstructs disposable geometry and
+resources. No operation requests a draw; presentation observes the pane revision.
 
-Flows that need the current projection use `OfferActivePaneGeometryHandler`.
-It selects the active tab once and delegates to the same bounded offer handler;
-an empty client returns zero without effects. `pane_geometry.offerActive`
-supplies only the concrete resize port and is shared by attachment changes,
-host resources, clipboard-image adoption and configuration reload.
-
-The outbox keeps a fixed bound and replaces an obsolete unsent resize for the
-same pane. The runtime dispatches each message through
-`pane_resize.Controller` and `PaneResizeHandler`. The controller counts stale
-attachments and geometry-lease rejection. The handler applies or defers an
-authorized PTY resize and then synchronizes observation, media and the client
-cell projection. The protocol has no success reply.
-
-The resized attachment requests a full cell snapshot. That snapshot respects
-the child's synchronized-output block just like an incremental frame: a
-deferred attempt keeps the snapshot pending and publishes no partial redraw.
-Closing the block, reaching its existing hold deadline, or finishing PTY output
-releases the pending frame. Runtime maintenance retries delivery even when no
-new child output arrives.
-
-Neither the use case nor the adapter invalidates `View` or requests a draw.
-After the event, `presentation_lifecycle.observe` lets `Presenter` observe the pane
-revision and schedule one paced frame.
-
-## Failure and recovery
-
-The client commits layout before enqueueing geometry effects. If local
-delivery fails, the error reaches the client loop with the new layout
-preserved. Client shutdown leaves runtime panes and PTYs valid; reconnect
-builds a fresh disposable layout and graphics state.
-
-If the runtime rejects geometry authority or no longer has the attachment, it
-keeps the PTY geometry unchanged and records the rejection. There is no client
-rollback because the `pane_resize` protocol has no acknowledgement.
-
-## Proof
-
-- `src/client/workspace/layout_support.zig` proves direction lookup, bounded ratios
-  and minimum usable pane geometry.
-- `src/client/model/Model.zig` proves semantic commit, no-op behavior,
-  fullscreen preservation and pane-version ownership.
-- `src/client/application/panes/resize_pane.zig` proves
-  commit-before-delivery ordering and the post-commit failure contract.
-- `src/client/application/panes/pane_geometry_delivery.zig` proves exact
-  commit validation, active-tab selection, empty-client behavior,
-  attached-visible filtering, effect order and partial delivery failure.
-- `src/client/controllers/panes/pane_geometry.zig` implements placement invalidation and
-  runtime `pane_resize` delivery ports.
-- `src/frontend/client/tests/` proves exact resize messages, detached
-  pane filtering, presenter observation and directionless no-ops through a
-  substituted runtime socket.
-- `src/backend/runtime/tests/pane_resize_test.zig` proves lease checks and runtime
-  synchronization order.
-- `src/backend/runtime/tests/cell_projection_test.zig` proves that resize snapshots
-  wait for synchronized redraw completion and still recover on expiry or EOF.
+Source: `src/client/operations/panes/pane_geometry.zig` and
+`src/client/model/Model.zig`.
+Tests: `src/frontend/client/tests/pane_lifecycle.zig`,
+`src/frontend/client/tests/host_resources.zig`,
+`src/client/model/tests/panes.zig`, and runtime pane-resize/cell-projection tests.

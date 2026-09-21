@@ -1,8 +1,6 @@
 //! Application policy for assigning each streamed paste phase to one owner.
 
 const PasteRoutingAuthority = @import("PasteRoutingAuthority.zig");
-const PasteRoutingCapture = @import("PasteRoutingCapture.zig");
-const PasteRoutingHandler = @import("PasteRoutingHandler.zig");
 const std = @import("std");
 
 pub const Command = union(enum) {
@@ -40,65 +38,4 @@ pub fn resolve(authority: PasteRoutingAuthority, command: Command) ?Owner {
         else
             null,
     };
-}
-
-test "PasteRoutingHandler assigns paste start by modal prompt and copy authority" {
-    const cases = [_]struct {
-        authority: PasteRoutingAuthority,
-        outcome: Outcome,
-    }{
-        .{ .authority = .{ .attachment_modal_active = true, .prompt_active = true }, .outcome = .ignored },
-        .{ .authority = .{ .prompt_active = true }, .outcome = .prompt_owned },
-        .{ .authority = .{ .copy_mode_active = true }, .outcome = .ignored },
-        .{ .authority = .{}, .outcome = .pane_owned },
-    };
-
-    for (cases) |case| {
-        var capture: PasteRoutingCapture = .{};
-        var handler: PasteRoutingHandler = .{ .effects = capture.effects() };
-
-        try std.testing.expectEqual(case.outcome, try handler.execute(case.authority, .start));
-        try std.testing.expectEqual(@as(usize, @intFromBool(case.outcome != .ignored)), capture.calls);
-    }
-}
-
-test "PasteRoutingHandler keeps later phases with their established owner" {
-    var capture: PasteRoutingCapture = .{};
-    var handler: PasteRoutingHandler = .{ .effects = capture.effects() };
-    const competing: PasteRoutingAuthority = .{
-        .attachment_modal_active = true,
-        .prompt_active = true,
-        .prompt_pasting = true,
-        .copy_mode_active = true,
-        .pane_paste_active = true,
-    };
-
-    try std.testing.expectEqual(Outcome.pane_owned, try handler.execute(competing, .{ .content = "one" }));
-    try std.testing.expectEqual(Owner.pane, capture.route_value.?.owner);
-    try std.testing.expectEqualStrings("one", capture.route_value.?.command.content);
-
-    capture = .{};
-    handler = .{ .effects = capture.effects() };
-    var prompt = competing;
-    prompt.pane_paste_active = false;
-    try std.testing.expectEqual(Outcome.prompt_owned, try handler.execute(prompt, .finish));
-    try std.testing.expectEqual(Owner.prompt, capture.route_value.?.owner);
-
-    capture = .{};
-    handler = .{ .effects = capture.effects() };
-    prompt.prompt_pasting = false;
-    try std.testing.expectEqual(Outcome.ignored, try handler.execute(prompt, .{ .content = "lost" }));
-    try std.testing.expectEqual(@as(usize, 0), capture.calls);
-}
-
-test "PasteRoutingHandler propagates the selected owner failure without fallback" {
-    var capture: PasteRoutingCapture = .{ .fail = true };
-    var handler: PasteRoutingHandler = .{ .effects = capture.effects() };
-
-    try std.testing.expectError(
-        error.PasteRouteFailed,
-        handler.execute(.{ .prompt_active = true }, .start),
-    );
-    try std.testing.expectEqual(@as(usize, 1), capture.calls);
-    try std.testing.expectEqual(Owner.prompt, capture.route_value.?.owner);
 }

@@ -305,7 +305,7 @@ test "history request admission failure is retryable and stale failure only wake
     const app = &session.gui.app;
     const pane = app.model.workspace.findPane(Session.pane_id).?;
     app.request_lifecycle.next_request_id = std.math.maxInt(u64);
-    client.agent_history.navigate(app, pane.id, .older);
+    _ = client.agent_history.navigate(&app.model, pane.id, .older);
     try client.agent_history.flush(app);
     try std.testing.expect(pane.agent_history.?.pending == null);
     try std.testing.expectEqualStrings("RequestIdExhausted", pane.agent_history.?.failureMessage());
@@ -313,10 +313,10 @@ test "history request admission failure is retryable and stale failure only wake
     try client.agent_history.flush(app);
     try std.testing.expect(pane.agent_history.?.pending == null);
     app.request_lifecycle.next_request_id = 200;
-    client.agent_history.navigate(app, pane.id, .older);
+    _ = client.agent_history.navigate(&app.model, pane.id, .older);
     try client.agent_history.flush(app);
     try std.testing.expect(client.request_lifecycle.has(app, .agent_history));
-    client.agent_history.navigate(app, pane.id, .newer);
+    _ = client.agent_history.navigate(&app.model, pane.id, .newer);
     const revision = app.model.panes_revision;
     const notification_revision = app.model.notifications_revision;
     var buffer: [1024]u8 = undefined;
@@ -336,7 +336,7 @@ test "history page loading starts after successful delivery and not after a fail
     defer session.deinit();
     const gui = session.gui;
     const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
-    client.agent_history.navigate(&gui.app, pane.id, .older);
+    _ = client.agent_history.navigate(&gui.app.model, pane.id, .older);
     const failed = try gui.prepare(&session.renderer);
     try gui.complete(failed, false);
     try std.testing.expect(pane.agent_history == null);
@@ -394,7 +394,7 @@ test "history outbound pressure clears pending state and keeps a visible retry r
     while (outbox.hasCapacity()) {
         try outbox.push(.{ .query_agent_thread = .{ .request_id = @enumFromInt(900), .pane_id = Session.pane_id, .pane_generation = 7 } });
     }
-    client.agent_history.navigate(app, Session.pane_id, .older);
+    _ = client.agent_history.navigate(&app.model, Session.pane_id, .older);
     try client.agent_history.flush(app);
     const window = app.model.agentPane(Session.pane_id).?.agent_history.?;
     try std.testing.expect(window.pending == null);
@@ -406,7 +406,7 @@ test "retired history replies wake visible navigation waiting for the connection
     const session = try historySession();
     defer session.deinit();
     const app = &session.gui.app;
-    client.agent_history.navigate(app, Session.pane_id, .older);
+    _ = client.agent_history.navigate(&app.model, Session.pane_id, .older);
     try client.request_lifecycle.register(app, .{ .request_id = @enumFromInt(500), .continuation = .ignored });
     var before = app.model.panes_revision;
     try std.testing.expect(!try client.agent_history.apply(app, .{ .request_id = @enumFromInt(500), .view_generation = 1, .snapshot = .{ .pane_id = Session.pane_id, .pane_generation = 7, .revision = 1, .encoded = "" }, .before = "", .after = "", .has_before = false, .has_after = false }));
@@ -582,7 +582,7 @@ test "one history gesture crosses folded pages without evicting the visible answ
     try std.testing.expectEqual(@as(u8, 2), window.count);
     try std.testing.expectEqual(.older, window.gaps[1].?.direction);
 
-    client.agent_history.revealWork(&gui.app, pane.id, window.gaps[1].?.key);
+    client.agent_history.revealWork(&gui.app.model, pane.id, window.gaps[1].?.key);
     try std.testing.expectEqual(@as(u8, 1), window.count);
     try std.testing.expect(window.gaps[0] == null);
     try std.testing.expectEqual(answer, window.pages[0].snapshot.items()[3].identity);

@@ -18,8 +18,6 @@ server_messages dispatcher
         |
 agent_sounds.apply
         |
-HandleAgentSoundHandler
-        |
 ClientModel.knowsAgent
         |
 sound.Playback.request
@@ -33,11 +31,11 @@ sound.Playback.complete
 
 The runtime message carries a pane ID, pane generation and semantic sound
 kind. `agent_sounds.apply` translates that identity into an `AgentKey`.
-`HandleAgentSoundHandler` schedules playback only when the current client
+`agent_sounds.apply` schedules playback only when the current client
 replica contains the exact key. A delayed message for an earlier process
 cannot make noise after the numeric pane ID has been reused.
 
-The handler reads `ClientModel` but does not mutate it. Accepted, stale and
+The operation reads `ClientModel` but does not mutate it. Accepted, stale and
 configuration-filtered sounds leave every model version unchanged. The
 dispatcher still calls `presentation_lifecycle.observe` after dispatch. The
 presenter sees no revision and schedules no frame.
@@ -76,17 +74,17 @@ Client teardown cancels its select tasks. A reconnect constructs a fresh
 `Playback`; it neither restores nor replays old audio work. Runtime agent state
 continues independently and later exact sound events may start a new queue.
 
-## Proof
+## Validation
 
 - `src/frontend/sound/types.zig` proves per-kind policy filtering.
-- `src/frontend/sound/playback_support.zig` proves one active token, one coalesced
+- `src/frontend/sound/sound_tests.zig` proves one active token, one coalesced
   successor, priority, configuration replacement and scheduling failure
   recovery.
 - `src/frontend/sound/worker.zig` owns the bounded host adapters; the cross
   build compiles the Linux and Windows paths.
-- `src/client/application/agents/agent_sound.zig` proves exact-identity
+- `src/client/operations/agents/agent_sounds.zig` proves exact-identity
   gating, stale suppression and effect-error propagation.
-- `src/client/controllers/agents/agent_sounds.zig` owns protocol translation, worker
+- `src/client/operations/agents/agent_sounds.zig` owns protocol translation, worker
   scheduling and the completion entrypoint.
 - `src/frontend/client/tests/` proves wire identity, bounded queuing,
   unchanged model and presentation versions, and configuration adoption.

@@ -13,9 +13,9 @@ wait for.
 ```text
 native, Lua, plugin or top-bar action
         |
-client_actions.apply
+operations/input/actions.apply
         |
-ToggleWorkspaceListHandler
+actions.toggleWorkspaceList
         |
 ClientModel.toggleWorkspaceList
         |
@@ -32,13 +32,13 @@ revision. Explicit assignment of the current value is a no-op.
 
 `View.handleMouse` reports `Interaction.toggle_workspace_list` without
 changing its projection. The input adapter and configured action sources route
-that intent through the shared dispatcher and the same use case.
+that intent through the shared dispatcher and the same concrete operation.
 
 ## Presentation
 
-This slice has no application effects port because the state change needs no
-IPC, resource cleanup or immediate geometry synchronization. The use case has
-no reference to `View` or `Presenter`.
+The action calls `Model.toggleWorkspaceList` directly. No IPC, resource cleanup
+or immediate geometry synchronization is needed, and the operation has no
+reference to `View` or `Presenter`.
 
 After the input event, `client_events` calls `presentation_lifecycle.observe`.
 `Presenter` compares the observed and presented chrome revisions and schedules

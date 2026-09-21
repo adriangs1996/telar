@@ -11,11 +11,9 @@ configured binding
       |
 keybind.Router -> InputHandler.action
       |
-action_routing -> ActionRoutingHandler
+action_routing.apply
       |
 lua_actions.execute
-      |
-LuaActionHandler
       |
 ClientModel.callbackContext
       |
@@ -27,7 +25,7 @@ client-owned Generation.invokeCallback / invokeExpression
       |
       +-- expression --> InputDecision --> key_routing / pane_inputs
       |
-      +-- failure --> ClientDiagnosticHandler.replace
+      +-- failure --> client_diagnostic.replace.replace
                                |
                   ClientModel.replaceDiagnostic
                                |
@@ -36,7 +34,7 @@ client-owned Generation.invokeCallback / invokeExpression
                     presentation_lifecycle.observe -> Presenter
 ```
 
-`InputHandler` only delegates the routed value. `ActionRoutingHandler`
+`InputHandler` only delegates the routed value. `action_routing.apply`
 classifies its source and translates an expression decision into semantic keys
 or paste. It does not access the Lua generation, plugin registry or diagnostic
 buffer. Built-in effects reuse `client_actions.apply`. Plugin effects reuse
@@ -58,12 +56,12 @@ transition.
 The diagnostic banner is semantic client state. `ClientModel` owns its bounded
 text and `Version.diagnostic`; configuration reloads, Lua actions and plugin
 actions all enter through
-[`ClientDiagnosticHandler`](client-diagnostic.md). Replacing equal text is a
+[`client_diagnostic.replace`](client-diagnostic.md). Replacing equal text is a
 no-op. Invalid UTF-8 or text beyond the fixed buffer is rejected before commit.
 
 ## Callback policy
 
-`LuaActionHandler` owns this order:
+`lua_actions.execute` owns this order:
 
 1. capture one callback context from `ClientModel`;
 2. invoke the exact callback generation and identity;
@@ -85,9 +83,9 @@ the sequence.
 ## Expression policy
 
 An expression returns `consume`, `forward_binding`, semantic keys or bounded
-paste. After a successful invocation, the application handler clears any older
-diagnostic and returns the value to `ActionRoutingHandler`. Keys pass through
-`key_routing` and `KeyRoutingHandler`; paste passes through
+paste. After a successful invocation, the operation clears any older
+diagnostic and returns the value to `action_routing.apply`. Keys pass through
+`key_routing` and `key_routing.apply`; paste passes through
 `pane_inputs.expressionPaste`. Both use the focused child's acknowledged
 terminal modes and the existing pane-input target checks.
 
@@ -104,7 +102,7 @@ error, instruction exhaustion, deadline or malformed result consumes the
 matched binding and commits the bounded diagnostic produced by the VM. A
 validation failure follows the same model path. Neither branch calls
 `Presenter.requestDraw`; `client_events` publishes `Version.diagnostic`.
-Invalid diagnostic bytes are replaced by the handler with an explicit
+Invalid diagnostic bytes are replaced by the operation with an explicit
 error-name-only fallback.
 
 The synchronous callback path keeps its existing hard limits:
@@ -120,7 +118,7 @@ Only an explicit Lua binding enters this path. Native bindings do not enter
 Lua. The VM has no ambient filesystem, process, network, debug or native-module
 authority.
 
-## Proof
+## Validation
 
 - `src/client/model/Model.zig` proves callback-context projection,
   diagnostic validation, equality and revision behavior.

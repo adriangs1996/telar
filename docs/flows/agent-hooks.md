@@ -24,15 +24,15 @@ telar hook <agent>   (stdin JSON; TELAR_PANE_ID + TELAR_PANE_GENERATION from the
 parse the harness payload once
         |
         +-> lifecycle mapping -> schema.report_agent
-        |                         -> routeReportAgent -> ReportAgentHandler
+        |                         -> routeReportAgent -> agents.routeReportAgent
         |                         -> Tracker.observeReport -> Agent.applyReport
         |
         +-> session name mapping -> schema.report_agent_title
-        |                         -> routeReportAgentTitle -> ReportAgentTitleHandler
+        |                         -> routeReportAgentTitle -> agents.routeReportAgentTitle
         |                         -> Tracker.reportTitle -> Agent.reportTitle
         |
         +-> manifest command_tools mapping -> schema.report_agent_command
-                                          -> ReportAgentCommandHandler
+                                          -> agents.routeReportAgentCommand
                                           -> history.Service.recordAgentCommand
         |
 reproject lifecycle state; persist a running or completed agent command
@@ -270,11 +270,11 @@ not write Codex's trust state or bypass that check. Claude hooks use a
 five-second timeout. Codex hooks use three seconds, the maximum Codex accepts
 for `SessionEnd` and `Interrupt`.
 
-## Proof
+## Validation
 
 - `src/backend/agent/tracker_support.zig` proves precedence over screen evidence,
   `exited` withdrawal and expiry.
-- `src/backend/runtime/entrypoints/requests/report_agent.zig` and
+- `src/backend/runtime/application/operations/agents.zig` and
   `report_agent_title.zig` prove the reply contracts.
 - `src/backend/agent/tracker_support.zig` proves that an agent title outranks a
   generated one, never clears a manual one, clears on an empty report and is

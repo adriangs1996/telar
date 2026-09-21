@@ -44,8 +44,8 @@ New-edition notifications also refresh metadata for the edition already open. Th
 not replace its diff or move its selection. **Older edit** and **Newer edit** are
 explicit navigation operations.
 
-`ChangeReviewController` translates IPC values and correlated errors;
-`ChangeReviewHandler` resolves the exact pane generation and provider conversation
+`change_review` translates IPC values and correlated errors;
+`change_review` resolves the exact pane generation and provider conversation
 before admitting a copied request. A bounded observation job calls the runtime
 service. Completion rechecks that authority before delivering the result or
 submitting feedback. The service never retains a pointer into a client or pane.

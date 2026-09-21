@@ -194,7 +194,7 @@ pins the snapshot revision; runtime authority rejects changed state before
 reserving the provider conversation. UI resume sends the same precondition.
 This changes the wire schema to generation 59 with a new golden fingerprint.
 The control remains bounded and allocation-free in the runtime request path;
-CLI snapshot storage is bounded and released on every outcome. Handler tests
+CLI snapshot storage is bounded and released on every outcome. Runtime control tests
 cover stale revisions, stale pane generations and duplicate open conversations.
 
 Validation: CLI socket contracts and `test-runtime`, `test-wire`, `test-client`,

@@ -35,7 +35,7 @@ codings and caps its output. Unknown or invalid encodings retain raw captured
 bytes. The pane token exists only in the queue envelope and is erased after
 publication or delivery; retained halves carry only pane ID and generation.
 
-## Proof
+## Validation
 
 Proxy tests cover split HTTP/1.1 chunked and content-length bodies, unchanged
 wire output, interleaved HTTP/2 streams, capture under an unknown dialect,

@@ -3,8 +3,6 @@
 const std = @import("std");
 const Options = @import("Options.zig");
 const Runtime = @import("Runtime.zig");
-const GenericShutdownCoordinator = @import("lifecycle/GenericShutdownCoordinator.zig").Type;
-const runtime_shutdown_mod = @import("lifecycle/shutdown_coordinator.zig");
 const LaunchViewType = @import("telar-core").LaunchView;
 const EncoderType = @import("telar-core").Encoder;
 const Initialization = @import("Initialization.zig");
@@ -41,36 +39,6 @@ pub fn serve(io: std.Io, gpa: std.mem.Allocator, options: Options) !void {
     defer runtime.deinit();
 
     try runtime.run();
-}
-
-const RuntimeShutdownCoordinator = GenericShutdownCoordinator(Runtime);
-
-pub fn runtimeShutdownCoordinator(runtime: *Runtime) RuntimeShutdownCoordinator {
-    return RuntimeShutdownCoordinator.init(runtime, &runtime.teardown_state, executeRuntimeShutdownStep);
-}
-
-fn executeRuntimeShutdownStep(runtime: *Runtime, step: runtime_shutdown_mod.Step) void {
-    switch (step) {
-        .stop_listener => runtime.resources.listener.shutdown(),
-        .stop_client_connections => runtime.application.shutdownStep(.stop_client_connections),
-        .stop_pending_admission => runtime.application.shutdownStep(.stop_pending_admission),
-        .stop_panes => runtime.application.shutdownStep(.stop_panes),
-        .cancel_actors => runtime.loop.cancel(),
-        .persist_session => runtime.application.shutdownStep(.persist_session),
-        .destroy_proxy => runtime.resources.proxy.deinit(),
-        .destroy_plugins => runtime.resources.plugins.deinit(),
-        .destroy_listener => runtime.resources.listener.deinit(runtime.resources.io()),
-        .destroy_pending_admission => runtime.application.shutdownStep(.destroy_pending_admission),
-        .release_client_actor_claims => runtime.application.shutdownStep(.release_client_actor_claims),
-        .destroy_client_sessions => runtime.application.shutdownStep(.destroy_client_sessions),
-        .destroy_panes => runtime.application.shutdownStep(.destroy_panes),
-        .destroy_workspaces => runtime.application.shutdownStep(.destroy_workspaces),
-        .destroy_engine => if (runtime.resources.engine) |*engine_runtime| engine_runtime.deinit(),
-        .destroy_history => runtime.resources.history.deinit(),
-        .destroy_client_store => runtime.resources.gpa.destroy(runtime.resources.clients),
-        .destroy_telemetry => runtime.resources.telemetry.deinit(runtime.resources.io()),
-        .destroy_child_environment => runtime.resources.child_environment.deinit(),
-    }
 }
 
 fn expectRuntimeEndpointRemoved(io: std.Io, endpoint: []const u8) !void {
@@ -140,7 +108,9 @@ test "runtime composition keeps every borrowed capability at a stable address" {
     try std.testing.expect(runtime.application.clients == runtime.resources.clients);
 
     runtime.deinit();
+    try std.testing.expectEqual(.stopped, runtime.teardown_state);
     runtime.deinit();
+    try std.testing.expectEqual(.stopped, runtime.teardown_state);
     try expectRuntimeEndpointRemoved(io, endpoint);
 }
 
@@ -569,7 +539,7 @@ test "process observation checkpoints a session reported before provider detecti
         pane.queueHistoryOutput(.{ .bytes = "observed", .shell_foreground = false, .clock = pane_namespace.historyClock(io) });
         try std.testing.expect(pane.beginHistoryObservation() != null);
         const shell_id: u32 = @intCast(pane.session.processId());
-        _ = try application_namespace.RuntimeEvents.handle(&runtime.application, .{ .pane_observed = .{
+        _ = try runtime.update(.{ .pane_observed = .{
             .pane = pane.key(),
             .stats = .{},
             .process_probe = .{
@@ -577,7 +547,7 @@ test "process observation checkpoints a session reported before provider detecti
                 .changed = true,
                 .inspected = true,
             },
-        } }, .{ .listener = &runtime.resources.listener, .telemetry = &runtime.resources.telemetry, .ingest_gate = null });
+        } });
         try std.testing.expect(runtime.application.session.dirty);
         try std.testing.expectEqual(agent_foreground, runtime.application.model.agents.resumeSession(pane.key()) != null);
     }

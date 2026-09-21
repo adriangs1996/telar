@@ -21,11 +21,11 @@ request containing only coordinates.
 ```text
 host key, mouse wheel or native action
         |
-key_routing / copy_mode_pointer / NativeActionHandler
+key_routing / copy_mode_pointer / actions.apply
         |
 copy_modes adapter
         |
-CopyModeHandler
+copy_modes
         |
 ClientModel.planCopyMode
         |
@@ -40,7 +40,7 @@ ClientModel.Version.copy and optional viewport
 
 Entry resolves the attached focused pane and captures its current viewport.
 An active name prompt, missing pane or repeated entry is a no-op. While copy
-mode is active, `KeyRoutingHandler` sends semantic keys to copy mode and
+mode is active, `key_routing.apply` sends semantic keys to copy mode and
 consumes replayed bytes. Neither reaches the child. Copy mode does not make
 `capturesKeys` true, so configured prefix bindings remain available. See
 [Key routing](key-routing.md).
@@ -53,13 +53,13 @@ the event leaves copy mode. Temporarily unavailable geometry consumes the
 event without surrendering ownership. Only an inactive copy mode returns the
 event to view and pane routing.
 
-`CopyModePointerHandler` selects that policy without reading either model or
+`copy_mode_pointer.apply` selects that policy without reading either model or
 mutating state. The adapter applies selected movement and exit effects through
-the existing `CopyModeHandler`. It allocates nothing, retains no pane pointer
+the existing `copy_modes`. It allocates nothing, retains no pane pointer
 and adds no queue. A selected effect failure propagates and cannot fall through
 to view or pane mouse handling.
 
-`NativeActionHandler` owns the exit rule for actions from host bindings, Lua
+`actions.apply` owns the exit rule for actions from host bindings, Lua
 batches and plugin batches. It receives a synchronous copy-mode authority
 snapshot, leaves copy mode before any action other than entry, then delegates
 the concrete action. A leave failure prevents that action; a later action
@@ -108,8 +108,8 @@ runtime-selected bytes -> schema.pane_clipboard
             host_ports.setClipboard -> OSC 52 -> host writer flush
 ```
 
-`pane_clipboards.apply` binds the shared handler to the client's host
-clipboard port; the TUI implementation in `host_ports.zig` encodes OSC 52.
+`pane_clipboards.apply` validates pane identity and calls the client's host
+clipboard port directly; the TUI implementation in `host_ports.zig` encodes OSC 52.
 The event neither reads nor changes `ClientModel`; the runtime already selected
 the requested text. The schema decoder rejects an invalid pane identity, and
 the adapter keeps the same check for direct callers. It writes the bounded
@@ -125,7 +125,7 @@ schedule presentation. The schema and terminal writer share the 64 KiB bound.
 ```text
 schema.pane_frame
         |
-pane_frames -> ApplyPaneFrameHandler
+pane_frames -> pane_frames.apply
         |
 ClientModel.applyPaneFrame
         |
@@ -140,16 +140,16 @@ across pruned history, clamps them to the new row count and adopts the runtime
 viewport. Unrelated or identical copy projections do not advance the copy
 revision.
 
-Pane and tab cleanup enter `ReleasePaneResourcesHandler`. Only retirement of
-the target pane closes the mode. The same handler releases paste and reported
-focus before the adapter clears physical graphics. A model
+Pane and tab cleanup enter `pane_resources.release`. Only retirement of
+the target pane closes the mode. The same operation releases paste and reported
+focus before clearing physical graphics. A model
 transition that makes another tab active also releases copy authority, so
 routing cannot remain attached to an inactive pane after an asynchronous
 runtime response.
 
 ## Presentation
 
-Neither the input adapter nor the application handler requests a draw or
+Neither the input adapter nor the operation requests a draw or
 writes presentation state. After the client event, `client_events` publishes the
 model version. `Presenter` compares the `copy` revision with its last presented
 version and folds the latest immutable `CopyModeProjection` into the paced
@@ -165,7 +165,7 @@ leaving invalidate the status bar; cursor and selection movement patch exact
 visible ranges without mutating multiplexer pane damage. Copy projection is
 presentation state, never semantic authority inside `multiplexer.Pane`.
 
-## Proof
+## Validation
 
 - `src/client/input/copy_mode.zig` proves fixed-state motions, selection and
   frame reconciliation.
@@ -176,12 +176,12 @@ presentation state, never semantic authority inside `multiplexer.Pane`.
   viewport-after-commit ordering, including both failure policies.
 - `src/client/application/input/copy_mode_pointer.zig` proves exclusive
   pointer ownership, bounded wheel movement and selected-effect failures.
-- `src/client/application/input/native_action.zig` proves source-independent
+- `src/client/operations/input/actions.zig` proves source-independent
   copy-mode preflight, the entry exception and partial failures.
-- `src/client/controllers/input/copy_modes.zig` owns the selection outbox adapter.
+- `src/client/operations/input/copy_modes.zig` owns the selection outbox adapter.
 - `src/frontend/presentation/screen_support.zig` proves exact OSC 52 encoding,
   multi-chunk payloads and the terminal-side size bound.
-- `src/client/controllers/panes/pane_viewports.zig` owns graphics visibility and
+- `src/client/operations/panes/pane_viewports.zig` owns graphics visibility and
   runtime viewport synchronization for both normal input and copy mode.
 - `src/frontend/client/tests/` proves key and pointer routing,
   outside-wheel consumption, missing-target exit, backpressure, clipboard

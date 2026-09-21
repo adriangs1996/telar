@@ -65,7 +65,7 @@ pub fn retained(app: *client.AttachedClient, event: client.Mouse) !bool {
     if (mouse.kind == .release) {
         if (tabs.gesture.finish()) |move| {
             const model = app.model.activeTabModel() orelse return true;
-            _ = try client.controllers.view_interactions.apply(app, model, .{ .intent = .{ .move_tab = move }, .consumed = true });
+            _ = try client.operations.view_interactions.apply(app, model, .{ .intent = .{ .move_tab = move }, .consumed = true });
         }
     }
 

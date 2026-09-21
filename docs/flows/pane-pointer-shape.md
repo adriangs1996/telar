@@ -86,7 +86,7 @@ Client death loses only physical pointer state. Reconnection reconstructs the
 canonical shape in its first snapshot. Hosts without OSC 22 support may ignore
 the selected shape without affecting input or cell output.
 
-## Proof
+## Validation
 
 - `src/backend/pane/pane_namespace.zig`: every canonical shape, every OSC byte split, the VT default,
   an alias, an invalid name and explicit default reset, with further allocation

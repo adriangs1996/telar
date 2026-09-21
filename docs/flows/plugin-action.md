@@ -12,23 +12,19 @@ configured plugin action
         |
 InputHandler.action
         |
-action_routing -> ActionRoutingHandler
+action_routing.apply
         |
 plugin_actions.start
-        |
-StartPluginActionHandler
         |
 ClientModel.beginPluginExecution { id, configuration_generation }
         |
 Io.Select.concurrent -> isolated one-shot worker
         |
-DeliverPluginActionStartHandler
+plugin_actions.start
         |
 ClientEvent.plugin_result { execution_id, result }
         |
 plugin_actions.complete
-        |
-CompletePluginActionHandler
         |
 finish exact id -> reject stale generation -> authorize whole batch
         |
@@ -36,7 +32,7 @@ client_actions.apply -> focused client use cases
         |
 ClientModel / bounded runtime outbox
         |
-DeliverPluginActionCompletionHandler
+plugin_actions.complete
         |
 loop directive or diagnostic + notification
         |
@@ -45,12 +41,12 @@ presentation_lifecycle.observe -> Presenter
 
 ## Start ownership and order
 
-`ActionRoutingHandler` selects the plugin start port after prompt authority has
+`action_routing.apply` calls plugin_actions.start after prompt authority has
 accepted the configured action. It does not resolve a package, reserve model
 state or schedule work.
 
 `plugin_actions.start` adapts the configured stable plugin and action IDs to
-`StartPluginActionHandler`. The application handler owns this order:
+`plugin_actions.start`. The operation owns this order:
 
 1. suppress a second invocation while one execution is active;
 2. resolve the action and build its worker request;
@@ -64,13 +60,11 @@ commit, `errdefer` removes only that exact reservation. The event loop remains
 the sole writer of `ClientModel`; the worker receives copied request data and
 returns through `ClientEvent.plugin_result`.
 
-Every classified start outcome crosses an explicit delivery boundary.
-`DeliverPluginActionStartHandler` keeps active, busy and unavailable outcomes
-quiet. For an invalid configured action, it commits the bounded diagnostic and
-constructs its failure notification. The adapter supplies only registry
-resolution, worker scheduling and physical notification publication. An
-unexpected preparation error or a scheduling failure remains an error and does
-not cross the delivery boundary.
+`plugin_actions.start` handles preparation and the resulting outcome in the
+same concrete operation. Active, busy and unavailable outcomes stay quiet. An
+invalid configured action commits a bounded diagnostic and publishes its failure
+notification. Registry resolution and actual worker scheduling are called
+directly. Unexpected preparation or scheduling errors propagate.
 
 The execution reservation is lifecycle state, not render state. Beginning or
 finishing it does not advance `ClientModel.Version` and cannot schedule an
@@ -79,7 +73,7 @@ empty frame.
 ## Completion ownership and order
 
 The completion event retains the execution identity even when the worker
-failed. `CompletePluginActionHandler` first consumes only a matching active
+failed. `plugin_actions.complete` first consumes only a matching active
 identity. An unknown completion cannot clear newer work. It then compares the
 captured configuration generation with the current model generation.
 
@@ -87,19 +81,18 @@ A reload does not cancel a worker whose event is already in flight. Its result
 becomes stale instead: the matching reservation is consumed, but the old batch
 cannot be authorized or applied against the replacement configuration.
 
-For a current successful result, the adapter re-resolves authority through the
+For a current successful result, the operation re-resolves authority through the
 current `Registry.authorizeBatch`. That check verifies package position,
 stable plugin ID, exact digest, declared capabilities and digest-bound grants
 for every effect before any effect runs. After authorization, the completion
-handler clears an obsolete diagnostic before applying the batch. The adapter
-does not own that semantic transition.
+operation clears an obsolete diagnostic before applying the batch.
 
-Every classified outcome crosses an explicit completion-delivery boundary.
-`DeliverPluginActionCompletionHandler` maps `exit` to the client-loop exit
+The same function handles the resulting outcome.
+`plugin_actions.complete` maps `exit` to the client-loop exit
 directive, keeps applied and obsolete outcomes quiet, and sends worker or
-authorization failures through `ClientDiagnosticHandler`. It then builds a
-bounded notification from the committed banner. The adapter supplies only the
-physical notification publication port after consuming the execution.
+authorization failures through `client_diagnostic.replace`. It then builds a
+bounded notification from the committed banner and calls
+`notifications.publishNow` after consuming the execution.
 
 Authorized effects enter `client_actions.apply`, the shared dispatcher for
 native semantic actions regardless of whether they came from host input, Lua
@@ -125,7 +118,7 @@ presenter compare versions and schedule at most the required paced frame.
 - Client shutdown cancels outstanding select work and then destroys the
   disposable model, so no plugin execution must survive the client.
 
-## Proof
+## Validation
 
 - `src/client/model/Model.zig` proves single-flight reservation, exact
   identity matching, generation retention and identifier exhaustion.

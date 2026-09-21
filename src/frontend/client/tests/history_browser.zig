@@ -4,11 +4,11 @@ const CharType = @import("telar-client").Char;
 const HistoryEntryType = @import("telar-core").HistoryEntry;
 const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
-const history = @import("telar-client").controllers.history_palettes;
+const history = @import("telar-client").operations.history_palettes;
 const encodeHistoryResults_module = @import("telar-core").encodeHistoryResults;
 const server = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
-const prompts = @import("telar-client").controllers.name_prompts;
+const prompts = @import("telar-client").operations.name_prompts;
 const encodeHistoryOutput_module = @import("telar-core").encodeHistoryOutput;
 const RequestFailedType = @import("telar-core").RequestFailed;
 

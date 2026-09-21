@@ -11,7 +11,7 @@ test "configured copy-mode action enters the agent reader without VT state or dr
     const binding = try client.config_model.ConfiguredBinding.parse(&.{"ctrl+q"}, .enter_copy_mode);
     gui.input.adopt(&gui.app, .{ .prefix = client.default_prefix, .bindings = &.{binding}, .escape_timeout_ns = std.time.ns_per_s, .sequence_timeout_ns = std.time.ns_per_s });
     try fixture.send(.{ .key = .{ .target_id = composer.id.target_id, .generation = composer.id.generation, .code = .{ .char = .init("q") }, .mods = .{ .ctrl = true }, .physical = .{ .value = 61 } } });
-    try std.testing.expect(client.controllers.copy_modes.active(&gui.app));
+    try std.testing.expect(client.operations.copy_modes.active(&gui.app));
     try std.testing.expect(!gui.app.model.copyModeActive());
     try std.testing.expect(gui.app.model.copy_state == null);
     try std.testing.expectEqual(.transcript, std.meta.activeTag(gui.widgets.dispatcher.focusedTarget().?.action));
@@ -40,7 +40,7 @@ test "reader select-all copies rendered text and Escape restores the composer" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const gui = fixture.session.gui;
-    try std.testing.expect(client.controllers.copy_modes.enter(&gui.app));
+    try std.testing.expect(client.operations.copy_modes.enter(&gui.app));
     try fixture.publish();
     try fixture.send(.{ .key = .{ .code = .{ .char = .init("a") }, .mods = .{ .super = true } } });
     try std.testing.expect(gui.widgets.thread_selection.selected());
@@ -56,7 +56,7 @@ test "reader select-all copies rendered text and Escape restores the composer" {
     try fixture.ack(request, .success);
     try std.testing.expect(gui.widgets.thread_selection.keyboard);
     try fixture.send(.{ .key = .{ .code = .escape } });
-    try std.testing.expect(!client.controllers.copy_modes.active(&gui.app));
+    try std.testing.expect(!client.operations.copy_modes.active(&gui.app));
     try std.testing.expect((try fixture.target(.composer)).id.eql(gui.widgets.dispatcher.focused.?));
     try fixture.publish();
     try std.testing.expect(gui.app.model.agentPane(Fixture.pane_id).?.agent_history == null);
@@ -66,13 +66,13 @@ test "reader Tab leaves selection and retains the focus selected by traversal" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const gui = fixture.session.gui;
-    try std.testing.expect(client.controllers.copy_modes.enter(&gui.app));
+    try std.testing.expect(client.operations.copy_modes.enter(&gui.app));
     try fixture.publish();
     const transcript = try fixture.target(.transcript);
     try fixture.send(.{ .key = .{ .code = .tab } });
     const focused = gui.widgets.dispatcher.focused orelse return error.MissingTraversedFocus;
     try std.testing.expect(!focused.eql(transcript.id));
-    try std.testing.expect(!client.controllers.copy_modes.active(&gui.app));
+    try std.testing.expect(!client.operations.copy_modes.active(&gui.app));
     try fixture.publish();
     try std.testing.expect(focused.eql(gui.widgets.dispatcher.focused.?));
     try std.testing.expect(gui.app.model.agentPane(Fixture.pane_id).?.agent_history == null);
@@ -83,7 +83,7 @@ test "reader failed copy keeps selection and an old success cannot close a newer
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const gui = fixture.session.gui;
-    try std.testing.expect(client.controllers.copy_modes.enter(&gui.app));
+    try std.testing.expect(client.operations.copy_modes.enter(&gui.app));
     try fixture.publish();
     try fixture.send(.{ .key = .{ .code = .home } });
     try fixture.send(.{ .key = .{ .code = .{ .char = .init("v") } } });
@@ -114,7 +114,7 @@ test "reader page movement retains a delivered caret for subsequent vertical key
     try fixture.messages(&.{"line with readable words\n" ** 120});
     try fixture.publish();
     const gui = fixture.session.gui;
-    try std.testing.expect(client.controllers.copy_modes.enter(&gui.app));
+    try std.testing.expect(client.operations.copy_modes.enter(&gui.app));
     try fixture.publish();
     const previous = gui.widgets.thread_selection.head.?;
     try fixture.send(.{ .key = .{ .code = .page_up } });

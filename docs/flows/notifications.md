@@ -10,13 +10,13 @@ starts exiting.
 ```text
 runtime notification                         local semantic event
         |                                              |
-notifications.applyRuntime                    application handler
+notifications.applyRuntime                    operation
         |                                              |
 wire-to-client translation              construct notifications.Input
         |                                              |
 notifications.publish <--------- adapter publishNow
                                |
-                   PublishNotificationHandler
+                   notifications.publishNow
                                |
                     ClientModel.publishNotification
                                |
@@ -31,14 +31,14 @@ notifications.publish <--------- adapter publishNow
 
 The dispatcher delegates a runtime event to `notifications.applyRuntime`. The
 adapter translates protocol level, target and millisecond duration into client
-notification values, adds the monotonic timestamp and invokes the existing
-publication use case. Request failures, agent and proxy transitions,
+notification values and calls `notifications.publishNow`, which samples time
+and applies the publication operation. Request failures, agent and proxy transitions,
 configuration or plugin diagnostics, and clipboard image failures enter
-as complete `notifications.Input` values constructed by their application
-handlers. Their adapters pass those values to `notifications.publishNow`,
-which owns monotonic timestamp acquisition but no notification policy.
-Diagnostic-producing delivery handlers commit their banner before constructing
-the input. The notification handler commits its owned model state before it
+as complete `notifications.Input` values. Those concrete operations call
+`notifications.publishNow`, which samples monotonic time and delegates to
+`notifications.publish` in the same module.
+Diagnostic-producing operations commit their banner before constructing
+the input. The notification operation commits its owned model state before it
 touches timer infrastructure.
 
 `notifications.Center` copies title and message bytes into fixed buffers. It
@@ -82,13 +82,11 @@ show_notification request + notification continuation
                          |
        notifications.applyDeliveryReport
                          |
-       HandleNotificationDeliveryHandler
-                         |
          delivered or local failure publication
 ```
 
 The client adapter removes the request identity by consuming its continuation,
-then requires the exact `notification` type. The application handler owns
+then requires the exact `notification` type. The operation owns
 delivery policy. A positive client count returns `delivered` without changing
 the model or timer. A zero count publishes one local failure through the normal
 owned notification flow and returns `undelivered`.
@@ -110,7 +108,7 @@ adding another task. Its fixed two-way select discards whichever wait loses
 the race.
 
 `notifications.handleTick` releases the completed task before checking its
-result. It then executes `AdvanceNotificationsHandler`, which advances the
+result. It then executes `notifications.handleTick`, which advances the
 center from elapsed monotonic time, commits `Version.notifications` only when
 state changed and rearms the next deadline.
 
@@ -151,7 +149,7 @@ activate(id) or dismiss(id) intent
       |
 InputHandler
       |
-ActivateNotificationHandler or DismissNotificationHandler
+notifications.activate or notifications.dismiss
       |
 ClientModel commit + timer reschedule
       |
@@ -182,7 +180,7 @@ client starts with an empty center. Runtime-owned facts that must survive, such
 as proxy status and agent state, rebuild their own model replicas and may emit
 new notifications after reconciliation.
 
-## Proof
+## Validation
 
 - `src/gui/tests/notifications.zig` covers host-time sampling, failed delivery,
   fixed text geometry, stack motion, retirement, Unicode wrapping, pixel hit
@@ -198,7 +196,7 @@ new notifications after reconciliation.
 - `src/client/application/notifications/notifications.zig` proves commit-before-
   timer-before-navigation ordering, delivery policy, stale interaction
   behavior and retained commits after effect failures.
-- `src/client/controllers/notifications/notifications.zig` owns local timestamp acquisition,
+- `src/client/operations/notifications/notifications.zig` owns local timestamp acquisition,
   diagnostic publication, outbound action translation, delivery correlation
   and timer event ordering.
 - `src/client/resources/notification_timers.zig` maps model deadlines to the

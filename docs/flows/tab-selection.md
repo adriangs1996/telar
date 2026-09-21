@@ -1,105 +1,44 @@
 # Tab selection
 
-The active tab is disposable client state. The runtime keeps canonical tab and
-pane membership, but it does not choose which tab one client is viewing.
-
-Selection runs on the interactive path. Its work is bounded by
-`schema.max_tabs_per_workspace`, `schema.max_panes_per_tab`, the fixed client
-outbox and the fixed continuation tracker. Only one tab snapshot may be pending.
-
-## Client transition
+The active tab belongs to the client. Runtime membership remains canonical.
+All sources resolve their intent through one concrete operation:
 
 ```text
-select_tab / select_tab_offset / mouse identity
-        |
-client_actions.selectTab
-        |
-SelectTab { target }
-        |
-SelectTabHandler
-        |
-ClientModel.selectTab
-        |
-TabSelection
-        |
-DeliverTabSelectionHandler
-        |
-detach previous panes -> request selected tab snapshot
-        |
-presentation_lifecycle.observe -> Presenter
+operations/input/actions.apply, delivered tab click or agent navigation
+  -> operations/tabs/tab_selections.select
+     -> reject a pending tab snapshot
+     -> Model.selectTab
+     -> tab_attachments.detach(previous)
+     -> show selected graphics
+     -> active_pane_resources.synchronize
+     -> request_lifecycle.requestTabSnapshot(selected location)
+  -> adapter observes presentation revisions
 ```
 
-Each source adapter translates its intent into a `Target` before calling
-`client_actions.selectTab`. Numeric bindings provide a zero-based position,
-next and previous bindings provide a signed offset, and mouse, sidebar and
-notification interactions provide a stable tab identity. The adapter does not
-inspect the workspace slot array or calculate the next index.
+The target can be a stable identity, zero-based position or signed offset.
+Missing/repeated targets, complete wrapped turns and fewer than two tabs are
+no-ops. Offset reduction happens before addition, so full-range signed inputs
+do not overflow. Callers do not inspect tab slots or implement navigation.
 
-`SelectTabHandler` rejects selection while a tab snapshot is pending. It then
-delegates target resolution and the semantic commit to `ClientModel`. A missing
-identity, invalid position, repeated position, zero offset, complete wrapped
-turn or workspace with fewer than two tabs is a no-op. No-op selections run no
-resource effects and advance no version.
+A real selection commits the active-tab revision and releases copy mode if it
+belongs to the previous tab. Attachment retirement finishes that tab's captured
+paste, sends its focus-out, delivers detaches, retires pending attachment
+continuations and hides graphics. Attachment flags commit only after all of
+that tab's effects succeed. An unrelated report owner is preserved.
 
-Offset resolution reduces the offset modulo the bounded tab count before it
-adds the active index. This supports negative offsets and avoids signed integer
-overflow for the full `isize` input range.
+Selected graphics become visible before active attachment/focus synchronization
+and the canonical snapshot request. Snapshot reconciliation repairs membership
+and requests detached panes with usable visible content. Late confirmations
+for the previous tab cannot revive its ownership.
 
-## Resource effects and presentation
+Selection and resource delivery are synchronous in the same operation. A
+failure after the selection keeps the committed identity and completed effects,
+then propagates to the client loop. Reconnect rebuilds disposable resources;
+runtime tabs and PTYs remain alive. Presentation follows the active-tab revision
+and is scheduled only by the host adapter.
 
-A committed selection advances `ClientModel.Version.active_tab` and releases
-copy mode when its pane belongs to the previous tab. Its commit captures both
-exact tab identities, both tab-local layout revisions and the workspace, tab,
-active-tab, pane and copy revisions. The two layout revisions make the commit
-exact even when an inactive tab changed without advancing the visible pane
-revision.
-
-`DeliverTabSelectionHandler` validates that commit before any resource effect.
-`RetireTabAttachmentsHandler` closes any bracketed paste captured by the
-previous tab. If that tab owns `ClientModel.reported_pane_focus`, it sends
-focus-out and clears the state before every `detach_pane`. Detaching another
-tab cannot clear the active owner's report state. The handler hides old
-graphics and commits their operational detachment. The delivery handler then
-makes the selected tab's graphics visible, synchronizes attachment geometry
-and focus reporting, and enqueues one `request_tab_snapshot` for the exact
-selected location. The `tab_selections` adapter supplies only paste, focus,
-attachment, graphics and request-lifecycle ports.
-
-The runtime dispatches `detach_pane` through `detach_pane.Controller` and
-`DetachPaneHandler`. It dispatches `request_tab_snapshot` through
-`tab_snapshot.Controller` and the tab snapshot query. The returned
-`tab_snapshot` enters the separate
-[tab snapshot reconciliation](tab-snapshot-reconciliation.md) flow, which
-repairs pane membership and attachments from runtime state.
-
-Neither the selection handler nor its adapter requests a frame. `client_events`
-calls `presentation_lifecycle.observe`, and `Presenter` schedules a paced frame
-only after it observes the changed active-tab revision.
-
-## Failure and recovery
-
-The model commits before resource effects. A resource error therefore preserves
-the selected identity and propagates to the client loop. The client process
-exits on that error. Runtime tabs and PTYs remain valid, and reconnect rebuilds
-the disposable client model from canonical snapshots. Any `detach_pane` message
-already delivered remains valid because attachments also belong to one client
-session.
-
-## Proof
-
-- `src/client/workspace/tabs.zig` proves bounded positive and negative wrap,
-  complete-turn no-ops and overflow-safe offset reduction.
-- `src/client/model/Model.zig` proves identity, position and offset
-  resolution plus exact version changes.
-- `src/client/application/tabs/select_tab.zig` proves snapshot gating,
-  commit ordering, no-op behavior and post-commit delivery failure.
-- `src/client/application/tabs/tab_selection_delivery.zig` proves exact
-  revisions and identities, local-layout ABA rejection, complete effect order
-  and partial failure boundaries.
-- `src/client/application/tabs/tab_attachment_retirement.zig` proves
-  exact previous-tab authority and attachment retirement.
-- `src/frontend/client/tests/` proves native position and offset
-  entrypoints, attachment order, snapshot delivery and presenter observation.
-- `src/backend/runtime/entrypoints/requests/detach_pane.zig` and
-  `src/backend/runtime/entrypoints/requests/tab_snapshot.zig` prove the two runtime
-  protocol entrypoints used after selection.
+Source: `src/client/operations/tabs/tab_selections.zig` and
+`tab_attachments.zig` in the same directory.
+Tests: `src/frontend/client/tests/tab_lifecycle.zig`, `pane_lifecycle.zig`,
+`src/client/model/tests/tabs.zig`, and `src/client/workspace/` tests cover target
+resolution, no-ops, wire order, exact ownership and canonical repair.

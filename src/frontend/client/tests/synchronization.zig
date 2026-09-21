@@ -4,23 +4,22 @@ const TerminalClient = @import("../TerminalClient.zig");
 const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
-const pane_openings = @import("telar-client").controllers.pane_openings;
+const pane_openings = @import("telar-client").operations.pane_openings;
 const RequestIdType = @import("telar-core").RequestId;
 const PaneOpenedType = @import("telar-core").PaneOpened;
-const ApplicationPanesPaneOpenDeliveryOutcome = @import("telar-client").ApplicationPanesPaneOpenDeliveryOutcome;
 const InputHandler = @import("../resources/InputHandler.zig");
-const client_actions = @import("telar-client").controllers.actions;
+const client_actions = @import("telar-client").operations.actions;
 const TerminalSizeType = @import("telar-core").TerminalSize;
 const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const PaneIdType = @import("telar-core").PaneId;
-const workspace_handoffs = @import("telar-client").controllers.workspace_handoffs;
+const workspace_handoffs = @import("telar-client").operations.workspace_handoffs;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const PaneTargetType = @import("telar-core").PaneTarget;
 const encodeRequestFailed_module = @import("telar-core").encodeRequestFailed;
 const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const capacity_module = @import("telar-client").capacity;
-const active_pane_resources = @import("telar-client").controllers.active_pane_resources;
+const active_pane_resources = @import("telar-client").operations.active_pane_resources;
 const AgentInputType = @import("telar-client").AgentInput;
 const LayoutType = @import("telar-client").WorkspaceLayout;
 const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
@@ -28,19 +27,20 @@ const encodeTabSnapshot_module = @import("telar-core").encodeTabSnapshot;
 const LayoutSnapshot = @import("telar-client").LayoutSnapshot;
 const max_client_layout_nodes_module = @import("telar-core").max_client_layout_nodes;
 const ClientLayoutNodeType = @import("telar-core").ClientLayoutNode;
-const ApplicationAgentsAgentNavigationOutcome = @import("telar-client").ApplicationAgentsAgentNavigationOutcome;
-const agent_navigation = @import("telar-client").controllers.agent_navigation;
+const ApplicationAgentsAgentNavigationOutcome = @import("telar-client").operations.agent_navigation.Outcome;
+const agent_navigation = @import("telar-client").operations.agent_navigation;
 const TabDescriptorType = @import("telar-core").TabDescriptor;
 const encodeWorkspaceSnapshot_module = @import("telar-core").encodeWorkspaceSnapshot;
 const PaneDescriptorType = @import("telar-core").PaneDescriptor;
 const AgentKeyType = @import("telar-client").AgentKey;
-const tab_snapshots = @import("telar-client").controllers.tab_snapshots;
+const tab_snapshots = @import("telar-client").operations.tab_snapshots;
 const support = @import("support.zig");
 const VersionType = @import("telar-client").Version;
-const workspace_snapshots = @import("telar-client").controllers.workspace_snapshots;
+const workspace_snapshots = @import("telar-client").operations.workspace_snapshots;
 const ResyncRequiredType = @import("telar-core").ResyncRequired;
 const ApplicationSessionResyncRequiredOutcome = @import("telar-client").ApplicationSessionResyncRequiredOutcome;
-const resync_requirements = @import("telar-client").controllers.resync_requirements;
+const resync_requirements = @import("telar-client").operations.resync_requirements;
+const runtime_io = @import("telar-client").runtime_io;
 
 test "pane opening rejects an unknown request without client effects" {
     var harness: TestHarness = undefined;
@@ -97,7 +97,7 @@ test "pane opening consumes an ignored continuation without client effects" {
     const pending_updates_before = host(client).presenter.pending_updates;
     try client.request_lifecycle.tracker.add(request_id, .ignored);
 
-    try std.testing.expectEqual(ApplicationPanesPaneOpenDeliveryOutcome.ignored, try pane_openings.apply(client, .{
+    try std.testing.expectEqual(pane_openings.Outcome.ignored, try pane_openings.apply(client, .{
         .request_id = request_id,
         .pane_id = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
@@ -1292,4 +1292,37 @@ test "resync keeps a closed bookmark forgotten when predecessor handoff is block
     try std.testing.expectEqual(@as(usize, 1), client.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
+}
+
+test "resync outbox failure releases its snapshot correlation so a later notice can retry" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.request_lifecycle.tracker = .{};
+    while (client.runtime_transport.outbox.hasCapacity()) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    }
+    const version = client.model.version();
+    const notice: ResyncRequiredType = .{ .workspace = TestHarness.bootstrap_location.workspace, .workspace_closed = false };
+
+    try std.testing.expectError(error.ClientOutboxFull, resync_requirements.apply(client, notice));
+
+    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try runtime_io.pump(client);
+    try harness.settle();
+    var outgoing: [256]u8 = undefined;
+    for (0..capacity_module) |_| {
+        try std.testing.expect((try harness.nextClientMessage(&outgoing)) == .detach_pane);
+    }
+
+    try std.testing.expectEqual(.snapshot_requested, try resync_requirements.apply(client, notice));
+    try std.testing.expectEqual(.coalesced, try resync_requirements.apply(client, notice));
+    try std.testing.expectEqual(@as(usize, 1), client.request_lifecycle.tracker.count);
+    try harness.settle();
+    const recovery = try harness.nextClientMessage(&outgoing);
+    try std.testing.expect(recovery == .request_workspace_snapshot);
+    try std.testing.expectEqualDeep(notice.workspace, recovery.request_workspace_snapshot.workspace);
 }

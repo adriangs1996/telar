@@ -5,7 +5,7 @@ const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const TabCreatedType = @import("telar-core").TabCreated;
 const std = @import("std");
-const tab_creations = @import("telar-client").controllers.tab_creations;
+const tab_creations = @import("telar-client").operations.tab_creations;
 const RequestIdType = @import("telar-core").RequestId;
 const VersionType = @import("telar-client").Version;
 const TabLocationType = @import("telar-core").TabLocation;
@@ -20,16 +20,16 @@ const encodeTabClosed_module = @import("telar-core").encodeTabClosed;
 const encodeRequestFailed_module = @import("telar-core").encodeRequestFailed;
 const support = @import("support.zig");
 const TabMovedType = @import("telar-core").TabMoved;
-const tab_moves = @import("telar-client").controllers.tab_moves;
+const tab_moves = @import("telar-client").operations.tab_moves;
 const InputHandler = @import("../resources/InputHandler.zig");
-const client_actions = @import("telar-client").controllers.actions;
+const client_actions = @import("telar-client").operations.actions;
 const TabMoveDirectionType = @import("telar-core").TabMoveDirection;
 const ChangeType = @import("telar-client").Change;
 const PaneIdType = @import("telar-core").PaneId;
 const capacity_module = @import("telar-client").capacity;
-const active_pane_resources = @import("telar-client").controllers.active_pane_resources;
+const active_pane_resources = @import("telar-client").operations.active_pane_resources;
 const TabClosedType = @import("telar-core").TabClosed;
-const tab_closures = @import("telar-client").controllers.tab_closures;
+const tab_closures = @import("telar-client").operations.tab_closures;
 const PaneTargetType = @import("telar-core").PaneTarget;
 const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const encodeResyncRequired_module = @import("telar-core").encodeResyncRequired;
@@ -1216,4 +1216,77 @@ test "TUI tab drag cancellation consumes releases outside the tab strip" {
     try std.testing.expect(!host(app).view.tab_drag.gesture.captured);
     try std.testing.expectEqual(@as(usize, 0), app.runtime_transport.outbox.len);
     try std.testing.expect(!app.runtime_transport.outbox.inFlight());
+}
+
+test "tab creation validates labels before retaining a request" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.request_lifecycle.tracker = .{};
+    const version = client.model.version();
+    const next_request = client.request_lifecycle.next_request_id;
+
+    try std.testing.expectError(error.InvalidTabLabel, tab_creations.request(client, .{ .label = "bad\nlabel" }));
+    try std.testing.expectError(error.InvalidUtf8, tab_creations.request(client, .{ .label = "\xff" }));
+
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(next_request, client.request_lifecycle.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+}
+
+test "tab creation outbox failure releases correlation without mutating the projection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.request_lifecycle.tracker = .{};
+    while (client.runtime_transport.outbox.hasCapacity()) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    }
+    const version = client.model.version();
+
+    try std.testing.expectError(error.ClientOutboxFull, tab_creations.request(client, .{}));
+
+    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+}
+
+test "canonical tab creation remains committed when previous attachment retirement cannot be delivered" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.request_lifecycle.tracker = .{};
+    const request_id: RequestIdType = @enumFromInt(4);
+    try client.request_lifecycle.tracker.add(request_id, .{ .create_tab = .{
+        .workspace = TestHarness.bootstrap_location.workspace,
+        .size = .{ .cols = 80, .rows = 20 },
+    } });
+    while (client.runtime_transport.outbox.hasCapacity()) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    }
+    const location: TabLocationType = .{ .workspace = TestHarness.bootstrap_location.workspace, .tab_id = @enumFromInt(2) };
+    const created: TabCreatedType = .{
+        .request_id = request_id,
+        .location = location,
+        .position = 1,
+        .label = "second",
+        .root_pane_id = @enumFromInt(20),
+    };
+
+    try std.testing.expectError(error.ClientOutboxFull, tab_creations.apply(client, created));
+
+    try std.testing.expectEqualDeep(location, client.model.activeTabLocation().?);
+    try std.testing.expectEqual(@as(usize, 2), client.model.workspace.count);
+    try std.testing.expect(client.model.workspace.findPane(@enumFromInt(20)).?.attached);
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectError(error.UnexpectedTabCreated, tab_creations.apply(client, created));
 }

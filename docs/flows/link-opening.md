@@ -30,7 +30,7 @@ native event -> NativeInput -> PointerRouting -> hover_target / resolveLink
                                       |              underline + preview
                           HostChrome.link_pointer_fn
                                       |
-                    OpenLinkHandler -> file tab or host worker
+                    link_openings -> file tab or host worker
 ```
 
 ## Ownership and budgets
@@ -66,7 +66,7 @@ modifier/release policy there. An absent callback retains TUI behavior: ordinary
 left press opens a row-local textual link, Shift declines opening for selection,
 and copy mode uses `o`. The common client contains no GUI gesture policy.
 
-`OpenLinkHandler` sends supported non-file schemes through `Opening`: at most one
+`link_openings` sends supported non-file schemes through `Opening`: at most one
 worker and one replaceable pending target per client. The worker uses
 `/usr/bin/open` on macOS, `xdg-open` on Linux, or
 `rundll32.exe url.dll,FileProtocolHandler` on Windows. It passes the URI as one
@@ -78,7 +78,7 @@ a tab with `[$EDITOR, path]`. Empty authority and `localhost` are local. Remote
 hosts, user information, ports, query/fragment, malformed escapes and decoded NUL
 are rejected. No command or URI is evaluated through a shell.
 
-## Proof
+## Validation
 
 - `src/core/link.zig`: scheme allowlist, punctuation, Unicode, and length limits.
 - `src/client/links/cells.zig`: row, OSC 8 and soft-wrap resolution.

@@ -22,9 +22,9 @@ descriptor whose publication raced with that cleanup. The window producer has
 stopped before this final pass. Storage and Wayland resources are released last.
 No transfer waits on the window thread or on a frame completion.
 
-Clicking an HTTP(S) link enters the existing shared link controller. Its bounded
-queue schedules `ports/services.zig` as an inbox producer, and `.link_opened`
-completes the request through the same controller. `telar-client.openHostLink`
+Clicking an HTTP(S) link enters `operations/input/link_openings.apply`. Its
+bounded queue schedules `ports/services.zig` as an inbox producer; `.link_opened`
+reaches `link_openings.complete` through `GuiClient.update`. `telar-client.openHostLink`
 contains the worker formerly owned by the TUI: `/usr/bin/open` on macOS and
 `xdg-open` on Linux, with a five-second timeout and 4 KiB limits for each output
 stream. The TUI imports that same function through its previous namespace;

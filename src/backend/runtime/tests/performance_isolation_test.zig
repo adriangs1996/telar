@@ -11,8 +11,7 @@ const attachment_mod = @import("../attachment/attachment_namespace.zig");
 const max_image_bytes_global_module = @import("telar-core").max_image_bytes_global;
 const StatsType = @import("../../media/Stats.zig");
 const system_metrics = @import("../observability/system_metrics.zig");
-const system_metrics_coordinator = @import("../observability/system_metrics_coordinator.zig");
-const MetricsCapture = @import("MetricsCapture.zig");
+const RequestFixture = @import("RequestFixture.zig");
 const CountedRelay = @import("CountedRelay.zig");
 const body = @import("../../proxy/http/body.zig");
 const ServiceType = @import("../../history/Service.zig");
@@ -122,27 +121,19 @@ test "performance probe measures runtime staging of a 4K RGBA transfer" {
 }
 
 test "performance probe counts work while host sampling is blocked or unchanged" {
-    const metrics = system_metrics;
-    const GenericMetricsPort = @import("../observability/GenericSystemMetricsCoordinatorRuntimePort.zig").Type;
-    const GenericMetricsCoordinator = @import("../observability/GenericSystemMetricsCoordinator.zig").Type;
-    const coordinator = system_metrics_coordinator;
-    const asynchronous = @hasDecl(metrics, "sampleOwned");
-    const port: GenericMetricsPort(MetricsCapture) = if (asynchronous)
-        .{ .rearm_tick = MetricsCapture.rearm, .schedule = MetricsCapture.schedule, .pump_clients = MetricsCapture.pump }
-    else
-        .{ .rearm_tick = MetricsCapture.rearm, .sample = MetricsCapture.sample, .pump_clients = MetricsCapture.pump };
-    var sampler: metrics.Sampler = .{};
-    var capture: MetricsCapture = .{};
-    var pending = false;
-    const resources: coordinator.Resources = if (asynchronous)
-        .{ .sampler = &sampler, .pending = &pending }
-    else
-        .{ .sampler = &sampler };
-    var handler = GenericMetricsCoordinator(MetricsCapture, port).init(&capture, resources);
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const application = &fixture.runtime.application;
+    application.system_metrics_pending = true;
+    const before = application.system_metrics;
+    const started = now();
     for (0..100) |_| {
-        try handler.handle({});
+        _ = try fixture.runtime.update(.{ .metrics_tick = {} });
     }
-    std.debug.print("PERF metrics_ticks ticks=100 inline_reads={d} scheduled_jobs={d} client_pumps={d}\n", .{ capture.reads, capture.jobs, capture.pumps });
+    try std.testing.expect(application.system_metrics_pending);
+    try std.testing.expectEqualDeep(before, application.system_metrics);
+    std.debug.print("PERF metrics_pending_ticks ticks=100 elapsed_ns={d}\n", .{elapsed(started)});
 }
 
 test "performance probe counts TLS-facing writes without changing chunk framing" {

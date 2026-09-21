@@ -17,16 +17,16 @@ the existing opening behavior.
 ```text
 InputHandler.mouse
     -> pointer_routing: normalize host pixels to cells
-    -> CopyModePointerHandler: captured gesture first
+    -> copy_mode_pointer.apply: captured gesture first
     -> view_interactions: focus the clicked pane
     -> link_openings: ordinary links retain priority
-    -> PaneMouseHandler: choose selection or child report
-    -> copy_modes.beginPointer -> CopyModeHandler.beginPointer
+    -> pane_mouse_inputs.apply: choose selection or child report
+    -> copy_modes.beginPointer -> copy_modes.beginPointer
     -> ClientModel.beginPointerSelection
 
 captured drag / release
-    -> CopyModePointerHandler
-    -> copy_modes.pointer -> CopyModeHandler.execute
+    -> copy_mode_pointer.apply
+    -> copy_modes.pointer -> copy_modes.execute
     -> ClientModel.planCopyMode
     -> copy_selection before commit, on release only
     -> ClientModel.commitCopyMode
@@ -40,7 +40,7 @@ runtime copy_selection
 The client owns the range, click tracker and physical gesture. Mouse selection
 reuses `copy_state` and its immutable projection but does not enter keyboard
 copy mode, move the child cursor or restore the entry viewport. Typing and
-pasting clear highlighting through `PaneInputHandler` and still reach the child.
+pasting clear highlighting through `pane_inputs.send` and still reach the child.
 A new press or mouse wheel clears a completed selection before normal routing.
 
 `selection_gesture` retains only the pane ID from the press. It survives clearing
@@ -77,7 +77,7 @@ This implementation clips at the viewport edge. It does not auto-scroll during
 a drag, offer rectangular mouse selection, or expand a triple click across
 soft-wrapped rows. Clipboard delivery still depends on host OSC 52 permission.
 
-## Proof
+## Validation
 
 - `src/core/select.zig`: word boundaries, whitespace, wide glyph continuations
   and saturated click counts.

@@ -132,7 +132,7 @@ icon exactly one cell wide) and the attachment scheme before the runtime
 starts; an invalid manifest is a configuration error, never a partially loaded
 table.
 
-## Proof
+## Validation
 
 - `src/core/agent_manifest.zig` proves the built-in heuristics, custom index
   assignment, extension by name, list bounds and presentation defaults.

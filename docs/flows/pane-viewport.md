@@ -1,125 +1,49 @@
 # Pane viewport
 
-The client owns the visible scroll position of each pane. The runtime keeps a
-per-attachment projection of that position so it can send the requested rows.
-`ClientModel` is the authority inside the client. `multiplexer.Pane.scroll` is
-the committed value, and `ClientModel.Version.viewport` records each local
-change independently from pane structure and copy-mode state.
-
-The transition runs on the interactive path. The model performs fixed
-arithmetic and allocates nothing. Its runtime effect produces at most one
-bounded outbox message. Repeated, missing, detached and inactive targets are
-no-ops.
-
-## Normal input
+The client owns its visible scroll position. The runtime keeps an independent
+per-attachment projection so it can return the requested history rows.
 
 ```text
-mouse wheel, focused scroll action or pane input
-        |
-InputHandler
-        |
-pane_mouse_inputs or PaneInputHandler
-        |
-PaneMouseHandler or pane-input viewport policy
-        |
-SetPaneViewportHandler
-        |
-ClientModel.setPaneViewport
-        |
-PaneViewportChange
-        |
-DeliverPaneViewportHandler
-        |
-graphics visibility, then set_pane_viewport
+operations/input/pane_inputs, pane_mouse_inputs or copy_modes
+  -> operations/panes/pane_viewports.apply
+     -> Model.setPaneViewport
+     -> pane_viewports.deliver
+        -> validate exact committed pane, viewport and revision
+        -> graphics visibility
+        -> runtime set_pane_viewport
+  -> adapter observes presentation revisions
 ```
 
-`PaneViewportCommand` supports an absolute row, a relative movement and the
-bottom of retained history. `PaneMouseHandler` selects relative wheel
-movement for both physical pointer commands and focused `scroll_pane` actions,
-and `pane_mouse_inputs` applies it through the viewport adapter. Focused scroll
-reuses the mouse source for child reports and alternate-screen keys, so the
-keyboard binding itself does not reset the viewport to live output.
-`PaneInputHandler` composes the same use case with a `.bottom` intent before
-keyboard and paste delivery. None of these callers clamps offsets, changes
-scroll state, hides graphics, sends viewport protocol messages or requests a
-draw. See [Pane mouse input](pane-mouse-input.md) for wheel ownership and
-alternate-screen policy.
+`Model.setPaneViewport` resolves absolute, relative or bottom intents only for
+an attached pane in the active tab. It clamps against retained history and
+advances only the viewport revision. Missing, inactive, detached and unchanged
+targets are no-ops. Copy mode owns its viewport transaction exclusively, so a
+standalone viewport request cannot interfere with it.
 
-`ClientModel.setPaneViewport` resolves the intent against the attached pane in
-the active tab. It clamps the offset to `scroll.maxOffset`, commits it and
-advances only the viewport revision. An unchanged offset produces no change
-and no effects. While copy mode is active, its transaction has exclusive
-control of the viewport, so the standalone transition is rejected.
+Copy movement/exit commits viewport and copy state together, then calls
+`pane_viewports.deliver` with the resulting change. The delivery entrypoint
+therefore retains exact commit validation. Stale location, attachment, offset,
+bottom state or revision executes no physical effect.
 
-`SetPaneViewportHandler` calls the shared delivery port after commit.
-`DeliverPaneViewportHandler` requires the exact active attached pane, offset,
-bottom state and viewport revision before effects. It then updates
-client-owned graphics visibility before sending `set_pane_viewport` to the
-runtime. A stale commit executes neither effect. A graphics failure prevents
-runtime delivery; a runtime failure retains the completed graphics change and
-never rolls back the client viewport. The adapter supplies only those two
-physical ports. The client process may reconnect, and the next runtime frame
-rebuilds the operational projection.
+Keyboard and paste return to the bottom before sending bytes. Wire order is
+`set_pane_viewport` then `pane_input`; mouse reports preserve the viewport they
+describe. Focused scroll bindings reuse mouse wheel/alternate-screen policy and
+do not immediately undo their scroll by treating the binding as child input.
 
-Keyboard and paste input use `.bottom` before sending bytes to the child. Mouse
-reports preserve scrollback because changing the viewport would alter the
-interaction they describe. When the viewport changes, wire order is
-`set_pane_viewport` followed by `pane_input`. The user's keyboard or paste
-cannot overtake the request to return to live output.
+Graphics visibility changes before runtime delivery. A graphics error prevents
+the wire effect; an outbox error keeps committed scroll and completed graphics
+changes. Neither failure rolls the viewport back.
 
-## Copy mode
+The runtime clamps and pins the attachment viewport; reaching the bottom clears
+the pin. Its next frame contains the accepted scroll projection. Frame
+application advances the frame revision independently from local viewport
+changes. The presenter reads those revisions and recomposes the active model;
+operations do not invalidate presentation caches or schedule draws.
 
-Copy-mode cursor movement and exit restore are part of the copy transaction,
-not a second viewport use case. `ClientModel.commitCopyMode` commits both
-states and returns the same `PaneViewportChange` value. `CopyModeHandler` then
-uses the delivery port from `pane_viewports`. This keeps copy delivery ordering
-inside copy mode while reusing the same exact commit validation and leaving
-graphics and IPC knowledge in one adapter.
-
-## Presentation
-
-`client_events` publishes `ClientModel.Version` after the input event.
-`Presenter` compares the viewport revision with the version it last painted.
-When it changes, the presenter renders only the active tab. The single
-presenter-owned compositor detects the active pane's projected scroll offset
-and rebuilds its composition. Inactive tabs retain no last-painted cache.
-
-Neither the viewport model transition nor its application handler touches
-presentation caches or scheduling. Runtime `pane_frame` messages
-remain a separate reconciliation path. Applying a frame replaces the pane's
-scroll projection, records rendering damage and advances the frame revision;
-the presenter observes that revision and schedules presentation.
-
-## Runtime projection
-
-```text
-set_pane_viewport
-        |
-runtime.entrypoints.attachment.setPaneViewport
-        |
-Attachment.setViewport
-        |
-cell.Sync viewport pin
-        |
-pane_frame
-        |
-pane_frames -> ApplyPaneFrameHandler -> ClientModel.applyPaneFrame
-```
-
-The attachment clamps the requested row against terminal history and pins the
-chosen viewport. Reaching the bottom clears the pin and resumes the active
-screen. A later frame carries the runtime's accepted `scroll` value. Client
-death drops the attachment projection without changing the PTY or terminal.
-
-## Proof
-
-- `src/client/model/Model.zig` proves clamping, relative movement,
-  independent revisions, no-ops and copy-mode exclusivity.
-- `src/client/application/panes/set_pane_viewport.zig` proves commit-before-
-  effect ordering and the failure policy.
-- `src/client/application/panes/pane_viewport_delivery.zig` proves exact
-  commit validation, graphics-before-runtime order and partial failures.
-- `src/frontend/client/tests/` proves graphics visibility, folded
-  revisions, presenter-owned composition and wire ordering before pane input.
-- `src/backend/runtime/attachment/cell.zig` proves attachment-local viewport
-  pinning and return to the live screen.
+This work performs bounded arithmetic and at most one viewport enqueue.
+Client death discards the attachment projection without changing the PTY.
+Source: `src/client/operations/panes/pane_viewports.zig`.
+Tests: `src/client/model/tests/input_and_frames.zig`,
+`src/frontend/client/tests/host_interaction.zig`, `input.zig` and
+`mouse_selection.zig`; runtime attachment tests cover pinning and live-screen
+restoration.

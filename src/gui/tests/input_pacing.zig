@@ -62,7 +62,7 @@ test "native terminal key release without encoded bytes grants no input grace" {
     const session = try Session.init();
     defer session.deinit();
     try begin(session);
-    const delivery = try client.controllers.pane_inputs.send(&session.gui.app, .{
+    const delivery = try client.operations.pane_inputs.send(&session.gui.app, .{
         .target = .focused,
         .source = .host,
         .payload = .{ .key = .{ .code = .{ .char = .init("x") }, .phase = .release } },
@@ -84,7 +84,7 @@ test "native rejected outbox input grants no frame grace" {
         try session.gui.app.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = Session.pane_id } });
     }
 
-    try std.testing.expectError(error.ClientOutboxFull, client.controllers.pane_inputs.send(&session.gui.app, .{
+    try std.testing.expectError(error.ClientOutboxFull, client.operations.pane_inputs.send(&session.gui.app, .{
         .target = .focused,
         .source = .host,
         .payload = .{ .key = .{ .code = .{ .char = .init("x") } } },

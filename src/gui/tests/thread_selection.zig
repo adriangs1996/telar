@@ -177,7 +177,7 @@ test "copying a large retained window fails visibly without writing a partial cl
     try fixture.messages(&.{"word " ** 8000});
     const gui = fixture.session.gui;
     const pane = gui.app.model.agentPane(Fixture.pane_id).?;
-    try std.testing.expect(try client.agent_history.freeze(&gui.app, Fixture.pane_id, pane.attachment_generation));
+    try std.testing.expect(try client.agent_history.freeze(&gui.app.model, Fixture.pane_id, pane.attachment_generation));
     const window = pane.agent_history.?;
     window.pages[1] = window.pages[0];
     window.pages[1].snapshot.item_storage[0].identity = 2;

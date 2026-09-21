@@ -7,6 +7,49 @@ const routing = @import("../input/router.zig");
 
 const ActionCapture = @import("ActionCapture.zig");
 
+test "update processes a horizontal split shortcut and its correlated runtime reply" {
+    const session = try Session.init();
+    defer session.deinit();
+    try session.bootstrap();
+    const gui = session.gui;
+    const app = &gui.app;
+    const before = app.model.version();
+    const request_area = app.geometry().area;
+    try std.testing.expect(try gui.acceptInput(.{ .key = .{ .code = client.default_prefix.code, .mods = .{ .ctrl = true } } }));
+    try std.testing.expect(try gui.acceptInput(.{ .text = .{ .bytes = "%" } }));
+
+    try std.testing.expectEqual(@as(?u8, null), try gui.update());
+    try session.settle();
+    try std.testing.expectEqual(@as(usize, 1), session.pane_creation_count);
+    try std.testing.expectEqualDeep(before, app.model.version());
+    const request = (try core.decodeClient(session.pane_creation_wire[0..session.pane_creation_len])).create_pane;
+    try std.testing.expectEqual(Session.pane_id, request.launch.cwd_source.?);
+    try std.testing.expectEqualDeep(Session.location, request.location);
+    const created: core.PaneId = @enumFromInt(21);
+    var buffer: [128]u8 = undefined;
+    const payload = try core.encodePaneOpened(&buffer, .{
+        .request_id = request.request_id,
+        .pane_id = created,
+        .location = request.location,
+        .created = true,
+    });
+    const response = try client.RuntimeMessage.decode(std.testing.io, payload);
+    try client.runtime_io.scheduleRead(app);
+    try session.driver.inbox.post(.{ .server = &response });
+
+    try std.testing.expectEqual(@as(?u8, null), try gui.update());
+    try session.settle();
+    try std.testing.expect(!client.request_lifecycle.has(app, .pane_operation));
+    try std.testing.expect(app.model.workspace.findPane(created).?.attached);
+    try std.testing.expectEqual(created, app.model.workspace.active().?.model.layout.focused().?);
+    try std.testing.expectEqual(before.panes + 1, app.model.version().panes);
+    const geometry = app.model.workspace.active().?.model.layoutSnapshot(request_area);
+    const first = geometry.find(Session.pane_id).?.outer;
+    const second = geometry.find(created).?.outer;
+    try std.testing.expectEqual(first.y, second.y);
+    try std.testing.expect(first.x < second.x);
+}
+
 test "native semantic router resolves every TUI default action" {
     const defaults = try client.default_bindings.load(client.default_prefix);
     for (defaults) |binding| {
@@ -148,7 +191,7 @@ test "native child release crosses a newly opened prompt only with its acquired 
     const view = model.viewForPane(pane.id, session.gui.region.area).?;
     const press: client.Mouse = .{ .x = view.content.x, .y = view.content.y, .kind = .press };
     var capture = Capture.begin(app, press).?;
-    try std.testing.expect(client.controllers.name_prompts.beginActiveTabRename(app));
+    try std.testing.expect(client.operations.name_prompts.beginActiveTabRename(app));
     try std.testing.expect(app.model.planPaneInput(.{ .pane = pane.id }) == null);
     var release = press;
     release.kind = .release;

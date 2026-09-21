@@ -46,7 +46,13 @@ pub fn of(app: *client.AttachedClient) *GuiClient {
 /// Adopts options on success and binds all ports before receiving messages.
 /// Example: `const gui = try GuiClient.init(params, &driver);`
 pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
-    const input = try NativeInput.init(.{ .prefix = params.options.prefix, .bindings = params.options.bindings, .escape_timeout_ns = params.options.input_escape_timeout_ns, .sequence_timeout_ns = params.options.input_sequence_timeout_ns });
+    const input = try NativeInput.init(.{
+        .prefix = params.options.prefix,
+        .bindings = params.options.bindings,
+        .escape_timeout_ns = params.options.input_escape_timeout_ns,
+        .sequence_timeout_ns = params.options.input_sequence_timeout_ns,
+    });
+
     const gui = try params.gpa.create(GuiClient);
     errdefer params.gpa.destroy(gui);
     const review = try params.gpa.create(ReviewPanel);
@@ -62,15 +68,26 @@ pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
     gui.focused = true;
     gui.widgets = .{};
     gui.theme = params.options.theme;
-    gui.region = .{ .area = .{}, .revision = 0 };
+    gui.region = .{
+        .area = .{},
+        .revision = 0,
+    };
     gui.resizeRegion(params.host_size.cols, params.host_size.rows);
     gui.chrome = .{};
     gui.sidebar = .init(params.options.gui.sidebar.width);
-    gui.overlays = .{ .router = &gui.input.router };
+
+    gui.overlays = .{
+        .router = &gui.input.router,
+    };
+
     gui.lifecycle = .{};
     gui.graphics_store = .init(params.gpa);
     gui.diagrams = .init(params.gpa);
-    gui.syntax = .{ .allocator = params.gpa };
+
+    gui.syntax = .{
+        .allocator = params.gpa,
+    };
+
     gui.review = review;
     gui.review.* = .{ .allocator = params.gpa };
     gui.review.widget.host_port = &gui.host;
@@ -120,18 +137,24 @@ pub fn start(gui: *GuiClient, colors: core.TerminalColors) !void {
     capabilities.images = .unsupported;
     capabilities.pointer_pixels = .supported;
     capabilities.agent_panes = true;
-    var handler: client.ResizeHostHandler = .{ .model = &gui.app.model, .effects = .{ .context = gui, .deliver = deliverResize } };
-    _ = try handler.execute(.{ .size = gui.app.model.hostSize(), .capabilities = capabilities });
+
+    _ = try client.operations.host_resources.apply(&gui.app, .{
+        .size = gui.app.model.hostSize(),
+        .capabilities = capabilities,
+    });
+
     gui.app.startup.phase = .opening;
+
     try gui.app.runtime_transport.bootstrap(.{
         .graphics_shared = false,
         .client_identity = gui.app.client_identity,
         .terminal_colors = colors,
     });
+
     try client.runtime_io.scheduleRead(&gui.app);
-    try client.runtime_io.flushGraphicsCredits(&gui.app);
-    try client.controllers.config_reloads.schedule(&gui.app);
-    try client.controllers.bar_updates.synchronize(&gui.app);
+    try client.runtime_io.pump(&gui.app);
+    try client.operations.config_reloads.schedule(&gui.app);
+    try client.operations.bar_updates.synchronize(&gui.app);
 }
 
 /// Copies borrowed input before the host callback returns. A full input queue
@@ -185,18 +208,18 @@ fn dispatch(self: *GuiClient, event: Message) !?u8 {
         .configuration_ready => try self.driver.configuration.accept(&self.app),
         .input_timeout => |result| try result,
         .binding_timeout => |result| try self.input.expire(&self.app, result),
-        .sidebar_animation_tick => |result| _ = try client.controllers.sidebar_animations.handleTick(&self.app, result),
-        .notification_tick => |result| _ = try client.controllers.notifications.handleTick(&self.app, result),
-        .bar_tick => |result| try client.controllers.bar_updates.handleTick(&self.app, result),
-        .bar_command => |result| try client.controllers.bar_updates.completeCommand(&self.app, result),
-        .link_opened => |result| try client.controllers.link_openings.complete(&self.app, result),
-        .path_completion => |result| try client.controllers.path_completions.complete(&self.app, result),
+        .sidebar_animation_tick => |result| _ = try client.operations.sidebar_animations.handleTick(&self.app, result),
+        .notification_tick => |result| _ = try client.operations.notifications.handleTick(&self.app, result),
+        .bar_tick => |result| try client.operations.bar_updates.handleTick(&self.app, result),
+        .bar_command => |result| try client.operations.bar_updates.completeCommand(&self.app, result),
+        .link_opened => |result| try client.operations.link_openings.complete(&self.app, result),
+        .path_completion => |result| try client.operations.path_completions.complete(&self.app, result),
         .favicon => |result| self.landFavicon(result),
         .diagram_ready => self.landDiagram(),
         .syntax_ready => self.landSyntax(),
         .change_review_ready => self.landChangeReview(),
         .plugin_result => |result| {
-            if (try client.controllers.plugin_actions.complete(&self.app, result)) {
+            if (try client.operations.plugin_actions.complete(&self.app, result)) {
                 return 0;
             }
         },
@@ -369,13 +392,7 @@ pub fn resize(gui: *GuiClient, size: core.TerminalSize, theme: client.TerminalTh
     capabilities.pointer_pixels = .supported;
     capabilities.agent_panes = true;
     capabilities.terminal_colors = .{ .foreground = theme.foreground, .background = theme.background, .palette = theme.palette };
-    var handler: client.ResizeHostHandler = .{ .model = &gui.app.model, .effects = .{ .context = gui, .deliver = deliverResize } };
-    _ = try handler.execute(.{ .size = size, .capabilities = capabilities });
-}
-
-fn deliverResize(context: *anyopaque, commit: client.HostCommit) !void {
-    const gui: *GuiClient = @ptrCast(@alignCast(context));
-    try client.controllers.host_resources.deliver(&gui.app, commit);
+    _ = try client.operations.host_resources.apply(&gui.app, .{ .size = size, .capabilities = capabilities });
 }
 
 /// Retires captured damage after GPU delivery, preserving newer received state.
@@ -396,11 +413,7 @@ pub fn complete(gui: *GuiClient, token: u64, delivered: bool) !void {
     @import("widgets/interaction/routing.zig").reconcileFocus(gui);
     gui.input.pointer.hover.present(delivered);
     const delivery = gui.lifecycle.complete(@enumFromInt(token), if (delivered) .delivered else .failed) orelse return;
-    var handler: client.DeliverPresentationHandler = .{
-        .model = &gui.app.model,
-        .effects = .{ .context = gui, .flush_graphics_credits = flushCredits, .request_media = noMedia },
-    };
-    try handler.execute(.{ .commit = delivery.commit, .media_pending = delivery.media_pending });
+    try client.presentation_delivery.apply(&gui.app, delivery.commit);
     if (delivered) {
         try @import("widgets/interaction/thread_items.zig").delivered(gui);
         try @import("widgets/interaction/thread_history.zig").delivered(gui);
@@ -408,13 +421,6 @@ pub fn complete(gui: *GuiClient, token: u64, delivered: bool) !void {
         @import("widgets/interaction/thread_selection.zig").delivered(gui);
     }
 }
-
-fn flushCredits(context: *anyopaque) !void {
-    const gui: *GuiClient = @ptrCast(@alignCast(context));
-    try client.runtime_io.flushGraphicsCredits(&gui.app);
-}
-
-fn noMedia(_: *anyopaque) !void {}
 
 pub fn applyGraphics(gui: *GuiClient, command: client.ApplicationPanesPaneGraphicsCommand) !void {
     return switch (command) {
@@ -505,7 +511,7 @@ pub fn landChangeReview(self: *GuiClient) void {
 /// Lands one favicon lookup from the inbox; the next preparation places it.
 /// Example: `gui.landFavicon(completion);`
 pub fn landFavicon(gui: *GuiClient, completion: client.FaviconCompletion) void {
-    const image: ?*client.FaviconImage = switch (client.controllers.favicons.complete(&gui.app, completion)) {
+    const image: ?*client.FaviconImage = switch (client.operations.favicons.complete(&gui.app, completion)) {
         .stale => return,
         .missing => null,
         .image => |owned| owned,
@@ -521,7 +527,7 @@ fn resolveFavicons(gui: *GuiClient, renderer: *@import("render/TerminalRenderer.
     const favicons = &gui.chrome.favicons;
     favicons.refresh(gui.app.gpa, page);
     const want = favicons.next(gui.app.model.workspaceListSnapshot()) orelse return;
-    if (try client.controllers.favicons.request(&gui.app, .{ .workspace = want.workspace, .cwd = want.cwd, .cell = @intCast(page.cell) })) {
+    if (try client.operations.favicons.request(&gui.app, .{ .workspace = want.workspace, .cwd = want.cwd, .cell = @intCast(page.cell) })) {
         favicons.started(want.workspace);
     }
 }
@@ -535,7 +541,7 @@ fn refreshPointer(gui: *GuiClient) void {
 /// Captures semantic state plus adapter-owned routing and interaction revisions.
 /// Example: `const projected = gui.projection();`
 pub fn projection(gui: *const GuiClient) client.Projection {
-    return client.capture(&gui.app.model, .{ .geometry = gui.region, .status_mode = gui.input.statusMode(client.controllers.copy_modes.active(&gui.app)), .presentation_ingress = gui.ingress() });
+    return client.capture(&gui.app.model, .{ .geometry = gui.region, .status_mode = gui.input.statusMode(client.operations.copy_modes.active(&gui.app)), .presentation_ingress = gui.ingress() });
 }
 
 /// Example: `_ = gui.lifecycle.observe(gui.observation());`

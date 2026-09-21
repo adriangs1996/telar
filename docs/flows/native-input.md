@@ -69,10 +69,10 @@ native snapshot. No platform callback mutates the model directly.
 
 `input/router.zig` instantiates the shared key router without an escape decoder.
 It resolves the same configured prefix, built-in actions and Lua/plugin bindings
-as the TUI. `input/InputHandler.zig` delegates keys and actions to the shared
-controllers. Prompt editing, copy mode, pane focus, workspace and tab requests,
-splits, pane fullscreen and detach therefore follow the existing application
-handlers and runtime messages. Prefix status is projected from this effective
+as the TUI. `src/gui/input/InputHandler.zig` delegates keys and actions to
+`src/client/operations/input/`. Prompt editing, copy mode, pane focus, workspace
+and tab requests, splits, pane fullscreen and detach call the same concrete
+operations and runtime messages. Prefix status is projected from this effective
 router, and a replaceable `.binding` timer expires ordinary partial chords.
 
 macOS disables press-and-hold accents in the process's volatile argument defaults

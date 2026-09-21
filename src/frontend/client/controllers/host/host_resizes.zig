@@ -10,10 +10,9 @@ const host_capabilities = @import("host_capabilities.zig");
 const std = @import("std");
 const SizeType = @import("../../../platform/Size.zig");
 const HostUpdateType = @import("telar-client").HostUpdate;
-const ResizeHostHandlerType = @import("telar-client").ResizeHostHandler;
 const TerminalSizeType = @import("telar-core").TerminalSize;
 const HostCapabilitiesType = @import("telar-client").HostCapabilities;
-const host_resources = @import("telar-client").controllers.host_resources;
+const host_resources = @import("telar-client").operations.host_resources;
 
 /// Registers the next platform resize observation for this client.
 ///
@@ -50,18 +49,7 @@ fn wait(io: std.Io, watcher: *platform.ResizeWatcher) anyerror!void {
 pub fn apply(client: *Client, measurement: SizeType) !?HostCommitType {
     const update = resolve(client.model.hostCapabilities(), measurement);
 
-    return applyUpdate(client, update);
-}
-
-fn applyUpdate(client: *Client, update: HostUpdateType) !?HostCommitType {
-    var use_case: ResizeHostHandlerType = .{
-        .model = &client.model,
-        .effects = .{
-            .context = client,
-            .deliver = deliverResources,
-        },
-    };
-    return use_case.execute(update);
+    return host_resources.apply(client, update);
 }
 
 /// Resolves the first platform measurement before a client model exists.
@@ -94,12 +82,6 @@ fn resolve(current: HostCapabilitiesType, measurement: SizeType) HostUpdateType 
             .cell_height_px = cell_size.height,
         },
     };
-}
-
-fn deliverResources(raw_context: *anyopaque, commit: HostCommitType) !void {
-    const client: *Client = @ptrCast(@alignCast(raw_context));
-
-    try host_resources.deliver(client, commit);
 }
 
 test "initial host size normalizes an empty grid and resolves pixels" {

@@ -2,15 +2,18 @@ const ResourcesType = @import("resources/Resources.zig");
 const Loop = @import("Loop.zig");
 const ApplicationType = @import("application/Application.zig");
 const IngestTestGateType = @import("IngestTestGate.zig");
-const runtime_shutdown_mod = @import("lifecycle/shutdown_coordinator.zig");
 const InitializationType = @import("Initialization.zig");
 const InitialSourcesType = @import("InitialSources.zig");
 const SourcesType = @import("Sources.zig");
 const OptionsType = @import("Options.zig");
 const enter_module = @import("telar-core").enter;
 const runtime_event = @import("event.zig");
-const runtime_application = @import("application/application_namespace.zig");
-const instance = @import("instance.zig");
+const events = @import("application/events.zig");
+const change_review = @import("application/change_review.zig");
+const agent_history = @import("application/agent_history.zig");
+const agent_threads = @import("application/agent_threads.zig");
+const pane_search_module = @import("application/pane_search.zig");
+const editors = @import("application/operations/editors.zig");
 /// Owns and composes the resources, event loop and application for one
 /// long-lived backend lifetime.
 const Runtime = @This();
@@ -19,7 +22,7 @@ resources: ResourcesType,
 loop: Loop,
 application: ApplicationType,
 ingest_gate: ?*IngestTestGateType,
-teardown_state: runtime_shutdown_mod.State,
+teardown_state: enum { running, shutting_down, stopped },
 
 /// Acquires all runtime-owned resources. The caller must keep `runtime` at
 /// the same address until `deinit` completes.
@@ -45,10 +48,9 @@ pub fn start(runtime: *Runtime, initialization: InitializationType, comptime fai
 
     try runtime.composeApplication(initialization.options);
     errdefer {
-        runtime.application.shutdownStep(.stop_panes);
+        runtime.application.model.panes.shutdown();
         runtime.loop.cancel();
-        runtime.application.shutdownStep(.destroy_panes);
-        runtime.application.shutdownStep(.destroy_workspaces);
+        runtime.application.deinitModel();
     }
 
     runtime.application.restoreSession();
@@ -109,21 +111,8 @@ pub fn run(runtime: *Runtime) !void {
         const path = enter_module(runtime_event.diagnosticsPath(event));
         defer path.restore();
 
-        switch (event) {
-            .stopped => |result| if (try runtime.loop.completeStop(result)) {
-                return;
-            },
-            else => {
-                const should_stop = try runtime_application.handle(&runtime.application, event, .{
-                    .listener = &runtime.resources.listener,
-                    .telemetry = &runtime.resources.telemetry,
-                    .ingest_gate = runtime.ingest_gate,
-                });
-
-                if (should_stop) {
-                    return;
-                }
-            },
+        if (try runtime.update(event)) {
+            return;
         }
     }
 }
@@ -134,7 +123,124 @@ pub fn run(runtime: *Runtime) !void {
 /// ```zig
 /// runtime.deinit();
 /// ```
-pub fn deinit(runtime: *Runtime) void {
-    var shutdown = instance.runtimeShutdownCoordinator(runtime);
-    shutdown.run();
+pub fn deinit(self: *Runtime) void {
+    if (self.teardown_state != .running) {
+        return;
+    }
+
+    self.teardown_state = .shutting_down;
+    self.resources.listener.shutdown();
+    self.application.stopClientConnections();
+    self.application.model.panes.shutdown();
+    // Actors must release their borrows before any backing storage is destroyed.
+    self.loop.cancel();
+    self.application.persistSession();
+
+    self.resources.proxy.deinit();
+    self.resources.plugins.deinit();
+    self.resources.listener.deinit(self.resources.io());
+    self.application.deinitClients();
+    self.application.deinitModel();
+    if (self.resources.engine) |*engine| {
+        engine.deinit();
+    }
+
+    self.resources.history.deinit();
+    self.resources.gpa.destroy(self.resources.clients);
+    self.resources.telemetry.deinit(self.resources.io());
+    self.resources.child_environment.deinit();
+    self.teardown_state = .stopped;
+}
+
+/// Dispatches one runtime event to its owning operation.
+/// Example: `const stopped = try runtime.update(event);`.
+pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
+    switch (event) {
+        .stopped => |result| return self.loop.completeStop(result),
+        .accepted => |result| {
+            try events.clients.handleAccepted(&self.application, result, &self.resources.listener);
+        },
+        .handshaken => |result| {
+            events.clients.handleHandshaken(&self.application, result);
+        },
+        .client_message => |value| return events.clients.handleMessage(&self.application, value),
+        .client_sent => |value| return events.clients.handleSent(&self.application, value),
+        .cell_publication_due => |result| {
+            try self.application.cellPublicationDue(result);
+        },
+        .history_response => |result| {
+            try events.history.handle(&self.application, result);
+        },
+        .proxy_event => |result| {
+            try events.agents.handleProxyObservation(&self.application, result);
+        },
+        .proxy_capture => |result| {
+            try events.agents.handleProxyCapture(&self.application, result);
+        },
+        .plugin_effects => |result| {
+            try events.agents.handlePluginEffects(&self.application, result);
+        },
+        .agent_tick => |result| {
+            try events.agents.handleMaintenance(&self.application, result);
+        },
+        .agent_description => |result| {
+            events.agents.handleDescription(&self.application, result);
+        },
+        .change_review_completed => |job| change_review.complete(&self.application, job),
+        .agent_history_completed => |job| agent_history.complete(&self.application, job),
+        .agent_thread_changed => |result| {
+            if (try agent_threads.handle(&self.application, result)) {
+                try events.panes.Pipeline.handleExit(&self.application, .{ .pane = result.pane, .result = .{ .exited = 0 } });
+            }
+        },
+        .engine_response => |result| {
+            try events.agents.handleEngineResponse(&self.application, result);
+        },
+        .metrics_tick => |result| {
+            try events.observability.handleMetricsTick(&self.application, result);
+        },
+        .metrics_sampled => |sample| events.observability.handleMetricsSample(&self.application, sample),
+        .pane_input_written => |value| {
+            try events.panes.Io.handleInputWritten(&self.application, value);
+        },
+        .pane_response_written => |value| {
+            try events.panes.Io.handleResponseWritten(&self.application, value);
+        },
+        .pane_output => |value| {
+            try events.panes.Pipeline.handleOutput(&self.application, value, self.ingest_gate);
+        },
+        .pane_ingested => |value| {
+            try events.panes.Pipeline.handleIngested(&self.application, value);
+        },
+        .pane_observed => |value| {
+            try events.panes.Projection.handleObserved(&self.application, value);
+        },
+        .pane_media => |value| {
+            try events.panes.Projection.handleMedia(&self.application, value);
+        },
+        .pane_search => |value| {
+            try pane_search_module.advance(&self.application, value);
+        },
+        .pane_exit => |value| {
+            try events.panes.Pipeline.handleExit(&self.application, value);
+        },
+        .telemetry_tick => |result| {
+            events.observability.handleTelemetryTick(&self.application, &self.resources.telemetry, result);
+        },
+        .telemetry_written => |result| {
+            events.observability.handleTelemetryWritten(&self.application, &self.resources.telemetry, result);
+        },
+        .checkpoint_written => |result| {
+            self.application.sessionCheckpointWritten(result);
+        },
+        .editor_opened => |job| editors.complete(&self.application, job),
+        .git_status => |completion| {
+            self.application.gitStatusCompleted(completion);
+        },
+        .session_name => |completion| {
+            self.application.sessionNameCompleted(completion);
+        },
+    }
+
+    return false;
 }

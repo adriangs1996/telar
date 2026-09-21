@@ -1,6 +1,11 @@
 //! Correlated, bounded search turns. No worker borrows terminal state.
 
-const SearchPaneTargetHandler = @import("commands/SearchPaneTargetHandler.zig");
+const Application = @import("Application.zig");
+const Session = @import("../client/Session.zig");
+const PaneStore = @import("../../pane/PaneStore.zig");
+const PaneKey = @import("../../pane/PaneKey.zig");
+const Pane = @import("../../pane/Pane.zig");
+const core = @import("telar-core");
 const SearchPaneType = @import("telar-core").SearchPane;
 const Cursor = @import("../../pane/Cursor.zig");
 const std = @import("std");
@@ -10,9 +15,8 @@ const RequestIdType = @import("telar-core").RequestId;
 
 /// Starts a search, replacing only this client's previous search.
 /// Example: `try start(application, session, request);`.
-pub fn start(application: anytype, session: anytype, request: SearchPaneType) !void {
-    const target: SearchPaneTargetHandler = .{ .panes = &application.model.panes, .session = session };
-    const pane = target.execute(request.pane_id) orelse {
+pub fn start(application: *Application, session: *Session, request: SearchPaneType) !void {
+    const pane = resolveTarget(&application.model.panes, session, request.pane_id) orelse {
         try session.delivery.responses.push(.{ .request_failed = .{
             .request_id = request.request_id,
             .code = .pane_not_found,
@@ -40,10 +44,15 @@ pub fn start(application: anytype, session: anytype, request: SearchPaneType) !v
 
 /// Resolves ownership again before inspecting at most one row budget.
 /// Example: `try advance(application, wake);`.
-pub fn advance(application: anytype, completion: Wake) !void {
-    try completion.result;
+pub fn advance(application: *Application, completion: Wake) !void {
     const session = application.clients.resolve(completion.client) orelse return;
     session.search_scheduled = false;
+    if (session.closing) {
+        application.finalizeClient(completion.client);
+        return;
+    }
+
+    try completion.result;
     if (!session.active()) {
         return;
     }
@@ -94,7 +103,7 @@ pub fn advance(application: anytype, completion: Wake) !void {
     }
 }
 
-fn fail(session: anytype, request_id: RequestIdType, message: []const u8) !void {
+fn fail(session: *Session, request_id: RequestIdType, message: []const u8) !void {
     try session.delivery.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = .resource_limit,
@@ -102,7 +111,7 @@ fn fail(session: anytype, request_id: RequestIdType, message: []const u8) !void 
     } });
 }
 
-fn schedule(application: anytype, wake: Wake, busy: bool) !void {
+fn schedule(application: *Application, wake: Wake, busy: bool) !void {
     const session = application.clients.resolve(wake.client) orelse return;
     std.debug.assert(!session.search_scheduled);
     session.search_scheduled = true;
@@ -118,4 +127,41 @@ fn yield(io: std.Io, wake: Wake, busy: bool) Wake {
     }
 
     return result;
+}
+
+fn resolveTarget(panes: *PaneStore, session: *Session, pane_id: core.PaneId) ?PaneKey {
+    if (session.role == .control) {
+        const pane = panes.findRunning(pane_id) orelse return null;
+        if (pane.exit != null) {
+            return null;
+        }
+
+        return pane.key();
+    }
+
+    const attachment = session.attachments.find(pane_id) orelse return null;
+    return attachment.pane.key();
+}
+
+test "headless searches capture a generation without granting UI attachment authority" {
+    const pane = try std.testing.allocator.create(Pane);
+    defer std.testing.allocator.destroy(pane);
+    pane.id = @enumFromInt(7);
+    pane.generation = 9;
+    pane.launch_state = .running;
+    pane.exit = null;
+    var panes: PaneStore = .{};
+    panes.items[0] = pane;
+    panes.count = 1;
+    panes.index.put(7, 0);
+    var session: Session = undefined;
+    session.role = .ui;
+    session.attachments = .{};
+    try std.testing.expect(resolveTarget(&panes, &session, pane.id) == null);
+    session.role = .control;
+    const selected = resolveTarget(&panes, &session, pane.id).?;
+    try std.testing.expectEqual(@as(u64, 9), selected.generation);
+    pane.generation = 10;
+    try std.testing.expect(panes.resolve(selected) == null);
+    try std.testing.expect(resolveTarget(&panes, &session, @enumFromInt(99)) == null);
 }

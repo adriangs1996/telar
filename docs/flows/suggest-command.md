@@ -78,7 +78,7 @@ the opt-in for all of it; without an engine the palette says so and sends
 nothing to a model. The request is bounded on the wire at 512 bytes and the
 suggestion at 1024; the engine's own prompt and reply caps bound the rest.
 
-## Proof
+## Validation
 
 - `src/backend/runtime/application/suggestion.zig` proves prompt bounds and
   reply reduction.

@@ -27,14 +27,24 @@ A design is incomplete while any item is unknown.
 - Apply [Zig source layout](zig-source-layout.md) to concrete structs, generic
   families and namespaces. A file exposes the smallest complete protocol for
   its abstraction. Method count and line count are not design targets.
-- An external event has one explicit entrypoint in the process that receives
-  it. Event loops classify and delegate; they do not contain the flow itself.
-- A new or materially refactored client mutation uses a request controller for
-  protocol translation, expected-error mapping and response delivery. The
-  controller does not mutate domain state or publish domain events.
-- Its application command handler owns domain orchestration, ordering,
-  transaction policy, rollback and event publication. It calls capability APIs
-  and does not mutate their representations directly.
+- Each process has a visible event dispatch. Its branches call named operations
+  directly. Place input, runtime replies and worker completions where a reader
+  can follow them from that dispatch without searching callback assembly.
+- An operation owns its request, completion, failure and cancellation policy in
+  one module. Use ordinary functions on the owning state. Keep ordering and
+  commit points visible; extract helpers for algorithms or independently owned
+  resources, not for forwarding the same arguments.
+- There is no required controller/handler/executor/effects sequence. Existing
+  implementations using it are migration candidates, not templates. Avoid
+  callback tables whose only purpose is mocking an internal function.
+- Application operations call capability APIs instead of mutating their
+  representations directly. Dynamic ports are appropriate at actual boundaries
+  such as GUI/TUI services, OS facilities and external workers.
+- More than three application forwarding calls triggers a review of what each
+  boundary owns. This is a readability check, not a ban on algorithmic helpers.
+- A refactor is complete for a flow when a reader can start at its dispatch,
+  locate the operation and follow success, pending work and recovery. Keep
+  behavioral tests and remove the obsolete forwarding path in the same change.
 - A domain event produced by a committed aggregate change is owned and typed.
   Client identity, request IDs, callbacks and borrowed request buffers are not
   domain event data.

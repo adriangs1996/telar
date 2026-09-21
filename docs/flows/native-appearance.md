@@ -132,7 +132,7 @@ cell width; natural line height times `line_height` determines cell height.
 Metrics round to physical pixels and are validated before use. The existing
 `TerminalMetrics` computes complete grid cells. Initial client pixel dimensions
 are exactly `columns * cell_width` and `rows * cell_height`; resize follows
-`ResizeHostHandler`. The runtime receives these dimensions through `pane_resize`
+`host_resources.apply`. The runtime receives these dimensions through `pane_resize`
 and propagates them to the PTY.
 
 ## Window effects and padding
@@ -148,7 +148,7 @@ the same atomic configuration reload as fonts and colors.
 `TerminalRenderer.measure` scales and rounds the insets, keeps space for one
 complete cell when the window shrinks, then measures the remaining viewport.
 It retains the physical origin used by both cell meshes and cursor quads.
-Padding changes follow `ResizeHostHandler`; neither initial attach nor resize
+Padding changes follow `host_resources.apply`; neither initial attach nor resize
 counts border pixels as PTY pixels. Retained mesh keys already include the
 resolved rectangle, so moving the origin invalidates exactly that geometry.
 Opacity and blur changes do not invalidate cell meshes or the glyph atlas.
@@ -208,7 +208,7 @@ device-pixel rectangle, snapped to whole pixels, as one quad with zero shape.
 
 Workspace favicons never cross the wire. `widgets/Favicons` keeps one entry per
 workspace of the list; each preparation places the one landed image into the
-page and asks `controllers/workspaces/favicons` to look up the next wanted
+page and asks `operations/workspaces/favicons.request` to look up the next wanted
 workspace when the client's `favicon_runner` is bound (the TUI leaves it
 unset). The GUI job runs on an inbox task: the shared `favicon_lookup` reads
 `favicon.png`, `favicon.ico`, then `.telar/icon.png` under the workspace root (regular files,
@@ -267,7 +267,7 @@ fullscreen. A hidden titlebar keeps the window's titled style and adds
 outer window frame and keyboard focus. When that change alters the viewport,
 `TelarView` discards the prepared presentation token with `delivered = 0` and
 prepares a frame using the new size. Layout notifications cannot reenter that
-preparation. The ordinary `ResizeHostHandler` updates the terminal grid; no
+preparation. The ordinary `host_resources.apply` updates the terminal grid; no
 old-size frame is submitted to Metal.
 
 On Wayland, `background_effect` owns at most one effect manager and one effect
@@ -297,7 +297,7 @@ toplevel; a manager advertised after mapping cannot create a late decoration.
 
 ## Hot reload
 
-`GuiClient.start` schedules the existing `config_reloads` controller through
+`GuiClient.start` calls `config_reloads.schedule` through
 `host_ports.configWatcher`. `ConfigurationReload` owns one worker and one
 pending result. Its worker calls the shared `config_reload.wait`: the same
 one-second fingerprint watch, selected profile, local modules, plugin registry
@@ -312,8 +312,8 @@ not alter the terminal geometry.
 
 The worker receives copied appearance/viewport values and borrowed current Lua
 owners for fingerprinting. It never reads a live renderer or mutates the model.
-Completion publishes into a reserved inbox slot. `NativeLoop.drain` delegates
-to `ConfigurationReload.accept`, which joins only that finished worker.
+Completion publishes into a reserved inbox slot. `GuiClient.update` dispatches
+`.configuration_ready` to `ConfigurationReload.accept`, which joins only that finished worker.
 Unchanged fingerprints rearm without requesting a draw. A changed result waits
 for `Application.prepare`, after the previous presentation token has ended.
 Input, socket reads and receipt ACKs continue while a candidate waits.
@@ -330,7 +330,7 @@ paint the TUI diagnostic banner.
 Successful adoption uses `config_reloads.handle` to commit the shared model and
 swap its Lua owners. The GUI then installs the prepared renderer, applies the
 typed colors/cursor settings, resets `CursorClock` and publishes metrics and
-terminal defaults through `ResizeHostHandler`. A replacement renderer inherits
+terminal defaults through `host_resources.apply`. A replacement renderer inherits
 the previous atlas version so its next preparation forces a GPU texture upload.
 Fallible shared effects after the model commit retain that new generation; the
 native resources follow it even if a downstream error ends the client.

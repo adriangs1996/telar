@@ -19,11 +19,11 @@ host_capabilities.observe
        |
 protocol reply translation
        |
-HostCapabilities.Handler.observe
+host_resources.observe
        |
 ClientModel.observeHostCapability
        |
-DeliverHostResourcesHandler
+host_resources.deliver
        |
 physical host effects
        |
@@ -37,11 +37,11 @@ Presenter
        |
 host_capabilities.handleExpiry
        |
-HostCapabilities.Handler.expire
+host_resources.reconcile
        |
-ClientModel.expireHostCapabilities
+ClientModel.reconcileHost
        |
-DeliverHostResourcesHandler
+host_resources.deliver
        |
 fallback host effects
        |
@@ -55,7 +55,7 @@ cell pixel reports, mode 1016 support, and OSC 10/11 color reports. RGB values
 remain in the model; the background also resolves light or dark appearance by
 luminance. When the
 appearance changes and `client.appearance` configures a theme for it, the
-delivery handler swaps the view theme unless `--theme` locked it; the same
+host-resource operation swaps the view theme unless `--theme` locked it; the same
 preference applies when a configuration generation is adopted. The
 colors are queried at startup and refreshed with pixel probes on host resize,
 without overlapping color-query windows. The adapter converts replies into
@@ -86,13 +86,12 @@ pixels and the geometry derived from them in one model transaction.
 
 ## Effects and consumers
 
-The capability handler delivers its `HostCommit` only after the complete model
-transition. `DeliverHostResourcesHandler` validates that the commit is still
+`host_resources.observe` and `reconcile` deliver a `HostCommit` only after the
+complete model transition. `host_resources.deliver` validates that the commit is still
 current and owns every branch shared with host resizing. A Kitty graphics
-transition enters
-`SyncPaneGraphicsFallbacksHandler`, which reads that committed capability,
-reconciles every bounded pane cell fallback, and leaves physical-presence
-queries to the graphics adapter. The shared host adapter then configures
+transition calls `pane_graphics.syncFallbacks`, which reads the committed
+capability and queries the graphics service while reconciling each bounded pane
+cell fallback. The host-resource operation then configures
 sidebar and overlay resources and invalidates physical placements. A geometry
 transition executes the same ordered screen, view and pane-size effects without
 depending on the host-resize adapter.
@@ -121,21 +120,21 @@ owns a single replaceable deadline through `host_capabilities.scheduleExpiry`.
 `host_capabilities.handleExpiry` validates its completion before applying the
 fallback, so a failed timer changes no capability state.
 
-## Proof
+## Validation
 
 - `src/client/model/Model.zig` proves independent probes, selective expiry,
   pixel precedence, atomic geometry and validation before mutation.
-- `src/client/application/host/host_capabilities.zig` proves
-  commit-before-delivery ordering, no-op suppression and retained commits after
-  a delivery failure.
-- `src/client/application/host/host_resource_delivery.zig` proves graphics,
-  grid, cell-size and geometry branch ordering plus partial-failure behavior.
-- `src/client/application/panes/pane_graphics.zig` proves capability-owned
-  fallback decisions, bounded traversal and repeated-value suppression.
+- `src/frontend/client/tests/host_resources.zig` proves commit-before-delivery,
+  no-op suppression, stale-commit rejection and graphics/grid/cell-size ordering
+  through the existing host ports, including partial failures.
+- `src/client/operations/panes/pane_graphics.zig` owns bounded fallback
+  traversal; `src/client/model/tests/input_and_frames.zig` and
+  `src/frontend/client/tests/graphics_and_clipboard.zig` cover fallback ownership,
+  repeated values and graphics recovery.
 - `src/frontend/client/controllers/host/host_capabilities.zig` owns terminal reply translation
   and probe expiry.
-- `src/client/controllers/host/host_resources.zig` implements the physical host effect
-  ports shared with resize delivery.
+- `src/client/operations/host/host_resources.zig` owns resource delivery shared
+  with resize, directly calling the GUI/TUI host ports.
 - `src/frontend/client/tests/` proves fallback reconciliation,
   presenter-owned scheduling, timeout idempotence and retained state after a
   real resource failure.

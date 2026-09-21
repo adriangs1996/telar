@@ -5,7 +5,7 @@ const Application = @import("Application.zig");
 const Session = @import("../client/Session.zig");
 const Context = @import("../../change_review/Context.zig");
 const Job = @import("../../change_review/Job.zig");
-const Controller = @import("../entrypoints/requests/ChangeReviewController.zig");
+const reviews = @import("operations/reviews.zig");
 const PaneKey = @import("../../pane/PaneKey.zig");
 const review_owner = @import("change_review_owner.zig");
 
@@ -94,7 +94,7 @@ fn finish(application: *Application, job: *Job) void {
         return;
     }
     if (job.failure) |err| {
-        client.delivery.responses.push(.{ .request_failed = Controller.failure(job.request_id, err) }) catch {
+        client.delivery.responses.push(.{ .request_failed = reviews.reviewFailure(job.request_id, err) }) catch {
             application.dropClient(client_key);
             return;
         };

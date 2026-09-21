@@ -10,7 +10,7 @@ application independently of presentation.
 The common `telar-client.presentation` capability owns the borrowed projection,
 observations, pane-coordinate geometry and single-flight completion identity.
 Each client has its own lifecycle. The TUI `Presenter` owns `Screen`, compositor,
-pacing, draw/media deadlines and physical caches. Handlers never request draws.
+pacing, draw/media deadlines and physical caches. Common operations do not request draws.
 
 ```text
 committed client event
@@ -29,14 +29,14 @@ sealed output bytes -> host write completion
         |
 lifecycle.complete(token, delivered)
         |
-DeliverPresentationHandler
+operations/session/presentation_delivery.apply
         |
 filter attachment generations + exact damage commit
         |
-graphics credits -> optional media task
+graphics credits -> adapter schedules optional media work
 ```
 
-The headless adapter uses the same projection, lifecycle and delivery handler.
+The headless adapter uses the same projection, lifecycle and concrete delivery operation on `AttachedClient`.
 It copies cells into bounded storage instead of encoding a terminal diff. Its
 caller controls when preparation and delivery fail or finish.
 
@@ -62,7 +62,7 @@ or pane acknowledgement state.
 
 ## Output and completion
 
-`host_output.Output` keeps one sealed byte slice in flight. Sideband bytes may
+`resources/Output` keeps one sealed byte slice in flight. Sideband bytes may
 accumulate in its other bounded buffer. When output is occupied, the lifecycle
 records deferred draw/media work without composing another diff or discarding
 the partly written one. The actor returns after the complete write and flush.
@@ -74,9 +74,10 @@ version still identifies only that version's captured pane frames.
 
 `ClientModel.commitPresentation` rejects retired attachment generations, even
 when a reconstructed pane reuses the same wire frame number. Exact pending-frame
-matching prevents an old delivery from clearing newer damage. The handler
-orders model commit, released graphics credit and optional media work. It
-sends no cell ACK. `ApplyPaneFrameHandler` acknowledges owned cells before
+matching prevents an old delivery from clearing newer damage.
+`presentation_delivery.apply` validates the bounded commit, commits model damage
+and flushes released graphics credit. The TUI adapter then schedules optional
+media work. This operation sends no cell ACK. `pane_frames.apply` acknowledges owned cells before
 resource delivery, so new patches can update the model while the sealed output
 is still in flight. The next preparation captures the latest state.
 
@@ -96,7 +97,7 @@ storage's credit.
 Window-title formatting and change suppression use a shared synchronous title
 port. The TUI supplies hostname lookup and OSC encoding. Clipboard, links,
 notifications, sound and other host effects continue through their application
-ports. No common handler receives a terminal writer or a GPU device.
+service ports. Common operations do not receive a terminal writer or a GPU device.
 
 ## Failure and teardown
 
@@ -120,9 +121,10 @@ or monitor presentation timing.
 - `src/client/presentation/lifecycle.zig` tests coalescing, busy admission,
   failure, cancellation and exact-token completion.
 - `src/client/presentation/headless_tests.zig` exercises shared entrypoints,
-  handlers, resource lifetime and outbox without a terminal.
-- `src/client/application/presentation/presentation_delivery.zig` tests bounded
-  commits, effect ordering and failures after commit.
+  concrete operations, resource lifetime and outbox without a terminal.
+- `src/client/operations/session/presentation_delivery.zig` contains the direct
+  completion operation; headless and adapter tests exercise its damage/credit
+  ordering through actual client state.
 - `src/frontend/client/tests/presentation.zig` tests TUI pacing, observations,
   media priority and the successful/failed host-write boundary.
 - `src/frontend/client/resources/host_output.zig` tests immutable sealed bytes,

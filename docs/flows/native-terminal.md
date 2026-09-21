@@ -33,27 +33,27 @@ budgets, wakeups and shutdown shared with the TUI and headless driver.
 
 1. Session and display: `bootstrap` queues `configure_graphics`,
    `configure_terminal_colors` and `request_runtime_state`. The shared
-   `client_layout_snapshot` handler issues `open_pane`; shared controllers consume
+   `client_layouts.apply` issues `open_pane`; shared operations consume
    `pane_opened`, membership snapshots and `pane_frame`. `TerminalRenderer`
    borrows the projection, resolves the shared layout and draws each terminal
    leaf's cells and cursor. A presentation token captures only rendered panes.
-   `ApplyPaneFrameHandler` acknowledges validated, owned cells immediately.
+   `pane_frames.apply` acknowledges validated, owned cells immediately.
    Additional patches update that model while the GPU owns an older submission.
    GPU completion consumes the presentation token through
-   `DeliverPresentationHandler`, which retires captured damage and flushes
+   `presentation_delivery.apply`, which retires captured damage and flushes
    released graphics credits. Failure preserves damage for another preparation;
    it does not undo application ACKs. A stale completion cannot retire a newer
    flight, and the next draw captures the latest accumulated state.
 2. Input: AppKit text input or Wayland/XKB produces owned semantic keys and
    committed UTF-8 text. `NativeInput` admits bounded input and forwards keys via
    `pane_inputs.send`. Paste uses `pane_pastes.start/content/finish`, whose
-   delivery uses the same pane-input controller and a captured pane identity.
+   delivery uses the same pane-input operation and a captured pane identity.
    Cmd+V on macOS and Ctrl+Shift+V on Linux read the native clipboard. Application
    multiplexer bindings are not activated without corresponding native UI.
 3. Geometry and detach: window size and font scale determine complete columns,
    rows and exact cell pixels, after the chrome bands (`ChromeMetrics`) are
-   taken off the window height. `ResizeHostHandler` and the shared resource
-   controllers deliver `pane_resize` through the existing geometry authority.
+   taken off the window height. `host_resources.apply` and `pane_geometry.offerActive`
+   deliver `pane_resize` through the existing geometry authority.
    Trailing pixels belong to chrome. Closing a window stops GPU consumers, then
    cancels and joins socket tasks before releasing the shared model. It does not
    send a pane-close or runtime-stop command. A new GUI can reattach to the same

@@ -12,7 +12,7 @@ The `navigate_pane` action handles a canonical directional key:
 
 1. When the focused foreground process is `nvim`, the client forwards the key
    to the pane. Neovim and `smart-splits.nvim` get the first chance to move.
-2. For any other process, the client asks its existing `FocusPaneHandler` for a
+2. For any other process, the client asks its existing `pane_focus.apply` for a
    neighbor in that direction.
 3. If no Telar neighbor exists, the client consumes the binding without sending
    input to the pane. An unavailable navigation action must not edit shell input.
@@ -41,11 +41,11 @@ runtime correlates the reply to the waiting control connection. A target UI
 disconnect turns the pending request into a failure instead of leaving the CLI
 waiting forever.
 
-The runtime request dispatcher only composes
-`runtime/entrypoints/requests/pane_focus.zig`. This protocol controller borrows
-pane/client stores and a delivery port, never the entire application.
-`client/session.zig` owns reservation, correlation and retirement of the
-pending exchange. This is connection state, not a runtime-owned focus model.
+`requests.dispatch` calls `routeRequestPaneFocus` or `routeCompletePaneFocus`
+in `src/backend/runtime/application/operations/clients.zig`. The concrete
+operation resolves the pane/client identities and queues the correlated command
+or reply. `src/backend/runtime/client/Session.zig` retains the pending exchange
+and its reservation, correlation and retirement state. This is connection state, not a runtime-owned focus model.
 
 ## Multi-client rule
 
@@ -54,7 +54,7 @@ is causal: Neovim can only start the control command after the runtime has
 accepted the triggering key from that UI. A completion must come from the same
 generation-safe client session selected for the pending request.
 
-## Proof
+## Validation
 
 - The schema golden corpus pins all four navigation messages and bumps the
   handshake fingerprint.

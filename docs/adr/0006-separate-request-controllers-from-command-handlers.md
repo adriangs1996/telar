@@ -1,8 +1,13 @@
 ---
-status: accepted
+status: superseded by ADR-0016
 ---
 
 # Separate request controllers from command handlers
+
+Superseded on 2026-09-21 by [ADR 0016](0016-follow-operations-from-process-entrypoints.md).
+The text below records the former decision; its layer and erased-executor
+requirements are no longer rules for Telar. Ownership, ordering and recovery
+contracts still apply independently of those layers.
 
 Runtime client messages currently enter through functions that may combine wire
 translation, domain mutation, cross-capability effects and response delivery.

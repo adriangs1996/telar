@@ -7,12 +7,12 @@ widget_target: ?@import("../widgets/interaction/Id.zig") = null,
 
 /// Example: `if (handler.capturesKeys()) routeToPrompt();`
 pub fn capturesKeys(handler: *const Handler) bool {
-    return client.controllers.key_routing.captures(handler.app);
+    return client.operations.key_routing.captures(handler.app);
 }
 
 /// Example: `try handler.forward(bytes);`
 pub fn forward(handler: *Handler, bytes: []const u8) !void {
-    _ = try client.controllers.key_routing.apply(handler.app, .{ .bytes = bytes });
+    _ = try client.operations.key_routing.apply(handler.app, .{ .bytes = bytes });
 }
 
 /// Example: `try handler.key(key);`
@@ -24,7 +24,7 @@ pub fn key(handler: *Handler, value: client.Key) !void {
         }
     }
 
-    _ = try client.controllers.key_routing.apply(handler.app, .{ .key = value });
+    _ = try client.operations.key_routing.apply(handler.app, .{ .key = value });
 }
 
 /// Agent scrolling uses delivered transcript geometry. The goto and suggest
@@ -44,7 +44,7 @@ pub fn action(handler: *Handler, value: client.Action) !client.Control {
         .goto_picker => .goto,
         .suggest_command => .suggest,
         .resize_sidebar => |direction| {
-            _ = try client.controllers.copy_modes.leave(handler.app);
+            _ = try client.operations.copy_modes.leave(handler.app);
             const gui = @import("../GuiClient.zig").of(handler.app);
             if (gui.sidebar.step(direction)) {
                 gui.chrome.invalidate();
@@ -52,19 +52,19 @@ pub fn action(handler: *Handler, value: client.Action) !client.Control {
 
             return .continue_routing;
         },
-        else => return client.controllers.action_routing.apply(handler.app, value),
+        else => return client.operations.action_routing.apply(handler.app, value),
     };
-    if (client.controllers.copy_modes.active(handler.app)) {
-        _ = try client.controllers.copy_modes.leave(handler.app);
+    if (client.operations.copy_modes.active(handler.app)) {
+        _ = try client.operations.copy_modes.leave(handler.app);
     }
 
-    _ = client.controllers.name_prompts.beginPalette(handler.app, prefix);
+    _ = client.operations.name_prompts.beginPalette(handler.app, prefix);
     return .continue_routing;
 }
 
 /// Example: `const policy = handler.repeatPolicy(action);`
 pub fn repeatPolicy(handler: *const Handler, value: client.Action) ?client.RepeatPolicy {
-    return client.controllers.action_routing.repeatPolicy(handler.app, value);
+    return client.operations.action_routing.repeatPolicy(handler.app, value);
 }
 
 /// Ends native control capture after ordered overflow or focus cancellation.

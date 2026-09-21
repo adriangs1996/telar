@@ -17,11 +17,11 @@ config, local module, plugin or trust-store fingerprint changes
                             |
                  config_reload.resolve
                             |
-              DeliverConfigReloadHandler
+              config_reloads
               |             |             |
           unchanged     rejected       adopted
               |             |             |
-              |    ClientDiagnostic   ApplyConfigHandler
+              |    ClientDiagnostic   config_reloads
               |             |             |
               |    failure notice    model commit + clear
               |                           |
@@ -40,7 +40,7 @@ config, local module, plugin or trust-store fingerprint changes
 
 `client_startup` asks `config_reloads.schedule` to start the watcher after the
 runtime handshake; the GUI schedules it from `GuiClient.start` after bootstrap.
-`DeliverConfigReloadHandler` rearms it through an adapter
+`config_reloads` rearms it through an adapter
 port after every successfully handled outcome. The worker loads a new Lua VM,
 typed snapshot, plugin registry and trust store without touching the active
 client. `config_reload.resolve` checks the sidebar
@@ -69,22 +69,21 @@ changed pane-gap preference updates every current tab and advances
 versions.
 
 The model also owns the diagnostic banner and `Version.diagnostic`.
-`DeliverConfigReloadHandler` sends a rejected generation through
-`ClientDiagnosticHandler`, which validates that bounded text and applies an
+`config_reloads` sends a rejected generation through
+`client_diagnostic.replace`, which validates that bounded text and applies an
 explicit safe fallback for malformed worker output without changing the active
 generation. It then constructs the failure notification from the committed
-banner. An accepted generation clears an older diagnostic through the same
-handler immediately after its semantic commit and before concrete resources
+banner. An accepted generation clears an older diagnostic with `model.clearDiagnostic` immediately after its semantic commit and before concrete resources
 are adopted.
 
-`DeliverConfigReloadHandler` owns the top-level outcome order. An unchanged
+`config_reloads` owns the top-level outcome order. An unchanged
 attempt only rearms. A rejection commits and publishes its diagnostic before
-rearming. An adoption calls `ApplyConfigHandler`, publishes success and then
-rearms. `ApplyConfigHandler` owns the synchronous adoption order: after the
+rearming. An adoption commits the new state, delivers dependent resources, publishes
+success and then rearms. `config_reloads` owns the synchronous adoption order: after the
 model commit and diagnostic clear, it adopts concrete resources, projects
 appearance, configures sidebar resources and chooses exactly one sidebar or
 pane-gap geometry branch. The pane-gap branch explicitly invalidates graphics
-placements before offering active pane geometry through separate effect ports.
+placements before offering active pane geometry with direct operation calls.
 A sidebar change takes precedence when the same generation also changes pane
 gaps because its shared projection already performs both operations. A stale
 generation clears no diagnostic, invokes no effect, and `config_reloads.apply`
@@ -92,9 +91,8 @@ releases the unaccepted adoption instead of leaking its VM or plugin objects.
 
 ## Ownership and effects
 
-The application handler's first external stage asks the adapter to swap the
-generation, registry, trust store, input router and resolved sidebar renderer.
-That callback replaces sound policy through `sound.Playback.configure`, marks
+The operation swaps the generation, registry and trust store, then uses host
+ports to adopt the input router and resolved sidebar renderer. It replaces sound policy through `sound.Playback.configure`, marks
 the adoption consumed and destroys the previous owned objects. It is
 infallible, so any later failure cannot leave the new semantic generation
 without its concrete owners. The client event loop cannot interleave another
@@ -107,11 +105,11 @@ Theme, icon and sidebar resources are updated after the ownership swap. CLI
 theme and sidebar-renderer locks still override reloaded values. A sidebar or
 pane-gap change invalidates host graphics placements and re-offers the current
 pane geometry to the runtime. Sidebar changes pass through
-`sidebar_projection.apply` and `DeliverSidebarLayoutHandler`, the same
+`sidebar_projection.apply` and `sidebar_projection.apply`, the same
 exact-commit delivery used by explicit toggles. `config_reloads` implements
 each concrete port independently; it does not choose the outcome order,
 notification content, layout branch or placement-to-geometry order. The
-pane-gap geometry port uses `OfferActivePaneGeometryHandler`, so an empty
+pane-gap geometry port uses `pane_geometry.offerActive`, so an empty
 projection and active-tab selection remain application policy.
 
 Fallible sidebar configuration, projection, geometry, notification or watcher
@@ -132,7 +130,7 @@ folds accepted changes into one paced frame. A rejection presents its
 diagnostic without depending on the failure notification as an accidental draw
 trigger.
 
-## Proof
+## Validation
 
 - `src/client/resources/config_reload.zig` proves rejected-load ownership and
   owns asynchronous loading, validation and orphan cleanup.
@@ -147,12 +145,12 @@ trigger.
   top-level partial failure boundary.
 - `src/client/application/configuration/client_diagnostic.zig` proves diagnostic
   validation, fallback and idempotent clear policy shared with other producers.
-- `src/client/controllers/configuration/config_reloads.zig` owns concrete resource transfer,
+- `src/client/operations/configuration/config_reloads.zig` owns concrete resource transfer,
   physical effect adapters and watcher scheduling, without application
   branching.
 - `src/client/application/notifications/sidebar_layout_delivery.zig` owns exact
   sidebar commit validation and projection order.
-- `src/client/controllers/notifications/sidebar_projection.zig` wires the shared physical
+- `src/client/operations/notifications/sidebar_projection.zig` wires the shared physical
   sidebar projection ports.
 - `src/frontend/client/tests/` proves resolved delivery, ownership
   replacement, accepted diagnostic cleanup, stale cleanup, post-commit geometry

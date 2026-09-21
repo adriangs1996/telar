@@ -17,10 +17,10 @@ Cmd+V / Paste
   -> shared host/macos/clipboard_image.h -> private PNG cache
   -> native clipboard completion { image path or text }
   -> routing.finishPaste validates owner, focus and draft revision
-  -> agent_threads.attachImage -> AgentThreadHandler -> Model -> Pane
+  -> agent_threads.attachImage -> agent_threads -> Model -> Pane
   -> composer image controls / Send
-  -> AgentPrompt -> owned client outbox -> AgentThreadController
-  -> runtime AgentThreadHandler -> Session observation queue
+  -> AgentPrompt -> owned client outbox -> requests.dispatch
+  -> runtime agent_threads -> Session observation queue
   -> Codex turn/start with localImage inputs
   -> request_completed clears only the acknowledged draft revision
 ```
@@ -104,7 +104,7 @@ cached files available to accepted runtime turns. Client death therefore does
 not remove an image while the provider is opening it. Cache retention also
 covers rejected and cancelled captures, bounded by the same byte quota.
 
-## Proof
+## Validation
 
 - `AgentImages`, schema and outbox tests check ownership, invalid references,
   image-only messages, wire round trips, overflow and atomic rejection.

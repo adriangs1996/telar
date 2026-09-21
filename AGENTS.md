@@ -59,7 +59,7 @@ frontend never import each other, and `telar-gui` never imports
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `telar-core`     | cells, buffers, geometry and wire values shared across processes                                                                 |
 | `telar-backend`  | children, PTYs, terminal emulation, history and runtime authority                                                                |
-| `telar-client`   | disposable model, handlers, input policy, configuration, plugins, local transport, resource retention and presentation contracts |
+| `telar-client`   | disposable model, operations, input policy, configuration, plugins, local transport, resource retention and presentation contracts |
 | `telar-frontend` | TUI assembly, host terminal, decoder, compositor, diff, pacing and Kitty delivery                                                |
 | `telar-gui`      | native chrome: glyph atlas and quad frames drawn by a Metal backend on macOS and a Wayland/Vulkan backend on Linux               |
 
@@ -71,6 +71,15 @@ focus or navigation.
 Before changing client presentation, input adapters or retained-resource delivery,
 read [`src/client/presentation/README.md`](src/client/presentation/README.md).
 Run `zig build check-client-boundaries` when changing common-client imports.
+
+### Following an operation
+
+When adding or refactoring a flow, apply the direct-operation rules in
+[`docs/engineering-invariants.md`](docs/engineering-invariants.md#code-organization-and-tracing).
+Start at the owning process's update/event dispatch, then follow concrete calls
+into the operation. Keep its request, completion and failure behavior together.
+[`docs/entrypoints.md`](docs/entrypoints.md) maps the process roots, operations
+and their protocol replies.
 
 ### One pane, end to end
 

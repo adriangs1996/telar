@@ -1,99 +1,41 @@
 # Workspace list snapshot
 
-The runtime owns the set and order of open workspaces. Each disposable client
-keeps one bounded replica so the top bar can present that set and input can
-resolve positional navigation to a stable `WorkspaceId`.
-
-## End-to-end path
+The runtime owns open workspace membership and order. Each client keeps a
+bounded replica for chrome and positional navigation.
 
 ```text
-workspace.Repository revision
-        |
-runtime delivery cursor
-        |
-schema.workspace_list
-        |
-server_messages dispatcher
-        |
-workspace_lists adapter
-        |
-ReconcileWorkspaceListHandler
-        |
-ClientModel.reconcileWorkspaceList
-        |
-ClientModel.Version.workspace_list
-        |
-presentation_lifecycle.observe
-        |
-Presenter -> View.render(workspaces)
+runtime repository revision and per-client cursor -> workspace_list
+  -> entrypoints/server_messages.handleServerMessage
+  -> operations/workspaces/workspace_lists.apply
+     -> decode bounded domain inputs
+     -> Model.reconcileWorkspaceList
+     -> classify stale, rejected or applied
+  -> adapter observes workspace_list revision
 ```
 
-The runtime delivery cursor compares its last delivered revision with the
-repository revision and encodes the latest list. It does not queue historical
-lists. The wire decoder rejects revision zero, more than 64 entries, duplicate
-workspace identities, oversized names or paths and invalid tab counts before
-the client adapter runs.
+Runtime delivery encodes the latest repository revision rather than queuing
+historical lists. Wire validation rejects revision zero, excess entries,
+duplicate identities, oversized names/paths and invalid tab counts.
 
-`workspace_lists.apply` translates borrowed wire entries into domain inputs on
-the stack. `ReconcileWorkspaceListHandler` delegates the transaction to
-`ClientModel` and returns the complete `stale`, `rejected` or `applied`
-application outcome; neither layer references `View`, `Presenter` or input
-routing.
+The model owns the only client replica. Its snapshot holds at most 64 entries,
+UTF-8-safe display names up to 48 bytes and complete paths in a shared 16 KiB
+pool. Reconciliation builds a candidate before replacement; it allocates
+nothing. A validation or aggregate-path capacity failure preserves the last
+snapshot. The operation classifies bounded validation errors as rejected and
+propagates unclassified failures.
 
-## Client ownership
+Only a newer runtime revision commits. Each such commit advances the local
+workspace-list revision once; repeated/older runtime versions are no-ops.
+Model queries resolve stable identity and zero-based position for actions and
+clicks. The view retains hit regions, not navigation authority or a second list.
 
-`ClientModel` is the only owner of the client-side replica. The reusable
-`workspace.workspace_list.Snapshot` stores at most 64 entries, truncates display
-names to 48 bytes without ending inside a UTF-8 continuation sequence and
-retains complete paths in a shared 16 KiB pool. Replacement allocates nothing
-and builds a local candidate before assignment, so every validation or capacity
-failure preserves the last usable snapshot.
+No server-message operation requests a draw. The adapter observes the model
+revision and composes the latest immutable snapshot at the paced deadline.
+Several updates can fold into one presentation. A later valid runtime revision
+can recover from rejected input; reconnect obtains a fresh canonical snapshot.
 
-Only a newer runtime revision commits. A commit advances
-`ClientModel.Version.workspace_list` once. Equal and older revisions are
-canonical no-ops. This presentation revision is local to the client and is
-separate from the runtime revision retained in the snapshot.
-
-The model exposes bounded queries for stable identity and zero-based position.
-The shared client action dispatcher uses those queries when a top-bar click,
-native binding, Lua binding or plugin action selects a workspace. `View` is
-not navigation authority and owns no second copy of the list.
-
-## Presentation
-
-The server-message path never requests a draw. After the event completes,
-`client_events` publishes the current model version. `Presenter` compares the
-workspace-list revision with the last version it painted, invalidates client
-chrome and passes the current immutable snapshot to `View.render` when the
-paced frame is due.
-
-The presenter retains only version values. For this slice, the view retains
-only hit regions from the rendered frame. Several runtime updates that arrive
-inside one frame interval therefore fold into one rendering of the latest model
-snapshot.
-
-## Failure and recovery
-
-A wire-valid list can still exceed the client's 16 KiB aggregate path budget.
-The application handler classifies that error, along with every other bounded
-snapshot validation failure, as a rejected outcome and leaves the previous
-replica and model version intact. It propagates any unclassified error instead
-of letting the adapter silently discard it. Runtime delivery continues with
-later repository revisions, each of which gets a fresh reconciliation attempt.
-A reconnect constructs a new disposable client model and receives the current
-runtime revision through a fresh delivery cursor.
-
-## Proof
-
-- `src/client/workspace/workspace_list.zig` proves fixed-capacity copying,
-  stale-revision rejection, UTF-8 truncation and atomic capacity failure.
-- `src/client/model/Model.zig` proves sole ownership, bounded navigation
-  queries and isolated version publication.
-- `src/client/application/workspaces/workspace_list_snapshot.zig` proves the use
-  case owns outcome classification and changes only committed client state.
-- `src/frontend/client/tests/` proves protocol reconciliation happens
-  before presentation, emits no direct draw and reaches the top bar only after
-  presenter observation.
-- `src/backend/runtime/delivery/` and
-  `src/backend/workspace/repository_support.zig` prove the runtime authority and
-  per-client revision cursor.
+Source: `src/client/operations/workspaces/workspace_lists.zig`,
+`src/client/model/Model.zig`, and `src/client/workspace/workspace_list.zig`.
+Tests: `src/client/model/tests/workspaces.zig`, workspace-list storage tests and
+`src/frontend/client/tests/notifications_and_agents.zig` cover revision
+ownership, bounded rejection, navigation and presentation.

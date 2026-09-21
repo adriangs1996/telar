@@ -1,3 +1,5 @@
+const AgentPromptIntent = @import("../application/agents/AgentPromptIntent.zig");
+const AgentOperation = @import("../connection/AgentOperation.zig");
 const PaneSurfaceType = @import("telar-core").PaneSurface;
 const AgentPane = @import("../panes/Pane.zig");
 const PaneOpened = @import("telar-core").PaneOpened;
@@ -3088,4 +3090,39 @@ pub fn applyPaneLayout(self: *Model, request: PaneLayoutRequest) !PaneFocusType 
 
     self.panes_revision +%= 1;
     return .{ .location = active.location, .previous = previous, .focused = request.panes.focused, .geometry_changed = true, .panes_revision = self.panes_revision };
+}
+
+/// Example: `_ = model.planAgentPrompt(pane_id);`
+pub fn planAgentPrompt(self: *Model, pane_id: PaneIdType) ?AgentPromptIntent {
+    const pane = self.agentPane(pane_id) orelse return null;
+    const thread = pane.agent_thread orelse return null;
+    if (thread.status != .ready or (std.mem.trim(u8, pane.composerSlice(), " \t\r\n").len == 0 and pane.composerImages().count == 0)) {
+        return null;
+    }
+    const options = pane.agentOptions();
+    if (!thread.accepts(options)) {
+        return null;
+    }
+
+    return .{
+        .pane_id = pane_id,
+        .pane_generation = pane.pane_generation,
+        .attachment_generation = pane.attachment_generation,
+        .composer_content_revision = pane.composer_content_revision,
+        .location = pane.location,
+        .text = pane.composerSlice(),
+        .images = pane.composerImages().view(),
+        .options = options,
+    };
+}
+
+/// Example: `_ = model.completeAgentPrompt(operation);`
+pub fn completeAgentPrompt(self: *Model, operation: AgentOperation) bool {
+    const pane = self.agentPane(operation.pane_id) orelse return false;
+    if (pane.pane_generation != operation.pane_generation or pane.attachment_generation != operation.attachment_generation) {
+        return false;
+    }
+
+    const revision = operation.composer_content_revision orelse return false;
+    return self.acceptAgentPrompt(operation.pane_id, revision);
 }

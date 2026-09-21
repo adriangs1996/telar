@@ -63,7 +63,7 @@ Clients commit one status revision and render yellow for trust-only, peach for
 active exact scope, or red for active wildcard scope. The trust-only badge
 therefore survives an inactive proxy and a client reconnect.
 
-## Proof
+## Validation
 
 - `src/backend/proxy/ca.zig` proves the 30-day lifetime, key/certificate match,
   owner-only persistence, fingerprint, and bounded expiry check.
@@ -71,7 +71,8 @@ therefore survives an inactive proxy and a client reconnect.
   default paths, and direct platform command construction.
 - `src/cli/server.zig` proves separate private and system authority paths.
 - `src/core/schema_contract_test.zig` fixes the wire representation.
-- `src/frontend/client/application/agents/proxy_status*.zig` prove exact
-  transitions and notification ordering.
+- `src/client/operations/agents/proxy_status.zig` applies the committed status
+  before publishing notifications; model observation and frontend notification
+  integration tests cover exact transitions and no-op repeats.
 - `src/frontend/widgets/top_bar.zig` proves the trust-only badge stays visible
   with the proxy off.

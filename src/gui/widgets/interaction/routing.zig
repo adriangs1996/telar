@@ -349,7 +349,7 @@ fn routeAgentBinding(gui: *GuiClient, event: Event) !bool {
         return true;
     }
 
-    if (!gui.widgets.dispatcher.window_focused or gui.widgets.dispatcher.maps.presented().modal_layer != 0 or gui.widgets.composer_menu.selector != null or gui.widgets.completions.open or client.controllers.key_routing.captures(&gui.app)) {
+    if (!gui.widgets.dispatcher.window_focused or gui.widgets.dispatcher.maps.presented().modal_layer != 0 or gui.widgets.composer_menu.selector != null or gui.widgets.completions.open or client.operations.key_routing.captures(&gui.app)) {
         return false;
     }
 
@@ -508,7 +508,7 @@ fn focus(gui: *GuiClient, target: Target) !void {
 
         _ = gui.widgets.dispatcher.focus(target.id);
         const model = gui.app.model.activeTabModel() orelse return;
-        _ = try client.controllers.view_interactions.apply(&gui.app, model, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
+        _ = try client.operations.view_interactions.apply(&gui.app, model, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
         return;
     }
 
@@ -532,7 +532,7 @@ fn command(gui: *GuiClient, value: client.ModelNamePromptCommand) !void {
         }
     }
 
-    _ = try client.controllers.name_prompts.handleInput(&gui.app, .{ .command = value });
+    _ = try client.operations.name_prompts.handleInput(&gui.app, .{ .command = value });
     if (revision != editingRevision(gui) or value == .select_all or value == .select_range or value == .replace_range) {
         gui.widgets.cancelComposition();
     }
@@ -579,7 +579,7 @@ fn editor(gui: *GuiClient, target: Target, event: Event) !void {
             if (target.action == .composer) {
                 try composerKey(gui, target, key);
             } else {
-                _ = try client.controllers.name_prompts.handleInput(&gui.app, .{ .key = key.terminalKey() });
+                _ = try client.operations.name_prompts.handleInput(&gui.app, .{ .key = key.terminalKey() });
             }
             if (revision != editingRevision(gui)) {
                 state.cancelComposition();
@@ -796,7 +796,7 @@ fn activateControl(gui: *GuiClient, target: Target) !void {
             },
         },
         .prompt => |action| try command(gui, if (action == .submit) .submit else .cancel),
-        .complete_path => |choice| try client.controllers.name_prompts.chooseDirectory(&gui.app, choice.index, choice.revision),
+        .complete_path => |choice| try client.operations.name_prompts.chooseDirectory(&gui.app, choice.index, choice.revision),
         .history => |action| {
             const prompt = gui.app.model.name_prompt.currentConst() orelse return;
             if (prompt.target() != .history) {
@@ -804,7 +804,7 @@ fn activateControl(gui: *GuiClient, target: Target) !void {
             }
 
             switch (action) {
-                .select => |choice| try client.controllers.name_prompts.selectHistoryRow(&gui.app, choice.index, choice.revision),
+                .select => |choice| try client.operations.name_prompts.selectHistoryRow(&gui.app, choice.index, choice.revision),
                 .submit => |choice| {
                     const history = &gui.app.model.history_palette;
                     if (history.phase == .ready and history.version() == choice.revision and prompt.selection() == choice.index) {
@@ -822,7 +822,7 @@ fn activateControl(gui: *GuiClient, target: Target) !void {
 
 fn dispatchIntent(gui: *GuiClient, intent: client.Intent) !void {
     const model = gui.app.model.activeTabModel() orelse return;
-    _ = try client.controllers.view_interactions.apply(&gui.app, model, .{ .intent = intent, .consumed = true });
+    _ = try client.operations.view_interactions.apply(&gui.app, model, .{ .intent = intent, .consumed = true });
     _ = gui.widgets.dispatcher.focus(null);
 }
 
@@ -976,7 +976,7 @@ fn scrollHistory(gui: *GuiClient, event: Event) !bool {
     }
 
     if (prompt.inspecting()) {
-        try client.controllers.name_prompts.scrollHistoryInspection(&gui.app, lines);
+        try client.operations.name_prompts.scrollHistoryInspection(&gui.app, lines);
     } else {
         for (0..@abs(lines)) |_| {
             if (history.phase != .ready) {
@@ -1115,7 +1115,7 @@ fn finishPaste(gui: *GuiClient, result: @import("../../input/ClipboardResult.zig
 
         if (result.status != .success) {
             if (result.status == .too_large or result.status == .cancelled) {
-                try client.controllers.notifications.publishNow(&gui.app, .{ .level = .warning, .title = "Clipboard could not be pasted", .message = if (result.status == .too_large) "The clipboard image or attachment storage exceeds its size limit." else "The clipboard image could not be read or saved." });
+                try client.operations.notifications.publishNow(&gui.app, .{ .level = .warning, .title = "Clipboard could not be pasted", .message = if (result.status == .too_large) "The clipboard image or attachment storage exceeds its size limit." else "The clipboard image could not be read or saved." });
             }
 
             return;

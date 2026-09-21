@@ -1,123 +1,44 @@
 # Pane metadata
 
-The runtime publishes a pane's current working directory and observed
-foreground process independently from its cell frames. Each client stores a
-bounded replica for the lifetime of that pane. Foreground changes update pane
-borders; CWD changes retain the exact path and publish presentation work only
-when its bounded display name changes.
-
-## End-to-end path
+The runtime publishes CWD and observed foreground process independently of
+cell frames. The client owns only bounded replicas used by pane borders, tab
+labels and navigation.
 
 ```text
-runtime Pane.cwd / foreground process cache
-                    |
-Attachment.prepareCwd / prepareForeground
-                    |
-schema.pane_cwd / schema.pane_foreground
-                    |
-server_messages dispatcher
-                    |
-pane_metadata adapter
-                    |
-UpdatePaneMetadataHandler
-                    |
-ClientModel.updatePaneMetadata
-                    |
-multiplexer.Model.setPaneCwd / setPaneForeground
-                    |
-ClientModel.Version.pane_metadata
-          + optional Version.pane_foreground
-                    |
-presentation_lifecycle.observe -> paced presentation
+runtime metadata cursors -> pane_cwd / pane_foreground
+  -> entrypoints/server_messages.handleServerMessage
+  -> operations/panes/pane_metadata.applyCwd / applyForeground
+  -> Model.updatePaneMetadata
+  -> multiplexer metadata storage
+  -> adapter observes pane_metadata / pane_foreground revisions
 ```
 
-The runtime owns both facts. `Pane.cwd` tracks the latest verified directory,
-and the process observer owns the bounded foreground name. Each runtime
-attachment records which revisions it delivered, so a new client or a
-reconnected client receives the current values without making client state
-authoritative.
+The operation translates both wire variants to the same model transaction.
+Retired panes and exact repeats are no-ops. CWD replacement allocates its bounded
+owned copy before releasing the old path, so failure preserves the previous
+value and revisions. A different exact path with the same display basename
+updates state without publishing a display revision.
 
-`pane_metadata` translates the two protocol messages into one application
-command. `UpdatePaneMetadataHandler` delegates the transaction to
-`ClientModel`. Neither layer reaches into pane storage, view state, composition
-caches or the presenter.
+Foreground names use fixed storage. A changed attached-pane name advances both
+metadata and foreground revisions; the latter identifies changes affecting pane
+composition. No metadata operation requests a draw or reaches into host caches.
+The presenter observes revisions and composes current model state.
 
-## Model transaction
+Workspace snapshots carry bounded foreground names for inactive tabs without
+requiring attachments. The model retains the relevant focused pane identity
+and fallback name until terminal models exist. Global runtime metadata cursors
+coalesce updates keyed by slot, identity, generation and revision. The model
+accepts an unattached foreground update only for a matching retained identity
+in the current workspace. Manual tab labels remain authoritative over automatic
+names. Both adapters use `Tab.labelSlice()` and `Tab.labelIcon()`.
 
-`ClientModel.updatePaneMetadata` resolves the pane before mutation. A report
-for a retired pane and an exact repeated value are no-ops. The model calls the
-multiplexer through `setPaneCwd` or `setPaneForeground`; callers outside the
-workspace capability no longer mutate `Pane` storage directly.
+Each new runtime attachment also has its own metadata cursor. It receives
+bootstrap metadata even if a global update arrived before the local pane was
+constructed. Retirement frees owned CWD storage; reconnect receives current
+runtime facts through fresh cursors.
 
-CWD storage owns an allocated copy bounded by `schema.max_cwd_bytes`. A change
-to another path with the same bounded basename still commits the exact path,
-but advances no presentation revision. A changed display name advances
-`Version.pane_metadata` once.
-
-Foreground storage uses the pane's fixed
-`schema.max_foreground_name_bytes` buffer. A changed name advances both
-`Version.pane_metadata` and `Version.pane_foreground`. The first revision tells
-the presenter that client metadata changed. The second identifies the subset
-that affects pane composition.
-
-The model and multiplexer do not invalidate view or composition caches. The
-returned commit contains pane identity, metadata kind, whether the display
-projection changed and both committed revisions.
-
-## Presentation
-
-After the server event, `client_events` calls
-`presentation_lifecycle.observe`. No metadata handler calls `requestDraw`.
-
-`Presenter.presentDue` maps the metadata revision to client-view invalidation.
-A foreground revision forces the single presenter-owned compositor to rebuild
-the active tab. Inactive tabs retain no composition cache; switching tabs
-changes the compositor source and rebuilds the selected tab from current
-metadata.
-
-An exact repeat or a CWD move that retains the same display name publishes no
-revision, schedules no frame and performs no cache work.
-
-## Failure and recovery
-
-Allocating a replacement CWD happens before the old value is released. An
-allocation failure preserves the previous path and both revisions. Foreground
-updates allocate nothing.
-
-Pane retirement frees the CWD copy with the rest of the disposable pane.
-Reports that arrive after retirement are ignored. Reconnection creates fresh
-runtime attachment cursors, which publish the runtime's current CWD and
-foreground revisions again.
-
-Workspace snapshots include foreground metadata for inactive tabs before
-their panes attach. Each tab owns a bounded fallback name for its client-local
-focused pane. Runtime-state subscribers receive foreground updates for
-unattached panes through a separate delivery cursor keyed by slot, pane
-identity, generation and revision. This cursor coalesces changes and schedules
-no cells or geometry. Attached panes retain their attachment cursor so a new
-attachment always receives bootstrap metadata, even if an earlier global
-report arrived before its local pane existed.
-
-The shared model applies unattached reports only when their pane ID matches a
-tab's foreground identity in the current workspace. Both GUI and TUI derive
-automatic tab text and icons through `Tab.labelSlice()` and `Tab.labelIcon()`.
-
-## Proof
-
-- `src/frontend/workspace/multiplexer.zig` proves bounded CWD display names,
-  exact path ownership, fixed foreground storage and border composition.
-- `src/client/model/Model.zig` proves stale and repeated reports, exact
-  revision changes, state-only CWD moves and allocation failure behavior.
-- `src/client/controllers/panes/pane_metadata.zig` proves both messages use
-  the same model transaction.
-- `src/frontend/client/tests/` proves the dispatcher commits before
-  presentation, requests no direct draw and leaves composition policy to the
-  presenter.
-- `src/backend/runtime/attachment/` proves per-client delivery cursors for
-  both runtime-owned facts.
-- `src/backend/runtime/tests/workspace_snapshot_test.zig` proves workspace
-  delivery includes distinct foreground names without attachments.
-- `src/backend/runtime/tests/runtime_state_test.zig` proves unattached
-  foreground updates, coalescing and attachment bootstrap.
-- `src/client/model/tests/tabs.zig` proves fresh workspace arrival, workspace
-  return, independent client focus, owned names and untouched manual labels.
+Source: `src/client/operations/panes/pane_metadata.zig`,
+`src/client/model/Model.zig`, and `src/client/workspace/`.
+Tests: `src/client/model/tests/panes.zig`, `tabs.zig`,
+`src/frontend/client/tests/pane_updates.zig`, and runtime workspace-snapshot /
+runtime-state tests.

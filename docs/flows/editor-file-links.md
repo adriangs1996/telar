@@ -6,8 +6,8 @@ that source tab. If there is a candidate, `open_editor` asks the runtime to open
 the file in an existing instance. `editor_opened` reports the exact pane and
 runtime generation; the client's existing focus handler focuses that pane.
 
-The runtime's `EditorOpenController` translates the request and delivers the
-reply. `EditorOpenHandler` checks the source generation and collects live
+The runtime's `editors.routeOpenEditor` translates the request and delivers the
+reply. `editors.routeOpenEditor` checks the source generation and collects live
 terminal panes in the same tab. `editors.Job` discovers servers and opens the
 file on an observation worker. It never writes commands or simulated keys to a
 PTY. Names only select candidates; the remote editor's process identity, and

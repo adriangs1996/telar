@@ -16,7 +16,7 @@ telar.ts extension: session_info_changed { name }   (session_start carries the c
         |
 telar hook pi  -> mapPiTitle -> schema.report_agent_title
         |
-routeReportAgentTitle -> ReportAgentTitleHandler -> Tracker.reportTitle -> Agent.reportTitle
+routeReportAgentTitle -> agents.routeReportAgentTitle -> Tracker.reportTitle -> Agent.reportTitle
         |
 agent snapshot revision bump; checkpoint dirty
 ```
@@ -40,7 +40,7 @@ telar hook claude -> mapClaudeTitle -> schema.report_agent_title   (same path as
 Claude appends {"type":"custom-title","customTitle":...,"sessionId":...} to transcript_path
         |
 every Claude hook: transcript_path rides on schema.report_agent as session_file, kind claude_transcript
-        -> ReportAgentHandler -> Tracker.observeReport -> session_file.Watches.put
+        -> agents.routeReportAgent -> Tracker.observeReport -> session_file.Watches.put
         |
 maintenance tick: tickSessionNames -> Tracker.nextSessionFileProbe (stalest due, one in flight)
         -> select.concurrent(.session_name, session_name.probe)   [observation path]
@@ -83,7 +83,7 @@ Codex updates threads.name for the thread id in $CODEX_HOME/state_<n>.sqlite
         |
 every Codex hook: telar hook codex resolves the newest state_<n>.sqlite under
 CODEX_HOME (else ~/.codex) and sends it as session_file, kind codex_state
-        -> ReportAgentHandler -> Tracker.observeReport -> session_file.Watches.put
+        -> agents.routeReportAgent -> Tracker.observeReport -> session_file.Watches.put
         |
 maintenance tick: tickSessionNames -> Tracker.nextSessionFileProbe
         -> select.concurrent(.session_name, session_name.probe)   [observation path]
@@ -128,7 +128,7 @@ the probe then degrades to reporting nothing.
   the current name and transcript again; the checkpoint carries the last
   ready title.
 
-## Proof
+## Validation
 
 - `src/backend/agent/Agent.zig` and `tracker.zig` prove precedence, clearing,
   durability, watch registration, single-flight probing, stale discard and

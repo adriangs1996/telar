@@ -23,7 +23,7 @@ bars.Layout -> ClientModel.bars
           |                 |
           |          Generation.invokeBar
           |                 |
-          |       ApplyBarUpdateHandler
+          |       bar_updates
           |                 |
           +------ Version.bars
                          |
@@ -109,7 +109,7 @@ The next scheduled evaluation is still eligible to recover. Closure state and
 display content are disposable and intentionally reset when their generation
 is replaced.
 
-## Proof
+## Validation
 
 - `src/client/config/` proves the Lua schema, exact tabs ownership,
   top-right restriction, immutable callback context and bounded result parser.
@@ -117,7 +117,7 @@ is replaced.
   state, generation checks and equal-value folding.
 - `src/client/bars/command.zig` proves direct argv execution and bounded
   single-line output.
-- `src/client/controllers/configuration/bar_updates.zig` proves
+- `src/client/operations/configuration/bar_updates.zig` proves
   immediate deadlines, missed-tick coalescence, single-worker identity and
   queue reset on synchronization.
 - `src/client/application/configuration/bar_update.zig` proves

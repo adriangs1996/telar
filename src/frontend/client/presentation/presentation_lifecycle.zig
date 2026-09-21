@@ -1,6 +1,7 @@
 //! Presentation event adaptation for one disposable client. The presenter
 //! decides when and what to paint. This adapter releases async tokens and
 //! supplies concrete effects to the application delivery policy.
+const common = @import("telar-client");
 
 const TerminalClient = @import("../TerminalClient.zig");
 const host = TerminalClient.of;
@@ -8,9 +9,7 @@ const Client = @import("telar-client").AttachedClient;
 const presentation_projection = @import("presentation_projection.zig");
 const mark_module = @import("telar-core").mark;
 const TokenType = @import("telar-client").Token;
-const DeliverPresentationHandlerType = @import("telar-client").DeliverPresentationHandler;
 const OutputType = @import("../resources/Output.zig");
-const EffectsType = @import("telar-client").PresentationEffects;
 const runtime_transport = @import("telar-client").runtime_io;
 
 /// Publishes every revision the presenter uses after one client event commits.
@@ -72,14 +71,10 @@ fn deliver(client: *Client, token: TokenType) !void {
     const delivery = host(client).presenter.presentation_state.complete(token, .delivered) orelse return;
     const geometry = client.presentation.deliveredGeometry();
     host(client).view.tab_drag.present(&host(client).view.hits, if (geometry) |value| if (value.location) |location| location.workspace else null else null);
-    var use_case: DeliverPresentationHandlerType = .{
-        .model = &client.model,
-        .effects = deliveryEffects(client),
-    };
-    try use_case.execute(.{
-        .commit = delivery.commit,
-        .media_pending = delivery.media_pending,
-    });
+    try common.presentation_delivery.apply(client, delivery.commit);
+    if (delivery.media_pending) {
+        try host(client).presenter.requestMedia();
+    }
 }
 
 /// Completes one lower-priority, byte-bounded host graphics pass.
@@ -145,22 +140,4 @@ pub fn handleWritten(client: *Client, result: anyerror!void) !void {
     }
 
     try pumpOutput(client);
-}
-
-fn deliveryEffects(client: *Client) EffectsType {
-    return .{
-        .context = client,
-        .flush_graphics_credits = flushGraphicsCredits,
-        .request_media = requestMedia,
-    };
-}
-
-fn flushGraphicsCredits(context: *anyopaque) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    try runtime_transport.flushGraphicsCredits(client);
-}
-
-fn requestMedia(context: *anyopaque) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    try host(client).presenter.requestMedia();
 }

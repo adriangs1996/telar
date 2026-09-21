@@ -72,7 +72,7 @@ pub fn cancelPointer(input: *Input, app: *client.AttachedClient) !void {
 /// Prompt replay contains UTF-8 text, never a terminal escape stream.
 /// Example: `try Input.routePromptBytes(app, bytes);`
 pub fn routePromptBytes(app: *client.AttachedClient, bytes: []const u8) !void {
-    _ = try client.controllers.name_prompts.handleInput(app, .{ .paste_text = bytes });
+    _ = try client.operations.name_prompts.handleInput(app, .{ .paste_text = bytes });
 }
 
 /// Example: `try input.expire(app, result);`
@@ -256,21 +256,21 @@ pub fn drain(input: *Input, app: *client.AttachedClient) !void {
                 try input.router.interrupt(&replay);
                 input.widget_paste = try gui.beginWidgetPaste();
                 if (!input.widget_paste) {
-                    _ = try client.controllers.paste_routing.start(app);
+                    _ = try client.operations.paste_routing.start(app);
                 }
             },
             .paste_text => |*chunk| {
                 if (input.widget_paste) {
                     try gui.widgetPaste(chunk.bytes[0..chunk.len]);
                 } else {
-                    _ = try client.controllers.paste_routing.content(app, chunk.bytes[0..chunk.len]);
+                    _ = try client.operations.paste_routing.content(app, chunk.bytes[0..chunk.len]);
                 }
             },
             .paste_finish => {
                 if (input.widget_paste) {
                     try gui.endWidgetPaste();
                 } else {
-                    _ = try client.controllers.paste_routing.finish(app);
+                    _ = try client.operations.paste_routing.finish(app);
                 }
 
                 input.widget_paste = false;
@@ -392,7 +392,7 @@ fn dispatchClipboard(input: *Input, gui: *GuiClient, result: @import("input/Clip
 
         var handler: InputHandler = .{ .app = &gui.app };
         try input.router.interrupt(&handler);
-        _ = try client.controllers.pane_pastes.start(&gui.app);
+        _ = try client.operations.pane_pastes.start(&gui.app);
         input.clipboard_offset = 0;
         return false;
     }
@@ -400,12 +400,12 @@ fn dispatchClipboard(input: *Input, gui: *GuiClient, result: @import("input/Clip
     const offset = input.clipboard_offset.?;
     if (offset < result.text.len) {
         const count = pasteChunkSize(result.text[offset..]);
-        _ = try client.controllers.pane_pastes.content(&gui.app, result.text[offset..][0..count]);
+        _ = try client.operations.pane_pastes.content(&gui.app, result.text[offset..][0..count]);
         input.clipboard_offset = offset + count;
         return false;
     }
 
-    _ = try client.controllers.pane_pastes.finish(&gui.app);
+    _ = try client.operations.pane_pastes.finish(&gui.app);
     input.clipboard_offset = null;
     return true;
 }
