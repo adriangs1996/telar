@@ -583,6 +583,8 @@ pub const wait = core.deadline_timer.wait;
 
 test {
     _ = @import("change_review/Session.zig");
+    _ = @import("change_review/view/Model.zig");
+    _ = @import("change_review/view/Revision.zig");
     _ = @import("application/change_review/Handler.zig");
     _ = @import("application/agents/agent_thread_tests.zig");
     _ = @import("agents/attention.zig");

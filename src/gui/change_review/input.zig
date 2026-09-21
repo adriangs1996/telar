@@ -12,6 +12,7 @@ const syntax_limits = @import("../syntax/limits.zig");
 pub fn apply(w: *Widget, event: Event, route: Route) !bool {
     if (event == .focus and !event.focus) {
         w.dragging = false;
+        w.pending_g = false;
         return false;
     }
     const target = route.target orelse return false;
@@ -28,8 +29,11 @@ pub fn apply(w: *Widget, event: Event, route: Route) !bool {
         }
         return true;
     }
-    if (kind == .editor) {
+    if (kind == .editor or kind == .search) {
         return Editor.apply(w, event, target);
+    }
+    if (w.search_prompt.open and (event == .text or event == .key)) {
+        return true;
     }
     if (w.model.current().row_count == 0 and event != .pointer and event != .accessibility) {
         if (event == .key and event.key.code == .escape) {
@@ -41,6 +45,12 @@ pub fn apply(w: *Widget, event: Event, route: Route) !bool {
         .pointer => |pointer| {
             if (pointer.button != .left) {
                 return false;
+            }
+            if (pointer.kind == .press) {
+                w.pending_g = false;
+                if (kind == .code or kind == .line) {
+                    w.finishSearch(true);
+                }
             }
             if (kind == .code) {
                 if (pointer.kind == .press) {
@@ -89,6 +99,20 @@ pub fn apply(w: *Widget, event: Event, route: Route) !bool {
             }
             if (key.code == .char and (key.mods.ctrl or key.mods.super)) {
                 const ch = key.code.char;
+                w.pending_g = false;
+                if (w.model.editing == null and ch.len == 1 and key.mods.ctrl and !key.mods.super and !key.mods.alt) {
+                    switch (std.ascii.toLower(ch.bytes[0])) {
+                        'u', 'd' => |letter| {
+                            w.page(if (letter == 'u') -0.5 else 0.5);
+                            return true;
+                        },
+                        'b', 'f' => |letter| {
+                            w.page(if (letter == 'b') -1 else 1);
+                            return true;
+                        },
+                        else => {},
+                    }
+                }
                 if (ch.len == 1 and std.ascii.toLower(ch.bytes[0]) == 'c') {
                     try copy(w);
                     return true;
@@ -99,18 +123,33 @@ pub fn apply(w: *Widget, event: Event, route: Route) !bool {
                 return false;
             }
             if (key.code == .up or key.code == .down) {
+                w.pending_g = false;
                 w.model.move(.{ .delta = if (key.code == .up) -1 else 1, .extend = w.model.visual or key.mods.shift });
                 w.reveal = true;
+                w.copy_range = null;
                 return true;
             }
             if (key.code == .page_down or key.code == .page_up) {
-                w.scroll = std.math.clamp(w.scroll + (if (key.code == .page_down) @as(f32, 260) else -260), 0, w.maximum_scroll);
+                w.page(if (key.code == .page_up) -1 else 1);
+                return true;
+            }
+            if (key.code == .home or key.code == .end) {
+                if (key.code == .home) {
+                    w.model.first();
+                } else {
+                    w.model.last();
+                }
+                w.pending_g = false;
+                w.reveal = true;
+                w.copy_range = null;
                 return true;
             }
             if (key.code == .escape) {
-                if (w.mode == .runtime and !w.model.visual and w.model.expanded == null and w.copy_range == null) {
+                if (w.mode == .runtime and !w.pending_g and !w.model.visual and w.model.expanded == null and w.copy_range == null and w.model.search.query.len == 0) {
                     w.command = .close;
                 }
+                w.pending_g = false;
+                w.model.clearSearch();
                 w.model.cancelVisual();
                 w.copy_range = null;
                 w.model.expanded = null;
@@ -118,10 +157,30 @@ pub fn apply(w: *Widget, event: Event, route: Route) !bool {
             }
         },
         .text => |text| {
-            if (text.phase == .release or text.bytes.len != 1 or w.model.editing != null) {
+            if (text.phase == .release or w.model.editing != null) {
+                return false;
+            }
+            const previous_g = w.pending_g;
+            w.pending_g = false;
+            if (text.bytes.len != 1) {
                 return false;
             }
             switch (text.bytes[0]) {
+                'g' => {
+                    if (previous_g) {
+                        w.model.first();
+                        w.reveal = true;
+                        w.copy_range = null;
+                    } else {
+                        w.pending_g = true;
+                    }
+                },
+                'G' => {
+                    w.model.last();
+                    w.reveal = true;
+                    w.copy_range = null;
+                },
+                '/' => w.beginSearch(),
                 'j', 'k', 'J', 'K' => |ch| {
                     w.model.move(.{ .delta = if (ch == 'j' or ch == 'J') 1 else -1, .extend = w.model.visual or std.ascii.isUpper(ch) });
                     w.reveal = true;
@@ -132,7 +191,16 @@ pub fn apply(w: *Widget, event: Event, route: Route) !bool {
                     w.copy_range = null;
                     w.reveal = true;
                 },
-                'n', 'p' => |ch| activate(w, .{ .kind = if (ch == 'n') .next else .previous }),
+                'n', 'N' => |ch| {
+                    if (w.model.search.query.len != 0) {
+                        _ = w.model.repeatSearch(if (ch == 'n') .forward else .backward);
+                        w.reveal = true;
+                        w.copy_range = null;
+                    } else {
+                        activate(w, .{ .kind = if (ch == 'n') .next else .previous });
+                    }
+                },
+                'p' => activate(w, .{ .kind = .previous }),
                 'c' => activate(w, .{ .kind = .comment }),
                 't', 'T' => activate(w, .{ .kind = .theme }),
                 else => return false,
@@ -154,9 +222,12 @@ pub fn activate(w: *Widget, value: struct { kind: actions.Kind, item: usize = 0 
     if (w.model.current().row_count == 0 and value.kind != .close and value.kind != .next_edition and value.kind != .previous_edition and value.kind != .refresh) {
         return;
     }
+    w.finishSearch(true);
+    w.pending_g = false;
     switch (value.kind) {
         .file => {
             w.model.selectFile(value.item);
+            w.resetNavigation();
             w.scroll = 0;
             w.changedOwner();
         },
@@ -164,6 +235,7 @@ pub fn activate(w: *Widget, value: struct { kind: actions.Kind, item: usize = 0 
             const file = w.model.file;
             w.model.move(.{ .delta = if (value.kind == .previous) -1 else 1, .extend = false, .hunk = true });
             if (w.model.file != file) {
+                w.resetNavigation();
                 w.scroll = 0;
                 w.changedOwner();
             }
@@ -231,6 +303,7 @@ pub fn activate(w: *Widget, value: struct { kind: actions.Kind, item: usize = 0 
         .simulate => w.model.simulate(),
         .version => {
             w.model.switchRevision();
+            w.resetNavigation();
             w.scroll = 0;
             w.changedOwner();
         },

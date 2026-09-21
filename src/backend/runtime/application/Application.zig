@@ -1,6 +1,8 @@
 const ReviewJobs = @import("../../change_review/Jobs.zig");
 const ReviewService = @import("../../change_review/Service.zig");
 const AdmittedReview = @import("../../change_review/Admitted.zig");
+const change_review = @import("change_review.zig");
+const EditorOpenState = @import("../../editors/State.zig");
 const std = @import("std");
 const HeapType = @import("telar-core").Heap;
 const event = @import("../event.zig");
@@ -84,6 +86,7 @@ agent_history_jobs: @import("AgentHistoryJobs.zig") = .{},
 review_jobs: ReviewJobs = .{},
 review_service: ?*ReviewService = null,
 review_admitted: [max_panes_per_tab]?AdmittedReview = @splat(null),
+editor_open: EditorOpenState = .{},
 input_sequence: u64 = 0,
 cell_timer: DeadlineScheduler = .{},
 
@@ -746,6 +749,7 @@ pub fn publishAgentSound(application: *Application, notification: AgentSoundNoti
 /// application.pumpAll();
 /// ```
 pub fn pumpAll(application: *Application) void {
+    change_review.discover(application);
     for (&application.clients.items) |*slot| {
         const session = slot.* orelse continue;
         const key = session.key;

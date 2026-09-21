@@ -8,7 +8,7 @@ const host_ports = @import("../host_ports.zig");
 
 const patch = "diff --git a/file.zig b/file.zig\n--- a/file.zig\n+++ b/file.zig\n@@ -1,3 +1,3 @@\n-old\n+new\n context\n tail\n";
 
-fn base() !*Session {
+pub fn base() !*Session {
     const session = try Session.init();
     errdefer session.deinit();
     try session.bootstrap();
@@ -20,7 +20,7 @@ fn base() !*Session {
     return session;
 }
 
-fn ready() !*Session {
+pub fn ready() !*Session {
     const session = try base();
     errdefer session.deinit();
     try session.gui.openChangeReview(Session.pane_id);
@@ -30,11 +30,11 @@ fn ready() !*Session {
     return session;
 }
 
-fn response(session: *Session, revision: u64) core.ChangeReviewSnapshotView {
+pub fn response(session: *Session, revision: u64) core.ChangeReviewSnapshotView {
     return .{ .request_id = session.gui.app.change_review.pending.?, .pane_id = Session.pane_id, .pane_generation = 77, .session = "thread-A", .edition_id = 1, .latest_edition_id = 1, .revision = revision, .patch = patch };
 }
 
-fn reply(session: *Session, snapshot: core.ChangeReviewSnapshotView) !void {
+pub fn reply(session: *Session, snapshot: core.ChangeReviewSnapshotView) !void {
     try session.settle();
     var bytes: [128 * 1024]u8 = undefined;
     const encoded = try core.encodeChangeReviewSnapshot(&bytes, snapshot);
@@ -43,7 +43,7 @@ fn reply(session: *Session, snapshot: core.ChangeReviewSnapshotView) !void {
     try session.gui.review.synchronize(&session.gui.app);
 }
 
-fn adopt(session: *Session) !void {
+pub fn adopt(session: *Session) !void {
     const panel = session.gui.review;
     const state = &session.gui.app.change_review;
     const index = 1 - panel.visible_slot;
@@ -59,7 +59,7 @@ fn adopt(session: *Session) !void {
     try panel.synchronize(&session.gui.app);
 }
 
-fn publish(session: *Session) !void {
+pub fn publish(session: *Session) !void {
     const token = try session.gui.prepare(&session.renderer);
     try session.gui.complete(token, true);
     try session.settle();
@@ -83,7 +83,7 @@ fn withComment(snapshot: core.ChangeReviewSnapshotView, body: []const u8) core.C
     return value;
 }
 
-fn send(session: *Session, event: Event) !void {
+pub fn send(session: *Session, event: Event) !void {
     try session.gui.input.acceptEvent(event);
     try session.gui.input.drain(&session.gui.app);
 }

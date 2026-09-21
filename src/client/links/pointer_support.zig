@@ -30,3 +30,17 @@ test "non-link and non-left presses remain unowned" {
     try std.testing.expect(!pointer.handle(.{ .kind = .press, .left_button = true }, null).consumed);
     try std.testing.expect(!pointer.handle(.{ .kind = .press, .left_button = false }, target).consumed);
 }
+
+test "right link press copies once and owns drag and release" {
+    var pointer: Pointer = .{};
+    const target = try TargetType.init("file:///tmp/a%20b.txt");
+    const pressed = pointer.handle(.{ .kind = .press, .left_button = false, .right_button = true }, target);
+    try std.testing.expect(pressed.consumed);
+    try std.testing.expect(pressed.open == null);
+    try std.testing.expectEqualStrings(target.uri(), pressed.copy.?.uri());
+    const dragged = pointer.handle(.{ .kind = .drag, .left_button = false, .right_button = true }, target);
+    try std.testing.expect(dragged.consumed and dragged.copy == null);
+    const released = pointer.handle(.{ .kind = .release, .left_button = false, .right_button = true }, target);
+    try std.testing.expect(released.consumed and released.copy == null);
+    try std.testing.expect(!pointer.owned);
+}

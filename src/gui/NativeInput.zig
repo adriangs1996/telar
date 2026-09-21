@@ -368,6 +368,10 @@ fn dispatchClipboard(input: *Input, gui: *GuiClient, result: @import("input/Clip
     if (input.clipboard_offset == null) {
         const kind = gui.host.complete(result) orelse return true;
         if (kind == .write) {
+            if (gui.widgets.copy_feedback.complete(result, client.monotonic(gui.app.io))) {
+                gui.widgets.dispatcher.revision +%= 1;
+            }
+
             if (result.target_id != 0) {
                 var completion = result;
                 completion.operation = .write;

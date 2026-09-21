@@ -2,6 +2,7 @@
 //! request lifecycle, configuration, plugins and the ports through which a
 //! presentation adapter supplies its host. Adapters embed it, build it in
 //! place and bind the ports before the first event.
+const EditorOpening = @import("links/EditorOpening.zig");
 
 const core = @import("telar-core");
 const std = @import("std");
@@ -106,6 +107,7 @@ input_leases: LeasesType = .{},
 sound_port: SoundPortType = undefined,
 notifier: HostNotifierType = undefined,
 link_opener: LinkOpenerType = undefined,
+editor_open: EditorOpening = .{},
 capture_port: CapturePortType = undefined,
 host_clipboard: HostClipboardType = undefined,
 host_graphics: HostGraphicsType = undefined,
@@ -163,7 +165,7 @@ pub fn init(client: *AttachedClient, params: ClientInit) !void {
         .reload = .{ .mtime_ns = params.options.config_mtime_ns },
         .sound_playback = .init(params.options.sound),
     };
-    client.model = ModelType.initWithState(gpa, .{
+    client.model.initInto(gpa, .{
         .pane_gaps = params.options.pane_gaps,
         .configuration_generation = configuration_generation,
         .bars = params.options.bars,

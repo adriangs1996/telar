@@ -250,3 +250,28 @@ test "Markdown destination tooltip rejects changed content geometry and modal co
     try std.testing.expect(fixture.quads.items().len > 0);
     try std.testing.expectEqual(@as(usize, 1), registry.len);
 }
+
+test "copy feedback stays at the bottom takes no input and expires without polling" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    try fixture.enableCache();
+    var canvas = fixture.canvas();
+    canvas.viewport = .{ 640, 480 };
+    canvas.chrome.status_bar = 26;
+    fixture.clock.begin(100);
+    fixture.state.?.copy_feedback.until_ns = 200;
+    try fixture.state.?.copy_feedback.draw(&canvas);
+    try std.testing.expectEqual(@as(?u64, 200), fixture.clock.deadline_ns);
+    try std.testing.expect(fixture.quads.items().len > 0);
+    for (fixture.quads.items()) |quad| {
+        try std.testing.expect(quad.y > 380 and quad.y + quad.height <= 454);
+        try std.testing.expect(quad.x >= 0 and quad.x + quad.width <= 640);
+    }
+
+    try std.testing.expectEqual(@as(usize, 0), fixture.state.?.dispatcher.maps.preparing().len);
+    fixture.quads.clear();
+    fixture.clock.begin(200);
+    try fixture.state.?.copy_feedback.draw(&canvas);
+    try std.testing.expectEqual(@as(usize, 0), fixture.quads.items().len);
+    try std.testing.expect(fixture.clock.deadline_ns == null);
+}

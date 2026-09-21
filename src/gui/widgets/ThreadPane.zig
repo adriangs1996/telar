@@ -2,7 +2,6 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
-const ChangeReviewButton = @import("ChangeReviewButton.zig");
 const ThreadPane = @This();
 
 area: core.Rect,
@@ -29,8 +28,7 @@ pub fn draw(widget: ThreadPane, canvas: *Canvas) !void {
     const status = if (widget.thread.transcript) |snapshot| snapshot.status else .starting;
     const status_text = @import("thread_status.zig").text(widget.thread.transcript);
     const title = if (widget.thread.agent) |agent| agent.displayName() else if (widget.thread.kind == .agent) "Codex" else "Conversation";
-    var header = layout.header;
-    header.width -= try (ChangeReviewButton{ .area = header, .pane_id = widget.thread.pane_id, .generation = widget.thread.attachment_generation, .placement = .thread_header }).draw(canvas);
+    const header = layout.header;
     const status_width = @min(header.width / 2, try canvas.measure(.{ .text = status_text, .face = .sans, .size = .small }) + canvas.chrome.px(18));
     const resume_width = if (widget.thread.transcript) |snapshot| if (snapshot.canResume()) @min(canvas.chrome.px(220), header.width * 0.55) else @as(f32, 0) else @as(f32, 0);
     if (resume_width > 0) {

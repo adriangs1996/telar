@@ -8,6 +8,7 @@ const decodeServer_module = @import("telar-core").decodeServer;
 const Pane = @import("Pane.zig");
 const std = @import("std");
 const PresentationCommitType = @import("PresentationCommit.zig");
+const core = @import("telar-core");
 
 const initial: InitialType = .{
     .spec = .{
@@ -17,6 +18,87 @@ const initial: InitialType = .{
     },
     .attached = true,
 };
+
+test "change review availability owns session identity and survives the initial attachment frame" {
+    var pane = try Pane.init(std.testing.allocator, initial);
+    defer pane.deinit();
+    _ = pane.identify(.terminal, 7);
+    try std.testing.expect(!pane.hasChangeReview());
+    var session = "session-A".*;
+    var notification: core.ChangeReviewChanged = .{ .pane_id = pane.id, .pane_generation = 7, .session = &session, .latest_edition_id = 1 };
+    try std.testing.expect(pane.applyChangeReview(notification));
+    @memset(&session, 'x');
+    notification.session = "session-A";
+    try std.testing.expect(!pane.applyChangeReview(notification));
+    try std.testing.expect(pane.hasChangeReview());
+    pane.attach(11);
+    try std.testing.expect(pane.hasChangeReview());
+    try std.testing.expect(!pane.applyChangeReview(notification));
+
+    notification.latest_edition_id = 0;
+    try std.testing.expect(pane.applyChangeReview(notification));
+    try std.testing.expect(!pane.hasChangeReview());
+    try std.testing.expect(!pane.applyChangeReview(notification));
+    notification.latest_edition_id = 1;
+    try std.testing.expect(pane.applyChangeReview(notification));
+    try std.testing.expect(pane.hasChangeReview());
+
+    notification.session = "session-B";
+    notification.latest_edition_id = 0;
+    try std.testing.expect(pane.applyChangeReview(notification));
+    try std.testing.expect(!pane.hasChangeReview());
+    notification.latest_edition_id = 1;
+    try std.testing.expect(pane.applyChangeReview(notification));
+    try std.testing.expect(pane.hasChangeReview());
+}
+
+test "change review availability rejects foreign panes and retires generations and attachments" {
+    var pane = try Pane.init(std.testing.allocator, initial);
+    defer pane.deinit();
+    var notification: core.ChangeReviewChanged = .{ .pane_id = pane.id, .pane_generation = 7, .session = "session-A", .latest_edition_id = 1 };
+    try std.testing.expect(!pane.applyChangeReview(notification));
+    _ = pane.identify(.terminal, 7);
+    pane.attach(11);
+    notification.pane_id = @enumFromInt(2);
+    try std.testing.expect(!pane.applyChangeReview(notification));
+    notification.pane_id = pane.id;
+    try std.testing.expect(pane.applyChangeReview(notification));
+    pane.attached = false;
+    try std.testing.expect(!pane.hasChangeReview());
+    try std.testing.expect(!pane.applyChangeReview(notification));
+    pane.attach(12);
+    try std.testing.expect(!pane.hasChangeReview());
+    try std.testing.expect(pane.applyChangeReview(notification));
+    pane.attachment_generation += 1;
+    try std.testing.expect(!pane.hasChangeReview());
+    try std.testing.expect(pane.applyChangeReview(notification));
+    _ = pane.identify(.terminal, 8);
+    try std.testing.expect(!pane.hasChangeReview());
+    try std.testing.expect(!pane.applyChangeReview(notification));
+    notification.pane_generation = 8;
+    try std.testing.expect(pane.applyChangeReview(notification));
+    try std.testing.expect(pane.hasChangeReview());
+}
+
+test "change review availability follows managed conversation identity without waiting for an edition" {
+    var pane = try Pane.init(std.testing.allocator, initial);
+    defer pane.deinit();
+    _ = pane.identify(.agent, 7);
+    pane.attach(11);
+    const notification: core.ChangeReviewChanged = .{ .pane_id = pane.id, .pane_generation = 7, .session = "thread-A", .latest_edition_id = 1 };
+    try std.testing.expect(pane.applyChangeReview(notification));
+    var snapshot: core.AgentThreadSnapshot = .{ .pane_id = pane.id, .pane_generation = 7, .revision = 1, .thread_id_len = 8 };
+    @memcpy(snapshot.thread_id[0..8], "thread-A");
+    var bytes: [4096]u8 = undefined;
+    const first = try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &snapshot));
+    try std.testing.expect(try pane.applyAgentThread(first.agent_thread_snapshot));
+    try std.testing.expect(pane.hasChangeReview());
+    snapshot.revision += 1;
+    @memcpy(snapshot.thread_id[0..8], "thread-B");
+    const second = try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, &snapshot));
+    try std.testing.expect(try pane.applyAgentThread(second.agent_thread_snapshot));
+    try std.testing.expect(!pane.hasChangeReview());
+}
 
 fn frame(storage: []u8, input: FrameInput) !FrameViewType {
     var cells = [_]CellType{.{}} ** 9;
@@ -139,7 +221,6 @@ test "composer draft is owned, bounded and replaced whole" {
 }
 
 test "pane metadata is owned admitted with its base and replaced without allocations" {
-    const core = @import("telar-core");
     var allocator = std.testing.FailingAllocator.init(std.testing.allocator, .{});
     var pane = try Pane.init(allocator.allocator(), initial);
     defer pane.deinit();

@@ -18,6 +18,9 @@ const max_image_bytes_per_pane_module = @import("telar-core").max_image_bytes_pe
 const attachment_namespace = @import("attachment_namespace.zig");
 const Pacer = @import("telar-core").Pacer;
 const monotonic = @import("telar-core").monotonic;
+const encodeChangeReviewChanged = @import("telar-core").encodeChangeReviewChanged;
+const ReviewContext = @import("../../change_review/Context.zig");
+const decodeServer = @import("telar-core").decodeServer;
 /// Per-client rendering state. It is disposable: reconnecting creates a fresh
 /// baseline while the pane and its PTY continue to exist.
 const Attachment = @This();
@@ -39,6 +42,7 @@ observed_foreground_revision: u64 = 0,
 /// titles a child actually set.
 observed_title_revision: u64 = 1,
 observed_progress_revision: u64 = 1,
+observed_review_revision: u64 = 0,
 exit_sent: bool = false,
 
 pub fn init(gpa: std.mem.Allocator, pane: *PaneType) !Attachment {
@@ -97,6 +101,50 @@ pub fn prepareCwd(attachment: *Attachment, buffer: []u8) !?PreparedType {
         }),
         .effect = .{ .cwd = pane.cwd.revision },
     };
+}
+
+/// Replays retained review availability for each fresh attachment and coalesces live changes.
+/// Example: `const prepared = try attachment.prepareReview(buffer);`.
+pub fn prepareReview(self: *Attachment, buffer: []u8) !?PreparedType {
+    const availability = &self.pane.review_availability;
+    if (self.observed_review_revision == availability.revision) {
+        return null;
+    }
+
+    const change = availability.view() orelse return null;
+    return .{ .bytes = try encodeChangeReviewChanged(buffer, change), .effect = .{ .review = availability.revision } };
+}
+
+test "review discovery replays on attach and reconnect without losing changes during send" {
+    var pane: PaneType = undefined;
+    pane.review_availability = .{};
+    const context = try ReviewContext.init(.{ .id = @enumFromInt(1), .generation = 4 }, .claude, "hook-session");
+    var first: Attachment = undefined;
+    first.pane = &pane;
+    first.observed_review_revision = 0;
+    var buffer: [1024]u8 = undefined;
+    try std.testing.expect(try first.prepareReview(&buffer) == null);
+    pane.review_availability.record(context, 2);
+    const pending = (try first.prepareReview(&buffer)).?;
+    const initial = (try decodeServer(pending.bytes)).change_review_changed;
+    try std.testing.expectEqualStrings("hook-session", initial.session);
+    try std.testing.expectEqual(@as(u64, 2), initial.latest_edition_id);
+    pane.review_availability.record(context, 5);
+    _ = first.commitPrepared(pending);
+    const newer = (try first.prepareReview(&buffer)).?;
+    try std.testing.expectEqual(@as(u64, 5), (try decodeServer(newer.bytes)).change_review_changed.latest_edition_id);
+    _ = first.commitPrepared(newer);
+    try std.testing.expect(try first.prepareReview(&buffer) == null);
+    var reconnect: Attachment = undefined;
+    reconnect.pane = &pane;
+    reconnect.observed_review_revision = 0;
+    const replayed = (try reconnect.prepareReview(&buffer)).?;
+    try std.testing.expectEqual(@as(u64, 5), (try decodeServer(replayed.bytes)).change_review_changed.latest_edition_id);
+    _ = reconnect.commitPrepared(replayed);
+    pane.review_availability.invalidate();
+    const cleared = (try first.prepareReview(&buffer)).?;
+    try std.testing.expectEqual(@as(u64, 0), (try decodeServer(cleared.bytes)).change_review_changed.latest_edition_id);
+    try std.testing.expect(try reconnect.prepareReview(&buffer) != null);
 }
 
 pub fn prepareTitle(attachment: *Attachment, buffer: []u8) !?PreparedType {
@@ -346,6 +394,10 @@ pub fn commitPrepared(attachment: *Attachment, prepared: PreparedType) CommitEff
         },
         .progress => |revision| effect: {
             attachment.observed_progress_revision = revision;
+            break :effect .{};
+        },
+        .review => |revision| effect: {
+            attachment.observed_review_revision = revision;
             break :effect .{};
         },
         .cells => .{},

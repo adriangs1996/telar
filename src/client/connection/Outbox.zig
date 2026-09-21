@@ -1,3 +1,4 @@
+const encodeOpenEditor = @import("telar-core").encodeOpenEditor;
 const outbox_support = @import("outbox_support.zig");
 const root = @import("../input/input_namespace.zig");
 const OwnedLaunchCwd = @import("OwnedLaunchCwd.zig");
@@ -495,6 +496,13 @@ fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
         .read_history_output => |value| encodeReadHistoryOutput_module(buffer, value),
         .suggest_command => |*value| encodeSuggestCommand_module(buffer, value.view()),
         .complete_client_command => |length| outbox.input_bytes[outbox.head][0..length],
+        .open_editor => |value| encode: {
+            var request = value;
+            const bytes = &outbox.input_bytes[outbox.head];
+            request.editor = bytes[0..value.editor.len];
+            request.path = bytes[value.editor.len..][0..value.path.len];
+            break :encode encodeOpenEditor(buffer, request);
+        },
         .complete_pane_focus => |value| encodeCompletePaneFocus_module(buffer, value),
         .agent_prompt => |*value| @import("telar-core").encodeAgentPrompt(buffer, value.view(&outbox.input_bytes[outbox.head])),
         .agent_interrupt => |value| @import("telar-core").encodeAgentInterrupt(buffer, value),
@@ -515,7 +523,18 @@ fn append(outbox: *Outbox, message: outbox_support.Message) !void {
     const index = try outbox.reserve();
     errdefer outbox.len -= 1;
     var owned = message;
-    if (owned == .create_pane) {
+    if (owned == .open_editor) {
+        try owned.open_editor.validateWire();
+        const request = owned.open_editor;
+        if (request.editor.len + request.path.len > root.max_encoded_bytes) {
+            return error.InvalidEditorTarget;
+        }
+
+        @memcpy(outbox.input_bytes[index][0..request.editor.len], request.editor);
+        @memcpy(outbox.input_bytes[index][request.editor.len..][0..request.path.len], request.path);
+        owned.open_editor.editor = outbox.input_bytes[index][0..request.editor.len];
+        owned.open_editor.path = outbox.input_bytes[index][request.editor.len..][0..request.path.len];
+    } else if (owned == .create_pane) {
         try owned.create_pane.ownArguments(&outbox.input_bytes[index]);
     } else if (owned == .create_tab) {
         try owned.create_tab.ownArguments(&outbox.input_bytes[index]);

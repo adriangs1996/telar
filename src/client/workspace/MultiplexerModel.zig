@@ -264,8 +264,7 @@ pub fn markAttached(model: *Model, pane_id: PaneIdType, generation: u64) !void {
         return;
     }
 
-    pane.attached = true;
-    pane.attachment_generation = generation;
+    pane.attach(generation);
 }
 
 pub fn removePane(model: *Model, pane_id: PaneIdType) bool {

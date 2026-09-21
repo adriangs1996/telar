@@ -1,4 +1,5 @@
 //! Exhaustive classification and delegation for decoded client requests.
+const OpenEditor = @import("telar-core").OpenEditor;
 
 const std = @import("std");
 const ClientMessageType = @import("telar-core").ClientMessage;
@@ -138,6 +139,7 @@ fn captureVoidHandler(comptime tag: Tag) *const fn (*RequestRouterCapture) anyer
 }
 
 const testing_handlers: GenericHandlers(RequestRouterCapture) = .{
+    .open_editor = captureHandler(.open_editor, OpenEditor),
     .open_pane = captureHandler(.open_pane, OpenPaneViewType),
     .pane_input = captureHandler(.pane_input, PaneInputType),
     .pane_resize = captureHandler(.pane_resize, PaneResizeType),
@@ -219,6 +221,7 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]ClientMessageType {
 
     return .{
         .{ .open_pane = .{ .request_id = request_id, .target = .default, .size = size, .launch = null } },
+        .{ .open_editor = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .editor = "nvim", .path = "/tmp/file" } },
         .{ .pane_input = .{ .pane_id = pane_id, .bytes = "input" } },
         .{ .pane_resize = .{ .pane_id = pane_id, .size = size } },
         .{ .frame_ack = .{ .pane_id = pane_id, .frame_id = 1 } },

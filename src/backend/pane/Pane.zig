@@ -56,6 +56,7 @@ const AgentProviderType = @import("telar-core").AgentProvider;
 const HistoryStats = @import("../history/Stats.zig");
 const cwd_module = @import("../process/cwd.zig");
 const blit = @import("blit.zig");
+const ReviewAvailability = @import("../change_review/Availability.zig");
 pub const Pane = @This();
 
 pub const CreationResources = @import("CreationResources.zig");
@@ -69,6 +70,7 @@ launch_state: pane_namespace.LaunchState = .starting,
 session: SessionType,
 kind: @import("telar-core").PaneKind = .terminal,
 agent_thread: ?*@import("telar-core").AgentThreadSnapshot = null,
+review_availability: ReviewAvailability = .{},
 terminal: vt.Terminal,
 stream: vt.TerminalStream,
 media: PipelineType,

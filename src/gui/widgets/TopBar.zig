@@ -42,8 +42,8 @@ pub fn draw(widget: TopBar, canvas: *Canvas) !void {
     if (content.width >= chrome.px(160)) {
         if (widget.context.projection.model) |model| {
             if (model.focusedPaneConst()) |pane| {
-                if (pane.attached and pane.pane_generation != 0) {
-                    _ = try (ChangeReviewButton{ .area = content, .pane_id = pane.id, .generation = pane.attachment_generation, .placement = .top_bar }).draw(canvas);
+                if (!model.layout.hasBorders()) {
+                    _ = try (ChangeReviewButton{ .area = content, .pane = pane, .placement = .top_bar }).draw(canvas);
                 }
             }
         }

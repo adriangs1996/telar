@@ -6,6 +6,9 @@
 //! and the trailing-bytes check, so a payload is never accepted with data
 //! after its message.
 
+const OpenEditor = @import("OpenEditor.zig");
+const EditorOpened = @import("EditorOpened.zig");
+const editor = @import("editor.zig");
 const OpenPaneViewType = @import("OpenPaneView.zig");
 const PaneInputType = @import("PaneInput.zig");
 const PaneResizeType = @import("PaneResize.zig");
@@ -171,6 +174,7 @@ pub const ClientMessage = union(enum) {
     history_stats: HistoryStatsQueryType,
     update_client_layout: ClientLayoutUpdateViewType,
     request_pane_focus: RequestPaneFocusType,
+    open_editor: OpenEditor,
     complete_pane_focus: CompletePaneFocusType,
 };
 
@@ -227,6 +231,7 @@ pub const ServerMessage = union(enum) {
     history_stats_result: HistoryStatsViewType,
     pane_focus_command: PaneFocusCommandType,
     pane_focus_result: PaneFocusResultType,
+    editor_opened: EditorOpened,
     pane_progress: PaneProgressType,
 };
 
@@ -305,6 +310,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .prune_history => .{ .prune_history = try history.decodePruneHistory(&decoder) },
         .read_history_output => .{ .read_history_output = try GenericDerived(ReadHistoryOutputType).decode(&decoder) },
         .history_stats => .{ .history_stats = try history.decodeHistoryStatsQuery(&decoder) },
+        .open_editor => .{ .open_editor = try editor.decodeOpenEditor(&decoder) },
         .request_pane_focus => .{ .request_pane_focus = try focus.decodeRequestPaneFocus(&decoder) },
         .complete_pane_focus => .{ .complete_pane_focus = try focus.decodeCompletePaneFocus(&decoder) },
     };
@@ -371,6 +377,7 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .history_output => .{ .history_output = try history.decodeHistoryOutput(&decoder) },
         .history_stats_result => .{ .history_stats_result = try history.decodeHistoryStats(&decoder) },
         .pane_focus_command => .{ .pane_focus_command = try focus.decodePaneFocusCommand(&decoder) },
+        .editor_opened => .{ .editor_opened = try editor.decodeEditorOpened(&decoder) },
         .pane_focus_result => .{ .pane_focus_result = try focus.decodePaneFocusResult(&decoder) },
         .pane_progress => .{ .pane_progress = try pane.decodePaneProgress(&decoder) },
     };

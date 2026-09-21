@@ -137,7 +137,7 @@ pub fn apply(pointer: *Routing, app: *client.AttachedClient, value: Sample) !voi
     if (event.kind == .press) {
         pointer.owners[button] = switch (outcome) {
             .view, .copy_mode => .shared,
-            .link => .link,
+            .link => if (event.button == .right) .discarded else .link,
             .unavailable => .discarded,
             .pane => pane: {
                 if (app.model.pointerSelection()) |selection| {
@@ -209,7 +209,7 @@ pub fn cancel(pointer: *Routing, app: *client.AttachedClient) !void {
 
 /// New widget and terminal gestures share the same delivered geometry guard.
 /// Example: `if (!PointerRouting.geometryMatches(app)) return;`
-pub fn geometryMatches(app: *client.AttachedClient) bool {
+pub fn geometryMatches(app: *const client.AttachedClient) bool {
     const delivered = app.presentation.deliveredGeometry() orelse return false;
     const projection = client.capture(&app.model, .{ .geometry = app.geometry() });
     const current = client.Geometry.capture(projection);

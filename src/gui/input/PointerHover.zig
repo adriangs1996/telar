@@ -4,6 +4,8 @@ const client = @import("telar-client");
 const core = @import("telar-core");
 const GuiClient = @import("../GuiClient.zig");
 const Event = @import("PointerEvent.zig");
+const message_links = @import("../widgets/interaction/message_links.zig");
+const Routing = @import("PointerRouting.zig");
 const Hit = @import("LinkHit.zig");
 const Stamp = @import("HoverStamp.zig");
 const Hover = @This();
@@ -39,6 +41,12 @@ pub fn refresh(hover: *Hover, gui: *const GuiClient) void {
     }
 
     const event = hover.event orelse return;
+    if (gui.review.active) {
+        hover.assign(null, .default);
+        hover.cached = null;
+        return;
+    }
+
     if (gui.widgets.tab_drag.dragging and gui.widgets.tab_drag.source != null) {
         hover.assign(null, .grabbing);
         hover.cached = null;
@@ -58,6 +66,16 @@ pub fn refresh(hover: *Hover, gui: *const GuiClient) void {
             hover.assign(null, if (target.enabled) .pointer else .default);
             hover.cached = null;
             return;
+        }
+    }
+
+    if (!gui.app.model.name_prompt.active() and gui.overlays.presented().modal == null and gui.widgets.composer_menu.selector == null and !gui.widgets.thread_selection.dragging) {
+        if (gui.widgets.dispatcher.maps.presented().at(.{ event.x, event.y })) |target| {
+            if (target.enabled and target.action == .message_link and Routing.geometryMatches(&gui.app) and message_links.destination(gui, target.action.message_link) != null) {
+                hover.assign(null, .pointer);
+                hover.cached = null;
+                return;
+            }
         }
     }
 

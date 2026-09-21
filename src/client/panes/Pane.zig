@@ -25,6 +25,7 @@ const IconType = @import("../layout/icons.zig").Icon;
 const core = @import("telar-core");
 pub const ImageRemoval = @import("ComposerImageRemoval.zig");
 const GenericField = @import("../input/GenericField.zig").Type;
+const ChangeReviewAvailability = @import("ChangeReviewAvailability.zig");
 
 pub const ComposerField = GenericField(4096);
 
@@ -57,6 +58,7 @@ composer_images: ?*core.AgentImages = null,
 composer_content_revision: u64 = 0,
 kind: core.PaneKind = .terminal,
 pane_generation: u64 = 0,
+change_review: *ChangeReviewAvailability,
 agent_thread: ?*core.AgentThreadSnapshot = null,
 agent_history: ?*@import("AgentHistoryWindow.zig") = null,
 history_intent: ?core.agent_history.Direction = null,
@@ -86,6 +88,9 @@ pub fn init(gpa: std.mem.Allocator, initial: InitialType) !Pane {
     const composer_field = try gpa.create(ComposerField);
     errdefer gpa.destroy(composer_field);
     composer_field.* = .{};
+    const change_review = try gpa.create(ChangeReviewAvailability);
+    errdefer gpa.destroy(change_review);
+    change_review.* = .{};
     const text_metadata = try gpa.create(@import("telar-core").TextMetadata);
     errdefer gpa.destroy(text_metadata);
     text_metadata.* = try .init(gpa, initial.spec.size.rows);
@@ -97,6 +102,7 @@ pub fn init(gpa: std.mem.Allocator, initial: InitialType) !Pane {
         .buffer = buffer,
         .damage_rows = rows,
         .composer_field = composer_field,
+        .change_review = change_review,
         .attached = initial.attached,
         .scroll = .{ .total_rows = initial.spec.size.rows, .offset = 0 },
     };
@@ -106,6 +112,7 @@ pub fn deinit(pane: *Pane) void {
     pane.gpa.free(pane.cwd);
     pane.gpa.free(pane.title);
     pane.gpa.destroy(pane.composer_field);
+    pane.gpa.destroy(pane.change_review);
     if (pane.composer_images) |images| {
         pane.gpa.destroy(images);
     }
@@ -316,6 +323,35 @@ pub fn composerSlice(pane: *const Pane) []const u8 {
     return pane.composer_field.text();
 }
 
+/// Installs a client attachment, preserving notices received before its first frame.
+/// Example: `pane.attach(generation);`
+pub fn attach(self: *Pane, generation: u64) void {
+    if (self.attached and self.attachment_generation == 0) {
+        self.change_review.attachment_generation = generation;
+    } else if (!self.attached or self.attachment_generation != generation) {
+        self.change_review.* = .{};
+    }
+
+    self.attached = true;
+    self.attachment_generation = generation;
+}
+
+/// Retains availability for ordinary terminals and managed agent panes alike.
+/// Example: `_ = pane.applyChangeReview(notification);`
+pub fn applyChangeReview(self: *Pane, notification: core.ChangeReviewChanged) bool {
+    if (!self.attached or self.pane_generation == 0 or self.id != notification.pane_id or self.pane_generation != notification.pane_generation) {
+        return false;
+    }
+
+    return self.change_review.apply(notification, self.attachment_generation);
+}
+
+/// Reports recorded editions belonging to this exact attached pane lifetime.
+/// Example: `if (pane.hasChangeReview()) drawReviewAction();`
+pub fn hasChangeReview(self: *const Pane) bool {
+    return self.attached and self.change_review.pane_generation == self.pane_generation and self.change_review.attachment_generation == self.attachment_generation and self.change_review.latest_edition_id != 0;
+}
+
 /// Installs the runtime identity and retires cached state for another lifetime.
 /// Example: `_ = pane.identify(.agent, generation);`
 pub fn identify(pane: *Pane, kind: core.PaneKind, generation: u64) bool {
@@ -331,6 +367,7 @@ pub fn identify(pane: *Pane, kind: core.PaneKind, generation: u64) bool {
 
     pane.kind = kind;
     pane.pane_generation = generation;
+    pane.change_review.* = .{};
     pane.transcript_scroll = 0;
     if (pane.agent_options) |options| {
         pane.gpa.destroy(options);
@@ -370,6 +407,7 @@ pub fn applyAgentThread(pane: *Pane, snapshot: core.AgentThreadSnapshotView) !bo
     }
 
     const retained = pane.agent_thread.?;
+    pane.change_review.retainSession(retained.threadId());
     pane.catalog_revision = catalogRevision(retained);
     if (retained.resumed and !pane.resume_history_requested) {
         pane.clearHistory();

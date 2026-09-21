@@ -523,3 +523,12 @@ pub const encodeQueryChangeReview = @import("schema/messages/change_review.zig")
 pub const encodeChangeReviewCommand = @import("schema/messages/change_review.zig").encodeChangeReviewCommand;
 pub const encodeReportChangeReviewSample = @import("schema/messages/change_review.zig").encodeReportChangeReviewSample;
 pub const encodeChangeReviewSnapshot = @import("schema/messages/change_review.zig").encodeChangeReviewSnapshot;
+pub const OpenEditor = @import("schema/messages/OpenEditor.zig");
+pub const EditorOpened = @import("schema/messages/EditorOpened.zig");
+const editor_codec = @import("schema/messages/editor.zig");
+pub const encodeOpenEditor = editor_codec.encodeOpenEditor;
+pub const encodeEditorOpened = editor_codec.encodeEditorOpened;
+
+pub const editor = @import("editor.zig");
+
+pub const OwnedEditorOpen = @import("schema/messages/OwnedEditorOpen.zig");

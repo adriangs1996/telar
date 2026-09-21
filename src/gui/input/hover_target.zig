@@ -55,16 +55,16 @@ pub fn resolve(gui: *const GuiClient, mouse: client.Mouse, mods: u32) Target {
             }
 
             const reporting = pane.mouse.tracking != .none;
-            if (mods & link_modifier == 0 or mods & 2 != 0 or (reporting and mods & 1 == 0)) {
-                return base;
-            }
-
             const row = pane.scroll.offset + (mouse.y - view.content.y);
             const found = client.resolveLink(pane, .{ .x = mouse.x - view.content.x, .y = row }) orelse return base;
             const start_x = if (row == found.start.y) found.start.x else 0;
             const end_x = @min(if (row == found.end.y) found.end.x else pane.buffer.w, view.content.w);
             if (start_x >= end_x) {
                 return base;
+            }
+
+            if (mods & link_modifier == 0 or mods & 2 != 0 or (reporting and mods & 1 == 0)) {
+                return .{ .shape = .pointer };
             }
 
             return .{ .shape = .pointer, .link = .{

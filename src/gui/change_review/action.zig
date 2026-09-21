@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const Kind = enum(u32) { background = 1, file, previous, next, line, line_comment, code, comment, save, fold, edit, delete, editor, simulate, version, reviewed, theme, open_comment, submit, close, previous_edition, next_edition, refresh };
+pub const Kind = enum(u32) { background = 1, file, previous, next, line, line_comment, code, comment, save, fold, edit, delete, editor, simulate, version, reviewed, theme, open_comment, submit, close, previous_edition, next_edition, refresh, search };
 
 pub fn encode(action_kind: Kind, index: usize) u64 {
     return (@as(u64, @intFromEnum(action_kind)) << 32) | @as(u32, @intCast(index));

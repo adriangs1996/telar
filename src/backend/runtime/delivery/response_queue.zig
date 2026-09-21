@@ -1,4 +1,5 @@
 //! Bounded, priority-aware responses awaiting one client session's writer.
+const EditorOpened = @import("telar-core").EditorOpened;
 
 const ClientCommand = @import("telar-core").ClientCommand;
 const ClientList = @import("telar-core").ClientList;
@@ -37,6 +38,7 @@ pub const PendingResponse = union(enum) {
     client_command: ClientCommand,
     client_command_result: ClientCommand,
     client_list: ClientList,
+    editor_opened: EditorOpened,
     pane_opened: PaneOpenedType,
     request_failed: PendingFailure,
     tab_snapshot: PendingTabSnapshot,

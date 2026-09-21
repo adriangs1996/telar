@@ -70,6 +70,7 @@ fn apply(handler: *HandleRequestFailureHandler, command: Command) !request_failu
         .agent_history,
         .change_review_query,
         .change_review_command,
+        .editor_open,
         => {},
     }
 

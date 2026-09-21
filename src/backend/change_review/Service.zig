@@ -141,6 +141,21 @@ pub fn execute(self: *Service, io: std.Io, input: Input) !*Result {
     return self.encodeResult(.{ .group = group, .edition = group.editions[at].?, .query = query });
 }
 
+/// Loads the durable discovery marker on an observation worker, without encoding a diff.
+/// Example: `const latest = try service.latestEdition(io, context);`.
+pub fn latestEdition(self: *Service, io: std.Io, context: Context) !u64 {
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
+    for (self.groups) |entry| {
+        const group = entry orelse continue;
+        if (group.context.provider == context.provider and std.mem.eql(u8, group.context.sessionSlice(), context.sessionSlice())) {
+            return group.total;
+        }
+    }
+
+    return (try self.loadGroup(io, context)).total;
+}
+
 /// The provider worker passes only complete official patches, before transcript eviction.
 /// Example: `try service.recordProvider(io, record);`.
 pub fn recordProvider(self: *Service, io: std.Io, record: ProviderPatch) !u64 {
@@ -424,6 +439,7 @@ test "review service persists immutable editions comments and idempotent feedbac
     try std.testing.expectError(error.StaleReview, service.execute(io, .{ .context = context, .operation = .{ .command = command } }));
     service.deinit();
     service = try Service.init(gpa, path);
+    try std.testing.expectEqual(@as(u64, 1), try service.latestEdition(io, context));
     const restored = try service.execute(io, .{ .context = context, .operation = .{ .query = query } });
     defer restored.deinit();
     const restored_view = try restored.snapshot();
@@ -531,5 +547,18 @@ test "review generation changes discard unmatched evidence while retained editio
     sample_value.pane_generation += 1;
     sample_value.phase = .after;
     sample_value.content = "new\n";
+    try std.testing.expectEqual(@as(u64, 0), try service.latestEdition(io, context));
     try std.testing.expectError(error.MissingReviewBaseline, service.execute(io, .{ .context = context, .operation = .{ .sample = sample_value } }));
+    sample_value.phase = .before;
+    sample_value.content = "old\n";
+    const current_before = try service.execute(io, .{ .context = context, .operation = .{ .sample = sample_value } });
+    current_before.deinit();
+    var stale_context = context;
+    stale_context.pane.generation -= 1;
+    try std.testing.expectEqual(@as(u64, 0), try service.latestEdition(io, stale_context));
+    sample_value.phase = .after;
+    sample_value.content = "new\n";
+    const current_after = try service.execute(io, .{ .context = context, .operation = .{ .sample = sample_value } });
+    current_after.deinit();
+    try std.testing.expectEqual(@as(u64, 1), try service.latestEdition(io, context));
 }

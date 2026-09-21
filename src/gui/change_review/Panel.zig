@@ -56,6 +56,7 @@ pub fn open(self: *Self, app: *client.AttachedClient, pane_id: core.PaneId) !voi
     self.revision = 0;
     self.pending = null;
     self.blocked = false;
+    self.widget.resetNavigation();
     self.widget.model = .{};
     self.widget.changed_comments = 0;
     self.widget.deleted_comments = 0;
@@ -226,7 +227,7 @@ pub fn beginPaste(self: *Self) void {
     self.paste = .{};
     self.paste_generation = self.widget.generation;
     self.paste_revision = self.widget.text_revision;
-    self.paste_failed = self.widget.model.editing == null;
+    self.paste_failed = self.widget.activeField() == null;
 }
 
 pub fn appendPaste(self: *Self, bytes: []const u8) void {
@@ -251,6 +252,7 @@ fn execute(self: *Self, io: std.Io) void {
 }
 
 fn adopt(self: *Self, snapshot: *const core.ChangeReviewSnapshotView) void {
+    self.widget.resetNavigation();
     self.widget.model = .{};
     self.widget.model.revisions[0] = self.slots[self.visible_slot].revision;
     @memcpy(self.widget.roles[0][0..snapshot.patch.len], self.slots[self.visible_slot].roles[0..snapshot.patch.len]);

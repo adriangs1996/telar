@@ -4,6 +4,7 @@
 //! Exactly one success or failure consumes the continuation. Lifecycle events
 //! may turn it into `.ignored` when the runtime already made the result stale.
 
+const AgentOperation = @import("AgentOperation.zig");
 const InitialOpen = @import("InitialOpen.zig");
 const TerminalSizeType = @import("telar-core").TerminalSize;
 const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
@@ -38,6 +39,7 @@ pub const Continuation = union(enum) {
     agent_history: @import("AgentHistoryOperation.zig"),
     change_review_query: ChangeReviewOperation,
     change_review_command: ChangeReviewOperation,
+    editor_open: AgentOperation,
     ignored,
 
     pub fn group(continuation: Continuation) Group {
@@ -56,6 +58,7 @@ pub const Continuation = union(enum) {
             .agent_history => .agent_history,
             .change_review_query => .change_review_query,
             .change_review_command => .change_review_command,
+            .editor_open => .editor_open,
             .ignored => .ignored,
         };
     }
@@ -63,8 +66,8 @@ pub const Continuation = union(enum) {
     pub fn tabId(continuation: Continuation) ?TabIdType {
         return switch (continuation) {
             .agent_history => |operation| operation.owner.location.tab_id,
-            .agent_prompt, .agent_control, .agent_query => |operation| operation.location.tab_id,
             .change_review_query, .change_review_command => |operation| operation.location.tab_id,
+            .editor_open, .agent_prompt, .agent_control, .agent_query => |operation| operation.location.tab_id,
             .tab_snapshot => |location| location.tab_id,
             .split => |split| split.location.tab_id,
             .close_pane, .attach_pane => |operation| operation.location.tab_id,
@@ -76,8 +79,8 @@ pub const Continuation = union(enum) {
     pub fn paneId(continuation: Continuation) ?PaneIdType {
         return switch (continuation) {
             .agent_history => |operation| operation.owner.pane_id,
-            .agent_prompt, .agent_control, .agent_query => |operation| operation.pane_id,
             .change_review_query, .change_review_command => |operation| operation.pane_id,
+            .editor_open, .agent_prompt, .agent_control, .agent_query => |operation| operation.pane_id,
             .split => |split| split.target_pane,
             .close_pane, .attach_pane => |operation| operation.pane_id,
             .initial_open, .create_workspace, .rename_workspace, .workspace_snapshot, .tab_snapshot, .create_tab, .rename_tab, .close_tab, .move_tab, .notification, .ignored => null,
@@ -100,6 +103,7 @@ pub const Group = enum {
     attachment,
     tab_operation,
     notification,
+    editor_open,
     ignored,
 };
 

@@ -157,7 +157,7 @@ return telar.config({
 		window = {
 			background_opacity = 0.95,
 			background_blur = 20,
-			titlebar = false,
+			titlebar = true,
 			padding = { x = 2, y = 0 },
 		},
 		font = {
@@ -219,6 +219,8 @@ return telar.config({
 	},
 
 	client = {
+		window_title = "{pane_title}",
+		editor = "nvim",
 		icons = "nerd-font",
 		prefix = "ctrl+s",
 		pane_gaps = false,

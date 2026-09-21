@@ -70,11 +70,13 @@ pub fn apply(self: Handler, owner: Operation, response: core.ChangeReviewSnapsho
     return applied;
 }
 
-/// Accepts invalidation only for this connection's current pane attachment.
+/// Retains pane availability even when its review is closed, and refreshes an open view.
 /// Example: `_ = handler.changed(notification);`
 pub fn changed(self: Handler, notification: core.ChangeReviewChanged) bool {
-    const owner = self.session.owner orelse return false;
-    if (self.resolve(owner) == null or !self.session.changed(notification)) {
+    const pane = self.find(notification.pane_id) orelse return false;
+    const availability_changed = pane.applyChangeReview(notification);
+    const review_changed = if (self.session.owner) |owner| self.resolve(owner) != null and self.session.changed(notification) else false;
+    if (!availability_changed and !review_changed) {
         return false;
     }
     self.invalidate();
@@ -97,7 +99,7 @@ pub fn report(self: Handler, message: []const u8) void {
     self.invalidate();
 }
 
-fn find(self: Handler, pane_id: core.PaneId) ?*const Pane {
+fn find(self: Handler, pane_id: core.PaneId) ?*Pane {
     const pane = self.model.workspace.findPane(pane_id) orelse return null;
     return if (pane.attached and pane.pane_generation != 0) pane else null;
 }
@@ -136,4 +138,44 @@ test "change review handler accepts terminal panes and rejects replaced attachme
     try std.testing.expect(!try use_case.apply(pending_owner, response));
     try std.testing.expect(!session.loaded);
     try std.testing.expect(session.errorSlice().len > 0);
+}
+
+test "change review handler updates closed review availability without opening or querying a view" {
+    const model = try std.testing.allocator.create(Model);
+    defer std.testing.allocator.destroy(model);
+    model.* = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const session = try std.testing.allocator.create(Session);
+    defer std.testing.allocator.destroy(session);
+    session.* = .{};
+    const pane_id: core.PaneId = @enumFromInt(1);
+    const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
+    const pane = model.workspace.findPane(pane_id).?;
+    _ = pane.identify(.terminal, 3);
+    const use_case: Handler = .{ .model = model, .session = session };
+    var notification: core.ChangeReviewChanged = .{ .pane_id = pane_id, .pane_generation = 3, .session = "hook-session", .latest_edition_id = 1 };
+    const revision = model.chrome_revision;
+    try std.testing.expect(use_case.changed(notification));
+    try std.testing.expect(model.chrome_revision != revision);
+    try std.testing.expect(pane.hasChangeReview());
+    try std.testing.expect(session.owner == null);
+    try std.testing.expect(!session.needsRefresh());
+    try std.testing.expect(!use_case.changed(notification));
+
+    try use_case.open(pane_id);
+    notification.latest_edition_id = 2;
+    try std.testing.expect(use_case.changed(notification));
+    try std.testing.expect(session.needsRefresh());
+    use_case.close();
+    try std.testing.expect(pane.hasChangeReview());
+    notification.session = "next-hook-session";
+    notification.latest_edition_id = 0;
+    try std.testing.expect(use_case.changed(notification));
+    try std.testing.expect(!pane.hasChangeReview());
+    try std.testing.expect(!session.needsRefresh());
+    notification.pane_generation += 1;
+    notification.latest_edition_id = 1;
+    try std.testing.expect(!use_case.changed(notification));
+    try std.testing.expect(!pane.hasChangeReview());
 }

@@ -47,6 +47,13 @@ pub fn dispatch(client: anytype, message: ServerMessageType, comptime Adapters: 
                 return error.ChangeReviewUnsupported;
             }
         },
+        .editor_opened => |reply| {
+            if (@hasDecl(Adapters, "link_openings")) {
+                try Adapters.link_openings.editorOpened(client, reply);
+            } else {
+                return error.UnexpectedControlReply;
+            }
+        },
         .agent_history_page => |page| {
             if (@hasDecl(Adapters, "agent_history")) {
                 _ = try Adapters.agent_history.apply(client, page);

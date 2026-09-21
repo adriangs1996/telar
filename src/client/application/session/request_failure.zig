@@ -44,6 +44,7 @@ fn failureTitle(continuation: client_requests.Continuation) []const u8 {
         .agent_control => "Could not update agent",
         .agent_query => "Could not load conversation",
         .agent_history => "Could not load earlier messages",
+        .editor_open => "Could not open file",
         .split => "Could not split pane",
         .close_pane => "Could not close pane",
         .attach_pane => "Could not attach pane",
@@ -63,7 +64,7 @@ fn notificationTarget(continuation: client_requests.Continuation) notifications.
     return switch (continuation) {
         .agent_history => |operation| .{ .focus_pane = operation.owner.pane_id },
         .change_review_query, .change_review_command => |operation| .{ .focus_pane = operation.pane_id },
-        .agent_prompt, .agent_control, .agent_query => |operation| .{ .focus_pane = operation.pane_id },
+        .editor_open, .agent_prompt, .agent_control, .agent_query => |operation| .{ .focus_pane = operation.pane_id },
         .split => |split| .{ .focus_pane = split.target_pane },
         .close_pane, .attach_pane => |operation| .{ .select_tab = operation.location.tab_id },
         .tab_snapshot, .rename_tab, .close_tab, .move_tab => |location| .{

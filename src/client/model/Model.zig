@@ -207,6 +207,14 @@ pub fn initWithConfiguration(gpa: std.mem.Allocator, pane_gaps: bool, generation
 /// var model = Model.initWithState(gpa, initial);
 /// ```
 pub fn initWithState(gpa: std.mem.Allocator, initial: InitialClientStateType) Model {
+    var self: Model = undefined;
+    self.initInto(gpa, initial);
+    return self;
+}
+
+/// Initializes the final destination without copying the reserved workspace slots.
+/// Example: `model.initInto(gpa, initial);`
+pub fn initInto(self: *Model, gpa: std.mem.Allocator, initial: InitialClientStateType) void {
     initial.host_size.validate() catch unreachable;
     const cell_size = initial.host_capabilities.cellSize(
         initial.host_size.cols,
@@ -214,17 +222,18 @@ pub fn initWithState(gpa: std.mem.Allocator, initial: InitialClientStateType) Mo
     );
     std.debug.assert(initial.host_size.cell_width_px == cell_size.width);
     std.debug.assert(initial.host_size.cell_height_px == cell_size.height);
-    var workspace = TabsModel.init(gpa);
-    workspace.setPaneGaps(initial.pane_gaps);
-    workspace.setCellSize(initial.host_size.cell_width_px, initial.host_size.cell_height_px);
 
-    return .{
-        .workspace = workspace,
+    self.* = .{
+        .workspace = undefined,
         .configuration_generation = initial.configuration_generation,
         .bars = .init(initial.bars),
         .host = .{ .host_size = initial.host_size, .host_capabilities = initial.host_capabilities },
         .sidebar_width = @max(sidebar_module.minimum_width, initial.sidebar_width),
     };
+
+    self.workspace.initInto(gpa);
+    self.workspace.setPaneGaps(initial.pane_gaps);
+    self.workspace.setCellSize(initial.host_size.cell_width_px, initial.host_size.cell_height_px);
 }
 
 /// Releases all semantic workspace state owned by the model.
@@ -1612,7 +1621,7 @@ pub fn applyPaneFrame(model: *Model, frame: FrameViewType) !model_types.PaneFram
     const generation = if (pane.attachment_generation == 0) try model.allocateAttachmentGeneration() else pane.attachment_generation;
     const previous_scroll_offset = pane.scroll.offset;
     const applied = try tab.model.applyFrame(frame);
-    pane.attachment_generation = generation;
+    pane.attach(generation);
     _ = model.reconcileCopyModeFrame(.{
         .pane_id = frame.pane_id,
         .previous_offset = previous_scroll_offset,

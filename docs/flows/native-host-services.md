@@ -29,7 +29,29 @@ contains the worker formerly owned by the TUI: `/usr/bin/open` on macOS and
 `xdg-open` on Linux, with a five-second timeout and 4 KiB limits for each output
 stream. The TUI imports that same function through its previous namespace;
 commands and failure behavior are unchanged. File links continue to use the
-configured editor in a shared command tab.
+configured editor in a shared command tab; agent message files open beside their
+source pane.
+
+Right-clicking a terminal link copies its URI without keyboard modifiers. The
+native chrome port resolves the target only from delivered pane content and
+queues the existing bounded clipboard write. `PointerRouting` consumes drag and
+release without forwarding them to the child. Agent message links use their
+snapshot-validated destination and the same clipboard service. The TUI dispatches
+right-button link gestures through `link_openings` to `HostClipboard`.
+`link_regressions.zig` verifies copying without opening or child mouse reports.
+
+Link copy requests retain only the latest host request ID in `CopyFeedback`.
+`NativeInput.dispatchClipboard` first validates completion through the host
+service; only a successful matching write displays "Copy to clipboard". The
+passive label sits above the bottom status bar for two seconds, using the frame
+clock's expiration deadline rather than a polling timer. It never enters the
+notification history or claims pointer input. Failed, duplicate and replaced
+requests cannot display a confirmation.
+
+Hovering a terminal URI shows the hand cursor even without modifiers. Opening
+still uses the existing platform modifier and child mouse-reporting policy.
+Agent message links resolve the delivered widget and current snapshot before
+showing the same hand; stale links, modals and pointer departure remove it.
 
 `zig build test-gui-clipboard` on Linux verifies snapshot ownership, saturation,
 closed consumers, polling failure, late publication and cancellation of a stalled

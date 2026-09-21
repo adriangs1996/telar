@@ -9,23 +9,32 @@ const Job = @This();
 
 service: *Service,
 context: Context,
-client: ClientKey,
+client: ?ClientKey,
 request_id: core.RequestId,
 wire: [32 * 1024]u8 = undefined,
 wire_len: u32,
 result: ?*Result = null,
 failure: ?anyerror = null,
+latest_edition_id: u64 = 0,
 
 pub fn run(self: *Job, io: std.Io) *Job {
     const budget = core.enter(.observation);
     defer budget.restore();
     self.work(io) catch |err| {
         self.failure = err;
+        if (self.client == null) {
+            _ = self.service.dropped.fetchAdd(1, .monotonic);
+        }
     };
     return self;
 }
 
 fn work(self: *Job, io: std.Io) !void {
+    if (self.client == null) {
+        self.latest_edition_id = try self.service.latestEdition(io, self.context);
+        return;
+    }
+
     const decoded = try core.decodeClient(self.wire[0..self.wire_len]);
     const operation: Operation = switch (decoded) {
         .query_change_review => |value| .{ .query = value },
@@ -34,6 +43,10 @@ fn work(self: *Job, io: std.Io) !void {
         else => return error.InvalidReviewAction,
     };
     self.result = try self.service.execute(io, .{ .context = self.context, .operation = operation });
+    self.latest_edition_id = switch (operation) {
+        .sample => self.result.?.changed_edition,
+        .query, .command => (try self.result.?.snapshot()).latest_edition_id,
+    };
 }
 
 pub fn deinit(self: *Job) void {

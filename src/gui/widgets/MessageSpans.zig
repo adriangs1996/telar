@@ -1,6 +1,7 @@
 //! Borrowed inline Markdown spans. Lookahead is linear-budgeted; unsupported or
 //! unfinished syntax stays literal. Block parsing owns fenced-code isolation.
 const std = @import("std");
+const core = @import("telar-core");
 const Span = @import("MessageSpan.zig");
 const Scope = @import("MessageSpanScope.zig");
 const Spans = @This();
@@ -85,6 +86,17 @@ pub fn next(spans: *Spans) ?Span {
                 }
 
                 continue;
+            }
+
+            if (scope.destination == null) {
+                if (spans.bareLink(.{ at, scope.end })) |end| {
+                    if (at > start) {
+                        return spans.span(start, at);
+                    }
+
+                    spans.index = end;
+                    return .{ .text = spans.text[at..end], .kind = scope.kind, .destination = spans.text[at..end], .link_offset = @intCast(at) };
+                }
             }
 
             var nested: ?Scope = null;
@@ -482,4 +494,31 @@ test "inline Markdown removes only complete presentation delimiters" {
 test {
     _ = @import("message_spans_test.zig");
     _ = @import("MessageLinkDestination.zig");
+}
+
+fn bareLink(self: *Spans, range: [2]usize) ?usize {
+    const at = range[0];
+    if (!std.ascii.isAlphabetic(self.text[at]) or (at > 0 and (std.ascii.isAlphanumeric(self.text[at - 1]) or self.text[at - 1] == '_' or self.text[at - 1] == '<'))) {
+        return null;
+    }
+
+    var end = at;
+    while (end < range[1] and std.ascii.isAlphabetic(self.text[end])) : (end += 1) {
+        if (!self.scan()) {
+            return null;
+        }
+    }
+
+    if (end == range[1] or self.text[end] != ':') {
+        return null;
+    }
+
+    const cost = @min(range[1] - at, core.max_uri_bytes + 1);
+    if (self.lookahead_left.? < cost) {
+        return null;
+    }
+
+    self.lookahead_left.? -= cost;
+    const found = core.extractAt(self.text[at..range[1]], 0) orelse return null;
+    return at + found.end;
 }

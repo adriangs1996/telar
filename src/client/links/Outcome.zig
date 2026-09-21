@@ -3,3 +3,4 @@ const Outcome = @This();
 
 consumed: bool = false,
 open: ?TargetType = null,
+copy: ?TargetType = null,

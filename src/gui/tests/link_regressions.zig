@@ -3,6 +3,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("LinkFixture.zig");
+const HostRequest = @import("../native/HostRequest.zig").HostRequest;
 const Session = @import("Session.zig");
 
 test "captured native link consumes stationary modifier motion before release" {
@@ -127,7 +128,7 @@ test "native pointer refreshes after resize ownership ends without a model or GP
     try std.testing.expect(!gui.chrome.sidebar_resize_active);
     try std.testing.expectEqualDeep(version, gui.app.model.version());
     _ = try gui.pump();
-    try std.testing.expectEqual(.text, gui.input.pointer.hover.shape);
+    try std.testing.expectEqual(.pointer, gui.input.pointer.hover.shape);
 }
 
 test "native Ctrl-Space prefix survives stationary modifier motion" {
@@ -304,4 +305,30 @@ test "native one-row panes keep links visible without a self-covering preview" {
     hover.present(true);
     try std.testing.expect(hover.shown_preview == null);
     try std.testing.expect(hover.openable());
+}
+
+test "native right click copies a link without modifiers or child mouse reports" {
+    const fixture = try Fixture.init();
+    defer fixture.deinit();
+    const session = fixture.session;
+    session.gui.app.model.workspace.findPane(Session.pane_id).?.mouse = .{ .tracking = .any, .sgr = true };
+    try fixture.present();
+    var event = fixture.event(1);
+    event.button = 2;
+    event.mods = 0;
+    try fixture.send(event);
+    event.code = 3;
+    try fixture.send(event);
+    event.code = 2;
+    try fixture.send(event);
+    var request: HostRequest = .{};
+    try std.testing.expect(session.gui.host.next(&request));
+    try std.testing.expectEqualStrings("https://a.b", request.text.?[0..request.len]);
+    try std.testing.expectEqual(@as(u64, 0), session.gui.widgets.copy_feedback.until_ns);
+    try fixture.send(.{ .kind = 9, .code = 0, .request_id = request.request_id, .target_id = request.target_id, .generation = request.generation });
+    try std.testing.expect(session.gui.widgets.copy_feedback.until_ns > 0);
+    try std.testing.expect(session.gui.widgets.copy_feedback.pending == null);
+    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), session.input_len);
+    try std.testing.expect(!session.gui.host.next(&request));
 }

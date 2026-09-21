@@ -1,8 +1,4 @@
-const PendingReviewChanged = @import("PendingReviewChanged.zig");
 const ReviewResult = @import("../../change_review/Result.zig");
-const encodeChangeReviewChanged = @import("telar-core").encodeChangeReviewChanged;
-const ChangeReviewChanged = @import("telar-core").ChangeReviewChanged;
-const max_review_identity_bytes = @import("telar-core").change_review.max_identity_bytes;
 const ResponseQueueType = @import("ResponseQueue.zig");
 const delivery_namespace = @import("delivery_namespace.zig");
 const ClientIdentityType = @import("telar-core").ClientIdentity;
@@ -59,7 +55,6 @@ agent_revision_sent: u64 = 0,
 agent_snapshot_requested: bool = false,
 agent_threads_sent: [max_panes_per_tab]?@import("AgentThreadProjection.zig") = @splat(null),
 requested_agent_thread: ?@import("../../pane/PaneKey.zig") = null,
-review_changes: [max_panes_per_tab]?PendingReviewChanged = @splat(null),
 system_metrics_revision_sent: u64 = 0,
 workspace_list_revision_sent: u64 = 0,
 foregrounds_sent: [max_panes_per_tab]?ForegroundProjection = @splat(null),
@@ -326,11 +321,6 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
         );
     }
 
-    for (delivery.review_changes, 0..) |entry, index| {
-        const change = entry orelse continue;
-        return delivery.stage(try encodeChangeReviewChanged(buffer, change.view()), .{ .review_change = .{ .slot = @intCast(index), .change = change } });
-    }
-
     if (delivery.runtime_state_requested or delivery.requested_agent_thread != null) {
         for (sources.panes.items, 0..) |entry, slot| {
             const pane = entry orelse continue;
@@ -354,6 +344,12 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
                 .revision = snapshot.revision,
                 .slot = @intCast(slot),
             } });
+        }
+    }
+
+    if (delivery.runtime_state_requested) {
+        if (try delivery.prepareAttachment(preparation, .review)) |prepared| {
+            return prepared;
         }
     }
 
@@ -497,13 +493,6 @@ pub fn commit(delivery: *Delivery, operation: Commit) void {
         .clipboard => delivery.clipboard_pending = false,
         .client_layout => delivery.client_layout_sent = true,
         .proxy_status => delivery.proxy_status_sent = true,
-        .review_change => |projection| {
-            if (delivery.review_changes[projection.slot]) |current| {
-                if (current.pane_id == projection.change.pane_id and current.pane_generation == projection.change.pane_generation and current.latest_edition_id == projection.change.latest_edition_id and std.mem.eql(u8, current.session[0..current.session_len], projection.change.session[0..projection.change.session_len])) {
-                    delivery.review_changes[projection.slot] = null;
-                }
-            }
-        },
         .agent_thread => |projection| {
             delivery.agent_threads_sent[projection.slot] = projection;
             if (delivery.requested_agent_thread) |key| {
@@ -565,7 +554,7 @@ pub fn complete(delivery: *Delivery, result: anyerror!void) Completion {
     }
 }
 
-const Lane = enum { cwd, foreground, title, progress, cells, exit, graphics };
+const Lane = enum { cwd, foreground, title, progress, review, cells, exit, graphics };
 
 fn prepareForeground(delivery: *Delivery, preparation: Preparation) !?Prepared {
     for (preparation.sources.panes.items, 0..) |slot, index| {
@@ -607,6 +596,7 @@ fn prepareAttachment(delivery: *Delivery, preparation: Preparation, lane: Lane) 
             .foreground => try attachment.prepareForeground(buffer),
             .title => try attachment.prepareTitle(buffer),
             .progress => try attachment.prepareProgress(buffer),
+            .review => try attachment.prepareReview(buffer),
             .cells => try attachment.prepareNextCells(.{ .io = preparation.io, .buffer = buffer, .metrics = preparation.metrics }),
             .exit => try attachment.prepareExit(buffer),
             .graphics => graphics: {
@@ -651,27 +641,4 @@ pub fn stage(delivery: *Delivery, payload: []const u8, effect: delivery_namespac
     }
     delivery.phase = .{ .prepared = .{ .ticket = ticket, .effect = effect } };
     return .{ .payload = payload, .ticket = ticket };
-}
-
-/// Replaces obsolete discovery while an earlier send retains its own prepared value.
-/// Example: `delivery.reviewChanged(change);`.
-pub fn reviewChanged(self: *Delivery, change: ChangeReviewChanged) void {
-    if (change.session.len == 0 or change.session.len > max_review_identity_bytes) {
-        return;
-    }
-    var available: ?usize = null;
-    for (self.review_changes, 0..) |entry, index| {
-        if (entry) |pending| {
-            if (pending.pane_id == change.pane_id) {
-                available = index;
-                break;
-            }
-        } else if (available == null) {
-            available = index;
-        }
-    }
-    const index = available orelse return;
-    var value: PendingReviewChanged = .{ .pane_id = change.pane_id, .pane_generation = change.pane_generation, .latest_edition_id = change.latest_edition_id, .session_len = @intCast(change.session.len) };
-    @memcpy(value.session[0..change.session.len], change.session);
-    self.review_changes[index] = value;
 }

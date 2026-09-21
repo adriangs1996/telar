@@ -4,6 +4,7 @@
 //! because their producers may reuse or replace their buffers as soon as the
 //! event handler returns. One encoded buffer is borrowed only while a send
 //! actor is active.
+const OpenEditor = @import("telar-core").OpenEditor;
 
 const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
 const OpenPaneType = @import("telar-core").OpenPane;
@@ -59,6 +60,7 @@ pub const max_pending_launches = 4;
 pub const Message = union(enum) {
     query_change_review: u16,
     change_review_command: u16,
+    open_editor: OpenEditor,
     agent_prompt: @import("OwnedAgentPrompt.zig"),
     agent_interrupt: @import("telar-core").AgentInterrupt,
     agent_resume: @import("telar-core").AgentResume,
@@ -660,4 +662,25 @@ test "change review query owns its provider conversation identity" {
     var bytes: [input_capability.max_encoded_bytes]u8 = undefined;
     const sent = (try outbox.beginSend(&bytes)).?;
     try std.testing.expectEqualStrings("thread-A", (try core.decodeClient(sent)).query_change_review.session);
+}
+
+test "queued editor requests own paths without enlarging queue metadata" {
+    var outbox: Outbox = .{};
+    var editor = "nvim".*;
+    var path = "/tmp/original file".*;
+    try outbox.push(.{ .open_editor = .{
+        .request_id = @enumFromInt(1),
+        .pane_id = @enumFromInt(2),
+        .pane_generation = 3,
+        .editor = &editor,
+        .path = &path,
+    } });
+    @memset(&editor, 'x');
+    @memset(&path, 'x');
+    var buffer: [256]u8 = undefined;
+    const request = (try decodeClient_module((try outbox.beginSend(&buffer)).?)).open_editor;
+    try std.testing.expectEqualStrings("nvim", request.editor);
+    try std.testing.expectEqualStrings("/tmp/original file", request.path);
+    try std.testing.expect(@sizeOf(Message) < 512);
+    try std.testing.expect(@sizeOf(Outbox) < 720 * 1024);
 }

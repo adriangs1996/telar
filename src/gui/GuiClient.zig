@@ -177,6 +177,12 @@ pub fn requestClipboardWrite(gui: *GuiClient, bytes: []const u8) !void {
     native.telar_gui_wake(gui.driver.fds[1]);
 }
 
+/// Requests a link copy with a bottom confirmation after host success.
+/// Example: `try gui.copyLink(destination);`
+pub fn copyLink(self: *GuiClient, bytes: []const u8) !void {
+    self.widgets.copy_feedback.pending = try self.requestClipboardWriteOwned(.{}, bytes);
+}
+
 /// The editor can commit a cut only after the matching native write succeeds.
 /// Example: `const request = try gui.requestClipboardWriteOwned(owner, bytes);`
 pub fn requestClipboardWriteOwned(gui: *GuiClient, owner: @import("host/Owner.zig"), bytes: []const u8) !u64 {

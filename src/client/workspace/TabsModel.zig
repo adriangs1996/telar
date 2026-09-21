@@ -37,6 +37,12 @@ pub fn init(gpa: std.mem.Allocator) Model {
     return .{ .gpa = gpa };
 }
 
+/// Initializes reserved tab storage directly in the owning client's model.
+/// Example: `workspace.initInto(gpa);`
+pub fn initInto(self: *Model, gpa: std.mem.Allocator) void {
+    self.* = .{ .gpa = gpa };
+}
+
 pub fn deinit(model: *Model) void {
     for (&model.items) |*slot| {
         if (slot.*) |*tab| {

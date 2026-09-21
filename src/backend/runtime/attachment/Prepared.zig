@@ -9,6 +9,7 @@ const Effect = union(enum) {
     foreground: u64,
     title: u64,
     progress: u64,
+    review: u64,
     cells,
     exit,
     graphics: GraphicsCounts,

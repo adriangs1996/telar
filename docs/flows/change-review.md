@@ -1,8 +1,9 @@
 # Change review
 
-The native GUI opens **Review changes** from the pane header or the **±** button
-in the top bar. The
-same surface reviews managed-agent patches and changes observed by hooks in an
+The native GUI shows one **Review changes** action per visible pane with recorded
+editions. It lives in the pane header, or the **±** button in the top bar when
+the layout has no pane header. Empty panes have no review action. The same
+surface reviews managed-agent patches and changes observed by hooks in an
 ordinary terminal pane. The standalone `zig build run-widget` remains a fixture
 bench for the presentation code; production code imports no experiment bridge.
 
@@ -35,7 +36,11 @@ different conversation. Queries and mutations retain that session identity.
 Mutations also compare the acknowledged review revision. A stale response cannot
 change a replacement view, and a rejected save keeps the local draft available.
 
-New-edition notifications refresh metadata for the edition already open. They do
+Availability belongs to each pane generation and provider conversation, even
+while the review is closed. The runtime republishes it when a client attaches;
+changing conversations clears the previous conversation's availability.
+
+New-edition notifications also refresh metadata for the edition already open. They do
 not replace its diff or move its selection. **Older edit** and **Newer edit** are
 explicit navigation operations.
 
@@ -47,8 +52,20 @@ submitting feedback. The service never retains a pointer into a client or pane.
 
 ## Interaction
 
-- `j/k` or arrows move through lines; `n/p` move between changes.
+- `j/k` or arrows move through lines. `gg` / `G` and `Home` / `End` move to
+  the first / last line of the open file.
+- `Ctrl+u` / `Ctrl+d` move up / down half the visible diff height.
+  `Ctrl+b` / `Ctrl+f` and Page Up / Page Down move a full page. These motions
+  move the cursor with the viewport and account for wrapping and inline comments.
+- `/` opens incremental, case-sensitive literal search in the open file.
+  Matches use the active theme's colors. `Enter` retains the query; `n` / `N`
+  visit the next / previous occurrence, wrapping at the file boundary. `Esc`
+  while typing restores the previous query, selection and scroll. Search accepts
+  at most 256 UTF-8 bytes, without line breaks; it does not interpret regexes.
+- With no search query, `n/p` move between changes. The **Previous** and **Next**
+  buttons keep that behavior while searching. `Esc` clears a retained query.
 - `v` starts a line range. Selection stays inside one file, hunk and diff side.
+  File/page motions and search extend the range within those same boundaries.
 - `c` opens a comment for the selected line or range. The editor supports native
   UTF-8 input, IME, clipboard operations and accessibility.
 - Draft changes are coalesced into runtime saves. **Save comment** or
@@ -109,6 +126,7 @@ different review. One syntax job uses an inactive source slot; its completion is
 adopted only after the preceding presentation releases its resources.
 
 The service admits four observation jobs, at most one per client connection.
+Availability discovery uses at most three slots, leaving one for review requests.
 It caches 32 conversations and 16 editions per conversation; eligible cache
 entries can be reloaded from disk. Unsent commented editions stay in memory.
 Once all 16 are pinned, capture reports a capacity failure until reviews are
@@ -136,6 +154,14 @@ earlier version 1 files are rejected with a storage-validation error.
 
 - `zig build test-client test-gui test-widget check-client-boundaries codestyle`
   covers correlated requests, retained drafts, native ownership and presentation.
+- `python3 tools/gui_review_availability.py zig-out/bin/telar /tmp/review-buttons`
+  uses a fake provider and native accessibility controls to verify empty panes,
+  one action per pane with editions, split/fullscreen layouts and reconnect.
+- `zig build build-widget` followed by
+  `python3 tools/gui_review_navigation.py zig-out/bin/run-widget /tmp/review-navigation`
+  exercises Vim navigation, native UTF-8 search and range comments in the
+  standalone fixture, records screenshots and closes its window. It starts
+  neither a runtime nor a provider and makes no model calls.
 - `python3 tools/test_review_runtime.py zig-out/bin/telar /tmp/review-hooks`
   exercises the real runtime and ordinary-pane hooks with a deterministic
   provider fixture, including restart, stale requests and feedback acknowledgments.

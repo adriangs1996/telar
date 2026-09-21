@@ -8,7 +8,7 @@ pub fn available(self: *const @This(), client: ClientKey) !usize {
     var vacant: ?usize = null;
     for (self.items, 0..) |item, index| {
         if (item) |job| {
-            if (std.meta.eql(job.client, client)) {
+            if (job.client != null and std.meta.eql(job.client.?, client)) {
                 return error.ReviewBusy;
             }
         } else if (vacant == null) {
@@ -16,6 +16,23 @@ pub fn available(self: *const @This(), client: ClientKey) !usize {
         }
     }
     return vacant orelse error.ReviewBusy;
+}
+
+/// Leaves one worker slot available for user commands while replay discovery catches up.
+/// Example: `const slot = jobs.discoverySlot() orelse return;`.
+pub fn discoverySlot(self: *const @This()) ?usize {
+    var vacant: ?usize = null;
+    for (self.items, 0..) |item, index| {
+        if (item == null) {
+            if (vacant != null) {
+                return vacant;
+            }
+
+            vacant = index;
+        }
+    }
+
+    return null;
 }
 
 pub fn remove(self: *@This(), completed: *Job) void {

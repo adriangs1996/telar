@@ -400,8 +400,11 @@ snapshots, menus, modals and pointer departure clear it. Original Markdown stays
 in the runtime snapshot and remains the source for copying.
 
 A plain left click on an absolute path or a local `file://` destination opens
-`$EDITOR` with that path as a separate argv entry in a new terminal pane beside
-the source agent. The transcript selection gesture retains the link identity
+the configured editor, reusing an accessible instance in the source tab. When
+none is available, it launches `$EDITOR` with that path as a separate argv entry
+in a new terminal pane beside the source agent.
+[Editor file links](../../../docs/flows/editor-file-links.md) describes discovery
+and failure handling. The transcript selection gesture retains the link identity
 until release; dragging cancels activation. Release validates the current
 snapshot and delivered hit before dispatching through `message_links.open`,
 `link_openings.openMessageFile` and the existing pane-split handler. `create_pane`

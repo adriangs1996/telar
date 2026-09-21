@@ -34,9 +34,12 @@ pub fn draw(self: *Self) !void {
     try self.addTarget(.{ .bounds = bounds, .action = .{ .custom = actions.encode(.background, 0) }, .role = 6 }, "Diff review");
     const sidebar = @min(p.px(240), width * 0.28);
     const top = p.px(if (w.mode == .runtime) @as(f32, 144) else 104);
-    const footer = p.px(54);
+    const footer = p.px(if (w.search_prompt.open) @as(f32, 92) else 54);
     self.viewport = .{ .x = sidebar + p.px(12), .y = top, .width = @max(1, width - sidebar - p.px(24)), .height = @max(1, height - top - footer) };
-    var label: [200]u8 = undefined;
+    w.prepared_viewport.height = self.viewport.height;
+    w.prepared_viewport.generation = w.generation;
+    w.prepared_viewport.file = w.model.file;
+    var label: [512]u8 = undefined;
     const title = if (w.mode == .runtime)
         try std.fmt.bufPrint(&label, "Change review  /  Edition {d}{s}{s}{s}", .{ w.edition_id, if (w.source_label.len != 0) " · " else "", w.source_label, if (w.next_edition) " · Newer edit available" else "" })
     else
@@ -65,8 +68,11 @@ pub fn draw(self: *Self) !void {
     const file = revision.files[w.model.file];
     var diff: DiffPaint = .{ .canvas = canvas, .bounds = self.viewport, .viewport = self.viewport, .text = revision.text(w.model.file), .source_start = @intFromPtr(revision.source.ptr), .roles = w.roles[w.model.revision][file.start..file.end], .paint = false, .annotations = .{ .context = self, .row = row, .after = after } };
     w.maximum_scroll = @max(0, try diff.layout() - self.viewport.height);
+    w.prepared_viewport.maximum_scroll = w.maximum_scroll;
     if (w.reveal) {
-        if (self.cursor_y < w.scroll) {
+        if (w.model.head == file.first and w.model.search.match == null and w.model.editing == null) {
+            w.scroll = 0;
+        } else if (self.cursor_y < w.scroll) {
             w.scroll = self.cursor_y;
         } else if (self.cursor_y + self.cursor_height > w.scroll + self.viewport.height) {
             w.scroll = @min(self.cursor_y, self.cursor_y + self.cursor_height - self.viewport.height);
@@ -86,9 +92,55 @@ pub fn draw(self: *Self) !void {
             }
         }
     }
-    const status = if (w.model.visual) try std.fmt.bufPrint(&label, "VISUAL LINE · {d} line(s) · {s} · c: comment on selection · Esc: cancel", .{ selected_lines, if (anchor.before) "before" else "after" }) else w.model.status;
-    try self.writeLabel(.{ .x = p.px(16), .y = height - footer, .width = width - p.px(32), .height = footer / 2 }, status);
-    try self.writeLabel(.{ .x = p.px(16), .y = height - footer / 2, .width = width - p.px(32), .height = footer / 2 }, "j/k: lines · v: visual lines · n/p: changes · c: comment · Esc: cancel/fold · Cmd/Ctrl+Enter: save · Cmd/Ctrl+C: copy");
+    var status = if (w.model.visual) try std.fmt.bufPrint(&label, "VISUAL LINE · {d} line(s) · {s} · c: comment on selection · Esc: cancel", .{ selected_lines, if (anchor.before) "before" else "after" }) else w.model.status;
+    if (w.model.search.query.len != 0) {
+        status = try self.searchStatus(&label);
+    } else if (w.search_prompt.open) {
+        status = "Literal search in this file · case sensitive · Enter: accept · Esc: cancel";
+    }
+    if (w.search_prompt.open) {
+        status = w.search_prompt.failure orelse status;
+    }
+    const status_y = height - p.px(54);
+    if (w.search_prompt.open) {
+        const field = &w.search_prompt.field;
+        try self.writeLabel(.{ .x = p.px(16), .y = height - footer, .width = p.px(20), .height = p.px(32) }, "/");
+        try (TextField{ .bounds = .{ .x = p.px(40), .y = height - footer, .width = width - p.px(56), .height = p.px(32) }, .text = field.text(), .selection = .{ @intCast(field.anchor), @intCast(field.head) }, .action = .{ .custom = actions.encode(.search, 0) }, .generation = w.generation, .layer = w.layer, .form_control = true, .placeholder = "Search in this file", .label = "Search in diff" }).draw(canvas);
+    }
+    try self.writeLabel(.{ .x = p.px(16), .y = status_y, .width = width - p.px(32), .height = p.px(27) }, status);
+    const help = if (w.search_prompt.open) "Enter: accept · Esc: restore previous position · Search stays within the visual hunk and side" else if (w.model.editing != null) "Cmd/Ctrl+Enter: save comment · Esc: fold · Cmd/Ctrl+C/X/V: clipboard" else if (w.model.search.query.len != 0) "j/k: lines · gg/G: first/last · Ctrl+u/d: half page · /: search · n/N: matches · v: select · c: comment" else "j/k: lines · gg/G: first/last · Ctrl+u/d: half page · /: search · n/p: changes · v: select · c: comment";
+    try self.writeLabel(.{ .x = p.px(16), .y = height - p.px(27), .width = width - p.px(32), .height = p.px(27) }, help);
+}
+
+fn searchStatus(self: *Self, buffer: []u8) ![]const u8 {
+    const w = self.widget;
+    const revision = w.model.current();
+    const file = revision.files[w.model.file];
+    const query = w.model.search.query.text();
+    const anchor = revision.rows[w.model.tail];
+    var count: usize = 0;
+    var selected: usize = 0;
+    for (revision.rows[file.first..file.last], file.first..) |line, index| {
+        if (w.model.visual and (line.hunk != anchor.hunk or line.before() != anchor.before())) {
+            continue;
+        }
+
+        var offset: usize = 0;
+        while (std.mem.indexOfPos(u8, line.value.text, offset, query)) |at| {
+            count += 1;
+            if (w.model.search.match) |match| {
+                if (match.row == index and match.start == at) {
+                    selected = count;
+                }
+            }
+            offset = at + 1;
+        }
+    }
+
+    if (count == 0) {
+        return std.fmt.bufPrint(buffer, "/{s} · No matches{s}", .{ query, if (w.model.visual) " in this visual hunk and side" else " in this file" });
+    }
+    return std.fmt.bufPrint(buffer, "/{s} · {d}/{d} matches · n/N: next/previous · Esc: clear", .{ query, selected, count });
 }
 
 fn drawSidebar(self: *Self, area: Rect) !void {
@@ -136,6 +188,32 @@ fn row(context: *anyopaque, canvas: *Canvas, value: DiffRow) !void {
         try canvas.fillAt(.{ .x = value.code.x, .y = value.code.y, .width = canvas.chrome.px(2), .height = value.code.height }, canvas.theme.palette.accent);
     }
     const fragment_offset = @intFromPtr(value.fragment.ptr) - @intFromPtr(revision.source.ptr);
+    const query = w.model.search.query.text();
+    const anchor_row = revision.rows[w.model.tail];
+    const search_scope = !w.model.visual or (revision.rows[index].hunk == anchor_row.hunk and revision.rows[index].before() == anchor_row.before());
+    if (query.len != 0 and search_scope) {
+        const fragment_start = fragment_offset - offset;
+        var occurrence = std.mem.indexOfPos(u8, value.line.text, fragment_start -| (query.len - 1), query);
+        var clusters: core.GraphemeIterator = .{ .bytes = value.fragment };
+        var x = value.code.x;
+        while (clusters.next()) |cluster| {
+            const end = fragment_start + clusters.index;
+            const start = end - cluster.bytes.len;
+            const width = @as(f32, @floatFromInt(cluster.width)) * w.prepared_cell;
+            while (occurrence != null and occurrence.? + query.len <= start) {
+                occurrence = std.mem.indexOfPos(u8, value.line.text, occurrence.? + 1, query);
+            }
+            if (occurrence) |at| {
+                if (at < end) {
+                    const selected = if (w.model.search.match) |match| match.row == index and match.end > start and match.start < end else false;
+                    const first = canvas.quads.items().len;
+                    try canvas.fillAt(.{ .x = x, .y = value.code.y, .width = width, .height = value.code.height }, if (selected) canvas.theme.palette.accent else canvas.theme.palette.yellow);
+                    canvas.quads.fadeFrom(first, if (selected) 0.48 else 0.25);
+                }
+            }
+            x += width;
+        }
+    }
     if (w.copy_range) |selection| {
         const low = @min(selection[0], selection[1]);
         const high = @max(selection[0], selection[1]);
@@ -178,6 +256,11 @@ fn after(context: *anyopaque, _: *Canvas, value: DiffRow) !f32 {
     const revision = w.model.current();
     const offset = @intFromPtr(value.line.text.ptr) - @intFromPtr(revision.source.ptr);
     const index = revision.findRow(offset) orelse return 0;
+    if (!value.paint) {
+        w.prepared_viewport.starts[index] = value.start_y - self.viewport.y;
+        w.prepared_viewport.ends[index] = value.bounds.y - self.viewport.y;
+        w.prepared_viewport.line_height = value.line_height;
+    }
     var height: f32 = 0;
     var editor_top: ?f32 = null;
     var editor_height: f32 = 0;
@@ -201,10 +284,31 @@ fn after(context: *anyopaque, _: *Canvas, value: DiffRow) !f32 {
         height += size;
     }
     if (!value.paint and index == w.model.head) {
-        self.cursor_y = editor_top orelse (value.bounds.y - self.viewport.y - self.canvas.chrome.px(22));
-        self.cursor_height = if (editor_top != null) editor_height else self.canvas.chrome.px(22);
+        const row_height = value.line_height;
+        self.cursor_y = editor_top orelse (value.bounds.y - self.viewport.y - row_height);
+        self.cursor_height = if (editor_top != null) editor_height else row_height;
+        if (editor_top == null) {
+            if (w.model.search.match) |match| {
+                if (match.row == index) {
+                    self.revealMatch(value, match.start);
+                }
+            }
+        }
     }
     return height;
+}
+
+fn revealMatch(self: *Self, value: DiffRow, start: usize) void {
+    var wrapped: WrappedLines = .{ .text = value.line.text, .width = value.columns };
+    var y = value.start_y - self.viewport.y;
+    while (wrapped.next()) |fragment| {
+        const offset = @intFromPtr(fragment.ptr) - @intFromPtr(value.line.text.ptr);
+        if (start >= offset and start < offset + fragment.len) {
+            self.cursor_y = y;
+            return;
+        }
+        y += value.line_height;
+    }
 }
 
 fn drawComment(self: *Self, area: Rect, index: usize) !void {

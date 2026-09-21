@@ -1,3 +1,4 @@
+const OpenEditor = @import("telar-core").OpenEditor;
 const OpenPaneViewType = @import("telar-core").OpenPaneView;
 const PaneInputType = @import("telar-core").PaneInput;
 const PaneResizeType = @import("telar-core").PaneResize;
@@ -52,6 +53,7 @@ const CompletePaneFocusType = @import("telar-core").CompletePaneFocus;
 /// ```
 pub fn Type(comptime Context: type) type {
     return struct {
+        open_editor: *const fn (*Context, OpenEditor) anyerror!void,
         open_pane: *const fn (*Context, OpenPaneViewType) anyerror!void,
         pane_input: *const fn (*Context, PaneInputType) anyerror!void,
         pane_resize: *const fn (*Context, PaneResizeType) anyerror!void,

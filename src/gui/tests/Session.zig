@@ -29,6 +29,8 @@ agent_request_id: core.RequestId = @enumFromInt(1),
 agent_tab_count: usize = 0,
 tab_creation_count: usize = 0,
 pane_creation_count: usize = 0,
+editor_open_count: usize = 0,
+last_editor_open: ?core.OwnedEditorOpen = null,
 pane_creation_wire: [8192]u8 = undefined,
 pane_creation_len: usize = 0,
 approval_count: usize = 0,
@@ -133,6 +135,10 @@ pub fn settle(session: *Session) !void {
                 session.agent_prompt_len = value.text.len;
                 session.agent_images = try core.AgentImages.copy(value.images);
                 session.agent_request_id = value.request_id;
+            },
+            .open_editor => |request| {
+                session.editor_open_count += 1;
+                session.last_editor_open = try core.OwnedEditorOpen.init(request);
             },
             .create_pane => {
                 session.pane_creation_count += 1;

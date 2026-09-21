@@ -10,7 +10,7 @@ test "native links highlight with the platform modifier and open only on release
     var move = fixture.event(6);
     move.mods = 0;
     try fixture.send(move);
-    try std.testing.expectEqual(.text, gui.input.pointer.hover.shape);
+    try std.testing.expectEqual(.pointer, gui.input.pointer.hover.shape);
     try std.testing.expect(gui.input.pointer.hover.link == null);
     try fixture.send(fixture.event(6));
     try std.testing.expectEqual(.pointer, gui.input.pointer.hover.shape);
@@ -81,6 +81,7 @@ test "native pane pointer shapes refresh under a stationary pointer and modal bl
     var move = fixture.event(6);
     move.mods = 0;
     try fixture.send(move);
+    fixture.text("plain text");
     const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
     inline for (@typeInfo(core.PointerShape).@"enum".fields) |field| {
         const shape: core.PointerShape = @enumFromInt(field.value);

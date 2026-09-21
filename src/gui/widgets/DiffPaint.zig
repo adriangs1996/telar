@@ -126,7 +126,9 @@ fn code(widget: *Paint, line: Line) !void {
     const gutter = @min(widget.bounds.width / 2, @as(f32, @floatFromInt(columns)) * number_width + canvas.chrome.px(24));
     const padding = @min(canvas.chrome.px(10), widget.bounds.width / 12);
     const code_width = @max(1, widget.bounds.width - gutter - padding);
-    var wrapped: @import("overlays/WrappedLines.zig") = .{ .text = line.text, .width = @intFromFloat(@min(65535, @max(1, @floor(code_width / cell)))) };
+    const code_columns: u16 = @intFromFloat(@min(65535, @max(1, @floor(code_width / cell))));
+    const start_y = widget.y;
+    var wrapped: @import("overlays/WrappedLines.zig") = .{ .text = line.text, .width = code_columns };
     var continuation = false;
     while (wrapped.next()) |text| {
         defer widget.y += row;
@@ -174,7 +176,7 @@ fn code(widget: *Paint, line: Line) !void {
 
     if (widget.annotations) |annotations| {
         const area = widget.rowBounds(0);
-        widget.y += try annotations.after(annotations.context, canvas, DiffRow{ .line = line, .fragment = line.text, .bounds = area, .code = area, .paint = widget.paint });
+        widget.y += try annotations.after(annotations.context, canvas, DiffRow{ .line = line, .fragment = line.text, .bounds = area, .code = area, .paint = widget.paint, .columns = code_columns, .line_height = row, .start_y = start_y });
     }
 }
 

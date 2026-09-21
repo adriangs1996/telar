@@ -2050,7 +2050,9 @@ test "message link hover owns normalized URL without changing source or editor f
     try send(session, .{ .pointer = .{ .kind = .leave, .x = target.bounds.x, .y = target.bounds.y } });
     try session.settle();
     try std.testing.expect(state.message_link_preview == null);
+    try std.testing.expectEqual(.default, session.gui.input.pointer.hover.shape);
     try hoverMessageLink(session, target);
+    try std.testing.expectEqual(.pointer, session.gui.input.pointer.hover.shape);
     try session.gui.focus(false);
     try std.testing.expect(state.message_link_preview == null);
 }
@@ -2528,43 +2530,362 @@ test "dragging an agent file link retains text selection without launching an ed
     try std.testing.expect(session.gui.widgets.thread_selection.selected());
 }
 
-test "review changes is visible in a single terminal pane and rejects retired attachments" {
+fn reviewControlCount(session: *Session) usize {
+    const registry = session.gui.widgets.dispatcher.maps.presented();
+    var count: usize = 0;
+    for (registry.targets[0..registry.len]) |target| {
+        if (target.action == .change_review) {
+            count += 1;
+        }
+    }
+
+    return count;
+}
+
+fn reviewControl(session: *Session) !Target {
+    const registry = session.gui.widgets.dispatcher.maps.presented();
+    for (registry.targets[0..registry.len]) |target| {
+        if (target.action == .change_review) {
+            return target;
+        }
+    }
+
+    return error.MissingChangeReviewButton;
+}
+
+test "review changes stays hidden in terminal and managed panes without editions" {
+    const terminal = try initSession();
+    defer terminal.deinit();
+    _ = terminal.gui.app.model.workspace.findPane(Session.pane_id).?.identify(.terminal, 77);
+    try publish(terminal);
+    try std.testing.expectEqual(@as(usize, 0), reviewControlCount(terminal));
+
+    const agent = try agentSession();
+    defer agent.deinit();
+    try std.testing.expectEqual(@as(usize, 0), reviewControlCount(agent));
+}
+
+test "hook editions show one terminal review action and retired availability rejects delivered controls" {
     const session = try initSession();
     defer session.deinit();
     const gui = session.gui;
     const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
     _ = pane.identify(.terminal, 77);
+    const notice: core.ChangeReviewChanged = .{ .pane_id = Session.pane_id, .pane_generation = 77, .session = "hook-thread", .latest_edition_id = 1 };
+    _ = try client.server_messages.handleServerMessage(&gui.app, .{ .change_review_changed = notice });
     try publish(session);
     const registry = gui.widgets.dispatcher.maps.presented();
-    var review: ?Target = null;
-    for (registry.targets[0..registry.len]) |target| {
-        if (target.action == .change_review) {
-            review = target;
-            break;
-        }
-    }
-    const target = review orelse return error.MissingChangeReviewButton;
+    try std.testing.expectEqual(@as(usize, 1), reviewControlCount(session));
+    const target = try reviewControl(session);
     try std.testing.expectEqualStrings("Review changes", target.label[0..target.label_len]);
     try std.testing.expect(target.activatable());
     try std.testing.expect(routing.eligible(gui, target));
     try std.testing.expectEqual(target.id, registry.at(.{ target.bounds.x + target.bounds.width / 2, target.bounds.y + target.bounds.height / 2 }).?.id);
+    _ = try client.server_messages.handleServerMessage(&gui.app, .{ .change_review_changed = .{ .pane_id = Session.pane_id, .pane_generation = 77, .session = "new-hook-thread", .latest_edition_id = 0 } });
+    try std.testing.expect(!routing.eligible(gui, target));
+    try publish(session);
+    try std.testing.expectEqual(@as(usize, 0), reviewControlCount(session));
+
+    _ = try client.server_messages.handleServerMessage(&gui.app, .{ .change_review_changed = notice });
+    try publish(session);
+    try std.testing.expectEqual(@as(usize, 1), reviewControlCount(session));
     pane.attachment_generation += 1;
     try std.testing.expect(!routing.eligible(gui, target));
 }
 
-test "managed review header controls retain separate identities and visible hit bounds" {
+test "managed review has exactly one action across single split and fullscreen layouts" {
     const session = try agentSession();
     defer session.deinit();
+    const gui = session.gui;
+    const panes = gui.app.model.activeTabModel().?;
+    var snapshot = panes.findConst(Session.pane_id).?.agent_thread.?.*;
+    const thread = "review-thread";
+    @memcpy(snapshot.thread_id[0..thread.len], thread);
+    snapshot.thread_id_len = thread.len;
+    snapshot.revision += 1;
+    try receiveThread(session, &snapshot);
+    _ = try client.server_messages.handleServerMessage(&gui.app, .{ .change_review_changed = .{ .pane_id = Session.pane_id, .pane_generation = 77, .session = thread, .latest_edition_id = 1 } });
     try publish(session);
-    const registry = session.gui.widgets.dispatcher.maps.presented();
-    var count: usize = 0;
-    for (registry.targets[0..registry.len]) |target| {
-        if (target.action != .change_review) {
-            continue;
-        }
-        count += 1;
-        try std.testing.expect(routing.eligible(session.gui, target));
+    try std.testing.expectEqual(@as(usize, 1), reviewControlCount(session));
+
+    const terminal: core.PaneId = @enumFromInt(21);
+    const other_terminal: core.PaneId = @enumFromInt(22);
+    try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    _ = panes.find(terminal).?.identify(.terminal, 78);
+    try panes.split(.{ .existing_pane = terminal, .new_pane = other_terminal, .location = Session.location, .axis = .vertical, .area = gui.region.area });
+    _ = panes.find(other_terminal).?.identify(.terminal, 79);
+    _ = panes.focusPane(Session.pane_id);
+    try publish(session);
+    try std.testing.expectEqual(@as(usize, 1), reviewControlCount(session));
+    {
+        const registry = gui.widgets.dispatcher.maps.presented();
+        const target = try reviewControl(session);
+        try std.testing.expectEqual(Session.pane_id, target.action.change_review);
+        try std.testing.expect(routing.eligible(gui, target));
         try std.testing.expectEqual(target.id, registry.at(.{ target.bounds.x + target.bounds.width / 2, target.bounds.y + target.bounds.height / 2 }).?.id);
     }
-    try std.testing.expect(count > 0);
+
+    try std.testing.expect(gui.app.model.togglePaneFullscreen(.{ .area = gui.region.area }) != null);
+    try publish(session);
+    try std.testing.expectEqual(@as(usize, 1), reviewControlCount(session));
+    _ = panes.focusPane(terminal);
+    try publish(session);
+    try std.testing.expectEqual(@as(usize, 0), reviewControlCount(session));
+    try std.testing.expect(gui.app.model.togglePaneFullscreen(.{ .area = gui.region.area }) != null);
+
+    _ = try client.server_messages.handleServerMessage(&gui.app, .{ .change_review_changed = .{ .pane_id = terminal, .pane_generation = 78, .session = "terminal-thread", .latest_edition_id = 2 } });
+    try publish(session);
+    try std.testing.expectEqual(@as(usize, 2), reviewControlCount(session));
+}
+
+fn captureMessageLink(context: *anyopaque, target: client.LinkTarget) !void {
+    const captured: *?client.LinkTarget = @ptrCast(@alignCast(context));
+    captured.* = target;
+}
+
+test "agent web links use the host opener with decoded Markdown destinations" {
+    const session = try agentSession();
+    defer session.deinit();
+    var opened: ?client.LinkTarget = null;
+    session.gui.app.link_opener = .{ .context = &opened, .open = captureMessageLink };
+    try linkSnapshot(session, "[site](https://example.com/?a=1&amp;b=2)");
+    try publish(session);
+    try pressControl(session, try messageLinkTarget(session));
+    try std.testing.expectEqualStrings("https://example.com/?a=1&b=2", opened.?.uri());
+    try std.testing.expectEqual(@as(usize, 0), session.pane_creation_count);
+}
+
+test "right clicking agent links copies destinations without opening them" {
+    for ([_][]const u8{ "/tmp/a b.md", "https://example.com/?a=1&b=2", "custom:destination" }) |destination| {
+        const session = try agentSession();
+        defer session.deinit();
+        var opened: ?client.LinkTarget = null;
+        session.gui.app.link_opener = .{ .context = &opened, .open = captureMessageLink };
+        var source: [256]u8 = undefined;
+        try linkSnapshot(session, try std.fmt.bufPrint(&source, "[label](<{s}>)", .{destination}));
+        try publish(session);
+        const link = try messageLinkTarget(session);
+        const point = .{ .x = link.bounds.x + 1, .y = link.bounds.y + link.bounds.height / 2 };
+        try send(session, .{ .pointer = .{ .kind = .press, .button = .right, .x = point.x, .y = point.y } });
+        try send(session, .{ .pointer = .{ .kind = .release, .button = .right, .x = point.x, .y = point.y } });
+        var request: native.HostRequest = .{};
+        try std.testing.expect(session.gui.host.next(&request));
+        try std.testing.expectEqualStrings(destination, request.text.?[0..request.len]);
+        try std.testing.expect(opened == null);
+        try std.testing.expectEqual(@as(usize, 0), session.pane_creation_count);
+        try std.testing.expect(!session.gui.host.next(&request));
+    }
+}
+
+test "right clicking a replaced message link cannot copy the replacement" {
+    const session = try agentSession();
+    defer session.deinit();
+    try linkSnapshot(session, "[site](https://old.example.com)");
+    try publish(session);
+    const link = try messageLinkTarget(session);
+    try linkSnapshot(session, "[site](https://new.example.com)");
+    try send(session, .{ .pointer = .{ .kind = .press, .button = .right, .x = link.bounds.x + 1, .y = link.bounds.y + link.bounds.height / 2 } });
+    var request: native.HostRequest = .{};
+    try std.testing.expect(!session.gui.host.next(&request));
+}
+
+test "agent link copy feedback waits for native success and ignores failures" {
+    const session = try agentSession();
+    defer session.deinit();
+    try linkSnapshot(session, "[site](https://example.com)");
+    try publish(session);
+    const link = try messageLinkTarget(session);
+    for ([_]bool{ false, true }) |success| {
+        try send(session, .{ .pointer = .{ .kind = .press, .button = .right, .x = link.bounds.x + 1, .y = link.bounds.y + link.bounds.height / 2 } });
+        try send(session, .{ .pointer = .{ .kind = .release, .button = .right, .x = link.bounds.x + 1, .y = link.bounds.y + link.bounds.height / 2 } });
+        var request: native.HostRequest = .{};
+        try std.testing.expect(session.gui.host.next(&request));
+        try std.testing.expectEqual(@as(u64, 0), session.gui.widgets.copy_feedback.until_ns);
+        try send(session, .{ .clipboard = .{ .request_id = request.request_id, .target_id = request.target_id, .generation = request.generation, .status = if (success) .success else .unavailable } });
+        try std.testing.expectEqual(success, session.gui.widgets.copy_feedback.until_ns > 0);
+        try std.testing.expect(session.gui.widgets.copy_feedback.pending == null);
+    }
+}
+
+test "agent link hand cursor follows links and rejects stale or covered targets" {
+    const session = try agentSession();
+    defer session.deinit();
+    for ([_][]const u8{ "[file](/tmp/file.zig)", "https://example.com", "[custom](custom:target)" }) |source| {
+        try linkSnapshot(session, source);
+        try publish(session);
+        const link = try messageLinkTarget(session);
+        try hoverMessageLink(session, link);
+        try std.testing.expectEqual(.pointer, session.gui.input.pointer.hover.shape);
+        try linkSnapshot(session, "replacement text");
+        try hoverMessageLink(session, link);
+        try std.testing.expect(session.gui.input.pointer.hover.shape != .pointer);
+    }
+
+    try linkSnapshot(session, "[site](https://example.com)");
+    try publish(session);
+    const link = try messageLinkTarget(session);
+    session.gui.app.model.name_prompt.begin(.create_workspace);
+    try hoverMessageLink(session, link);
+    try std.testing.expect(session.gui.input.pointer.hover.shape != .pointer);
+}
+
+fn existingEditor(session: *Session, name: []const u8) !core.PaneId {
+    const editor_id: core.PaneId = @enumFromInt(99);
+    const panes = session.gui.app.model.activeTabModel().?;
+    try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = editor_id, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    try std.testing.expect(session.gui.app.model.identifyPane(.{ .request_id = @enumFromInt(2), .pane_id = editor_id, .location = Session.location, .created = false, .kind = .terminal, .pane_generation = 88 }));
+    _ = panes.setPaneForeground(editor_id, name);
+    _ = panes.focusPane(Session.pane_id);
+    return editor_id;
+}
+
+fn editorReply(session: *Session, outcome: core.EditorOpened.Outcome) !void {
+    const reply: core.EditorOpened = .{ .request_id = session.last_editor_open.?.request_id, .outcome = outcome, .pane_id = @enumFromInt(99), .pane_generation = 88 };
+    var buffer: [128]u8 = undefined;
+    _ = try client.server_messages.handleServerMessage(&session.gui.app, try core.decodeServer(try core.encodeEditorOpened(&buffer, reply)));
+    try session.settle();
+}
+
+test "agent file links reuse supported editors without splitting or typing into the PTY" {
+    for ([_][]const u8{ "nvim", "vim", "emacs" }) |editor| {
+        const session = try agentSession();
+        defer session.deinit();
+        session.gui.app.options.editor = editor;
+        const editor_id = try existingEditor(session, editor);
+        try linkSnapshot(session, "[file](/tmp/reused.md)");
+        try publish(session);
+        try pressControl(session, try messageLinkTarget(session));
+        try session.settle();
+        try std.testing.expectEqual(@as(usize, 1), session.editor_open_count);
+        try std.testing.expectEqual(@as(usize, 0), session.pane_creation_count);
+        try std.testing.expectEqualStrings("/tmp/reused.md", session.last_editor_open.?.path());
+        try std.testing.expectEqual(Session.pane_id, session.last_editor_open.?.pane_id);
+        try editorReply(session, .opened);
+        const panes = session.gui.app.model.activeTabModel().?;
+        try std.testing.expectEqual(@as(usize, 2), panes.pane_count);
+        try std.testing.expectEqual(editor_id, panes.layout.focused());
+        try std.testing.expectEqual(@as(usize, 0), session.input_len);
+        try std.testing.expectEqual(@as(usize, 0), session.pane_creation_count);
+        try editorReply(session, .opened);
+        try std.testing.expectEqual(@as(usize, 0), session.pane_creation_count);
+    }
+}
+
+test "unavailable editor integration falls back once using the clicked editor configuration" {
+    const session = try agentSession();
+    defer session.deinit();
+    session.gui.app.options.editor = "nvim";
+    _ = try existingEditor(session, "nvim");
+    try linkSnapshot(session, "[file](/tmp/fallback.md)");
+    try publish(session);
+    try pressControl(session, try messageLinkTarget(session));
+    try session.settle();
+    session.gui.app.options.editor = "nano";
+    try editorReply(session, .unavailable);
+    try std.testing.expectEqual(@as(usize, 1), session.pane_creation_count);
+    const request = (try core.decodeClient(session.pane_creation_wire[0..session.pane_creation_len])).create_pane;
+    var args = request.launch.arguments();
+    try std.testing.expectEqualStrings("nvim", (try args.next()).?);
+    try std.testing.expectEqualStrings("/tmp/fallback.md", (try args.next()).?);
+    try editorReply(session, .unavailable);
+    try std.testing.expectEqual(@as(usize, 1), session.pane_creation_count);
+}
+
+test "nano always gets a new pane and failed remote opens never duplicate an editor" {
+    for ([_][]const u8{ "nano", "nvim" }) |editor| {
+        const session = try agentSession();
+        defer session.deinit();
+        session.gui.app.options.editor = editor;
+        _ = try existingEditor(session, editor);
+        try linkSnapshot(session, "[file](/tmp/design.md)");
+        try publish(session);
+        try pressControl(session, try messageLinkTarget(session));
+        try session.settle();
+        if (std.mem.eql(u8, editor, "nano")) {
+            try std.testing.expectEqual(@as(usize, 0), session.editor_open_count);
+            try std.testing.expectEqual(@as(usize, 1), session.pane_creation_count);
+        } else {
+            try editorReply(session, .failed);
+            try std.testing.expectEqual(@as(usize, 0), session.pane_creation_count);
+            try std.testing.expect(session.gui.app.editor_open.pending == null);
+        }
+    }
+}
+
+test "editor reuse replies cannot act on a replaced source pane" {
+    const session = try agentSession();
+    defer session.deinit();
+    session.gui.app.options.editor = "nvim";
+    _ = try existingEditor(session, "nvim");
+    try linkSnapshot(session, "[file](/tmp/stale.md)");
+    try publish(session);
+    try pressControl(session, try messageLinkTarget(session));
+    try session.settle();
+    try std.testing.expect(session.gui.app.model.identifyPane(.{ .request_id = @enumFromInt(3), .pane_id = Session.pane_id, .location = Session.location, .created = false, .kind = .agent, .pane_generation = 100 }));
+    try editorReply(session, .unavailable);
+    try std.testing.expectEqual(@as(usize, 0), session.pane_creation_count);
+}
+
+test "review hides underlying message links before delivery and restores them after closing" {
+    const session = try agentSession();
+    defer session.deinit();
+    var opened: ?client.LinkTarget = null;
+    session.gui.app.link_opener = .{ .context = &opened, .open = captureMessageLink };
+    try linkSnapshot(session, "[site](https://example.com)");
+    try publish(session);
+    const link = try messageLinkTarget(session);
+    try hoverMessageLink(session, link);
+    try std.testing.expectEqual(.pointer, session.gui.input.pointer.hover.shape);
+    try std.testing.expect(session.gui.widgets.message_link_preview != null);
+
+    try session.gui.openChangeReview(Session.pane_id);
+    for (0..2) |frame| {
+        if (frame != 0) {
+            try publish(session);
+        }
+
+        try hoverMessageLink(session, link);
+        try std.testing.expectEqual(.default, session.gui.input.pointer.hover.shape);
+        try std.testing.expect(session.gui.input.pointer.hover.link == null);
+        try std.testing.expect(session.gui.widgets.message_link_preview == null);
+        try pressControl(session, link);
+        try send(session, .{ .pointer = .{ .kind = .press, .button = .right, .x = link.bounds.x + 1, .y = link.bounds.y + 1 } });
+        try send(session, .{ .pointer = .{ .kind = .release, .button = .right, .x = link.bounds.x + 1, .y = link.bounds.y + 1 } });
+        var request: native.HostRequest = .{};
+        try std.testing.expect(!session.gui.host.next(&request));
+        try std.testing.expect(opened == null);
+    }
+
+    _ = try client.server_messages.handleServerMessage(&session.gui.app, .{ .change_review_snapshot = .{
+        .request_id = session.gui.app.change_review.pending.?,
+        .pane_id = Session.pane_id,
+        .pane_generation = 77,
+        .session = "thread-A",
+    } });
+    session.gui.review.widget.command = .close;
+    try publish(session);
+    try hoverMessageLink(session, try messageLinkTarget(session));
+    try std.testing.expectEqual(.pointer, session.gui.input.pointer.hover.shape);
+    try std.testing.expect(session.gui.widgets.message_link_preview != null);
+}
+
+test "link clipboard confirmation remains visible when review opens before native completion" {
+    const session = try agentSession();
+    defer session.deinit();
+    try linkSnapshot(session, "[site](https://example.com)");
+    try publish(session);
+    const link = try messageLinkTarget(session);
+    try send(session, .{ .pointer = .{ .kind = .press, .button = .right, .x = link.bounds.x + 1, .y = link.bounds.y + 1 } });
+    try send(session, .{ .pointer = .{ .kind = .release, .button = .right, .x = link.bounds.x + 1, .y = link.bounds.y + 1 } });
+    var request: native.HostRequest = .{};
+    try std.testing.expect(session.gui.host.next(&request));
+    try session.gui.openChangeReview(Session.pane_id);
+    try publish(session);
+    const before = session.renderer.quads.items().len;
+    try send(session, .{ .clipboard = .{ .request_id = request.request_id, .target_id = request.target_id, .generation = request.generation, .status = .success } });
+    try std.testing.expect(session.gui.widgets.copy_feedback.pending == null);
+    try std.testing.expect(session.gui.widgets.copy_feedback.until_ns > 0);
+    try publish(session);
+    try std.testing.expect(session.renderer.quads.items().len > before);
+    try std.testing.expect(session.gui.chrome.animation.deadline_ns != null);
 }

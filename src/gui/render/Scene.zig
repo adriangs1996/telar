@@ -49,6 +49,10 @@ pub fn prepare(scene: *Scene, projection: client.Projection) !client.Presentatio
         }
     }
 
+    if (scene.widgets) |state| {
+        try state.copy_feedback.draw(&canvas);
+    }
+
     scene.chrome.seal();
     scene.overlays.seal();
     if (scene.widgets) |state| {

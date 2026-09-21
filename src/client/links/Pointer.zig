@@ -5,17 +5,17 @@ const Pointer = @This();
 
 owned: bool = false,
 
-/// Claims a left-button gesture only when its press begins over a link.
+/// Claims a left- or right-button gesture only when its press begins over a link.
 ///
 /// ```zig
 /// const outcome = pointer.handle(command, target);
 /// ```
-pub fn handle(pointer: *Pointer, command: Command, target: ?TargetType) Outcome {
-    if (pointer.owned) {
+pub fn handle(self: *Pointer, command: Command, target: ?TargetType) Outcome {
+    if (self.owned) {
         if (command.kind == .release) {
-            pointer.owned = false;
+            self.owned = false;
         } else if (command.kind == .press) {
-            pointer.owned = false;
+            self.owned = false;
         } else {
             return .{ .consumed = command.kind == .drag };
         }
@@ -25,12 +25,16 @@ pub fn handle(pointer: *Pointer, command: Command, target: ?TargetType) Outcome 
         }
     }
 
-    if (command.kind != .press or !command.left_button) {
+    if (command.kind != .press or (!command.left_button and !command.right_button)) {
         return .{};
     }
 
     const link_target = target orelse return .{};
-    pointer.owned = true;
+    self.owned = true;
+
+    if (command.right_button) {
+        return .{ .consumed = true, .copy = link_target };
+    }
 
     return .{ .consumed = true, .open = link_target };
 }

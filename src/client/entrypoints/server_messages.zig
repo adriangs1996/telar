@@ -1,6 +1,7 @@
 //! Routes decoded runtime messages to client slice adapters.
 //! State transitions, resource effects and correlation stay in those adapters.
 //! This dispatcher only maps their control outcomes to the client loop.
+pub const link_openings = @import("../controllers/input/link_openings.zig");
 
 const Client = @import("../AttachedClient.zig");
 const ServerMessageType = @import("telar-core").ServerMessage;

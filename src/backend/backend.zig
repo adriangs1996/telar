@@ -300,4 +300,6 @@ test {
     _ = @import("workspace/repository_support.zig");
     _ = @import("workspace/state_support.zig");
     _ = @import("workspace/workspace_support.zig");
+    _ = @import("editors/tests.zig");
+    _ = @import("runtime/tests/editor_open_test.zig");
 }

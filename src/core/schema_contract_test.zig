@@ -57,7 +57,7 @@ test {
 
 pub const Direction = enum { client, server };
 
-const corpus_len = 113;
+const corpus_len = 115;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -1072,6 +1072,15 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
 
     helper.add(.{ .name = "change_review_changed", .direction = .server, .golden_hex = golden.change_review_changed }, helper.commit(
         try review.encodeChangeReviewChanged(helper.space(), .{ .pane_id = @enumFromInt(5), .pane_generation = 3, .session = "thread", .latest_edition_id = 2 }),
+    ));
+
+    var editor_request: schema.OwnedEditorOpen = .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(6), .pane_generation = 7 };
+    try editor_request.setTarget("nvim", "/tmp/a");
+    helper.add(.{ .name = "open_editor", .direction = .client, .golden_hex = golden.open_editor }, helper.commit(
+        try schema.encodeOpenEditor(helper.space(), editor_request.view()),
+    ));
+    helper.add(.{ .name = "editor_opened", .direction = .server, .golden_hex = golden.editor_opened }, helper.commit(
+        try schema.encodeEditorOpened(helper.space(), .{ .request_id = @enumFromInt(5), .outcome = .opened, .pane_id = @enumFromInt(8), .pane_generation = 9 }),
     ));
 
     std.debug.assert(index == corpus_len);
@@ -2688,4 +2697,24 @@ test "agent images round trip without text and reject malformed counts and paths
     request.images.count = 1;
     request.images.storage[0] = "relative.png";
     try std.testing.expectError(error.InvalidAgentImage, threads.encodeAgentPrompt(&storage, request));
+}
+
+test "editor requests own deferred paths and reject command controls and invalid identities" {
+    var request: schema.OwnedEditorOpen = .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(6), .pane_generation = 7 };
+    const path = "/tmp/a b'|quit!\"\\$().md";
+    try request.setTarget("/usr/bin/nvim", path);
+    var storage: [1024]u8 = undefined;
+    const bytes = try schema.encodeOpenEditor(&storage, request.view());
+    const decoded = (try schema.decodeClient(bytes)).open_editor;
+    var retained = try schema.OwnedEditorOpen.init(decoded);
+    @memset(&storage, 0);
+    try std.testing.expectEqualStrings(path, retained.path());
+    try std.testing.expectEqualStrings("/usr/bin/nvim", retained.editor());
+    try std.testing.expectError(error.InvalidEditorTarget, retained.setTarget("nvim", "/tmp/line\nbreak"));
+    try std.testing.expectError(error.InvalidEditorTarget, retained.setTarget("nvim", "relative/file"));
+    try std.testing.expectError(error.InvalidEditorTarget, retained.setTarget("-c", "/tmp/a"));
+    try std.testing.expectError(error.InvalidByteString, retained.setTarget("nvim", "x" ** (schema.OpenEditor.max_bytes + 1)));
+    retained.pane_generation = 0;
+    try std.testing.expectError(error.InvalidPaneGeneration, schema.encodeOpenEditor(&storage, retained.view()));
+    try std.testing.expectError(error.InvalidPaneId, schema.encodeEditorOpened(&storage, .{ .request_id = @enumFromInt(5), .outcome = .opened }));
 }

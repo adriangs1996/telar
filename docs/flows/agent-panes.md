@@ -147,7 +147,22 @@ HTTP(S) autolinks inside `<...>`. This is a bounded subset of
 [CommonMark links](https://spec.commonmark.org/0.31.2/#links): reference definitions,
 images and links spanning separate source lines remain unsupported. Code blocks
 and code spans keep link syntax literal. Hover only displays the destination;
-opening files or browsers is a separate interaction.
+a completed left click opens local files in the configured editor, reusing an
+accessible instance in the same tab or creating a pane beside the source. See
+[editor file links](editor-file-links.md). HTTP(S) destinations open in the host browser. Other supported URI
+schemes use the same host opener as terminal panes. Bare supported URIs also
+become links through the shared terminal recognizer; recognition spends the
+inline parser's bounded lookahead budget.
+
+A right press copies the decoded destination immediately, including relative
+file paths and schemes unsupported by the opener. `routing.apply` consumes the
+whole right-button gesture and `message_links.copy` validates the attachment,
+message revision and delivered geometry before queuing an owned clipboard write.
+It uses the existing host clipboard queue and creates no runtime state or IPC
+messages. Replaced snapshots cannot open or copy a replacement destination.
+`widget_interaction.zig` covers browser dispatch, file editor creation, right-click
+copying and stale message rejection; `message_spans_test.zig` covers bare URI
+recognition and literal code.
 
 Tools appear as compact activity rows with their command, file summary or tool
 name and actual lifecycle state. Expanding a row reveals its output or diff.

@@ -94,7 +94,7 @@ pub fn apply(client: *Client, response: core.ChangeReviewSnapshotView) !bool {
     return accepted;
 }
 
-/// Refreshes metadata on the same immutable edition, coalescing notices while busy.
+/// Retains pane availability and invalidates an open review without changing its edition.
 /// Example: `_ = change_review.changed(client, notification);`
 pub fn changed(client: *Client, notification: core.ChangeReviewChanged) bool {
     const accepted = handler(client).changed(notification);

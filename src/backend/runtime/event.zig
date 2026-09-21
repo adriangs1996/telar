@@ -1,4 +1,5 @@
 //! Events delivered to the runtime loop and their execution-budget class.
+const EditorJob = @import("../editors/Job.zig");
 
 const SocketChannelType = @import("telar-core").SocketChannel;
 const ClientMessage = @import("ClientMessage.zig");
@@ -53,6 +54,7 @@ pub const Event = union(enum) {
     metrics_sampled: SystemMetricsSample,
     checkpoint_written: anyerror!void,
     git_status: CompletionType,
+    editor_opened: *EditorJob,
     session_name: AgentCompletion,
     stopped: anyerror!void,
 };
@@ -96,6 +98,7 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) PathType {
         .telemetry_written,
         .checkpoint_written,
         .git_status,
+        .editor_opened,
         .session_name,
         => .observation,
         .accepted,

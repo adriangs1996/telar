@@ -9,6 +9,8 @@ const ChangeReviewController = @import("../entrypoints/requests/ChangeReviewCont
 const QueryChangeReview = @import("telar-core").QueryChangeReview;
 const ChangeReviewCommand = @import("telar-core").ChangeReviewCommand;
 const ReportChangeReviewSample = @import("telar-core").ReportChangeReviewSample;
+const OpenEditor = @import("telar-core").OpenEditor;
+const EditorOpenController = @import("../entrypoints/requests/EditorOpenController.zig");
 const GenericRuntimePort = @import("GenericRuntimePort.zig").Type;
 const Session = @import("../client/Session.zig");
 const Repository = @import("../../workspace/Repository.zig");
@@ -186,6 +188,7 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
         };
 
         const client_request_handlers: GenericHandlers(ClientRequestContext) = .{
+            .open_editor = routeOpenEditor,
             .open_pane = routeOpenPane,
             .pane_input = routePaneInput,
             .pane_resize = routePaneResize,
@@ -246,6 +249,11 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
         };
 
         const ClientRequestRouter = GenericRouter(ClientRequestContext, client_request_handlers);
+
+        fn routeOpenEditor(request: *ClientRequestContext, message: OpenEditor) !void {
+            var controller: EditorOpenController = .{ .application = request.application, .session = request.session };
+            try controller.handle(message);
+        }
 
         fn routeOpenPane(request: *ClientRequestContext, open: OpenPaneViewType) !void {
             const application = request.application;

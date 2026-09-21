@@ -29,6 +29,7 @@ pub fn Type(comptime Context: type, comptime handlers: GenericHandlers(Context))
         /// ```
         pub fn route(router: Self, message: ClientMessageType) !void {
             return switch (message) {
+                .open_editor => |request| handlers.open_editor(router.context, request),
                 .open_pane => |request| handlers.open_pane(router.context, request),
                 .pane_input => |request| handlers.pane_input(router.context, request),
                 .pane_resize => |request| handlers.pane_resize(router.context, request),

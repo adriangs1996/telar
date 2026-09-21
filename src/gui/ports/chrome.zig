@@ -1,5 +1,6 @@
 //! Native geometry and hit testing implement the shared chrome port.
 const client = @import("telar-client");
+const hover_target = @import("../input/hover_target.zig");
 const GuiClient = @import("../GuiClient.zig");
 
 /// Example: `app.chrome = chrome.port(app);`
@@ -69,12 +70,22 @@ fn pointer(context: *anyopaque, event: client.Mouse) client.ViewInteractionComma
 }
 
 fn linkPointer(context: *anyopaque, event: client.Mouse) bool {
-    if (event.kind != .press or event.button & 3 != 0) {
+    if (event.kind != .press or event.button & 3 == 1) {
         return false;
     }
 
     const gui = host(context);
     const routing = &gui.input.pointer;
+    if (event.button & 3 == 2) {
+        const hit = hover_target.resolve(gui, event, hover_target.link_modifier | 1).link orelse return false;
+        const pane = gui.app.model.activeTabModelConst().?.findConst(hit.pane_id).?;
+        if (pane.pending_frame_id == 0) {
+            gui.copyLink(hit.match.target.uri()) catch {};
+        }
+
+        return true;
+    }
+
     routing.hover.dirty = true;
     routing.hover.refresh(gui);
     const hit = routing.hover.link orelse return false;

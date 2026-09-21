@@ -1,4 +1,5 @@
 //! Runtime protocol projection from authoritative state.
+const encodeEditorOpened = @import("telar-core").encodeEditorOpened;
 
 const encodeClientList = @import("telar-core").encodeClientList;
 const EncodeContext = @import("EncodeContext.zig");
@@ -220,6 +221,7 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
         .client_command_result => |command| try encodeClientCommandResult(buffer, command),
         .client_list => |list| try encodeClientList(buffer, list),
         .pane_focus_command => |command| try encodePaneFocusCommand_module(buffer, command),
+        .editor_opened => |result| try encodeEditorOpened(buffer, result),
         .pane_focus_result => |result| try encodePaneFocusResult_module(buffer, result),
         .command_suggestion => |*suggested| try encodeCommandSuggestion_module(buffer, .{
             .request_id = suggested.request_id,

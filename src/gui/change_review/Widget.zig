@@ -9,11 +9,13 @@ const Key = @import("../input/KeyInput.zig");
 const native = @import("../native/native.zig");
 const Services = @import("../host/Services.zig");
 const syntax_limits = @import("../syntax/limits.zig");
-const Model = @import("telar-client").ChangeReviewModel;
+const Model = client.ChangeReviewModel;
 const Paint = @import("Paint.zig");
 const Input = @import("input.zig");
 const Editor = @import("editor.zig");
 const actions = @import("action.zig");
+const SearchPrompt = @import("SearchPrompt.zig");
+const Viewport = @import("Viewport.zig");
 const Self = @This();
 
 host: Services = .{},
@@ -52,6 +54,99 @@ clipboard_id: ?u64 = null,
 clipboard_revision: u64 = 0,
 clipboard_selection: [2]u32 = .{ 0, 0 },
 clipboard_cut: bool = false,
+search_prompt: SearchPrompt = .{},
+pending_g: bool = false,
+prepared_viewport: Viewport = .{},
+viewport: Viewport = .{},
+
+/// Uses the native field machinery for both search and review comments.
+/// Example: `const field = widget.activeField() orelse return;`
+pub fn activeField(self: *Self) ?*SearchPrompt.Field {
+    if (self.search_prompt.open) {
+        return &self.search_prompt.field;
+    }
+
+    const index = self.model.editing orelse return null;
+    return &self.model.comments[index].body;
+}
+
+/// Updates only the owner of the currently edited field.
+/// Example: `widget.fieldChanged();`
+pub fn fieldChanged(self: *Self) void {
+    if (self.search_prompt.open) {
+        self.search_prompt.failure = null;
+        self.previewSearch();
+    } else if (self.model.editing) |index| {
+        self.model.comments[index].draft = true;
+        self.noteComment(index);
+    }
+    self.text_revision += 1;
+}
+
+/// Starts an incremental search without discarding the previous position/query.
+/// Example: `widget.beginSearch();`
+pub fn beginSearch(self: *Self) void {
+    if (self.model.editing != null or self.search_prompt.open) {
+        return;
+    }
+
+    self.search_prompt = .{ .open = true, .previous = self.model.search, .head = self.model.head, .tail = self.model.tail, .visual = self.model.visual, .scroll = self.scroll };
+    self.model.clearSearch();
+    self.changedOwner();
+    self.reveal = false;
+}
+
+fn previewSearch(self: *Self) void {
+    self.model.head = self.search_prompt.head;
+    self.model.tail = self.search_prompt.tail;
+    self.model.visual = self.search_prompt.visual;
+    _ = self.model.startSearch(self.search_prompt.field.text());
+    self.scroll = self.search_prompt.scroll;
+    self.reveal = self.model.search.match != null;
+}
+
+/// Confirms a query or restores the position and query from before `/`.
+/// Example: `widget.finishSearch(false);`
+pub fn finishSearch(self: *Self, accept: bool) void {
+    if (!self.search_prompt.open) {
+        return;
+    }
+
+    if (!accept) {
+        self.model.head = self.search_prompt.head;
+        self.model.tail = self.search_prompt.tail;
+        self.model.visual = self.search_prompt.visual;
+        self.scroll = self.search_prompt.scroll;
+        self.model.search = self.search_prompt.previous;
+    }
+    self.search_prompt.open = false;
+    // Closing retires the search action through activeField/ownsField while
+    // keeping any code-selection gesture attached to its delivered target.
+    self.refocus();
+    self.reveal = accept and self.model.search.match != null;
+}
+
+/// Invalidates view-local input when replacing the displayed file or edition.
+/// Example: `widget.resetNavigation();`
+pub fn resetNavigation(self: *Self) void {
+    self.search_prompt = .{};
+    self.model.clearSearch();
+    self.pending_g = false;
+}
+
+/// Scrolls a delivered page fraction and moves the review cursor with it.
+/// Example: `widget.page(0.5);`
+pub fn page(self: *Self, fraction: f32) void {
+    if (self.viewport.generation != self.generation or self.viewport.file != self.model.file) {
+        return;
+    }
+
+    const reached = self.viewport.move(&self.model, .{ .fraction = fraction, .scroll = self.scroll });
+    self.scroll = std.math.clamp(self.scroll + self.viewport.height * fraction, 0, self.viewport.maximum_scroll);
+    self.reveal = self.model.visual and !reached;
+    self.copy_range = null;
+    self.pending_g = false;
+}
 
 pub fn services(self: *Self) *Services {
     return self.host_port orelse &self.host;
@@ -90,10 +185,15 @@ pub fn ownsKey(self: *const Self, key: Key) bool {
 /// Example: `widget.changedOwner();`
 pub fn changedOwner(self: *Self) void {
     self.generation += 1;
+    self.refocus();
+}
+
+fn refocus(self: *Self) void {
     self.needs_focus = true;
     self.reveal = true;
     self.copy_range = null;
     self.dragging = false;
+    self.pending_g = false;
     if (self.widgets) |state| {
         state.cancelComposition();
     }
@@ -107,12 +207,13 @@ pub fn present(self: *Self, delivered: bool) void {
     }
 
     self.cell = self.prepared_cell;
+    self.viewport = self.prepared_viewport;
     if (!self.needs_focus) {
         return;
     }
 
     const state = self.widgets orelse return;
-    const desired: actions.Kind = if (self.model.editing != null) .editor else .background;
+    const desired: actions.Kind = if (self.search_prompt.open) .search else if (self.model.editing != null) .editor else .background;
     const registry = state.dispatcher.maps.presented();
     for (registry.targets[0..registry.len]) |target| {
         if (target.id.generation == self.generation and target.action == .custom and actions.kind(target.action.custom) == desired) {
@@ -137,8 +238,8 @@ pub fn accessibility(self: *Self, out: *native.AccessibilityTree) bool {
         }
 
         state.native_nodes[count] = .{ .id = target.id.target_id, .generation = target.id.generation, .role = target.role, .flags = 1, .actions = 1 | 2, .x = target.bounds.x, .y = target.bounds.y, .width = target.bounds.width, .height = target.bounds.height, .label = &target.label, .label_len = target.label_len };
-        if (target.action == .custom and actions.kind(target.action.custom) == .editor and self.model.editing != null) {
-            const field = &self.model.comments[self.model.editing.?].body;
+        if (target.action == .custom and (actions.kind(target.action.custom) == .editor or actions.kind(target.action.custom) == .search) and self.activeField() != null) {
+            const field = self.activeField().?;
             const node = &state.native_nodes[count];
             node.flags |= 8;
             node.actions |= 4 | 8 | 64 | 128 | 256 | 512;

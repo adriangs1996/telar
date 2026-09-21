@@ -418,3 +418,10 @@ pub const encodeQueryChangeReview = @import("messages/change_review.zig").encode
 pub const encodeChangeReviewCommand = @import("messages/change_review.zig").encodeChangeReviewCommand;
 pub const encodeReportChangeReviewSample = @import("messages/change_review.zig").encodeReportChangeReviewSample;
 pub const encodeChangeReviewSnapshot = @import("messages/change_review.zig").encodeChangeReviewSnapshot;
+pub const OpenEditor = @import("messages/OpenEditor.zig");
+pub const EditorOpened = @import("messages/EditorOpened.zig");
+const editor_codec = @import("messages/editor.zig");
+pub const encodeOpenEditor = editor_codec.encodeOpenEditor;
+pub const encodeEditorOpened = editor_codec.encodeEditorOpened;
+
+pub const OwnedEditorOpen = @import("messages/OwnedEditorOpen.zig");

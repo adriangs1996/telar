@@ -1,4 +1,5 @@
 const change_review = @import("../change_review.zig");
+const EditorOpenController = @import("../../entrypoints/requests/EditorOpenController.zig");
 const GenericAgentDispatcher = @import("GenericAgentDispatcher.zig").Type;
 const GenericClientDispatcher = @import("GenericClientDispatcher.zig").Type;
 const GenericHistoryDispatcher = @import("GenericHistoryDispatcher.zig").Type;
@@ -135,6 +136,7 @@ pub fn Type(comptime Application: type) type {
                 .checkpoint_written => |result| {
                     application.sessionCheckpointWritten(result);
                 },
+                .editor_opened => |job| EditorOpenController.complete(application, job),
                 .git_status => |completion| {
                     application.gitStatusCompleted(completion);
                 },

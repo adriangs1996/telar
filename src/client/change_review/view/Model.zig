@@ -3,6 +3,7 @@ const Revision = @import("Revision.zig");
 const Comment = @import("Comment.zig");
 const Anchor = @import("Anchor.zig");
 const limits = @import("limits.zig");
+const Search = @import("Search.zig");
 const Self = @This();
 
 revisions: [2]Revision = @splat(.{}),
@@ -11,6 +12,7 @@ file: usize = 0,
 head: usize = 0,
 tail: usize = 0,
 visual: bool = false,
+search: Search = .{},
 comments: [limits.comments]Comment = @splat(.{}),
 editing: ?usize = null,
 expanded: ?usize = null,
@@ -27,6 +29,7 @@ pub fn selectFile(self: *Self, file: usize) void {
     }
 
     self.file = file;
+    self.search.match = null;
     self.head = self.current().files[file].first;
     self.cancelVisual();
     self.editing = null;
@@ -66,19 +69,32 @@ pub fn select(self: *Self, request: struct { row: usize, extend: bool }) void {
     }
 
     self.head = request.row;
+    self.search.match = null;
 }
 
+/// Moves by selectable lines, clamping at file and visual-selection boundaries.
+/// Example: `model.move(.{ .delta = 12, .extend = model.visual });`
 pub fn move(self: *Self, request: struct { delta: i32, extend: bool, hunk: bool = false }) void {
+    if (request.delta == 0 or self.current().file_count == 0) {
+        return;
+    }
+
     if (request.hunk) {
         self.cancelVisual();
     }
 
     const revision = self.current();
     const file = revision.files[self.file];
+    if (file.first == file.last) {
+        return;
+    }
+
     const current_hunk = revision.rows[self.head].hunk;
+    const step: i64 = if (request.delta > 0) 1 else -1;
+    var remaining = @abs(request.delta);
     var at: i64 = @intCast(self.head);
     while (true) {
-        at += request.delta;
+        at += step;
         if (at < file.first or at >= file.last) {
             if (request.hunk) {
                 if (request.delta > 0 and self.file + 1 < revision.file_count) {
@@ -106,8 +122,91 @@ pub fn move(self: *Self, request: struct { delta: i32, extend: bool, hunk: bool 
         }
 
         self.select(.{ .row = row, .extend = request.extend });
-        return;
+        remaining -= 1;
+        if (request.hunk or remaining == 0) {
+            return;
+        }
     }
+}
+
+/// Selects the first permitted line of the current file or visual range.
+/// Example: `model.first();`
+pub fn first(self: *Self) void {
+    self.search.match = null;
+    self.move(.{ .delta = -limits.lines, .extend = self.visual });
+}
+
+/// Selects the last permitted line of the current file or visual range.
+/// Example: `model.last();`
+pub fn last(self: *Self) void {
+    self.search.match = null;
+    self.move(.{ .delta = limits.lines, .extend = self.visual });
+}
+
+/// Searches literal UTF-8 text in the current file, starting with the selected line.
+/// Example: `const found = model.startSearch("café");`
+pub fn startSearch(self: *Self, query: []const u8) bool {
+    if (!self.search.setQuery(query)) {
+        return false;
+    }
+
+    return self.repeatSearch(.forward);
+}
+
+/// Finds the next occurrence with wrap, preserving visual hunk and side ownership.
+/// Example: `const found = model.repeatSearch(.backward);`
+pub fn repeatSearch(self: *Self, direction: Search.Direction) bool {
+    const revision = self.current();
+    const query = self.search.query.text();
+    if (query.len == 0 or revision.file_count == 0) {
+        return false;
+    }
+
+    const file = revision.files[self.file];
+    const count = file.last - file.first;
+    if (count == 0) {
+        return false;
+    }
+
+    const origin = self.head - file.first;
+    const previous = self.search.match;
+    for (0..count + 1) |step| {
+        const relative = switch (direction) {
+            .forward => (origin + step) % count,
+            .backward => (origin + count - step % count) % count,
+        };
+        const row_index = file.first + relative;
+        const row = revision.rows[row_index];
+        const anchor_row = revision.rows[self.tail];
+        if (self.visual and (row.hunk != anchor_row.hunk or row.before() != anchor_row.before())) {
+            continue;
+        }
+
+        const text = row.value.text;
+        const cursor = if (step == 0 and previous != null and previous.?.row == self.head) previous else null;
+        const at = switch (direction) {
+            .forward => forward: {
+                const start = if (cursor) |match| match.start + 1 else 0;
+                break :forward if (start <= text.len) std.mem.indexOfPos(u8, text, start, query) else null;
+            },
+            .backward => backward: {
+                const end = if (cursor) |match| @min(text.len, match.start + query.len - 1) else text.len;
+                break :backward std.mem.lastIndexOf(u8, text[0..end], query);
+            },
+        } orelse continue;
+        self.select(.{ .row = row_index, .extend = self.visual });
+        self.search.match = .{ .row = row_index, .start = at, .end = at + query.len };
+        return true;
+    }
+
+    self.search.match = null;
+    return false;
+}
+
+/// Clears the committed query without changing the current line or visual anchor.
+/// Example: `model.clearSearch();`
+pub fn clearSearch(self: *Self) void {
+    self.search = .{};
 }
 
 pub fn anchor(self: *Self) Anchor {
@@ -358,4 +457,136 @@ test "review prototype missing files select a valid fallback without reattaching
     model.selectFile(0);
     model.comment();
     try std.testing.expectEqual(comment_index, model.editing.?);
+}
+
+test "review line motions count selectable rows and clamp to the current file" {
+    const model = try fixture();
+    defer std.testing.allocator.destroy(model);
+    model.move(.{ .delta = 2, .extend = false });
+    try std.testing.expectEqual(@as(usize, 2), model.head);
+    model.move(.{ .delta = std.math.maxInt(i32), .extend = false });
+    try std.testing.expectEqual(@as(usize, 4), model.head);
+    try std.testing.expectEqual(@as(usize, 0), model.file);
+    model.first();
+    try std.testing.expectEqual(@as(usize, 0), model.head);
+    model.last();
+    try std.testing.expectEqual(@as(usize, 4), model.head);
+    model.move(.{ .delta = std.math.minInt(i32), .extend = false });
+    try std.testing.expectEqual(@as(usize, 0), model.head);
+    model.move(.{ .delta = 0, .extend = false, .hunk = true });
+    try std.testing.expectEqual(@as(usize, 0), model.head);
+
+    model.selectFile(1);
+    model.first();
+    model.last();
+    try std.testing.expectEqual(@as(usize, 1), model.file);
+    try std.testing.expectEqual(@as(usize, 5), model.head);
+}
+
+test "review first last and large visual motions retain their hunk and side" {
+    const model = try fixture();
+    defer std.testing.allocator.destroy(model);
+    model.select(.{ .row = 1, .extend = false });
+    model.toggleVisual();
+    model.last();
+    try std.testing.expect(model.visual);
+    try std.testing.expectEqual(@as(usize, 1), model.tail);
+    try std.testing.expectEqual(@as(usize, 2), model.head);
+    model.first();
+    try std.testing.expectEqual(@as(usize, 1), model.head);
+    model.move(.{ .delta = 20, .extend = true });
+    try std.testing.expectEqual(@as(usize, 2), model.head);
+
+    model.select(.{ .row = 3, .extend = false });
+    model.toggleVisual();
+    model.first();
+    model.last();
+    try std.testing.expectEqual(@as(usize, 3), model.head);
+    try std.testing.expectEqual(@as(usize, 3), model.tail);
+    try std.testing.expect(model.anchor().before);
+}
+
+const search_source = "Updated café.rs\n@@ -1,3 +1,4 @@\n-café old café\n+café new café\n context 界\n+界 café\n@@ -30 +30 @@\n-old café\n+new café\nUpdated other.go\n@@ -0,0 +1 @@\n+café other\n";
+
+test "review literal UTF8 search visits occurrences in both directions and wraps within one file" {
+    const model = try fixture();
+    defer std.testing.allocator.destroy(model);
+    try model.current().load(search_source);
+    model.selectFile(0);
+    try std.testing.expect(model.startSearch("café"));
+    try std.testing.expectEqual(@as(usize, 0), model.head);
+    try std.testing.expectEqual(@as(usize, 0), model.search.match.?.start);
+    try std.testing.expectEqual(@as(usize, 5), model.search.match.?.end);
+    try std.testing.expect(model.repeatSearch(.forward));
+    try std.testing.expectEqual(@as(usize, 0), model.head);
+    try std.testing.expectEqual(@as(usize, 10), model.search.match.?.start);
+    try std.testing.expect(model.repeatSearch(.forward));
+    try std.testing.expectEqual(@as(usize, 1), model.head);
+    try std.testing.expectEqual(@as(usize, 0), model.search.match.?.start);
+    try std.testing.expect(model.repeatSearch(.backward));
+    try std.testing.expectEqual(@as(usize, 0), model.head);
+    try std.testing.expectEqual(@as(usize, 10), model.search.match.?.start);
+    try std.testing.expect(model.repeatSearch(.backward));
+    try std.testing.expectEqual(@as(usize, 0), model.search.match.?.start);
+    try std.testing.expect(model.repeatSearch(.backward));
+    try std.testing.expectEqual(@as(usize, 5), model.head);
+    try std.testing.expectEqual(@as(usize, 0), model.file);
+    try std.testing.expect(model.repeatSearch(.forward));
+    try std.testing.expectEqual(@as(usize, 0), model.head);
+
+    try std.testing.expect(model.startSearch("界"));
+    try std.testing.expectEqual(@as(usize, 2), model.head);
+    const match = model.search.match.?;
+    try std.testing.expectEqualStrings("界", model.current().rows[match.row].value.text[match.start..match.end]);
+    try std.testing.expect(!model.startSearch("CAFÉ"));
+    try std.testing.expectEqual(@as(usize, 2), model.head);
+    try std.testing.expectEqualStrings("CAFÉ", model.search.query.text());
+    try std.testing.expect(model.search.match == null);
+}
+
+test "review search follows visual boundaries and resets occurrence position after navigation" {
+    const model = try fixture();
+    defer std.testing.allocator.destroy(model);
+    try model.current().load(search_source);
+    model.selectFile(0);
+    model.select(.{ .row = 1, .extend = false });
+    model.toggleVisual();
+    try std.testing.expect(model.startSearch("café"));
+    try std.testing.expect(model.repeatSearch(.forward));
+    try std.testing.expectEqual(@as(usize, 1), model.head);
+    try std.testing.expect(model.repeatSearch(.forward));
+    try std.testing.expectEqual(@as(usize, 3), model.head);
+    try std.testing.expectEqual(@as(usize, 1), model.tail);
+    try std.testing.expectEqual(@as(usize, 4), model.search.match.?.start);
+    try std.testing.expect(model.repeatSearch(.forward));
+    try std.testing.expectEqual(@as(usize, 1), model.head);
+    try std.testing.expectEqual(@as(usize, 0), model.search.match.?.start);
+    try std.testing.expect(model.visual);
+
+    model.selectFile(1);
+    try std.testing.expect(model.search.match == null);
+    try std.testing.expect(model.repeatSearch(.forward));
+    try std.testing.expectEqual(@as(usize, 6), model.head);
+    try std.testing.expectEqual(@as(usize, 0), model.search.match.?.start);
+    try std.testing.expect(model.repeatSearch(.backward));
+    try std.testing.expectEqual(@as(usize, 6), model.head);
+}
+
+test "review search rejects oversized or invalid queries atomically and handles empty revisions" {
+    const model = try fixture();
+    defer std.testing.allocator.destroy(model);
+    try std.testing.expect(model.startSearch("new"));
+    const previous = model.search.match;
+    try std.testing.expect(!model.startSearch(&[_]u8{'a'} ** (limits.search_bytes + 1)));
+    try std.testing.expect(!model.startSearch("\xff"));
+    try std.testing.expect(!model.startSearch("two\nlines"));
+    try std.testing.expectEqualStrings("new", model.search.query.text());
+    try std.testing.expectEqualDeep(previous, model.search.match);
+    model.clearSearch();
+    try std.testing.expect(!model.repeatSearch(.forward));
+    try std.testing.expectEqual(@as(usize, 0), model.search.query.text().len);
+    try model.current().load("");
+    model.first();
+    model.last();
+    try std.testing.expect(!model.startSearch("new"));
 }

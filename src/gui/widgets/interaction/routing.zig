@@ -6,6 +6,7 @@ const core = @import("telar-core");
 
 const image_preview = @import("image_preview.zig");
 const completions = @import("completions.zig");
+const message_links = @import("message_links.zig");
 const thread_items = @import("thread_items.zig");
 const thread_selection = @import("thread_selection.zig");
 
@@ -108,6 +109,16 @@ pub fn apply(gui: *GuiClient, event: Event) !bool {
     }
     if (try @import("composer_menu.zig").route(gui, event, result)) {
         return true;
+    }
+
+    if (event == .pointer and event.pointer.kind == .press and event.pointer.button == .right) {
+        if (result.target) |target| {
+            if (target.layer == 0 and target.action == .message_link) {
+                state.dispatcher.discardPointer(.right);
+                try message_links.copy(gui, target.action.message_link);
+                return true;
+            }
+        }
     }
 
     if (explicitTarget(event)) |id| {
@@ -482,7 +493,7 @@ pub fn eligible(gui: *const GuiClient, target: Target) bool {
     };
     const model = gui.app.model.activeTabModelConst() orelse return false;
     const pane = model.findConst(pane_id) orelse return false;
-    return target.layer == 0 and pane.attached and (target.action == .change_review or pane.kind == .agent) and pane.attachment_generation == target.id.generation;
+    return target.layer == 0 and pane.attached and (if (target.action == .change_review) pane.hasChangeReview() else pane.kind == .agent) and pane.attachment_generation == target.id.generation;
 }
 
 fn focus(gui: *GuiClient, target: Target) !void {

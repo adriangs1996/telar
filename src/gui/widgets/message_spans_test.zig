@@ -166,3 +166,16 @@ test "Markdown repeated unclosed brackets have bounded linear lookahead and exac
     try std.testing.expectEqual(0, spans.lookahead_left.?);
     try std.testing.expect(@sizeOf(Spans) <= 640);
 }
+
+test "bare URLs reuse terminal recognition and leave code literal" {
+    var spans: Spans = .{ .text = "See https://example.com/a, then `https://code.test` and mailto:user@example.com." };
+    try std.testing.expectEqualStrings("See ", spans.next().?.text);
+    const web = spans.next().?;
+    try std.testing.expectEqualStrings("https://example.com/a", web.destination.?);
+    try std.testing.expectEqualStrings(", then ", spans.next().?.text);
+    const code = spans.next().?;
+    try std.testing.expect(code.destination == null);
+    try std.testing.expectEqualStrings(" and ", spans.next().?.text);
+    try std.testing.expectEqualStrings("mailto:user@example.com", spans.next().?.destination.?);
+    try std.testing.expectEqualStrings(".", spans.next().?.text);
+}

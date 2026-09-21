@@ -22,7 +22,7 @@ pub fn draw(fullscreen: FullscreenStrip, canvas: *Canvas) !void {
     }
 
     if (fullscreen.model.focusedPaneConst()) |pane| {
-        const review_width = try (ChangeReviewButton{ .area = canvas.rect(area), .pane_id = pane.id, .generation = pane.attachment_generation, .placement = .fullscreen }).draw(canvas);
+        const review_width = try (ChangeReviewButton{ .area = canvas.rect(area), .pane = pane, .placement = .fullscreen }).draw(canvas);
         const review_columns: u16 = @intFromFloat(@min(65535, @ceil(review_width / @as(f32, @floatFromInt(canvas.metrics.cell_width)))));
         area.w -|= review_columns;
         var progress: PaneProgress = .{ .pane = pane, .area = canvas.rect(area), .motions = fullscreen.context.progress };

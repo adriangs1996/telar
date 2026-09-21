@@ -3,3 +3,4 @@ const Command = @This();
 
 kind: pointer_support.Kind,
 left_button: bool,
+right_button: bool = false,

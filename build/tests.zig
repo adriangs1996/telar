@@ -90,6 +90,18 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         "test-backend-proxy",
         "Run the runtime observation proxy tests",
     );
+    const editor_tests = b.addTest(.{ .root_module = app.modules.backend, .filters = &.{"editor"} });
+    const editor_wire_tests = b.addTest(.{ .root_module = app.modules.core, .filters = &.{ "editor", "corpus", "every truncated prefix" } });
+    const editor_step = b.step("test-editors", "Verify editor discovery, identity and literal file opening");
+    editor_step.dependOn(&b.addRunArtifact(editor_tests).step);
+    editor_step.dependOn(&b.addRunArtifact(editor_wire_tests).step);
+    const editor_client_tests = b.addTest(.{ .root_module = app.modules.client, .filters = &.{ "queued editor", "queue metadata" } });
+    editor_step.dependOn(&b.addRunArtifact(editor_client_tests).step);
+    if (app.modules.gui) |gui| {
+        const editor_gui_tests = b.addTest(.{ .root_module = gui, .filters = &.{ "editor", "agent file link" } });
+        editor_step.dependOn(&b.addRunArtifact(editor_gui_tests).step);
+    }
+
     const media_tests = b.addTest(.{ .root_module = app.modules.backend, .filters = &.{"PNG"} });
     b.step("test-png", "Run PNG decoding and pane ingestion tests").dependOn(&b.addRunArtifact(media_tests).step);
     const isolation_tests = b.addTest(.{ .root_module = app.modules.backend, .filters = &.{"performance probe"} });

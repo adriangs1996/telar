@@ -52,6 +52,8 @@ pub fn apply(client: *Client, failure: RequestFailedType) !ApplicationSessionReq
         },
         else => {},
     }
+    _ = client.editor_open.complete(failure.request_id);
+
     var use_case = handler(client);
     const outcome = try use_case.execute(.{
         .continuation = continuation,

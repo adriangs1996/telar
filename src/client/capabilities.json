@@ -508,6 +508,7 @@
     "links/LinkGrid.zig",
     "links/LinkMatch.zig",
     "links/LinkOpener.zig",
+    "links/EditorOpening.zig",
     "links/LinkTarget.zig",
     "links/Opening.zig",
     "links/Pointer.zig",

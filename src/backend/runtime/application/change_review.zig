@@ -6,6 +6,7 @@ const Session = @import("../client/Session.zig");
 const Context = @import("../../change_review/Context.zig");
 const Job = @import("../../change_review/Job.zig");
 const Controller = @import("../entrypoints/requests/ChangeReviewController.zig");
+const PaneKey = @import("../../pane/PaneKey.zig");
 const review_owner = @import("change_review_owner.zig");
 
 pub fn complete(application: *Application, job: *Job) void {
@@ -17,7 +18,7 @@ pub fn complete(application: *Application, job: *Job) void {
         };
         if (current.provider != job.context.provider or !std.mem.eql(u8, current.sessionSlice(), job.context.sessionSlice())) {
             job.failure = error.InvalidReviewOwner;
-        } else {
+        } else if (job.client != null) {
             const message = core.decodeClient(job.wire[0..job.wire_len]) catch unreachable;
             if (message == .change_review_command and message.change_review_command.action == .submit) {
                 if (handoff(application, job)) |queued| {
@@ -82,36 +83,70 @@ fn handoff(application: *Application, job: *Job) !bool {
 
 fn finish(application: *Application, job: *Job) void {
     application.review_jobs.remove(job);
+    defer application.pumpAll();
     defer job.deinit();
-    if (job.failure == null and job.result != null and job.result.?.changed_edition != 0) {
-        publish(application, .{ .pane_id = job.context.pane.id, .pane_generation = job.context.pane.generation, .session = job.context.sessionSlice(), .latest_edition_id = job.result.?.changed_edition });
+    if (job.failure == null) {
+        publish(application, .{ .pane_id = job.context.pane.id, .pane_generation = job.context.pane.generation, .session = job.context.sessionSlice(), .latest_edition_id = job.latest_edition_id });
     }
-    const client = application.clients.resolve(job.client) orelse return;
+    const client_key = job.client orelse return;
+    const client = application.clients.resolve(client_key) orelse return;
     if (!client.active()) {
         return;
     }
     if (job.failure) |err| {
         client.delivery.responses.push(.{ .request_failed = Controller.failure(job.request_id, err) }) catch {
-            application.dropClient(job.client);
+            application.dropClient(client_key);
             return;
         };
     } else if (job.result) |result| {
         client.delivery.responses.push(.{ .change_review = result }) catch {
-            application.dropClient(job.client);
+            application.dropClient(client_key);
             return;
         };
         job.result = null;
     }
-    application.pumpAll();
 }
 
 /// Invalidates discovery while clients keep their currently opened immutable edition.
 /// Example: `change_review.publish(application, change);`.
 pub fn publish(application: *Application, change: core.ChangeReviewChanged) void {
-    for (application.clients.items) |slot| {
-        const client = slot orelse continue;
-        if (client.active() and client.delivery.runtime_state_requested) {
-            client.delivery.reviewChanged(change);
+    const key: PaneKey = .{ .id = change.pane_id, .generation = change.pane_generation };
+    const context = review_owner.resolve(application, key) catch return;
+    if (!std.mem.eql(u8, context.sessionSlice(), change.session)) {
+        return;
+    }
+
+    const pane = application.model.panes.resolve(key) orelse return;
+    pane.review_availability.record(context, change.latest_edition_id);
+}
+
+/// Rebinds cheap runtime metadata and starts bounded, one-shot durable discovery.
+/// Example: `change_review.discover(application);`.
+pub fn discover(application: *Application) void {
+    if (application.shutdown.isRequested()) {
+        return;
+    }
+
+    const service = application.review_service orelse return;
+    for (application.model.panes.items) |entry| {
+        const pane = entry orelse continue;
+        const context = review_owner.resolve(application, pane.key()) catch {
+            pane.review_availability.invalidate();
+            continue;
+        };
+        pane.review_availability.bind(context);
+        if (pane.review_availability.discovery_started) {
+            continue;
         }
+
+        const slot = application.review_jobs.discoverySlot() orelse continue;
+        const job = &application.review_jobs.storage[slot];
+        job.* = .{ .service = service, .context = context, .client = null, .request_id = .none, .wire_len = 0 };
+        application.review_jobs.items[slot] = job;
+        pane.review_availability.discovery_started = true;
+        application.select.concurrent(.change_review_completed, Job.run, .{ job, application.io }) catch {
+            application.review_jobs.items[slot] = null;
+            _ = service.dropped.fetchAdd(1, .monotonic);
+        };
     }
 }

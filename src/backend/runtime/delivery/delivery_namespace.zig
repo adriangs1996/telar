@@ -1,7 +1,6 @@
 //! Bounded runtime-to-client delivery policy and logical send transaction.
 
 const ReviewResult = @import("../../change_review/Result.zig");
-const PendingReviewChanged = @import("PendingReviewChanged.zig");
 const QueryResultType = @import("../../history/QueryResult.zig");
 const OutputResultType = @import("../../history/OutputResult.zig");
 const StatsResultType = @import("../../history/StatsResult.zig");
@@ -43,7 +42,6 @@ pub const Effect = union(enum) {
     proxy_status,
     agent_revision: u64,
     agent_thread: @import("AgentThreadProjection.zig"),
-    review_change: struct { slot: u8, change: PendingReviewChanged },
     system_metrics_revision: u64,
     workspace_list_revision: u64,
     foreground: ForegroundProjection,
