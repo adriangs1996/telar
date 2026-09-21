@@ -5,7 +5,6 @@ const TabClosedType = @import("telar-core").TabClosed;
 const RemovalTriggerType = @import("../../application/tabs/close_tab.zig").RemovalTrigger;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const std = @import("std");
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const TabLocationType = @import("telar-core").TabLocation;
 const tab_attachments = @import("tab_attachments.zig");
 const TabCloseIntentType = @import("../../application/tabs/TabCloseIntent.zig");
@@ -29,7 +28,7 @@ pub fn request(client: *Client) !bool {
     const location = client.model.activeTabLocation() orelse return false;
     const plan = try client.model.planTabDetachment(location);
     try request_lifecycle.ensureCanStart(client, 2);
-    if (1 + tab_attachments.requiredCapacity(client, &plan) > runtime_transport.availableCapacity(client)) {
+    if (1 + tab_attachments.requiredCapacity(client, &plan) > client.runtime_transport.outbox.availableCapacity()) {
         return error.ClientOutboxFull;
     }
 

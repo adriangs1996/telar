@@ -224,7 +224,7 @@ pub fn canSubmit(client: *Client, selection: u16) bool {
     };
 
     const slots = (command.len + 13 + max_encoded_bytes - 1) / max_encoded_bytes;
-    if (runtime_transport.availableCapacity(client) < slots + 1) {
+    if (client.runtime_transport.outbox.availableCapacity() < slots + 1) {
         history_browser.reject(&client.model, "Input is busy; retry the command");
         return false;
     }

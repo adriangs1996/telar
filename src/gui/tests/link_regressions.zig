@@ -92,7 +92,7 @@ test "native link hover clears on focus loss while transport defers gesture reco
 
     try input_support.focus(gui, false);
     _ = try gui.update();
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_io.availableCapacity(&gui.app));
+    try std.testing.expectEqual(@as(usize, 0), gui.app.runtime_transport.outbox.availableCapacity());
     try std.testing.expect(gui.input_queue.recovery.queued);
     try std.testing.expect(gui.pointer.hover.link == null);
     try std.testing.expectEqual(.default, gui.pointer.hover.shape);

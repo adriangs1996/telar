@@ -13,7 +13,6 @@ const OpenedPaneType = @import("../../application/panes/OpenedPane.zig");
 const WorkspaceArrivalType = @import("../../model/WorkspaceArrival.zig");
 const workspace_transitions = @import("workspace_transitions.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const WorkspaceHandoffType = @import("../../application/workspaces/WorkspaceHandoff.zig");
 
 const tab_snapshots = @import("../tabs/tab_snapshots.zig");
@@ -107,7 +106,7 @@ fn request(client: *Client, target: ApplicationWorkspacesWorkspaceHandoffTargeti
         required += tab_attachments.requiredCapacity(client, &detachment);
     }
 
-    if (required > runtime_transport.availableCapacity(client)) {
+    if (required > client.runtime_transport.outbox.availableCapacity()) {
         return error.ClientOutboxFull;
     }
 

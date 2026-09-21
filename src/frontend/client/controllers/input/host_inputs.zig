@@ -75,7 +75,7 @@ const Expiry = enum {
 /// ```
 pub fn scheduleRead(client: *Client) !void {
     const state = &host(client).host_input;
-    if (state.read_pending or runtime_transport.availableCapacity(client) == 0) {
+    if (state.read_pending or client.runtime_transport.outbox.availableCapacity() == 0) {
         return;
     }
 

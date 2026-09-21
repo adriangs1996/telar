@@ -18,16 +18,6 @@ const ClientLayoutUpdateType = @import("telar-core").ClientLayoutUpdate;
 const RuntimeMessage = @import("../connection/RuntimeMessage.zig");
 const enabled_module = @import("telar-core").enabled;
 
-/// Reports remaining bounded outbound message slots without exposing the
-/// queue representation.
-///
-/// ```zig
-/// const available = runtime_transport.availableCapacity(client);
-/// ```
-pub fn availableCapacity(client: *const Client) usize {
-    return client.runtime_transport.outbox.availableCapacity();
-}
-
 /// Copies the outbound counters consumed by client telemetry.
 ///
 /// ```zig
