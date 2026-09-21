@@ -9,7 +9,6 @@ const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const OwnedHistoryQueryType = @import("../../connection/OwnedHistoryQuery.zig");
 const max_history_results = @import("telar-core").max_history_results;
 const raw_module = @import("telar-core").raw;
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const HistoryResultsViewType = @import("telar-core").HistoryResultsView;
 const HistoryEntryType = @import("telar-core").HistoryEntry;
 const std = @import("std");
@@ -51,7 +50,7 @@ pub fn sendQuery(client: *Client, query: []const u8) !void {
 }
 
 fn sendPage(client: *Client, query: []const u8) !void {
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
 
     var owned: OwnedHistoryQueryType = .{
         .request_id = request_id,
@@ -68,7 +67,11 @@ fn sendPage(client: *Client, query: []const u8) !void {
         return;
     }
 
-    runtime_transport.enqueue(client, .{ .query_history = owned }) catch |err| {
+    client.sendRuntime(
+        .{
+            .query_history = owned,
+        },
+    ) catch |err| {
         _ = failed(client, .{ .request_id = request_id, .code = .resource_limit, .message = "History request queue is full; retry" });
         if (err != error.ClientOutboxFull) {
             return err;
@@ -165,7 +168,7 @@ pub fn refreshInspection(client: *Client) !void {
         }
 
         const read = next orelse return;
-        const request_id = try request_lifecycle.nextId(client);
+        const request_id = try client.request_lifecycle.nextId();
         if (!history_browser.requestRead(&client.model, raw_module(request_id), read)) {
             return;
         }
@@ -199,7 +202,7 @@ pub fn failed(client: *Client, failure: RequestFailedType) bool {
 }
 
 fn enqueue(client: *Client, message: MessageType, request_id: RequestIdType) !void {
-    runtime_transport.enqueue(client, message) catch |err| {
+    client.sendRuntime(message) catch |err| {
         _ = failed(client, .{ .request_id = request_id, .code = .resource_limit, .message = "History queue is full; change selection or retry" });
         if (err != error.ClientOutboxFull) {
             return err;
@@ -259,7 +262,7 @@ pub fn pasteSelection(client: *Client, request: PasteRequest) !void {
 /// try deleteSelected(client, selection);
 /// ```
 pub fn deleteSelected(client: *Client, selection: u16) !void {
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     const id = history_browser.requestDelete(&client.model, raw_module(request_id), selection) orelse return;
     try enqueue(client, .{ .delete_history = .{ .request_id = request_id, .id = id } }, request_id);
 }

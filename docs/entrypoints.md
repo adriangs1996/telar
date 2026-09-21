@@ -10,7 +10,7 @@ request identity. The ownership map is [capabilities.md](capabilities.md);
 
 | Process | Start | Update | Input | Drawing / delivery |
 | --- | --- | --- | --- | --- |
-| GUI | [`GuiClient.start`](../src/gui/GuiClient.zig) | `GuiClient.update` → `dispatch` in the same file | `acceptInput` owns incoming bytes; `.input_ready` → `inputReady` → [`GuiClient.drainInput`](../src/gui/GuiClient.zig) | `prepare`; `.presented` → `complete` |
+| GUI | [`GuiClient.run` → `windowReady`](../src/gui/GuiClient.zig) | `GuiClient.update` → `dispatch` in the same file | `acceptInput` owns incoming bytes; `.input_ready` → `inputReady` → [`GuiClient.drainInput`](../src/gui/GuiClient.zig) | `draw` → private `prepare`; `.presented` → `complete` |
 | TUI | [`run`](../src/frontend/client/run.zig) | [`events.update`](../src/frontend/client/entrypoints/events.zig) → `dispatch` in the same file | `.input` → [`host_inputs.handleOwnedRead`](../src/frontend/client/controllers/input/host_inputs.zig) | [`presentation_lifecycle`](../src/frontend/client/presentation/presentation_lifecycle.zig) observes changes, prepares drawing, and consumes write completion |
 | Runtime | [`Runtime.init` / `run`](../src/backend/runtime/Runtime.zig) | `Runtime.update`: exhaustive event switch | `.client_message` → client read admission → [`requests.dispatch`](../src/backend/runtime/application/requests.zig) | PTY/VT changes publish bounded cell frames; the runtime owns no window |
 
@@ -27,8 +27,8 @@ state. See [Key routing](flows/key-routing.md) and the full
 
 ## Operation map
 
-Startup schedules socket tasks through `RuntimeTransportState.scheduleRead` and
-`pump`, passing the transport driver explicitly. `AttachedClient.scheduleConfigReload`
+Startup activates socket tasks through `AttachedClient.startRuntimeIo` in the
+GUI and `startRuntimeRead` before host negotiation in the TUI. `AttachedClient.scheduleConfigReload`
 and `synchronizeBars` select the live configuration; reload workers and bar timers
 receive only their own state and concrete dependencies. Native transport and timer
 ports bind to `NativeLoop`, and the configuration watcher binds to `ConfigurationReload`.
@@ -37,7 +37,7 @@ ports bind to `NativeLoop`, and the configuration watcher binds to `Configuratio
 | --- | --- | --- |
 | Configured action | [`action_routing.apply`](../src/client/operations/input/action_routing.zig) selects native, Lua or plugin; [`actions.apply`](../src/client/operations/input/actions.zig) enumerates native actions | Plugin/worker completion enters the process event switch with its identity |
 | Split pane | `actions.apply(.split_pane)` → [`pane_splits.request`](../src/client/operations/panes/pane_splits.zig) | `pane_opened` → `pane_openings.apply` → `pane_splits.confirm`; failure → `request_failures.apply` → `pane_splits.recover` |
-| Runtime reply | [`runtime_io.handleRead`](../src/client/entrypoints/runtime_io.zig) → [`server_messages.handleServerMessage`](../src/client/entrypoints/server_messages.zig) | The exhaustive switch calls concrete operations; receive storage remains borrowed only during dispatch |
+| Runtime reply | [`AttachedClient.receiveRuntime`](../src/client/AttachedClient.zig) → [`server_messages.handleServerMessage`](../src/client/entrypoints/server_messages.zig) | The exhaustive switch calls concrete operations; receive storage remains borrowed only during dispatch |
 | Host capabilities / size | [`host_resources`](../src/client/AttachedClient.zig) | Model commit, graphics, geometry and host delivery order are in that module |
 | Pane focus, geometry, frame, attachment or closure | [`operations/panes`](../src/client/operations/panes/) | Each operation groups request, confirmation and recovery where applicable |
 | Tab / workspace changes | [`operations/tabs`](../src/client/operations/tabs/), [`operations/workspaces`](../src/client/operations/workspaces/) | Wire responses are cases in `server_messages`; request identity is consumed once |

@@ -3,7 +3,6 @@ const std = @import("std");
 const pane_pastes = @import("../input/pane_pastes.zig");
 const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const TabDetachmentPlan = @import("../../model/TabDetachmentPlan.zig");
 
 const TabLocation = @import("telar-core").TabLocation;
@@ -38,7 +37,13 @@ pub fn detach(client: *Client, location: TabLocation) !void {
             continue;
         }
 
-        try runtime_transport.enqueue(client, .{ .detach_pane = .{ .pane_id = pane.pane_id } });
+        try client.sendRuntime(
+            .{
+                .detach_pane = .{
+                    .pane_id = pane.pane_id,
+                },
+            },
+        );
         _ = request_lifecycle.ignoreAttachment(client, pane.pane_id);
         try client.graphics.setPaneVisible(pane.pane_id, false);
     }

@@ -15,9 +15,15 @@ pub fn init() !Fixture {
     const session = try Session.init();
     errdefer session.deinit();
     try session.bootstrap();
-    const size = try session.gui.measure(&session.renderer, .{ .width = 1000, .height = 800, .scale = 1 });
-    try session.gui.resize(size, session.renderer.theme);
-    session.gui.pointer.configure(session.renderer.origin, size);
+    const size = try session.gui.resizeViewport(
+        .{
+            .width = 1000,
+            .height = 800,
+            .scale = 1,
+        },
+    );
+    try session.gui.resize(size, session.gui.renderer.theme);
+    session.gui.pointer.configure(session.gui.renderer.origin, size);
     try session.settle();
     try std.testing.expect(session.gui.app.model.identifyPane(.{ .request_id = @enumFromInt(1), .pane_id = pane_id, .location = location, .created = false, .kind = .agent, .pane_generation = 7 }));
     var fixture: Fixture = .{ .session = session };
@@ -31,7 +37,7 @@ pub fn deinit(fixture: *Fixture) void {
 }
 
 pub fn publish(fixture: *Fixture) !void {
-    const token = try fixture.session.gui.prepare(&fixture.session.renderer);
+    const token = try fixture.session.draw();
     try input_support.presented(
         fixture.session.gui,
         token,

@@ -1296,6 +1296,13 @@ test "resync outbox failure releases its snapshot correlation so a later notice 
     try harness.bootstrap();
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
+    try client.sendRuntime(
+        .{
+            .detach_pane = .{
+                .pane_id = TestHarness.bootstrap_pane,
+            },
+        },
+    );
     while (client.runtime_transport.outbox.hasCapacity()) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
@@ -1306,7 +1313,6 @@ test "resync outbox failure releases its snapshot correlation so a later notice 
 
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version, client.model.version());
-    try client.runtime_transport.pump(client.transport_driver);
     try harness.settle();
     var outgoing: [256]u8 = undefined;
     for (0..capacity_module) |_| {

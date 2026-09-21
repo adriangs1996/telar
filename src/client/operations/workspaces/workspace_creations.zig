@@ -25,7 +25,7 @@ pub fn request(client: *Client, command: RequestWorkspaceCreation) !bool {
         client.model.planWorkspaceCreation() orelse return false
     else
         null;
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try request_lifecycle.deliverCreateWorkspace(client, .{
         .request_id = request_id,
         .size = rectSize_module(client.geometry().area) orelse return error.TerminalTooSmall,

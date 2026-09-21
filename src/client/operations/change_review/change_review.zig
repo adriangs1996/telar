@@ -6,7 +6,6 @@ const Client = @import("../../AttachedClient.zig");
 const Pane = @import("../../panes/Pane.zig");
 const Operation = @import("../../connection/ChangeReviewOperation.zig");
 const lifecycle = @import("../../connection/request_lifecycle.zig");
-const runtime_io = @import("../../entrypoints/runtime_io.zig");
 
 /// Opens the latest review for any attached pane, preserving an already open edition.
 /// Example: `try change_review.open(client, pane_id);`
@@ -22,10 +21,18 @@ pub fn query(client: *Client, edition_id: u64) !void {
         report(client, @errorName(err));
         return err;
     };
-    const request_id = try lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try lifecycle.register(client, .{ .request_id = request_id, .continuation = .{ .change_review_query = owner } });
     begin(client, request_id);
-    runtime_io.enqueueChangeReviewQuery(client, .{ .request_id = request_id, .pane_id = owner.pane_id, .pane_generation = owner.pane_generation, .edition_id = edition_id, .session = owner.sessionSlice() }) catch |err| {
+    client.sendRuntimeChangeReviewQuery(
+        .{
+            .request_id = request_id,
+            .pane_id = owner.pane_id,
+            .pane_generation = owner.pane_generation,
+            .edition_id = edition_id,
+            .session = owner.sessionSlice(),
+        },
+    ) catch |err| {
         _ = lifecycle.consume(client, request_id);
         _ = failed(client, owner, @errorName(err));
         return err;
@@ -46,7 +53,7 @@ pub fn command(client: *Client, request: core.ChangeReviewCommand) !void {
         return err;
     };
     var outgoing = request;
-    outgoing.request_id = try lifecycle.nextId(client);
+    outgoing.request_id = try client.request_lifecycle.nextId();
     outgoing.pane_id = owner.pane_id;
     outgoing.pane_generation = owner.pane_generation;
     outgoing.edition_id = edition_id;
@@ -56,7 +63,7 @@ pub fn command(client: *Client, request: core.ChangeReviewCommand) !void {
     }
     try lifecycle.register(client, .{ .request_id = outgoing.request_id, .continuation = .{ .change_review_command = owner } });
     begin(client, outgoing.request_id);
-    runtime_io.enqueueChangeReviewCommand(client, outgoing) catch |err| {
+    client.sendRuntimeChangeReviewCommand(outgoing) catch |err| {
         _ = lifecycle.consume(client, outgoing.request_id);
         _ = failed(client, owner, @errorName(err));
         return err;

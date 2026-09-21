@@ -6,7 +6,6 @@ const TestHarness = @import("TestHarness.zig");
 const ChunkType = @import("../controllers/input/Chunk.zig");
 const std = @import("std");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
-const runtime_transport = @import("telar-client").runtime_io;
 const capacity_module = @import("telar-client").capacity;
 const encodeSystemMetrics_module = @import("telar-core").encodeSystemMetrics;
 const encodeRuntimeStopping_module = @import("telar-core").encodeRuntimeStopping;
@@ -49,7 +48,13 @@ test "host input reads pause at outbox capacity and resume with one token" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    try runtime_transport.enqueue(client, .{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    try client.sendRuntime(
+        .{
+            .detach_pane = .{
+                .pane_id = TestHarness.bootstrap_pane,
+            },
+        },
+    );
     while (client.runtime_transport.outbox.hasCapacity()) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
@@ -58,7 +63,7 @@ test "host input reads pause at outbox capacity and resume with one token" {
     try std.testing.expect(!host(client).host_input.read_pending);
 
     switch (try host(client).inbox.receive()) {
-        .sent => |result| try runtime_transport.handleSent(client, result),
+        .sent => |result| try client.completeRuntimeSend(result),
         else => return error.UnexpectedEvent,
     }
     try std.testing.expectEqual(capacity_module - 1, @as(usize, client.runtime_transport.outbox.len));
@@ -76,8 +81,8 @@ test "runtime reads own one token and do not rearm after shutdown" {
     defer harness.deinit();
     const client = harness.client;
 
-    try client.runtime_transport.scheduleRead(client.transport_driver);
-    try client.runtime_transport.scheduleRead(client.transport_driver);
+    try client.startRuntimeRead();
+    try client.startRuntimeRead();
     try std.testing.expect(client.runtime_transport.receive_pending);
 
     var payload: [64]u8 = undefined;
@@ -92,7 +97,7 @@ test "runtime reads own one token and do not rearm after shutdown" {
     switch (try host(client).inbox.receive()) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, null),
-            try runtime_transport.handleRead(client, result),
+            try client.receiveRuntime(result),
         ),
         else => return error.UnexpectedEvent,
     }
@@ -103,7 +108,7 @@ test "runtime reads own one token and do not rearm after shutdown" {
     switch (try host(client).inbox.receive()) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, 0),
-            try runtime_transport.handleRead(client, result),
+            try client.receiveRuntime(result),
         ),
         else => return error.UnexpectedEvent,
     }
@@ -112,7 +117,7 @@ test "runtime reads own one token and do not rearm after shutdown" {
     client.runtime_transport.receive_pending = true;
     try std.testing.expectError(
         error.RuntimeReadFailed,
-        runtime_transport.handleRead(client, error.RuntimeReadFailed),
+        client.receiveRuntime(error.RuntimeReadFailed),
     );
     try std.testing.expect(!client.runtime_transport.receive_pending);
 }
@@ -143,12 +148,12 @@ test "graphics credits remain owned until the outbox accepts them" {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = pane_id } });
     }
 
-    try runtime_transport.flushGraphicsCredits(client);
+    try client.flushGraphicsCredits();
     try std.testing.expectEqual(@as(usize, 4), host(client).graphics_store.peekCredit().?.bytes);
     try std.testing.expect(client.runtime_transport.outbox.inFlight());
 
     switch (try host(client).inbox.receive()) {
-        .sent => |result| try runtime_transport.handleSent(client, result),
+        .sent => |result| try client.completeRuntimeSend(result),
         else => return error.UnexpectedEvent,
     }
     try std.testing.expect(host(client).graphics_store.peekCredit() == null);
@@ -168,7 +173,7 @@ test "runtime write errors release the outbound token" {
 
     try std.testing.expectError(
         error.RuntimeWriteFailed,
-        runtime_transport.handleSent(client, error.RuntimeWriteFailed),
+        client.completeRuntimeSend(error.RuntimeWriteFailed),
     );
     try std.testing.expect(!client.runtime_transport.outbox.inFlight());
     try std.testing.expectEqual(@as(u8, 1), client.runtime_transport.outbox.len);
@@ -184,7 +189,7 @@ test "request delivery rolls correlation back when transport is full" {
             .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane },
         });
     }
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
 
     try std.testing.expectError(error.ClientOutboxFull, request_lifecycle.deliver(client, .{
         .registration = .{

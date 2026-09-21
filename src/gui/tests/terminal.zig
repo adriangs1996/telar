@@ -9,11 +9,53 @@ test "native startup sends the ordered bootstrap without graphics credits or a s
     const session = try Session.init();
     defer session.deinit();
     const app = &session.gui.app;
-    const colors: core.TerminalColors = .{ .foreground = .{ 210, 211, 212 }, .background = .{ 20, 21, 22 } };
+    const colors: core.TerminalColors = .{
+        .foreground = .{
+            210,
+            211,
+            212,
+        },
+        .background = .{
+            20,
+            21,
+            22,
+        },
+        .palette = session.gui.renderer.theme.palette,
+    };
     try std.testing.expect(app.graphics.peekCredit() == null);
+    try session.gui.windowReady(
+        .{
+            .width = 0,
+            .height = 0,
+            .scale = 1,
+        },
+    );
+    try std.testing.expect(!session.gui.started);
+    try std.testing.expect(!app.runtime_transport.receive_pending);
+    try std.testing.expect(session.pending == null);
 
-    try session.gui.start(colors);
+    session.gui.renderer.theme.foreground = colors.foreground.?;
+    session.gui.renderer.theme.background = colors.background.?;
+    try session.gui.windowReady(
+        .{
+            .width = 180,
+            .height = 240,
+            .scale = 1,
+        },
+    );
 
+    const pending_count = app.runtime_transport.outbox.len;
+    const pending_bytes = session.pending.?;
+    try session.gui.windowReady(
+        .{
+            .width = 180,
+            .height = 240,
+            .scale = 1,
+        },
+    );
+    try std.testing.expectEqual(pending_count, app.runtime_transport.outbox.len);
+    try std.testing.expectEqual(pending_bytes.ptr, session.pending.?.ptr);
+    try std.testing.expect(session.gui.started);
     try std.testing.expect(app.startup.phase == .opening);
     try std.testing.expect(app.runtime_transport.receive_pending);
     try std.testing.expectEqualDeep(colors, app.model.hostCapabilities().terminal_colors);
@@ -24,22 +66,35 @@ test "native startup sends the ordered bootstrap without graphics credits or a s
     try std.testing.expect(!graphics.configure_graphics.shared);
 
     session.pending = null;
-    try client.runtime_io.handleSent(app, {});
+    try app.completeRuntimeSend({});
     const configured = try core.decodeClient(session.pending.?);
     try std.testing.expect(configured == .configure_terminal_colors);
     try std.testing.expectEqualDeep(colors, configured.configure_terminal_colors);
 
     session.pending = null;
-    try client.runtime_io.handleSent(app, {});
+    try app.completeRuntimeSend({});
     const request = try core.decodeClient(session.pending.?);
     try std.testing.expect(request == .request_runtime_state);
     try std.testing.expectEqual(app.client_identity, request.request_runtime_state.client_identity);
 
     session.pending = null;
-    try client.runtime_io.handleSent(app, {});
+    try app.completeRuntimeSend({});
     try std.testing.expect(session.pending == null);
     try std.testing.expectEqual(@as(usize, 0), app.runtime_transport.outbox.len);
     try std.testing.expect(app.startup.phase == .opening);
+}
+
+test "drawing does not activate the runtime before native readiness" {
+    const session = try Session.init();
+    defer session.deinit();
+
+    const token = try session.draw();
+
+    try std.testing.expect(token != 0);
+    try std.testing.expect(!session.gui.started);
+    try std.testing.expect(!session.gui.app.runtime_transport.receive_pending);
+    try std.testing.expect(session.pending == null);
+    try std.testing.expectEqual(@as(u8, 0), session.gui.app.runtime_transport.outbox.len);
 }
 
 test "GUI font metrics apply size spacing and display scale once" {
@@ -89,24 +144,24 @@ test "background opacity preserves cell ink cursor and explicit backgrounds" {
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
     pane.buffer.cells[0].style.bg = .{ .rgb = .{ 255, 0, 0 } };
     try present(session);
-    const shape_calls = session.renderer.atlas.?.shape_calls;
-    const atlas_version = session.renderer.atlas_version;
+    const shape_calls = session.gui.renderer.atlas.?.shape_calls;
+    const atlas_version = session.gui.renderer.atlas_version;
     for ([_]f32{ 0, 0.5, 1 }) |opacity| {
-        session.renderer.config.window.background_opacity = opacity;
+        session.gui.renderer.config.window.background_opacity = opacity;
         try present(session);
-        const frame = session.renderer.frame(1);
+        const frame = session.gui.renderer.frame(1);
         try std.testing.expectEqual(opacity, frame.background[3]);
-        try std.testing.expectEqual(@as(usize, 0), session.renderer.repainted_cells);
+        try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.repainted_cells);
         var red_background = false;
-        for (session.renderer.quads.items()) |quad| {
+        for (session.gui.renderer.quads.items()) |quad| {
             try std.testing.expectEqual(@as(f32, 1), quad.a);
             red_background = red_background or (quad.r == 1 and quad.g == 0 and quad.b == 0);
         }
         try std.testing.expect(red_background);
     }
 
-    try std.testing.expectEqual(shape_calls, session.renderer.atlas.?.shape_calls);
-    try std.testing.expectEqual(atlas_version, session.renderer.atlas_version);
+    try std.testing.expectEqual(shape_calls, session.gui.renderer.atlas.?.shape_calls);
+    try std.testing.expectEqual(atlas_version, session.gui.renderer.atlas_version);
 }
 
 test "native font lookup resolves installed faces and fails explicitly for missing families" {
@@ -132,45 +187,59 @@ test "cursor shapes focus and blink reuse retained ink without changing the atla
     try session.receiveFrame(1);
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
     const content = paneContent(session);
-    const bounds = session.renderer.metrics.rect(session.renderer.origin, content);
+    const bounds = session.gui.renderer.metrics.rect(session.gui.renderer.origin, content);
     pane.cursor.x = 0;
     try paintTerminal(session);
-    const ink = try std.testing.allocator.dupe(@import("../render/Quad.zig").Quad, session.renderer.retained.at(.{ content.x, content.y }).items());
+    const ink = try std.testing.allocator.dupe(@import("../render/Quad.zig").Quad, session.gui.renderer.retained.at(
+        .{
+            content.x,
+            content.y,
+        },
+    ).items());
     defer std.testing.allocator.free(ink);
-    const shape_calls = session.renderer.atlas.?.shape_calls;
-    const version = session.renderer.atlas_version;
-    const cell_width: f32 = @floatFromInt(session.renderer.metrics.cell_width);
-    const cell_height: f32 = @floatFromInt(session.renderer.metrics.cell_height);
+    const shape_calls = session.gui.renderer.atlas.?.shape_calls;
+    const version = session.gui.renderer.atlas_version;
+    const cell_width: f32 = @floatFromInt(session.gui.renderer.metrics.cell_width);
+    const cell_height: f32 = @floatFromInt(session.gui.renderer.metrics.cell_height);
     for (std.meta.tags(core.Cursor.Shape)) |shape| {
         pane.cursor.appearance.shape = shape;
         try paintTerminal(session);
-        const quads = session.renderer.quads.items();
+        const quads = session.gui.renderer.quads.items();
         const count: usize = if (shape == .hollow) 4 else 1;
         const first = quads[if (shape == .block or shape == .default) 0 else quads.len - count];
         try std.testing.expectEqual(if (shape == .bar) @as(f32, 2) else cell_width, first.width);
         try std.testing.expectEqual(if (shape == .underline or shape == .hollow) @as(f32, 2) else cell_height, first.height);
         try std.testing.expectEqual(bounds.y + if (shape == .underline) cell_height - 2 else @as(f32, 0), first.y);
-        try std.testing.expectEqual(@as(usize, 0), session.renderer.repainted_cells);
-        session.renderer.cursor_on = false;
+        try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.repainted_cells);
+        session.gui.renderer.cursor_on = false;
         try paintTerminal(session);
-        try std.testing.expectEqual(quads.len - count, session.renderer.quads.items().len);
-        session.renderer.cursor_on = true;
+        try std.testing.expectEqual(quads.len - count, session.gui.renderer.quads.items().len);
+        session.gui.renderer.cursor_on = true;
     }
 
-    try std.testing.expectEqualSlices(@import("../render/Quad.zig").Quad, ink, session.renderer.retained.at(.{ content.x, content.y }).items());
-    try std.testing.expectEqual(shape_calls, session.renderer.atlas.?.shape_calls);
-    try std.testing.expectEqual(version, session.renderer.atlas_version);
+    try std.testing.expectEqualSlices(
+        @import("../render/Quad.zig").Quad,
+        ink,
+        session.gui.renderer.retained.at(
+            .{
+                content.x,
+                content.y,
+            },
+        ).items(),
+    );
+    try std.testing.expectEqual(shape_calls, session.gui.renderer.atlas.?.shape_calls);
+    try std.testing.expectEqual(version, session.gui.renderer.atlas_version);
     pane.cursor.appearance.shape = .bar;
-    session.renderer.focused = false;
+    session.gui.renderer.focused = false;
     try paintTerminal(session);
-    const hollow = session.renderer.quads.items();
+    const hollow = session.gui.renderer.quads.items();
     try std.testing.expectEqual(cell_width, hollow[hollow.len - 4].width);
     try std.testing.expectEqual(@as(f32, 2), hollow[hollow.len - 4].height);
-    session.renderer.focused = true;
-    session.renderer.config.cursor.style = .underline;
+    session.gui.renderer.focused = true;
+    session.gui.renderer.config.cursor.style = .underline;
     pane.cursor.appearance.shape = .default;
     try paintTerminal(session);
-    const underline = session.renderer.quads.items();
+    const underline = session.gui.renderer.quads.items();
     try std.testing.expectEqual(bounds.y + cell_height - 2, underline[underline.len - 1].y);
 }
 
@@ -183,17 +252,34 @@ test "a block cursor recolors wide cell ink and ANSI colors belong to the GUI th
     pane.buffer.cells[0] = .{ .bytes = .{ 0xe7, 0x95, 0x8c } ++ .{0} ** 13, .len = 3, .width = 2, .style = .{ .fg = .{ .indexed = 1 } } };
     pane.buffer.cells[1].width = 0;
     const content = paneContent(session);
-    const bounds = session.renderer.metrics.rect(session.renderer.origin, content);
+    const bounds = session.gui.renderer.metrics.rect(session.gui.renderer.origin, content);
     pane.cursor.x = 1;
-    session.renderer.theme.palette[1] = .{ 12, 34, 56 };
-    session.renderer.theme.cursor_color = .{ 255, 0, 0 };
-    session.renderer.theme.cursor_text_color = .{ 0, 255, 0 };
+    session.gui.renderer.theme.palette[1] = .{
+        12,
+        34,
+        56,
+    };
+    session.gui.renderer.theme.cursor_color = .{
+        255,
+        0,
+        0,
+    };
+    session.gui.renderer.theme.cursor_text_color = .{
+        0,
+        255,
+        0,
+    };
     try paintTerminal(session);
-    const mesh = session.renderer.retained.at(.{ content.x, content.y });
-    const quads = session.renderer.quads.items();
+    const mesh = session.gui.renderer.retained.at(
+        .{
+            content.x,
+            content.y,
+        },
+    );
+    const quads = session.gui.renderer.quads.items();
     const cursor = quads[quads.len - mesh.len];
     try std.testing.expectEqual(bounds.x, cursor.x);
-    try std.testing.expectEqual(@as(f32, @floatFromInt(session.renderer.metrics.cell_width * 2)), cursor.width);
+    try std.testing.expectEqual(@as(f32, @floatFromInt(session.gui.renderer.metrics.cell_width * 2)), cursor.width);
     try std.testing.expectEqual(@as(f32, 1), cursor.r);
     for (quads[quads.len - mesh.len + 1 ..]) |glyph| {
         try std.testing.expectEqual(@as(f32, 0), glyph.r);
@@ -209,10 +295,10 @@ test "native terminal acknowledges received patches while presentation is busy o
     try session.bootstrap();
     try session.receiveFrame(1);
     try session.settle();
-    const first = try session.gui.prepare(&session.renderer);
-    try std.testing.expect(session.renderer.quads.items().len > 1);
+    const first = try session.draw();
+    try std.testing.expect(session.gui.renderer.quads.items().len > 1);
     try std.testing.expectEqual(@as(usize, 1), session.ack_count);
-    try std.testing.expectError(error.PresentationBusy, session.gui.prepare(&session.renderer));
+    try std.testing.expectError(error.PresentationBusy, session.draw());
     try input_support.presented(
         session.gui,
         first,
@@ -220,9 +306,9 @@ test "native terminal acknowledges received patches while presentation is busy o
     );
     try session.settle();
     try std.testing.expectEqual(@as(usize, 1), session.ack_count);
-    const retry = try session.gui.prepare(&session.renderer);
+    const retry = try session.draw();
     const Quad = @import("../render/Quad.zig").Quad;
-    const frozen = try std.testing.allocator.dupe(Quad, session.renderer.quads.items());
+    const frozen = try std.testing.allocator.dupe(Quad, session.gui.renderer.quads.items());
     defer std.testing.allocator.free(frozen);
     for (2..34) |frame| {
         try session.receiveFrame(frame);
@@ -231,7 +317,11 @@ test "native terminal acknowledges received patches while presentation is busy o
         try std.testing.expectEqual(frame, session.acknowledgements[frame - 1].frame_id);
     }
 
-    try std.testing.expectEqualSlices(Quad, frozen, session.renderer.quads.items());
+    try std.testing.expectEqualSlices(
+        Quad,
+        frozen,
+        session.gui.renderer.quads.items(),
+    );
     try std.testing.expectEqualStrings("H", session.gui.app.model.workspace.findPane(Session.pane_id).?.buffer.cells[0].text());
     try input_support.presented(
         session.gui,
@@ -272,8 +362,14 @@ test "native resize publishes exact grid pixels and preserves runtime-owned pane
     const session = try Session.init();
     defer session.deinit();
     try session.bootstrap();
-    const size = try session.renderer.metrics.measure(.{ .width = 303, .height = 199, .scale = 1 });
-    try session.gui.resize(size, session.renderer.theme);
+    const size = try session.gui.renderer.metrics.measure(
+        .{
+            .width = 303,
+            .height = 199,
+            .scale = 1,
+        },
+    );
+    try session.gui.resize(size, session.gui.renderer.theme);
     try session.settle();
     const regions = @import("../widgets/Regions.zig").calculate(size.cols, size.rows);
     try std.testing.expectEqual(regions.workbench, session.gui.region.area);
@@ -292,14 +388,14 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
     const model = session.gui.app.model.activeTabModel().?;
     const second: @import("telar-core").PaneId = @enumFromInt(11);
     try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
-    const token = try session.gui.prepare(&session.renderer);
+    const token = try session.draw();
     const commit = session.gui.lifecycle.active.?.delivery.commit;
     try std.testing.expectEqual(@as(u8, 2), commit.len);
     try std.testing.expectEqual(Session.pane_id, commit.panes[0].pane_id);
     try std.testing.expectEqual(second, commit.panes[1].pane_id);
-    const width: f32 = @floatFromInt(session.renderer.viewport[0]);
-    const height: f32 = @floatFromInt(session.renderer.viewport[1]);
-    for (session.renderer.quads.items()) |quad| {
+    const width: f32 = @floatFromInt(session.gui.renderer.viewport[0]);
+    const height: f32 = @floatFromInt(session.gui.renderer.viewport[1]);
+    for (session.gui.renderer.quads.items()) |quad| {
         try std.testing.expect(quad.x >= 0 and quad.y >= 0);
         try std.testing.expect(quad.x + quad.width <= width and quad.y + quad.height <= height);
     }
@@ -314,9 +410,9 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
     try paintTerminal(session);
     var layout: @import("telar-client").LayoutSnapshot = .{};
     model.layout.snapshot(session.gui.region.area, &layout);
-    for (session.renderer.quads.items()) |quad| {
+    for (session.gui.renderer.quads.items()) |quad| {
         const contained = for (layout.views()) |view| {
-            const bounds = session.renderer.metrics.rect(session.renderer.origin, view.content);
+            const bounds = session.gui.renderer.metrics.rect(session.gui.renderer.origin, view.content);
             if (quad.x >= bounds.x and quad.y >= bounds.y and quad.x + quad.width <= bounds.x + bounds.width and quad.y + quad.height <= bounds.y + bounds.height) {
                 break true;
             }
@@ -328,8 +424,8 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
 test "native driver joins a blocked socket read before freeing the shared client" {
     const session = try Session.init();
     defer session.deinit();
-    session.gui.app.transport_driver = host_ports.transport(session.gui.driver);
-    try session.gui.app.runtime_transport.scheduleRead(session.gui.app.transport_driver);
+    session.gui.app.transport_driver = host_ports.transport(&session.gui.driver);
+    try session.gui.app.startRuntimeRead();
     try std.testing.expect(session.gui.app.runtime_transport.receive_pending);
 }
 
@@ -339,8 +435,8 @@ test "native inbox holds input and GPU completion until the consumer runs" {
     try session.bootstrap();
     try session.receiveFrame(1);
     try session.settle();
-    const token = try session.gui.prepare(&session.renderer);
-    const inbox = &session.driver.inbox;
+    const token = try session.draw();
+    const inbox = &session.gui.driver.inbox;
     var text = [_]u8{'x'} ** 80;
     try std.testing.expect(try session.gui.acceptInput(.{ .text = .{ .bytes = &text } }));
     @memset(&text, 'z');
@@ -368,12 +464,12 @@ fn paneContent(session: *Session) @import("telar-core").Rect {
 }
 
 fn paintTerminal(session: *Session) !void {
-    _ = try session.renderer.prepare(session.gui.projection());
-    session.renderer.seal();
+    _ = try session.gui.renderer.prepare(session.gui.projection());
+    session.gui.renderer.seal();
 }
 
 fn present(session: *Session) !void {
-    const token = try session.gui.prepare(&session.renderer);
+    const token = try session.draw();
     try input_support.presented(
         session.gui,
         token,
@@ -384,11 +480,15 @@ fn present(session: *Session) !void {
 
 fn expectFullRedraw(session: *Session) !void {
     const Quad = @import("../render/Quad.zig").Quad;
-    const expected = try std.testing.allocator.dupe(Quad, session.renderer.quads.items());
+    const expected = try std.testing.allocator.dupe(Quad, session.gui.renderer.quads.items());
     defer std.testing.allocator.free(expected);
-    session.renderer.retained.invalidate();
+    session.gui.renderer.retained.invalidate();
     try present(session);
-    try std.testing.expectEqualSlices(Quad, expected, session.renderer.quads.items());
+    try std.testing.expectEqualSlices(
+        Quad,
+        expected,
+        session.gui.renderer.quads.items(),
+    );
 }
 
 test "retained cell damage rebuilds only changed cells and a cursor move reuses ink" {
@@ -398,33 +498,33 @@ test "retained cell damage rebuilds only changed cells and a cursor move reuses 
     try session.receiveFrame(1);
     try present(session);
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
-    try std.testing.expectEqual(pane.buffer.cells.len, session.renderer.repainted_cells);
-    const shape_calls = session.renderer.atlas.?.shape_calls;
+    try std.testing.expectEqual(pane.buffer.cells.len, session.gui.renderer.repainted_cells);
+    const shape_calls = session.gui.renderer.atlas.?.shape_calls;
     try present(session);
-    try std.testing.expectEqual(@as(usize, 0), session.renderer.repainted_cells);
-    try std.testing.expectEqual(shape_calls, session.renderer.atlas.?.shape_calls);
+    try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.repainted_cells);
+    try std.testing.expectEqual(shape_calls, session.gui.renderer.atlas.?.shape_calls);
     pane.cursor.x = 2;
     try present(session);
-    try std.testing.expectEqual(@as(usize, 0), session.renderer.repainted_cells);
+    try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.repainted_cells);
     pane.buffer.cells[1].bytes[0] = '$';
     try present(session);
-    try std.testing.expectEqual(@as(usize, 1), session.renderer.repainted_cells);
-    try std.testing.expectEqual(shape_calls, session.renderer.atlas.?.shape_calls);
+    try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
+    try std.testing.expectEqual(shape_calls, session.gui.renderer.atlas.?.shape_calls);
     try expectFullRedraw(session);
 
     // Damage in several unpresented updates must survive coalescing.
     pane.buffer.cells[0].style.flags.inverse = true;
     pane.buffer.cells[1].style.flags.bold = true;
     pane.buffer.cells[2].style.flags.underline = .single;
-    const token = try session.gui.prepare(&session.renderer);
-    try std.testing.expectEqual(@as(usize, 3), session.renderer.repainted_cells);
+    const token = try session.draw();
+    try std.testing.expectEqual(@as(usize, 3), session.gui.renderer.repainted_cells);
     try input_support.presented(
         session.gui,
         token,
         false,
     );
     try present(session);
-    try std.testing.expectEqual(@as(usize, 0), session.renderer.repainted_cells);
+    try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.repainted_cells);
     try expectFullRedraw(session);
 }
 
@@ -449,15 +549,29 @@ test "retained geometry matches full redraw through erasure wide cells styles an
         try expectFullRedraw(session);
     }
 
-    session.renderer.theme.foreground = .{ 12, 100, 200 };
-    session.renderer.theme.background = .{ 20, 40, 60 };
+    session.gui.renderer.theme.foreground = .{
+        12,
+        100,
+        200,
+    };
+    session.gui.renderer.theme.background = .{
+        20,
+        40,
+        60,
+    };
     try present(session);
-    try std.testing.expectEqual(pane.buffer.cells.len, session.renderer.repainted_cells);
+    try std.testing.expectEqual(pane.buffer.cells.len, session.gui.renderer.repainted_cells);
     try expectFullRedraw(session);
-    const size = try session.renderer.measure(.{ .width = 360, .height = 144, .scale = 2 });
-    try session.gui.resize(size, session.renderer.theme);
+    const size = try session.gui.renderer.measure(
+        .{
+            .width = 360,
+            .height = 144,
+            .scale = 2,
+        },
+    );
+    try session.gui.resize(size, session.gui.renderer.theme);
     try present(session);
-    try std.testing.expect(session.renderer.repainted_cells > 0);
+    try std.testing.expect(session.gui.renderer.repainted_cells > 0);
     try expectFullRedraw(session);
 }
 
@@ -468,7 +582,7 @@ test "warm retained rendering and repeated glyph edits allocate no adapter stora
     try session.receiveFrame(1);
     try present(session);
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0, .resize_fail_index = 0 });
-    const renderer = &session.renderer;
+    const renderer = &session.gui.renderer;
     renderer.allocator = failing.allocator();
     renderer.quads.allocator = failing.allocator();
     renderer.cell_quads.allocator = failing.allocator();

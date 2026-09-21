@@ -12,7 +12,6 @@ const rssBytes_module = @import("telar-core").rssBytes;
 const Client = @import("telar-client").AttachedClient;
 const Snapshot = @import("telar-core").SnapshotSnapshot;
 const SnapshotType = @import("Snapshot.zig");
-const runtime_transport = @import("telar-client").runtime_io;
 const CellType = @import("telar-core").Cell;
 const waitForTick_module = @import("telar-core").waitForTick;
 const TelemetryState = @import("telar-client").TelemetryState;
@@ -296,7 +295,7 @@ fn capture(client: *Client, heap: Snapshot) ?SnapshotType {
         .pending_updates = host(client).presenter.pending_updates,
         .draw_pending = host(client).presenter.draw_pending,
         .media_pending = host(client).presenter.media_tick_pending,
-        .outbox = runtime_transport.snapshot(client),
+        .outbox = client.runtime_transport.outbox.snapshot(),
         .inbox = host(client).inbox.snapshot(),
         .capabilities = client.model.hostCapabilities(),
         .zlib_support = host(client).host_negotiation.zlib_support,

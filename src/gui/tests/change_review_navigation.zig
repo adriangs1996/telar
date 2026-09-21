@@ -91,9 +91,15 @@ test "runtime review half page motions follow the delivered viewport height" {
     try std.testing.expectEqual(first, widget.model.head);
     try review.publish(session);
 
-    const size = try session.gui.measure(&session.renderer, .{ .width = 1100, .height = 450, .scale = 1 });
-    try session.gui.resize(size, session.renderer.theme);
-    session.gui.pointer.configure(session.renderer.origin, size);
+    const size = try session.gui.resizeViewport(
+        .{
+            .width = 1100,
+            .height = 450,
+            .scale = 1,
+        },
+    );
+    try session.gui.resize(size, session.gui.renderer.theme);
+    session.gui.pointer.configure(session.gui.renderer.origin, size);
     try review.publish(session);
     try std.testing.expect(widget.viewport.height < tall_height);
     try control(session, "d");
@@ -116,10 +122,16 @@ test "runtime review half page motion ignores the viewport from a failed frame" 
     try control(session, "u");
     try std.testing.expectEqual(first, widget.model.head);
 
-    const size = try session.gui.measure(&session.renderer, .{ .width = 1100, .height = 450, .scale = 1 });
-    try session.gui.resize(size, session.renderer.theme);
-    session.gui.pointer.configure(session.renderer.origin, size);
-    const rejected = try session.gui.prepare(&session.renderer);
+    const size = try session.gui.resizeViewport(
+        .{
+            .width = 1100,
+            .height = 450,
+            .scale = 1,
+        },
+    );
+    try session.gui.resize(size, session.gui.renderer.theme);
+    session.gui.pointer.configure(session.gui.renderer.origin, size);
+    const rejected = try session.draw();
     try std.testing.expect(widget.prepared_viewport.height < delivered_height);
     try std.testing.expectEqual(delivered_height, widget.viewport.height);
     try input_support.presented(
@@ -163,9 +175,15 @@ test "runtime review search reveals the matching wrapped fragment instead of the
     const session = try withPatch(patch);
     defer session.deinit();
     const widget = &session.gui.review.widget;
-    const size = try session.gui.measure(&session.renderer, .{ .width = 1100, .height = 450, .scale = 1 });
-    try session.gui.resize(size, session.renderer.theme);
-    session.gui.pointer.configure(session.renderer.origin, size);
+    const size = try session.gui.resizeViewport(
+        .{
+            .width = 1100,
+            .height = 450,
+            .scale = 1,
+        },
+    );
+    try session.gui.resize(size, session.gui.renderer.theme);
+    session.gui.pointer.configure(session.gui.renderer.origin, size);
     try review.publish(session);
     _ = try beginSearch(session);
     try typeText(session, "needle");
@@ -207,9 +225,15 @@ test "runtime review page motions scroll a single logical line across its wrappe
     const session = try withPatch(patch);
     defer session.deinit();
     const widget = &session.gui.review.widget;
-    const size = try session.gui.measure(&session.renderer, .{ .width = 1100, .height = 450, .scale = 1 });
-    try session.gui.resize(size, session.renderer.theme);
-    session.gui.pointer.configure(session.renderer.origin, size);
+    const size = try session.gui.resizeViewport(
+        .{
+            .width = 1100,
+            .height = 450,
+            .scale = 1,
+        },
+    );
+    try session.gui.resize(size, session.gui.renderer.theme);
+    session.gui.pointer.configure(session.gui.renderer.origin, size);
     try review.publish(session);
     try std.testing.expectEqual(@as(usize, 1), widget.model.current().row_count);
     const page = widget.viewport.height;

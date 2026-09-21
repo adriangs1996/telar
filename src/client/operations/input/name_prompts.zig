@@ -25,7 +25,6 @@ const workspace_creations = @import("../workspaces/workspace_creations.zig");
 const workspace_renames = @import("../workspaces/workspace_renames.zig");
 const tab_renames = @import("../tabs/tab_renames.zig");
 const OwnedSearchType = @import("../../connection/OwnedSearch.zig");
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const KeyType = @import("../../input/Key.zig");
 const ModelNamePromptCommand = @import("../../model/name_prompt.zig").Command;
 const NamePromptState = @import("../../model/NamePromptState.zig");
@@ -424,14 +423,18 @@ fn submit(client: *Client, submission: SubmissionType) !bool {
         },
         .copy_search => blk: {
             const pane_id = client.model.copyModeTarget() orelse break :blk true;
-            const request_id = try request_lifecycle.nextId(client);
+            const request_id = try client.request_lifecycle.nextId();
             var owned: OwnedSearchType = .{
                 .request_id = request_id,
                 .pane_id = pane_id,
                 .needle_len = @intCast(submission.name.len),
             };
             @memcpy(owned.needle[0..submission.name.len], submission.name);
-            try runtime_transport.enqueue(client, .{ .search_pane = owned });
+            try client.sendRuntime(
+                .{
+                    .search_pane = owned,
+                },
+            );
             break :blk true;
         },
     };

@@ -14,7 +14,6 @@ const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
 const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const client_actions = @import("telar-client").operations.actions;
-const runtime_transport = @import("telar-client").runtime_io;
 const supportsSharedMemory_module = @import("telar-client").supportsSharedMemory;
 const host_resizes = @import("../controllers/host/host_resizes.zig");
 const ShmNameType = @import("telar-core").ShmName;
@@ -242,7 +241,7 @@ test "a media tick that yields to a pending draw runs at that draw's completion"
                 try presentation_lifecycle.handleMediaTick(client, result);
                 break;
             },
-            .sent => |result| try runtime_transport.handleSent(client, result),
+            .sent => |result| try client.completeRuntimeSend(result),
             else => return error.UnexpectedEvent,
         }
     }

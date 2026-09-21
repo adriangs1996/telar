@@ -29,18 +29,22 @@ test "a blocked pane animates without working agents and folds a rejected and la
     const started_ns = std.time.ns_per_s;
     fixture.chrome.now_ns = started_ns;
     try fixture.paint(projection);
-    try std.testing.expectEqual(@as(f32, 0), try attentionOpacity(fixture.session.renderer.quads.items()));
+    try std.testing.expectEqual(@as(f32, 0), try attentionOpacity(fixture.session.gui.renderer.quads.items()));
     try std.testing.expect(fixture.chrome.animation.wakeupAfter(started_ns) > 0);
 
     fixture.chrome.now_ns = started_ns + RingFades.duration_ns / 2;
     try fixture.prepare(projection);
-    try std.testing.expectApproxEqAbs(@as(f32, 0.5), try attentionOpacity(fixture.session.renderer.quads.items()), 0.001);
+    try std.testing.expectApproxEqAbs(
+        @as(f32, 0.5),
+        try attentionOpacity(fixture.session.gui.renderer.quads.items()),
+        0.001,
+    );
     fixture.chrome.present(false);
 
     fixture.chrome.now_ns = started_ns + 4 * RingFades.duration_ns;
     try std.testing.expect(fixture.chrome.animation.due(fixture.chrome.now_ns));
     try fixture.paint(projection);
-    try std.testing.expectEqual(@as(f32, 1), try attentionOpacity(fixture.session.renderer.quads.items()));
+    try std.testing.expectEqual(@as(f32, 1), try attentionOpacity(fixture.session.gui.renderer.quads.items()));
     try std.testing.expectEqual(@as(u32, 0), fixture.chrome.animation.wakeupAfter(fixture.chrome.now_ns));
     try std.testing.expectEqual(version, fixture.session.gui.app.model.version());
 
@@ -48,7 +52,7 @@ test "a blocked pane animates without working agents and folds a rejected and la
     projection = fixture.projection();
     projection.agents = &agents;
     try fixture.paint(projection);
-    try std.testing.expectError(error.MissingAttentionRing, attentionOpacity(fixture.session.renderer.quads.items()));
+    try std.testing.expectError(error.MissingAttentionRing, attentionOpacity(fixture.session.gui.renderer.quads.items()));
     try std.testing.expectEqual(@as(usize, 0), fixture.chrome.rings.len);
     try std.testing.expectEqual(@as(u32, 0), fixture.chrome.animation.wakeupAfter(fixture.chrome.now_ns));
 }
@@ -100,12 +104,12 @@ test "native indeterminate progress paints each frame without model ticks and fo
     fixture.chrome.now_ns = std.time.ns_per_s;
     try fixture.paint(fixture.projection());
     try std.testing.expectEqual(fixture.chrome.now_ns + FrameClock.frame_interval_ns, fixture.chrome.animation.deadline_ns.?);
-    const previous = try std.testing.allocator.dupe(Quad, fixture.session.renderer.quads.items());
+    const previous = try std.testing.allocator.dupe(Quad, fixture.session.gui.renderer.quads.items());
     defer std.testing.allocator.free(previous);
 
     fixture.chrome.now_ns += FrameClock.frame_interval_ns;
     try fixture.prepare(fixture.projection());
-    const next = fixture.session.renderer.quads.items();
+    const next = fixture.session.gui.renderer.quads.items();
     var changed = previous.len != next.len;
     for (previous[0..@min(previous.len, next.len)], next[0..@min(previous.len, next.len)]) |before, after| {
         changed = changed or !std.meta.eql(before, after);

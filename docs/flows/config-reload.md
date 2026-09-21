@@ -118,8 +118,8 @@ pane geometry to the runtime. Sidebar changes pass through
 exact-commit delivery used by explicit toggles. `config_reloads` implements
 each concrete port independently; it does not choose the outcome order,
 notification content, layout branch or placement-to-geometry order. The
-pane-gap geometry port uses `pane_geometry.offerActive`, so an empty
-projection and active-tab selection remain application policy.
+pane-gap branch selects the active tab, when present, and calls
+`AttachedClient.resizeAttachedPanes` with its model and the current area.
 
 Fallible sidebar configuration, projection, geometry, notification or watcher
 work does not roll back any earlier stage. If pane geometry cannot enter the

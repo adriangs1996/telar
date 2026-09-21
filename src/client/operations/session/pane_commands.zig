@@ -10,7 +10,6 @@ const pane_viewports = @import("../panes/pane_viewports.zig");
 const agent_threads = @import("../agents/agent_threads.zig");
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
 /// Applies one routed command within this domain. Example: `try pane_commands.execute(client, reply);`
 pub fn execute(client: *Client, reply: *core.ClientCommand) !void {
@@ -23,7 +22,11 @@ pub fn execute(client: *Client, reply: *core.ClientCommand) !void {
                 return error.TerminalPaneNotAttached;
             }
 
-            try runtime_transport.enqueue(client, .{ .copy_selection = selection });
+            try client.sendRuntime(
+                .{
+                    .copy_selection = selection,
+                },
+            );
             reply.length = 0;
             reply.status = .admitted;
         },

@@ -6,7 +6,6 @@ const plugin_toggles = @import("../configuration/plugin_toggles.zig");
 const plugin_invocations = @import("../configuration/plugin_invocations.zig");
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const pane_commands = @import("pane_commands.zig");
 const navigation_commands = @import("navigation_commands.zig");
 const presentation_commands = @import("presentation_commands.zig");
@@ -19,7 +18,7 @@ pub fn apply(client: *Client, command: core.ClientCommand) !void {
         reply.status = .failed;
         try reply.setText(@errorName(err));
     };
-    try runtime_transport.enqueueClientCompletion(client, reply);
+    try client.sendRuntimeClientCompletion(reply);
 }
 
 fn execute(client: *Client, reply: *core.ClientCommand) !void {

@@ -180,6 +180,8 @@ typedef struct {
   uint64_t (*frame_delay_ns)(void *);
 
   int (*window_title)(void *, telar_gui_window_title *);
+  // Window-thread notification after a surface acquires usable geometry.
+  void (*ready)(void *, telar_gui_viewport);
 } telar_gui_callbacks;
 
 int telar_gui_run(const char *title, void *context,

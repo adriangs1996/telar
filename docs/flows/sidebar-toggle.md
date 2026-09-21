@@ -49,7 +49,7 @@ placements and publishes the resulting size for every attached pane in the
 active tab, in that order. With no active workspace it completes after the
 first two effects. Configuration reload calls the same
 `sidebar_projection.apply` operation after its model transaction. That function
-calls the chrome and graphics service ports and `pane_geometry.offerAttached`
+calls the chrome and graphics service ports and `AttachedClient.resizeAttachedPanes`
 directly. This immediate projection gives
 geometry effects the same workbench that the next frame will show.
 

@@ -16,40 +16,44 @@ test "Braille pattern replacement removes retained dots and blank Braille erases
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
     pane.cursor.visible = false;
     pane.buffer.cells[0] = cell(0xff);
-    const shape_calls = session.renderer.atlas.?.shape_calls;
-    const rasters = session.renderer.atlas.?.raster_attempts;
-    const version = session.renderer.atlas.?.version;
+    const shape_calls = session.gui.renderer.atlas.?.shape_calls;
+    const rasters = session.gui.renderer.atlas.?.raster_attempts;
+    const version = session.gui.renderer.atlas.?.version;
     try paint(session);
-    try std.testing.expectEqual(@as(usize, 8), session.renderer.quads.items().len);
-    for (session.renderer.quads.items()) |dot| {
+    try std.testing.expectEqual(@as(usize, 8), session.gui.renderer.quads.items().len);
+    for (session.gui.renderer.quads.items()) |dot| {
         try expectSolid(dot);
     }
 
     pane.buffer.cells[0] = cell(0x01);
     try paint(session);
-    try std.testing.expectEqual(@as(usize, 1), session.renderer.repainted_cells);
-    try std.testing.expectEqual(@as(usize, 1), session.renderer.quads.items().len);
-    const top_left = session.renderer.quads.items()[0];
+    try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
+    try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.quads.items().len);
+    const top_left = session.gui.renderer.quads.items()[0];
     pane.buffer.cells[0] = cell(0x80);
     try paint(session);
-    try std.testing.expectEqual(@as(usize, 1), session.renderer.repainted_cells);
-    try std.testing.expectEqual(@as(usize, 1), session.renderer.quads.items().len);
-    const bottom_right = session.renderer.quads.items()[0];
+    try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
+    try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.quads.items().len);
+    const bottom_right = session.gui.renderer.quads.items()[0];
     try std.testing.expect(bottom_right.x > top_left.x and bottom_right.y > top_left.y);
     const expected = [_]Quad{bottom_right};
-    session.renderer.retained.invalidate();
+    session.gui.renderer.retained.invalidate();
     try paint(session);
-    try std.testing.expectEqualSlices(Quad, &expected, session.renderer.quads.items());
+    try std.testing.expectEqualSlices(
+        Quad,
+        &expected,
+        session.gui.renderer.quads.items(),
+    );
 
     pane.buffer.cells[0] = cell(0);
     try paint(session);
-    try std.testing.expectEqual(@as(usize, 1), session.renderer.repainted_cells);
-    try std.testing.expectEqual(@as(usize, 0), session.renderer.quads.items().len);
+    try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
+    try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.quads.items().len);
     try paint(session);
-    try std.testing.expectEqual(@as(usize, 0), session.renderer.repainted_cells);
-    try std.testing.expectEqual(shape_calls, session.renderer.atlas.?.shape_calls);
-    try std.testing.expectEqual(rasters, session.renderer.atlas.?.raster_attempts);
-    try std.testing.expectEqual(version, session.renderer.atlas.?.version);
+    try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.repainted_cells);
+    try std.testing.expectEqual(shape_calls, session.gui.renderer.atlas.?.shape_calls);
+    try std.testing.expectEqual(rasters, session.gui.renderer.atlas.?.raster_attempts);
+    try std.testing.expectEqual(version, session.gui.renderer.atlas.?.version);
 }
 
 test "Braille uses terminal inverse faint decorations and retained block cursor ink" {
@@ -63,11 +67,24 @@ test "Braille uses terminal inverse faint decorations and retained block cursor 
     pane.cursor.x = 0;
     pane.cursor.y = 0;
     pane.cursor.appearance.shape = .block;
-    session.renderer.theme.cursor_color = .{ 255, 255, 255 };
-    session.renderer.theme.cursor_text_color = .{ 0, 255, 0 };
+    session.gui.renderer.theme.cursor_color = .{
+        255,
+        255,
+        255,
+    };
+    session.gui.renderer.theme.cursor_text_color = .{
+        0,
+        255,
+        0,
+    };
     try paint(session);
     const content = paneContent(session);
-    const mesh = session.renderer.retained.at(.{ content.x, content.y });
+    const mesh = session.gui.renderer.retained.at(
+        .{
+            content.x,
+            content.y,
+        },
+    );
     try std.testing.expectEqual(@as(usize, 5), mesh.len);
     try std.testing.expectEqual(@as(f32, 1), mesh.items()[0].r);
     try std.testing.expectEqual(@as(f32, 0), mesh.items()[0].b);
@@ -78,7 +95,7 @@ test "Braille uses terminal inverse faint decorations and retained block cursor 
         try std.testing.expectEqual(@as(f32, 0.5), ink.a);
     }
 
-    const frame = session.renderer.quads.items();
+    const frame = session.gui.renderer.quads.items();
     const cursor = frame[frame.len - mesh.len ..];
     try std.testing.expectEqual(@as(f32, 1), cursor[0].r);
     for (cursor[1..], mesh.items()[1..]) |actual, original| {
@@ -92,15 +109,15 @@ test "Braille uses terminal inverse faint decorations and retained block cursor 
 
     const retained = try std.testing.allocator.dupe(Quad, mesh.items());
     defer std.testing.allocator.free(retained);
-    session.renderer.cursor_on = false;
+    session.gui.renderer.cursor_on = false;
     try paint(session);
-    try std.testing.expectEqual(@as(usize, 0), session.renderer.repainted_cells);
+    try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.repainted_cells);
     try std.testing.expectEqualSlices(Quad, retained, mesh.items());
-    try std.testing.expectEqual(retained.len, session.renderer.quads.items().len);
+    try std.testing.expectEqual(retained.len, session.gui.renderer.quads.items().len);
     pane.buffer.cells[0].style.flags.invisible = true;
     try paint(session);
     try std.testing.expectEqual(@as(usize, 1), mesh.len);
-    try std.testing.expectEqual(@as(usize, 1), session.renderer.quads.items().len);
+    try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.quads.items().len);
 }
 
 test "Braille chrome preserves blank columns clipping colors and configured grid metrics" {
@@ -154,7 +171,7 @@ test "Braille animation stays within retained budgets without allocating or touc
     pane.cursor.visible = false;
     pane.buffer.cells[0] = cell(0);
     try paint(session);
-    const renderer = &session.renderer;
+    const renderer = &session.gui.renderer;
     const calls = renderer.atlas.?.shape_calls;
     const rasters = renderer.atlas.?.raster_attempts;
     const version = renderer.atlas.?.version;
@@ -201,8 +218,8 @@ fn paneContent(session: *Session) core.Rect {
 }
 
 fn paint(session: *Session) !void {
-    _ = try session.renderer.prepare(session.gui.projection());
-    session.renderer.seal();
+    _ = try session.gui.renderer.prepare(session.gui.projection());
+    session.gui.renderer.seal();
 }
 
 fn expectSolid(item: Quad) !void {

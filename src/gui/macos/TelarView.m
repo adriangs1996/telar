@@ -121,6 +121,13 @@
   layer.contentsScale = scale;
   NSSize size = self.bounds.size;
   layer.drawableSize = CGSizeMake(size.width * scale, size.height * scale);
+  if (self.window != nil && layer.drawableSize.width >= 1 &&
+      layer.drawableSize.height >= 1 && callbacks.ready != NULL) {
+    telar_gui_viewport viewport = {(uint32_t)layer.drawableSize.width,
+                                   (uint32_t)layer.drawableSize.height,
+                                   (float)scale};
+    callbacks.ready(context, viewport);
+  }
 }
 
 - (void)startWakeSource {

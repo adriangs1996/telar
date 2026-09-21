@@ -25,17 +25,33 @@ fn expectNaturalWord(thicken: bool) !void {
         for (pane.buffer.cells) |*cell| {
             cell.style.flags.bold = bold;
         }
-        _ = try session.renderer.prepare(session.gui.projection());
+        _ = try session.gui.renderer.prepare(session.gui.projection());
         var natural = try naturalWord(session, .{ 2, 1 }, "New");
         defer natural.deinit();
         var visible_overhang = false;
         for (natural.items(), 0..) |glyph, index| {
             const area = content(session);
-            const rect = session.renderer.metrics.rect(session.renderer.origin, .{ .x = area.x + 2 + @as(u16, @intCast(index)), .y = area.y + 1, .w = 1, .h = 1 });
-            visible_overhang = visible_overhang or hasInkOutside(&session.renderer, glyph, rect);
+            const rect = session.gui.renderer.metrics.rect(
+                session.gui.renderer.origin,
+                .{
+                    .x = area.x + 2 + @as(u16, @intCast(index)),
+                    .y = area.y + 1,
+                    .w = 1,
+                    .h = 1,
+                },
+            );
+            visible_overhang = visible_overhang or hasInkOutside(
+                &session.gui.renderer,
+                glyph,
+                rect,
+            );
         }
         try std.testing.expect(visible_overhang);
-        try std.testing.expectEqualSlices(Quad, natural.items(), session.renderer.quads.items());
+        try std.testing.expectEqualSlices(
+            Quad,
+            natural.items(),
+            session.gui.renderer.quads.items(),
+        );
     }
 }
 
@@ -46,10 +62,18 @@ test "italic overhang stays above adjacent backgrounds and the block cursor" {
     word(session, .{ 2, 1 }, "New");
     pane.buffer.cells[pane.buffer.w + 3].style.bg = .{ .rgb = .{ 255, 0, 0 } };
     pane.cursor = .{ .visible = true, .x = 3, .y = 1, .appearance = .{ .shape = .block } };
-    session.renderer.theme.cursor_color = .{ 0, 0, 255 };
-    session.renderer.theme.cursor_text_color = .{ 0, 255, 0 };
-    _ = try session.renderer.prepare(session.gui.projection());
-    const frame = session.renderer.quads.items();
+    session.gui.renderer.theme.cursor_color = .{
+        0,
+        0,
+        255,
+    };
+    session.gui.renderer.theme.cursor_text_color = .{
+        0,
+        255,
+        0,
+    };
+    _ = try session.gui.renderer.prepare(session.gui.projection());
+    const frame = session.gui.renderer.quads.items();
     try std.testing.expectEqual(@as(usize, 5), frame.len);
     try std.testing.expectEqual(@as(f32, 1), frame[0].r);
     try std.testing.expectEqual(@as(f32, 1), frame[1].b);
@@ -68,7 +92,7 @@ test "italic overhang stays above adjacent backgrounds and the block cursor" {
 test "italic clipping follows pane geometry while retained ink keeps its full texture" {
     const session = try configured(true, 0.75);
     defer session.deinit();
-    const renderer = &session.renderer;
+    const renderer = &session.gui.renderer;
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
     const area = content(session);
     const last: u16 = @min(area.w, pane.buffer.w) - 1;
@@ -105,7 +129,7 @@ test "italic clipping follows pane geometry while retained ink keeps its full te
 test "italic selection and replacement reuse meshes without leaving stale overhang" {
     const session = try configured(true, 1.4);
     defer session.deinit();
-    const renderer = &session.renderer;
+    const renderer = &session.gui.renderer;
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
     word(session, .{ 2, 1 }, "New");
     var projection = session.gui.projection();
@@ -164,9 +188,15 @@ fn configured(thicken: bool, line_height: f32) !*Session {
         error.FontFamilyNotFound => return error.SkipZigTest,
         else => return err,
     };
-    session.renderer.deinit();
-    session.renderer = renderer;
-    const size = try session.renderer.measure(.{ .width = 390, .height = 276, .scale = 1 });
+    session.gui.renderer.deinit();
+    session.gui.renderer = renderer;
+    const size = try session.gui.renderer.measure(
+        .{
+            .width = 390,
+            .height = 276,
+            .scale = 1,
+        },
+    );
     try session.gui.resize(size, renderer.theme);
     try session.bootstrap();
     try session.receiveFrame(1);
@@ -193,7 +223,7 @@ fn word(session: *Session, point: [2]u16, text: []const u8) void {
 fn naturalWord(session: *Session, point: [2]u16, text: []const u8) !QuadList {
     var list = QuadList.init(std.testing.allocator);
     errdefer list.deinit();
-    const renderer = &session.renderer;
+    const renderer = &session.gui.renderer;
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
     const area = content(session);
     for (0..text.len) |index| {

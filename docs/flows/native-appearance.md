@@ -15,7 +15,7 @@ cursor behavior preferences, plus `GuiWindow` and its logical `GuiPadding`.
 No native handles or Lua string pointers enter
 shared client state. Invalid numbers, colors, fields and incomplete palettes reject the generation.
 `cli/ClientLaunch.frontendOptions` transfers the selected snapshot to
-`gui/Application.init`.
+`GuiClient.run`.
 
 `render/TerminalRenderer.configured` stages the native resources before the
 window starts. `text/FontSource` resolves an installed family through the small
@@ -317,7 +317,7 @@ owners for fingerprinting. It never reads a live renderer or mutates the model.
 Completion publishes into a reserved inbox slot. `GuiClient.update` dispatches
 `.configuration_ready` to `ConfigurationReload.accept`, which joins only that finished worker.
 Unchanged fingerprints rearm without requesting a draw. A changed result waits
-for `Application.prepare`, after the previous presentation token has ended.
+for `GuiClient.draw`, after the previous presentation token has ended.
 Input, socket reads and receipt ACKs continue while a candidate waits.
 
 `ConfigurationReload.apply` checks the current viewport before adoption. A
@@ -363,7 +363,7 @@ truecolor cells directly. Changed foreground, background or ANSI entries
 invalidate retained cell geometry. Cursor colors reuse that ink. Positions and
 text remain owned by the shared client model.
 
-`Application` supplies `TerminalColors` through the existing
+`GuiClient.windowReady` supplies `TerminalColors` through the existing
 `configure_terminal_colors` bootstrap. The runtime's existing geometry authority
 chooses which attached host supplies VT defaults. `Pane.setTerminalColors`
 defers updates during ingestion; `applyTerminalColors` changes the defaults
@@ -389,7 +389,7 @@ target changes or input/focus arrives. Its next deadline is computed directly;
 late callbacks fold missed phases rather than replaying animations. Hidden,
 steady and unfocused cursors have no deadline. There is no timer per pane.
 
-`Application.pump` requests a draw only when the model, cursor phase or focus
+`GuiClient.update` requests a draw only when the model, cursor phase or focus
 differs from the prepared scene. The optional `Callbacks.wakeup_after` port
 returns relative milliseconds, with zero meaning no deadline. macOS uses one
 reusable dispatch timer on the main queue, paused while the window is occluded.

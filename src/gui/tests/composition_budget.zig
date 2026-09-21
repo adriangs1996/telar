@@ -13,7 +13,7 @@ test "native composed multiplexer scenes keep warm allocation shaping and cell w
     defer fixture.deinit();
     try fixture.resize(160, 60);
     try populateMultiplexer(&fixture);
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const model = &fixture.session.gui.app.model;
     var overlays: Overlays = .{};
     var scene: Scene = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = fixture.session.gui.theme };
@@ -69,7 +69,7 @@ test "native composed multiplexer scenes keep warm allocation shaping and cell w
 test "native decorated combining clusters remain bounded and atlas exhaustion retains valid quads" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const atlas = &renderer.atlas.?;
     var canvas: Canvas = .{ .atlas = atlas, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
     const cluster = "a" ++ "\u{301}" ** 15;

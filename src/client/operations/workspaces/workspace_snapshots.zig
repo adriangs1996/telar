@@ -6,7 +6,6 @@ const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const std = @import("std");
 const max_tabs_per_workspace = @import("telar-core").max_tabs_per_workspace;
 const WorkspaceTabInputType = @import("../../workspace/WorkspaceTabInput.zig");
-const pane_geometry = @import("../panes/pane_geometry.zig");
 const active_pane_resources = @import("../panes/active_pane_resources.zig");
 const PaneForeground = @import("telar-core").PaneForeground;
 const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
@@ -88,5 +87,5 @@ pub fn apply(client: *Client, snapshot: WorkspaceSnapshotViewType) !void {
         return;
     }
 
-    try pane_geometry.offerAttached(client, &active.model, client.geometry().area);
+    try client.resizeAttachedPanes(&active.model, client.geometry().area);
 }

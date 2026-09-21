@@ -8,7 +8,6 @@ const name_prompts = @import("name_prompts.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const OwnedSuggestionType = @import("../../connection/OwnedSuggestion.zig");
 const raw_module = @import("telar-core").raw;
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const CommandSuggestionType = @import("telar-core").CommandSuggestion;
 const pane_inputs = @import("pane_inputs.zig");
 const PaneIdType = @import("telar-core").PaneId;
@@ -41,7 +40,7 @@ pub fn request(client: *Client, text: []const u8) !void {
         return;
     };
 
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     var owned: OwnedSuggestionType = .{
         .request_id = request_id,
         .pane_id = pane_id,
@@ -50,7 +49,11 @@ pub fn request(client: *Client, text: []const u8) !void {
     @memcpy(owned.text[0..owned.text_len], text[0..owned.text_len]);
 
     client.model.suggestion.expect(raw_module(request_id));
-    try runtime_transport.enqueue(client, .{ .suggest_command = owned });
+    try client.sendRuntime(
+        .{
+            .suggest_command = owned,
+        },
+    );
 }
 
 /// Lands one runtime reply. Stale replies and replies arriving after the

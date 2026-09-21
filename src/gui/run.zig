@@ -2,7 +2,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
-const Application = @import("Application.zig");
+const GuiClient = @import("GuiClient.zig");
 const WindowIdentity = @import("WindowIdentity.zig");
 
 /// Opens a native terminal session. Example: `const status = try run(init, connection, options);`
@@ -23,7 +23,7 @@ pub fn run(init: std.process.Init, connection: *core.SocketChannel, options: cli
     };
     var identity = try WindowIdentity.acquire(init.io, options.endpoint);
     defer identity.deinit(init.io);
-    var app = try Application.init(.{
+    const app = try GuiClient.init(.{
         .gpa = init.gpa,
         .io = init.io,
         .connection = connection,

@@ -21,7 +21,7 @@ pub fn request(client: *Client, command: RequestTabCreation) !bool {
 
     try create_tab.validateLabel(command.label);
     const plan = client.model.planTabCreation() orelse return false;
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try request_lifecycle.deliverCreateTab(client, .{
         .kind = command.kind,
         .request_id = request_id,

@@ -42,7 +42,7 @@ semantic key, routed bytes, paste or pointer event
                          |
                   send effect
                          |
- runtime_transport.enqueueInput -> Outbox -> pane_input
+ AttachedClient.sendRuntimeInput -> Outbox -> pane_input
 ```
 
 `InputHandler` delegates semantic keys and replayed bytes to `key_routing`
@@ -123,7 +123,7 @@ bounds and presentation path.
 ## Effects and failure policy
 
 `pane_inputs.send` plans and encodes the input, calls `pane_viewports.apply`
-when needed, then calls `runtime_transport.enqueueInput` directly. The outbox copies the borrowed bytes,
+when needed, then calls `AttachedClient.sendRuntimeInput` directly. The outbox copies the borrowed bytes,
 coalesces adjacent input for the same pane and preserves protocol order. See
 [Client runtime transport](runtime-transport.md) for send-token and
 backpressure ownership.
@@ -145,7 +145,7 @@ latency.
 
 Terminal focus reports are deliberately outside this use case. They pass
 through `operations/panes/pane_focus_reports.sync` or `clear`. These operations
-use `runtime_transport.enqueueInput`, so
+use `AttachedClient.sendRuntimeInput`, so
 focus bytes remain outside user-input telemetry and can target the pane that
 just lost focus.
 

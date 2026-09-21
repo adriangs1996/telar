@@ -4,7 +4,6 @@ const Client = @import("../../AttachedClient.zig");
 const PaneFocusCommandType = @import("telar-core").PaneFocusCommand;
 const pane_focus = @import("pane_focus.zig");
 const Completion = @import("Completion.zig");
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const PaneDirectionType = @import("telar-core").PaneDirection;
 const WorkspaceLayoutSupportDirection = @import("../../workspace/layout_support.zig").Direction;
 
@@ -32,14 +31,18 @@ pub fn apply(client: *Client, command: PaneFocusCommandType) !void {
 }
 
 fn complete(client: *Client, command: PaneFocusCommandType, completion: Completion) !void {
-    try runtime_transport.enqueue(client, .{ .complete_pane_focus = .{
-        .requester = command.requester,
-        .request_id = command.request_id,
-        .pane_id = command.pane_id,
-        .pane_generation = command.pane_generation,
-        .outcome = completion.outcome,
-        .focused_pane_id = completion.focused_pane_id,
-    } });
+    try client.sendRuntime(
+        .{
+            .complete_pane_focus = .{
+                .requester = command.requester,
+                .request_id = command.request_id,
+                .pane_id = command.pane_id,
+                .pane_generation = command.pane_generation,
+                .outcome = completion.outcome,
+                .focused_pane_id = completion.focused_pane_id,
+            },
+        },
+    );
 }
 
 fn direction(value: PaneDirectionType) WorkspaceLayoutSupportDirection {

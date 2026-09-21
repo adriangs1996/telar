@@ -14,7 +14,6 @@ const PaneCommandType = @import("../../application/input/PaneCommand.zig");
 const PaneIdType = @import("telar-core").PaneId;
 const pane_inputs = @import("pane_inputs.zig");
 const attachment_prompts = @import("attachment_prompts.zig");
-const pane_geometry = @import("../panes/pane_geometry.zig");
 const clipboard_images = @import("../host/clipboard_images.zig");
 
 /// Routes one semantic key or borrowed byte slice to a single current owner.
@@ -63,7 +62,9 @@ fn routePane(client: *Client, command: PaneCommandType) !?PaneIdType {
     const completed = delivery orelse return null;
     if (attachment_prompts.observe(client, completed.pane_id, command.input)) {
         client.host_graphics.invalidatePlacements();
-        try pane_geometry.offerActive(client, client.geometry().area);
+        if (client.model.workspace.active()) |tab| {
+            try client.resizeAttachedPanes(&tab.model, client.geometry().area);
+        }
     }
 
     return completed.pane_id;

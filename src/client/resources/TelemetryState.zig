@@ -1,3 +1,4 @@
+const RuntimeMessage = @import("../connection/RuntimeMessage.zig");
 const Metrics = @import("Metrics.zig");
 const SinkType = @import("telar-core").Sink;
 const std = @import("std");
@@ -69,4 +70,32 @@ pub fn disable(state: *State, io: std.Io) void {
     if (!state.write_pending) {
         state.sink.deinit(io);
     }
+}
+
+/// Records a decoded message before the client rearms its borrowed receive buffer.
+/// Example: `telemetry.recordMessage(received);`
+pub fn recordMessage(self: *State, observation: *const RuntimeMessage) void {
+    if (comptime !enabled_module) {
+        return;
+    }
+
+    self.metrics.server_messages += 1;
+    self.metrics.server_bytes += observation.payload_len;
+
+    switch (observation.message) {
+        .graphics_snapshot,
+        .graphics_image,
+        .graphics_shared_image,
+        .graphics_image_chunk,
+        .graphics_placement,
+        .graphics_delete_image,
+        .graphics_delete_placement,
+        => {
+            self.metrics.graphics_messages += 1;
+            self.metrics.graphics_bytes += observation.payload_len;
+        },
+        else => {},
+    }
+
+    self.metrics.decode.observe(observation.decode_ns);
 }

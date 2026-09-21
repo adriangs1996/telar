@@ -6,13 +6,9 @@ const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const std = @import("std");
 const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
 const PaneIdType = @import("telar-core").PaneId;
-const RectType = @import("telar-core").Rect;
-const pane_geometry = @import("../panes/pane_geometry.zig");
 const active_pane_resources = @import("../panes/active_pane_resources.zig");
-const PaneAttachmentRequestType = @import("../../application/panes/PaneAttachmentRequest.zig");
 
 const pane_resources = @import("../panes/pane_resources.zig");
-const Tab = @import("../../workspace/Tab.zig");
 
 const TabLocation = @import("telar-core").TabLocation;
 pub const Outcome = enum { applied, ignored };
@@ -56,8 +52,8 @@ pub fn apply(client: *Client, snapshot: TabSnapshotViewType) !Outcome {
     if (reconciliation.active) {
         const tab = client.model.workspace.find(reconciliation.location.tab_id) orelse return error.StaleTabReconciliation;
         try active_pane_resources.synchronize(client);
-        try pane_geometry.offerAttached(client, &tab.model, reconciliation.area);
-        try requestAttachments(client, tab, reconciliation.area);
+        try client.resizeAttachedPanes(&tab.model, reconciliation.area);
+        try client.attachVisiblePanes(tab, reconciliation.area);
     }
 
     return .applied;
@@ -71,45 +67,4 @@ pub fn recover(client: *Client, location: TabLocation) !Recovery {
 
     try request_lifecycle.requestTabSnapshot(client, location);
     return .requested;
-}
-
-/// Attaches newly visible detached panes once canonical membership is loaded. Example: `try attachActive(client, area);`
-pub fn attachActive(client: *Client, area: RectType) !void {
-    const active = client.model.workspace.active() orelse return;
-    if (!active.snapshot_loaded) {
-        return;
-    }
-
-    try requestAttachments(client, active, area);
-}
-
-fn requestAttachments(client: *Client, tab: *Tab, area: RectType) !void {
-    var panes = tab.model.paneIterator();
-    while (panes.next()) |pane| {
-        if (pane.attached or request_lifecycle.hasPane(client, .attachment, pane.id)) {
-            continue;
-        }
-
-        const size = tab.model.contentSize(pane.id, area) orelse continue;
-        try requestAttachment(client, .{ .pane_id = pane.id, .location = tab.location, .size = size });
-    }
-}
-
-fn requestAttachment(client: *Client, request: PaneAttachmentRequestType) !void {
-    const request_id = try request_lifecycle.nextId(client);
-    try request_lifecycle.deliver(client, .{
-        .registration = .{
-            .request_id = request_id,
-            .continuation = .{ .attach_pane = .{
-                .pane_id = request.pane_id,
-                .location = request.location,
-            } },
-        },
-        .message = .{ .open_pane = .{
-            .request_id = request_id,
-            .target = .{ .pane = request.pane_id },
-            .size = request.size,
-            .launch = null,
-        } },
-    });
 }

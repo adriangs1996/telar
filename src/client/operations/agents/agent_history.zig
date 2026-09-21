@@ -4,7 +4,6 @@ const Client = @import("../../AttachedClient.zig");
 const reading = @import("../../application/agents/agent_reading.zig");
 const lifecycle = @import("../../connection/request_lifecycle.zig");
 const AgentHistoryOperation = @import("../../connection/AgentHistoryOperation.zig");
-const runtime_io = @import("../../entrypoints/runtime_io.zig");
 const notifications = @import("../notifications/notifications.zig");
 
 pub const navigate = reading.navigate;
@@ -34,7 +33,7 @@ pub fn flush(client: *Client) !void {
             continue;
         }) orelse continue;
         const operation: AgentHistoryOperation = .{ .owner = .{ .pane_id = pane.id, .pane_generation = pane.pane_generation, .attachment_generation = pane.attachment_generation, .location = pane.location }, .view_generation = query.view_generation };
-        query.request_id = lifecycle.nextId(client) catch |err| {
+        query.request_id = client.request_lifecycle.nextId() catch |err| {
             _ = reading.failed(&client.model, operation, @errorName(err));
             try report(client, @errorName(err));
             return;
@@ -44,7 +43,7 @@ pub fn flush(client: *Client) !void {
             try report(client, @errorName(err));
             return;
         };
-        runtime_io.enqueueAgentHistory(client, query) catch |err| {
+        client.sendRuntimeAgentHistory(query) catch |err| {
             _ = lifecycle.consume(client, query.request_id);
             _ = reading.failed(&client.model, operation, @errorName(err));
             try report(client, @errorName(err));

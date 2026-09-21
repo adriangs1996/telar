@@ -18,7 +18,6 @@ const DirectionType = @import("telar-client").Direction;
 const encodePaneFocusCommand_module = @import("telar-core").encodePaneFocusCommand;
 const PaneFocusOutcomeType = @import("telar-core").PaneFocusOutcome;
 const term = @import("../../presentation/screen_support.zig");
-const pane_geometry = @import("telar-client").operations.pane_geometry;
 const TerminalSizeType = @import("telar-core").TerminalSize;
 const sidebar_projection = @import("telar-client").operations.sidebar_projection;
 const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
@@ -335,7 +334,7 @@ test "pane geometry delivery offers only attached visible panes" {
     const active = &client.model.workspace.active().?.model;
     const expected_size = active.contentSize(TestHarness.bootstrap_pane, area).?;
 
-    try pane_geometry.offerAttached(client, active, area);
+    try client.resizeAttachedPanes(active, area);
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
@@ -346,7 +345,7 @@ test "pane geometry delivery offers only attached visible panes" {
 
     const detached_location = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
     const detached = &client.model.workspace.find(detached_location.tab_id).?.model;
-    try pane_geometry.offerAttached(client, detached, area);
+    try client.resizeAttachedPanes(detached, area);
 
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expect(!client.runtime_transport.outbox.inFlight());

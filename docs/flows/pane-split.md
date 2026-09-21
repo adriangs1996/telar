@@ -41,7 +41,7 @@ The runtime dispatches `.create_pane` from `requests.dispatch` directly to
 answers with `pane_opened` or `request_failed`.
 
 ```text
-runtime_io.handleRead
+AttachedClient.receiveRuntime
   → server_messages.handleServerMessage
       → pane_openings.apply: consume request identity once
           → pane_splits.confirm

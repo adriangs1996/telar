@@ -13,9 +13,15 @@ fn fixture() !*Session {
     const session = try Session.init();
     errdefer session.deinit();
     try session.bootstrap();
-    const size = try session.gui.measure(&session.renderer, .{ .width = 800, .height = 600, .scale = 1 });
-    try session.gui.resize(size, session.renderer.theme);
-    session.gui.pointer.configure(session.renderer.origin, size);
+    const size = try session.gui.resizeViewport(
+        .{
+            .width = 800,
+            .height = 600,
+            .scale = 1,
+        },
+    );
+    try session.gui.resize(size, session.gui.renderer.theme);
+    session.gui.pointer.configure(session.gui.renderer.origin, size);
     try std.testing.expect(session.gui.app.model.identifyPane(.{ .request_id = @enumFromInt(1), .pane_id = Session.pane_id, .location = Session.location, .created = false, .kind = .agent, .pane_generation = 77 }));
     const text = "Earlier output\n" ** 60 ++ "[scroll anchor](https://example.test/anchor)";
     var snapshot: core.AgentThreadSnapshot = .{ .pane_id = Session.pane_id, .pane_generation = 77, .revision = 1, .status = .ready, .item_count = 1, .text_len = text.len };
@@ -29,7 +35,7 @@ fn fixture() !*Session {
 }
 
 fn publish(session: *Session) !void {
-    const token = try session.gui.prepare(&session.renderer);
+    const token = try session.draw();
     try input_support.presented(
         session.gui,
         token,
@@ -248,7 +254,7 @@ test "failed hidden frames retain motion until a successful presentation retires
     const pane = session.gui.app.model.activeTabModel().?.find(Session.pane_id).?;
     const saved = (try entry(session)).*;
     pane.kind = .terminal;
-    const failed = try session.gui.prepare(&session.renderer);
+    const failed = try session.draw();
     try input_support.presented(
         session.gui,
         failed,
@@ -272,10 +278,16 @@ test "failed resized frames cannot commit new bounds or rebase active motion" {
     try advance(session, 16 * std.time.ns_per_ms);
     try publish(session);
     const before = (try entry(session)).*;
-    const size = try session.gui.measure(&session.renderer, .{ .width = 800, .height = 800, .scale = 1 });
-    try session.gui.resize(size, session.renderer.theme);
-    session.gui.pointer.configure(session.renderer.origin, size);
-    const failed = try session.gui.prepare(&session.renderer);
+    const size = try session.gui.resizeViewport(
+        .{
+            .width = 800,
+            .height = 800,
+            .scale = 1,
+        },
+    );
+    try session.gui.resize(size, session.gui.renderer.theme);
+    session.gui.pointer.configure(session.gui.renderer.origin, size);
+    const failed = try session.draw();
     try input_support.presented(
         session.gui,
         failed,

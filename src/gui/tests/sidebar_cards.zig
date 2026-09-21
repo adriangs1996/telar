@@ -96,7 +96,7 @@ test "replacement sidebar widgets retain scrolling and clip their own card contr
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     var hits: HitMap = .{};
     var band_hits: BandHitMap = .{};
     const context: Context = .{ .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
@@ -146,13 +146,13 @@ test "the selected card is the focused pane's agent and carries the fill and rin
     var projection = fixture.projection();
     projection.agents = &agents;
     try fixture.paint(projection);
-    const quads = fixture.session.renderer.quads.items();
+    const quads = fixture.session.gui.renderer.quads.items();
     try std.testing.expectEqual(@as(usize, 1), roundedCount(quads, CardGeometry.radius, sidebarColumn(&fixture)));
     // Provider marks are secondary; custom providers use an unboxed glyph.
     try std.testing.expectEqual(@as(usize, 0), roundedCount(quads, 4, sidebarColumn(&fixture)));
     try std.testing.expectEqual(@as(usize, 5), sprites.spriteCount(quads));
     const selected = ring(quads).?;
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const geometry = CardGeometry.derive(renderer.chrome, renderer.metrics);
     const list_top = fixture.chrome.presented().sidebar_regions.agents.y;
     try std.testing.expectEqual(list_top + 5 * geometry.pitch(), selected.y);
@@ -161,7 +161,11 @@ test "the selected card is the focused pane's agent and carries the fill and rin
     const hovered = fixture.bandTarget(.{ .focus_agent = entries[2].key }).?;
     _ = fixture.chrome.bandPointer(.{ .kind = .move, .x = hovered.x, .y = hovered.y });
     try fixture.paint(projection);
-    try std.testing.expectEqual(@as(usize, 2), roundedCount(fixture.session.renderer.quads.items(), CardGeometry.radius, sidebarColumn(&fixture)));
+    try std.testing.expectEqual(@as(usize, 2), roundedCount(
+        fixture.session.gui.renderer.quads.items(),
+        CardGeometry.radius,
+        sidebarColumn(&fixture),
+    ));
 }
 
 test "narrow cards keep status in the first row and clip every token to its card" {
@@ -171,7 +175,7 @@ test "narrow cards keep status in the first row and clip every token to its card
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     var hits: HitMap = .{};
     var band_hits: BandHitMap = .{};
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .sprites = &renderer.sprites.? };
@@ -215,7 +219,7 @@ test "card detail follows working state and the agent workspace across branch-on
     var projection = fixture.projection();
     projection.agents = &agents;
     projection.workspaces = &workspaces;
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     var hits: HitMap = .{};
     var band_hits: BandHitMap = .{};
     const context: Context = .{ .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
@@ -251,14 +255,14 @@ test "the working pulse samples the status alpha from presentation time" {
     projection.agents = &agents;
     fixture.chrome.now_ns = 0;
     try fixture.paint(projection);
-    for (fixture.session.renderer.quads.items()) |item| {
+    for (fixture.session.gui.renderer.quads.items()) |item| {
         try std.testing.expect(item.a == 1 or item.a == 0 or item.a == AgentCard.provider_alpha);
     }
 
     fixture.chrome.now_ns = 9 * 120 * std.time.ns_per_ms;
     try fixture.paint(projection);
     var dimmed: usize = 0;
-    for (fixture.session.renderer.quads.items()) |item| {
+    for (fixture.session.gui.renderer.quads.items()) |item| {
         dimmed += @intFromBool(@abs(item.a - 0.65) < 0.001);
     }
 
@@ -298,12 +302,12 @@ test "a snapshot refresh cannot rewind a working duration already painted" {
     try fixture.paint(projection);
     fixture.chrome.now_ns = 101 * std.time.ns_per_s;
     try fixture.paint(projection);
-    const visible = try std.testing.allocator.dupe(Quad, fixture.session.renderer.quads.items());
+    const visible = try std.testing.allocator.dupe(Quad, fixture.session.gui.renderer.quads.items());
     defer std.testing.allocator.free(visible);
 
     _ = try agents.replace(.{ .revision = 2, .agents = &.{input} });
     try fixture.paint(projection);
-    try std.testing.expectEqualDeep(visible, fixture.session.renderer.quads.items());
+    try std.testing.expectEqualDeep(visible, fixture.session.gui.renderer.quads.items());
 }
 
 test "a warm sidebar repaint with six agents allocates nothing" {
@@ -325,16 +329,16 @@ test "a warm sidebar repaint with six agents allocates nothing" {
         try fixture.paint(projection);
     }
 
-    const atlas = &fixture.session.renderer.atlas.?;
+    const atlas = &fixture.session.gui.renderer.atlas.?;
     const version = atlas.version;
     const rasters = atlas.raster_attempts;
     var failure = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0, .resize_fail_index = 0 });
     const allocator = atlas.allocator;
     atlas.allocator = failure.allocator();
     defer atlas.allocator = allocator;
-    const quad_allocator = fixture.session.renderer.quads.allocator;
-    fixture.session.renderer.quads.allocator = failure.allocator();
-    defer fixture.session.renderer.quads.allocator = quad_allocator;
+    const quad_allocator = fixture.session.gui.renderer.quads.allocator;
+    fixture.session.gui.renderer.quads.allocator = failure.allocator();
+    defer fixture.session.gui.renderer.quads.allocator = quad_allocator;
     for (0..30) |frame| {
         fixture.chrome.now_ns = (60 + frame) * std.time.ns_per_s;
         try fixture.paint(projection);

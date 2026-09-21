@@ -29,7 +29,7 @@ pub fn deinit(fixture: *Fixture) void {
 /// preference ask for.
 /// Example: `try fixture.resize(120, 40);`
 pub fn resize(fixture: *Fixture, cols: u16, rows: u16) !void {
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const gui = fixture.session.gui;
     const reserved = SidebarBand.resolve(gui.sidebar.request(gui.app.model.sidebarVisible()), .{ .width = 65535, .cell_width = renderer.metrics.cell_width }).reserved();
     try fixture.measure(.{ .width = @as(u32, renderer.metrics.cell_width) * cols + reserved, .height = @as(u32, renderer.metrics.cell_height) * rows + renderer.chrome.vertical(), .scale = 1 });
@@ -38,9 +38,9 @@ pub fn resize(fixture: *Fixture, cols: u16, rows: u16) !void {
 /// Measures one exact window through the GUI client and settles the PTY.
 /// Example: `try fixture.measure(.{ .width = 800, .height = 600, .scale = 2 });`
 pub fn measure(fixture: *Fixture, viewport: @import("../native/native.zig").Viewport) !void {
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const gui = fixture.session.gui;
-    const size = try gui.measure(renderer, viewport);
+    const size = try gui.resizeViewport(viewport);
     try gui.resize(size, renderer.theme);
     gui.pointer.configure(renderer.origin, size);
     try fixture.session.settle();
@@ -49,7 +49,7 @@ pub fn measure(fixture: *Fixture, viewport: @import("../native/native.zig").View
 /// Changes the shared visibility and measures the same window again.
 /// Example: `try fixture.showSidebar(false);`
 pub fn showSidebar(fixture: *Fixture, visible: bool) !void {
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     _ = fixture.session.gui.app.model.setSidebarVisible(visible);
     try fixture.measure(.{ .width = renderer.viewport[0], .height = renderer.viewport[1], .scale = renderer.scale });
 }
@@ -70,7 +70,7 @@ pub fn paint(fixture: *Fixture, projection_value: client.Projection) !void {
 }
 
 pub fn prepare(fixture: *Fixture, projection_value: client.Projection) !void {
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     renderer.quads.clear();
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .background_opacity = renderer.config.window.background_opacity, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar, .sprites = if (renderer.sprites) |*page| page else null };
     fixture.chrome.animation.begin(fixture.chrome.now_ns);

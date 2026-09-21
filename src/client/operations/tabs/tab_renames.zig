@@ -17,7 +17,7 @@ pub fn request(client: *Client, command: RequestRenameTab) !bool {
 
     try rename_tab.validateLabel(command.label);
     const location = client.model.tabLocation(command.tab_id) orelse return false;
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try request_lifecycle.deliverRename(client, .{
         .request_id = request_id,
         .location = location,

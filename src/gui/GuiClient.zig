@@ -45,6 +45,12 @@ const thread_history = @import("widgets/interaction/thread_history.zig");
 const thread_scroll = @import("widgets/interaction/thread_scroll.zig");
 const host_context = @import("widgets/interaction/host_context.zig");
 
+const FramePacer = @import("FramePacer.zig");
+const CursorClock = @import("CursorClock.zig");
+const FrameClock = @import("animation/FrameClock.zig");
+const native_callbacks = @import("native/window_callbacks.zig");
+const TestSession = @import("tests/Session.zig");
+const input_test_support = @import("tests/input_support.zig");
 const GuiClient = @This();
 
 const InputLimit = enum(u8) {
@@ -63,7 +69,17 @@ const TabDragStep = enum(u8) {
 };
 
 app: client.AttachedClient,
-driver: *NativeLoop,
+driver: NativeLoop,
+renderer: Renderer,
+failure: ?anyerror = null,
+exit_status: ?u8 = null,
+started: bool = false,
+needs_draw: bool = false,
+cursor_clock: CursorClock = .{},
+observed_input_revision: u64 = 0,
+window_title: client.WindowTitleState = .{},
+hostname: [std.posix.HOST_NAME_MAX]u8 = undefined,
+hostname_len: usize = 0,
 input_queue: InputQueue = .{},
 router: input_routing.Type,
 binding_timeout: client.Scheduler = .{},
@@ -98,8 +114,8 @@ pub fn of(app: *client.AttachedClient) *GuiClient {
 }
 
 /// Adopts options on success and binds all ports before receiving messages.
-/// Example: `const gui = try GuiClient.init(params, &driver);`
-pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
+/// Example: `const gui = try GuiClient.init(params);`
+pub fn init(params: client.ClientInit) !*GuiClient {
     const router = try input_routing.build(
         .{
             .prefix = params.options.prefix,
@@ -115,12 +131,26 @@ pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
     const review = try params.gpa.create(ReviewPanel);
     errdefer params.gpa.destroy(review);
 
+    gui.driver = try NativeLoop.init(params.io);
+    errdefer gui.driver.deinit();
+    gui.renderer = Renderer.init(params.gpa);
+    gui.renderer.io = params.io;
+    errdefer gui.renderer.deinit();
+    gui.failure = null;
+    gui.exit_status = null;
+    gui.started = false;
+    gui.needs_draw = false;
+    gui.cursor_clock = .{
+        .config = params.options.gui.cursor,
+    };
+    gui.observed_input_revision = 0;
+    gui.window_title = .{};
+    gui.hostname_len = 0;
     try client.AttachedClient.init(&gui.app, params);
 
     // Native chrome uses the shared semantic projection, never TUI Kitty output.
     gui.app.options.sidebar_renderer_locked = true;
-    gui.driver = driver;
-    driver.configuration.inbox = &driver.inbox;
+    gui.driver.configuration.inbox = &gui.driver.inbox;
     gui.input_queue = .{};
     gui.router = router;
     gui.binding_timeout = .{};
@@ -164,6 +194,7 @@ pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
 
     gui.review.widget.host_port = &gui.host;
     gui.review.widget.widgets = &gui.widgets;
+
     gui.app.sound_port = host_ports.sound(&gui.app);
     gui.app.notifier = host_ports.notifier(&gui.app);
     gui.app.link_opener = host_ports.links(&gui.app);
@@ -175,22 +206,24 @@ pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
     gui.app.attachment_catalog = host_ports.attachmentCatalog(&gui.app);
     gui.app.attachment_shelf = host_ports.attachmentShelf(&gui.app);
     gui.app.presentation = host_ports.presentation(&gui.app);
-    gui.app.timers = host_ports.timers(driver);
+    gui.app.timers = host_ports.timers(&gui.driver);
     gui.app.bar_runner = host_ports.barCommands(&gui.app);
     gui.app.plugin_runner = host_ports.pluginWorkers(&gui.app);
     gui.app.path_completion_runner = host_ports.pathCompletions(&gui.app);
     gui.app.favicon_runner = host_ports.favicons(&gui.app);
     gui.app.clock = host_ports.clock(&gui.app);
     gui.app.host_input_source = host_ports.hostInput(&gui.app);
-    gui.app.transport_driver = host_ports.transport(driver);
-    gui.app.config_watcher = host_ports.configWatcher(&driver.configuration);
+    gui.app.transport_driver = host_ports.transport(&gui.driver);
+    gui.app.config_watcher = host_ports.configWatcher(&gui.driver.configuration);
 
     return gui;
 }
 
-/// Call only after the driver has joined its tasks. Example: `gui.deinit();`
+/// Call after native GPU consumers stop; joins workers before releasing resources. Example: `gui.deinit();`
 pub fn deinit(self: *GuiClient) void {
     const gpa = self.app.gpa;
+    self.driver.deinit();
+    self.renderer.deinit();
 
     if (self.lifecycle.active) |flight| {
         _ = self.lifecycle.complete(flight.token, .cancelled);
@@ -205,9 +238,221 @@ pub fn deinit(self: *GuiClient) void {
     gpa.destroy(self);
 }
 
+/// Opens the native window after configuring its renderer; returns after GPU consumers stop.
+/// Example: `const status = try gui.run("Telar");`
+pub fn run(self: *GuiClient, title: [*:0]const u8) !u8 {
+    const renderer = try Renderer.configured(
+        self.app.gpa,
+        self.app.io,
+        .{
+            .config = self.app.options.gui,
+            .theme = self.app.options.theme.terminal,
+        },
+    );
+    self.renderer.deinit();
+    self.renderer = renderer;
+    self.renderer.sidebar_request = self.sidebar.request(self.app.model.sidebarVisible());
+    const hostname = std.posix.gethostname(&self.hostname) catch "";
+    self.hostname_len = hostname.len;
+    const callbacks = native_callbacks.bind(self);
+    const result = native.telar_gui_run(
+        title,
+        self,
+        &callbacks,
+    );
+
+    if (self.failure) |err| {
+        return err;
+    }
+
+    if (result != 0) {
+        return error.NativeWindowFailed;
+    }
+
+    return self.exit_status orelse 0;
+}
+
+/// Starts the runtime only after the native surface supplies usable geometry.
+/// Repeated notifications do not repeat bootstrap or mutate an in-flight frame.
+/// Example: `try gui.windowReady(viewport);`
+pub fn windowReady(self: *GuiClient, viewport: native.Viewport) !void {
+    if (self.started or self.failure != null or self.exit_status != null) {
+        return;
+    }
+
+    _ = self.resizeViewport(viewport) catch |err| switch (err) {
+        error.InvalidTerminalSize => return,
+        else => return err,
+    };
+    try self.start(
+        .{
+            .foreground = self.renderer.theme.foreground,
+            .background = self.renderer.theme.background,
+            .palette = self.renderer.theme.palette,
+        },
+    );
+}
+
+/// Negotiates the current viewport against the owned renderer and shared model.
+/// Example: `const size = try gui.resizeViewport(viewport);`
+pub fn resizeViewport(self: *GuiClient, viewport: native.Viewport) !core.TerminalSize {
+    if (self.lifecycle.active != null) {
+        return error.PresentationBusy;
+    }
+
+    const size = try self.measure(&self.renderer, viewport);
+    try self.resize(size, self.renderer.theme);
+    self.pointer.configure(self.renderer.origin, size);
+    return size;
+}
+
+/// Prepares one frame without starting the runtime. Native readiness owns startup.
+/// Example: `const token = try gui.draw(viewport);`
+pub fn draw(self: *GuiClient, viewport: native.Viewport) !u64 {
+    if (self.failure != null or self.exit_status != null) {
+        return 0;
+    }
+
+    if (self.lifecycle.active != null) {
+        return error.PresentationBusy;
+    }
+
+    self.driver.configuration.observe(self.renderer.config, viewport);
+    if (try self.driver.configuration.apply(self, &self.renderer)) {
+        self.cursor_clock.config = self.renderer.config.cursor;
+        self.cursor_clock.reset(self.now());
+    }
+
+    _ = self.resizeViewport(viewport) catch |err| switch (err) {
+        error.InvalidTerminalSize => return 0,
+        else => return err,
+    };
+    const now_ns = self.now();
+    self.cursor_clock.observe(self.cursorTarget(), now_ns);
+    self.renderer.cursor_on = self.cursor_clock.shown(now_ns);
+    self.renderer.focused = self.cursor_clock.focused;
+    const token = try self.prepare(&self.renderer);
+    if (token != 0) {
+        self.driver.frame_pacer.record(self.lifecycle.active.?.delivery.commit.slice(), now_ns);
+    }
+
+    return token;
+}
+
+/// Admits native input once ready, retaining pre-start focus transitions.
+/// Example: `_ = try gui.input(decoded);`
+pub fn input(self: *GuiClient, event: InputEvent) !bool {
+    if (!self.started) {
+        if (event == .focus) {
+            try self.driver.inbox.post(
+                .{
+                    .focus = event.focus,
+                },
+            );
+            return true;
+        }
+
+        return false;
+    }
+
+    core.mark(self.app.io, .client_input);
+    return self.acceptInput(event);
+}
+
+/// Records the first window failure and wakes the native loop to close it.
+/// Example: `gui.fail(err);`
+pub fn fail(self: *GuiClient, err: anyerror) void {
+    if (self.failure == null) {
+        std.log.err(
+            "native client: {s}",
+            .{
+                @errorName(err),
+            },
+        );
+        self.failure = err;
+    }
+
+    native.telar_gui_wake(self.driver.fds[1]);
+}
+
+fn now(self: *const GuiClient) u64 {
+    return @intCast(@max(0, std.Io.Clock.awake.now(self.app.io).toNanoseconds()));
+}
+
+/// Reports the next cursor or widget animation wake without advancing either.
+/// Example: `const delay = gui.wakeupAfter();`
+pub fn wakeupAfter(self: *const GuiClient) u32 {
+    const now_ns = self.now();
+    const widgets = if (self.lifecycle.active == null) self.chrome.animation.wakeupAfter(now_ns) else 0;
+    return FrameClock.earliest(self.cursor_clock.wakeupAfter(now_ns), widgets);
+}
+
+/// Reports native frame admission delay from visible terminal frame identities.
+/// Example: `const delay_ns = gui.frameDelayNs();`
+pub fn frameDelayNs(self: *GuiClient) u64 {
+    var visible: [core.max_panes_per_tab]FramePacer.Pane = undefined;
+    var count: usize = 0;
+    if (self.app.model.activeTabModelConst()) |model| {
+        var layout: client.LayoutSnapshot = .{};
+        model.layout.snapshot(self.region.area, &layout);
+        for (layout.views()) |view| {
+            if (view.surface != .terminal or view.content.w == 0 or view.content.h == 0) {
+                continue;
+            }
+
+            const pane = model.findConst(view.pane_id) orelse continue;
+            visible[count] = .{
+                .pane_id = pane.id,
+                .attachment_generation = pane.attachment_generation,
+                .frame_id = pane.applied_frame_id,
+                .attached = pane.attached,
+            };
+            count += 1;
+        }
+    }
+
+    const now_ns = self.now();
+    const deadline = self.driver.frame_pacer.waitUntil(visible[0..count], now_ns) orelse return 0;
+    return deadline -| now_ns;
+}
+
+/// Copies a changed title into native-owned output storage.
+/// Example: `const changed = try gui.windowTitle(out);`
+pub fn windowTitle(self: *GuiClient, out: *native.WindowTitle) !bool {
+    out.* = .{};
+    const model = &self.app.model;
+    const tab_label = if (model.workspace.activeConst()) |tab| tab.labelSlice() else "";
+    return self.window_title.sync(
+        .{
+            .context = out,
+            .set = copyWindowTitle,
+        },
+        .{
+            .template = model.windowTitleTemplate(),
+            .tokens = .{
+                .workspace = model.workspace.workspaceName(),
+                .tab = tab_label,
+                .pane_title = model.focusedPaneTitle(),
+                .hostname = self.hostname[0..self.hostname_len],
+            },
+        },
+    );
+}
+
+fn copyWindowTitle(context: *anyopaque, title: []const u8) !void {
+    const out: *native.WindowTitle = @ptrCast(@alignCast(context));
+    if (title.len >= out.bytes.len) {
+        return error.WindowTitleTooLong;
+    }
+
+    @memcpy(out.bytes[0..title.len], title);
+    out.bytes[title.len] = 0;
+    out.len = @intCast(title.len);
+}
+
 /// Publishes native capabilities and starts runtime I/O and configuration tasks.
 /// Example: `try gui.start(colors);`
-pub fn start(self: *GuiClient, colors: core.TerminalColors) !void {
+fn start(self: *GuiClient, colors: core.TerminalColors) !void {
     var capabilities = self.app.model.hostCapabilities();
 
     capabilities.terminal_colors = colors;
@@ -232,10 +477,10 @@ pub fn start(self: *GuiClient, colors: core.TerminalColors) !void {
         },
     );
 
-    try self.app.runtime_transport.scheduleRead(self.app.transport_driver);
-    try self.app.runtime_transport.pump(self.app.transport_driver);
+    try self.app.startRuntimeIo();
     try self.app.scheduleConfigReload();
     try self.app.synchronizeBars();
+    self.started = true;
 }
 
 /// Copies borrowed input before the host callback returns. A full input queue
@@ -273,7 +518,7 @@ pub fn acceptInput(self: *GuiClient, event: InputEvent) !bool {
 /// Workers only publish owned messages; the window thread owns mutation.
 /// Example: `const status = try gui.update();`
 pub fn update(self: *GuiClient) !?u8 {
-    const loop = self.driver;
+    const loop = &self.driver;
     const status: ?u8 = turn: {
         var batch = try loop.inbox.begin();
         defer loop.inbox.end();
@@ -297,6 +542,24 @@ pub fn update(self: *GuiClient) !?u8 {
     };
 
     self.refreshPointer();
+    self.exit_status = status;
+    const now_ns = self.now();
+    if (self.observed_input_revision != self.input_revision) {
+        self.observed_input_revision = self.input_revision;
+        self.cursor_clock.focused = self.focused;
+        self.cursor_clock.reset(now_ns);
+    }
+
+    self.cursor_clock.observe(self.cursorTarget(), now_ns);
+    _ = self.lifecycle.observe(self.observation());
+    self.needs_draw = false;
+    if (self.lifecycle.active == null) {
+        const animation_due = self.chrome.animation.requestPreparation(now_ns);
+        self.needs_draw = self.lifecycle.needsPreparation() or animation_due or
+            self.driver.configuration.pending or
+            self.renderer.cursor_on != self.cursor_clock.shown(now_ns) or
+            self.renderer.focused != self.cursor_clock.focused;
+    }
 
     return status;
 }
@@ -304,7 +567,7 @@ pub fn update(self: *GuiClient) !?u8 {
 fn dispatch(self: *GuiClient, event: Message) !?u8 {
     switch (event) {
         .server => |result| return self.receive(result),
-        .sent => |result| try client.runtime_io.handleSent(&self.app, result),
+        .sent => |result| try self.app.completeRuntimeSend(result),
         .input_ready => try self.inputReady(),
         .focus => |focused| try self.focus(focused),
         .presented => |result| try self.complete(result.token, result.delivered),
@@ -351,7 +614,7 @@ fn pathFor(event: Message) core.Path {
 
 /// Applies one validated runtime message before releasing its receive borrow.
 fn receive(self: *GuiClient, result: anyerror!*const client.RuntimeMessage) !?u8 {
-    if (try client.runtime_io.handleRead(&self.app, result)) |status| {
+    if (try self.app.receiveRuntime(result)) |status| {
         return status;
     }
 
@@ -444,20 +707,20 @@ fn statusMode(self: *const GuiClient) client.Mode {
 /// Stops before the shared outbox fills, resuming on transport completion.
 fn drainInput(self: *GuiClient) !void {
     const app = &self.app;
-    const input = &self.input_queue;
+    const pending_input = &self.input_queue;
 
     if (app.startup.holdsInput()) {
         return;
     }
 
-    var budget = client.DrainBudget.begin(app.io, input.len + input.recovery.len);
+    var budget = client.DrainBudget.begin(app.io, pending_input.len + pending_input.recovery.len);
     const pending = self.router.prefixPending();
 
-    while (!self.stopped and input.len != 0 and app.runtime_transport.outbox.availableCapacity() >= @intFromEnum(InputLimit.minimum_outbox_slots) and budget.take(app.io)) {
+    while (!self.stopped and pending_input.len != 0 and app.runtime_transport.outbox.availableCapacity() >= @intFromEnum(InputLimit.minimum_outbox_slots) and budget.take(app.io)) {
         app.presentation.noteInput(client.monotonic(app.io));
         const overflows = self.router.leaseOverflowCount();
 
-        switch (input.front().?.*) {
+        switch (pending_input.front().?.*) {
             .key => |key| try self.dispatchKey(key),
             .text => |*text| {
                 if (!try self.widgetInput(
@@ -516,16 +779,16 @@ fn drainInput(self: *GuiClient) !void {
                     self.pointer.scroll_remainder = 0;
                     self.recovery_interactions_finished = true;
 
-                    if (input.recovery.len != 0) {
+                    if (pending_input.recovery.len != 0) {
                         continue;
                     }
                 }
 
-                if (input.recovery.next()) |key| {
+                if (pending_input.recovery.next()) |key| {
                     try self.dispatchKey(key);
-                    input.recovery.finish(key);
+                    pending_input.recovery.finish(key);
 
-                    if (input.recovery.len != 0) {
+                    if (pending_input.recovery.len != 0) {
                         continue;
                     }
                 }
@@ -543,7 +806,7 @@ fn drainInput(self: *GuiClient) !void {
                             .pointer = event.event,
                         },
                     )) {
-                        input.consume();
+                        pending_input.consume();
                         continue;
                     }
                 }
@@ -556,7 +819,7 @@ fn drainInput(self: *GuiClient) !void {
                 }
             },
             .owned_small => |index| {
-                _ = try self.widgetInput(input.small_events.view(index));
+                _ = try self.widgetInput(pending_input.small_events.view(index));
             },
             .composition_cancel => |value| _ = try self.widgetInput(
                 .{
@@ -564,14 +827,14 @@ fn drainInput(self: *GuiClient) !void {
                 },
             ),
             .owned_large => |index| {
-                if (!try self.dispatchClipboard(input.large_events.view(index).clipboard)) {
+                if (!try self.dispatchClipboard(pending_input.large_events.view(index).clipboard)) {
                     continue;
                 }
             },
         }
 
         app.telemetry.metrics.key_lease_overflows +%= self.router.leaseOverflowCount() -% overflows;
-        input.consume();
+        pending_input.consume();
     }
 
     try self.finishInput(pending);
@@ -1135,10 +1398,10 @@ fn finishInput(self: *GuiClient, pending: bool) !void {
 /// Reserves one control slot to finish gestures even when ordinary input is
 /// saturated. Example: `try gui.cancelPointer();`
 fn cancelPointer(self: *GuiClient) !void {
-    const input = &self.input_queue;
+    const pending_input = &self.input_queue;
 
     self.pointer.invalidateGestures();
-    input.requestRecovery();
+    pending_input.requestRecovery();
     try self.drainInput();
     try self.resumeInput();
 }
@@ -1229,7 +1492,7 @@ pub fn resumeInput(self: *GuiClient) !void {
 
 /// Copies the visible cursor identity for the native blink clock.
 /// Example: `clock.observe(gui.cursorTarget(), now_ns);`
-pub fn cursorTarget(self: *const GuiClient) CursorTarget {
+fn cursorTarget(self: *const GuiClient) CursorTarget {
     if (self.app.model.name_prompt.active()) {
         return .{};
     }
@@ -1277,7 +1540,7 @@ pub fn resizeRegion(self: *GuiClient, cols: u16, rows: u16) void {
 /// next keyboard step or drag clamps to it. The caller still negotiates the
 /// PTY with `resize`.
 /// Example: `const size = try gui.measure(&renderer, viewport);`
-pub fn measure(self: *GuiClient, renderer: *Renderer, viewport: native.Viewport) !core.TerminalSize {
+fn measure(self: *GuiClient, renderer: *Renderer, viewport: native.Viewport) !core.TerminalSize {
     const viewport_changed = !std.meta.eql(
         renderer.viewport,
         [2]u32{
@@ -1378,7 +1641,7 @@ pub fn applyGraphics(self: *GuiClient, command: client.ApplicationPanesPaneGraph
 
 /// Borrows the projection synchronously and seals only the rendered pane frames.
 /// Example: `const token = try gui.prepare(&renderer);`
-pub fn prepare(self: *GuiClient, renderer: *Renderer) !u64 {
+fn prepare(self: *GuiClient, renderer: *Renderer) !u64 {
     self.widgets.tab_drag.validate(&self.app.model);
 
     if (!client.request_lifecycle.has(&self.app, .tab_operation)) {
@@ -1612,4 +1875,75 @@ pub fn widgetAccessibility(self: *GuiClient, output: *native.AccessibilityTree) 
     }
 
     return host_context.accessibility(self, output);
+}
+
+test "widget draw failure preserves delivered targets and pending pane damage before retry" {
+    const session = try TestSession.init();
+    defer session.deinit();
+    try session.bootstrap();
+    try session.receiveFrame(1);
+    const gui = session.gui;
+    gui.app.model.name_prompt.begin(
+        .{
+            .rename_tab = .{
+                .tab_id = TestSession.location.tab_id,
+                .label = "Visible title",
+            },
+        },
+    );
+    const delivered = try session.draw();
+    try input_test_support.presented(
+        gui,
+        delivered,
+        true,
+    );
+    const chrome = gui.chrome.presented();
+    const overlays = gui.overlays.presented();
+    const targets = gui.widgets.dispatcher.maps.presented();
+    const editors = gui.widgets.editors.presented();
+    try std.testing.expect(editors.len > 0);
+    try session.receiveFrame(2);
+    _ = gui.app.model.name_prompt.apply(.cancel);
+    gui.app.model.name_prompt.begin(
+        .{
+            .rename_tab = .{
+                .tab_id = TestSession.location.tab_id,
+                .label = "Pending title",
+            },
+        },
+    );
+    const pane = gui.app.model.workspace.findPane(TestSession.pane_id).?;
+    const limit = session.gui.renderer.quads.limit;
+    session.gui.renderer.quads.limit = 1;
+    defer session.gui.renderer.quads.limit = limit;
+    // Inject failure after measurement reserves the production frame budget.
+    try std.testing.expectError(error.NativeQuadBudgetExceeded, gui.prepare(&gui.renderer));
+    try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.quads.items().len);
+    try std.testing.expect(gui.lifecycle.active == null);
+    try std.testing.expectEqual(@as(u64, 2), pane.pending_frame_id);
+    try std.testing.expectEqual(chrome, gui.chrome.presented());
+    try std.testing.expectEqual(overlays, gui.overlays.presented());
+    try std.testing.expectEqual(targets, gui.widgets.dispatcher.maps.presented());
+    try std.testing.expectEqual(editors, gui.widgets.editors.presented());
+    try input_test_support.presented(
+        gui,
+        delivered,
+        true,
+    );
+    try std.testing.expectEqual(targets, gui.widgets.dispatcher.maps.presented());
+    try std.testing.expectEqual(@as(u64, 2), pane.pending_frame_id);
+
+    session.gui.renderer.quads.limit = limit;
+    const retry = try session.draw();
+    try std.testing.expect(retry != delivered);
+    try std.testing.expectEqual(targets, gui.widgets.dispatcher.maps.presented());
+    try input_test_support.presented(
+        gui,
+        retry,
+        true,
+    );
+    try std.testing.expect(gui.widgets.dispatcher.maps.presented() != targets);
+    try std.testing.expectEqual(@as(usize, 1), gui.widgets.editors.presented().len);
+    try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
+    try session.settle();
 }

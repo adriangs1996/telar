@@ -18,7 +18,6 @@ const encodePaneExited_module = @import("telar-core").encodePaneExited;
 const support = @import("support.zig");
 const pane_closures = @import("telar-client").operations.pane_closures;
 const workspace_handoffs = @import("telar-client").operations.workspace_handoffs;
-const runtime_transport = @import("telar-client").runtime_io;
 const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
 const TabLocationType = @import("telar-core").TabLocation;
 const IconType = @import("telar-client").Icon;
@@ -181,11 +180,11 @@ test "a frame already sent before workspace departure is harmless during handoff
     const graphics_visible = host(client).graphics_store.paneVisible(TestHarness.bootstrap_pane);
     const frames = client.telemetry.metrics.frames;
 
-    try client.runtime_transport.scheduleRead(client.transport_driver);
+    try client.startRuntimeRead();
     switch (try host(client).inbox.receive()) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, null),
-            try runtime_transport.handleRead(client, result),
+            try client.receiveRuntime(result),
         ),
         else => return error.UnexpectedEvent,
     }
@@ -215,7 +214,7 @@ test "a frame already sent before workspace departure is harmless during handoff
     switch (try host(client).inbox.receive()) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, null),
-            try runtime_transport.handleRead(client, result),
+            try client.receiveRuntime(result),
         ),
         else => return error.UnexpectedEvent,
     }
@@ -247,7 +246,7 @@ test "a frame already sent before workspace departure is harmless during handoff
     switch (try host(client).inbox.receive()) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, null),
-            try runtime_transport.handleRead(client, result),
+            try client.receiveRuntime(result),
         ),
         else => return error.UnexpectedEvent,
     }

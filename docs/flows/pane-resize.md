@@ -9,8 +9,8 @@ operations/input/actions.apply
      -> Model.resizePane
      -> validate committed location, focus, fullscreen and pane revision
      -> host_graphics.invalidatePlacements
-     -> pane_geometry.offerAttached
-     -> tab_snapshots.attachActive
+     -> AttachedClient.resizeAttachedPanes
+     -> AttachedClient.attachVisiblePanes
   -> adapter observes presentation revisions
 ```
 
@@ -19,13 +19,13 @@ axes, bounded ratios and rectangles without usable content produce no change.
 A commit advances the pane revision. Fullscreen keeps its split tree, so a
 resize while fullscreen changes the hidden tiled layout.
 
-`offerAttached` computes one bounded layout snapshot and applies the attachment
-shelf reservation only to its owner. It emits one `pane_resize` per attached
+`AttachedClient.resizeAttachedPanes` computes one bounded layout snapshot and
+applies the attachment shelf reservation only to its owner. It emits one `pane_resize` per attached
 pane with visible content; fullscreen selects its focused pane. Cell pixel
-metrics come from the tab model. `offerActive` selects the current tab and
-reuses this implementation, returning silently for an empty client.
+metrics come from the tab model. Callers resolve the target tab and geometry
+once before invoking the delivery methods. Empty clients skip pane delivery.
 
-After offering sizes, `tab_snapshots.attachActive` requests newly visible
+After offering sizes, `AttachedClient.attachVisiblePanes` requests newly visible
 detached panes whose canonical membership has been loaded. It skips already
 pending requests. The fixed outbox replaces obsolete unsent resizes for the
 same pane instead of building a replay queue.

@@ -49,7 +49,7 @@ focus or remote handoff selected from that plan.
 
 After the model accepts a newer snapshot, the operation calls
 `active_pane_resources.synchronizeAttachments`. A shelf geometry change calls
-`pane_geometry.offerActive`. This attachment-only synchronization does not
+`AttachedClient.resizeAttachedPanes`. This attachment-only synchronization does not
 emit child focus reports. The operation then translates transitions to
 `blocked`, `done` and `failed` into owned notifications, bounded by the center's
 capacity. It finally calls `sidebar_animations.synchronize` to arm working-agent

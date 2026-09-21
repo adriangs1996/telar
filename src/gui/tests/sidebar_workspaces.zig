@@ -27,7 +27,7 @@ test "project rows occupy the upper sidebar and keep stable workspace identities
 
     // The section rule shares the agent title's line, above its card viewport.
     var found_rule = false;
-    for (fixture.session.renderer.quads.items()) |quad| {
+    for (fixture.session.gui.renderer.quads.items()) |quad| {
         if (quad.height == 1 and quad.width > 80 and quad.x > list.x + 30 and quad.x + quad.width <= list.x + list.width and quad.y > list.y + list.height and quad.y < agents.y) {
             found_rule = true;
         }
@@ -139,7 +139,7 @@ test "projects use text contrast for selection and a card background only on hov
         fixture.chrome.hovered = .{ .intent = .{ .select_workspace = workspaceId(if (scale == 1) 1 else 0) } };
         try fixture.paint(projection);
         const hit = fixture.bandTarget(.{ .select_workspace = workspaceId(0) }).?;
-        const renderer = &fixture.session.renderer;
+        const renderer = &fixture.session.gui.renderer;
         const other = fixture.bandTarget(.{ .select_workspace = workspaceId(1) }).?;
         const bright = fixture.session.gui.theme.palette.text.rgb;
         const muted = [3]u8{ 115, 115, 115 };

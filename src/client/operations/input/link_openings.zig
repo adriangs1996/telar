@@ -169,7 +169,7 @@ fn openEditorPane(client: *Client, pane_id: PaneId, path: FilePathType) !void {
         return splitEditorPane(client, request);
     }
 
-    request.request_id = try request_lifecycle.nextId(client);
+    request.request_id = try client.request_lifecycle.nextId();
     try client.editor_open.begin(request);
     errdefer _ = client.editor_open.complete(request.request_id);
     try request_lifecycle.deliver(client, .{

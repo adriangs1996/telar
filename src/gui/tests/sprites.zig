@@ -30,7 +30,7 @@ pub fn spriteCount(quads: []const Quad) usize {
 test "the renderer builds the page with the atlas and versions it per change" {
     const session = try Session.init();
     defer session.deinit();
-    const renderer = &session.renderer;
+    const renderer = &session.gui.renderer;
     const page = &renderer.sprites.?;
     try std.testing.expectEqual(SpritePage.cellFor(1), page.cell);
     try std.testing.expectEqual(@as(u16, 3), page.count);
@@ -104,7 +104,7 @@ fn agent(provider: core.AgentProvider, pane: u32) client.AgentInput {
 test "the card draws the sheet mark for the three providers and an unboxed glyph for a custom one" {
     var fixture = try ChromeFixture.init();
     defer fixture.deinit();
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     var agents: client.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &.{ agent(.claude, 51), agent(.codex, 52), agent(.pi, 53), agent(.unknown, 54), agent(@enumFromInt(7), 55) } });
     var projection = fixture.projection();
@@ -172,7 +172,7 @@ test "a warm repaint with sprites shapes rasterizes and allocates nothing" {
     var projection = fixture.projection();
     projection.agents = &agents;
     try fixture.paint(projection);
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const count = renderer.quads.items().len;
     try std.testing.expectEqual(@as(usize, 3), spriteCount(renderer.quads.items()));
     const atlas = &renderer.atlas.?;
@@ -337,7 +337,7 @@ fn expectFaviconCard(name: []const u8, bytes: []const u8) !void {
     defer fixture.deinit();
     const session = fixture.session;
     const gui = session.gui;
-    const renderer = &session.renderer;
+    const renderer = &session.gui.renderer;
     const io = std.testing.io;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
@@ -350,7 +350,7 @@ fn expectFaviconCard(name: []const u8, bytes: []const u8) !void {
 
     // The first preparation starts the lookup; its completion lands through
     // the inbox and the next preparation places the cell.
-    const first = try gui.prepare(renderer);
+    const first = try session.draw();
     try std.testing.expect(gui.chrome.favicons.stateOf(workspace) == .pending);
     try std.testing.expect(gui.app.favicons.busy());
     try input_support.presented(
@@ -366,7 +366,7 @@ fn expectFaviconCard(name: []const u8, bytes: []const u8) !void {
 
         // Presentation may have already consumed the worker completion. Prepare
         // first to adopt a ready image instead of waiting for another message.
-        const token = try gui.prepare(renderer);
+        const token = try session.draw();
         try input_support.presented(
             gui,
             token,
@@ -377,7 +377,7 @@ fn expectFaviconCard(name: []const u8, bytes: []const u8) !void {
         }
 
         if (gui.app.favicons.busy()) {
-            try session.driver.inbox.wait();
+            try session.gui.driver.inbox.wait();
             _ = try gui.update();
         }
     }
@@ -388,7 +388,7 @@ fn expectFaviconCard(name: []const u8, bytes: []const u8) !void {
     try std.testing.expectEqual(@as(u16, 4), renderer.sprites.?.count);
     renderer.seal();
     const version = renderer.sprites_version;
-    const again = try gui.prepare(renderer);
+    const again = try session.draw();
     try input_support.presented(
         gui,
         again,

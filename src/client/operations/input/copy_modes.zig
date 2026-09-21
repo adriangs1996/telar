@@ -15,7 +15,6 @@ const link_openings = @import("link_openings.zig");
 const InputCopyModeDirection = @import("../../input/copy_mode.zig").Direction;
 const name_prompts_module = @import("name_prompts.zig");
 const CopySelectionType = @import("telar-core").CopySelection;
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
 /// Semantic actions include native conversation readers in copy-mode policy.
 /// Example: `if (copy_modes.active(client)) try copy_modes.leave(client);`
@@ -120,7 +119,11 @@ fn openSearch(client: *Client, direction: InputCopyModeDirection) !void {
 }
 
 fn copySelection(client: *Client, selection: CopySelectionType) !void {
-    try runtime_transport.enqueue(client, .{ .copy_selection = selection });
+    try client.sendRuntime(
+        .{
+            .copy_selection = selection,
+        },
+    );
 }
 
 test "copy mode delegates agent readers after admission and preserves terminal behavior" {

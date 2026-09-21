@@ -64,7 +64,7 @@ pub fn submit(client: *Client, pane_id: core.PaneId) !void {
     }
 
     const intent = client.model.planAgentPrompt(pane_id) orelse return;
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try request_lifecycle.deliverAgentPrompt(client, .{
         .request_id = request_id,
         .pane_id = pane_id,
@@ -88,7 +88,7 @@ pub fn interrupt(client: *Client, pane_id: core.PaneId) !void {
         return;
     }
 
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try request_lifecycle.deliver(client, .{
         .registration = .{ .request_id = request_id, .continuation = .{ .agent_control = pending } },
         .message = .{ .agent_interrupt = .{
@@ -109,7 +109,7 @@ pub fn resumeConversation(client: *Client, pane_id: core.PaneId, index: u8) !voi
         return;
     }
 
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try request_lifecycle.deliver(client, .{
         .registration = .{ .request_id = request_id, .continuation = .{ .agent_control = pending } },
         .message = .{ .agent_resume = .{
@@ -132,7 +132,7 @@ pub fn approve(client: *Client, decision: AgentDecision) !void {
         return;
     }
 
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try request_lifecycle.deliver(client, .{
         .registration = .{ .request_id = request_id, .continuation = .{ .agent_control = pending } },
         .message = .{ .agent_approval = .{
@@ -152,7 +152,7 @@ pub fn query(client: *Client, pane_id: core.PaneId) !void {
         return;
     }
 
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try request_lifecycle.deliver(client, .{
         .registration = .{ .request_id = request_id, .continuation = .{ .agent_query = pending } },
         .message = .{ .query_agent_thread = .{

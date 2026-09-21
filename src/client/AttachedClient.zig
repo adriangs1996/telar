@@ -69,10 +69,14 @@ comptime {
 const HostUpdate = @import("model/HostUpdate.zig");
 const HostCommit = @import("model/HostCommit.zig");
 const HostCapabilityObservation = @import("model/types.zig").HostCapabilityObservation;
-const runtime_io = @import("entrypoints/runtime_io.zig");
+const server_messages = @import("entrypoints/server_messages.zig");
+const RuntimeOutboundMessage = @import("connection/outbox_support.zig").Message;
+const RuntimeMessage = @import("connection/RuntimeMessage.zig");
 const pane_graphics = @import("operations/panes/pane_graphics.zig");
-const pane_geometry = @import("operations/panes/pane_geometry.zig");
-const tab_snapshots = @import("operations/tabs/tab_snapshots.zig");
+const MultiplexerModel = @import("workspace/MultiplexerModel.zig");
+const multiplexer = @import("workspace/multiplexer.zig");
+const Tab = @import("workspace/Tab.zig");
+const requests = @import("connection/request_lifecycle.zig");
 
 const AttachedClient = @This();
 
@@ -230,6 +234,214 @@ pub fn editorExecutable(self: *const AttachedClient) []const u8 {
     return self.options.editor;
 }
 
+/// Owns a routed response until its asynchronous send completes. Example: `try self.sendRuntimeClientCompletion(reply);`
+pub fn sendRuntimeClientCompletion(self: *AttachedClient, reply: core.ClientCommand) !void {
+    try self.runtime_transport.outbox.pushClientCompletion(reply);
+    try self.startRuntimeSend();
+}
+
+/// Copies one fixed-size message and starts its write when idle.
+/// Example: `try self.sendRuntime(.{ .detach_pane = detach });`
+pub fn sendRuntime(self: *AttachedClient, message: RuntimeOutboundMessage) !void {
+    try self.runtime_transport.outbox.push(message);
+    try self.startRuntimeSend();
+}
+
+/// Copies bounded pane input and starts its write when idle.
+///
+/// ```zig
+/// try self.sendRuntimeInput(.{ .pane_id = pane_id, .bytes = bytes });
+/// ```
+pub fn sendRuntimeInput(self: *AttachedClient, input: core.PaneInput) !void {
+    if (input.bytes.len > max_encoded_bytes) {
+        try self.runtime_transport.outbox.pushInputBatch(input.pane_id, input.bytes);
+    } else {
+        try self.runtime_transport.outbox.pushInput(input.pane_id, input.bytes);
+    }
+
+    try self.startRuntimeSend();
+}
+
+/// Copies one tab rename and starts its write when idle.
+///
+/// ```zig
+/// try self.sendRuntimeRename(rename);
+/// ```
+pub fn sendRuntimeRename(self: *AttachedClient, rename: core.RenameTab) !void {
+    try self.runtime_transport.outbox.pushRename(rename);
+    try self.startRuntimeSend();
+}
+
+/// Copies one workspace rename and starts its write when idle.
+///
+/// ```zig
+/// try self.sendRuntimeWorkspaceRename(rename);
+/// ```
+pub fn sendRuntimeWorkspaceRename(self: *AttachedClient, rename: core.RenameWorkspace) !void {
+    try self.runtime_transport.outbox.pushWorkspaceRename(rename);
+    try self.startRuntimeSend();
+}
+
+/// Copies one workspace creation and starts its write when idle.
+///
+/// ```zig
+/// try self.sendRuntimeCreateWorkspace(request);
+/// ```
+pub fn sendRuntimeCreateWorkspace(self: *AttachedClient, request: core.CreateWorkspace) !void {
+    try self.runtime_transport.outbox.pushCreateWorkspace(request);
+    try self.startRuntimeSend();
+}
+
+/// Copies one tab creation and starts its write when idle.
+///
+/// ```zig
+/// try self.sendRuntimeCreateTab(request);
+/// ```
+pub fn sendRuntimeCreateTab(self: *AttachedClient, request: core.CreateTab) !void {
+    try self.runtime_transport.outbox.pushCreateTab(request);
+    try self.startRuntimeSend();
+}
+
+/// Copies a prompt into its outbound slot before the editor can change it.
+/// Example: `try self.sendRuntimeAgentPrompt(request);`
+pub fn sendRuntimeAgentPrompt(self: *AttachedClient, request: core.AgentPrompt) !void {
+    try self.runtime_transport.outbox.pushAgentPrompt(request);
+    try self.startRuntimeSend();
+}
+
+/// Copies a page cursor before its reading window can change.
+/// Example: `try self.sendRuntimeAgentHistory(request);`
+pub fn sendRuntimeAgentHistory(self: *AttachedClient, request: core.QueryAgentHistory) !void {
+    try self.runtime_transport.outbox.pushAgentHistory(request);
+    try self.startRuntimeSend();
+}
+
+/// Pins a query to copied provider session bytes before the view can change.
+/// Example: `try self.sendRuntimeChangeReviewQuery(query);`
+pub fn sendRuntimeChangeReviewQuery(self: *AttachedClient, query: core.QueryChangeReview) !void {
+    try self.runtime_transport.outbox.pushChangeReviewQuery(query);
+    try self.startRuntimeSend();
+}
+
+/// Copies comment and path bytes before the originating editor can mutate them.
+/// Example: `try self.sendRuntimeChangeReviewCommand(request);`
+pub fn sendRuntimeChangeReviewCommand(self: *AttachedClient, request: core.ChangeReviewCommand) !void {
+    try self.runtime_transport.outbox.pushChangeReviewCommand(request);
+    try self.startRuntimeSend();
+}
+
+/// Copies one notification request and starts its write when idle.
+///
+/// ```zig
+/// try self.sendRuntimeNotification(request);
+/// ```
+pub fn sendRuntimeNotification(self: *AttachedClient, request: core.ShowNotification) !void {
+    try self.runtime_transport.outbox.pushNotification(request);
+    try self.startRuntimeSend();
+}
+
+/// Copies and coalesces one complete reconnectable client layout.
+///
+/// ```zig
+/// try self.sendRuntimeClientLayout(update);
+/// ```
+pub fn sendRuntimeClientLayout(self: *AttachedClient, update: core.ClientLayoutUpdate) !void {
+    try self.runtime_transport.outbox.pushClientLayout(update);
+    try self.startRuntimeSend();
+}
+
+/// Starts the receive loop before sending the queued bootstrap.
+/// Example: `try client.startRuntimeIo();`
+pub fn startRuntimeIo(self: *AttachedClient) !void {
+    try self.startRuntimeRead();
+    try self.startRuntimeSend();
+}
+
+/// Reserves a receive buffer and releases it if the driver rejects the read.
+/// Example: `try client.startRuntimeRead();`
+pub fn startRuntimeRead(self: *AttachedClient) !void {
+    const transport = &self.runtime_transport;
+    if (!transport.beginRead()) {
+        return;
+    }
+
+    self.transport_driver.startRead(transport) catch |err| {
+        transport.cancelRead();
+
+        return err;
+    };
+}
+
+/// Keeps queued data owned by the transport if scheduling fails.
+fn startRuntimeSend(self: *AttachedClient) !void {
+    const transport = &self.runtime_transport;
+    const payload = try transport.prepareSend() orelse return;
+
+    self.transport_driver.startSend(transport, payload) catch |err| {
+        transport.cancelSend();
+
+        return err;
+    };
+}
+
+/// Releases one runtime read, dispatches its bounded message and rearms only
+/// while the client remains alive.
+///
+/// ```zig
+/// if (try self.receiveRuntime(result)) |status| return status;
+/// ```
+pub fn receiveRuntime(self: *AttachedClient, result: anyerror!*const RuntimeMessage) !?u8 {
+    core.mark(self.io, .client_frame);
+    const received = try self.runtime_transport.completeRead(result);
+    self.telemetry.recordMessage(received);
+    const status = try server_messages.handleServerMessage(self, received.message);
+
+    if (status) |exit_status| {
+        return exit_status;
+    }
+
+    self.queueGraphicsCredits();
+    try self.startRuntimeSend();
+    try self.startRuntimeRead();
+
+    return null;
+}
+
+/// Releases one runtime write, pumps its successor and resumes host input when
+/// one queue slot becomes available.
+///
+/// ```zig
+/// try self.completeRuntimeSend(result);
+/// ```
+pub fn completeRuntimeSend(self: *AttachedClient, result: anyerror!void) !void {
+    try self.runtime_transport.outbox.finishSend(result);
+    self.queueGraphicsCredits();
+    try self.startRuntimeSend();
+    try self.host_input_source.resumeRead();
+}
+
+/// Returns available graphics credits and starts their delivery.
+/// Example: `try client.flushGraphicsCredits();`
+pub fn flushGraphicsCredits(self: *AttachedClient) !void {
+    self.queueGraphicsCredits();
+    try self.startRuntimeSend();
+}
+
+/// Transfers only credits admitted by the outbox; saturation preserves the rest.
+fn queueGraphicsCredits(self: *AttachedClient) void {
+    while (self.graphics.peekCredit()) |credit| {
+        self.runtime_transport.outbox.push(
+            .{
+                .graphics_credit = .{
+                    .pane_id = credit.pane_id,
+                    .bytes = @intCast(credit.bytes),
+                },
+            },
+        ) catch break;
+        self.graphics.consumeCredit(credit);
+    }
+}
+
 /// Commits validated geometry before touching resources. Delivery failure keeps
 /// the committed state; the caller ends the client session.
 /// Example: `_ = try self.applyHostUpdate(update);`
@@ -275,8 +487,7 @@ fn deliverHostCommit(self: *AttachedClient, commit: HostCommit) !void {
         if (!std.meta.eql(change.previous.terminal_colors, change.current.terminal_colors) and
             (self.startup.phase == .opening or self.startup.phase == .active))
         {
-            try runtime_io.enqueue(
-                self,
+            try self.sendRuntime(
                 .{
                     .configure_terminal_colors = change.current.terminal_colors,
                 },
@@ -327,8 +538,82 @@ fn deliverHostCommit(self: *AttachedClient, commit: HostCommit) !void {
         }
 
         self.host_graphics.invalidatePlacements();
-        try pane_geometry.offerActive(self, self.geometry().area);
-        try tab_snapshots.attachActive(self, self.geometry().area);
+        if (self.model.workspace.active()) |tab| {
+            const area = self.geometry().area;
+            try self.resizeAttachedPanes(&tab.model, area);
+
+            if (tab.snapshot_loaded) {
+                try self.attachVisiblePanes(tab, area);
+            }
+        }
+    }
+}
+
+/// Offers sizes for attached visible panes, reserving space for the attachment shelf.
+/// Example: `try self.resizeAttachedPanes(&tab.model, area);`
+pub fn resizeAttachedPanes(self: *AttachedClient, model: *MultiplexerModel, area: core.Rect) !void {
+    var layout = model.layoutSnapshot(area).*;
+    _ = layout.reserveBelowPane(self.attachment_shelf.reservation());
+    var panes = model.paneIterator();
+
+    while (panes.next()) |pane| {
+        if (!pane.attached) {
+            continue;
+        }
+
+        const view = layout.find(pane.id) orelse continue;
+        var size = multiplexer.rectSize(view.content) orelse continue;
+        size.cell_width_px = model.cell_width_px;
+        size.cell_height_px = model.cell_height_px;
+        try self.sendRuntime(
+            .{
+                .pane_resize = .{
+                    .pane_id = pane.id,
+                    .size = size,
+                },
+            },
+        );
+    }
+}
+
+/// Connects visible detached panes after canonical membership is loaded.
+/// Pending attachments are coalesced; failed delivery rolls back its correlation.
+/// Example: `if (tab.snapshot_loaded) { try self.attachVisiblePanes(tab, area); }`
+pub fn attachVisiblePanes(self: *AttachedClient, tab: *Tab, area: core.Rect) !void {
+    std.debug.assert(tab.snapshot_loaded);
+    var panes = tab.model.paneIterator();
+
+    while (panes.next()) |pane| {
+        if (pane.attached or self.request_lifecycle.tracker.hasPane(.attachment, pane.id)) {
+            continue;
+        }
+
+        const size = tab.model.contentSize(pane.id, area) orelse continue;
+        const request_id = try self.request_lifecycle.nextId();
+        try requests.deliver(
+            self,
+            .{
+                .registration = .{
+                    .request_id = request_id,
+                    .continuation = .{
+                        .attach_pane = .{
+                            .pane_id = pane.id,
+                            .location = tab.location,
+                        },
+                    },
+                },
+                .message = .{
+                    .open_pane = .{
+                        .request_id = request_id,
+                        .target = .{
+                            .pane = pane.id,
+                        },
+                        .size = size,
+                        .launch = null,
+                    },
+                },
+            },
+        );
     }
 }
 
@@ -481,4 +766,207 @@ test "host resources reject empty and stale commits before calling ports" {
     ));
     try std.testing.expectError(error.StaleHostCommit, app.deliverHostCommit(stale_capabilities));
     try std.testing.expectError(error.StaleHostCommit, app.deliverHostCommit(stale_size));
+}
+
+test "transport scheduling releases rejected reservations and retries queued frames in order" {
+    const Driver = struct {
+        reject: bool = true,
+        reads: usize = 0,
+        sends: usize = 0,
+        payload: []const u8 = &.{},
+
+        fn read(raw: *anyopaque, state: *RuntimeTransportState) !void {
+            const self: *@This() = @ptrCast(@alignCast(raw));
+            self.reads += 1;
+            try std.testing.expect(state.receive_pending);
+
+            if (self.reject) {
+                return error.DriverBusy;
+            }
+        }
+
+        fn send(raw: *anyopaque, state: *RuntimeTransportState, payload: []const u8) !void {
+            const self: *@This() = @ptrCast(@alignCast(raw));
+            self.sends += 1;
+            self.payload = payload;
+            try std.testing.expect(state.outbox.inFlight());
+
+            if (self.reject) {
+                return error.DriverBusy;
+            }
+        }
+    };
+
+    var capture: Driver = .{};
+    const driver: TransportDriverType = .{
+        .context = &capture,
+        .start_read_fn = Driver.read,
+        .start_send_fn = Driver.send,
+    };
+    var send_buffer: [64]u8 = undefined;
+    const app = try std.testing.allocator.create(AttachedClient);
+    defer std.testing.allocator.destroy(app);
+    app.transport_driver = driver;
+    const state = &app.runtime_transport;
+    state.* = .{
+        .connection = undefined,
+        .send_buffer = &send_buffer,
+        .receive_buffer = &.{},
+        .read_buffer = &.{},
+    };
+
+    try std.testing.expectError(error.DriverBusy, app.startRuntimeRead());
+    try std.testing.expect(!state.receive_pending);
+    capture.reject = false;
+    try app.startRuntimeRead();
+    try app.startRuntimeRead();
+    try std.testing.expectEqual(@as(usize, 2), capture.reads);
+    try std.testing.expectError(error.ReadFailed, state.completeRead(error.ReadFailed));
+    try std.testing.expect(!state.receive_pending);
+    try app.startRuntimeRead();
+    try std.testing.expectEqual(@as(usize, 3), capture.reads);
+    state.cancelRead();
+
+    try app.startRuntimeSend();
+    try std.testing.expectEqual(@as(usize, 0), capture.sends);
+    try state.outbox.push(
+        .{
+            .detach_pane = .{
+                .pane_id = @enumFromInt(1),
+            },
+        },
+    );
+    try state.outbox.push(
+        .{
+            .detach_pane = .{
+                .pane_id = @enumFromInt(2),
+            },
+        },
+    );
+    capture.reject = true;
+    try std.testing.expectError(error.DriverBusy, app.startRuntimeSend());
+    try std.testing.expect(!state.outbox.inFlight());
+    try std.testing.expectEqual(@as(u8, 2), state.outbox.len);
+    const first = send_buffer;
+    const first_len = capture.payload.len;
+    capture.reject = false;
+    try app.startRuntimeSend();
+    try std.testing.expectEqualSlices(
+        u8,
+        first[0..first_len],
+        capture.payload,
+    );
+    try app.startRuntimeSend();
+    try std.testing.expectEqual(@as(usize, 2), capture.sends);
+    try state.outbox.finishSend({});
+    try app.startRuntimeSend();
+    try std.testing.expectEqual(@as(usize, 3), capture.sends);
+    try std.testing.expect(!std.mem.eql(
+        u8,
+        first[0..first_len],
+        capture.payload,
+    ));
+    try state.outbox.finishSend({});
+    try std.testing.expectEqual(@as(u8, 0), state.outbox.len);
+}
+
+test "enqueue retains copied input after rejected scheduling and preserves order on retry" {
+    const Driver = struct {
+        reject: bool = true,
+        sends: usize = 0,
+        payload: []const u8 = &.{},
+
+        fn read(_: *anyopaque, _: *RuntimeTransportState) !void {
+            return error.UnexpectedRead;
+        }
+
+        fn send(raw: *anyopaque, _: *RuntimeTransportState, payload: []const u8) !void {
+            const self: *@This() = @ptrCast(@alignCast(raw));
+            self.sends += 1;
+
+            if (self.reject) {
+                return error.DriverBusy;
+            }
+
+            self.payload = payload;
+        }
+    };
+
+    var capture: Driver = .{};
+    const driver: TransportDriverType = .{
+        .context = &capture,
+        .start_read_fn = Driver.read,
+        .start_send_fn = Driver.send,
+    };
+    var send_buffer: [max_encoded_bytes + 64]u8 = undefined;
+    const app = try std.testing.allocator.create(AttachedClient);
+    defer std.testing.allocator.destroy(app);
+    app.transport_driver = driver;
+    const state = &app.runtime_transport;
+    state.* = .{
+        .connection = undefined,
+        .send_buffer = &send_buffer,
+        .receive_buffer = &.{},
+        .read_buffer = &.{},
+    };
+    const pane: core.PaneId = @enumFromInt(1);
+    var source = [_]u8{
+        'x',
+    } ** (max_encoded_bytes + 1);
+
+    try std.testing.expectError(error.DriverBusy, app.sendRuntimeInput(
+        .{
+            .pane_id = pane,
+            .bytes = &source,
+        },
+    ));
+    try std.testing.expectEqual(@as(u8, 2), state.outbox.len);
+    try std.testing.expect(!state.outbox.inFlight());
+    @memset(&source, 'y');
+    capture.reject = false;
+
+    try app.sendRuntime(
+        .{
+            .detach_pane = .{
+                .pane_id = pane,
+            },
+        },
+    );
+    const first = try core.decodeClient(capture.payload);
+    try std.testing.expect(first == .pane_input);
+    try std.testing.expectEqual(pane, first.pane_input.pane_id);
+    try std.testing.expectEqualStrings("x" ** max_encoded_bytes, first.pane_input.bytes);
+    try state.outbox.finishSend({});
+    try app.startRuntimeSend();
+    const second = try core.decodeClient(capture.payload);
+    try std.testing.expect(second == .pane_input);
+    try std.testing.expectEqualStrings("x", second.pane_input.bytes);
+    try state.outbox.finishSend({});
+    try app.startRuntimeSend();
+    const third = try core.decodeClient(capture.payload);
+    try std.testing.expect(third == .detach_pane);
+    try std.testing.expectEqual(pane, third.detach_pane.pane_id);
+    try state.outbox.finishSend({});
+    try std.testing.expectEqual(@as(u8, 0), state.outbox.len);
+
+    while (state.outbox.hasCapacity()) {
+        try state.outbox.push(
+            .{
+                .detach_pane = .{
+                    .pane_id = pane,
+                },
+            },
+        );
+    }
+
+    const sends = capture.sends;
+    try std.testing.expectError(error.ClientOutboxFull, app.sendRuntime(
+        .{
+            .detach_pane = .{
+                .pane_id = pane,
+            },
+        },
+    ));
+    try std.testing.expectEqual(sends, capture.sends);
+    try std.testing.expect(!state.outbox.inFlight());
 }

@@ -17,9 +17,15 @@ fn initSession() !*Session {
     const session = try Session.init();
     errdefer session.deinit();
     try session.bootstrap();
-    const size = try session.gui.measure(&session.renderer, .{ .width = 1000, .height = 800, .scale = 1 });
-    try session.gui.resize(size, session.renderer.theme);
-    session.gui.pointer.configure(session.renderer.origin, size);
+    const size = try session.gui.resizeViewport(
+        .{
+            .width = 1000,
+            .height = 800,
+            .scale = 1,
+        },
+    );
+    try session.gui.resize(size, session.gui.renderer.theme);
+    session.gui.pointer.configure(session.gui.renderer.origin, size);
     try session.settle();
     session.gui.app.model.name_prompt.begin(.history_palette);
     try session.gui.app.model.history_palette.prepare(std.testing.allocator);
@@ -35,7 +41,7 @@ fn replacePage(session: *Session, request_id: u64) !void {
 }
 
 fn publish(session: *Session) !void {
-    const token = try session.gui.prepare(&session.renderer);
+    const token = try session.draw();
     try input_support.presented(
         session.gui,
         token,
@@ -113,7 +119,7 @@ test "native history rejects a delivered row after its page changed across a fai
     const y = original.bounds.y + original.bounds.height / 2;
     try send(session, .{ .pointer = .{ .kind = .press, .x = x, .y = y } });
     try replacePage(session, 2);
-    const token = try gui.prepare(&session.renderer);
+    const token = try session.draw();
     try input_support.presented(
         gui,
         token,
@@ -338,7 +344,7 @@ test "native history cannot submit an unseen replacement page from a failed fram
     const y = submit.bounds.y + submit.bounds.height / 2;
     try send(session, .{ .pointer = .{ .kind = .press, .x = x, .y = y } });
     try replacePage(session, 2);
-    const token = try gui.prepare(&session.renderer);
+    const token = try session.draw();
     try input_support.presented(
         gui,
         token,
@@ -364,7 +370,7 @@ test "native history submit waits until a changed selection is delivered" {
     const submit = try submitTarget(session);
     try send(session, .{ .key = .{ .code = .up } });
     try std.testing.expectEqual(@as(u16, 1), gui.app.model.name_prompt.currentConst().?.selection());
-    const token = try gui.prepare(&session.renderer);
+    const token = try session.draw();
     try input_support.presented(
         gui,
         token,

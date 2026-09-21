@@ -1,6 +1,5 @@
 const Client = @import("../AttachedClient.zig");
 const core = @import("telar-core");
-const runtime_io = @import("../entrypoints/runtime_io.zig");
 const server_messages = @import("../entrypoints/server_messages.zig");
 const pane_inputs = @import("../operations/input/pane_inputs.zig");
 const presentation_delivery = @import("../operations/session/presentation_delivery.zig");
@@ -245,5 +244,5 @@ pub fn expectAck(fixture: *Fixture, frame_id: u64) !void {
 pub fn sendOne(fixture: *Fixture) !void {
     try std.testing.expect(fixture.pending != null);
     fixture.pending = null;
-    try runtime_io.handleSent(&fixture.app, {});
+    try fixture.app.completeRuntimeSend({});
 }

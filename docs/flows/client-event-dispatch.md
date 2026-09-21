@@ -80,10 +80,10 @@ publish input readiness, focus and presentation completion. The window-thread
 consumer is `GuiClient.update`, which classifies events and calls the shared
 runtime/config operations directly. `NativeLoop` owns transport and wake resources,
 not dispatch policy. `GuiClient.acceptInput` copies native input into the bounded
-queue; `GuiClient.prepare` seals a frame and `GuiClient.complete` consumes the
+queue; `GuiClient.draw` seals a frame and `GuiClient.complete` consumes the
 GPU result from the inbox.
-`Application` derives cursor state and prepares the latest projection after
-draining. Font adoption and geometry changes run on that same owner.
+`GuiClient.update` derives cursor state and decides whether to draw after
+draining. `draw` prepares the latest projection. Font adoption and geometry changes run on that same owner.
 
 If a native frame's previous completion still awaits consumption, `render`
 returns token zero. Both backends defer GPU submission until a later wake or

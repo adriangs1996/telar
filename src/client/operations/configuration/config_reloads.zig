@@ -11,7 +11,6 @@ const ConfigurationCommitType = @import("../../model/ConfigurationCommit.zig");
 const AdoptionContext = @import("AdoptionContext.zig");
 const std = @import("std");
 const sidebar_projection = @import("../notifications/sidebar_projection.zig");
-const pane_geometry = @import("../panes/pane_geometry.zig");
 const notification_flow = @import("../notifications/notifications.zig");
 
 /// Resolves one reload completion, applies its outcome and rearms the watcher.
@@ -109,7 +108,9 @@ pub fn apply(client: *Client, adoption: Adoption) !ConfigurationCommitType {
         try sidebar_projection.apply(client, sidebar);
     } else if (commit.pane_gaps_changed) {
         client.host_graphics.invalidatePlacements();
-        try pane_geometry.offerActive(client, client.geometry().area);
+        if (client.model.workspace.active()) |tab| {
+            try client.resizeAttachedPanes(&tab.model, client.geometry().area);
+        }
     }
 
     std.debug.assert(context.consumed);

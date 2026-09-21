@@ -8,8 +8,6 @@ const PaneSplitPlan = @import("../../model/PaneSplitPlan.zig");
 const PaneSplitCommit = @import("../../model/PaneSplitCommit.zig");
 const ConfirmPaneSplit = @import("ConfirmPaneSplit.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-const runtime_io = @import("../../entrypoints/runtime_io.zig");
-const pane_geometry = @import("pane_geometry.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
 
 pub const Recovery = enum { restored, not_required, stale };
@@ -23,12 +21,24 @@ pub fn request(client: *Client, command: RequestPaneSplit) !?PaneSplitPlan {
     }
 
     const plan = client.model.planPaneSplit(command) orelse return null;
-    runtime_io.enqueue(client, .{ .pane_resize = plan.provisional_resize }) catch |err| {
-        try runtime_io.enqueue(client, .{ .pane_resize = plan.restore_resize });
+    client.sendRuntime(
+        .{
+            .pane_resize = plan.provisional_resize,
+        },
+    ) catch |err| {
+        try client.sendRuntime(
+            .{
+                .pane_resize = plan.restore_resize,
+            },
+        );
         return err;
     };
     sendRequest(client, plan) catch |err| {
-        try runtime_io.enqueue(client, .{ .pane_resize = plan.restore_resize });
+        try client.sendRuntime(
+            .{
+                .pane_resize = plan.restore_resize,
+            },
+        );
         return err;
     };
 
@@ -36,7 +46,7 @@ pub fn request(client: *Client, command: RequestPaneSplit) !?PaneSplitPlan {
 }
 
 fn sendRequest(client: *Client, plan: PaneSplitPlan) !void {
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try request_lifecycle.deliver(client, .{
         .registration = .{
             .request_id = request_id,
@@ -77,11 +87,17 @@ pub fn confirm(client: *Client, command: ConfirmPaneSplit) !PaneSplitCommit {
     switch (commit.disposition) {
         .active => {
             const tab = client.model.workspace.find(commit.location.tab_id).?;
-            try pane_geometry.offerAttached(client, &tab.model, commit.area);
+            try client.resizeAttachedPanes(&tab.model, commit.area);
             try active_pane_resources.synchronize(client);
         },
         .inactive => {
-            try runtime_io.enqueue(client, .{ .detach_pane = .{ .pane_id = commit.pane_id } });
+            try client.sendRuntime(
+                .{
+                    .detach_pane = .{
+                        .pane_id = commit.pane_id,
+                    },
+                },
+            );
             try client.graphics.setPaneVisible(commit.pane_id, false);
         },
         .stale => {
@@ -91,7 +107,13 @@ pub fn confirm(client: *Client, command: ConfirmPaneSplit) !PaneSplitCommit {
                 return error.StalePaneSplitConfirmation;
             }
 
-            try runtime_io.enqueue(client, .{ .detach_pane = .{ .pane_id = commit.pane_id } });
+            try client.sendRuntime(
+                .{
+                    .detach_pane = .{
+                        .pane_id = commit.pane_id,
+                    },
+                },
+            );
             if (client.model.workspace.workspace) |workspace| {
                 if (std.meta.eql(workspace, commit.location.workspace) and !request_lifecycle.has(client, .workspace_snapshot)) {
                     try request_lifecycle.requestWorkspaceSnapshot(client, workspace);
@@ -109,7 +131,11 @@ pub fn confirm(client: *Client, command: ConfirmPaneSplit) !PaneSplitCommit {
 pub fn recover(client: *Client, split: PaneSplit) !Recovery {
     return switch (client.model.recoverPaneSplit(.{ .split = split, .area = client.geometry().area })) {
         .resize => |resize| recovery: {
-            try runtime_io.enqueue(client, .{ .pane_resize = resize });
+            try client.sendRuntime(
+                .{
+                    .pane_resize = resize,
+                },
+            );
             break :recovery .restored;
         },
         .not_required => .not_required,

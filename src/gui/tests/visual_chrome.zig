@@ -137,7 +137,7 @@ test "a blocked agent marks its tab and project independently of selection" {
     projection.agents = &agents;
     try fixture.paint(projection);
     const palette = fixture.session.gui.theme.palette;
-    const quads = fixture.session.renderer.quads.items();
+    const quads = fixture.session.gui.renderer.quads.items();
     const blocked_tab = fixture.bandTarget(.{ .select_tab = second_tab }).?;
     const working_tab = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
     try std.testing.expectEqual(@as(usize, 1), dotQuads(quads, blocked_tab, palette.yellow));
@@ -151,11 +151,27 @@ test "a blocked agent marks its tab and project independently of selection" {
     var failed = try blockedAgents(second_location, .failed);
     projection.agents = &failed;
     try fixture.paint(projection);
-    try std.testing.expectEqual(@as(usize, 1), dotQuads(fixture.session.renderer.quads.items(), fixture.bandTarget(.{ .select_tab = second_tab }).?, palette.red));
+    try std.testing.expectEqual(@as(usize, 1), dotQuads(
+        fixture.session.gui.renderer.quads.items(),
+        fixture.bandTarget(
+            .{
+                .select_tab = second_tab,
+            },
+        ).?,
+        palette.red,
+    ));
     var working = try blockedAgents(second_location, .working);
     projection.agents = &working;
     try fixture.paint(projection);
-    try std.testing.expectEqual(@as(usize, 0), dotQuads(fixture.session.renderer.quads.items(), fixture.bandTarget(.{ .select_tab = second_tab }).?, palette.teal));
+    try std.testing.expectEqual(@as(usize, 0), dotQuads(
+        fixture.session.gui.renderer.quads.items(),
+        fixture.bandTarget(
+            .{
+                .select_tab = second_tab,
+            },
+        ).?,
+        palette.teal,
+    ));
 }
 
 fn ringQuads(quads: []const Quad, outer: Rect) usize {
@@ -182,7 +198,7 @@ test "the attention ring surrounds an unfocused blocked pane only and the header
     try fixture.paint(projection);
     var layout: client.LayoutSnapshot = .{};
     model.layout.snapshot(projection.geometry.area, &layout);
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const blocked_outer = renderer.metrics.rect(renderer.origin, layout.find(second).?.outer);
     const focused_outer = renderer.metrics.rect(renderer.origin, layout.find(Session.pane_id).?.outer);
     try std.testing.expectEqual(@as(usize, 1), ringQuads(renderer.quads.items(), blocked_outer));
@@ -221,7 +237,7 @@ test "toasts cap at two and skip a pane already on screen" {
 
     _ = model.advanceNotifications(client.transition_duration_ns);
     var overlays: Overlays = .{};
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
     renderer.quads.clear();
     var projection = fixture.projection();
@@ -271,17 +287,17 @@ test "warm chrome with rings chips dots and toasts allocates and shapes nothing"
         try fixture.paint(projection);
     }
 
-    const atlas = &fixture.session.renderer.atlas.?;
+    const atlas = &fixture.session.gui.renderer.atlas.?;
     const version = atlas.version;
     const calls = atlas.shape_calls;
-    const count = fixture.session.renderer.quads.items().len;
+    const count = fixture.session.gui.renderer.quads.items().len;
     var failure = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     const allocator = atlas.allocator;
     atlas.allocator = failure.allocator();
     defer atlas.allocator = allocator;
-    const quad_allocator = fixture.session.renderer.quads.allocator;
-    fixture.session.renderer.quads.allocator = failure.allocator();
-    defer fixture.session.renderer.quads.allocator = quad_allocator;
+    const quad_allocator = fixture.session.gui.renderer.quads.allocator;
+    fixture.session.gui.renderer.quads.allocator = failure.allocator();
+    defer fixture.session.gui.renderer.quads.allocator = quad_allocator;
     for (17..77) |frame| {
         fixture.chrome.now_ns = frame * 120 * std.time.ns_per_ms;
         try fixture.paint(projection);
@@ -289,6 +305,6 @@ test "warm chrome with rings chips dots and toasts allocates and shapes nothing"
 
     try std.testing.expectEqual(version, atlas.version);
     try std.testing.expectEqual(calls, atlas.shape_calls);
-    try std.testing.expectEqual(count, fixture.session.renderer.quads.items().len);
+    try std.testing.expectEqual(count, fixture.session.gui.renderer.quads.items().len);
     try std.testing.expectEqual(@as(usize, 0), failure.allocations);
 }

@@ -225,7 +225,15 @@ static const telar_gui_quad quads[6] = {
     {300,100,160,80,0,0,1,1,1,1,1,1,0,0,2,0,0,0,0,0},
     {300,200,80,160,0,0,1,1,1,1,1,1,0,0,9,0,0,0,0,0},
 };
+static unsigned ready_count;
+static void ready(void *context, telar_gui_viewport viewport) {
+    (void)context;
+    if (viewport.width > 0 && viewport.height > 0 && viewport.scale > 0) {
+        ready_count++;
+    }
+}
 static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *frame) {
+    if (ready_count == 0) failed++;
     (void)context;
     if (!deferred) {
         deferred++;
@@ -322,7 +330,7 @@ int main(void) {
         original_draw = method_setImplementation(method, (IMP)draw);
         int fds[2];
         if (telar_gui_pipe(fds)) return 2;
-        telar_gui_callbacks callbacks = {render,pump,complete,input,fds[0],wakeup_after,desired_pointer};
+        telar_gui_callbacks callbacks = {.render = render, .pump = pump, .complete = complete, .input = input, .wake_fd = fds[0], .wakeup_after = wakeup_after, .pointer_shape = desired_pointer, .ready = ready};
         NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
         id entered = [center addObserverForName:NSWindowDidEnterFullScreenNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) {
             NSWindow *window = note.object;

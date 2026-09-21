@@ -104,9 +104,15 @@ test "native pointer refreshes after resize ownership ends without a model or GP
     defer fixture.deinit();
     const session = fixture.session;
     const gui = session.gui;
-    const size = try gui.measure(&session.renderer, .{ .width = @as(u32, session.renderer.metrics.cell_width) * 120 + 292, .height = @as(u32, session.renderer.metrics.cell_height) * 12 + session.renderer.chrome.vertical(), .scale = 1 });
-    try gui.resize(size, session.renderer.theme);
-    gui.pointer.configure(session.renderer.origin, size);
+    const size = try gui.resizeViewport(
+        .{
+            .width = @as(u32, session.gui.renderer.metrics.cell_width) * 120 + 292,
+            .height = @as(u32, session.gui.renderer.metrics.cell_height) * 12 + session.gui.renderer.chrome.vertical(),
+            .scale = 1,
+        },
+    );
+    try gui.resize(size, session.gui.renderer.theme);
+    gui.pointer.configure(session.gui.renderer.origin, size);
     try fixture.present();
     const hits = &gui.chrome.presented().band_hits;
     const divider = for (hits.items[0..hits.len]) |hit| {
@@ -197,8 +203,8 @@ test "native displayed link previews consume hidden URL clicks until replacement
     const preview = gui.pointer.hover.shown_preview.?;
     const size = gui.app.model.hostSize();
     var pointer = fixture.event(6);
-    pointer.x = @as(f64, @floatFromInt(preview.x + 2)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[0])) + 1;
-    pointer.y = @as(f64, @floatFromInt(preview.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[1])) + 1;
+    pointer.x = @as(f64, @floatFromInt(preview.x + 2)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.gui.renderer.origin[0])) + 1;
+    pointer.y = @as(f64, @floatFromInt(preview.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.gui.renderer.origin[1])) + 1;
     try fixture.send(pointer);
     try std.testing.expect(gui.pointer.hover.link == null);
     try std.testing.expectEqual(.default, gui.pointer.hover.shape);
@@ -233,7 +239,7 @@ test "native preview coverage survives pointer leave failed presentation and lat
     try fixture.send(fixture.event(7));
     try std.testing.expect(gui.pointer.hover.link == null);
     try std.testing.expectEqualDeep(@as(?core.Rect, preview), gui.pointer.hover.shown_preview);
-    const token = try gui.prepare(&fixture.session.renderer);
+    const token = try fixture.session.draw();
     try std.testing.expect(gui.pointer.hover.prepared_preview == null);
     try input_support.presented(
         gui,
@@ -254,8 +260,8 @@ test "native preview coverage survives pointer leave failed presentation and lat
     const size = gui.app.model.hostSize();
     var pointer = fixture.event(1);
     pointer.mods = 0;
-    pointer.x = @as(f64, @floatFromInt(preview.x)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[0])) + 1;
-    pointer.y = @as(f64, @floatFromInt(preview.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[1])) + 1;
+    pointer.x = @as(f64, @floatFromInt(preview.x)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.gui.renderer.origin[0])) + 1;
+    pointer.y = @as(f64, @floatFromInt(preview.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.gui.renderer.origin[1])) + 1;
     try fixture.send(pointer);
     try fixture.present();
     try std.testing.expect(gui.pointer.hover.shown_preview == null);
@@ -291,8 +297,8 @@ test "native hover computes absolute rows without adding the host offset to hist
     try std.testing.expect(view.content.y > pane.buffer.h);
     const size = gui.app.model.hostSize();
     var pointer = fixture.event(6);
-    pointer.x = @as(f64, @floatFromInt(view.content.x + 2)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[0])) + 1;
-    pointer.y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[1])) + 1;
+    pointer.x = @as(f64, @floatFromInt(view.content.x + 2)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.gui.renderer.origin[0])) + 1;
+    pointer.y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.gui.renderer.origin[1])) + 1;
     try fixture.send(pointer);
     try std.testing.expectEqualStrings("https://b.c", gui.pointer.hover.link.?.match.target.uri());
     try std.testing.expectEqual(pane.scroll.offset, gui.pointer.hover.link.?.match.start.y);

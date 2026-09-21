@@ -1,5 +1,6 @@
 //! Client integration tests for host interaction.
 
+const PaneId = @import("telar-core").PaneId;
 const key_captures = @import("telar-client").captures;
 const TerminalClient = @import("../TerminalClient.zig");
 const host = TerminalClient.of;
@@ -124,6 +125,133 @@ test "host resize retains committed geometry after outbox backpressure" {
     try std.testing.expectEqual(@as(u16, 28), host(client).view.scratch.h);
     try std.testing.expectEqual(@as(usize, capacity_module), client.runtime_transport.outbox.len);
     try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
+}
+
+test "host resize waits for canonical membership then resizes before attaching without duplicate opens" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const tab = client.model.workspace.active().?;
+    const sibling: PaneId = @enumFromInt(20);
+    try tab.model.addDiscovered(
+        .{
+            .pane_id = sibling,
+            .location = tab.location,
+            .area = client.geometry().area,
+        },
+    );
+    try std.testing.expect(!tab.snapshot_loaded);
+    const initial_request_id = client.request_lifecycle.next_request_id;
+    var buffer: [256]u8 = undefined;
+
+    _ = try host_resizes.apply(
+        client,
+        .{
+            .cols = 90,
+            .rows = 28,
+            .width_px = 900,
+            .height_px = 560,
+        },
+    );
+    try harness.settle();
+    const before_snapshot = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(before_snapshot == .pane_resize);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, before_snapshot.pane_resize.pane_id);
+    try std.testing.expectEqual(initial_request_id, client.request_lifecycle.next_request_id);
+    try std.testing.expect(!client.request_lifecycle.tracker.hasPane(.attachment, sibling));
+
+    _ = try client.model.reconcileTab(
+        .{
+            .location = tab.location,
+            .panes = &.{
+                TestHarness.bootstrap_pane,
+                sibling,
+            },
+        },
+        client.geometry().area,
+    );
+    _ = try host_resizes.apply(
+        client,
+        .{
+            .cols = 100,
+            .rows = 30,
+            .width_px = 1000,
+            .height_px = 600,
+        },
+    );
+    try harness.settle();
+    const resized = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(resized == .pane_resize);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, resized.pane_resize.pane_id);
+    const opened = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(opened == .open_pane);
+    try std.testing.expectEqual(sibling, opened.open_pane.target.pane);
+    try std.testing.expectEqualDeep(tab.model.contentSize(sibling, client.geometry().area).?, opened.open_pane.size);
+    try std.testing.expect(client.request_lifecycle.tracker.hasPane(.attachment, sibling));
+    const pending_request_id = client.request_lifecycle.next_request_id;
+
+    _ = try host_resizes.apply(
+        client,
+        .{
+            .cols = 110,
+            .rows = 32,
+            .width_px = 1100,
+            .height_px = 640,
+        },
+    );
+    try harness.settle();
+    const repeated = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(repeated == .pane_resize);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, repeated.pane_resize.pane_id);
+    try std.testing.expectEqual(pending_request_id, client.request_lifecycle.next_request_id);
+}
+
+test "host resize rolls back rejected attachment correlation after offering connected pane sizes" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const sibling: PaneId = @enumFromInt(20);
+    _ = try client.model.reconcileTab(
+        .{
+            .location = TestHarness.bootstrap_location,
+            .panes = &.{
+                TestHarness.bootstrap_pane,
+                sibling,
+            },
+        },
+        client.geometry().area,
+    );
+
+    while (client.runtime_transport.outbox.len < capacity_module - 1) {
+        try client.runtime_transport.outbox.push(
+            .{
+                .detach_pane = .{
+                    .pane_id = TestHarness.bootstrap_pane,
+                },
+            },
+        );
+    }
+
+    const initial_request_id = client.request_lifecycle.next_request_id;
+    try std.testing.expectError(error.ClientOutboxFull, host_resizes.apply(
+        client,
+        .{
+            .cols = 100,
+            .rows = 30,
+            .width_px = 1000,
+            .height_px = 600,
+        },
+    ));
+
+    try std.testing.expectEqual(initial_request_id + 1, client.request_lifecycle.next_request_id);
+    try std.testing.expect(!client.request_lifecycle.tracker.hasPane(.attachment, sibling));
+    try std.testing.expectEqual(@as(usize, capacity_module), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(u16, 100), client.model.hostSize().cols);
+    try std.testing.expect(!client.model.workspace.active().?.model.find(sibling).?.attached);
 }
 
 test "oversized host measurement changes neither model nor capabilities" {

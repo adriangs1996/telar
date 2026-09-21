@@ -28,7 +28,7 @@ const pane_focus = @import("../panes/pane_focus.zig");
 /// const request_id = try requestDelivery(client, &notification);
 /// ```
 pub fn requestDelivery(client: *Client, notification: *const NotificationType) !RequestIdType {
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try request_lifecycle.deliverNotification(client, .{
         .request_id = request_id,
         .notification = .{

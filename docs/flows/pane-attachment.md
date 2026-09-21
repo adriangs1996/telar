@@ -5,8 +5,9 @@ records whether this connection can accept frames and send pane input; changing
 that flag alone does not advance a presentation revision.
 
 ```text
-operations/tabs/tab_snapshots.apply or attachActive
-  -> requestAttachments: detached, visible, no pending attachment
+tab_snapshots.apply / host resize / pane geometry or focus change
+  -> resolve tab and area; require canonical membership
+  -> AttachedClient.attachVisiblePanes: detached, visible, no pending attachment
   -> request_lifecycle.deliver(open_pane, exact pane and tab continuation)
   -> runtime attachment -> pane_opened
   -> entrypoints/server_messages.handleServerMessage

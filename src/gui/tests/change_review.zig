@@ -13,9 +13,15 @@ pub fn base() !*Session {
     const session = try Session.init();
     errdefer session.deinit();
     try session.bootstrap();
-    const size = try session.gui.measure(&session.renderer, .{ .width = 1100, .height = 750, .scale = 1 });
-    try session.gui.resize(size, session.renderer.theme);
-    session.gui.pointer.configure(session.renderer.origin, size);
+    const size = try session.gui.resizeViewport(
+        .{
+            .width = 1100,
+            .height = 750,
+            .scale = 1,
+        },
+    );
+    try session.gui.resize(size, session.gui.renderer.theme);
+    session.gui.pointer.configure(session.gui.renderer.origin, size);
     _ = session.gui.app.model.workspace.findPane(Session.pane_id).?.identify(.terminal, 77);
     try session.settle();
     return session;
@@ -61,7 +67,7 @@ pub fn adopt(session: *Session) !void {
 }
 
 pub fn publish(session: *Session) !void {
-    const token = try session.gui.prepare(&session.renderer);
+    const token = try session.draw();
     try input_support.presented(
         session.gui,
         token,
@@ -262,8 +268,8 @@ test "runtime review modal retires a held terminal mouse gesture before swallowi
     model.find(Session.pane_id).?.mouse = .{ .sgr = true, .tracking = .button };
     try publish(session);
     const view = model.viewForPane(Session.pane_id, gui.region.area).?;
-    const x = @as(f64, @floatFromInt(view.content.x)) * gui.app.model.hostSize().cell_width_px + @as(f64, @floatFromInt(session.renderer.origin[0])) + 1;
-    const y = @as(f64, @floatFromInt(view.content.y)) * gui.app.model.hostSize().cell_height_px + @as(f64, @floatFromInt(session.renderer.origin[1])) + 1;
+    const x = @as(f64, @floatFromInt(view.content.x)) * gui.app.model.hostSize().cell_width_px + @as(f64, @floatFromInt(session.gui.renderer.origin[0])) + 1;
+    const y = @as(f64, @floatFromInt(view.content.y)) * gui.app.model.hostSize().cell_height_px + @as(f64, @floatFromInt(session.gui.renderer.origin[1])) + 1;
     try send(session, .{ .pointer = .{ .kind = .press, .button = .right, .x = x, .y = y } });
     try session.settle();
     const button = @intFromEnum(PointerEvent.Button.right);
@@ -364,8 +370,8 @@ test "runtime review loads through its real worker and inbox after the previous 
     const session = try base();
     defer session.deinit();
     const gui = session.gui;
-    gui.app.transport_driver = host_ports.transport(gui.driver);
-    try gui.app.runtime_transport.scheduleRead(gui.app.transport_driver);
+    gui.app.transport_driver = host_ports.transport(&gui.driver);
+    try gui.app.startRuntimeRead();
     try gui.openChangeReview(Session.pane_id);
     var buffer: [128 * 1024]u8 = undefined;
     const request = (try core.decodeClient(try session.peer.receive(std.testing.io, &buffer))).query_change_review;
@@ -373,13 +379,13 @@ test "runtime review loads through its real worker and inbox after the previous 
     try std.testing.expectEqual(@as(u64, 0), request.edition_id);
     try session.peer.send(std.testing.io, try core.encodeChangeReviewSnapshot(&buffer, response(session, 1)));
     while (!gui.app.change_review.loaded) {
-        try session.driver.inbox.wait();
+        try session.gui.driver.inbox.wait();
         _ = try gui.update();
     }
-    const token = try gui.prepare(&session.renderer);
+    const token = try session.draw();
     try std.testing.expect(gui.review.job != null);
     while (!gui.review.notified) {
-        try session.driver.inbox.wait();
+        try session.gui.driver.inbox.wait();
         _ = try gui.update();
     }
     try std.testing.expectEqual(@as(u64, 0), gui.review.edition);

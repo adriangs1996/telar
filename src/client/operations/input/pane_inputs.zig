@@ -16,7 +16,6 @@ const KeyType = @import("../../input/Key.zig");
 const PanePasteSessionType = @import("../../model/PanePasteSession.zig");
 const BoundaryType = @import("../../application/input/pane_paste.zig").Boundary;
 const pane_viewports = @import("../panes/pane_viewports.zig");
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const enabled_module = @import("telar-core").enabled;
 const elapsed_module = @import("telar-core").elapsed;
 const monotonic = @import("telar-core").monotonic;
@@ -169,7 +168,12 @@ fn deliver(client: *Client, plan: PaneInputPlanType, prepared: Prepared) !Delive
         _ = try pane_viewports.apply(client, .{ .pane_id = plan.pane_id, .target = .bottom });
     }
 
-    try runtime_transport.enqueueInput(client, plan.pane_id, prepared.bytes);
+    try client.sendRuntimeInput(
+        .{
+            .pane_id = plan.pane_id,
+            .bytes = prepared.bytes,
+        },
+    );
 
     return .{
         .pane_id = plan.pane_id,

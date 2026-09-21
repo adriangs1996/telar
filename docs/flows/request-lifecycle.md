@@ -26,7 +26,7 @@ function; the model does not own request IDs.
 ```text
 concrete client operation
         |
-request_lifecycle.nextId
+LifecycleState.nextId
         |
 check one tracker slot and request-ID space
         |
@@ -34,7 +34,7 @@ operation constructs message and Continuation
         |
 request_lifecycle.deliver
         |
-Tracker.add -> runtime_transport.enqueue
+Tracker.add -> AttachedClient.sendRuntime
         |
 local rejection -> Tracker.take rollback
 ```
@@ -65,7 +65,7 @@ the same rollback rule as other requests.
 ## Consuming a response
 
 ```text
-runtime_transport.handleRead
+AttachedClient.receiveRuntime
         |
 decoded terminal response
         |

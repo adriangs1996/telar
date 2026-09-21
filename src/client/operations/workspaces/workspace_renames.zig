@@ -17,7 +17,7 @@ pub fn request(client: *Client, command: RequestRenameWorkspace) !bool {
         return false;
     }
 
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try request_lifecycle.deliverWorkspaceRename(client, .{
         .request_id = request_id,
         .workspace = command.workspace,

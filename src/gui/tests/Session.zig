@@ -3,15 +3,12 @@ const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const GuiClient = @import("../GuiClient.zig");
-const NativeLoop = @import("../NativeLoop.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
 const Session = @This();
 
 connection: core.SocketChannel,
 peer: core.SocketChannel,
-driver: NativeLoop,
 gui: *GuiClient,
-renderer: Renderer,
 pending: ?[]const u8 = null,
 acknowledgements: [128]core.FrameAck = undefined,
 ack_count: usize = 0,
@@ -50,33 +47,50 @@ pub fn init() !*Session {
     session.* = .{
         .connection = .init(.{ .socket = .{ .handle = fds[0], .address = .{ .ip4 = .loopback(0) } } }),
         .peer = .init(.{ .socket = .{ .handle = fds[1], .address = .{ .ip4 = .loopback(0) } } }),
-        .driver = try NativeLoop.init(std.testing.io),
         .gui = undefined,
-        .renderer = .init(std.testing.allocator),
     };
     errdefer session.connection.deinit(std.testing.io);
     errdefer session.peer.deinit(std.testing.io);
-    errdefer session.driver.deinit();
-    errdefer session.renderer.deinit();
-    session.renderer.io = std.testing.io;
-    const size = try session.renderer.measure(.{ .width = 180, .height = 240, .scale = 1 });
-    session.gui = try GuiClient.init(.{
-        .gpa = std.testing.allocator,
-        .io = std.testing.io,
-        .connection = &session.connection,
-        .host_size = size,
-        .window_width_px = @as(u32, size.cols) * size.cell_width_px,
-        .window_height_px = @as(u32, size.rows) * size.cell_height_px,
-        .options = .{ .arguments = &.{"/bin/sh"}, .cwd = "/", .endpoint = "" },
-    }, &session.driver);
+    var measurement = Renderer.init(std.testing.allocator);
+    defer measurement.deinit();
+    const size = try measurement.measure(
+        .{
+            .width = 180,
+            .height = 240,
+            .scale = 1,
+        },
+    );
+    session.gui = try GuiClient.init(
+        .{
+            .gpa = std.testing.allocator,
+            .io = std.testing.io,
+            .connection = &session.connection,
+            .host_size = size,
+            .window_width_px = @as(u32, size.cols) * size.cell_width_px,
+            .window_height_px = @as(u32, size.rows) * size.cell_height_px,
+            .options = .{
+                .arguments = &.{
+                    "/bin/sh",
+                },
+                .cwd = "/",
+                .endpoint = "",
+            },
+        },
+    );
+    errdefer session.gui.deinit();
+    _ = try session.gui.renderer.measure(
+        .{
+            .width = 180,
+            .height = 240,
+            .scale = 1,
+        },
+    );
     session.gui.app.transport_driver = .{ .context = session, .start_read_fn = noRead, .start_send_fn = captureSend };
     return session;
 }
 
 pub fn deinit(session: *Session) void {
-    session.driver.deinit();
     session.gui.deinit();
-    session.renderer.deinit();
     session.connection.deinit(std.testing.io);
     session.peer.deinit(std.testing.io);
     std.testing.allocator.destroy(session);
@@ -157,7 +171,7 @@ pub fn settle(session: *Session) !void {
         }
 
         session.pending = null;
-        try client.runtime_io.handleSent(&session.gui.app, {});
+        try session.gui.app.completeRuntimeSend({});
     }
 }
 
@@ -194,4 +208,17 @@ pub fn receiveFrame(session: *Session, frame_id: u64) !void {
     });
     _ = try client.server_messages.handleServerMessage(&session.gui.app, try core.decodeServer(encoded));
     @memset(&wire, 0xff);
+}
+
+/// Draws through the production entry using the scenario's measured viewport.
+/// Example: `const token = try session.draw();`
+pub fn draw(self: *Session) !u64 {
+    const renderer = &self.gui.renderer;
+    return self.gui.draw(
+        .{
+            .width = renderer.viewport[0],
+            .height = renderer.viewport[1],
+            .scale = renderer.scale,
+        },
+    );
 }

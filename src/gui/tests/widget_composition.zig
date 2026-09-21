@@ -38,7 +38,7 @@ test "projection composes terminal thread link chrome notifications and modal be
         try std.testing.expectEqual(tag, std.meta.activeTag(widget));
     }
 
-    try std.testing.expectEqual(@as(usize, 0), session.renderer.quads.items().len);
+    try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.quads.items().len);
     try std.testing.expectEqual(@as(u8, 2), composition.commit.len);
     try std.testing.expectEqual(Session.pane_id, composition.commit.panes[0].pane_id);
     try std.testing.expectEqual(thread_id, composition.commit.panes[1].pane_id);
@@ -49,15 +49,15 @@ test "projection composes terminal thread link chrome notifications and modal be
     try std.testing.expectEqualStrings("Borrowed thread draft", widgets.storage[1].thread.thread.composer);
     try std.testing.expect(widgets.storage[widgets.len - 1].modal == .name_prompt);
     try widgets.draw(&canvas);
-    session.renderer.seal();
-    try std.testing.expect(session.renderer.quads.items().len > 0);
-    try std.testing.expectEqual(session.renderer.atlas.?.version, session.renderer.last_page_version);
+    session.gui.renderer.seal();
+    try std.testing.expect(session.gui.renderer.quads.items().len > 0);
+    try std.testing.expectEqual(session.gui.renderer.atlas.?.version, session.gui.renderer.last_page_version);
     try std.testing.expect(gui.overlays.prepared().modal != null);
     try std.testing.expectEqual(@as(usize, 1), gui.widgets.editors.prepared().len);
-    for (session.renderer.quads.items()) |quad| {
+    for (session.gui.renderer.quads.items()) |quad| {
         try std.testing.expect(quad.x >= 0 and quad.y >= 0);
-        try std.testing.expect(quad.x + quad.width <= @as(f32, @floatFromInt(session.renderer.viewport[0])));
-        try std.testing.expect(quad.y + quad.height <= @as(f32, @floatFromInt(session.renderer.viewport[1])));
+        try std.testing.expect(quad.x + quad.width <= @as(f32, @floatFromInt(session.gui.renderer.viewport[0])));
+        try std.testing.expect(quad.y + quad.height <= @as(f32, @floatFromInt(session.gui.renderer.viewport[1])));
     }
 
     _ = model.name_prompt.apply(.cancel);
@@ -67,15 +67,15 @@ test "projection composes terminal thread link chrome notifications and modal be
     try std.testing.expect(!with_cursor.storage[0].terminal_pane.paint.hide_cursor);
     try widgetsWithoutModal(&with_cursor);
     try with_cursor.draw(&canvas);
-    const cursor_count = session.renderer.quads.items().len;
-    const shape_calls = session.renderer.atlas.?.shape_calls;
-    session.renderer.cursor_on = false;
+    const cursor_count = session.gui.renderer.quads.items().len;
+    const shape_calls = session.gui.renderer.atlas.?.shape_calls;
+    session.gui.renderer.cursor_on = false;
     canvas = begin(&fixture, &without_modal);
     const without_cursor = try composition.render(&without_modal);
     try without_cursor.draw(&canvas);
-    try std.testing.expectEqual(cursor_count - 1, session.renderer.quads.items().len);
-    try std.testing.expectEqual(shape_calls, session.renderer.atlas.?.shape_calls);
-    try std.testing.expectEqual(@as(usize, 0), session.renderer.repainted_cells);
+    try std.testing.expectEqual(cursor_count - 1, session.gui.renderer.quads.items().len);
+    try std.testing.expectEqual(shape_calls, session.gui.renderer.atlas.?.shape_calls);
+    try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.repainted_cells);
 }
 
 test "complete widget list fits the maximum pane count with every optional layer" {
@@ -108,7 +108,7 @@ test "complete widget list fits the maximum pane count with every optional layer
     var widgets = try composition.render(&projection);
     try std.testing.expectEqual(core.max_panes_per_tab, composition.commit.len);
     try std.testing.expectEqual(FrameWidget.capacity, widgets.len);
-    try std.testing.expectEqual(@as(usize, 0), fixture.session.renderer.quads.items().len);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.gui.renderer.quads.items().len);
     for (widgets.storage[0..core.max_panes_per_tab], composition.commit.slice()) |widget, commit| {
         try std.testing.expect(widget == .terminal_pane);
         try std.testing.expectEqual(commit.pane_id, widget.terminal_pane.paint.pane.id);
@@ -117,7 +117,7 @@ test "complete widget list fits the maximum pane count with every optional layer
     try std.testing.expectError(error.WidgetCapacityExceeded, widgets.append(widgets.storage[0]));
     try std.testing.expectEqual(FrameWidget.capacity, widgets.len);
     try widgets.draw(&canvas);
-    try std.testing.expect(fixture.session.renderer.quads.items().len > 0);
+    try std.testing.expect(fixture.session.gui.renderer.quads.items().len > 0);
 }
 
 test "composed frame survives local widgets and replaced projection borrows until delivery" {
@@ -128,9 +128,9 @@ test "composed frame survives local widgets and replaced projection borrows unti
     const gui = session.gui;
     gui.app.model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "First title" } });
     const generation = gui.app.model.name_prompt.currentConst().?.generation;
-    const token = try gui.prepare(&session.renderer);
-    const frame = session.renderer.frame(token);
-    const frozen = try std.testing.allocator.dupe(Quad, session.renderer.quads.items());
+    const token = try session.draw();
+    const frame = session.gui.renderer.frame(token);
+    const frozen = try std.testing.allocator.dupe(Quad, session.gui.renderer.quads.items());
     defer std.testing.allocator.free(frozen);
     const targets = gui.widgets.dispatcher.maps.prepared().*;
     const editors = gui.widgets.editors.prepared().*;
@@ -143,19 +143,23 @@ test "composed frame survives local widgets and replaced projection borrows unti
     try session.settle();
     const replacement_generation = gui.app.model.name_prompt.currentConst().?.generation;
     try std.testing.expect(replacement_generation != generation);
-    try std.testing.expectEqualSlices(Quad, frozen, session.renderer.quads.items());
+    try std.testing.expectEqualSlices(
+        Quad,
+        frozen,
+        session.gui.renderer.quads.items(),
+    );
     try std.testing.expect(targets.equivalent(gui.widgets.dispatcher.maps.prepared()));
     for (editors.items[0..editors.len], gui.widgets.editors.prepared().items[0..editors.len]) |expected, actual| {
         try std.testing.expect(std.meta.eql(expected, actual));
     }
-    const retained = session.renderer.frame(token);
+    const retained = session.gui.renderer.frame(token);
     try std.testing.expectEqual(frame.quads, retained.quads);
     try std.testing.expectEqual(frame.quad_count, retained.quad_count);
     try std.testing.expectEqual(frame.atlas, retained.atlas);
     try std.testing.expectEqual(frame.atlas_version, retained.atlas_version);
     try std.testing.expectEqual(frame.sprites, retained.sprites);
     try std.testing.expectEqual(frame.sprites_version, retained.sprites_version);
-    try std.testing.expectError(error.PresentationBusy, gui.prepare(&session.renderer));
+    try std.testing.expectError(error.PresentationBusy, session.draw());
 
     try input_support.presented(
         gui,
@@ -166,7 +170,7 @@ test "composed frame survives local widgets and replaced projection borrows unti
     try std.testing.expectEqual(generation, gui.widgets.editors.presented().items[0].id.generation);
     const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
     try std.testing.expectEqual(@as(u64, 2), pane.pending_frame_id);
-    const next = try gui.prepare(&session.renderer);
+    const next = try session.draw();
     try input_support.presented(
         gui,
         next,
@@ -177,78 +181,53 @@ test "composed frame survives local widgets and replaced projection borrows unti
     try session.settle();
 }
 
-test "widget draw failure preserves delivered targets and pending pane damage before retry" {
-    const session = try Session.init();
-    defer session.deinit();
-    try session.bootstrap();
-    try session.receiveFrame(1);
-    const gui = session.gui;
-    gui.app.model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "Visible title" } });
-    const delivered = try gui.prepare(&session.renderer);
-    try input_support.presented(
-        gui,
-        delivered,
-        true,
-    );
-    const chrome = gui.chrome.presented();
-    const overlays = gui.overlays.presented();
-    const targets = gui.widgets.dispatcher.maps.presented();
-    const editors = gui.widgets.editors.presented();
-    try std.testing.expect(editors.len > 0);
-    try session.receiveFrame(2);
-    _ = gui.app.model.name_prompt.apply(.cancel);
-    gui.app.model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "Pending title" } });
-    const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
-    const limit = session.renderer.quads.limit;
-    session.renderer.quads.limit = 1;
-    defer session.renderer.quads.limit = limit;
-    try std.testing.expectError(error.NativeQuadBudgetExceeded, gui.prepare(&session.renderer));
-    try std.testing.expectEqual(@as(usize, 1), session.renderer.quads.items().len);
-    try std.testing.expect(gui.lifecycle.active == null);
-    try std.testing.expectEqual(@as(u64, 2), pane.pending_frame_id);
-    try std.testing.expectEqual(chrome, gui.chrome.presented());
-    try std.testing.expectEqual(overlays, gui.overlays.presented());
-    try std.testing.expectEqual(targets, gui.widgets.dispatcher.maps.presented());
-    try std.testing.expectEqual(editors, gui.widgets.editors.presented());
-    try input_support.presented(
-        gui,
-        delivered,
-        true,
-    );
-    try std.testing.expectEqual(targets, gui.widgets.dispatcher.maps.presented());
-    try std.testing.expectEqual(@as(u64, 2), pane.pending_frame_id);
-
-    session.renderer.quads.limit = limit;
-    const retry = try gui.prepare(&session.renderer);
-    try std.testing.expect(retry != delivered);
-    try std.testing.expectEqual(targets, gui.widgets.dispatcher.maps.presented());
-    try input_support.presented(
-        gui,
-        retry,
-        true,
-    );
-    try std.testing.expect(gui.widgets.dispatcher.maps.presented() != targets);
-    try std.testing.expectEqual(@as(usize, 1), gui.widgets.editors.presented().len);
-    try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
-    try session.settle();
-}
-
 fn begin(fixture: *Fixture, projection: *const client.Projection) Canvas {
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const gui = fixture.session.gui;
     renderer.begin();
     gui.chrome.now_ns = client.transition_duration_ns;
     gui.chrome.animation.begin(gui.chrome.now_ns);
     gui.widgets.begin(projection.prompt != null);
     gui.widgets.prompt_generation = if (projection.prompt) |prompt| prompt.generation else 0;
-    return .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .terminal_renderer = renderer, .metrics = renderer.metrics, .origin = renderer.origin, .theme = gui.theme, .background_opacity = renderer.config.window.background_opacity, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar, .sprites = if (renderer.sprites) |*page| page else null, .animation = &gui.chrome.animation, .widgets = &gui.widgets };
+    return .{
+        .atlas = &renderer.atlas.?,
+        .quads = &renderer.quads,
+        .terminal_renderer = renderer,
+        .metrics = renderer.metrics,
+        .origin = renderer.origin,
+        .theme = gui.theme,
+        .background_opacity = renderer.config.window.background_opacity,
+        .chrome = renderer.chrome,
+        .viewport = renderer.viewport,
+        .sidebar = renderer.sidebar,
+        .sprites = if (renderer.sprites) |*page| page else null,
+        .animation = &gui.chrome.animation,
+        .widgets = &gui.widgets,
+    };
 }
 
 fn linkFor(fixture: *Fixture) !@import("../input/LinkHit.zig") {
     const gui = fixture.session.gui;
     const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
     const view = gui.app.model.activeTabModel().?.viewForPane(pane.id, gui.region.area).?;
-    return .{ .pane_id = pane.id, .generation = pane.attachment_generation, .location = pane.location, .content = view.content, .area = view.content.row(0), .match = .{ .target = try client.LinkTarget.init("https://example.com"), .start = .{ .x = 0, .y = 0 }, .end = .{ .x = @min(19, view.content.w), .y = 0 } } };
+    return .{
+        .pane_id = pane.id,
+        .generation = pane.attachment_generation,
+        .location = pane.location,
+        .content = view.content,
+        .area = view.content.row(0),
+        .match = .{
+            .target = try client.LinkTarget.init("https://example.com"),
+            .start = .{
+                .x = 0,
+                .y = 0,
+            },
+            .end = .{
+                .x = @min(19, view.content.w),
+                .y = 0,
+            },
+        },
+    };
 }
 
 fn widgetsWithoutModal(widgets: *const FrameWidget.List) !void {

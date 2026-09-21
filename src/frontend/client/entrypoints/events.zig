@@ -13,7 +13,6 @@ const presentation_lifecycle = @import("../presentation/presentation_lifecycle.z
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
 const host_resizes = @import("../controllers/host/host_resizes.zig");
-const runtime_transport = @import("telar-client").runtime_io;
 const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
 const sidebar_animations = @import("telar-client").operations.sidebar_animations;
 const notifications = @import("telar-client").operations.notifications;
@@ -104,11 +103,11 @@ fn dispatch(client: *Client, event: TerminalClient.ClientEvent, resources: Resou
             .watcher = resources.resize_watcher,
         }),
         .server => |result| {
-            if (try runtime_transport.handleRead(client, result)) |status| {
+            if (try client.receiveRuntime(result)) |status| {
                 return .{ .exit = status };
             }
         },
-        .sent => |result| try runtime_transport.handleSent(client, result),
+        .sent => |result| try client.completeRuntimeSend(result),
         .draw => |result| try presentation_lifecycle.handleDraw(client, result),
         .media_tick => |result| try presentation_lifecycle.handleMediaTick(client, result),
         .host_written => |result| try presentation_lifecycle.handleWritten(client, result),

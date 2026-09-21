@@ -79,7 +79,7 @@ test "a pointer on a card focuses its agent and a pointer in the gap hits nothin
     const band = fixture.band();
     try std.testing.expect(card.x >= band.x and card.x + card.width <= band.x + band.width);
     try std.testing.expectEqualDeep(client.Intent{ .focus_agent = agents_input[1].key }, fixture.clickBand(card, 0).intent);
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const gap_x: f64 = @floatFromInt(renderer.sidebar.width + 2);
     try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = .press, .x = gap_x, .y = card.y }) == null);
     try std.testing.expect(fixture.session.gui.pointer.geometry.resolve(.{ .kind = .press, .x = gap_x, .y = card.y }) == null);
@@ -93,7 +93,7 @@ test "dragging the edge sets the exact width and the grid follows on the next me
     defer fixture.deinit();
     const projection = fixture.projection();
     try fixture.paint(projection);
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const gui = fixture.session.gui;
     const before = gui.app.model.hostSize();
     const band = fixture.band();
@@ -121,7 +121,7 @@ test "the keyboard resize action moves the band by sixteen logical pixels withou
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const gui = fixture.session.gui;
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const shared = gui.app.model.sidebarWidth();
     const revision = gui.chrome.revision;
     try std.testing.expectEqual(client.Control.continue_routing, try input_support.action(
@@ -164,7 +164,7 @@ test "hiding the sidebar returns its pixels to the grid without moving top navig
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.paint(fixture.projection());
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const gui = fixture.session.gui;
     const shown = gui.app.model.hostSize();
     try std.testing.expect(fixture.band().width > 0);
@@ -189,20 +189,20 @@ test "a configuration reload applies a new sidebar width without changing the PT
     var fixture = try ConfigFixture.init("return { api_version = 2 }", null);
     defer fixture.deinit();
     const session = fixture.session;
-    const reload = &session.driver.configuration;
+    const reload = &session.gui.driver.configuration;
     const viewport: @import("../native/native.zig").Viewport = .{ .width = 1400, .height = 800, .scale = 1 };
-    const before = try session.gui.measure(&session.renderer, viewport);
-    try session.gui.resize(before, session.renderer.theme);
+    const before = try session.gui.resizeViewport(viewport);
+    try session.gui.resize(before, session.gui.renderer.theme);
     try session.settle();
-    try std.testing.expectEqual(@as(u32, 284), session.renderer.sidebar.width);
+    try std.testing.expectEqual(@as(u32, 284), session.gui.renderer.sidebar.width);
     try fixture.write("config.lua", "return { api_version = 2, gui = { sidebar = { width = 400 } } }");
     try fixture.wait();
-    try std.testing.expect(try reload.apply(session.gui, &session.renderer));
+    try std.testing.expect(try reload.apply(session.gui, &session.gui.renderer));
     try std.testing.expectEqual(@as(f32, 400), session.gui.sidebar.logical);
-    const after = try session.gui.measure(&session.renderer, viewport);
-    try session.gui.resize(after, session.renderer.theme);
+    const after = try session.gui.resizeViewport(viewport);
+    try session.gui.resize(after, session.gui.renderer.theme);
     try session.settle();
-    try std.testing.expectEqual(@as(u32, 400), session.renderer.sidebar.width);
+    try std.testing.expectEqual(@as(u32, 400), session.gui.renderer.sidebar.width);
     try std.testing.expectEqual(before.rows, after.rows);
     try std.testing.expect(after.cols < before.cols);
     try std.testing.expectEqual(after, session.gui.app.model.hostSize());
@@ -210,6 +210,6 @@ test "a configuration reload applies a new sidebar width without changing the PT
     session.gui.adoptSidebarWidth(300);
     try fixture.write("config.lua", "return { api_version = 2, gui = { sidebar = { width = 400 }, chrome = { scale = 1.1 } } }");
     try fixture.wait();
-    try std.testing.expect(try reload.apply(session.gui, &session.renderer));
+    try std.testing.expect(try reload.apply(session.gui, &session.gui.renderer));
     try std.testing.expectEqual(@as(f32, 300), session.gui.sidebar.logical);
 }

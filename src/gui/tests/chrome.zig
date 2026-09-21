@@ -18,7 +18,7 @@ test "native pane frames use the smaller pixel gutter on both axes" {
     const area = fixture.projection().geometry.area;
     try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = area });
     try model.split(.{ .existing_pane = second, .new_pane = third, .location = Session.location, .axis = .vertical, .area = area });
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     for ([_][2]u16{ .{ 9, 19 }, .{ 19, 9 }, .{ 12, 12 } }) |cell| {
         renderer.metrics.cell_width = cell[0];
         renderer.metrics.cell_height = cell[1];
@@ -181,8 +181,8 @@ test "native fullscreen labels keep hidden panes reachable without covering term
     try std.testing.expect(fixture.target(.{ .focus_pane = second }) != null);
     var layout: client.LayoutSnapshot = .{};
     model.layout.snapshot(projection.geometry.area, &layout);
-    const content = fixture.session.renderer.metrics.rect(fixture.session.renderer.origin, layout.views()[0].content);
-    for (fixture.session.renderer.quads.items()) |quad| {
+    const content = fixture.session.gui.renderer.metrics.rect(fixture.session.gui.renderer.origin, layout.views()[0].content);
+    for (fixture.session.gui.renderer.quads.items()) |quad| {
         if (quad.a == 0 and quad.border > 0) {
             // A frame ring paints only its stroke: the content must sit inside it.
             try std.testing.expect(quad.x + quad.border <= content.x and quad.y + quad.border <= content.y);
@@ -201,16 +201,16 @@ test "native chrome warm repaint reuses glyphs and performs no allocation" {
     defer fixture.deinit();
     const projection = fixture.projection();
     try fixture.paint(projection);
-    const atlas = &fixture.session.renderer.atlas.?;
+    const atlas = &fixture.session.gui.renderer.atlas.?;
     const version = atlas.version;
     const calls = atlas.shape_calls;
     var failure = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     const allocator = atlas.allocator;
     atlas.allocator = failure.allocator();
     defer atlas.allocator = allocator;
-    const quad_allocator = fixture.session.renderer.quads.allocator;
-    fixture.session.renderer.quads.allocator = failure.allocator();
-    defer fixture.session.renderer.quads.allocator = quad_allocator;
+    const quad_allocator = fixture.session.gui.renderer.quads.allocator;
+    fixture.session.gui.renderer.quads.allocator = failure.allocator();
+    defer fixture.session.gui.renderer.quads.allocator = quad_allocator;
     try fixture.paint(projection);
     try std.testing.expectEqual(version, atlas.version);
     try std.testing.expectEqual(calls, atlas.shape_calls);
@@ -275,7 +275,7 @@ test "native workspace visibility follows available width and tiny bars stay wit
             try std.testing.expect(fixture.bandTarget(.{ .select_workspace = @enumFromInt(2) }) != null);
         }
 
-        const renderer = &fixture.session.renderer;
+        const renderer = &fixture.session.gui.renderer;
         const bounds: @import("../render/Rect.zig") = .{ .x = 0, .y = 0, .width = @floatFromInt(renderer.viewport[0]), .height = @floatFromInt(renderer.viewport[1]) };
         for (renderer.quads.items()) |quad| {
             try std.testing.expect(quad.x >= bounds.x and quad.y >= bounds.y);
@@ -306,7 +306,7 @@ test "native configured bar segments preserve colors decorations and faint ink" 
     var background = false;
     var faint_ink = false;
     var underline = false;
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const band = fixture.chrome.presented().bands.status_bar;
     const cell_height: f32 = @floatFromInt(renderer.metrics.cell_height);
     const row_top = band.y + @floor((band.height - cell_height) / 2);
@@ -326,7 +326,7 @@ test "native sidebar ignores configured footer slots" {
     var projection = fixture.projection();
     projection.bar_state = &state;
     try fixture.paint(projection);
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const before = try std.testing.allocator.dupe(@import("../render/Quad.zig").Quad, renderer.quads.items());
     defer std.testing.allocator.free(before);
 
@@ -344,7 +344,7 @@ test "native child progress remains visible with a single borderless pane" {
     _ = pane.setProgress(.{ .pane_id = Session.pane_id, .state = .set, .percent = 50 });
     try fixture.paint(fixture.projection());
     const pixels = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     var found = false;
     for (renderer.quads.items()) |quad| {
         if (quad.radius > 0 and quad.border > 0 and quad.width == quad.height and quad.x >= pixels.x and quad.x + quad.width <= pixels.x + pixels.width and quad.y >= pixels.y and quad.y + quad.height <= pixels.y + pixels.height) {
@@ -414,7 +414,7 @@ test "native GUI discards failed and stale completions before publishing control
     const gui = session.gui;
     const initial = gui.chrome.presented();
     gui.app.model.name_prompt.begin(.create_workspace);
-    const first = try gui.prepare(&session.renderer);
+    const first = try session.draw();
     try input_support.presented(
         gui,
         first + 1,
@@ -432,7 +432,7 @@ test "native GUI discards failed and stale completions before publishing control
     try std.testing.expect(gui.overlays.presented().modal == null);
     try std.testing.expect(gui.lifecycle.active == null);
 
-    const next = try gui.prepare(&session.renderer);
+    const next = try session.draw();
     const prepared = gui.chrome.prepared();
     try input_support.presented(
         gui,

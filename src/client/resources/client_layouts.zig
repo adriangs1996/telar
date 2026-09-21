@@ -5,7 +5,6 @@ const max_client_layout_nodes_module = @import("telar-core").max_client_layout_n
 const ClientLayoutNodeType = @import("telar-core").ClientLayoutNode;
 const max_client_layout_tabs_module = @import("telar-core").max_client_layout_tabs;
 const ClientTabLayoutType = @import("telar-core").ClientTabLayout;
-const runtime_transport = @import("../entrypoints/runtime_io.zig");
 const Version = @import("Version.zig");
 const ClientLayoutUpdateType = @import("telar-core").ClientLayoutUpdate;
 const std = @import("std");
@@ -31,7 +30,7 @@ pub fn observe(client: *Client) !void {
     var nodes: [max_client_layout_nodes_module]ClientLayoutNodeType = undefined;
     var tabs: [max_client_layout_tabs_module]ClientTabLayoutType = undefined;
     const update = buildUpdate(client, &nodes, &tabs) orelse return;
-    runtime_transport.enqueueClientLayout(client, update) catch |err| switch (err) {
+    client.sendRuntimeClientLayout(update) catch |err| switch (err) {
         error.ClientOutboxFull, error.TooManyPendingClientLayouts => return,
         else => return err,
     };

@@ -56,7 +56,7 @@ semantic notification action
              |
 notifications.requestDelivery
              |
-request_lifecycle.nextId + deliverNotification
+LifecycleState.nextId + request_lifecycle.deliverNotification
              |
       show_notification
 ```

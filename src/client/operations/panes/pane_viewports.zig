@@ -1,7 +1,6 @@
 const Client = @import("../../AttachedClient.zig");
 const PaneViewportCommand = @import("../../model/PaneViewportCommand.zig");
 const PaneViewportChange = @import("../../model/PaneViewportChange.zig");
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
 /// Commits a bounded viewport, then updates graphics and the runtime. Example: `_ = try apply(client, command);`
 pub fn apply(client: *Client, command: PaneViewportCommand) !?PaneViewportChange {
@@ -24,8 +23,12 @@ pub fn deliver(client: *Client, change: PaneViewportChange) !void {
     }
 
     try client.graphics.setPaneVisible(change.pane_id, change.at_bottom);
-    try runtime_transport.enqueue(client, .{ .set_pane_viewport = .{
-        .pane_id = change.pane_id,
-        .offset = change.offset,
-    } });
+    try client.sendRuntime(
+        .{
+            .set_pane_viewport = .{
+                .pane_id = change.pane_id,
+                .offset = change.offset,
+            },
+        },
+    );
 }

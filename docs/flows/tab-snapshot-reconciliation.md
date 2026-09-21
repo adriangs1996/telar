@@ -12,8 +12,8 @@ bootstrap / selection / recovery -> request_lifecycle.requestTabSnapshot
      -> Model.reconcileTab
      -> ignore removed-pane requests and pane_resources.release
      -> active_pane_resources.synchronize
-     -> pane_geometry.offerAttached
-     -> requestAttachments for visible detached panes
+     -> AttachedClient.resizeAttachedPanes
+     -> AttachedClient.attachVisiblePanes for visible detached panes
   -> adapter observes presentation revisions
 ```
 
@@ -37,9 +37,10 @@ layout and can attach after geometry becomes available.
 After the model commits, the same operation retires removed resources, then
 synchronizes active resources, offers attached sizes and requests missing
 attachments. Pending requests are deduplicated; panes without content are
-skipped. `attachActive` reuses selection after geometry/focus changes, once the
-canonical snapshot has loaded. Exact repeated snapshots can repair operational
-resources without inventing a model revision.
+skipped. Geometry/focus operations resolve their target tab once and call
+`AttachedClient.attachVisiblePanes` only after its canonical snapshot has loaded.
+Exact repeated snapshots can repair operational resources without inventing a
+model revision.
 
 `tab_snapshots.recover` owns singleton repair coalescence. Attachment rejection,
 tab closure and failed workspace departure decide whether they need repair,

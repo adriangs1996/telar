@@ -33,7 +33,7 @@ ClientModel.planPaneInput -> input.encoding.encodeKey
       |
 pane_viewports.apply(.bottom)
       |
-runtime_transport.enqueueInput
+AttachedClient.sendRuntimeInput
       |
 Outbox.encodeNext -> schema.pane_input -> socket
       |
@@ -53,7 +53,7 @@ inline result or .pane_ingested -> Pipeline.handleIngested -> Application.pump
 Attachment.prepareNextCells -> cell.Sync.prepare -> schema.pane_frame -> socket
       |
       v
-runtime_transport.handleRead -> server_messages -> pane_frames
+AttachedClient.receiveRuntime -> server_messages -> pane_frames
       |
 presentation_lifecycle.observe -> Presenter.presentDue -> presentation.Screen.flush
       |
@@ -232,7 +232,7 @@ stationary-pointer updates, UI priority and proofs.
 calling the concrete sidebar, workspace-list, agent-navigation, tab-selection,
 pane-focus, name-prompt, handoff or notification operation. If the interaction
 changed layout, that same function invalidates graphics placements and calls
-`pane_geometry.offerAttached` with the original active model and current area.
+`AttachedClient.resizeAttachedPanes` with the original active model and current area.
 It then returns whether the triggering event was consumed.
 
 Tab selection and agent navigation consume the triggering pointer event.
@@ -326,9 +326,9 @@ The encodings follow the
 For keyboard presses, repeats and paste sources, `pane_inputs.send` plans and
 encodes input before applying the optional `.bottom` viewport intent. A changed
 viewport commits, updates graphics visibility and queues `set_pane_viewport`.
-The concrete input operation then calls `runtime_io.enqueueInput` directly.
+The concrete input operation then calls `AttachedClient.sendRuntimeInput` directly.
 
-The outbox copies the bytes through `Outbox.pushInput`. `RuntimeTransportState.pump` calls
+The outbox copies the bytes through `Outbox.pushInput`. `AttachedClient.startRuntimeSend` calls
 `RuntimeTransportState.prepareSend` and `Outbox.beginSend`, which encodes the
 head through `encodePaneInput`. The actual transport driver starts the owned
 send actor. Its `.sent` completion releases that claim before pumping the next
@@ -433,7 +433,7 @@ state remain inline; no queue of obsolete frames is introduced.
 
 ## 6. Client frame and host presentation
 
-The client socket read completes at `runtime_transport.handleRead`. That
+The client socket read completes at `AttachedClient.receiveRuntime`. That
 entrypoint releases its read token, uses the message decoded by the receive
 producer, delegates to
 `server_messages.handleServerMessage`, accounts flow-control credits and
@@ -472,7 +472,7 @@ They update the same model; the next preparation captures its latest state.
 
 ## Native input and drawing cadence
 
-The GUI admits native events through `Application.input`, then the window
+The GUI admits native events through `GuiClient.input`, then the window
 thread drains `InputQueue` into the shared router. After `pane_inputs.send`
 successfully admits nonempty child input, `pane_inputs.record` calls the
 optional `HostPresentation.notePaneInput` port. Local shortcuts, suppressed
@@ -487,7 +487,7 @@ frame contains an echo. The fixed table holds at most `max_panes_per_tab`
 entries. Replacing its oldest entry loses only an optimization. Detachment or
 reattachment cannot transfer the old attachment's grace.
 
-On macOS, `TelarView.drawDelay` queries `Application.frameDelayNs` before
+On macOS, `TelarView.drawDelay` queries `GuiClient.frameDelayNs` before
 acquiring a drawable. Querying does not consume budget. A nonzero preparation
 token charges the ordinary cadence and only the newer pane frames captured in
 its presentation commit. An early frame reanchors the next interval at its

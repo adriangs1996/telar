@@ -9,8 +9,8 @@ operations/input/actions.apply
      -> Model.togglePaneFullscreen
      -> validate exact geometry commit
      -> invalidate graphics placements
-     -> offerAttached: visible attached panes only
-     -> tab_snapshots.attachActive: newly visible detached panes
+     -> AttachedClient.resizeAttachedPanes: visible attached panes only
+     -> AttachedClient.attachVisiblePanes: newly visible detached panes
   -> adapter observes the pane revision
 ```
 

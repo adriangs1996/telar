@@ -138,8 +138,8 @@ adapter securely frees its PNG without changing the shelf.
 
 For a current result, the operation orders resource adoption before
 geometry effects. `attachments.Store` validates the image again, owns the PNG
-and reports whether the shelf changed pane geometry. The adapter delegates
-active-tab selection to `pane_geometry.offerActive` and offers new pane
+and reports whether the shelf changed pane geometry. The operation resolves
+the active tab and calls `AttachedClient.resizeAttachedPanes` to offer new pane
 sizes to the runtime only for that layout transition. The same operation then handles the classified outcome.
 
 `clipboard_images.complete` keeps applied, stale, ignored and

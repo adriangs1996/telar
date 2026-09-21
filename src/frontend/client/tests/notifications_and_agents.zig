@@ -17,7 +17,6 @@ const encodeNotification_module = @import("telar-core").encodeNotification;
 const notification_flow = @import("telar-client").operations.notifications;
 const LevelType = @import("telar-client").Level;
 const transition_duration_ns_module = @import("telar-client").transition_duration_ns;
-const runtime_transport = @import("telar-client").runtime_io;
 const NotificationType = @import("telar-client").Notification;
 const ControlType = @import("telar-client").Control;
 const client_actions = @import("telar-client").operations.actions;
@@ -200,9 +199,13 @@ test "notification action delivers one correlated runtime request without model 
     const request_id: RequestIdType = @enumFromInt(client.request_lifecycle.next_request_id);
     const version_before = client.model.version();
     const pending_updates_before = host(client).presenter.pending_updates;
-    try runtime_transport.enqueue(client, .{
-        .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane },
-    });
+    try client.sendRuntime(
+        .{
+            .detach_pane = .{
+                .pane_id = TestHarness.bootstrap_pane,
+            },
+        },
+    );
     var notification = try NotificationType.init(.{
         .level = .warning,
         .duration_ms = 2500,
@@ -1030,7 +1033,7 @@ test "attachment rejection consumes correlation but does not notify when recover
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
     client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached = false;
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try client.request_lifecycle.tracker.add(request_id, .{ .attach_pane = .{
         .pane_id = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
@@ -1062,7 +1065,7 @@ test "request failure retains canonical recovery when host notification delivery
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
     client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached = false;
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try client.request_lifecycle.tracker.add(request_id, .{ .attach_pane = .{
         .pane_id = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,

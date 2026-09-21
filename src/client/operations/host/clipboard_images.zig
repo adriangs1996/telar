@@ -10,7 +10,6 @@ const ApplicationInputClipboardImageCompletionCommand = @import("../../applicati
 const ClipboardCaptureType = @import("../../model/ClipboardCapture.zig");
 const CaptureRequestType = @import("../../attachments/CaptureRequest.zig");
 const markerPolicy_module = @import("../../application/input/attachment_prompt.zig").markerPolicy;
-const pane_geometry = @import("../panes/pane_geometry.zig");
 const ApplicationInputClipboardImageCompletionOutcome = @import("../../application/input/clipboard_image.zig").CompletionOutcome;
 const InputType = @import("../../notifications/NotificationInput.zig");
 const notification_flow = @import("../notifications/notifications.zig");
@@ -80,7 +79,9 @@ pub fn complete(client: *Client, completion: Completion) !void {
                 break :result .{ .adoption_failed = err };
             };
             if (layout_changed) {
-                try pane_geometry.offerActive(client, client.geometry().area);
+                if (client.model.workspace.active()) |tab| {
+                    try client.resizeAttachedPanes(&tab.model, client.geometry().area);
+                }
             }
 
             break :result .applied;

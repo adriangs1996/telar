@@ -22,9 +22,9 @@ test "terminal box borders join adjacent cells for light heavy double and mixed 
         .{ "╔═╦═╗", "║ ║ ║", "╠═╬═╣", "║ ║ ║", "╚═╩═╝" },
         .{ "╒═╤═╕", "│ │ │", "├─┼─┤", "│ │ │", "╘═╧═╛" },
     };
-    const shapes = session.renderer.atlas.?.shape_calls;
-    const rasters = session.renderer.atlas.?.raster_attempts;
-    const version = session.renderer.atlas.?.version;
+    const shapes = session.gui.renderer.atlas.?.shape_calls;
+    const rasters = session.gui.renderer.atlas.?.raster_attempts;
+    const version = session.gui.renderer.atlas.?.version;
     for (frames) |frame| {
         @memset(pane.buffer.cells, .{});
         for (frame, 0..) |row, y| {
@@ -48,14 +48,14 @@ test "terminal box borders join adjacent cells for light heavy double and mixed 
             }
         }
 
-        for (session.renderer.quads.items()) |item| {
+        for (session.gui.renderer.quads.items()) |item| {
             try std.testing.expect(isSolid(item));
         }
     }
 
-    try std.testing.expectEqual(shapes, session.renderer.atlas.?.shape_calls);
-    try std.testing.expectEqual(rasters, session.renderer.atlas.?.raster_attempts);
-    try std.testing.expectEqual(version, session.renderer.atlas.?.version);
+    try std.testing.expectEqual(shapes, session.gui.renderer.atlas.?.shape_calls);
+    try std.testing.expectEqual(rasters, session.gui.renderer.atlas.?.raster_attempts);
+    try std.testing.expectEqual(version, session.gui.renderer.atlas.?.version);
 }
 
 test "faint straight box glyphs never blend overlapping strokes or consult a font" {
@@ -65,8 +65,8 @@ test "faint straight box glyphs never blend overlapping strokes or consult a fon
     try session.receiveFrame(1);
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
     pane.cursor.visible = false;
-    const shapes = session.renderer.atlas.?.shape_calls;
-    const rasters = session.renderer.atlas.?.raster_attempts;
+    const shapes = session.gui.renderer.atlas.?.shape_calls;
+    const rasters = session.gui.renderer.atlas.?.raster_attempts;
     for (0x2500..0x2580) |value| {
         if (value >= 0x256d and value <= 0x2573) {
             continue;
@@ -88,8 +88,8 @@ test "faint straight box glyphs never blend overlapping strokes or consult a fon
         }
     }
 
-    try std.testing.expectEqual(shapes, session.renderer.atlas.?.shape_calls);
-    try std.testing.expectEqual(rasters, session.renderer.atlas.?.raster_attempts);
+    try std.testing.expectEqual(shapes, session.gui.renderer.atlas.?.shape_calls);
+    try std.testing.expectEqual(rasters, session.gui.renderer.atlas.?.raster_attempts);
 }
 
 test "box replacement and erasure match full rebuilding with cached rounded corners" {
@@ -101,13 +101,13 @@ test "box replacement and erasure match full rebuilding with cached rounded corn
     pane.cursor.visible = false;
     pane.buffer.cells[0] = cell(0x253c);
     try paint(session);
-    const shapes = session.renderer.atlas.?.shape_calls;
-    const rasters = session.renderer.atlas.?.raster_attempts;
+    const shapes = session.gui.renderer.atlas.?.shape_calls;
+    const rasters = session.gui.renderer.atlas.?.raster_attempts;
     for ([_]u21{ 0x256d, 0x256e, 0x256f, 0x2570, ' ', 0x2500 }) |cp| {
         pane.buffer.cells[0] = cell(cp);
         try paint(session);
-        try std.testing.expectEqual(@as(usize, 1), session.renderer.repainted_cells);
-        const frame = session.renderer.quads.items();
+        try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
+        const frame = session.gui.renderer.quads.items();
         if (cp == ' ') {
             try std.testing.expectEqual(@as(usize, 0), frame.len);
         } else if (cp >= 0x256d and cp <= 0x2570) {
@@ -118,15 +118,19 @@ test "box replacement and erasure match full rebuilding with cached rounded corn
         var expected: [CellMesh.capacity]Quad = undefined;
         @memcpy(expected[0..frame.len], frame);
         const count = frame.len;
-        session.renderer.retained.invalidate();
+        session.gui.renderer.retained.invalidate();
         try paint(session);
-        try std.testing.expectEqualSlices(Quad, expected[0..count], session.renderer.quads.items());
+        try std.testing.expectEqualSlices(
+            Quad,
+            expected[0..count],
+            session.gui.renderer.quads.items(),
+        );
         try paint(session);
-        try std.testing.expectEqual(@as(usize, 0), session.renderer.repainted_cells);
+        try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.repainted_cells);
     }
 
-    try std.testing.expectEqual(shapes, session.renderer.atlas.?.shape_calls);
-    try std.testing.expectEqual(rasters, session.renderer.atlas.?.raster_attempts);
+    try std.testing.expectEqual(shapes, session.gui.renderer.atlas.?.shape_calls);
+    try std.testing.expectEqual(rasters, session.gui.renderer.atlas.?.raster_attempts);
 }
 
 test "chrome box strokes follow line height letter spacing and scale through the shared atlas" {
@@ -180,7 +184,7 @@ test "all box glyphs animate within retained capacity without allocation after w
         try paint(session);
     }
 
-    const renderer = &session.renderer;
+    const renderer = &session.gui.renderer;
     const shapes = renderer.atlas.?.shape_calls;
     const rasters = renderer.atlas.?.raster_attempts;
     const version = renderer.atlas.?.version;
@@ -226,14 +230,19 @@ fn cell(cp: u21) core.Cell {
 }
 
 fn paint(session: *Session) !void {
-    _ = try session.renderer.prepare(session.gui.projection());
-    session.renderer.seal();
+    _ = try session.gui.renderer.prepare(session.gui.projection());
+    session.gui.renderer.seal();
 }
 
 fn mesh(session: *Session, x: u16, y: u16) *CellMesh {
     const model = session.gui.app.model.activeTabModel().?;
     const area = model.viewForPane(Session.pane_id, session.gui.region.area).?.content;
-    return session.renderer.retained.at(.{ area.x + x, area.y + y });
+    return session.gui.renderer.retained.at(
+        .{
+            area.x + x,
+            area.y + y,
+        },
+    );
 }
 
 fn expectJoin(first: []const Quad, second: []const Quad, vertical: bool) !void {

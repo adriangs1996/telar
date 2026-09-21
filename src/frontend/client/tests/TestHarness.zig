@@ -3,7 +3,6 @@ const host = TerminalClient.of;
 const SocketChannelType = @import("telar-core").SocketChannel;
 const std = @import("std");
 const Client = @import("telar-client").AttachedClient;
-const runtime_transport = @import("telar-client").runtime_io;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const sidebar_animations = @import("telar-client").operations.sidebar_animations;
 const notification_flow = @import("telar-client").operations.notifications;
@@ -88,7 +87,7 @@ pub fn deinit(harness: *TestHarness) void {
 pub fn settle(harness: *TestHarness) !void {
     while (harness.client.runtime_transport.outbox.inFlight() or harness.client.runtime_transport.outbox.len != 0) {
         switch (try host(harness.client).inbox.receive()) {
-            .sent => |result| try runtime_transport.handleSent(harness.client, result),
+            .sent => |result| try harness.client.completeRuntimeSend(result),
             .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
             .sidebar_animation_tick => |result| {
                 _ = try sidebar_animations.handleTick(harness.client, result);
@@ -131,7 +130,7 @@ pub fn settleModelPresentation(harness: *TestHarness) !void {
     {
         switch (try host(harness.client).inbox.receive()) {
             .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
-            .sent => |result| try runtime_transport.handleSent(harness.client, result),
+            .sent => |result| try harness.client.completeRuntimeSend(result),
             .media_tick => |result| try presentation_lifecycle.handleMediaTick(harness.client, result),
             .sidebar_animation_tick => |result| {
                 _ = try sidebar_animations.handleTick(harness.client, result);

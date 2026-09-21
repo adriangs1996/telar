@@ -1,5 +1,4 @@
 const Client = @import("../../AttachedClient.zig");
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
 pub const Outcome = enum { applied, unchanged };
 
@@ -7,11 +6,21 @@ pub const Outcome = enum { applied, unchanged };
 pub fn sync(client: *Client) !Outcome {
     const transition = client.model.syncReportedPaneFocus() orelse return .unchanged;
     if (transition.focus_out) |pane_id| {
-        try runtime_transport.enqueueInput(client, pane_id, "\x1b[O");
+        try client.sendRuntimeInput(
+            .{
+                .pane_id = pane_id,
+                .bytes = "\x1b[O",
+            },
+        );
     }
 
     if (transition.focus_in) |pane_id| {
-        try runtime_transport.enqueueInput(client, pane_id, "\x1b[I");
+        try client.sendRuntimeInput(
+            .{
+                .pane_id = pane_id,
+                .bytes = "\x1b[I",
+            },
+        );
     }
 
     return .applied;
@@ -21,7 +30,12 @@ pub fn sync(client: *Client) !Outcome {
 pub fn clear(client: *Client) !Outcome {
     const transition = client.model.clearReportedPaneFocus() orelse return .unchanged;
     if (transition.focus_out) |pane_id| {
-        try runtime_transport.enqueueInput(client, pane_id, "\x1b[O");
+        try client.sendRuntimeInput(
+            .{
+                .pane_id = pane_id,
+                .bytes = "\x1b[O",
+            },
+        );
     }
 
     return .applied;

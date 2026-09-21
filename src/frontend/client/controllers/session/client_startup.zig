@@ -10,7 +10,6 @@ const host_capabilities = @import("../host/host_capabilities.zig");
 const presentation_lifecycle = @import("../../presentation/presentation_lifecycle.zig");
 const host_inputs = @import("../input/host_inputs.zig");
 const host_resizes = @import("../host/host_resizes.zig");
-const runtime_transport = @import("telar-client").runtime_io;
 const client_telemetry = @import("../../resources/telemetry.zig");
 const supportsSharedMemory_module = @import("telar-client").supportsSharedMemory;
 
@@ -30,7 +29,7 @@ pub fn start(client: *Client, request: Request) !void {
     try host_inputs.scheduleRead(client);
 
     try host_resizes.schedule(client, request.resize_watcher);
-    try client.runtime_transport.scheduleRead(client.transport_driver);
+    try client.startRuntimeRead();
     try client_telemetry.start(client);
     try client.synchronizeBars();
     try client.scheduleConfigReload();
@@ -47,7 +46,7 @@ pub fn advance(client: *Client) !bool {
             .terminal_colors = client.model.hostCapabilities().terminal_colors,
         });
         client.startup.phase = .opening;
-        try runtime_transport.flushGraphicsCredits(client);
+        try client.flushGraphicsCredits();
     }
 
     if (client.startup.phase == .opening and client.model.activeTabLocation() != null) {

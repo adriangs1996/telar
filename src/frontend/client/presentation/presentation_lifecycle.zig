@@ -10,7 +10,6 @@ const presentation_projection = @import("presentation_projection.zig");
 const mark_module = @import("telar-core").mark;
 const TokenType = @import("telar-client").Token;
 const OutputType = @import("../resources/Output.zig");
-const runtime_transport = @import("telar-client").runtime_io;
 
 /// Publishes every revision the presenter uses after one client event commits.
 ///

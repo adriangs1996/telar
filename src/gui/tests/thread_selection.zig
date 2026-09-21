@@ -55,9 +55,15 @@ test "shift click keeps the pinned source after live updates and resizing" {
     const gui = fixture.session.gui;
     const pinned = gui.app.model.agentPane(Fixture.pane_id).?.agent_history.?;
     try fixture.messages(&.{ "changed user", "new response with unrelated bytes", "latest output" });
-    const size = try gui.measure(&fixture.session.renderer, .{ .width = 850, .height = 800, .scale = 1 });
-    try gui.resize(size, fixture.session.renderer.theme);
-    gui.pointer.configure(fixture.session.renderer.origin, size);
+    const size = try gui.resizeViewport(
+        .{
+            .width = 850,
+            .height = 800,
+            .scale = 1,
+        },
+    );
+    try gui.resize(size, fixture.session.gui.renderer.theme);
+    gui.pointer.configure(fixture.session.gui.renderer.origin, size);
     try fixture.publish();
     const point = try fixture.point(3, "selectable");
     try fixture.send(.{ .pointer = .{ .kind = .press, .mods = 1, .x = point[0], .y = point[1] } });

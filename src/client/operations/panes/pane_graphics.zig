@@ -7,7 +7,6 @@ const ApplicationPanesPaneGraphicsCommand = @import("../../application/panes/pan
 const ApplicationPanesPaneGraphicsOutcome = @import("../../application/panes/pane_graphics.zig").Outcome;
 const enabled_module = @import("telar-core").enabled;
 const ResourceResultType = @import("../../application/panes/pane_graphics.zig").ResourceResult;
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -45,7 +44,13 @@ pub fn apply(client: *Client, command: ApplicationPanesPaneGraphicsCommand) !App
                 return error.InvalidPaneGraphicsResult;
             }
 
-            try runtime_transport.enqueue(client, .{ .request_graphics_snapshot = .{ .pane_id = pane_id } });
+            try client.sendRuntime(
+                .{
+                    .request_graphics_snapshot = .{
+                        .pane_id = pane_id,
+                    },
+                },
+            );
             break :block .{ .resync_requested = pane_id };
         },
         .shared_mapping_failed => |recovery_pane| block: {
@@ -53,8 +58,20 @@ pub fn apply(client: *Client, command: ApplicationPanesPaneGraphicsCommand) !App
                 return error.InvalidPaneGraphicsResult;
             }
 
-            try runtime_transport.enqueue(client, .{ .configure_graphics = .{ .shared = false } });
-            try runtime_transport.enqueue(client, .{ .request_graphics_snapshot = .{ .pane_id = pane_id } });
+            try client.sendRuntime(
+                .{
+                    .configure_graphics = .{
+                        .shared = false,
+                    },
+                },
+            );
+            try client.sendRuntime(
+                .{
+                    .request_graphics_snapshot = .{
+                        .pane_id = pane_id,
+                    },
+                },
+            );
             break :block .{ .shared_disabled = pane_id };
         },
     };

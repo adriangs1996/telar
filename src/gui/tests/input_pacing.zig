@@ -36,8 +36,12 @@ fn begin(session: *Session) !void {
     try session.receiveFrame(@intFromEnum(Frame.initial));
     try session.settle();
     session.gui.app.presentation.note_pane_input_fn = noteInputAtTestTime;
-    session.driver.frame_pacer.record(&.{currentPane(session)}, @intFromEnum(Time.before_input));
-    try std.testing.expect(session.driver.frame_pacer.waitUntil(&.{currentPane(session)}, @intFromEnum(Time.after_input)) != null);
+    session.gui.driver.frame_pacer.record(&.{
+        currentPane(session),
+    }, @intFromEnum(Time.before_input));
+    try std.testing.expect(session.gui.driver.frame_pacer.waitUntil(&.{
+        currentPane(session),
+    }, @intFromEnum(Time.after_input)) != null);
 }
 
 test "native admitted terminal key admits only a newer pane frame before cadence" {
@@ -48,15 +52,23 @@ test "native admitted terminal key admits only a newer pane frame before cadence
     try input_support.pump(session.gui);
     try session.settle();
     try std.testing.expectEqualStrings("x", session.input[0..session.input_len]);
-    try std.testing.expect(session.driver.frame_pacer.waitUntil(&.{currentPane(session)}, @intFromEnum(Time.after_input)) != null);
+    try std.testing.expect(session.gui.driver.frame_pacer.waitUntil(&.{
+        currentPane(session),
+    }, @intFromEnum(Time.after_input)) != null);
 
     try session.receiveFrame(@intFromEnum(Frame.echo));
     try session.settle();
     try std.testing.expectEqual(@as(usize, 2), session.ack_count);
-    try std.testing.expectEqual(@as(?u64, null), session.driver.frame_pacer.waitUntil(&.{currentPane(session)}, @intFromEnum(Time.after_input)));
+    try std.testing.expectEqual(@as(?u64, null), session.gui.driver.frame_pacer.waitUntil(&.{
+        currentPane(session),
+    }, @intFromEnum(Time.after_input)));
 
-    session.driver.frame_pacer.record(&.{currentPane(session)}, @intFromEnum(Time.after_input));
-    try std.testing.expect(session.driver.frame_pacer.waitUntil(&.{currentPane(session)}, @intFromEnum(Time.after_input)) != null);
+    session.gui.driver.frame_pacer.record(&.{
+        currentPane(session),
+    }, @intFromEnum(Time.after_input));
+    try std.testing.expect(session.gui.driver.frame_pacer.waitUntil(&.{
+        currentPane(session),
+    }, @intFromEnum(Time.after_input)) != null);
 }
 
 test "native terminal key release without encoded bytes grants no input grace" {
@@ -74,7 +86,9 @@ test "native terminal key release without encoded bytes grants no input grace" {
 
     try session.receiveFrame(@intFromEnum(Frame.echo));
     try session.settle();
-    try std.testing.expect(session.driver.frame_pacer.waitUntil(&.{currentPane(session)}, @intFromEnum(Time.after_input)) != null);
+    try std.testing.expect(session.gui.driver.frame_pacer.waitUntil(&.{
+        currentPane(session),
+    }, @intFromEnum(Time.after_input)) != null);
 }
 
 test "native rejected outbox input grants no frame grace" {
@@ -93,7 +107,9 @@ test "native rejected outbox input grants no frame grace" {
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
     var prospective = currentPane(session);
     prospective.frame_id = @intFromEnum(Frame.echo);
-    try std.testing.expect(session.driver.frame_pacer.waitUntil(&.{prospective}, @intFromEnum(Time.after_input)) != null);
+    try std.testing.expect(session.gui.driver.frame_pacer.waitUntil(&.{
+        prospective,
+    }, @intFromEnum(Time.after_input)) != null);
 }
 
 test "native local prefix shortcut grants no terminal frame grace" {
@@ -108,14 +124,16 @@ test "native local prefix shortcut grants no terminal frame grace" {
 
     try session.receiveFrame(@intFromEnum(Frame.echo));
     try session.settle();
-    try std.testing.expect(session.driver.frame_pacer.waitUntil(&.{currentPane(session)}, @intFromEnum(Time.after_input)) != null);
+    try std.testing.expect(session.gui.driver.frame_pacer.waitUntil(&.{
+        currentPane(session),
+    }, @intFromEnum(Time.after_input)) != null);
 }
 
 test "native older GPU completion preserves a newer input hint and sends no extra ACK" {
     const session = try Session.init();
     defer session.deinit();
     try begin(session);
-    const token = try session.gui.prepare(&session.renderer);
+    const token = try session.draw();
     try std.testing.expect(token != 0);
     try input_support.accept(session.gui, .{ .key = .{ .code = .{ .char = .init("x") } } });
     try input_support.pump(session.gui);
@@ -133,7 +151,9 @@ test "native older GPU completion preserves a newer input hint and sends no extr
     );
     try session.settle();
     try std.testing.expectEqual(acknowledgements, session.ack_count);
-    try std.testing.expectEqual(@as(?u64, null), session.driver.frame_pacer.waitUntil(&.{currentPane(session)}, @intFromEnum(Time.after_input)));
+    try std.testing.expectEqual(@as(?u64, null), session.gui.driver.frame_pacer.waitUntil(&.{
+        currentPane(session),
+    }, @intFromEnum(Time.after_input)));
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
     try std.testing.expectEqual(@intFromEnum(Frame.echo), pane.pending_frame_id);
 
@@ -142,5 +162,7 @@ test "native older GPU completion preserves a newer input hint and sends no extr
         token,
         true,
     );
-    try std.testing.expectEqual(@as(?u64, null), session.driver.frame_pacer.waitUntil(&.{currentPane(session)}, @intFromEnum(Time.after_input)));
+    try std.testing.expectEqual(@as(?u64, null), session.gui.driver.frame_pacer.waitUntil(&.{
+        currentPane(session),
+    }, @intFromEnum(Time.after_input)));
 }

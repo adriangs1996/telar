@@ -126,7 +126,7 @@ pub fn apply(client: *Client, closed: TabClosedType) !Outcome {
 }
 
 fn send(client: *Client, intent: TabCloseIntentType) !void {
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
 
     try request_lifecycle.deliver(client, .{
         .registration = .{

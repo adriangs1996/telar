@@ -6,7 +6,7 @@ test "native theme backgrounds share window opacity across bands and pane header
     const client = @import("telar-client");
     var fixture = try @import("ChromeFixture.zig").init();
     defer fixture.deinit();
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const model = &fixture.session.gui.app.model;
     const projection = fixture.projection();
     const panes = model.activeTabModel().?;
@@ -51,7 +51,7 @@ test "agent and terminal panes share the configured theme background opacity and
     const client = @import("telar-client");
     var fixture = try @import("ChromeFixture.zig").init();
     defer fixture.deinit();
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const model = &fixture.session.gui.app.model;
     const panes = model.activeTabModel().?;
     try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(20), .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
@@ -121,15 +121,16 @@ test "native scene captures terminal and thread damage in the same presentation"
     try session.bootstrap();
     try session.receiveFrame(1);
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
-    try std.testing.expectEqual(pane.id, session.gui.cursorTarget().pane_id);
+    _ = try session.gui.update();
+    try std.testing.expectEqual(pane.id, session.gui.cursor_clock.target.pane_id);
     const layout = &session.gui.app.model.activeTabModel().?.layout;
     try std.testing.expect(layout.setSurface(pane.id, .thread));
-    const token = try session.gui.prepare(&session.renderer);
+    const token = try session.draw();
     const commit = session.gui.lifecycle.active.?.delivery.commit;
     try std.testing.expectEqual(@as(u8, 1), commit.len);
     try std.testing.expectEqual(pane.id, commit.panes[0].pane_id);
-    try std.testing.expect(session.renderer.quads.items().len > 0);
-    try std.testing.expectEqual(session.renderer.atlas.?.version, session.renderer.last_page_version);
+    try std.testing.expect(session.gui.renderer.quads.items().len > 0);
+    try std.testing.expectEqual(session.gui.renderer.atlas.?.version, session.gui.renderer.last_page_version);
     try input_support.presented(
         session.gui,
         token,
@@ -149,18 +150,18 @@ test "native copy selection recolors only projected cells and restores retained 
     const view = session.gui.app.model.activeTabModel().?.viewForPane(pane.id, session.gui.region.area).?;
     const position = [2]u16{ view.content.x, view.content.y };
     var projection = session.gui.projection();
-    _ = try session.renderer.prepare(projection);
-    const original = session.renderer.retained.at(position).items()[0];
+    _ = try session.gui.renderer.prepare(projection);
+    const original = session.gui.renderer.retained.at(position).items()[0];
     projection.copy = .{ .pane_id = pane.id, .view = .{ .cursor = .{ .x = 0, .y = pane.scroll.offset }, .anchor = .{ .x = 0, .y = pane.scroll.offset }, .linewise = false } };
-    _ = try session.renderer.prepare(projection);
-    try std.testing.expectEqual(@as(usize, 1), session.renderer.repainted_cells);
-    const selected = session.renderer.retained.at(position).items()[0];
+    _ = try session.gui.renderer.prepare(projection);
+    try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
+    const selected = session.gui.renderer.retained.at(position).items()[0];
     try std.testing.expect(original.r != selected.r or original.g != selected.g or original.b != selected.b);
     try std.testing.expectEqualDeep(canonical, pane.buffer.cells[0]);
     projection.copy = null;
-    _ = try session.renderer.prepare(projection);
-    try std.testing.expectEqualDeep(original, session.renderer.retained.at(position).items()[0]);
-    try std.testing.expectEqual(@as(usize, 1), session.renderer.repainted_cells);
+    _ = try session.gui.renderer.prepare(projection);
+    try std.testing.expectEqualDeep(original, session.gui.renderer.retained.at(position).items()[0]);
+    try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
 }
 
 test "native prefix and chrome hover invalidate presentation without changing model state" {
@@ -168,7 +169,7 @@ test "native prefix and chrome hover invalidate presentation without changing mo
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    const token = try session.gui.prepare(&session.renderer);
+    const token = try session.draw();
     try input_support.presented(
         session.gui,
         token,
@@ -182,7 +183,7 @@ test "native prefix and chrome hover invalidate presentation without changing mo
     _ = session.gui.lifecycle.observe(session.gui.observation());
     try std.testing.expect(session.gui.lifecycle.needsPreparation());
     try std.testing.expect(session.gui.projection().status_mode == .prefix);
-    const prefix = try session.gui.prepare(&session.renderer);
+    const prefix = try session.draw();
     try input_support.presented(
         session.gui,
         prefix,

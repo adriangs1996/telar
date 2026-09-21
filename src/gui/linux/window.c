@@ -162,6 +162,10 @@ static void surface_configure(void *data, struct xdg_surface *surface,
     }
   }
   self->configured = true;
+  if (self->callbacks.ready != NULL) {
+    telar_gui_viewport viewport = {self->width, self->height, 1.0f};
+    self->callbacks.ready(self->context, viewport);
+  }
   self->dirty = true;
 }
 

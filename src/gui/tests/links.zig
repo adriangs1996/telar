@@ -103,7 +103,7 @@ test "native pane pointer shapes refresh under a stationary pointer and modal bl
 test "native link highlight reuses retained cells and disappears without changing atlas pixels" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const atlas = renderer.atlas.?.version;
     try fixture.send(fixture.event(6));
     try fixture.present();

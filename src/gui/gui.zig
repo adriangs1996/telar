@@ -2,7 +2,7 @@
 //! Shared client controllers own the session; native backends deliver input
 //! and consume sealed cell frames without knowing the terminal protocol.
 
-pub const Application = @import("Application.zig");
+pub const GuiClient = @import("GuiClient.zig");
 pub const Color = @import("render/Color.zig");
 pub const GlyphAtlas = @import("text/GlyphAtlas.zig");
 pub const QuadList = @import("render/QuadList.zig");
@@ -57,7 +57,7 @@ test {
     _ = @import("tests/thread_text_geometry.zig");
     _ = @import("tests/thread_selection.zig");
     _ = @import("tests/thread_scroll_motion.zig");
-    _ = Application;
+    _ = GuiClient;
     _ = @import("WindowIdentity.zig");
     _ = @import("tests/terminal.zig");
     _ = @import("tests/configuration.zig");

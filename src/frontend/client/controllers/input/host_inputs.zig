@@ -12,7 +12,6 @@ const max_encoded_bytes = @import("telar-client").max_encoded_bytes;
 const Config = @import("telar-client").RouterConfig;
 const default_bindings = @import("telar-client").default_bindings;
 const Client = @import("telar-client").AttachedClient;
-const runtime_transport = @import("telar-client").runtime_io;
 const mark_module = @import("telar-core").mark;
 const Chunk = @import("Chunk.zig");
 const key_routing = @import("telar-client").operations.key_routing;
@@ -284,7 +283,7 @@ pub fn terminalResponse(client: *Client, response: term.Event.TerminalResponse) 
             if (!kitty_delivery.noteHostReply(&host(client).graphics_store, reply.image_id, reply.supported)) {
                 return;
             }
-            try runtime_transport.flushGraphicsCredits(client);
+            try client.flushGraphicsCredits();
             try presentation_lifecycle.observe(client);
         },
         else => {},

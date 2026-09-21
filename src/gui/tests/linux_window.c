@@ -145,7 +145,15 @@ close:
     return NULL;
 }
 
+static unsigned ready_count;
+static void ready(void *context, telar_gui_viewport viewport) {
+    (void)context;
+    if (viewport.width > 0 && viewport.height > 0 && viewport.scale > 0) {
+        ready_count++;
+    }
+}
 static void render(void *context, telar_gui_viewport viewport, telar_gui_frame *frame) {
+    if (ready_count == 0) atomic_fetch_add(&state.failures, 1);
     (void)context;
     if (!invalid_frame_test && !deferred) {
         deferred = true;
@@ -281,7 +289,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     telar_gui_callbacks callbacks = {
-        .render = render, .pump = pump, .complete = complete, .input = input, .wake_fd = state.wake[0], .pointer_shape = pointer_shape, .wakeup_after = wakeup_after};
+        .render = render, .pump = pump, .complete = complete, .input = input, .wake_fd = state.wake[0], .pointer_shape = pointer_shape, .wakeup_after = wakeup_after, .ready = ready};
     int status = telar_gui_run("Telar Vulkan integration test", NULL, &callbacks);
     if (invalid_frame_test) {
         telar_gui_close_pipe(state.wake);

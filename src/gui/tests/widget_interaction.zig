@@ -97,7 +97,7 @@ test "retired generations and modal scope consume captured releases without reta
 }
 
 fn publish(session: *Session) !void {
-    const token = try session.gui.prepare(&session.renderer);
+    const token = try session.draw();
     try input_support.presented(
         session.gui,
         token,
@@ -119,9 +119,15 @@ fn initSession() !*Session {
     const session = try Session.init();
     errdefer session.deinit();
     try session.bootstrap();
-    const size = try session.gui.measure(&session.renderer, .{ .width = 800, .height = 600, .scale = 1 });
-    try session.gui.resize(size, session.renderer.theme);
-    session.gui.pointer.configure(session.renderer.origin, size);
+    const size = try session.gui.resizeViewport(
+        .{
+            .width = 800,
+            .height = 600,
+            .scale = 1,
+        },
+    );
+    try session.gui.resize(size, session.gui.renderer.theme);
+    session.gui.pointer.configure(session.gui.renderer.origin, size);
     try session.settle();
     return session;
 }
@@ -628,8 +634,14 @@ test "native tab drag sends one anchored move after release and waits for runtim
     try std.testing.expectEqual(@as(?usize, 2), session.gui.app.model.workspace.indexOf(third));
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
     try std.testing.expectEqual(Session.location.tab_id, session.gui.widgets.tab_drag.destination.?.relative_to.?);
-    const size = try session.gui.measure(&session.renderer, .{ .width = 800, .height = 600, .scale = 1 });
-    try session.gui.resize(size, session.renderer.theme);
+    const size = try session.gui.resizeViewport(
+        .{
+            .width = 800,
+            .height = 600,
+            .scale = 1,
+        },
+    );
+    try session.gui.resize(size, session.gui.renderer.theme);
     try publish(session);
     try std.testing.expect(session.gui.widgets.tab_drag.source != null);
     const lifted = try tabTarget(session, third);
@@ -637,7 +649,7 @@ test "native tab drag sends one anchored move after release and waits for runtim
     try std.testing.expect(lifted.bounds.x < source.bounds.x);
     try send(session, .{ .pointer = .{ .kind = .drag, .x = target.bounds.x + 2, .y = y } });
     try std.testing.expectEqual(Session.location.tab_id, session.gui.widgets.tab_drag.destination.?.relative_to.?);
-    const failed = try session.gui.prepare(&session.renderer);
+    const failed = try session.draw();
     try input_support.presented(
         session.gui,
         failed,
@@ -848,10 +860,10 @@ test "composer popover consumes outside input and reuses warm glyph and quad sto
     try pressControl(session, try composerSelector(session, .access));
     try publish(session);
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
-    session.renderer.atlas.?.allocator = failing.allocator();
-    session.renderer.quads.allocator = failing.allocator();
-    defer session.renderer.atlas.?.allocator = std.testing.allocator;
-    defer session.renderer.quads.allocator = std.testing.allocator;
+    session.gui.renderer.atlas.?.allocator = failing.allocator();
+    session.gui.renderer.quads.allocator = failing.allocator();
+    defer session.gui.renderer.atlas.?.allocator = std.testing.allocator;
+    defer session.gui.renderer.quads.allocator = std.testing.allocator;
     for (0..3) |_| {
         try publish(session);
     }
@@ -1148,10 +1160,10 @@ test "approval review exposes the complete request with bounded scroll and pane 
     try send(session, .{ .scroll = .{ .x = body.bounds.x + 1, .y = body.bounds.y + 1, .delta_y = 1 } });
     try settleConversationScroll(session);
     try std.testing.expectEqual(body.scroll_limit - 1, session.gui.app.model.agentPane(Session.pane_id).?.transcript_scroll);
-    for (session.renderer.quads.items()) |quad| {
+    for (session.gui.renderer.quads.items()) |quad| {
         try std.testing.expect(quad.x >= 0 and quad.y >= 0);
-        try std.testing.expect(quad.x + quad.width <= @as(f32, @floatFromInt(session.renderer.viewport[0])));
-        try std.testing.expect(quad.y + quad.height <= @as(f32, @floatFromInt(session.renderer.viewport[1])));
+        try std.testing.expect(quad.x + quad.width <= @as(f32, @floatFromInt(session.gui.renderer.viewport[0])));
+        try std.testing.expect(quad.y + quad.height <= @as(f32, @floatFromInt(session.gui.renderer.viewport[1])));
     }
 }
 
@@ -1185,30 +1197,43 @@ test "agent thread warm drawing allocates no glyph or quad storage and clips sma
     defer session.deinit();
     try publish(session);
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
-    session.renderer.atlas.?.allocator = failing.allocator();
-    session.renderer.quads.allocator = failing.allocator();
-    defer session.renderer.atlas.?.allocator = std.testing.allocator;
-    defer session.renderer.quads.allocator = std.testing.allocator;
+    session.gui.renderer.atlas.?.allocator = failing.allocator();
+    session.gui.renderer.quads.allocator = failing.allocator();
+    defer session.gui.renderer.atlas.?.allocator = std.testing.allocator;
+    defer session.gui.renderer.quads.allocator = std.testing.allocator;
     for (0..3) |_| {
         try publish(session);
     }
 
     try std.testing.expectEqual(@as(usize, 0), failing.allocated_bytes);
-    session.renderer.atlas.?.allocator = std.testing.allocator;
-    session.renderer.quads.allocator = std.testing.allocator;
+    session.gui.renderer.atlas.?.allocator = std.testing.allocator;
+    session.gui.renderer.quads.allocator = std.testing.allocator;
     for ([_][2]u32{ .{ 180, 240 }, .{ 120, 100 } }) |viewport| {
-        const size = try session.gui.measure(&session.renderer, .{ .width = viewport[0], .height = viewport[1], .scale = 1 });
-        try session.gui.resize(size, session.renderer.theme);
-        session.gui.pointer.configure(session.renderer.origin, size);
+        const size = try session.gui.resizeViewport(
+            .{
+                .width = viewport[0],
+                .height = viewport[1],
+                .scale = 1,
+            },
+        );
+        try session.gui.resize(size, session.gui.renderer.theme);
+        session.gui.pointer.configure(session.gui.renderer.origin, size);
         try publish(session);
-        session.renderer.quads.clear();
-        var canvas: @import("../widgets/Canvas.zig") = .{ .atlas = &session.renderer.atlas.?, .quads = &session.renderer.quads, .metrics = session.renderer.metrics, .origin = session.renderer.origin, .theme = session.gui.theme, .chrome = session.renderer.chrome };
+        session.gui.renderer.quads.clear();
+        var canvas: @import("../widgets/Canvas.zig") = .{
+            .atlas = &session.gui.renderer.atlas.?,
+            .quads = &session.gui.renderer.quads,
+            .metrics = session.gui.renderer.metrics,
+            .origin = session.gui.renderer.origin,
+            .theme = session.gui.theme,
+            .chrome = session.gui.renderer.chrome,
+        };
         const thread = client.ThreadView.capture(session.gui.app.model.activeTabModel().?, null, Session.pane_id).?;
         try (@import("../widgets/ThreadPane.zig"){ .area = session.gui.region.area, .thread = thread }).draw(&canvas);
-        for (session.renderer.quads.items()) |quad| {
+        for (session.gui.renderer.quads.items()) |quad| {
             try std.testing.expect(quad.x >= 0 and quad.y >= 0);
-            try std.testing.expect(quad.x + quad.width <= @as(f32, @floatFromInt(session.renderer.viewport[0])));
-            try std.testing.expect(quad.y + quad.height <= @as(f32, @floatFromInt(session.renderer.viewport[1])));
+            try std.testing.expect(quad.x + quad.width <= @as(f32, @floatFromInt(session.gui.renderer.viewport[0])));
+            try std.testing.expect(quad.y + quad.height <= @as(f32, @floatFromInt(session.gui.renderer.viewport[1])));
         }
     }
 }
@@ -1382,7 +1407,7 @@ test "disclosure anchors survive a newer snapshot and failed frame delivery" {
     try pressControl(session, target);
     const pane = session.gui.app.model.agentPane(Session.pane_id).?;
     try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
-    const failed = try session.gui.prepare(&session.renderer);
+    const failed = try session.draw();
     try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
     try input_support.presented(
         session.gui,
@@ -1405,7 +1430,7 @@ test "disclosure delivery cannot overwrite newer scrolling or a newer disclosure
     try activitySnapshot(session);
     const target = try threadItemTarget(session, 42);
     try pressControl(session, target);
-    const first = try session.gui.prepare(&session.renderer);
+    const first = try session.draw();
     try client.agent_threads.scroll(&session.gui.app, Session.pane_id, 7);
     try input_support.presented(
         session.gui,
@@ -1418,7 +1443,7 @@ test "disclosure delivery cannot overwrite newer scrolling or a newer disclosure
     const baseline = session.gui.app.model.agentPane(Session.pane_id).?.transcript_scroll;
     const expanded = try threadItemTarget(session, 42);
     try pressControl(session, expanded);
-    const second = try session.gui.prepare(&session.renderer);
+    const second = try session.draw();
     try send(session, .{ .accessibility = .{ .target_id = expanded.id.target_id, .generation = expanded.id.generation, .action = .press } });
     const newer = session.gui.widgets.thread_anchor.pending.?.sequence;
     try input_support.presented(
@@ -1432,7 +1457,7 @@ test "disclosure delivery cannot overwrite newer scrolling or a newer disclosure
     try std.testing.expect(session.gui.widgets.thread_anchor.pending == null);
     const latest = try threadItemTarget(session, 42);
     try pressControl(session, latest);
-    const third = try session.gui.prepare(&session.renderer);
+    const third = try session.draw();
     try send(session, .{ .key = .{ .code = .page_down } });
     const manual = session.gui.app.model.agentPane(Session.pane_id).?.transcript_scroll;
     try std.testing.expect(session.gui.widgets.thread_anchor.pending == null);
@@ -1458,7 +1483,7 @@ test "folded work retires obsolete scroll only after successful frame delivery" 
 
     // Restore an obsolete offset, as input against older geometry can do.
     try client.agent_threads.scroll(&session.gui.app, pane.id, 100);
-    const failed = try session.gui.prepare(&session.renderer);
+    const failed = try session.draw();
     try input_support.presented(
         session.gui,
         failed,
@@ -1487,7 +1512,7 @@ test "scrolling during work collapse cannot retain the expanded scroll extent" {
     } else return error.MissingAgentWork;
 
     try pressControl(session, header);
-    const collapsing = try session.gui.prepare(&session.renderer);
+    const collapsing = try session.draw();
     try send(session, .{ .scroll = .{ .x = header.bounds.x + 1, .y = header.bounds.y + 1, .delta_y = -1 } });
     const manual = pane.transcript_scroll;
     try std.testing.expect(manual > 0);
@@ -1516,7 +1541,7 @@ test "an empty conversation clears scroll even when no previous row survives" {
     snapshot.item_count = 0;
     snapshot.text_len = 0;
     try receiveThread(session, &snapshot);
-    const failed = try session.gui.prepare(&session.renderer);
+    const failed = try session.draw();
     try input_support.presented(
         session.gui,
         failed,
@@ -1787,7 +1812,7 @@ test "a terminal split receives typing while the sibling agent composer stays vi
         defer session.deinit();
         const gui = session.gui;
         const panes = gui.app.model.activeTabModel().?;
-        const token = if (timing == .during_frame) try gui.prepare(&session.renderer) else 0;
+        const token = if (timing == .during_frame) try session.draw() else 0;
         const terminal: core.PaneId = @enumFromInt(21);
         try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
         _ = panes.focusPane(terminal);
@@ -2068,8 +2093,8 @@ test "one native input batch retires composer replay ownership before a terminal
     const target = try composerTarget(session);
     const view = panes.viewForPane(terminal, gui.region.area).?;
     const size = gui.app.model.hostSize();
-    const x = @as(f64, @floatFromInt(view.content.x)) * size.cell_width_px + @as(f64, @floatFromInt(session.renderer.origin[0])) + 1;
-    const y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(session.renderer.origin[1])) + 1;
+    const x = @as(f64, @floatFromInt(view.content.x)) * size.cell_width_px + @as(f64, @floatFromInt(session.gui.renderer.origin[0])) + 1;
+    const y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(session.gui.renderer.origin[1])) + 1;
     try input_support.accept(gui, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 114 } } });
     try input_support.accept(gui, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 114 }, .phase = .release } });
     try input_support.accept(gui, .{ .pointer = .{ .kind = .press, .x = x, .y = y } });
@@ -2134,7 +2159,7 @@ test "message link hover rejects stale snapshots and failed delivery before acce
     try session.settle();
     try std.testing.expect(session.gui.widgets.message_link_preview == null);
     try std.testing.expect(links.destination(session.gui, old.action.message_link) == null);
-    const failed = try session.gui.prepare(&session.renderer);
+    const failed = try session.draw();
     try input_support.presented(
         session.gui,
         failed,
@@ -2204,7 +2229,7 @@ test "precise conversation scrolling moves on every fractional delta including m
     try publish(session);
     const link = try messageLinkTarget(session);
     const pane = session.gui.app.model.agentPane(Session.pane_id).?;
-    const step = session.renderer.chrome.px(24);
+    const step = session.gui.renderer.chrome.px(24);
     var displacement: f64 = 0;
     const Phase = @FieldType(@import("../input/ScrollEvent.zig"), "phase");
     for ([_]Phase{ .begin, .update, .end, .none, .none, .none, .begin, .update }, 0..) |phase, index| {
@@ -2219,7 +2244,7 @@ test "precise conversation scrolling moves on every fractional delta including m
 
     try send(session, .{ .scroll = .{ .x = link.bounds.x + 2, .y = link.bounds.y + 2, .delta_y = 20, .precise = true, .phase = .cancel } });
     try std.testing.expectApproxEqAbs(displacement / step, pane.transcript_scroll, 0.000001);
-    const failed = try session.gui.prepare(&session.renderer);
+    const failed = try session.draw();
     try input_support.presented(
         session.gui,
         failed,
@@ -2953,12 +2978,12 @@ test "link clipboard confirmation remains visible when review opens before nativ
     try std.testing.expect(session.gui.host.next(&request));
     try session.gui.openChangeReview(Session.pane_id);
     try publish(session);
-    const before = session.renderer.quads.items().len;
+    const before = session.gui.renderer.quads.items().len;
     try send(session, .{ .clipboard = .{ .request_id = request.request_id, .target_id = request.target_id, .generation = request.generation, .status = .success } });
     try std.testing.expect(session.gui.widgets.copy_feedback.pending == null);
     try std.testing.expect(session.gui.widgets.copy_feedback.until_ns > 0);
     try publish(session);
-    try std.testing.expect(session.renderer.quads.items().len > before);
+    try std.testing.expect(session.gui.renderer.quads.items().len > before);
     try std.testing.expect(session.gui.chrome.animation.deadline_ns != null);
 }
 

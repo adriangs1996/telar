@@ -338,7 +338,7 @@ test "history page loading starts after successful delivery and not after a fail
     const gui = session.gui;
     const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
     _ = client.agent_history.navigate(&gui.app.model, pane.id, .older);
-    const failed = try gui.prepare(&session.renderer);
+    const failed = try session.draw();
     try input_support.presented(
         gui,
         failed,
@@ -346,7 +346,7 @@ test "history page loading starts after successful delivery and not after a fail
     );
     try std.testing.expect(pane.agent_history == null);
     try std.testing.expect(!client.request_lifecycle.has(&gui.app, .agent_history));
-    const delivered = try gui.prepare(&session.renderer);
+    const delivered = try session.draw();
     try input_support.presented(
         gui,
         delivered,
@@ -550,14 +550,14 @@ test "one history gesture crosses folded pages without evicting the visible answ
     const pane = gui.app.model.agentPane(Session.pane_id).?;
     const window = pane.agent_history.?;
     const answer = window.pages[1].snapshot.items()[3].identity;
-    const failed = try gui.prepare(&session.renderer);
+    const failed = try session.draw();
     try input_support.presented(
         gui,
         failed,
         false,
     );
     try std.testing.expect(!client.request_lifecycle.has(&gui.app, .agent_history));
-    const delivered = try gui.prepare(&session.renderer);
+    const delivered = try session.draw();
     try input_support.presented(
         gui,
         delivered,
@@ -577,7 +577,7 @@ test "one history gesture crosses folded pages without evicting the visible answ
     }
     try deliverHistory(session, page);
     try std.testing.expect(window.findItem(answer) != null);
-    const next = try gui.prepare(&session.renderer);
+    const next = try session.draw();
     try input_support.presented(
         gui,
         next,
@@ -594,7 +594,7 @@ test "one history gesture crosses folded pages without evicting the visible answ
     page.snapshot.item_storage[0].kind = .message;
     page.has_before = false;
     try deliverHistory(session, page);
-    const with_prompt = try gui.prepare(&session.renderer);
+    const with_prompt = try session.draw();
     try input_support.presented(
         gui,
         with_prompt,

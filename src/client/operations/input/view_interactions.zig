@@ -18,7 +18,6 @@ const name_prompts = @import("name_prompts.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 const notification_flow = @import("../notifications/notifications.zig");
 const attachment_prompts = @import("attachment_prompts.zig");
-const pane_geometry = @import("../panes/pane_geometry.zig");
 
 /// Applies one interaction emitted by the view and returns its pane-input
 /// routing decision.
@@ -42,7 +41,7 @@ pub fn apply(client: *Client, model: *MultiplexerModel, interaction: ViewInterac
 
     if (layout_changed) {
         client.host_graphics.invalidatePlacements();
-        try pane_geometry.offerAttached(client, model, client.geometry().area);
+        try client.resizeAttachedPanes(model, client.geometry().area);
     }
 
     return .{

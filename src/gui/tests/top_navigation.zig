@@ -26,7 +26,7 @@ test "workspace departure retains the delivered indicators and overflow window u
         try fixture.paint(fixture.projection());
         const selected = fixture.bandTarget(.{ .select_workspace = ids[4] }).?;
         const region: Rect = .{ .x = 0, .y = 0, .width = selected.x + selected.width, .height = fixture.chrome.presented().bands.top_bar.height };
-        var before = try quadsIn(fixture.session.renderer.quads.items(), region);
+        var before = try quadsIn(fixture.session.gui.renderer.quads.items(), region);
         defer before.deinit(std.testing.allocator);
         var targets: [ids.len]?Rect = undefined;
         for (ids, &targets) |id, *target| {
@@ -37,7 +37,7 @@ test "workspace departure retains the delivered indicators and overflow window u
         try std.testing.expect(model.workspaceLocation() == null);
         for (0..3) |_| {
             try fixture.paint(fixture.projection());
-            var during = try quadsIn(fixture.session.renderer.quads.items(), region);
+            var during = try quadsIn(fixture.session.gui.renderer.quads.items(), region);
             defer during.deinit(std.testing.allocator);
             try std.testing.expectEqualDeep(before.items, during.items);
             for (ids, targets) |id, bounds| {
@@ -94,7 +94,7 @@ test "five compact projects fit without pill backgrounds and reuse landed favico
         .{ .workspace = @enumFromInt(40), .name = "docs", .path = "/docs", .tab_count = 1 },
         .{ .workspace = @enumFromInt(50), .name = "website", .path = "/website", .tab_count = 1 },
     } });
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const favicons = &fixture.chrome.favicons;
     defer favicons.deinit(std.testing.allocator);
     for ([_]f32{ 1, 2 }) |scale| {
@@ -151,12 +151,12 @@ test "native project indicators use numbers instead of names and attention does 
     }
 
     const active = fixture.bandTarget(.{ .select_workspace = Session.location.workspace.workspace }).?;
-    const before_dot = try firstInk(fixture.session.renderer.quads.items(), active);
+    const before_dot = try firstInk(fixture.session.gui.renderer.quads.items(), active);
     var agents: client.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &.{.{ .key = .{ .pane_id = Session.pane_id, .pane_generation = 1 }, .location = Session.location, .pane_index = 1, .provider = .codex, .status = .blocked }} });
     projection.agents = &agents;
     try fixture.paint(projection);
-    const with_dot = try firstInk(fixture.session.renderer.quads.items(), active);
+    const with_dot = try firstInk(fixture.session.gui.renderer.quads.items(), active);
     try std.testing.expectApproxEqAbs(before_dot.x, with_dot.x, 0.01);
 }
 
@@ -182,8 +182,8 @@ test "native workspace overflow counters keep nearest hidden destinations withou
             fixture.chrome.hovered = if (hovered) .{ .intent = .{ .select_workspace = id } } else null;
             try fixture.paint(projection);
             const bounds = fixture.bandTarget(.{ .select_workspace = id }).?;
-            _ = try firstInk(fixture.session.renderer.quads.items(), bounds);
-            for (fixture.session.renderer.quads.items()) |quad| {
+            _ = try firstInk(fixture.session.gui.renderer.quads.items(), bounds);
+            for (fixture.session.gui.renderer.quads.items()) |quad| {
                 if (quad.x >= bounds.x and quad.y >= bounds.y and quad.x + quad.width <= bounds.x + bounds.width and quad.y + quad.height <= bounds.y + bounds.height) {
                     try std.testing.expect(!solid(quad));
                 }
@@ -251,7 +251,7 @@ test "native navigation names unlisted workspaces and worktrees without selectin
         .{ .workspace = @enumFromInt(1), .name = "unrelated workspace", .path = "/other", .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "another workspace", .path = "/another", .tab_count = 1 },
     } });
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     for ([_]core.WorkspaceLocation{ .{ .worktree = @enumFromInt(1) }, .{ .workspace = @enumFromInt(99) } }) |location| {
         try tabs.replaceWithRoot(.{ .pane_id = Session.pane_id, .location = .{ .workspace = location, .tab_id = Session.location.tab_id }, .size = fixture.session.gui.app.model.hostSize() });
         try tabs.reconcileWorkspace(.{ .workspace = location, .name = "current context", .tabs = &.{.{ .tab_id = Session.location.tab_id, .label = "main", .pane_count = 1 }} });
@@ -358,7 +358,7 @@ test "moving workspaces to the sidebar preserves every tab bound across sidebar 
         const second_tab = fixture.bandTarget(.{ .select_tab = @enumFromInt(2) }).?;
         const plus = fixture.bandTarget(.create_tab).?;
         try std.testing.expectEqual(@as(f32, 42), top.height);
-        try std.testing.expectEqual(@as(u32, 42), fixture.session.renderer.origin[1]);
+        try std.testing.expectEqual(@as(u32, 42), fixture.session.gui.renderer.origin[1]);
         try std.testing.expect(workspace.x + workspace.width < first_tab.x);
         try std.testing.expect(first_tab.x > top.width / 2);
         try std.testing.expect(first_tab.x + first_tab.width <= second_tab.x);
@@ -412,7 +412,7 @@ test "native selected tab preserves its rounded surface and hosts an explicit ch
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.paint(fixture.projection());
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const top = fixture.chrome.presented().bands.top_bar;
     const selected = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
     var rounded = false;
@@ -465,7 +465,7 @@ fn quadsIn(quads: []const Quad, area: Rect) !std.ArrayList(Quad) {
 }
 
 fn expectNumberLabel(fixture: *Fixture, bounds: Rect, label: Label) !void {
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     const actual = try firstInk(renderer.quads.items(), bounds);
     var reference = @import("../render/QuadList.zig").init(std.testing.allocator);
     defer reference.deinit();
@@ -504,14 +504,18 @@ test "native automatic tabs show the foreground application mark and preserve ma
     try fixture.paint(fixture.projection());
     try std.testing.expectEqualStrings("codex", tab.labelSlice());
     const bounds = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
-    try std.testing.expect(hasApplicationMark(fixture.session.renderer.quads.items(), bounds));
+    try std.testing.expect(hasApplicationMark(fixture.session.gui.renderer.quads.items(), bounds));
 
     // Choosing the same text explicitly still disables automatic naming.
     _ = try tabs.applyLabel(Session.location.tab_id, "codex");
     _ = pane.setForegroundName("nvim");
     try fixture.paint(fixture.projection());
     try std.testing.expectEqualStrings("codex", tab.labelSlice());
-    try std.testing.expect(!hasApplicationMark(fixture.session.renderer.quads.items(), fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?));
+    try std.testing.expect(!hasApplicationMark(fixture.session.gui.renderer.quads.items(), fixture.bandTarget(
+        .{
+            .select_tab = Session.location.tab_id,
+        },
+    ).?));
 
     tab.setLabel("");
     try fixture.paint(fixture.projection());

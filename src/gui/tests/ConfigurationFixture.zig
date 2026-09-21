@@ -34,14 +34,14 @@ pub fn init(source: []const u8, profile: ?[]const u8) !Fixture {
     _ = try client.operations.config_reloads.apply(&session.gui.app, try fixture.adoption());
     const generation = session.gui.app.lua_generation.?;
     const renderer = try Renderer.configured(gpa, io, .{ .config = generation.snapshot.gui, .theme = generation.snapshot.theme.terminal, .viewport = viewport });
-    session.renderer.deinit();
-    session.renderer = renderer;
-    try session.gui.resize(try session.renderer.measure(viewport), renderer.theme);
+    session.gui.renderer.deinit();
+    session.gui.renderer = renderer;
+    try session.gui.resize(try session.gui.renderer.measure(viewport), renderer.theme);
     try session.bootstrap();
     session.gui.app.reload.mtime_ns = generation.watchFingerprint(io, path) ^
         @as(i128, session.gui.app.plugin_registry.?.watchFingerprint(gpa, io)) ^
         @as(i128, client.config_reload.trustWatchFingerprint(io, trust_path));
-    session.driver.configuration.observe(renderer.config, viewport);
+    session.gui.driver.configuration.observe(renderer.config, viewport);
     try session.gui.app.scheduleConfigReload();
     return fixture;
 }
@@ -63,7 +63,7 @@ pub fn write(fixture: *Fixture, name: []const u8, source: []const u8) !void {
 /// Waits for the actual worker with a deadline, leaving adoption to the test.
 /// Example: `try fixture.wait();`
 pub fn wait(fixture: *Fixture) !void {
-    const reload = &fixture.session.driver.configuration;
+    const reload = &fixture.session.gui.driver.configuration;
     try reload.poll(&fixture.session.gui.app);
     for (0..1000) |_| {
         if (reload.ready.load(.acquire)) {

@@ -35,8 +35,12 @@ test "update processes a horizontal split shortcut and its correlated runtime re
         .created = true,
     });
     const response = try client.RuntimeMessage.decode(std.testing.io, payload);
-    try app.runtime_transport.scheduleRead(app.transport_driver);
-    try session.driver.inbox.post(.{ .server = &response });
+    try app.startRuntimeRead();
+    try session.gui.driver.inbox.post(
+        .{
+            .server = &response,
+        },
+    );
 
     try std.testing.expectEqual(@as(?u8, null), try gui.update());
     try session.settle();
@@ -213,7 +217,7 @@ test "native pointer rejects a newer layout even before a GPU flight starts" {
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    const token = try session.gui.prepare(&session.renderer);
+    const token = try session.draw();
     try input_support.presented(
         session.gui,
         token,
@@ -242,17 +246,17 @@ test "native focus loss releases an acquired child mouse gesture" {
     const model = app.model.activeTabModel().?;
     const pane = model.find(Session.pane_id).?;
     pane.mouse = .{ .sgr = true, .tracking = .button };
-    const token = try session.gui.prepare(&session.renderer);
+    const token = try session.draw();
     try input_support.presented(
         session.gui,
         token,
         true,
     );
     try session.settle();
-    session.gui.pointer.configure(session.renderer.origin, app.model.hostSize());
+    session.gui.pointer.configure(session.gui.renderer.origin, app.model.hostSize());
     const view = model.viewForPane(pane.id, session.gui.region.area).?;
-    const x = @as(f64, @floatFromInt(view.content.x)) * app.model.hostSize().cell_width_px + @as(f64, @floatFromInt(session.renderer.origin[0])) + 1;
-    const y = @as(f64, @floatFromInt(view.content.y)) * app.model.hostSize().cell_height_px + @as(f64, @floatFromInt(session.renderer.origin[1])) + 1;
+    const x = @as(f64, @floatFromInt(view.content.x)) * app.model.hostSize().cell_width_px + @as(f64, @floatFromInt(session.gui.renderer.origin[0])) + 1;
+    const y = @as(f64, @floatFromInt(view.content.y)) * app.model.hostSize().cell_height_px + @as(f64, @floatFromInt(session.gui.renderer.origin[1])) + 1;
     try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 1, .x = x, .y = y });
     try input_support.pump(session.gui);
     try session.settle();
@@ -290,7 +294,7 @@ test "native mouse release reaches its original tab and a pane hidden by fullscr
     try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second_pane, .location = Session.location, .axis = .horizontal, .area = app.geometry().area });
     _ = model.layout.focusPane(Session.pane_id);
     _ = model.layout.toggleFullscreen();
-    const token = try session.gui.prepare(&session.renderer);
+    const token = try session.draw();
     try input_support.presented(
         session.gui,
         token,
@@ -322,7 +326,7 @@ test "native saturated mouse release cancels captured owners and admits a fresh 
     try std.testing.expect(gui.pointer.owners[0] == .child);
     _ = gui.chrome.bandPointer(.{ .kind = .press, .button = .right, .x = 1, .y = 1 });
     gui.app.model.name_prompt.begin(.create_workspace);
-    const token = try gui.prepare(&session.renderer);
+    const token = try session.draw();
     try input_support.presented(
         gui,
         token,
@@ -343,7 +347,7 @@ test "native saturated mouse release cancels captured owners and admits a fresh 
     try std.testing.expect(std.mem.endsWith(u8, session.input[0..session.input_len], "m"));
 
     _ = gui.app.model.name_prompt.apply(.cancel);
-    const closed = try gui.prepare(&session.renderer);
+    const closed = try session.draw();
     try input_support.presented(
         gui,
         closed,
@@ -390,21 +394,26 @@ fn prepareMouse(session: *Session) !void {
     try session.bootstrap();
     try session.receiveFrame(1);
     session.gui.app.model.workspace.findPane(Session.pane_id).?.mouse = .{ .sgr = true, .tracking = .button };
-    const token = try session.gui.prepare(&session.renderer);
+    const token = try session.draw();
     try input_support.presented(
         session.gui,
         token,
         true,
     );
     try session.settle();
-    session.gui.pointer.configure(session.renderer.origin, session.gui.app.model.hostSize());
+    session.gui.pointer.configure(session.gui.renderer.origin, session.gui.app.model.hostSize());
 }
 
 fn pointerPress(session: *Session) @import("../native/native.zig").InputEvent {
     const model = session.gui.app.model.activeTabModel().?;
     const view = model.viewForPane(Session.pane_id, session.gui.region.area).?;
     const size = session.gui.app.model.hostSize();
-    return .{ .kind = 6, .code = 1, .x = @as(f64, @floatFromInt(view.content.x)) * size.cell_width_px + @as(f64, @floatFromInt(session.renderer.origin[0])) + 1, .y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(session.renderer.origin[1])) + 1 };
+    return .{
+        .kind = 6,
+        .code = 1,
+        .x = @as(f64, @floatFromInt(view.content.x)) * size.cell_width_px + @as(f64, @floatFromInt(session.gui.renderer.origin[0])) + 1,
+        .y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(session.gui.renderer.origin[1])) + 1,
+    };
 }
 
 fn saturate(gui: *GuiClient) !void {

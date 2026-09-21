@@ -12,14 +12,26 @@ rejected. Nonterminal surfaces are not implemented by this renderer yet.
 ## Ownership and entrypoints
 
 `src/cli/client.zig` connects to the runtime and prepares options. `src/gui/run.zig`
-transfers those resources to `Application`, which constructs `GuiClient` after
-the first valid font and window measurement. The shared `AttachedClient` lives at
-one stable heap address. Every host port is bound before the first event.
+constructs one heap-owned `GuiClient` and calls its `run`. It owns `AttachedClient`,
+`NativeLoop`, `TerminalRenderer`, input, widgets, cursor and window state.
+Every host port is bound to its final address before events arrive.
+
+`native/window_callbacks.zig` adapts the C ABI without owning state. Both native
+backends notify `windowReady` when surface geometry is available: macOS after
+sizing its drawable, Wayland after acknowledging surface configuration. The
+first usable measurement starts the runtime; repeated notifications do not
+repeat bootstrap. `draw` never initializes the connection.
+
+`GuiClient.update` drains events and computes cursor and redraw decisions.
+`draw` applies pending configuration and measures geometry only after the prior
+frame retires, then seals the next presentation. Native callbacks return token
+zero while a prior frame is busy. Native GPU consumers stop before `deinit`,
+which joins loop workers before releasing renderer and client resources.
 
 `NativeLoop` connects the shared bounded inbox to an owner-held nonblocking
 wake pipe. Socket workers publish validated `RuntimeMessage` values or send
 completions into reserved slots. The window thread drains a finite FIFO batch
-and delegates to `runtime_io.handleRead` or `runtime_io.handleSent`. A receive
+and delegates to `AttachedClient.receiveRuntime` or `AttachedClient.completeRuntimeSend`. A receive
 buffer remains borrowed until synchronous dispatch finishes. No worker accesses
 the model. Input readiness, focus and GPU completion use that same inbox.
 
@@ -52,8 +64,8 @@ budgets, wakeups and shutdown shared with the TUI and headless driver.
    multiplexer bindings are not activated without corresponding native UI.
 3. Geometry and detach: window size and font scale determine complete columns,
    rows and exact cell pixels, after the chrome bands (`ChromeMetrics`) are
-   taken off the window height. `AttachedClient.applyHostUpdate` and `pane_geometry.offerActive`
-   deliver `pane_resize` through the existing geometry authority.
+   taken off the window height. `AttachedClient.applyHostUpdate` calls
+   `AttachedClient.resizeAttachedPanes` to deliver `pane_resize` through the existing geometry authority.
    Trailing pixels belong to chrome. Closing a window stops GPU consumers, then
    cancels and joins socket tasks before releasing the shared model. It does not
    send a pane-close or runtime-stop command. A new GUI can reattach to the same

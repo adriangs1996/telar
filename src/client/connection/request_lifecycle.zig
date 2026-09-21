@@ -8,7 +8,6 @@ const PaneIdType = @import("telar-core").PaneId;
 const Registration = @import("Registration.zig");
 const ContinuationType = @import("requests.zig").Continuation;
 const Delivery = @import("ConnectionDelivery.zig");
-const runtime_transport = @import("../entrypoints/runtime_io.zig");
 const RenameTabType = @import("telar-core").RenameTab;
 const RenameWorkspaceType = @import("telar-core").RenameWorkspace;
 const CreateWorkspaceType = @import("telar-core").CreateWorkspace;
@@ -34,15 +33,6 @@ pub fn registerInitial(client: *Client) !RequestIdType {
     });
 
     return initial_request_id;
-}
-
-/// Allocates one identity from this client's request lifecycle.
-///
-/// ```zig
-/// const request_id = try request_lifecycle.nextId(client);
-/// ```
-pub fn nextId(client: *Client) !RequestIdType {
-    return client.request_lifecycle.nextId();
 }
 
 /// Preflights one correlation slot and the identities required by an
@@ -116,7 +106,7 @@ pub fn consume(client: *Client, request_id: RequestIdType) ?ContinuationType {
 pub fn deliver(client: *Client, delivery: Delivery) !void {
     try register(client, delivery.registration);
     errdefer _ = consume(client, delivery.registration.request_id);
-    try runtime_transport.enqueue(client, delivery.message);
+    try client.sendRuntime(delivery.message);
 }
 
 /// Registers and copies one tab rename as one fallible delivery.
@@ -127,7 +117,7 @@ pub fn deliver(client: *Client, delivery: Delivery) !void {
 pub fn deliverRename(client: *Client, rename: RenameTabType, continuation: ContinuationType) !void {
     try register(client, .{ .request_id = rename.request_id, .continuation = continuation });
     errdefer _ = consume(client, rename.request_id);
-    try runtime_transport.enqueueRename(client, rename);
+    try client.sendRuntimeRename(rename);
 }
 
 /// Registers and copies one workspace rename as one fallible delivery.
@@ -141,7 +131,7 @@ pub fn deliverWorkspaceRename(client: *Client, rename: RenameWorkspaceType) !voi
         .continuation = .{ .rename_workspace = rename.workspace },
     });
     errdefer _ = consume(client, rename.request_id);
-    try runtime_transport.enqueueWorkspaceRename(client, rename);
+    try client.sendRuntimeWorkspaceRename(rename);
 }
 
 /// Registers and copies one workspace creation as one fallible delivery.
@@ -155,7 +145,7 @@ pub fn deliverCreateWorkspace(client: *Client, request: CreateWorkspaceType) !vo
         .continuation = .{ .create_workspace = request.size },
     });
     errdefer _ = consume(client, request.request_id);
-    try runtime_transport.enqueueCreateWorkspace(client, request);
+    try client.sendRuntimeCreateWorkspace(request);
 }
 
 /// Registers and copies one tab creation as one fallible delivery.
@@ -172,7 +162,7 @@ pub fn deliverCreateTab(client: *Client, request: CreateTabType) !void {
         } },
     });
     errdefer _ = consume(client, request.request_id);
-    try runtime_transport.enqueueCreateTab(client, request);
+    try client.sendRuntimeCreateTab(request);
 }
 
 /// Correlates and owns a prompt atomically; rejected delivery preserves its draft.
@@ -183,7 +173,7 @@ pub fn deliverAgentPrompt(client: *Client, request: @import("telar-core").AgentP
         .continuation = .{ .agent_prompt = operation },
     });
     errdefer _ = consume(client, request.request_id);
-    try runtime_transport.enqueueAgentPrompt(client, request);
+    try client.sendRuntimeAgentPrompt(request);
 }
 
 /// Registers and copies one host notification request as one fallible
@@ -198,7 +188,7 @@ pub fn deliverNotification(client: *Client, request: ShowNotificationType) !void
         .continuation = .notification,
     });
     errdefer _ = consume(client, request.request_id);
-    try runtime_transport.enqueueNotification(client, request);
+    try client.sendRuntimeNotification(request);
 }
 
 /// Requests one canonical tab snapshot and records its exact target.
@@ -207,7 +197,7 @@ pub fn deliverNotification(client: *Client, request: ShowNotificationType) !void
 /// try request_lifecycle.requestTabSnapshot(client, location);
 /// ```
 pub fn requestTabSnapshot(client: *Client, location: TabLocationType) !void {
-    const request_id = try nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try deliver(client, .{
         .registration = .{
             .request_id = request_id,
@@ -226,7 +216,7 @@ pub fn requestTabSnapshot(client: *Client, location: TabLocationType) !void {
 /// try request_lifecycle.requestWorkspaceSnapshot(client, workspace);
 /// ```
 pub fn requestWorkspaceSnapshot(client: *Client, workspace: WorkspaceLocationType) !void {
-    const request_id = try nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try deliver(client, .{
         .registration = .{
             .request_id = request_id,

@@ -24,15 +24,21 @@ which typed continuation may consume a reply. Transport only preserves framed
 delivery, bounded storage and I/O ordering. See
 [Client request lifecycle](request-lifecycle.md).
 
-I/O completion orchestration lives in `client/entrypoints/runtime_io.zig`.
-It connects transport state to graphics credit, host input and server-message
-dispatch. `connection/RuntimeTransportState.zig` owns framing, queue state and
-read/write scheduling without importing `AttachedClient`. Its `scheduleRead`
-and `pump` methods receive only a `TransportDriver`; each releases its
-reservation if the driver rejects the task. Native transport ports bind
-directly to `NativeLoop`, without recovering it through the client model.
-Local aliases named `runtime_transport` in client operations refer to the
-`runtime_io` entrypoint for enqueue and completion coordination.
+`AttachedClient.receiveRuntime` and `completeRuntimeSend` coordinate I/O
+completion with graphics credits, host input and server-message dispatch.
+`TelemetryState.recordMessage` owns the received-message counters and decode
+latency. Consumers read outbound counters directly from `Outbox.snapshot`.
+
+`connection/RuntimeTransportState.zig` owns connection buffers, framing and
+transfer reservations. It knows neither `AttachedClient` nor `TransportDriver`.
+`Outbox` owns copied messages, capacity and folding rules.
+
+`AttachedClient.sendRuntime` and its typed variants copy messages into the
+outbox and call the private `startRuntimeSend`. Callers supply only the message.
+Pane input uses the existing `core.PaneInput` value, including bounded batches
+when it exceeds one slot. `startRuntimeRead` and `startRuntimeSend` reserve
+transport storage and activate the client's driver, releasing the reservation
+if scheduling fails. Native transport ports bind directly to `NativeLoop`.
 
 ## Bootstrap
 
@@ -44,9 +50,8 @@ atomically to the ordinary outbox, in order:
 2. `configure_terminal_colors`, so terminal queries use the host defaults;
 3. `request_runtime_state`, so reconnectable replicas can be rebuilt.
 
-Bootstrap only queues messages. The fresh GUI then calls `RuntimeTransportState.pump`
-explicitly to start the send actor; it does not rely on the side effect of a
-graphics-credit flush. The TUI finishes its color probes before queuing the
+Bootstrap only queues messages. The GUI calls `AttachedClient.startRuntimeIo`
+to activate the receive loop before starting the queued send. The TUI finishes its color probes before queuing the
 same bootstrap. The send actor writes independently of reception. The initial
 runtime layout determines the subsequent `open_pane` transaction.
 
@@ -55,19 +60,20 @@ runtime layout determines the subsequent `open_pane` transaction.
 ```text
 concrete client operation
        |
-request_lifecycle.deliver / runtime_transport.enqueueInput
+request_lifecycle.deliver -> AttachedClient.sendRuntime
+       or AttachedClient.sendRuntimeInput
        |
 Outbox copies and folds bounded data
        |
-RuntimeTransportState.pump(driver)
+AttachedClient.startRuntimeSend()
        |
 Outbox.beginSend -> schema encoder -> inbox producer reservation -> SocketChannel.send
        |
 ClientEvent.sent
        |
-runtime_transport.handleSent
+AttachedClient.completeRuntimeSend
        |
-Outbox.finishSend -> next send -> host input capacity check
+Outbox.finishSend -> queueGraphicsCredits -> startRuntimeSend -> resume host input
 ```
 
 `Outbox.beginSend` lends the shared send buffer to one write actor. No producer
@@ -81,8 +87,11 @@ exists. Request correlation rolls back when an enqueue fails; transport does
 not invent or consume continuations.
 
 Graphics memory credit follows the same queue. The graphics store retains a
-credit until `flushGraphicsCredits` inserts its complete message. Saturation
-therefore delays credit without losing it.
+credit until the private `queueGraphicsCredits` inserts its complete message.
+That method never starts I/O. Receive and send completions call it before
+explicitly starting the next send; presentation and other credit-release paths
+use `flushGraphicsCredits`, which queues credits and then starts delivery.
+Saturation delays credit without losing it.
 
 ## Inbound path
 
@@ -93,7 +102,7 @@ RuntimeMessage.decode on the receiving worker
        |
 reserved inbox slot -> ClientEvent.server -> consumer dispatch
        |
-runtime_transport.handleRead
+AttachedClient.receiveRuntime
        |
 server_messages.handleServerMessage
        |
@@ -102,8 +111,8 @@ concrete client operation -> ClientModel or disposable resources
 graphics credit flush -> next runtime read
 ```
 
-`handleRead` releases the receive token before inspecting the result. It
-records bounded decode telemetry, dispatches the decoded message and rearms
+`AttachedClient.receiveRuntime` releases the receive token before inspecting
+the result. It records bounded decode telemetry, dispatches the message and rearms
 the read after every non-terminal result. `runtime_stopping`, a client exit
 outcome or an error leaves no new read behind.
 
@@ -131,8 +140,9 @@ propagate without transport classifying their original message.
 
 ## Validation
 
-- `RuntimeTransportState.zig` exercises rejected read/write scheduling, retry
-  without duplicate reservations, and preservation of queued frame order.
+- Tests in `AttachedClient.zig` exercise rejected read/write scheduling, copied
+  input batches surviving rejected sends, queue saturation, retry without
+  duplicate reservations, and preservation of queued frame order.
 - `src/client/connection/runtime_transport.zig` checks partial-allocation cleanup
   and the exact three-frame bootstrap order over a real socketpair.
 - `src/client/connection/outbox_support.zig` proves one send claim, completion on success

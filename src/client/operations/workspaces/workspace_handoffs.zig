@@ -170,7 +170,7 @@ pub fn recover(client: *Client, failure: WorkspaceHandoffFailure) !WorkspaceReco
 }
 
 fn sendHandoff(client: *Client, command: WorkspaceHandoffType) !void {
-    const request_id = try request_lifecycle.nextId(client);
+    const request_id = try client.request_lifecycle.nextId();
     try request_lifecycle.deliver(client, .{
         .registration = .{
             .request_id = request_id,

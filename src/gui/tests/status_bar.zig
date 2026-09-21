@@ -21,11 +21,15 @@ test "native bottom widgets preserve configured positions and legacy top content
     const left = paintedBounds(&fixture, red).?;
     const right = paintedBounds(&fixture, green).?;
     const legacy = paintedBounds(&fixture, blue).?;
-    const margin = fixture.session.renderer.chrome.px(8);
+    const margin = fixture.session.gui.renderer.chrome.px(8);
     try std.testing.expectEqual(margin, left.x);
     try std.testing.expect(left.x + left.width <= right.x);
     try std.testing.expect(right.x + right.width <= legacy.x);
-    try std.testing.expectApproxEqAbs(@as(f32, @floatFromInt(fixture.session.renderer.viewport[0])) - margin, legacy.x + legacy.width, 1);
+    try std.testing.expectApproxEqAbs(
+        @as(f32, @floatFromInt(fixture.session.gui.renderer.viewport[0])) - margin,
+        legacy.x + legacy.width,
+        1,
+    );
 
     state.layout.bottom = .{ try colored("left", red), try colored("center", green), .tabs };
     try fixture.paint(projection);
@@ -63,7 +67,7 @@ test "native footer reserves TLS ahead of widgets and mode hints in narrow windo
                 };
                 try fixture.paint(projection);
                 const tls = paintedBounds(&fixture, tls_color).?;
-                const renderer = &fixture.session.renderer;
+                const renderer = &fixture.session.gui.renderer;
                 const right_edge: f32 = @floatFromInt(renderer.viewport[0]);
                 try std.testing.expect(tls.x > right_edge - 8 * @as(f32, @floatFromInt(renderer.metrics.cell_width)));
                 try std.testing.expect(tls.x + tls.width <= right_edge);
@@ -81,9 +85,9 @@ test "native footer reserves TLS ahead of widgets and mode hints in narrow windo
 test "native footer clips tall terminal line spacing without hiding configured widgets" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    fixture.session.renderer.config.font.line_height = 3;
+    fixture.session.gui.renderer.config.font.line_height = 3;
     try fixture.measure(.{ .width = 1200, .height = 800, .scale = 2 });
-    const renderer = &fixture.session.renderer;
+    const renderer = &fixture.session.gui.renderer;
     try std.testing.expect(renderer.metrics.cell_height > renderer.chrome.status_bar);
     const color = core.Color{ .rgb = .{ 0, 255, 0 } };
     var state: client.State = .{};
@@ -114,7 +118,7 @@ fn paintedBounds(fixture: *Fixture, color: core.Color) ?Rect {
     const expected = colors.resolve(color, Color.black);
     const band = fixture.chrome.presented().bands.status_bar;
     var result: ?Rect = null;
-    for (fixture.session.renderer.quads.items()) |quad| {
+    for (fixture.session.gui.renderer.quads.items()) |quad| {
         if (quad.y < band.y or quad.r != expected.r or quad.g != expected.g or quad.b != expected.b) {
             continue;
         }
