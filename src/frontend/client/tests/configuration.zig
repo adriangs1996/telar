@@ -1,5 +1,6 @@
 //! Client integration tests for configuration.
 
+const key_captures = @import("telar-client").captures;
 const TerminalClient = @import("../TerminalClient.zig");
 const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
@@ -730,7 +731,7 @@ test "attachment modal captures semantic keys until escape closes it" {
     const interaction_revision = host(client).view.interactionVersion();
     const pending_updates = host(client).presenter.pending_updates;
 
-    try std.testing.expect(input_operations.key_routing.captures(client));
+    try std.testing.expect(key_captures(client.keyRoutingAuthority()));
     try host_inputs.key(client, try parseKey_module("x"));
 
     try std.testing.expect(host(client).view.hasAttachmentModal());
@@ -742,7 +743,7 @@ test "attachment modal captures semantic keys until escape closes it" {
     try host_inputs.key(client, try parseKey_module("escape"));
 
     try std.testing.expect(!host(client).view.hasAttachmentModal());
-    try std.testing.expect(!input_operations.key_routing.captures(client));
+    try std.testing.expect(!key_captures(client.keyRoutingAuthority()));
     try std.testing.expectEqual(interaction_revision + 1, host(client).view.interactionVersion());
     try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
     try std.testing.expectEqualDeep(version, client.model.version());

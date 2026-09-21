@@ -1,4 +1,5 @@
 //! Slice 6 of the GUI visual language: the native command palette.
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -275,21 +276,21 @@ test "native history keeps its own modal and records no palette rows" {
 }
 
 fn chord(session: *Session, text: []const u8) !void {
-    try session.gui.input.accept(.{ .kind = 4, .code = 'b', .mods = 4 });
-    try session.gui.input.accept(.{ .kind = 1, .text = text.ptr, .len = text.len });
-    try session.gui.drainInput();
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'b', .mods = 4 });
+    try input_support.acceptNative(session.gui, .{ .kind = 1, .text = text.ptr, .len = text.len });
+    try input_support.pump(session.gui);
     try session.settle();
 }
 
 fn typeText(session: *Session, text: []const u8) !void {
-    try session.gui.input.accept(.{ .kind = 1, .text = text.ptr, .len = text.len });
-    try session.gui.drainInput();
+    try input_support.acceptNative(session.gui, .{ .kind = 1, .text = text.ptr, .len = text.len });
+    try input_support.pump(session.gui);
     try session.settle();
 }
 
 fn special(session: *Session, code: u32) !void {
-    try session.gui.input.accept(.{ .kind = 3, .code = code });
-    try session.gui.drainInput();
+    try input_support.acceptNative(session.gui, .{ .kind = 3, .code = code });
+    try input_support.pump(session.gui);
     try session.settle();
 }
 

@@ -2,8 +2,23 @@
 
 AppKit and Wayland translate platform events to the bounded `telar_gui_input`
 ABI. The native callback copies committed text, paste chunks, semantic keys and
-pointer samples into `NativeInput`; its readiness notification enters the shared
-inbox. Only the window-thread consumer changes the client model.
+pointer samples through `GuiClient.acceptInput` into `InputQueue`; its readiness
+notification enters the shared inbox. Only the window-thread consumer changes the client model.
+
+`GuiClient` owns the router, binding deadline and original widget target,
+`PointerState`, terminal clipboard transfer, paste route and exit state directly.
+`drainInput` dispatches keys, pointer samples, scroll and clipboard completions;
+`dispatchPointer` and `releasePointer` coordinate chrome, links and retained
+child gestures without recovering a parent from `AttachedClient`.
+`PointerState` keeps geometry and gesture invariants; `InputQueue` only owns
+ordered storage, payload lifetimes and release recovery.
+
+Admission receives a value snapshot of geometry and gesture generations. When
+saturation admits recovery, the queue returns `.recovery` and `acceptInput`
+invalidates gestures immediately, before another native event can be admitted.
+The ordered recovery marker performs cancellation later under the drain budget.
+Consuming that marker reopens ordinary admission only after all retained key
+releases have finished. No queue operation looks up or mutates a GUI owner.
 
 `native/decode_input.zig` is the checked boundary between that C ABI and
 `input/event.zig`. The Zig union distinguishes committed text, paste, key
@@ -109,7 +124,7 @@ does not change. Hover, sidebar scrolling and captured gestures remain outside
 these snapshots, so publishing a frame cannot erase input received in flight.
 
 Each gesture has one owner. Chrome retains controls and resize handles, shared
-copy mode retains selection, and `PointerRouting` retains child mouse reporting
+copy mode retains selection, and `PointerState` retains child mouse reporting
 by button. A child capture stores pane ID, attachment generation, tab location
 and its last visible rectangle and cell metrics. Drag/up resolves that tab even
 when another tab is active. A pane hidden by fullscreen keeps its last visible

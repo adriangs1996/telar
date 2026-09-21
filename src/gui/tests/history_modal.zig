@@ -1,3 +1,4 @@
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -18,7 +19,7 @@ fn initSession() !*Session {
     try session.bootstrap();
     const size = try session.gui.measure(&session.renderer, .{ .width = 1000, .height = 800, .scale = 1 });
     try session.gui.resize(size, session.renderer.theme);
-    session.gui.input.setGeometry(session.renderer.origin, size);
+    session.gui.pointer.configure(session.renderer.origin, size);
     try session.settle();
     session.gui.app.model.name_prompt.begin(.history_palette);
     try session.gui.app.model.history_palette.prepare(std.testing.allocator);
@@ -35,13 +36,17 @@ fn replacePage(session: *Session, request_id: u64) !void {
 
 fn publish(session: *Session) !void {
     const token = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(token, true);
+    try input_support.presented(
+        session.gui,
+        token,
+        true,
+    );
     try session.settle();
 }
 
 fn send(session: *Session, event: Event) !void {
-    try session.gui.input.acceptEvent(event);
-    try session.gui.drainInput();
+    try input_support.accept(session.gui, event);
+    try input_support.pump(session.gui);
 }
 
 fn targetFor(session: *Session, action: Target.Action) !Target {
@@ -109,7 +114,11 @@ test "native history rejects a delivered row after its page changed across a fai
     try send(session, .{ .pointer = .{ .kind = .press, .x = x, .y = y } });
     try replacePage(session, 2);
     const token = try gui.prepare(&session.renderer);
-    try gui.complete(token, false);
+    try input_support.presented(
+        gui,
+        token,
+        false,
+    );
     try std.testing.expect(gui.widgets.dispatcher.maps.presented().find(original.id) != null);
     try send(session, .{ .pointer = .{ .kind = .release, .x = x, .y = y } });
     try std.testing.expectEqual(@as(u16, 0), gui.app.model.name_prompt.currentConst().?.selection());
@@ -212,7 +221,7 @@ test "native history wheel accumulates precise movement and bounds inspector scr
     const bounds = gui.overlays.presented().native_modal.?;
     const sx = bounds.x + bounds.width / 2;
     const sy = bounds.y + bounds.height / 2;
-    const half_line = @as(f64, @floatFromInt(gui.input.pointer.geometry.size.cell_height_px)) / 2;
+    const half_line = @as(f64, @floatFromInt(gui.pointer.geometry.size.cell_height_px)) / 2;
     try send(session, .{ .scroll = .{ .x = sx, .y = sy, .delta_y = half_line, .precise = true, .phase = .begin } });
     try std.testing.expectEqual(@as(u32, 0), gui.app.model.name_prompt.currentConst().?.detailScroll());
     try send(session, .{ .scroll = .{ .x = sx, .y = sy, .delta_y = half_line, .precise = true, .phase = .update } });
@@ -330,7 +339,11 @@ test "native history cannot submit an unseen replacement page from a failed fram
     try send(session, .{ .pointer = .{ .kind = .press, .x = x, .y = y } });
     try replacePage(session, 2);
     const token = try gui.prepare(&session.renderer);
-    try gui.complete(token, false);
+    try input_support.presented(
+        gui,
+        token,
+        false,
+    );
     try send(session, .{ .pointer = .{ .kind = .release, .x = x, .y = y } });
     try send(session, .{ .accessibility = .{ .target_id = submit.id.target_id, .generation = submit.id.generation, .action = .press } });
     try session.settle();
@@ -352,7 +365,11 @@ test "native history submit waits until a changed selection is delivered" {
     try send(session, .{ .key = .{ .code = .up } });
     try std.testing.expectEqual(@as(u16, 1), gui.app.model.name_prompt.currentConst().?.selection());
     const token = try gui.prepare(&session.renderer);
-    try gui.complete(token, false);
+    try input_support.presented(
+        gui,
+        token,
+        false,
+    );
     try click(session, submit);
     try send(session, .{ .accessibility = .{ .target_id = submit.id.target_id, .generation = submit.id.generation, .action = .press } });
     try session.settle();

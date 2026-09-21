@@ -1,3 +1,4 @@
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -14,7 +15,7 @@ fn fixture() !*Session {
     try session.bootstrap();
     const size = try session.gui.measure(&session.renderer, .{ .width = 800, .height = 600, .scale = 1 });
     try session.gui.resize(size, session.renderer.theme);
-    session.gui.input.setGeometry(session.renderer.origin, size);
+    session.gui.pointer.configure(session.renderer.origin, size);
     try std.testing.expect(session.gui.app.model.identifyPane(.{ .request_id = @enumFromInt(1), .pane_id = Session.pane_id, .location = Session.location, .created = false, .kind = .agent, .pane_generation = 77 }));
     const text = "Earlier output\n" ** 60 ++ "[scroll anchor](https://example.test/anchor)";
     var snapshot: core.AgentThreadSnapshot = .{ .pane_id = Session.pane_id, .pane_generation = 77, .revision = 1, .status = .ready, .item_count = 1, .text_len = text.len };
@@ -29,7 +30,11 @@ fn fixture() !*Session {
 
 fn publish(session: *Session) !void {
     const token = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(token, true);
+    try input_support.presented(
+        session.gui,
+        token,
+        true,
+    );
     try session.settle();
 }
 
@@ -72,8 +77,8 @@ fn sendAt(session: *Session, target: Target, event: Event) !void {
     var located = event;
     located.x = target.bounds.x + 2;
     located.y = target.bounds.y + 2;
-    try session.gui.input.acceptEvent(.{ .scroll = located });
-    try session.gui.drainInput();
+    try input_support.accept(session.gui, .{ .scroll = located });
+    try input_support.pump(session.gui);
 }
 
 fn addAgentPane(session: *Session) !void {
@@ -191,7 +196,7 @@ test "Wayland finger release moves after end and focus loss cancels its inertia"
     try std.testing.expect((try entry(session)).motion.spring.velocity < velocity);
     const pane = session.gui.app.model.agentPane(Session.pane_id).?;
     const stopped = pane.transcript_scroll;
-    try session.gui.focus(false);
+    try input_support.focus(session.gui, false);
     try std.testing.expectEqual(@as(usize, 0), session.gui.widgets.thread_scroll.len);
     try scroll.advance(session.gui, std.math.maxInt(u64));
     try std.testing.expectEqual(stopped, pane.transcript_scroll);
@@ -244,7 +249,11 @@ test "failed hidden frames retain motion until a successful presentation retires
     const saved = (try entry(session)).*;
     pane.kind = .terminal;
     const failed = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(failed, false);
+    try input_support.presented(
+        session.gui,
+        failed,
+        false,
+    );
     try std.testing.expectEqual(@as(usize, 1), session.gui.widgets.thread_scroll.len);
     try std.testing.expectEqualDeep(saved, session.gui.widgets.thread_scroll.entries[0]);
     pane.kind = .agent;
@@ -265,9 +274,13 @@ test "failed resized frames cannot commit new bounds or rebase active motion" {
     const before = (try entry(session)).*;
     const size = try session.gui.measure(&session.renderer, .{ .width = 800, .height = 800, .scale = 1 });
     try session.gui.resize(size, session.renderer.theme);
-    session.gui.input.setGeometry(session.renderer.origin, size);
+    session.gui.pointer.configure(session.renderer.origin, size);
     const failed = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(failed, false);
+    try input_support.presented(
+        session.gui,
+        failed,
+        false,
+    );
     try std.testing.expectEqualDeep(before, (try entry(session)).*);
     try publish(session);
     try std.testing.expect((try entry(session)).limit < before.limit);
@@ -281,8 +294,8 @@ test "native gesture and momentum keep their original pane when the pointer cros
     const second = try transcriptFor(session, second_pane_id);
     try sendAt(session, first, .{ .precise = true, .phase = .begin, .delta_y = -4 });
     try sendAt(session, second, .{ .precise = true, .phase = .update, .delta_y = -3 });
-    try session.gui.input.acceptEvent(.{ .scroll = .{ .precise = true, .phase = .end, .x = -100, .y = -100 } });
-    try session.gui.drainInput();
+    try input_support.accept(session.gui, .{ .scroll = .{ .precise = true, .phase = .end, .x = -100, .y = -100 } });
+    try input_support.pump(session.gui);
     try sendAt(session, second, .{ .precise = true, .momentum = .begin, .delta_y = -2 });
     try sendAt(session, second, .{ .precise = true, .momentum = .end, .delta_y = -0.5 });
     const first_pane = session.gui.app.model.agentPane(Session.pane_id).?;

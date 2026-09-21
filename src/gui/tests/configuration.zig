@@ -1,3 +1,4 @@
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const Fixture = @import("ConfigurationFixture.zig");
 const Session = @import("Session.zig");
@@ -60,13 +61,17 @@ test "GUI reload preserves an in-flight frame and keeps input and receipt ACKs m
     try std.testing.expectEqual(@as(u64, 1), session.gui.app.lua_generation.?.number);
     try std.testing.expectEqual(pixels, session.renderer.atlas.?.pixels.ptr);
     try std.testing.expectEqualSlices(Quad, quads, session.renderer.quads.items());
-    try session.gui.input.accept(.{ .kind = 1, .text = "echo ready", .len = 10 });
-    try session.gui.drainInput();
+    try input_support.acceptNative(session.gui, .{ .kind = 1, .text = "echo ready", .len = 10 });
+    try input_support.pump(session.gui);
     try session.receiveFrame(2);
     try session.settle();
     try std.testing.expectEqualStrings("echo ready", session.input[0..session.input_len]);
     try std.testing.expectEqual(@as(usize, 2), session.ack_count);
-    try session.gui.complete(token, true);
+    try input_support.presented(
+        session.gui,
+        token,
+        true,
+    );
     try std.testing.expect(try reload.apply(session.gui, &session.renderer));
     try std.testing.expectEqual(@as(u64, 2), session.gui.app.lua_generation.?.number);
     try std.testing.expectEqual(@as(f32, 20), session.renderer.config.font.size);
@@ -254,7 +259,11 @@ test "chrome scale reload enlarges chrome text without resizing the PTY or the a
 
 fn present(session: *Session) !void {
     const token = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(token, true);
+    try input_support.presented(
+        session.gui,
+        token,
+        true,
+    );
     try session.settle();
 }
 

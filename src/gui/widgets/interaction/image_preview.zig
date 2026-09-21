@@ -63,7 +63,7 @@ pub fn route(gui: *GuiClient, event: Event) bool {
             }
         },
         .pointer => {
-            if (event.pointer.kind == .press and !@import("../../input/PointerRouting.zig").geometryMatches(&gui.app)) {
+            if (event.pointer.kind == .press and !gui.pointerGeometryMatches()) {
                 gui.widgets.dispatcher.discardPointer(event.pointer.button);
                 return true;
             }

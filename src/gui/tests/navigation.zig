@@ -1,8 +1,9 @@
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Session = @import("Session.zig");
-const NativeInput = @import("../NativeInput.zig");
+const GuiClient = @import("../GuiClient.zig");
 const routing = @import("../input/router.zig");
 
 const ActionCapture = @import("ActionCapture.zig");
@@ -78,8 +79,8 @@ test "native rename prompt receives pasted text without leaking to the child" {
     try chord(session, "T");
     try std.testing.expect(session.gui.app.model.name_prompt.active());
     const text = "new workspace";
-    try session.gui.input.accept(.{ .kind = 2, .text = text.ptr, .len = text.len });
-    try session.gui.drainInput();
+    try input_support.acceptNative(session.gui, .{ .kind = 2, .text = text.ptr, .len = text.len });
+    try input_support.pump(session.gui);
     try session.settle();
     try std.testing.expectEqualStrings("shell" ++ text, session.gui.app.model.name_prompt.currentConst().?.field.text());
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
@@ -94,9 +95,9 @@ test "native custom prefix navigates pane focus fullscreen and copy mode" {
     const model = session.gui.app.model.activeTabModel().?;
     const second: core.PaneId = @enumFromInt(11);
     try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
-    try session.gui.input.accept(.{ .kind = 4, .code = ' ', .mods = 4 });
-    try session.gui.input.accept(.{ .kind = 3, .code = 7 });
-    try session.gui.drainInput();
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = ' ', .mods = 4 });
+    try input_support.acceptNative(session.gui, .{ .kind = 3, .code = 7 });
+    try input_support.pump(session.gui);
     try session.settle();
     try std.testing.expectEqual(Session.pane_id, model.layout.focused().?);
     try customChord(session, "z");
@@ -109,16 +110,16 @@ test "native custom prefix navigates pane focus fullscreen and copy mode" {
 }
 
 fn chord(session: *Session, text: []const u8) !void {
-    try session.gui.input.accept(.{ .kind = 4, .code = 'b', .mods = 4 });
-    try session.gui.input.accept(.{ .kind = 1, .text = text.ptr, .len = text.len });
-    try session.gui.drainInput();
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'b', .mods = 4 });
+    try input_support.acceptNative(session.gui, .{ .kind = 1, .text = text.ptr, .len = text.len });
+    try input_support.pump(session.gui);
     try session.settle();
 }
 
 fn customChord(session: *Session, text: []const u8) !void {
-    try session.gui.input.accept(.{ .kind = 4, .code = ' ', .mods = 4 });
-    try session.gui.input.accept(.{ .kind = 1, .text = text.ptr, .len = text.len });
-    try session.gui.drainInput();
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = ' ', .mods = 4 });
+    try input_support.acceptNative(session.gui, .{ .kind = 1, .text = text.ptr, .len = text.len });
+    try input_support.pump(session.gui);
     try session.settle();
 }
 
@@ -156,11 +157,11 @@ test "native pointer rejects queued presses after geometry replacement" {
     defer session.deinit();
     try session.bootstrap();
     const app = &session.gui.app;
-    session.gui.input.setGeometry(.{ 0, 0 }, app.model.hostSize());
-    try session.gui.input.accept(.{ .kind = 6, .code = 1, .x = 20, .y = 20 });
-    session.gui.input.setGeometry(.{ 8, 8 }, app.model.hostSize());
-    try session.gui.input.accept(.{ .kind = 6, .code = 2, .x = 20, .y = 20 });
-    try session.gui.drainInput();
+    session.gui.pointer.configure(.{ 0, 0 }, app.model.hostSize());
+    try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 1, .x = 20, .y = 20 });
+    session.gui.pointer.configure(.{ 8, 8 }, app.model.hostSize());
+    try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 2, .x = 20, .y = 20 });
+    try input_support.pump(session.gui);
     try session.settle();
     try std.testing.expect(app.model.pointerSelection() == null);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
@@ -172,12 +173,12 @@ test "native bindings preserve ownership through hot reload and matching release
     try session.bootstrap();
     const binding = try client.config_model.ConfiguredBinding.parse(&.{"ctrl+k"}, .toggle_workspace_list);
     session.gui.adoptBindings(.{ .prefix = client.default_prefix, .bindings = &.{binding}, .escape_timeout_ns = 1, .sequence_timeout_ns = 1 });
-    try session.gui.input.accept(.{ .kind = 4, .code = 'k', .mods = 4, .physical = 9 });
-    try session.gui.drainInput();
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'k', .mods = 4, .physical = 9 });
+    try input_support.pump(session.gui);
     session.gui.adoptBindings(.{ .prefix = client.default_prefix, .bindings = &.{}, .escape_timeout_ns = 1, .sequence_timeout_ns = 1 });
-    try session.gui.input.accept(.{ .kind = 4, .code = 'k', .physical = 9, .phase = 2 });
-    try session.gui.input.accept(.{ .kind = 4, .code = 'k', .physical = 9, .phase = 3 });
-    try session.gui.drainInput();
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'k', .physical = 9, .phase = 2 });
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'k', .physical = 9, .phase = 3 });
+    try input_support.pump(session.gui);
     try session.settle();
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }
@@ -213,16 +214,20 @@ test "native pointer rejects a newer layout even before a GPU flight starts" {
     try session.bootstrap();
     try session.receiveFrame(1);
     const token = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(token, true);
+    try input_support.presented(
+        session.gui,
+        token,
+        true,
+    );
     try session.settle();
     const app = &session.gui.app;
     const model = app.model.activeTabModel().?;
-    session.gui.input.setGeometry(.{ 0, 0 }, app.model.hostSize());
+    session.gui.pointer.configure(.{ 0, 0 }, app.model.hostSize());
     try model.split(.{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(11), .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
     try std.testing.expect(!app.presentation.inFlight());
-    try session.gui.input.accept(.{ .kind = 6, .code = 1, .x = 10, .y = 10 });
-    try session.gui.input.accept(.{ .kind = 6, .code = 2, .x = 10, .y = 10 });
-    try session.gui.drainInput();
+    try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 1, .x = 10, .y = 10 });
+    try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 2, .x = 10, .y = 10 });
+    try input_support.pump(session.gui);
     try session.settle();
     try std.testing.expect(app.model.pointerSelection() == null);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
@@ -238,19 +243,23 @@ test "native focus loss releases an acquired child mouse gesture" {
     const pane = model.find(Session.pane_id).?;
     pane.mouse = .{ .sgr = true, .tracking = .button };
     const token = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(token, true);
+    try input_support.presented(
+        session.gui,
+        token,
+        true,
+    );
     try session.settle();
-    session.gui.input.setGeometry(session.renderer.origin, app.model.hostSize());
+    session.gui.pointer.configure(session.renderer.origin, app.model.hostSize());
     const view = model.viewForPane(pane.id, session.gui.region.area).?;
     const x = @as(f64, @floatFromInt(view.content.x)) * app.model.hostSize().cell_width_px + @as(f64, @floatFromInt(session.renderer.origin[0])) + 1;
     const y = @as(f64, @floatFromInt(view.content.y)) * app.model.hostSize().cell_height_px + @as(f64, @floatFromInt(session.renderer.origin[1])) + 1;
-    try session.gui.input.accept(.{ .kind = 6, .code = 1, .x = x, .y = y });
-    try session.gui.drainInput();
+    try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 1, .x = x, .y = y });
+    try input_support.pump(session.gui);
     try session.settle();
-    try std.testing.expect(session.gui.input.pointer.owners[0] == .child);
-    try session.gui.cancelPointer();
+    try std.testing.expect(session.gui.pointer.owners[0] == .child);
+    try input_support.focus(session.gui, false);
     try session.settle();
-    try std.testing.expect(session.gui.input.pointer.owners[0] == .shared);
+    try std.testing.expect(session.gui.pointer.owners[0] == .shared);
     try std.testing.expect(std.mem.endsWith(u8, session.input[0..session.input_len], "m"));
 }
 
@@ -259,16 +268,16 @@ test "native mouse release reaches its original tab and a pane hidden by fullscr
     defer session.deinit();
     try prepareMouse(session);
     const app = &session.gui.app;
-    const input = &session.gui.input;
+    const gui = session.gui;
     const press = pointerPress(session);
-    try input.accept(press);
+    try input_support.acceptNative(gui, press);
     try drainInput(session);
     const second_tab: core.TabId = @enumFromInt(2);
     _ = try app.model.workspace.addCreated(.{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_tab }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, app.model.hostSize());
     var release = press;
     release.code = 2;
-    try input.accept(release);
-    try session.gui.drainInput();
+    try input_support.acceptNative(gui, release);
+    try input_support.pump(session.gui);
     const request = try core.decodeClient(session.pending.?);
     try std.testing.expectEqual(Session.pane_id, request.pane_input.pane_id);
     try std.testing.expect(std.mem.endsWith(u8, request.pane_input.bytes, "m"));
@@ -282,20 +291,24 @@ test "native mouse release reaches its original tab and a pane hidden by fullscr
     _ = model.layout.focusPane(Session.pane_id);
     _ = model.layout.toggleFullscreen();
     const token = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(token, true);
+    try input_support.presented(
+        session.gui,
+        token,
+        true,
+    );
     try session.settle();
-    try input.accept(pointerPress(session));
+    try input_support.acceptNative(gui, pointerPress(session));
     try drainInput(session);
     _ = model.layout.focusPane(second_pane);
     try std.testing.expect(model.viewForPane(Session.pane_id, app.geometry().area) == null);
-    try input.accept(release);
-    try session.gui.drainInput();
+    try input_support.acceptNative(gui, release);
+    try input_support.pump(session.gui);
     const hidden_request = try core.decodeClient(session.pending.?);
     try std.testing.expectEqual(Session.pane_id, hidden_request.pane_input.pane_id);
     try std.testing.expect(std.mem.endsWith(u8, hidden_request.pane_input.bytes, "m"));
     try session.settle();
     try std.testing.expectEqual(second_pane, model.layout.focused().?);
-    try std.testing.expect(input.pointer.owners[0] == .shared);
+    try std.testing.expect(gui.pointer.owners[0] == .shared);
 }
 
 test "native saturated mouse release cancels captured owners and admits a fresh gesture" {
@@ -303,67 +316,74 @@ test "native saturated mouse release cancels captured owners and admits a fresh 
     defer session.deinit();
     try prepareMouse(session);
     const gui = session.gui;
-    const input = &gui.input;
     const press = pointerPress(session);
-    try input.accept(press);
+    try input_support.acceptNative(gui, press);
     try drainInput(session);
-    try std.testing.expect(input.pointer.owners[0] == .child);
+    try std.testing.expect(gui.pointer.owners[0] == .child);
     _ = gui.chrome.bandPointer(.{ .kind = .press, .button = .right, .x = 1, .y = 1 });
     gui.app.model.name_prompt.begin(.create_workspace);
     const token = try gui.prepare(&session.renderer);
-    try gui.complete(token, true);
+    try input_support.presented(
+        gui,
+        token,
+        true,
+    );
     _ = gui.overlays.pointer(.{ .x = 0, .y = 0, .kind = .press, .button = 1 });
     try std.testing.expect(gui.chrome.band_gesture != null and gui.overlays.gesture != null);
-    try saturate(input);
+    try saturate(gui);
     var release = press;
     release.code = 2;
-    try input.accept(release);
-    try input.accept(release);
-    try std.testing.expectEqual(@as(usize, 1024), input.len);
-    try std.testing.expectError(error.NativeInputFull, input.accept(press));
+    try input_support.acceptNative(gui, release);
+    try input_support.acceptNative(gui, release);
+    try std.testing.expectEqual(@as(usize, 1024), gui.input_queue.len);
+    try std.testing.expectError(error.InputRejected, input_support.acceptNative(gui, press));
     try drainInput(session);
-    try std.testing.expect(input.pointer.owners[0] == .shared);
+    try std.testing.expect(gui.pointer.owners[0] == .shared);
     try std.testing.expect(gui.chrome.band_gesture == null and gui.overlays.gesture == null);
     try std.testing.expect(std.mem.endsWith(u8, session.input[0..session.input_len], "m"));
 
     _ = gui.app.model.name_prompt.apply(.cancel);
     const closed = try gui.prepare(&session.renderer);
-    try gui.complete(closed, true);
+    try input_support.presented(
+        gui,
+        closed,
+        true,
+    );
     try session.settle();
-    try input.accept(press);
+    try input_support.acceptNative(gui, press);
     try drainInput(session);
-    try std.testing.expect(input.pointer.owners[0] == .child);
-    try input.accept(release);
+    try std.testing.expect(gui.pointer.owners[0] == .child);
+    try input_support.acceptNative(gui, release);
     try drainInput(session);
-    try std.testing.expect(input.pointer.owners[0] == .shared);
+    try std.testing.expect(gui.pointer.owners[0] == .shared);
 }
 
 test "native saturated key releases preserve order and finish before another press" {
     const session = try Session.init();
     defer session.deinit();
     try prepareMouse(session);
-    const input = &session.gui.input;
+    const gui = session.gui;
     session.gui.app.model.workspace.findPane(Session.pane_id).?.input_modes.kitty_keyboard_flags = 10;
-    try input.accept(.{ .kind = 4, .code = 'k', .physical = 9 });
-    try input.accept(.{ .kind = 4, .code = 'j', .physical = 4 });
+    try input_support.acceptNative(gui, .{ .kind = 4, .code = 'k', .physical = 9 });
+    try input_support.acceptNative(gui, .{ .kind = 4, .code = 'j', .physical = 4 });
     try drainInput(session);
     const before = session.input_len;
-    try saturate(input);
-    try input.accept(.{ .kind = 4, .code = 'k', .physical = 9, .phase = 3 });
-    try input.accept(.{ .kind = 4, .code = 'j', .physical = 4, .phase = 3 });
-    try input.accept(.{ .kind = 4, .code = 'j', .physical = 4, .phase = 3 });
-    try std.testing.expectEqual(@as(usize, 1024), input.len);
-    try std.testing.expectEqual(@as(usize, 2), input.recovery.len);
-    try std.testing.expectError(error.NativeInputFull, input.accept(.{ .kind = 4, .code = 'k', .physical = 9 }));
+    try saturate(gui);
+    try input_support.acceptNative(gui, .{ .kind = 4, .code = 'k', .physical = 9, .phase = 3 });
+    try input_support.acceptNative(gui, .{ .kind = 4, .code = 'j', .physical = 4, .phase = 3 });
+    try input_support.acceptNative(gui, .{ .kind = 4, .code = 'j', .physical = 4, .phase = 3 });
+    try std.testing.expectEqual(@as(usize, 1024), gui.input_queue.len);
+    try std.testing.expectEqual(@as(usize, 2), gui.input_queue.recovery.len);
+    try std.testing.expectError(error.InputRejected, input_support.acceptNative(gui, .{ .kind = 4, .code = 'k', .physical = 9 }));
     try drainInput(session);
     try std.testing.expectEqualStrings("\x1b[107;1:3u\x1b[106;1:3u", session.input[before..session.input_len]);
-    try std.testing.expectEqual(@as(usize, 0), input.router.leases.count());
+    try std.testing.expectEqual(@as(usize, 0), gui.router.leases.count());
     const recovered = session.input_len;
-    try input.accept(.{ .kind = 4, .code = 'k', .physical = 9 });
-    try input.accept(.{ .kind = 4, .code = 'k', .physical = 9, .phase = 3 });
+    try input_support.acceptNative(gui, .{ .kind = 4, .code = 'k', .physical = 9 });
+    try input_support.acceptNative(gui, .{ .kind = 4, .code = 'k', .physical = 9, .phase = 3 });
     try drainInput(session);
     try std.testing.expectEqualStrings("\x1b[107u\x1b[107;1:3u", session.input[recovered..session.input_len]);
-    try std.testing.expectEqual(@as(usize, 0), input.router.leases.count());
+    try std.testing.expectEqual(@as(usize, 0), gui.router.leases.count());
 }
 
 fn prepareMouse(session: *Session) !void {
@@ -371,9 +391,13 @@ fn prepareMouse(session: *Session) !void {
     try session.receiveFrame(1);
     session.gui.app.model.workspace.findPane(Session.pane_id).?.mouse = .{ .sgr = true, .tracking = .button };
     const token = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(token, true);
+    try input_support.presented(
+        session.gui,
+        token,
+        true,
+    );
     try session.settle();
-    session.gui.input.setGeometry(session.renderer.origin, session.gui.app.model.hostSize());
+    session.gui.pointer.configure(session.renderer.origin, session.gui.app.model.hostSize());
 }
 
 fn pointerPress(session: *Session) @import("../native/native.zig").InputEvent {
@@ -383,20 +407,20 @@ fn pointerPress(session: *Session) @import("../native/native.zig").InputEvent {
     return .{ .kind = 6, .code = 1, .x = @as(f64, @floatFromInt(view.content.x)) * size.cell_width_px + @as(f64, @floatFromInt(session.renderer.origin[0])) + 1, .y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(session.renderer.origin[1])) + 1 };
 }
 
-fn saturate(input: *NativeInput) !void {
+fn saturate(gui: *GuiClient) !void {
     for (0..1023) |_| {
-        try input.accept(.{ .kind = 6, .code = 6 });
+        try input_support.acceptNative(gui, .{ .kind = 6, .code = 6 });
     }
 }
 
 fn drainInput(session: *Session) !void {
     var turns: usize = 0;
-    while (session.gui.input.len != 0) : (turns += 1) {
+    while (session.gui.input_queue.len != 0) : (turns += 1) {
         if (turns > 1024) {
             return error.UnboundedInputRecovery;
         }
 
-        try session.gui.inputReady();
+        try input_support.pump(session.gui);
         try session.settle();
     }
 }
@@ -418,17 +442,17 @@ test "native held keys repeat into legacy and Kitty children and stop after rele
         inline for (fixtures) |fixture| {
             const before = session.input_len;
             var event = fixture[0];
-            try session.gui.input.accept(event);
+            try input_support.acceptNative(session.gui, event);
             event.phase = 2;
-            try session.gui.input.accept(event);
-            try session.gui.input.accept(event);
+            try input_support.acceptNative(session.gui, event);
+            try input_support.acceptNative(session.gui, event);
             event.phase = 3;
-            try session.gui.input.accept(event);
+            try input_support.acceptNative(session.gui, event);
             event.phase = 2;
-            try session.gui.input.accept(event);
+            try input_support.acceptNative(session.gui, event);
             try drainInput(session);
             try std.testing.expectEqualStrings(if (flags == 0) fixture[1] else fixture[2], session.input[before..session.input_len]);
-            try std.testing.expectEqual(@as(usize, 0), session.gui.input.router.leases.count());
+            try std.testing.expectEqual(@as(usize, 0), session.gui.router.leases.count());
         }
     }
 }
@@ -443,16 +467,16 @@ test "native application repeat keeps its pane when focus changes" {
     const second: core.PaneId = @enumFromInt(11);
     try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
     _ = model.layout.focusPane(Session.pane_id);
-    try session.gui.input.accept(.{ .kind = 1, .text = "j".ptr, .len = 1, .physical = 39 });
+    try input_support.acceptNative(session.gui, .{ .kind = 1, .text = "j".ptr, .len = 1, .physical = 39 });
     try drainInput(session);
     _ = model.layout.focusPane(second);
-    try session.gui.input.accept(.{ .kind = 1, .text = "j".ptr, .len = 1, .physical = 39, .phase = 2 });
-    try session.gui.drainInput();
+    try input_support.acceptNative(session.gui, .{ .kind = 1, .text = "j".ptr, .len = 1, .physical = 39, .phase = 2 });
+    try input_support.pump(session.gui);
     const request = try core.decodeClient(session.pending.?);
     try std.testing.expectEqual(Session.pane_id, request.pane_input.pane_id);
     try std.testing.expectEqualStrings("j", request.pane_input.bytes);
     try session.settle();
-    try session.gui.input.accept(.{ .kind = 4, .code = 'j', .physical = 39, .phase = 3 });
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'j', .physical = 39, .phase = 3 });
     try drainInput(session);
     try std.testing.expectEqual(second, model.layout.focused().?);
 }

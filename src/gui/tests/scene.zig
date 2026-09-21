@@ -1,3 +1,4 @@
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const Session = @import("Session.zig");
 
@@ -129,7 +130,11 @@ test "native scene captures terminal and thread damage in the same presentation"
     try std.testing.expectEqual(pane.id, commit.panes[0].pane_id);
     try std.testing.expect(session.renderer.quads.items().len > 0);
     try std.testing.expectEqual(session.renderer.atlas.?.version, session.renderer.last_page_version);
-    try session.gui.complete(token, true);
+    try input_support.presented(
+        session.gui,
+        token,
+        true,
+    );
     try session.settle();
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
 }
@@ -164,17 +169,25 @@ test "native prefix and chrome hover invalidate presentation without changing mo
     try session.bootstrap();
     try session.receiveFrame(1);
     const token = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(token, true);
+    try input_support.presented(
+        session.gui,
+        token,
+        true,
+    );
     try session.settle();
     const version = session.gui.app.model.version();
-    try session.gui.input.accept(.{ .kind = 4, .code = 'b', .mods = 4 });
-    try session.gui.drainInput();
+    try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'b', .mods = 4 });
+    try input_support.pump(session.gui);
     try std.testing.expectEqualDeep(version, session.gui.app.model.version());
     _ = session.gui.lifecycle.observe(session.gui.observation());
     try std.testing.expect(session.gui.lifecycle.needsPreparation());
     try std.testing.expect(session.gui.projection().status_mode == .prefix);
     const prefix = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(prefix, true);
+    try input_support.presented(
+        session.gui,
+        prefix,
+        true,
+    );
     try session.settle();
     _ = session.gui.chrome.pointer(.{ .x = 0, .y = 0, .kind = .move });
     _ = session.gui.lifecycle.observe(session.gui.observation());

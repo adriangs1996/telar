@@ -32,7 +32,7 @@ test "configured copy-mode action enters the agent reader without VT state or dr
     try std.testing.expect(composer.id.eql(gui.widgets.dispatcher.focused.?));
     try std.testing.expectEqualStrings("keep draft", gui.app.model.agentPane(Fixture.pane_id).?.composerSlice());
     try std.testing.expectEqual(@as(usize, 0), gui.widgets.dispatcher.keys.len);
-    try std.testing.expectEqual(@as(usize, 0), gui.input.router.leases.len);
+    try std.testing.expectEqual(@as(usize, 0), gui.router.leases.len);
     try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
 }
 

@@ -24,7 +24,8 @@ a substitute URL.
 ```text
 VT RenderState -> TextMetadataCapture -> pane_frame -> owned client Pane
                                                            |
-native event -> NativeInput -> PointerRouting -> hover_target / resolveLink
+native event -> GuiClient.acceptInput -> InputQueue
+GuiClient.drainInput -> dispatchPointer -> hover_target / resolveLink
                                       |                    |
                                 LinkGesture           LinkRegions
                                       |              underline + preview

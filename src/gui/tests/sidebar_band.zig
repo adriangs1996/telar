@@ -1,6 +1,7 @@
 //! The sidebar as a pixel band: its width from the configuration, the grid
 //! it leaves beside it, the pointer targets inside it and the drag, keyboard
 //! and reload paths that move it.
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -81,10 +82,10 @@ test "a pointer on a card focuses its agent and a pointer in the gap hits nothin
     const renderer = &fixture.session.renderer;
     const gap_x: f64 = @floatFromInt(renderer.sidebar.width + 2);
     try std.testing.expect(fixture.chrome.bandPointer(.{ .kind = .press, .x = gap_x, .y = card.y }) == null);
-    try std.testing.expect(fixture.session.gui.input.pointer.geometry.resolve(.{ .kind = .press, .x = gap_x, .y = card.y }) == null);
+    try std.testing.expect(fixture.session.gui.pointer.geometry.resolve(.{ .kind = .press, .x = gap_x, .y = card.y }) == null);
     try std.testing.expect(fixture.chrome.band_gesture == null);
     const first_cell: f64 = @floatFromInt(renderer.origin[0]);
-    try std.testing.expect(fixture.session.gui.input.pointer.geometry.resolve(.{ .kind = .press, .x = first_cell, .y = card.y }) != null);
+    try std.testing.expect(fixture.session.gui.pointer.geometry.resolve(.{ .kind = .press, .x = first_cell, .y = card.y }) != null);
 }
 
 test "dragging the edge sets the exact width and the grid follows on the next measurement" {
@@ -123,17 +124,37 @@ test "the keyboard resize action moves the band by sixteen logical pixels withou
     const renderer = &fixture.session.renderer;
     const shared = gui.app.model.sidebarWidth();
     const revision = gui.chrome.revision;
-    try std.testing.expectEqual(client.Control.continue_routing, try gui.executeAction(.{ .resize_sidebar = .right }));
+    try std.testing.expectEqual(client.Control.continue_routing, try input_support.action(
+        gui,
+        .{
+            .resize_sidebar = .right,
+        },
+    ));
     try std.testing.expectEqual(@as(f32, 300), gui.sidebar.logical);
     try std.testing.expect(gui.chrome.revision != revision);
-    try std.testing.expectEqual(client.Control.continue_routing, try gui.executeAction(.{ .resize_sidebar = .left }));
-    try std.testing.expectEqual(client.Control.continue_routing, try gui.executeAction(.{ .resize_sidebar = .left }));
+    try std.testing.expectEqual(client.Control.continue_routing, try input_support.action(
+        gui,
+        .{
+            .resize_sidebar = .left,
+        },
+    ));
+    try std.testing.expectEqual(client.Control.continue_routing, try input_support.action(
+        gui,
+        .{
+            .resize_sidebar = .left,
+        },
+    ));
     try std.testing.expectEqual(@as(f32, 268), gui.sidebar.logical);
     try std.testing.expectEqual(shared, gui.app.model.sidebarWidth());
     try fixture.measure(.{ .width = renderer.viewport[0], .height = renderer.viewport[1], .scale = 1 });
     try std.testing.expectEqual(@as(u32, 268), renderer.sidebar.width);
     for (0..20) |_| {
-        _ = try gui.executeAction(.{ .resize_sidebar = .right });
+        _ = try input_support.action(
+            gui,
+            .{
+                .resize_sidebar = .right,
+            },
+        );
     }
 
     try std.testing.expectEqual(@as(f32, 480), gui.sidebar.logical);

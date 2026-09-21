@@ -1,5 +1,7 @@
 //! Owns one client's host-TTY read, native router and replaceable deadlines.
 
+const key_captures = @import("telar-client").captures;
+const repeat_policy = @import("telar-client").repeatPolicy;
 const TerminalClient = @import("../../TerminalClient.zig");
 const host = TerminalClient.of;
 const GenericRouter = @import("../../../input/GenericRouter.zig").Type;
@@ -312,10 +314,20 @@ fn decoded(client: *Client, event: Router.Decoded, now_ns: u64) !ControlType {
     switch (event.event) {
         .key => |value| {
             errdefer router.eventFailed(value);
-            return applyDecision(client, router.routeEvent(.{ .key = value, .raw = event.raw, .now_ns = now_ns }, .{
-                .captures_keys = key_routing.captures(client),
-                .repeat_policy = if (router.repeatAction()) |held| action_routing.repeatPolicy(client, held) else null,
-            }));
+            return applyDecision(
+                client,
+                router.routeEvent(
+                    .{
+                        .key = value,
+                        .raw = event.raw,
+                        .now_ns = now_ns,
+                    },
+                    .{
+                        .captures_keys = key_captures(client.keyRoutingAuthority()),
+                        .repeat_policy = if (router.repeatAction()) |held| repeat_policy(held, client.repeatPane()) else null,
+                    },
+                ),
+            );
         },
         .mouse => |value| {
             router.cancelSequence();
@@ -355,7 +367,7 @@ fn applyDecision(client: *Client, decision: Router.Decision) !ControlType {
         .action => |request| {
             const control = try action_routing.apply(client, request.value);
             if (control == .continue_routing) {
-                router.actionCompleted(request, action_routing.repeatPolicy(client, request.value));
+                router.actionCompleted(request, repeat_policy(request.value, client.repeatPane()));
             }
             return control;
         },

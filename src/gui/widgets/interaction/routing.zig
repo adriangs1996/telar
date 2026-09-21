@@ -10,8 +10,6 @@ const message_links = @import("message_links.zig");
 const thread_items = @import("thread_items.zig");
 const thread_selection = @import("thread_selection.zig");
 
-const PointerRouting = @import("../../input/PointerRouting.zig");
-
 const GuiClient = @import("../../GuiClient.zig");
 const Event = @import("../../input/event.zig").Event;
 const Key = @import("../../input/KeyInput.zig");
@@ -46,8 +44,8 @@ pub fn reconcileFocus(gui: *GuiClient) void {
     _ = state.dispatcher.focus(null);
     state.dispatcher.cancel();
 
-    if (gui.input.binding_target != null) {
-        gui.input.cancelBinding();
+    if (gui.binding_target != null) {
+        gui.cancelBinding();
     }
 }
 
@@ -67,7 +65,7 @@ pub fn apply(gui: *GuiClient, event: Event) !bool {
         return true;
     }
 
-    if (event.isScrollOrPointerBegin() and !PointerRouting.geometryMatches(&gui.app)) {
+    if (event.isScrollOrPointerBegin() and !gui.pointerGeometryMatches()) {
         if (event.isScroll()) {
             state.thread_scroll.clear();
         }
@@ -146,8 +144,8 @@ pub fn apply(gui: *GuiClient, event: Event) !bool {
         const capture = state.dispatcher.captures[0];
         const captured = if (capture) |id| state.dispatcher.maps.presented().find(id) else null;
         gui.chrome.widgetPointer(event.pointer, captured != null and captured.?.action == .resize_sidebar);
-        gui.input.pointer.hover.observe(event.pointer);
-        gui.input.pointer.hover.refresh(gui);
+        gui.pointer.hover.observe(event.pointer);
+        gui.pointer.hover.refresh(gui);
     }
     if (result.focus_changed) {
         if (state.thread_selection.owner) |owner| {
@@ -348,7 +346,7 @@ fn routeAgentBinding(gui: *GuiClient, event: Event) !bool {
         return true;
     }
 
-    if (!gui.widgets.dispatcher.window_focused or gui.widgets.dispatcher.maps.presented().modal_layer != 0 or gui.widgets.composer_menu.selector != null or gui.widgets.completions.open or client.operations.key_routing.captures(&gui.app)) {
+    if (!gui.widgets.dispatcher.window_focused or gui.widgets.dispatcher.maps.presented().modal_layer != 0 or gui.widgets.composer_menu.selector != null or gui.widgets.completions.open or client.captures(gui.app.keyRoutingAuthority())) {
         return false;
     }
 
@@ -366,7 +364,7 @@ fn routeAgentBinding(gui: *GuiClient, event: Event) !bool {
         }
     }
 
-    if (!gui.input.router.wantsBinding(key)) {
+    if (!gui.router.wantsBinding(key)) {
         return false;
     }
     if (key.physical) |physical| {
@@ -375,8 +373,8 @@ fn routeAgentBinding(gui: *GuiClient, event: Event) !bool {
         }
     }
 
-    if (gui.input.router.bindingDeadline() == null and !gui.input.router.prefixPending()) {
-        gui.input.binding_target = target.id;
+    if (gui.router.bindingDeadline() == null and !gui.router.prefixPending()) {
+        gui.binding_target = target.id;
     }
 
     gui.widgets.cancelComposition();
@@ -392,7 +390,7 @@ pub fn replayBindingKey(gui: *GuiClient, owner: Id, key: client.Key) !void {
     const model = gui.app.model.activeTabModelConst();
     const valid = gui.widgets.dispatcher.window_focused and gui.widgets.dispatcher.maps.presented().modal_layer == 0 and gui.widgets.composer_menu.selector == null and target != null and target.?.id.eql(owner) and target.?.action == .composer and model != null and model.?.layout.focused() == target.?.action.composer and field(gui, target.?) != null;
     if (key.physical) |physical| {
-        gui.input.router.relinquishKey(physical);
+        gui.router.relinquishKey(physical);
         const lease = gui.widgets.dispatcher.keys.owner(physical);
         if (lease != null and lease.? == .fallback) {
             _ = gui.widgets.dispatcher.keys.acquire(physical, if (valid) .{ .widget = owner } else .discarded);
@@ -495,7 +493,7 @@ pub fn eligible(gui: *const GuiClient, target: Target) bool {
 }
 
 fn focus(gui: *GuiClient, target: Target) !void {
-    gui.input.cancelBinding();
+    gui.cancelBinding();
     if (target.paneId()) |pane_id| {
         if (!eligible(gui, target)) {
             return;
@@ -925,7 +923,7 @@ fn scrollHistory(gui: *GuiClient, event: Event) !bool {
     }
 
     var delivered = false;
-    var line_height: f64 = @floatFromInt(@max(1, gui.input.pointer.geometry.size.cell_height_px));
+    var line_height: f64 = @floatFromInt(@max(1, gui.pointer.geometry.size.cell_height_px));
     const registry = state.dispatcher.maps.presented();
     for (registry.targets[0..registry.len]) |target| {
         if (target.id.generation != prompt.generation) {

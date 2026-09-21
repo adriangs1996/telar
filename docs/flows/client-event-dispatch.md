@@ -31,7 +31,7 @@ Messages own values or carry an explicit borrow from a producer resource:
 | Runtime RX | `RuntimeTransportState` owns both its 4 MiB `receive_buffer` and one validated `RuntimeMessage`. Inbox entries borrow the decoded value; handlers finish before the next read is armed. |
 | Runtime TX | Existing outbox plus the 4 MiB send buffer. One writer; completion releases the send claim. |
 | TUI input | One reserved 4 KiB `host_input.chunk`. Decode and routing finish before rearming its reader. |
-| Native input | `NativeInput` copies keys/paste before returning to AppKit/Wayland. One coalesced readiness message dispatches bounded chunks. |
+| Native input | `InputQueue` copies keys/paste before returning to AppKit/Wayland. One coalesced readiness message dispatches bounded chunks. |
 | TUI host output | Sealed bytes owned by `Output`; no model pointer reaches its writer. |
 | GUI presentation | A token and outcome. GPU consumers have finished before posting the completion. |
 | Config, plugins and media | Existing generation/job owners retain results through dispatch or orphan cleanup. |

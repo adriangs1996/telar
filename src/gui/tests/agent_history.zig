@@ -1,3 +1,4 @@
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -338,11 +339,19 @@ test "history page loading starts after successful delivery and not after a fail
     const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
     _ = client.agent_history.navigate(&gui.app.model, pane.id, .older);
     const failed = try gui.prepare(&session.renderer);
-    try gui.complete(failed, false);
+    try input_support.presented(
+        gui,
+        failed,
+        false,
+    );
     try std.testing.expect(pane.agent_history == null);
     try std.testing.expect(!client.request_lifecycle.has(&gui.app, .agent_history));
     const delivered = try gui.prepare(&session.renderer);
-    try gui.complete(delivered, true);
+    try input_support.presented(
+        gui,
+        delivered,
+        true,
+    );
     try std.testing.expect(pane.agent_history != null);
     try std.testing.expect(client.request_lifecycle.has(&gui.app, .agent_history));
     try session.settle();
@@ -542,10 +551,18 @@ test "one history gesture crosses folded pages without evicting the visible answ
     const window = pane.agent_history.?;
     const answer = window.pages[1].snapshot.items()[3].identity;
     const failed = try gui.prepare(&session.renderer);
-    try gui.complete(failed, false);
+    try input_support.presented(
+        gui,
+        failed,
+        false,
+    );
     try std.testing.expect(!client.request_lifecycle.has(&gui.app, .agent_history));
     const delivered = try gui.prepare(&session.renderer);
-    try gui.complete(delivered, true);
+    try input_support.presented(
+        gui,
+        delivered,
+        true,
+    );
     try session.settle();
     try std.testing.expect(client.request_lifecycle.has(&gui.app, .agent_history));
     try std.testing.expect(window.preserve_seam);
@@ -561,7 +578,11 @@ test "one history gesture crosses folded pages without evicting the visible answ
     try deliverHistory(session, page);
     try std.testing.expect(window.findItem(answer) != null);
     const next = try gui.prepare(&session.renderer);
-    try gui.complete(next, true);
+    try input_support.presented(
+        gui,
+        next,
+        true,
+    );
     try session.settle();
     try std.testing.expect(client.request_lifecycle.has(&gui.app, .agent_history));
     try std.testing.expect(window.preserve_seam);
@@ -574,7 +595,11 @@ test "one history gesture crosses folded pages without evicting the visible answ
     page.has_before = false;
     try deliverHistory(session, page);
     const with_prompt = try gui.prepare(&session.renderer);
-    try gui.complete(with_prompt, true);
+    try input_support.presented(
+        gui,
+        with_prompt,
+        true,
+    );
     try session.settle();
     try std.testing.expect(!client.request_lifecycle.has(&gui.app, .agent_history));
     try std.testing.expect(window.findItem(1) != null);

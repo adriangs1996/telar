@@ -209,7 +209,7 @@ fn prepare(app: *Application, viewport: native.Viewport) !u64 {
 
     const gui = app.gui.?;
     try gui.resize(size, app.renderer.theme);
-    gui.input.setGeometry(app.renderer.origin, size);
+    gui.pointer.configure(app.renderer.origin, size);
     const now_ns = app.now();
     app.cursor_clock.observe(gui.cursorTarget(), now_ns);
     app.renderer.cursor_on = app.cursor_clock.shown(now_ns);
@@ -331,13 +331,13 @@ fn wakeupAfter(context: ?*anyopaque) callconv(.c) u32 {
 
 fn pointerShape(context: ?*anyopaque) callconv(.c) u32 {
     const gui = from(context).gui orelse return 0;
-    return @intFromEnum(gui.input.pointer.hover.shape);
+    return @intFromEnum(gui.pointer.hover.shape);
 }
 
 fn textContext(context: ?*anyopaque, out: *native.TextContext) callconv(.c) c_int {
     out.* = .{};
     const gui = from(context).gui orelse return 0;
-    if (gui.input.len != 0) {
+    if (gui.input_queue.len != 0) {
         return -1;
     }
 

@@ -1,4 +1,5 @@
 //! Headless native reader fixture; no window or desktop input is created.
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -16,7 +17,7 @@ pub fn init() !Fixture {
     try session.bootstrap();
     const size = try session.gui.measure(&session.renderer, .{ .width = 1000, .height = 800, .scale = 1 });
     try session.gui.resize(size, session.renderer.theme);
-    session.gui.input.setGeometry(session.renderer.origin, size);
+    session.gui.pointer.configure(session.renderer.origin, size);
     try session.settle();
     try std.testing.expect(session.gui.app.model.identifyPane(.{ .request_id = @enumFromInt(1), .pane_id = pane_id, .location = location, .created = false, .kind = .agent, .pane_generation = 7 }));
     var fixture: Fixture = .{ .session = session };
@@ -31,13 +32,17 @@ pub fn deinit(fixture: *Fixture) void {
 
 pub fn publish(fixture: *Fixture) !void {
     const token = try fixture.session.gui.prepare(&fixture.session.renderer);
-    try fixture.session.gui.complete(token, true);
+    try input_support.presented(
+        fixture.session.gui,
+        token,
+        true,
+    );
     try fixture.session.settle();
 }
 
 pub fn send(fixture: *Fixture, event: @import("../input/event.zig").Event) !void {
-    try fixture.session.gui.input.acceptEvent(event);
-    try fixture.session.gui.drainInput();
+    try input_support.accept(fixture.session.gui, event);
+    try input_support.pump(fixture.session.gui);
 }
 
 pub fn messages(fixture: *Fixture, texts: []const []const u8) !void {

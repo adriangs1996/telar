@@ -1,3 +1,4 @@
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -43,8 +44,8 @@ test "native admitted terminal key admits only a newer pane frame before cadence
     const session = try Session.init();
     defer session.deinit();
     try begin(session);
-    try session.gui.input.acceptEvent(.{ .key = .{ .code = .{ .char = .init("x") } } });
-    try session.gui.drainInput();
+    try input_support.accept(session.gui, .{ .key = .{ .code = .{ .char = .init("x") } } });
+    try input_support.pump(session.gui);
     try session.settle();
     try std.testing.expectEqualStrings("x", session.input[0..session.input_len]);
     try std.testing.expect(session.driver.frame_pacer.waitUntil(&.{currentPane(session)}, @intFromEnum(Time.after_input)) != null);
@@ -99,8 +100,8 @@ test "native local prefix shortcut grants no terminal frame grace" {
     const session = try Session.init();
     defer session.deinit();
     try begin(session);
-    try session.gui.input.acceptEvent(.{ .key = .{ .code = client.default_prefix.code, .mods = .{ .ctrl = true } } });
-    try session.gui.drainInput();
+    try input_support.accept(session.gui, .{ .key = .{ .code = client.default_prefix.code, .mods = .{ .ctrl = true } } });
+    try input_support.pump(session.gui);
     try session.settle();
     try std.testing.expect(session.gui.projection().status_mode == .prefix);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
@@ -116,8 +117,8 @@ test "native older GPU completion preserves a newer input hint and sends no extr
     try begin(session);
     const token = try session.gui.prepare(&session.renderer);
     try std.testing.expect(token != 0);
-    try session.gui.input.acceptEvent(.{ .key = .{ .code = .{ .char = .init("x") } } });
-    try session.gui.drainInput();
+    try input_support.accept(session.gui, .{ .key = .{ .code = .{ .char = .init("x") } } });
+    try input_support.pump(session.gui);
     try session.settle();
     try std.testing.expectEqualStrings("x", session.input[0..session.input_len]);
     try session.receiveFrame(@intFromEnum(Frame.echo));
@@ -125,13 +126,21 @@ test "native older GPU completion preserves a newer input hint and sends no extr
     const acknowledgements = session.ack_count;
     try std.testing.expectEqual(@as(usize, 2), acknowledgements);
 
-    try session.gui.complete(token, true);
+    try input_support.presented(
+        session.gui,
+        token,
+        true,
+    );
     try session.settle();
     try std.testing.expectEqual(acknowledgements, session.ack_count);
     try std.testing.expectEqual(@as(?u64, null), session.driver.frame_pacer.waitUntil(&.{currentPane(session)}, @intFromEnum(Time.after_input)));
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
     try std.testing.expectEqual(@intFromEnum(Frame.echo), pane.pending_frame_id);
 
-    try session.gui.complete(token, true);
+    try input_support.presented(
+        session.gui,
+        token,
+        true,
+    );
     try std.testing.expectEqual(@as(?u64, null), session.driver.frame_pacer.waitUntil(&.{currentPane(session)}, @intFromEnum(Time.after_input)));
 }

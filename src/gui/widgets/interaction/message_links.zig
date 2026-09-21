@@ -1,6 +1,5 @@
 //! Resolves delivered Markdown hits against their exact live message snapshot.
 const client = @import("telar-client");
-const PointerRouting = @import("../../input/PointerRouting.zig");
 const std = @import("std");
 const GuiClient = @import("../../GuiClient.zig");
 const Target = @import("Target.zig");
@@ -48,9 +47,9 @@ pub fn destination(gui: *const GuiClient, control: Control) ?[]const u8 {
 /// Example: `message_links.refresh(gui);`
 pub fn refresh(gui: *GuiClient) void {
     const state = &gui.widgets;
-    const event = gui.input.pointer.hover.event;
+    const event = gui.pointer.hover.event;
     const target: ?Target = if (event) |pointer| state.dispatcher.maps.presented().at(.{ pointer.x, pointer.y }) else null;
-    if (!gui.focused or gui.review.active or state.thread_selection.dragging or state.tab_drag.captured or gui.app.model.name_prompt.active() or state.dispatcher.maps.presented().modal_layer != 0 or state.composer_menu.selector != null or event == null or target == null or target.?.action != .message_link or !PointerRouting.geometryMatches(&gui.app)) {
+    if (!gui.focused or gui.review.active or state.thread_selection.dragging or state.tab_drag.captured or gui.app.model.name_prompt.active() or state.dispatcher.maps.presented().modal_layer != 0 or state.composer_menu.selector != null or event == null or target == null or target.?.action != .message_link or !gui.pointerGeometryMatches()) {
         clear(gui);
         return;
     }
@@ -86,7 +85,7 @@ pub fn clear(gui: *GuiClient) void {
 /// Opens a still-current destination after a completed click.
 /// Example: `try message_links.open(gui, control);`
 pub fn open(gui: *GuiClient, control: Control) !void {
-    if (!PointerRouting.geometryMatches(&gui.app) or gui.app.model.name_prompt.active() or gui.widgets.composer_menu.selector != null) {
+    if (!gui.pointerGeometryMatches() or gui.app.model.name_prompt.active() or gui.widgets.composer_menu.selector != null) {
         return;
     }
 
@@ -111,7 +110,7 @@ pub fn open(gui: *GuiClient, control: Control) !void {
 /// Copies a current destination, including schemes the opener does not support.
 /// Example: `try message_links.copy(gui, control);`
 pub fn copy(gui: *GuiClient, control: Control) !void {
-    if (!PointerRouting.geometryMatches(&gui.app) or gui.app.model.name_prompt.active() or gui.widgets.composer_menu.selector != null) {
+    if (!gui.pointerGeometryMatches() or gui.app.model.name_prompt.active() or gui.widgets.composer_menu.selector != null) {
         return;
     }
 

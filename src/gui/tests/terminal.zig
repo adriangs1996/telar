@@ -1,3 +1,4 @@
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const Session = @import("Session.zig");
 const core = @import("telar-core");
@@ -211,7 +212,11 @@ test "native terminal acknowledges received patches while presentation is busy o
     try std.testing.expect(session.renderer.quads.items().len > 1);
     try std.testing.expectEqual(@as(usize, 1), session.ack_count);
     try std.testing.expectError(error.PresentationBusy, session.gui.prepare(&session.renderer));
-    try session.gui.complete(first, false);
+    try input_support.presented(
+        session.gui,
+        first,
+        false,
+    );
     try session.settle();
     try std.testing.expectEqual(@as(usize, 1), session.ack_count);
     const retry = try session.gui.prepare(&session.renderer);
@@ -227,9 +232,17 @@ test "native terminal acknowledges received patches while presentation is busy o
 
     try std.testing.expectEqualSlices(Quad, frozen, session.renderer.quads.items());
     try std.testing.expectEqualStrings("H", session.gui.app.model.workspace.findPane(Session.pane_id).?.buffer.cells[0].text());
-    try session.gui.complete(first, true);
+    try input_support.presented(
+        session.gui,
+        first,
+        true,
+    );
     try std.testing.expectEqual(retry, @intFromEnum(session.gui.lifecycle.active.?.token));
-    try session.gui.complete(retry, true);
+    try input_support.presented(
+        session.gui,
+        retry,
+        true,
+    );
     try session.settle();
     try std.testing.expectEqual(@as(u64, 1), session.acknowledgements[0].frame_id);
     try std.testing.expectEqual(@as(u64, 33), session.gui.app.model.workspace.findPane(Session.pane_id).?.pending_frame_id);
@@ -245,11 +258,11 @@ test "native keyboard and clipboard use the focused pane and bracketed paste mod
     try session.bootstrap();
     try session.receiveFrame(1);
     const text = "printf 'hola\\n'";
-    try session.gui.input.accept(.{ .kind = 1, .text = text.ptr, .len = text.len });
-    try session.gui.input.accept(.{ .kind = 3, .code = 1 });
+    try input_support.acceptNative(session.gui, .{ .kind = 1, .text = text.ptr, .len = text.len });
+    try input_support.acceptNative(session.gui, .{ .kind = 3, .code = 1 });
     const pasted = "café\nsecond line";
-    try session.gui.input.accept(.{ .kind = 2, .text = pasted.ptr, .len = pasted.len });
-    try session.gui.drainInput();
+    try input_support.acceptNative(session.gui, .{ .kind = 2, .text = pasted.ptr, .len = pasted.len });
+    try input_support.pump(session.gui);
     try session.settle();
     try std.testing.expectEqualStrings("printf 'hola\\n'\r\x1b[200~café\nsecond line\x1b[201~", session.input[0..session.input_len]);
 }
@@ -290,7 +303,11 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
         try std.testing.expect(quad.x + quad.width <= width and quad.y + quad.height <= height);
     }
 
-    try session.gui.complete(token, true);
+    try input_support.presented(
+        session.gui,
+        token,
+        true,
+    );
     try session.settle();
     try expectFullRedraw(session);
     try paintTerminal(session);
@@ -330,7 +347,7 @@ test "native inbox holds input and GPU completion until the consumer runs" {
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
     try std.testing.expect(session.gui.lifecycle.active != null);
     _ = try session.gui.update();
-    try std.testing.expect(session.gui.input.len >= 48);
+    try std.testing.expect(session.gui.input_queue.len >= 48);
     try session.settle();
     try std.testing.expectEqual(@as(usize, 80), session.input_len);
     for (session.input[0..session.input_len]) |byte| {
@@ -356,7 +373,11 @@ fn paintTerminal(session: *Session) !void {
 
 fn present(session: *Session) !void {
     const token = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(token, true);
+    try input_support.presented(
+        session.gui,
+        token,
+        true,
+    );
     try session.settle();
 }
 
@@ -396,7 +417,11 @@ test "retained cell damage rebuilds only changed cells and a cursor move reuses 
     pane.buffer.cells[2].style.flags.underline = .single;
     const token = try session.gui.prepare(&session.renderer);
     try std.testing.expectEqual(@as(usize, 3), session.renderer.repainted_cells);
-    try session.gui.complete(token, false);
+    try input_support.presented(
+        session.gui,
+        token,
+        false,
+    );
     try present(session);
     try std.testing.expectEqual(@as(usize, 0), session.renderer.repainted_cells);
     try expectFullRedraw(session);

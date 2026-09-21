@@ -42,7 +42,7 @@ pub fn measure(fixture: *Fixture, viewport: @import("../native/native.zig").View
     const gui = fixture.session.gui;
     const size = try gui.measure(renderer, viewport);
     try gui.resize(size, renderer.theme);
-    gui.input.setGeometry(renderer.origin, size);
+    gui.pointer.configure(renderer.origin, size);
     try fixture.session.settle();
 }
 

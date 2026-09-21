@@ -1,4 +1,5 @@
 //! Native gesture fixture whose opener captures targets instead of launching apps.
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -21,7 +22,7 @@ pub fn init() !*Fixture {
     fixture.text("https://a.b");
     session.gui.app.link_opener = .{ .context = fixture, .open = open };
     try fixture.present();
-    session.gui.input.setGeometry(session.renderer.origin, session.gui.app.model.hostSize());
+    session.gui.pointer.configure(session.renderer.origin, session.gui.app.model.hostSize());
     return fixture;
 }
 
@@ -36,13 +37,17 @@ pub fn text(fixture: *Fixture, value: []const u8) void {
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = value, .style = .{} });
     pane.markSpan(0, @intCast(pane.buffer.cells.len));
-    fixture.session.gui.input.pointer.hover.dirty = true;
+    fixture.session.gui.pointer.hover.dirty = true;
 }
 
 pub fn present(fixture: *Fixture) !void {
     const gui = fixture.session.gui;
     const token = try gui.prepare(&fixture.session.renderer);
-    try gui.complete(token, true);
+    try input_support.presented(
+        gui,
+        token,
+        true,
+    );
     try fixture.session.settle();
 }
 
@@ -54,8 +59,8 @@ pub fn event(fixture: *Fixture, code: u32) Event {
 }
 
 pub fn send(fixture: *Fixture, value: Event) !void {
-    try fixture.session.gui.input.accept(value);
-    try fixture.session.gui.inputReady();
+    try input_support.acceptNative(fixture.session.gui, value);
+    try input_support.pump(fixture.session.gui);
     try fixture.session.settle();
 }
 

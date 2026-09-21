@@ -4,7 +4,6 @@ const key_routing = @import("../../application/input/key_routing.zig");
 const Routed = @import("../../application/input/Routed.zig");
 const std = @import("std");
 const Client = @import("../../AttachedClient.zig");
-const captures_module = @import("../../application/input/key_routing.zig").captures;
 const ApplicationInputKeyRoutingCommand = @import("../../application/input/key_routing.zig").Command;
 const KeyRoutingOutcome = @import("../../application/input/KeyRoutingOutcome.zig");
 const KeyRoutingAuthority = @import("../../application/input/KeyRoutingAuthority.zig");
@@ -18,37 +17,19 @@ const attachment_prompts = @import("attachment_prompts.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 const clipboard_images = @import("../host/clipboard_images.zig");
 
-/// Returns whether modal or prompt authority must bypass configured bindings.
-/// Copy mode deliberately leaves native bindings available.
-///
-/// ```zig
-/// if (captures(client)) routeDirectly();
-/// ```
-pub fn captures(client: *const Client) bool {
-    return captures_module(snapshotAuthority(client));
-}
-
 /// Routes one semantic key or borrowed byte slice to a single current owner.
 ///
 /// ```zig
 /// const outcome = try apply(client, .{ .key = key });
 /// ```
 pub fn apply(client: *Client, command: ApplicationInputKeyRoutingCommand) !KeyRoutingOutcome {
-    const current = snapshotAuthority(client);
+    const current = client.keyRoutingAuthority();
     const outcome = switch (command) {
         .bytes => |bytes| if (bytes.len == 0) KeyRoutingOutcome{ .owner = .ignored } else (try routeCurrent(client, command, current)).outcome,
         .key => |key| try routeKey(client, key, current),
     };
     client.telemetry.metrics.key_lease_overflows +%= @intFromBool(outcome.lease_overflow);
     return outcome;
-}
-
-fn snapshotAuthority(client: *const Client) KeyRoutingAuthority {
-    return .{
-        .attachment_modal_active = client.attachment_shelf.modalActive(),
-        .prompt_active = client.model.name_prompt.active(),
-        .copy_mode_active = client.model.copyModeActive(),
-    };
 }
 
 fn closeModal(client: *Client) void {

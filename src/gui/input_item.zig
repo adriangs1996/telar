@@ -1,3 +1,5 @@
+pub const Admission = enum { accepted, recovery };
+
 pub const Item = union(enum) {
     release_recovery,
     pointer: @import("input/PointerSample.zig"),

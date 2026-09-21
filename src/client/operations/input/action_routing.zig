@@ -3,9 +3,7 @@
 const Client = @import("../../AttachedClient.zig");
 const Action = @import("../../input/action.zig").Action;
 const ControlType = @import("../../input/keybind.zig").Control;
-const RepeatPolicyType = @import("../../input/RepeatPolicy.zig");
 const key_routing = @import("key_routing.zig");
-const repeatPolicy_module = @import("../../application/input/action_routing.zig").repeatPolicy;
 const copy_modes = @import("copy_modes.zig");
 const client_actions = @import("actions.zig");
 const ApplicationInputLuaActionCommand = @import("../../application/input/lua_action.zig").Command;
@@ -32,22 +30,6 @@ pub fn apply(client: *Client, value: Action) !ControlType {
         },
         else => client_actions.apply(client, value),
     };
-}
-
-/// Resolves repeat authority without retaining pane storage.
-/// For example: `const policy = repeatPolicy(client, action);`.
-pub fn repeatPolicy(client: *const Client, value: Action) ?RepeatPolicyType {
-    if (key_routing.captures(client) or client.model.copyModeActive()) {
-        return null;
-    }
-
-    const model = client.model.activeTabModelConst() orelse return null;
-    const pane = model.focusedPaneConst() orelse return null;
-    if (!pane.attached) {
-        return null;
-    }
-
-    return repeatPolicy_module(value, pane.id);
 }
 
 fn executeLua(client: *Client, command: ApplicationInputLuaActionCommand) !ControlType {

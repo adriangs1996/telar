@@ -27,7 +27,7 @@ pub fn resolve(gui: *const GuiClient, mouse: client.Mouse, mods: u32) Target {
         return .{};
     }
 
-    if (gui.input.pointer.hover.covers(mouse)) {
+    if (gui.pointer.hover.covers(mouse)) {
         return .{};
     }
 

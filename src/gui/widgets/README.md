@@ -135,7 +135,7 @@ remaining excess space participates in alignment.
 `input/event.zig` defines committed text, paste, key phases, pointer gestures,
 precise two-axis scroll, focus, IME composition, clipboard completions and
 accessibility actions. Only `native/decode_input.zig` interprets numeric C ABI
-tags. `NativeInput` copies borrowed payloads into bounded storage before native
+tags. `InputQueue` copies borrowed payloads into bounded storage before native
 callbacks return. The window thread drains them through `GuiClient.widgetInput`
 before the terminal router. Terminal input keeps its physical-key and pane
 ownership rules.

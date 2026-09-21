@@ -1,3 +1,4 @@
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -414,24 +415,44 @@ test "native GUI discards failed and stale completions before publishing control
     const initial = gui.chrome.presented();
     gui.app.model.name_prompt.begin(.create_workspace);
     const first = try gui.prepare(&session.renderer);
-    try gui.complete(first + 1, true);
+    try input_support.presented(
+        gui,
+        first + 1,
+        true,
+    );
     try std.testing.expectEqual(initial, gui.chrome.presented());
     try std.testing.expect(gui.overlays.presented().modal == null);
     try std.testing.expect(gui.lifecycle.active != null);
-    try gui.complete(first, false);
+    try input_support.presented(
+        gui,
+        first,
+        false,
+    );
     try std.testing.expectEqual(initial, gui.chrome.presented());
     try std.testing.expect(gui.overlays.presented().modal == null);
     try std.testing.expect(gui.lifecycle.active == null);
 
     const next = try gui.prepare(&session.renderer);
     const prepared = gui.chrome.prepared();
-    try gui.complete(first, true);
+    try input_support.presented(
+        gui,
+        first,
+        true,
+    );
     try std.testing.expectEqual(initial, gui.chrome.presented());
     try std.testing.expect(gui.overlays.presented().modal == null);
-    try gui.complete(next, true);
+    try input_support.presented(
+        gui,
+        next,
+        true,
+    );
     try std.testing.expectEqual(prepared, gui.chrome.presented());
     try std.testing.expect(gui.overlays.presented().modal != null);
     try session.settle();
-    try gui.complete(next, true);
+    try input_support.presented(
+        gui,
+        next,
+        true,
+    );
     try std.testing.expectEqual(prepared, gui.chrome.presented());
 }

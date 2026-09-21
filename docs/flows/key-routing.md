@@ -33,11 +33,25 @@ TUI: host_inputs.handleRead → feed → router.next → decoded
 ```
 
 `GuiClient.executeAction` also applies native palette, sidebar and transcript behavior.
-`NativeInput` owns bounded event storage, key routing state and payload pools.
-It has no application argument or owner pointer. `GuiClient.drainInput` borrows
+`InputQueue` owns bounded event storage, payload pools and retained releases.
+`GuiClient` owns the router, binding target, timer and binding presentation revision.
+The queue has no application argument or owner pointer. `GuiClient.drainInput` borrows
 its front event and calls `consume` only after processing completes. Partial
 scroll and clipboard delivery retain the front event. Binding expiry,
 configuration adoption and cancellation also enter `GuiClient` directly.
+
+GUI input draining, action execution, focus handling, GPU completion and worker
+completion are private operations reached through `update` and its event dispatch.
+GUI integration tests admit input and post completion messages to that same inbox;
+they do not invoke those private steps directly.
+
+`AttachedClient.keyRoutingAuthority()` snapshots modal, prompt and copy-mode
+flags. The existing pure `captures(authority)` decides whether bindings are
+bypassed. `AttachedClient.repeatPane()` returns only the eligible attached pane
+ID, or null when an exclusive owner, copy mode or an unavailable pane prevents
+repetition. The pure `repeatPolicy(action, eligible_pane)` receives these values,
+never an application pointer. GUI and TUI re-read eligibility after each action
+so a focus or mode change takes effect before the next repeat.
 
 A failed widget chord replays to its original widget identity; it cannot type
 into a newly focused composer. TUI mouse, paste and terminal responses are
@@ -89,7 +103,8 @@ returns no delivery and the route ends without another effect.
 
 ## Held scroll bindings
 
-The host obtains `action_routing.repeatPolicy` after successful execution and
+The host obtains the pure `repeatPolicy(action, eligible_pane)` after successful
+execution and
 passes it to `router.actionCompleted`. Only native
 `scroll_pane` actions opt in, with a 100 ms interval and the current `PaneId`
 as their owner token. Prompts, attachment modals, copy mode and

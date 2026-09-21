@@ -31,7 +31,9 @@ const PointerType = @import("links/Pointer.zig");
 const LifecycleState = @import("connection/LifecycleState.zig");
 const SchedulerType = core.DeadlineScheduler;
 const BarUpdatesState = @import("operations/configuration/State.zig");
-const LeasesType = @import("application/input/key_routing.zig").Leases;
+const key_policy = @import("application/input/key_routing.zig");
+const KeyRoutingAuthority = @import("application/input/KeyRoutingAuthority.zig");
+const LeasesType = key_policy.Leases;
 const RegionType = @import("workspace/Region.zig");
 const default_width = @import("layout/sidebar.zig").default_width;
 const SoundPortType = @import("agents/SoundPort.zig");
@@ -216,4 +218,28 @@ pub fn editorExecutable(self: *const AttachedClient) []const u8 {
     }
 
     return self.options.editor;
+}
+
+/// Snapshot the current exclusive keyboard owners without exposing client state.
+/// Example: `const captures_keys = key_policy.captures(self.keyRoutingAuthority());`
+pub fn keyRoutingAuthority(self: *const AttachedClient) KeyRoutingAuthority {
+    return .{
+        .attachment_modal_active = self.attachment_shelf.modalActive(),
+        .prompt_active = self.model.name_prompt.active(),
+        .copy_mode_active = self.model.copyModeActive(),
+    };
+}
+
+/// An exclusive owner or unavailable pane prevents held-action repetition.
+/// Re-read after executing an action because it may change focus or modes.
+/// Example: `const policy = repeatPolicy(action, self.repeatPane());`
+pub fn repeatPane(self: *const AttachedClient) ?core.PaneId {
+    const authority = self.keyRoutingAuthority();
+    if (key_policy.captures(authority) or authority.copy_mode_active) {
+        return null;
+    }
+
+    const model = self.model.activeTabModelConst() orelse return null;
+    const pane = model.focusedPaneConst() orelse return null;
+    return if (pane.attached) pane.id else null;
 }

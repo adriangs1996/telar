@@ -85,7 +85,7 @@ test {
     _ = @import("tests/sidebar_band.zig");
     _ = @import("tests/chrome_sizes.zig");
     _ = @import("TerminalMetrics.zig");
-    _ = @import("NativeInput.zig");
+    _ = @import("InputQueue.zig");
     _ = @import("CursorClock.zig");
     _ = GlyphAtlas;
     _ = QuadList;

@@ -58,7 +58,7 @@ fn pointer(context: *anyopaque, event: client.Mouse) client.ViewInteractionComma
         return interaction;
     }
 
-    if (gui.input.pointer.hover.covers(event)) {
+    if (gui.pointer.hover.covers(event)) {
         if (event.kind == .press) {
             gui.overlays.gesture = event.button & 3;
         }
@@ -75,7 +75,7 @@ fn linkPointer(context: *anyopaque, event: client.Mouse) bool {
     }
 
     const gui = host(context);
-    const routing = &gui.input.pointer;
+    const routing = &gui.pointer;
     if (event.button & 3 == 2) {
         const hit = hover_target.resolve(gui, event, hover_target.link_modifier | 1).link orelse return false;
         const pane = gui.app.model.activeTabModelConst().?.findConst(hit.pane_id).?;

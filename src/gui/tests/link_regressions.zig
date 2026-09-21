@@ -1,4 +1,5 @@
 //! Native hover and link ownership across asynchronous state transitions.
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -15,7 +16,7 @@ test "captured native link consumes stationary modifier motion before release" {
     var event = fixture.event(1);
     event.mods |= 1;
     try fixture.send(event);
-    try std.testing.expect(session.gui.input.pointer.owners[0] == .link);
+    try std.testing.expect(session.gui.pointer.owners[0] == .link);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 
     // AppKit flagsChanged and Wayland modifiers emit motion without a drag.
@@ -84,17 +85,17 @@ test "native link hover clears on focus loss while transport defers gesture reco
     defer fixture.deinit();
     const gui = fixture.session.gui;
     try fixture.send(fixture.event(1));
-    try std.testing.expect(gui.input.pointer.hover.link != null);
+    try std.testing.expect(gui.pointer.hover.link != null);
     while (gui.app.runtime_transport.outbox.hasCapacity()) {
         try gui.app.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = Session.pane_id } });
     }
 
-    try gui.focus(false);
+    try input_support.focus(gui, false);
     _ = try gui.update();
     try std.testing.expectEqual(@as(usize, 0), client.runtime_io.availableCapacity(&gui.app));
-    try std.testing.expect(gui.input.recovery.queued);
-    try std.testing.expect(gui.input.pointer.hover.link == null);
-    try std.testing.expectEqual(.default, gui.input.pointer.hover.shape);
+    try std.testing.expect(gui.input_queue.recovery.queued);
+    try std.testing.expect(gui.pointer.hover.link == null);
+    try std.testing.expectEqual(.default, gui.pointer.hover.shape);
     try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
 }
 
@@ -105,7 +106,7 @@ test "native pointer refreshes after resize ownership ends without a model or GP
     const gui = session.gui;
     const size = try gui.measure(&session.renderer, .{ .width = @as(u32, session.renderer.metrics.cell_width) * 120 + 292, .height = @as(u32, session.renderer.metrics.cell_height) * 12 + session.renderer.chrome.vertical(), .scale = 1 });
     try gui.resize(size, session.renderer.theme);
-    gui.input.setGeometry(session.renderer.origin, size);
+    gui.pointer.configure(session.renderer.origin, size);
     try fixture.present();
     const hits = &gui.chrome.presented().band_hits;
     const divider = for (hits.items[0..hits.len]) |hit| {
@@ -119,7 +120,7 @@ test "native pointer refreshes after resize ownership ends without a model or GP
     var moved = fixture.event(6);
     moved.mods = 0;
     try fixture.send(moved);
-    try std.testing.expectEqual(.col_resize, gui.input.pointer.hover.shape);
+    try std.testing.expectEqual(.col_resize, gui.pointer.hover.shape);
 
     const version = gui.app.model.version();
     var released = moved;
@@ -128,7 +129,7 @@ test "native pointer refreshes after resize ownership ends without a model or GP
     try std.testing.expect(!gui.chrome.sidebar_resize_active);
     try std.testing.expectEqualDeep(version, gui.app.model.version());
     _ = try gui.update();
-    try std.testing.expectEqual(.pointer, gui.input.pointer.hover.shape);
+    try std.testing.expectEqual(.pointer, gui.pointer.hover.shape);
 }
 
 test "native Ctrl-Space prefix survives stationary modifier motion" {
@@ -146,11 +147,11 @@ fn prefixAfterPointer(code: u32) !void {
     gui.adoptBindings(.{ .prefix = try client.parseKey("ctrl+space"), .bindings = &.{}, .escape_timeout_ns = std.time.ns_per_s, .sequence_timeout_ns = 10 * std.time.ns_per_s });
     try fixture.send(.{ .kind = 4, .code = ' ', .mods = 4, .physical = 50 });
     try fixture.send(.{ .kind = 4, .code = ' ', .physical = 50, .phase = 3 });
-    try std.testing.expect(gui.input.router.prefixPending());
+    try std.testing.expect(gui.router.prefixPending());
     var pointer = fixture.event(code);
     pointer.mods = 0;
     try fixture.send(pointer);
-    try std.testing.expect(gui.input.router.prefixPending());
+    try std.testing.expect(gui.router.prefixPending());
     try fixture.send(.{ .kind = 1, .text = "z".ptr, .len = 1 });
     try std.testing.expect(gui.app.model.activeTabModel().?.layout.isFullscreen());
     try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
@@ -193,14 +194,14 @@ test "native displayed link previews consume hidden URL clicks until replacement
     try fixture.present();
     try fixture.send(fixture.event(6));
     try fixture.present();
-    const preview = gui.input.pointer.hover.shown_preview.?;
+    const preview = gui.pointer.hover.shown_preview.?;
     const size = gui.app.model.hostSize();
     var pointer = fixture.event(6);
     pointer.x = @as(f64, @floatFromInt(preview.x + 2)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[0])) + 1;
     pointer.y = @as(f64, @floatFromInt(preview.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[1])) + 1;
     try fixture.send(pointer);
-    try std.testing.expect(gui.input.pointer.hover.link == null);
-    try std.testing.expectEqual(.default, gui.input.pointer.hover.shape);
+    try std.testing.expect(gui.pointer.hover.link == null);
+    try std.testing.expectEqual(.default, gui.pointer.hover.shape);
     pointer.code = 1;
     try fixture.send(pointer);
     try std.testing.expectEqual(@as(?u8, 0), gui.overlays.gesture);
@@ -210,10 +211,10 @@ test "native displayed link previews consume hidden URL clicks until replacement
     try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
 
     try fixture.present();
-    try std.testing.expect(gui.input.pointer.hover.shown_preview == null);
+    try std.testing.expect(gui.pointer.hover.shown_preview == null);
     pointer.code = 6;
     try fixture.send(pointer);
-    try std.testing.expectEqualStrings("https://b.c", gui.input.pointer.hover.link.?.match.target.uri());
+    try std.testing.expectEqualStrings("https://b.c", gui.pointer.hover.link.?.match.target.uri());
     pointer.code = 1;
     try fixture.send(pointer);
     pointer.code = 2;
@@ -228,17 +229,25 @@ test "native preview coverage survives pointer leave failed presentation and lat
     const gui = fixture.session.gui;
     try fixture.send(fixture.event(6));
     try fixture.present();
-    const preview = gui.input.pointer.hover.shown_preview.?;
+    const preview = gui.pointer.hover.shown_preview.?;
     try fixture.send(fixture.event(7));
-    try std.testing.expect(gui.input.pointer.hover.link == null);
-    try std.testing.expectEqualDeep(@as(?core.Rect, preview), gui.input.pointer.hover.shown_preview);
+    try std.testing.expect(gui.pointer.hover.link == null);
+    try std.testing.expectEqualDeep(@as(?core.Rect, preview), gui.pointer.hover.shown_preview);
     const token = try gui.prepare(&fixture.session.renderer);
-    try std.testing.expect(gui.input.pointer.hover.prepared_preview == null);
-    try gui.complete(token + 1, true);
-    try std.testing.expectEqualDeep(@as(?core.Rect, preview), gui.input.pointer.hover.shown_preview);
-    try gui.complete(token, false);
+    try std.testing.expect(gui.pointer.hover.prepared_preview == null);
+    try input_support.presented(
+        gui,
+        token + 1,
+        true,
+    );
+    try std.testing.expectEqualDeep(@as(?core.Rect, preview), gui.pointer.hover.shown_preview);
+    try input_support.presented(
+        gui,
+        token,
+        false,
+    );
     try fixture.session.settle();
-    try std.testing.expectEqualDeep(@as(?core.Rect, preview), gui.input.pointer.hover.shown_preview);
+    try std.testing.expectEqualDeep(@as(?core.Rect, preview), gui.pointer.hover.shown_preview);
 
     const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
     pane.mouse = .{ .tracking = .button, .sgr = true };
@@ -249,7 +258,7 @@ test "native preview coverage survives pointer leave failed presentation and lat
     pointer.y = @as(f64, @floatFromInt(preview.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[1])) + 1;
     try fixture.send(pointer);
     try fixture.present();
-    try std.testing.expect(gui.input.pointer.hover.shown_preview == null);
+    try std.testing.expect(gui.pointer.hover.shown_preview == null);
     try std.testing.expectEqual(@as(?u8, 0), gui.overlays.gesture);
     pointer.code = 3;
     pointer.y = fixture.event(3).y;
@@ -260,7 +269,7 @@ test "native preview coverage survives pointer leave failed presentation and lat
     try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
     try std.testing.expect(gui.overlays.gesture == null);
     try fixture.present();
-    try std.testing.expect(gui.input.pointer.hover.shown_preview == null);
+    try std.testing.expect(gui.pointer.hover.shown_preview == null);
 }
 
 test "native hover computes absolute rows without adding the host offset to history" {
@@ -285,8 +294,8 @@ test "native hover computes absolute rows without adding the host offset to hist
     pointer.x = @as(f64, @floatFromInt(view.content.x + 2)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[0])) + 1;
     pointer.y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.renderer.origin[1])) + 1;
     try fixture.send(pointer);
-    try std.testing.expectEqualStrings("https://b.c", gui.input.pointer.hover.link.?.match.target.uri());
-    try std.testing.expectEqual(pane.scroll.offset, gui.input.pointer.hover.link.?.match.start.y);
+    try std.testing.expectEqualStrings("https://b.c", gui.pointer.hover.link.?.match.target.uri());
+    try std.testing.expectEqual(pane.scroll.offset, gui.pointer.hover.link.?.match.start.y);
 }
 
 test "native one-row panes keep links visible without a self-covering preview" {

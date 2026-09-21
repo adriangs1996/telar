@@ -1,5 +1,6 @@
 //! Client integration tests for renaming and telemetry.
 
+const key_captures = @import("telar-client").captures;
 const TerminalClient = @import("../TerminalClient.zig");
 const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
@@ -243,7 +244,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
     const pending_updates_before_request = host(client).presenter.pending_updates;
 
     try std.testing.expect(name_prompts.beginTabRename(client, TestHarness.bootstrap_location.tab_id));
-    try std.testing.expect(input_operations.key_routing.captures(client));
+    try std.testing.expect(key_captures(client.keyRoutingAuthority()));
 
     try host_inputs.forward(client, "x");
     try host_inputs.forward(client, "\r");

@@ -1,5 +1,6 @@
 //! Client integration tests for host interaction.
 
+const key_captures = @import("telar-client").captures;
 const TerminalClient = @import("../TerminalClient.zig");
 const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
@@ -531,7 +532,7 @@ test "copy mode round trip: enter, select, copy, leave" {
         try client_actions.apply(client, .enter_copy_mode),
     );
     try std.testing.expect(client.model.copyModeActive());
-    try std.testing.expect(!input_operations.key_routing.captures(client));
+    try std.testing.expect(!key_captures(client.keyRoutingAuthority()));
     try std.testing.expect(!name_prompts.beginActiveTabRename(client));
     try std.testing.expect(!client.model.name_prompt.active());
     try support.expectNonCopyVersionEqual(version_before, client.model.version());

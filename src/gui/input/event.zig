@@ -1,5 +1,5 @@
 //! Semantic GUI input. Text and paste borrow UTF-8 bytes only for synchronous
-//! dispatch; NativeInput copies them before native callbacks return. Pointer,
+//! dispatch; InputQueue copies them before native callbacks return. Pointer,
 //! key and focus events are values. No widget consumes the native C ABI.
 pub const Event = union(enum) {
     text: @import("TextInput.zig"),

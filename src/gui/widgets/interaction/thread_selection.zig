@@ -15,7 +15,7 @@ const Selection = @import("ThreadSelection.zig");
 pub fn enter(gui: *GuiClient, pane_id: core.PaneId) bool {
     const target = transcript(gui, pane_id) orelse return false;
     const store = gui.widgets.thread_text orelse return false;
-    if (!@import("../../input/PointerRouting.zig").geometryMatches(&gui.app) or gui.app.model.name_prompt.active() or gui.widgets.composer_menu.selector != null) {
+    if (!gui.pointerGeometryMatches() or gui.app.model.name_prompt.active() or gui.widgets.composer_menu.selector != null) {
         return false;
     }
     const at = store.maps.presented().hit(.{ .pane_id = pane_id, .point = .{ target.bounds.x + target.bounds.width, target.bounds.y + target.bounds.height - 1 } }) orelse return false;

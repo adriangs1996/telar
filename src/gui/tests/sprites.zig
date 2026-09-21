@@ -1,6 +1,7 @@
 //! Slice 8 of the GUI visual language: the RGBA sprite page beside the alpha
 //! atlas, the quads that select it, the provider marks on the card and the
 //! favicon that reaches `project_icon`.
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -350,19 +351,35 @@ fn expectFaviconCard(name: []const u8, bytes: []const u8) !void {
     // The first preparation starts the lookup; its completion lands through
     // the inbox and the next preparation places the cell.
     const first = try gui.prepare(renderer);
-    try gui.complete(first, true);
     try std.testing.expect(gui.chrome.favicons.stateOf(workspace) == .pending);
     try std.testing.expect(gui.app.favicons.busy());
+    try input_support.presented(
+        gui,
+        first,
+        true,
+    );
     var rounds: usize = 0;
     while (gui.chrome.favicons.stateOf(workspace) != .resolved) : (rounds += 1) {
         if (rounds == 8) {
             return error.FaviconNeverLanded;
         }
 
-        try session.driver.inbox.wait();
-        _ = try gui.update();
+        // Presentation may have already consumed the worker completion. Prepare
+        // first to adopt a ready image instead of waiting for another message.
         const token = try gui.prepare(renderer);
-        try gui.complete(token, true);
+        try input_support.presented(
+            gui,
+            token,
+            true,
+        );
+        if (gui.chrome.favicons.stateOf(workspace) == .resolved) {
+            break;
+        }
+
+        if (gui.app.favicons.busy()) {
+            try session.driver.inbox.wait();
+            _ = try gui.update();
+        }
     }
 
     try std.testing.expect(!gui.app.favicons.busy());
@@ -372,7 +389,11 @@ fn expectFaviconCard(name: []const u8, bytes: []const u8) !void {
     renderer.seal();
     const version = renderer.sprites_version;
     const again = try gui.prepare(renderer);
-    try gui.complete(again, true);
+    try input_support.presented(
+        gui,
+        again,
+        true,
+    );
     try std.testing.expectEqual(version, renderer.sprites_version);
 
     var agents: client.AgentSnapshot = .{};

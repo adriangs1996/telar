@@ -1,3 +1,4 @@
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Fixture = @import("LinkFixture.zig");
@@ -10,19 +11,19 @@ test "native links highlight with the platform modifier and open only on release
     var move = fixture.event(6);
     move.mods = 0;
     try fixture.send(move);
-    try std.testing.expectEqual(.pointer, gui.input.pointer.hover.shape);
-    try std.testing.expect(gui.input.pointer.hover.link == null);
+    try std.testing.expectEqual(.pointer, gui.pointer.hover.shape);
+    try std.testing.expect(gui.pointer.hover.link == null);
     try fixture.send(fixture.event(6));
-    try std.testing.expectEqual(.pointer, gui.input.pointer.hover.shape);
-    try std.testing.expectEqualStrings("https://a.b", gui.input.pointer.hover.link.?.match.target.uri());
-    const revision = gui.input.pointer.hover.revision;
+    try std.testing.expectEqual(.pointer, gui.pointer.hover.shape);
+    try std.testing.expectEqualStrings("https://a.b", gui.pointer.hover.link.?.match.target.uri());
+    const revision = gui.pointer.hover.revision;
     var within_cell = fixture.event(6);
     within_cell.x += 0.25;
     try fixture.send(within_cell);
-    try std.testing.expectEqual(revision, gui.input.pointer.hover.revision);
+    try std.testing.expectEqual(revision, gui.pointer.hover.revision);
     try fixture.send(fixture.event(1));
     try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
-    try std.testing.expect(gui.input.pointer.owners[0] == .link);
+    try std.testing.expect(gui.pointer.owners[0] == .link);
     try fixture.send(fixture.event(2));
     try std.testing.expectEqual(@as(usize, 1), fixture.open_count);
     try std.testing.expectEqualStrings("https://a.b", fixture.opened.?.uri());
@@ -44,15 +45,15 @@ test "native link drags changed targets pointer leave and focus loss cancel open
     try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
     try fixture.send(fixture.event(1));
     try fixture.send(fixture.event(7));
-    try std.testing.expectEqual(.default, fixture.session.gui.input.pointer.hover.shape);
-    try std.testing.expect(fixture.session.gui.input.pointer.hover.link == null);
+    try std.testing.expectEqual(.default, fixture.session.gui.pointer.hover.shape);
+    try std.testing.expect(fixture.session.gui.pointer.hover.link == null);
     try fixture.send(fixture.event(2));
     try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
     try fixture.send(fixture.event(1));
-    try fixture.session.gui.focus(false);
+    try input_support.focus(fixture.session.gui, false);
     try fixture.send(fixture.event(2));
     try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
-    try std.testing.expectEqual(.default, fixture.session.gui.input.pointer.hover.shape);
+    try std.testing.expectEqual(.default, fixture.session.gui.pointer.hover.shape);
 }
 
 test "native links require Shift to override child reporting and never leak a captured gesture" {
@@ -86,14 +87,14 @@ test "native pane pointer shapes refresh under a stationary pointer and modal bl
     inline for (@typeInfo(core.PointerShape).@"enum".fields) |field| {
         const shape: core.PointerShape = @enumFromInt(field.value);
         pane.pointer_shape = shape;
-        gui.input.pointer.hover.dirty = true;
+        gui.pointer.hover.dirty = true;
         _ = try gui.update();
-        try std.testing.expectEqual(if (shape == .default) .text else shape, gui.input.pointer.hover.shape);
+        try std.testing.expectEqual(if (shape == .default) .text else shape, gui.pointer.hover.shape);
     }
 
     gui.app.model.name_prompt.begin(.create_workspace);
     try fixture.send(fixture.event(6));
-    try std.testing.expect(gui.input.pointer.hover.link == null);
+    try std.testing.expect(gui.pointer.hover.link == null);
     try fixture.send(fixture.event(1));
     try fixture.send(fixture.event(2));
     try std.testing.expectEqual(@as(usize, 0), fixture.open_count);

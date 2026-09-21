@@ -473,7 +473,7 @@ They update the same model; the next preparation captures its latest state.
 ## Native input and drawing cadence
 
 The GUI admits native events through `Application.input`, then the window
-thread drains `NativeInput` into the shared router. After `pane_inputs.send`
+thread drains `InputQueue` into the shared router. After `pane_inputs.send`
 successfully admits nonempty child input, `pane_inputs.record` calls the
 optional `HostPresentation.notePaneInput` port. Local shortcuts, suppressed
 releases and rejected outbox writes grant no terminal drawing grace.

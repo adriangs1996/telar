@@ -1,3 +1,4 @@
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -14,7 +15,7 @@ pub fn base() !*Session {
     try session.bootstrap();
     const size = try session.gui.measure(&session.renderer, .{ .width = 1100, .height = 750, .scale = 1 });
     try session.gui.resize(size, session.renderer.theme);
-    session.gui.input.setGeometry(session.renderer.origin, size);
+    session.gui.pointer.configure(session.renderer.origin, size);
     _ = session.gui.app.model.workspace.findPane(Session.pane_id).?.identify(.terminal, 77);
     try session.settle();
     return session;
@@ -61,7 +62,11 @@ pub fn adopt(session: *Session) !void {
 
 pub fn publish(session: *Session) !void {
     const token = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(token, true);
+    try input_support.presented(
+        session.gui,
+        token,
+        true,
+    );
     try session.settle();
 }
 
@@ -84,8 +89,8 @@ fn withComment(snapshot: core.ChangeReviewSnapshotView, body: []const u8) core.C
 }
 
 pub fn send(session: *Session, event: Event) !void {
-    try session.gui.input.acceptEvent(event);
-    try session.gui.drainInput();
+    try input_support.accept(session.gui, event);
+    try input_support.pump(session.gui);
 }
 
 test "runtime review autosave acknowledges only submitted text while later typing stays queued" {
@@ -245,7 +250,7 @@ test "runtime review modal releases previously held terminal keys without forwar
     try send(session, .{ .key = .{ .code = .enter, .physical = .{ .value = 91 }, .phase = .release } });
     try session.settle();
     try std.testing.expect(session.input_len > pressed);
-    try std.testing.expectEqual(@as(usize, 0), session.gui.input.router.leases.len);
+    try std.testing.expectEqual(@as(usize, 0), session.gui.router.leases.len);
     try std.testing.expectEqual(@as(usize, 0), session.gui.widgets.dispatcher.keys.len);
 }
 
@@ -262,10 +267,10 @@ test "runtime review modal retires a held terminal mouse gesture before swallowi
     try send(session, .{ .pointer = .{ .kind = .press, .button = .right, .x = x, .y = y } });
     try session.settle();
     const button = @intFromEnum(PointerEvent.Button.right);
-    try std.testing.expect(gui.input.pointer.owners[button] == .child);
+    try std.testing.expect(gui.pointer.owners[button] == .child);
     try gui.openChangeReview(Session.pane_id);
     try session.settle();
-    try std.testing.expect(gui.input.pointer.owners[button] == .shared);
+    try std.testing.expect(gui.pointer.owners[button] == .shared);
     try std.testing.expect(std.mem.endsWith(u8, session.input[0..session.input_len], "m"));
     const retired = session.input_len;
     try send(session, .{ .pointer = .{ .kind = .release, .button = .right, .x = x, .y = y } });
@@ -378,7 +383,11 @@ test "runtime review loads through its real worker and inbox after the previous 
         _ = try gui.update();
     }
     try std.testing.expectEqual(@as(u64, 0), gui.review.edition);
-    try gui.complete(token, true);
+    try input_support.presented(
+        gui,
+        token,
+        true,
+    );
     try publish(session);
     try std.testing.expectEqual(@as(u64, 1), gui.review.edition);
     try std.testing.expect(!gui.review.widget.loading);

@@ -1,3 +1,4 @@
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -56,7 +57,7 @@ test "shift click keeps the pinned source after live updates and resizing" {
     try fixture.messages(&.{ "changed user", "new response with unrelated bytes", "latest output" });
     const size = try gui.measure(&fixture.session.renderer, .{ .width = 850, .height = 800, .scale = 1 });
     try gui.resize(size, fixture.session.renderer.theme);
-    gui.input.setGeometry(fixture.session.renderer.origin, size);
+    gui.pointer.configure(fixture.session.renderer.origin, size);
     try fixture.publish();
     const point = try fixture.point(3, "selectable");
     try fixture.send(.{ .pointer = .{ .kind = .press, .mods = 1, .x = point[0], .y = point[1] } });
@@ -134,7 +135,7 @@ test "stale text starts and focus loss cannot retain an invisible selection" {
     try fixture.publish();
     try std.testing.expect(reader.enter(fixture.session.gui, Fixture.pane_id));
     try fixture.publish();
-    try fixture.session.gui.focus(false);
+    try input_support.focus(fixture.session.gui, false);
     try std.testing.expect(!reader.active(fixture.session.gui));
     try fixture.publish();
     try std.testing.expect(fixture.session.gui.app.model.agentPane(Fixture.pane_id).?.agent_history == null);

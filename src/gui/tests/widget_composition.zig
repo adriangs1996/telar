@@ -1,3 +1,4 @@
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -156,13 +157,21 @@ test "composed frame survives local widgets and replaced projection borrows unti
     try std.testing.expectEqual(frame.sprites_version, retained.sprites_version);
     try std.testing.expectError(error.PresentationBusy, gui.prepare(&session.renderer));
 
-    try gui.complete(token, true);
+    try input_support.presented(
+        gui,
+        token,
+        true,
+    );
     try std.testing.expect(targets.equivalent(gui.widgets.dispatcher.maps.presented()));
     try std.testing.expectEqual(generation, gui.widgets.editors.presented().items[0].id.generation);
     const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
     try std.testing.expectEqual(@as(u64, 2), pane.pending_frame_id);
     const next = try gui.prepare(&session.renderer);
-    try gui.complete(next, true);
+    try input_support.presented(
+        gui,
+        next,
+        true,
+    );
     try std.testing.expectEqual(replacement_generation, gui.widgets.editors.presented().items[0].id.generation);
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
     try session.settle();
@@ -176,7 +185,11 @@ test "widget draw failure preserves delivered targets and pending pane damage be
     const gui = session.gui;
     gui.app.model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "Visible title" } });
     const delivered = try gui.prepare(&session.renderer);
-    try gui.complete(delivered, true);
+    try input_support.presented(
+        gui,
+        delivered,
+        true,
+    );
     const chrome = gui.chrome.presented();
     const overlays = gui.overlays.presented();
     const targets = gui.widgets.dispatcher.maps.presented();
@@ -197,7 +210,11 @@ test "widget draw failure preserves delivered targets and pending pane damage be
     try std.testing.expectEqual(overlays, gui.overlays.presented());
     try std.testing.expectEqual(targets, gui.widgets.dispatcher.maps.presented());
     try std.testing.expectEqual(editors, gui.widgets.editors.presented());
-    try gui.complete(delivered, true);
+    try input_support.presented(
+        gui,
+        delivered,
+        true,
+    );
     try std.testing.expectEqual(targets, gui.widgets.dispatcher.maps.presented());
     try std.testing.expectEqual(@as(u64, 2), pane.pending_frame_id);
 
@@ -205,7 +222,11 @@ test "widget draw failure preserves delivered targets and pending pane damage be
     const retry = try gui.prepare(&session.renderer);
     try std.testing.expect(retry != delivered);
     try std.testing.expectEqual(targets, gui.widgets.dispatcher.maps.presented());
-    try gui.complete(retry, true);
+    try input_support.presented(
+        gui,
+        retry,
+        true,
+    );
     try std.testing.expect(gui.widgets.dispatcher.maps.presented() != targets);
     try std.testing.expectEqual(@as(usize, 1), gui.widgets.editors.presented().len);
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);

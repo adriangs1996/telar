@@ -34,7 +34,7 @@ source pane.
 
 Right-clicking a terminal link copies its URI without keyboard modifiers. The
 native chrome port resolves the target only from delivered pane content and
-queues the existing bounded clipboard write. `PointerRouting` consumes drag and
+queues the existing bounded clipboard write. `GuiClient.dispatchPointer` consumes drag and
 release without forwarding them to the child. Agent message links use their
 snapshot-validated destination and the same clipboard service. The TUI dispatches
 right-button link gestures through `link_openings` to `HostClipboard`.

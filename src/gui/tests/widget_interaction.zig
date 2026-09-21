@@ -1,3 +1,4 @@
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -97,7 +98,11 @@ test "retired generations and modal scope consume captured releases without reta
 
 fn publish(session: *Session) !void {
     const token = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(token, true);
+    try input_support.presented(
+        session.gui,
+        token,
+        true,
+    );
     try session.settle();
 }
 
@@ -116,14 +121,14 @@ fn initSession() !*Session {
     try session.bootstrap();
     const size = try session.gui.measure(&session.renderer, .{ .width = 800, .height = 600, .scale = 1 });
     try session.gui.resize(size, session.renderer.theme);
-    session.gui.input.setGeometry(session.renderer.origin, size);
+    session.gui.pointer.configure(session.renderer.origin, size);
     try session.settle();
     return session;
 }
 
 fn send(session: *Session, event: Event) !void {
-    try session.gui.input.acceptEvent(event);
-    try session.gui.drainInput();
+    try input_support.accept(session.gui, event);
+    try input_support.pump(session.gui);
 }
 
 fn editorTarget(session: *Session, wanted: Target.Field) !Target {
@@ -147,9 +152,9 @@ test "native prompt preedit owns bytes moves candidate caret and commits only to
     var before: native.TextContext = .{};
     try std.testing.expect(gui.widgetTextContext(&before));
     var bytes = [_]u8{ 'x', 'y' };
-    try gui.input.acceptEvent(.{ .composition = .{ .target_id = target.id.target_id, .generation = target.id.generation, .text = &bytes, .selection_start = 2, .selection_end = 2 } });
+    try input_support.accept(gui, .{ .composition = .{ .target_id = target.id.target_id, .generation = target.id.generation, .text = &bytes, .selection_start = 2, .selection_end = 2 } });
     @memset(&bytes, 'z');
-    try gui.drainInput();
+    try input_support.pump(gui);
     try std.testing.expectEqualStrings("xy", gui.widgets.preedit.text());
     try std.testing.expectEqualStrings("hello", gui.app.model.name_prompt.currentConst().?.field.text());
     var after: native.TextContext = .{};
@@ -425,19 +430,19 @@ test "accessibility widget focus cancels terminal prefix without transferring it
     const gui = session.gui;
     try publish(session);
     try send(session, .{ .key = .{ .code = .{ .char = .init("b") }, .mods = .{ .ctrl = true }, .physical = .{ .value = 31 } } });
-    try std.testing.expect(gui.input.router.prefixPending());
+    try std.testing.expect(gui.router.prefixPending());
     gui.app.model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "name" } });
     try publish(session);
     const target = try editorTarget(session, .name);
     try send(session, .{ .accessibility = .{ .target_id = target.id.target_id, .generation = target.id.generation, .action = .focus } });
-    try std.testing.expect(!gui.input.router.prefixPending());
+    try std.testing.expect(!gui.router.prefixPending());
     try send(session, .{ .text = .{ .bytes = "x" } });
     try send(session, .{ .key = .{ .code = .{ .char = .init("b") }, .mods = .{ .ctrl = true }, .physical = .{ .value = 31 }, .phase = .release } });
     try std.testing.expectEqualStrings("namex", gui.app.model.name_prompt.currentConst().?.field.text());
     try std.testing.expectEqual(@as(usize, 0), gui.widgets.dispatcher.keys.len);
-    try std.testing.expectEqual(@as(usize, 0), gui.input.router.leases.len);
-    try gui.focus(false);
-    try gui.focus(true);
+    try std.testing.expectEqual(@as(usize, 0), gui.router.leases.len);
+    try input_support.focus(gui, false);
+    try input_support.focus(gui, true);
     _ = try client.operations.name_prompts.handleInput(&gui.app, .{ .command = .cancel });
     try publish(session);
     try send(session, .{ .text = .{ .bytes = "c" } });
@@ -633,7 +638,11 @@ test "native tab drag sends one anchored move after release and waits for runtim
     try send(session, .{ .pointer = .{ .kind = .drag, .x = target.bounds.x + 2, .y = y } });
     try std.testing.expectEqual(Session.location.tab_id, session.gui.widgets.tab_drag.destination.?.relative_to.?);
     const failed = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(failed, false);
+    try input_support.presented(
+        session.gui,
+        failed,
+        false,
+    );
     try send(session, .{ .pointer = .{ .kind = .release, .x = target.bounds.x + 2, .y = y } });
     _ = try session.gui.update();
     const request = (try core.decodeClient(session.pending.?)).move_tab;
@@ -656,11 +665,11 @@ test "native tab drag cancels on Escape focus loss and outside drops without pan
     const y = source.bounds.y + source.bounds.height / 2;
     const cancellations = [_]Event{ .{ .key = .{ .code = .escape } }, .{ .focus = false }, .{ .pointer = .{ .kind = .drag, .x = 500, .y = 200 } } };
     for (cancellations) |cancel| {
-        try session.gui.focus(true);
+        try input_support.focus(session.gui, true);
         try send(session, .{ .pointer = .{ .kind = .press, .x = source.bounds.x + 10, .y = y } });
         try send(session, .{ .pointer = .{ .kind = .drag, .x = target.bounds.x + 2, .y = y } });
         if (cancel == .focus) {
-            try session.gui.focus(cancel.focus);
+            try input_support.focus(session.gui, cancel.focus);
         } else {
             try send(session, cancel);
         }
@@ -891,7 +900,7 @@ test "composer menu preserves terminal repeats and releases across pane focus ch
     try session.settle();
     const pressed = session.input_len;
     try std.testing.expect(pressed > 0);
-    try std.testing.expectEqual(@as(usize, 2), gui.input.router.leases.len);
+    try std.testing.expectEqual(@as(usize, 2), gui.router.leases.len);
     try pressControl(session, try composerSelector(session, .model));
     try publish(session);
     try send(session, .{ .key = .{ .code = .enter, .physical = .{ .value = 93 }, .phase = .repeat } });
@@ -905,7 +914,7 @@ test "composer menu preserves terminal repeats and releases across pane focus ch
     try session.settle();
     try std.testing.expect(session.input_len > repeated);
     try std.testing.expectEqual(@as(usize, 0), gui.widgets.dispatcher.keys.len);
-    try std.testing.expectEqual(@as(usize, 0), gui.input.router.leases.len);
+    try std.testing.expectEqual(@as(usize, 0), gui.router.leases.len);
     try std.testing.expectEqual(@as(usize, 0), gui.app.input_leases.len);
     try std.testing.expectEqualStrings("", panes.findConst(Session.pane_id).?.composerSlice());
     try std.testing.expect(gui.widgets.composer_menu.selector != null);
@@ -1014,7 +1023,7 @@ test "composer keeps prefix binding available and consumes stale attachment inpu
     const gui = session.gui;
     const target = try composerTarget(session);
     try send(session, .{ .key = .{ .code = .{ .char = .{ .bytes = .{ 'b', 0, 0, 0 }, .len = 1 } }, .mods = .{ .ctrl = true }, .physical = .{ .value = 44 } } });
-    try std.testing.expect(gui.input.router.prefixPending());
+    try std.testing.expect(gui.router.prefixPending());
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "a", .physical = .{ .value = 45 } } });
     try session.settle();
     try std.testing.expectEqual(@as(usize, 1), session.agent_tab_count);
@@ -1033,17 +1042,17 @@ test "agent prefix survives modifier hover and closes its pane after key release
     try publish(session);
     try send(session, .{ .key = .{ .code = .{ .char = .init("b") }, .mods = .{ .ctrl = true }, .physical = .{ .value = 44 } } });
     try send(session, .{ .key = .{ .code = .{ .char = .init("b") }, .physical = .{ .value = 44 }, .phase = .release } });
-    try std.testing.expect(gui.input.router.prefixPending());
+    try std.testing.expect(gui.router.prefixPending());
 
     for ([_]u4{ 4, 0 }) |mods| {
         try send(session, .{ .pointer = .{ .kind = .move, .mods = mods, .x = target.bounds.x + 2, .y = target.bounds.y + 2 } });
         try publish(session);
-        try std.testing.expect(gui.input.router.prefixPending());
+        try std.testing.expect(gui.router.prefixPending());
         try std.testing.expectEqualStrings("Keep this draft", gui.app.model.agentPane(Session.pane_id).?.composerSlice());
     }
 
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "x", .physical = .{ .value = 45 } } });
-    try std.testing.expect(!gui.input.router.prefixPending());
+    try std.testing.expect(!gui.router.prefixPending());
     _ = try gui.update();
     const request = (try core.decodeClient(session.pending.?)).close_pane;
     try std.testing.expectEqual(Session.pane_id, request.pane_id);
@@ -1063,11 +1072,11 @@ test "hovering the composer preserves conversation control focus and its pending
     try send(session, .{ .key = .{ .code = .{ .char = .init("b") }, .mods = .{ .ctrl = true } } });
     try send(session, .{ .pointer = .{ .kind = .move, .x = composer.bounds.x + 2, .y = composer.bounds.y + 2 } });
     try std.testing.expect(target.id.eql(session.gui.widgets.dispatcher.focused.?));
-    try std.testing.expect(session.gui.input.router.prefixPending());
+    try std.testing.expect(session.gui.router.prefixPending());
 
     try send(session, .{ .pointer = .{ .kind = .press, .x = composer.bounds.x + 2, .y = composer.bounds.y + 2 } });
     try std.testing.expect(composer.id.eql(session.gui.widgets.dispatcher.focused.?));
-    try std.testing.expect(!session.gui.input.router.prefixPending());
+    try std.testing.expect(!session.gui.router.prefixPending());
     try send(session, .{ .pointer = .{ .kind = .release, .x = composer.bounds.x + 2, .y = composer.bounds.y + 2 } });
 }
 
@@ -1190,7 +1199,7 @@ test "agent thread warm drawing allocates no glyph or quad storage and clips sma
     for ([_][2]u32{ .{ 180, 240 }, .{ 120, 100 } }) |viewport| {
         const size = try session.gui.measure(&session.renderer, .{ .width = viewport[0], .height = viewport[1], .scale = 1 });
         try session.gui.resize(size, session.renderer.theme);
-        session.gui.input.setGeometry(session.renderer.origin, size);
+        session.gui.pointer.configure(session.renderer.origin, size);
         try publish(session);
         session.renderer.quads.clear();
         var canvas: @import("../widgets/Canvas.zig") = .{ .atlas = &session.renderer.atlas.?, .quads = &session.renderer.quads, .metrics = session.renderer.metrics, .origin = session.renderer.origin, .theme = session.gui.theme, .chrome = session.renderer.chrome };
@@ -1375,7 +1384,11 @@ test "disclosure anchors survive a newer snapshot and failed frame delivery" {
     try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
     const failed = try session.gui.prepare(&session.renderer);
     try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
-    try session.gui.complete(failed, false);
+    try input_support.presented(
+        session.gui,
+        failed,
+        false,
+    );
     try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
     try std.testing.expect(session.gui.widgets.thread_anchor.pending != null);
     try publish(session);
@@ -1394,7 +1407,11 @@ test "disclosure delivery cannot overwrite newer scrolling or a newer disclosure
     try pressControl(session, target);
     const first = try session.gui.prepare(&session.renderer);
     try client.agent_threads.scroll(&session.gui.app, Session.pane_id, 7);
-    try session.gui.complete(first, true);
+    try input_support.presented(
+        session.gui,
+        first,
+        true,
+    );
     try std.testing.expectEqual(@as(u32, 7), session.gui.app.model.agentPane(Session.pane_id).?.transcript_scroll);
     try client.agent_threads.scroll(&session.gui.app, Session.pane_id, 65536);
     try publish(session);
@@ -1404,7 +1421,11 @@ test "disclosure delivery cannot overwrite newer scrolling or a newer disclosure
     const second = try session.gui.prepare(&session.renderer);
     try send(session, .{ .accessibility = .{ .target_id = expanded.id.target_id, .generation = expanded.id.generation, .action = .press } });
     const newer = session.gui.widgets.thread_anchor.pending.?.sequence;
-    try session.gui.complete(second, true);
+    try input_support.presented(
+        session.gui,
+        second,
+        true,
+    );
     try std.testing.expectEqual(newer, session.gui.widgets.thread_anchor.pending.?.sequence);
     try std.testing.expectEqual(baseline, session.gui.app.model.agentPane(Session.pane_id).?.transcript_scroll);
     try publish(session);
@@ -1415,7 +1436,11 @@ test "disclosure delivery cannot overwrite newer scrolling or a newer disclosure
     try send(session, .{ .key = .{ .code = .page_down } });
     const manual = session.gui.app.model.agentPane(Session.pane_id).?.transcript_scroll;
     try std.testing.expect(session.gui.widgets.thread_anchor.pending == null);
-    try session.gui.complete(third, true);
+    try input_support.presented(
+        session.gui,
+        third,
+        true,
+    );
     try std.testing.expectEqual(manual, session.gui.app.model.agentPane(Session.pane_id).?.transcript_scroll);
 }
 
@@ -1434,7 +1459,11 @@ test "folded work retires obsolete scroll only after successful frame delivery" 
     // Restore an obsolete offset, as input against older geometry can do.
     try client.agent_threads.scroll(&session.gui.app, pane.id, 100);
     const failed = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(failed, false);
+    try input_support.presented(
+        session.gui,
+        failed,
+        false,
+    );
     try std.testing.expectEqual(@as(u32, 100), pane.transcript_scroll);
     try publish(session);
     try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
@@ -1463,7 +1492,11 @@ test "scrolling during work collapse cannot retain the expanded scroll extent" {
     const manual = pane.transcript_scroll;
     try std.testing.expect(manual > 0);
     try std.testing.expect(session.gui.widgets.thread_anchor.pending == null);
-    try session.gui.complete(collapsing, true);
+    try input_support.presented(
+        session.gui,
+        collapsing,
+        true,
+    );
     try std.testing.expectEqual(manual, pane.transcript_scroll);
     try publish(session);
     try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
@@ -1484,7 +1517,11 @@ test "an empty conversation clears scroll even when no previous row survives" {
     snapshot.text_len = 0;
     try receiveThread(session, &snapshot);
     const failed = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(failed, false);
+    try input_support.presented(
+        session.gui,
+        failed,
+        false,
+    );
     try std.testing.expectEqual(previous, pane.transcript_scroll);
     try publish(session);
     try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
@@ -1517,7 +1554,7 @@ fn adoptAgentBinding(session: *Session, binding: client.config_model.ConfiguredB
 
 fn expectReleasedKeys(session: *Session) !void {
     try std.testing.expectEqual(@as(usize, 0), session.gui.widgets.dispatcher.keys.len);
-    try std.testing.expectEqual(@as(usize, 0), session.gui.input.router.leases.len);
+    try std.testing.expectEqual(@as(usize, 0), session.gui.router.leases.len);
     try std.testing.expectEqual(@as(usize, 0), session.gui.app.input_leases.len);
 }
 
@@ -1530,7 +1567,7 @@ test "agent scroll bindings move the focused transcript without editing the comp
     const terminal_scroll = pane.scroll;
 
     try send(session, .{ .key = .{ .code = client.default_prefix.code, .mods = .{ .ctrl = true }, .physical = .{ .value = 103 } } });
-    try std.testing.expect(session.gui.input.router.prefixPending());
+    try std.testing.expect(session.gui.router.prefixPending());
     try send(session, .{ .key = .{ .code = client.default_prefix.code, .physical = .{ .value = 103 }, .phase = .release } });
     try send(session, .{ .text = .{ .bytes = "-", .physical = .{ .value = 104 } } });
     try send(session, .{ .text = .{ .bytes = "-", .physical = .{ .value = 104 }, .phase = .release } });
@@ -1597,25 +1634,50 @@ test "agent scroll bindings respect transcript bounds and attachment identity" {
     } else return error.MissingTranscript;
     try std.testing.expect(transcript.scroll_limit > 3);
 
-    _ = try session.gui.executeAction(.{ .scroll_pane = .down });
+    _ = try input_support.action(
+        session.gui,
+        .{
+            .scroll_pane = .down,
+        },
+    );
     try settleConversationScroll(session);
     try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
     try client.agent_threads.scroll(&session.gui.app, pane.id, transcript.scroll_limit - 1);
-    _ = try session.gui.executeAction(.{ .scroll_pane = .up });
+    _ = try input_support.action(
+        session.gui,
+        .{
+            .scroll_pane = .up,
+        },
+    );
     try settleConversationScroll(session);
     try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
-    _ = try session.gui.executeAction(.{ .scroll_pane = .up });
+    _ = try input_support.action(
+        session.gui,
+        .{
+            .scroll_pane = .up,
+        },
+    );
     try settleConversationScroll(session);
     try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
 
     pane.attached = false;
-    try std.testing.expect(client.operations.action_routing.repeatPolicy(&session.gui.app, .{ .scroll_pane = .down }) == null);
-    _ = try session.gui.executeAction(.{ .scroll_pane = .down });
+    try std.testing.expect(client.repeatPolicy(.{ .scroll_pane = .down }, session.gui.app.repeatPane()) == null);
+    _ = try input_support.action(
+        session.gui,
+        .{
+            .scroll_pane = .down,
+        },
+    );
     try settleConversationScroll(session);
     try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
     pane.attached = true;
     pane.attachment_generation += 1;
-    _ = try session.gui.executeAction(.{ .scroll_pane = .down });
+    _ = try input_support.action(
+        session.gui,
+        .{
+            .scroll_pane = .down,
+        },
+    );
     try settleConversationScroll(session);
     try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
     try std.testing.expectEqualStrings("", pane.composerSlice());
@@ -1732,7 +1794,11 @@ test "a terminal split receives typing while the sibling agent composer stays vi
         if (timing == .after_frame) {
             try publish(session);
         } else if (timing == .during_frame) {
-            try gui.complete(token, true);
+            try input_support.presented(
+                gui,
+                token,
+                true,
+            );
         }
 
         try send(session, .{ .text = .{ .bytes = "x" } });
@@ -1782,9 +1848,9 @@ test "an agent chord timeout cannot restore pane focus before repaint" {
     const terminal: core.PaneId = @enumFromInt(21);
     try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
     _ = panes.focusPane(terminal);
-    gui.input.router.binding_since_ns = 0;
-    gui.input.router.sequence_timeout_ns = 0;
-    try gui.expireBinding({});
+    gui.router.binding_since_ns = 0;
+    gui.router.sequence_timeout_ns = 0;
+    try input_support.bindingExpired(gui);
     try std.testing.expectEqual(terminal, panes.layout.focused());
     try std.testing.expectEqualStrings("", panes.findConst(Session.pane_id).?.composerSlice());
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 121 }, .phase = .release } });
@@ -1854,7 +1920,7 @@ test "agent default prefix works from closed selectors and conversation controls
         const binding = defaults[0];
         try std.testing.expectEqual(.new_agent_tab, std.meta.activeTag(binding.action));
         try send(session, .{ .key = .{ .code = binding.keys[0].code, .mods = .{ .ctrl = binding.keys[0].mods.ctrl }, .physical = .{ .value = 103 } } });
-        try std.testing.expect(session.gui.input.router.prefixPending());
+        try std.testing.expect(session.gui.router.prefixPending());
         try send(session, .{ .text = .{ .bytes = binding.keys[1].code.char.bytes[0..binding.keys[1].code.char.len], .physical = .{ .value = 104 } } });
         try session.settle();
         try std.testing.expectEqual(@as(usize, 1), session.agent_tab_count);
@@ -1880,7 +1946,7 @@ test "agent global bindings preserve prompt and open selector capture" {
         try send(session, .{ .key = .{ .code = .{ .char = .init("r") }, .mods = .{ .ctrl = true }, .physical = .{ .value = 105 } } });
         try send(session, .{ .key = .{ .code = .{ .char = .init("r") }, .physical = .{ .value = 105 }, .phase = .release } });
         try send(session, .{ .key = .{ .code = .{ .char = .init("b") }, .mods = .{ .ctrl = true }, .physical = .{ .value = 106 } } });
-        try std.testing.expect(!session.gui.input.router.prefixPending());
+        try std.testing.expect(!session.gui.router.prefixPending());
         try send(session, .{ .key = .{ .code = .{ .char = .init("b") }, .physical = .{ .value = 106 }, .phase = .release } });
         if (menu) {
             try std.testing.expect(session.gui.widgets.composer_menu.selector != null);
@@ -1955,12 +2021,12 @@ test "agent unprefixed sequence timeout restores text and physical ownership to 
     adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
     const visible = session.gui.app.model.sidebarVisible();
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 112 } } });
-    session.gui.input.router.binding_since_ns = 0;
-    session.gui.input.router.sequence_timeout_ns = 0;
-    try session.gui.expireBinding({});
+    session.gui.router.binding_since_ns = 0;
+    session.gui.router.sequence_timeout_ns = 0;
+    try input_support.bindingExpired(session.gui);
     try std.testing.expectEqualStrings("g", session.gui.app.model.agentPane(Session.pane_id).?.composerSlice());
     try std.testing.expectEqual(visible, session.gui.app.model.sidebarVisible());
-    try std.testing.expectEqual(@as(usize, 0), session.gui.input.router.leases.len);
+    try std.testing.expectEqual(@as(usize, 0), session.gui.router.leases.len);
     const owner = session.gui.widgets.dispatcher.keys.owner(.{ .value = 112 }).?;
     try std.testing.expect(owner == .widget and owner.widget.eql(target.id));
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 112 }, .phase = .repeat } });
@@ -1979,7 +2045,7 @@ test "agent IME commits never start or complete a global character binding" {
     try send(session, .{ .composition = .{ .target_id = target.id.target_id, .generation = target.id.generation, .text = "g", .selection_start = 1, .selection_end = 1 } });
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g" } });
     try std.testing.expectEqualStrings("g", session.gui.app.model.agentPane(Session.pane_id).?.composerSlice());
-    try std.testing.expect(session.gui.input.router.bindingDeadline() == null);
+    try std.testing.expect(session.gui.router.bindingDeadline() == null);
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 113 } } });
     try send(session, .{ .composition = .{ .target_id = target.id.target_id, .generation = target.id.generation, .text = "g", .selection_start = 1, .selection_end = 1 } });
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g" } });
@@ -2004,18 +2070,18 @@ test "one native input batch retires composer replay ownership before a terminal
     const size = gui.app.model.hostSize();
     const x = @as(f64, @floatFromInt(view.content.x)) * size.cell_width_px + @as(f64, @floatFromInt(session.renderer.origin[0])) + 1;
     const y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(session.renderer.origin[1])) + 1;
-    try gui.input.acceptEvent(.{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 114 } } });
-    try gui.input.acceptEvent(.{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 114 }, .phase = .release } });
-    try gui.input.acceptEvent(.{ .pointer = .{ .kind = .press, .x = x, .y = y } });
-    try gui.input.acceptEvent(.{ .pointer = .{ .kind = .release, .x = x, .y = y } });
-    try gui.input.acceptEvent(.{ .text = .{ .bytes = "g", .physical = .{ .value = 115 } } });
-    try gui.drainInput();
+    try input_support.accept(gui, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 114 } } });
+    try input_support.accept(gui, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 114 }, .phase = .release } });
+    try input_support.accept(gui, .{ .pointer = .{ .kind = .press, .x = x, .y = y } });
+    try input_support.accept(gui, .{ .pointer = .{ .kind = .release, .x = x, .y = y } });
+    try input_support.accept(gui, .{ .text = .{ .bytes = "g", .physical = .{ .value = 115 } } });
+    try input_support.pump(gui);
     try std.testing.expectEqual(terminal, panes.layout.focused());
-    try std.testing.expect(gui.input.router.bindingDeadline() != null);
+    try std.testing.expect(gui.router.bindingDeadline() != null);
     try std.testing.expectEqualStrings("", panes.findConst(Session.pane_id).?.composerSlice());
-    gui.input.router.binding_since_ns = 0;
-    gui.input.router.sequence_timeout_ns = 0;
-    try gui.expireBinding({});
+    gui.router.binding_since_ns = 0;
+    gui.router.sequence_timeout_ns = 0;
+    try input_support.bindingExpired(gui);
     try session.settle();
     try std.testing.expectEqualStrings("g", session.input[0..session.input_len]);
     try std.testing.expectEqualStrings("", panes.findConst(Session.pane_id).?.composerSlice());
@@ -2048,10 +2114,10 @@ test "message link hover owns normalized URL without changing source or editor f
     try send(session, .{ .pointer = .{ .kind = .leave, .x = target.bounds.x, .y = target.bounds.y } });
     try session.settle();
     try std.testing.expect(state.message_link_preview == null);
-    try std.testing.expectEqual(.default, session.gui.input.pointer.hover.shape);
+    try std.testing.expectEqual(.default, session.gui.pointer.hover.shape);
     try hoverMessageLink(session, target);
-    try std.testing.expectEqual(.pointer, session.gui.input.pointer.hover.shape);
-    try session.gui.focus(false);
+    try std.testing.expectEqual(.pointer, session.gui.pointer.hover.shape);
+    try input_support.focus(session.gui, false);
     try std.testing.expect(state.message_link_preview == null);
 }
 
@@ -2069,7 +2135,11 @@ test "message link hover rejects stale snapshots and failed delivery before acce
     try std.testing.expect(session.gui.widgets.message_link_preview == null);
     try std.testing.expect(links.destination(session.gui, old.action.message_link) == null);
     const failed = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(failed, false);
+    try input_support.presented(
+        session.gui,
+        failed,
+        false,
+    );
     try hoverMessageLink(session, old);
     try std.testing.expect(session.gui.widgets.message_link_preview == null);
     try publish(session);
@@ -2150,7 +2220,11 @@ test "precise conversation scrolling moves on every fractional delta including m
     try send(session, .{ .scroll = .{ .x = link.bounds.x + 2, .y = link.bounds.y + 2, .delta_y = 20, .precise = true, .phase = .cancel } });
     try std.testing.expectApproxEqAbs(displacement / step, pane.transcript_scroll, 0.000001);
     const failed = try session.gui.prepare(&session.renderer);
-    try session.gui.complete(failed, false);
+    try input_support.presented(
+        session.gui,
+        failed,
+        false,
+    );
     try publish(session);
     try std.testing.expectApproxEqAbs(@as(f64, link.bounds.y) + displacement, (try messageLinkTarget(session)).bounds.y, 0.001);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
@@ -2713,10 +2787,10 @@ test "agent link hand cursor follows links and rejects stale or covered targets"
         try publish(session);
         const link = try messageLinkTarget(session);
         try hoverMessageLink(session, link);
-        try std.testing.expectEqual(.pointer, session.gui.input.pointer.hover.shape);
+        try std.testing.expectEqual(.pointer, session.gui.pointer.hover.shape);
         try linkSnapshot(session, "replacement text");
         try hoverMessageLink(session, link);
-        try std.testing.expect(session.gui.input.pointer.hover.shape != .pointer);
+        try std.testing.expect(session.gui.pointer.hover.shape != .pointer);
     }
 
     try linkSnapshot(session, "[site](https://example.com)");
@@ -2724,7 +2798,7 @@ test "agent link hand cursor follows links and rejects stale or covered targets"
     const link = try messageLinkTarget(session);
     session.gui.app.model.name_prompt.begin(.create_workspace);
     try hoverMessageLink(session, link);
-    try std.testing.expect(session.gui.input.pointer.hover.shape != .pointer);
+    try std.testing.expect(session.gui.pointer.hover.shape != .pointer);
 }
 
 fn existingEditor(session: *Session, name: []const u8) !core.PaneId {
@@ -2833,7 +2907,7 @@ test "review hides underlying message links before delivery and restores them af
     try publish(session);
     const link = try messageLinkTarget(session);
     try hoverMessageLink(session, link);
-    try std.testing.expectEqual(.pointer, session.gui.input.pointer.hover.shape);
+    try std.testing.expectEqual(.pointer, session.gui.pointer.hover.shape);
     try std.testing.expect(session.gui.widgets.message_link_preview != null);
 
     try session.gui.openChangeReview(Session.pane_id);
@@ -2843,8 +2917,8 @@ test "review hides underlying message links before delivery and restores them af
         }
 
         try hoverMessageLink(session, link);
-        try std.testing.expectEqual(.default, session.gui.input.pointer.hover.shape);
-        try std.testing.expect(session.gui.input.pointer.hover.link == null);
+        try std.testing.expectEqual(.default, session.gui.pointer.hover.shape);
+        try std.testing.expect(session.gui.pointer.hover.link == null);
         try std.testing.expect(session.gui.widgets.message_link_preview == null);
         try pressControl(session, link);
         try send(session, .{ .pointer = .{ .kind = .press, .button = .right, .x = link.bounds.x + 1, .y = link.bounds.y + 1 } });
@@ -2863,7 +2937,7 @@ test "review hides underlying message links before delivery and restores them af
     session.gui.review.widget.command = .close;
     try publish(session);
     try hoverMessageLink(session, try messageLinkTarget(session));
-    try std.testing.expectEqual(.pointer, session.gui.input.pointer.hover.shape);
+    try std.testing.expectEqual(.pointer, session.gui.pointer.hover.shape);
     try std.testing.expect(session.gui.widgets.message_link_preview != null);
 }
 
@@ -2895,10 +2969,10 @@ test "native batch routes text to a newly opened prompt and retires the composer
     adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{"ctrl+r"}, .history_palette));
     try std.testing.expect(try gui.acceptInput(.{ .key = .{ .code = .{ .char = .init("r") }, .mods = .{ .ctrl = true } } }));
     try std.testing.expect(try gui.acceptInput(.{ .text = .{ .bytes = "x" } }));
-    try gui.drainInput();
+    try input_support.pump(gui);
     try session.settle();
 
     try std.testing.expectEqualStrings("x", gui.app.model.name_prompt.currentConst().?.field.text());
     try std.testing.expectEqualStrings("", gui.app.model.agentPane(Session.pane_id).?.composerSlice());
-    try std.testing.expect(gui.input.binding_target == null);
+    try std.testing.expect(gui.binding_target == null);
 }

@@ -1,3 +1,4 @@
+const input_support = @import("input_support.zig");
 const std = @import("std");
 const client = @import("telar-client");
 const Session = @import("Session.zig");
@@ -92,7 +93,7 @@ test "runtime review half page motions follow the delivered viewport height" {
 
     const size = try session.gui.measure(&session.renderer, .{ .width = 1100, .height = 450, .scale = 1 });
     try session.gui.resize(size, session.renderer.theme);
-    session.gui.input.setGeometry(session.renderer.origin, size);
+    session.gui.pointer.configure(session.renderer.origin, size);
     try review.publish(session);
     try std.testing.expect(widget.viewport.height < tall_height);
     try control(session, "d");
@@ -117,11 +118,15 @@ test "runtime review half page motion ignores the viewport from a failed frame" 
 
     const size = try session.gui.measure(&session.renderer, .{ .width = 1100, .height = 450, .scale = 1 });
     try session.gui.resize(size, session.renderer.theme);
-    session.gui.input.setGeometry(session.renderer.origin, size);
+    session.gui.pointer.configure(session.renderer.origin, size);
     const rejected = try session.gui.prepare(&session.renderer);
     try std.testing.expect(widget.prepared_viewport.height < delivered_height);
     try std.testing.expectEqual(delivered_height, widget.viewport.height);
-    try session.gui.complete(rejected, false);
+    try input_support.presented(
+        session.gui,
+        rejected,
+        false,
+    );
     try std.testing.expectEqual(delivered_height, widget.viewport.height);
     try control(session, "d");
     try std.testing.expectEqual(delivered_destination, widget.model.head);
@@ -160,7 +165,7 @@ test "runtime review search reveals the matching wrapped fragment instead of the
     const widget = &session.gui.review.widget;
     const size = try session.gui.measure(&session.renderer, .{ .width = 1100, .height = 450, .scale = 1 });
     try session.gui.resize(size, session.renderer.theme);
-    session.gui.input.setGeometry(session.renderer.origin, size);
+    session.gui.pointer.configure(session.renderer.origin, size);
     try review.publish(session);
     _ = try beginSearch(session);
     try typeText(session, "needle");
@@ -204,7 +209,7 @@ test "runtime review page motions scroll a single logical line across its wrappe
     const widget = &session.gui.review.widget;
     const size = try session.gui.measure(&session.renderer, .{ .width = 1100, .height = 450, .scale = 1 });
     try session.gui.resize(size, session.renderer.theme);
-    session.gui.input.setGeometry(session.renderer.origin, size);
+    session.gui.pointer.configure(session.renderer.origin, size);
     try review.publish(session);
     try std.testing.expectEqual(@as(usize, 1), widget.model.current().row_count);
     const page = widget.viewport.height;
@@ -351,7 +356,9 @@ test "runtime review read only search rejects oversized multiline and invalid UT
         try std.testing.expectEqualStrings("café", widget.model.search.query.text());
     }
 
-    try std.testing.expectError(error.InvalidUtf8, review.send(session, .{ .accessibility = .{ .target_id = target.id.target_id, .generation = target.id.generation, .action = .set_value, .text = "\xff" } }));
+    const queued = session.gui.input_queue.len;
+    try std.testing.expect(!try session.gui.acceptInput(.{ .accessibility = .{ .target_id = target.id.target_id, .generation = target.id.generation, .action = .set_value, .text = "\xff" } }));
+    try std.testing.expectEqual(queued, session.gui.input_queue.len);
     try std.testing.expectEqualStrings("café", widget.search_prompt.field.text());
     try press(session, .backspace);
     try std.testing.expectEqualStrings("caf", widget.model.search.query.text());

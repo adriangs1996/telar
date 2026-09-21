@@ -10,7 +10,6 @@ order: [capacity]u8 = undefined,
 head: u8 = 0,
 len: usize = 0,
 queued: bool = false,
-pointer_finished: bool = false,
 
 /// Keeps the latest release while ordinary admission is closed until recovery.
 /// Example: `recovery.retain(key);`.

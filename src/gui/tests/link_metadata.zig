@@ -23,7 +23,7 @@ test "native OSC 8 opens its destination and highlights separated runs of the sa
     pane.text_metadata.replace(builder.finish(.complete));
     try fixture.present();
     try fixture.send(fixture.event(6));
-    const hit = &gui.input.pointer.hover.link.?;
+    const hit = &gui.pointer.hover.link.?;
     try std.testing.expectEqualStrings("https://actual.example/docs", hit.match.target.uri());
     try std.testing.expectEqual(@as(?u16, link), hit.match.link_index);
     var regions = Regions.init(hit, pane);
@@ -48,16 +48,16 @@ test "native OSC 8 never treats an unsafe or omitted destination as the visible 
     const link = try builder.addLink("javascript:alert(1)");
     try builder.addRun(.{ .start = 0, .len = 11, .link_index = link });
     pane.text_metadata.replace(builder.finish(.complete));
-    gui.input.pointer.hover.dirty = true;
+    gui.pointer.hover.dirty = true;
     try fixture.send(fixture.event(6));
-    try std.testing.expect(gui.input.pointer.hover.link == null);
-    try std.testing.expectEqual(.text, gui.input.pointer.hover.shape);
+    try std.testing.expect(gui.pointer.hover.link == null);
+    try std.testing.expectEqual(.text, gui.pointer.hover.shape);
     builder = core.TextMetadataBuilder.init(storage.buffer, pane.buffer.h);
     builder.setRow(0, .{ .hyperlinks = true });
     pane.text_metadata.replace(builder.finish(.omitted));
-    gui.input.pointer.hover.dirty = true;
+    gui.pointer.hover.dirty = true;
     try fixture.send(fixture.event(6));
-    try std.testing.expect(gui.input.pointer.hover.link == null);
+    try std.testing.expect(gui.pointer.hover.link == null);
     try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
 }
 
@@ -80,7 +80,7 @@ test "native wrapped URLs underline both physical rows and require a VT soft wra
     var event = fixture.event(6);
     event.y += gui.app.model.hostSize().cell_height_px;
     try fixture.send(event);
-    const hit = &gui.input.pointer.hover.link.?;
+    const hit = &gui.pointer.hover.link.?;
     try std.testing.expectEqualStrings("https://e/path", hit.match.target.uri());
     var regions = Regions.init(hit, pane);
     try std.testing.expectEqualDeep(core.Rect{ .x = hit.content.x + start, .y = hit.content.y, .w = 10, .h = 1 }, regions.next().?);
@@ -93,10 +93,10 @@ test "native wrapped URLs underline both physical rows and require a VT soft wra
     try std.testing.expectEqualStrings("https://e/path", fixture.opened.?.uri());
     builder = core.TextMetadataBuilder.init(storage.buffer, pane.buffer.h);
     pane.text_metadata.replace(builder.finish(.complete));
-    gui.input.pointer.hover.dirty = true;
+    gui.pointer.hover.dirty = true;
     event.code = 6;
     try fixture.send(event);
-    try std.testing.expect(gui.input.pointer.hover.link == null);
+    try std.testing.expect(gui.pointer.hover.link == null);
 }
 
 test "native OSC 8 replacement under a held pointer cancels the original destination" {
@@ -117,8 +117,8 @@ test "native OSC 8 replacement under a held pointer cancels the original destina
     builder.setRow(0, .{ .hyperlinks = true });
     try builder.addRun(.{ .start = 0, .len = 4, .link_index = try builder.addLink("https://second.example") });
     pane.text_metadata.replace(builder.finish(.complete));
-    gui.input.pointer.hover.dirty = true;
+    gui.pointer.hover.dirty = true;
     try fixture.send(fixture.event(2));
     try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
-    try std.testing.expectEqualStrings("https://second.example", gui.input.pointer.hover.link.?.match.target.uri());
+    try std.testing.expectEqualStrings("https://second.example", gui.pointer.hover.link.?.match.target.uri());
 }
