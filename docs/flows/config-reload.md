@@ -38,10 +38,13 @@ config, local module, plugin or trust-store fingerprint changes
                        Presenter
 ```
 
-`client_startup` asks `config_reloads.schedule` to start the watcher after the
-runtime handshake; the GUI schedules it from `GuiClient.start` after bootstrap.
-`config_reloads` rearms it through an adapter
-port after every successfully handled outcome. The worker loads a new Lua VM,
+`client_startup` asks `AttachedClient.scheduleConfigReload` to start the watcher
+after initiating runtime reads; the GUI schedules it from `GuiClient.start`
+after bootstrap. The owner selects the current generation, plugin registry and
+paths, then calls `config_reload.schedule` with explicit arguments. No configured
+path means no watch; missing required resources return `ConfigurationNotLoaded`.
+`config_reloads.handle` asks the same owner to rearm after every successfully
+handled outcome. The worker loads a new Lua VM,
 typed snapshot, plugin registry and trust store without touching the active
 client. `config_reload.resolve` checks the sidebar
 renderer against host capabilities, compiles the input router, clears the
@@ -58,6 +61,12 @@ existing diagnostic flow. An unchanged watch does not request a frame. See
 resource retirement and shutdown ownership.
 
 ## Model transaction
+
+`AttachedClient.synchronizeBars` selects bar sources only when Lua and the model
+agree on their generation. Bar state receives the generation, sources and time;
+its `rearm(io, timers)` method owns timer reservation and failure recovery.
+The native timer port binds directly to `NativeLoop`. No bar scheduler receives
+`AttachedClient`, and synchronization preserves any in-flight command identity.
 
 `ClientModel` stores the active configuration generation. It accepts only a
 newer generation and commits sidebar visibility, pane gaps and the typed bar

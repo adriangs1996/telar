@@ -16,11 +16,11 @@ SIGWINCH or Windows size poll
               |
       one TTY measurement
               |
-      host_resources.apply
+      AttachedClient.applyHostUpdate
               |
      ClientModel.reconcileHost
               |
-     host_resources.deliver
+     AttachedClient.deliverHostCommit
               |
  screen, view, sidebar and graphics effects
               |
@@ -56,13 +56,13 @@ value outside the model.
 
 ## Effects and failure
 
-`host_resources.apply` commits before delivering its `HostCommit`.
-`host_resources.deliver` rejects empty or stale commits before effects and
+`AttachedClient.applyHostUpdate` commits before delivering its `HostCommit`.
+The private `AttachedClient.deliverHostCommit` rejects empty or stale commits before effects and
 calls the host ports directly in order. A grid change resizes the presenter's front and back
 buffers and then the client view. A changed cell size configures pixel-aware
 sidebar resources. Every accepted geometry invalidates physical graphics
 placements before pane geometry is offered. Shared policy lives in
-`src/client/operations/host/host_resources.zig`; GUI and TUI provide the host
+`src/client/AttachedClient.zig`; GUI and TUI provide the host
 ports. There is no intermediate handler or host-effect callback table.
 
 The model commit remains active if buffer allocation, sidebar configuration or
@@ -98,13 +98,14 @@ but schedules no frame.
 - `src/client/model/Model.zig` proves validation, atomic capability and
   geometry commits, no-op behavior and isolated host revisions.
 - `src/frontend/client/tests/host_resources.zig` proves commit-before-delivery,
-  exact branch ordering, no-op policy, stale-commit rejection and failures at
-  each fallible host port.
+  exact branch ordering, no-op policy and failures at each fallible host port.
+- The owner test in `src/client/AttachedClient.zig` proves that empty and stale
+  commits are rejected before any host port can be accessed.
 - `src/frontend/client/tests/host_interaction.zig` proves real resource changes,
   pane-size delivery and retained commits after outbox saturation.
 - `src/frontend/client/controllers/host/host_resizes.zig` owns platform measurement, pixel
   refresh requests and watcher rearming.
-- `src/client/operations/host/host_resources.zig` owns ordered resource delivery
+- `src/client/AttachedClient.zig` owns ordered resource delivery
   shared by resize and capability observations.
 - `src/client/operations/panes/pane_geometry.zig` owns translation and bounded delivery
   of visible attached pane sizes.

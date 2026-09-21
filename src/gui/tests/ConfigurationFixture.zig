@@ -42,7 +42,7 @@ pub fn init(source: []const u8, profile: ?[]const u8) !Fixture {
         @as(i128, session.gui.app.plugin_registry.?.watchFingerprint(gpa, io)) ^
         @as(i128, client.config_reload.trustWatchFingerprint(io, trust_path));
     session.driver.configuration.observe(renderer.config, viewport);
-    try client.operations.config_reloads.schedule(&session.gui.app);
+    try session.gui.app.scheduleConfigReload();
     return fixture;
 }
 

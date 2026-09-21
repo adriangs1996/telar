@@ -26,10 +26,13 @@ delivery, bounded storage and I/O ordering. See
 
 I/O completion orchestration lives in `client/entrypoints/runtime_io.zig`.
 It connects transport state to graphics credit, host input and server-message
-dispatch. `connection/RuntimeTransportState.zig` owns framing and queue state
-without importing `AttachedClient`. Local aliases named `runtime_transport` in
-client operations refer to the concrete `runtime_io` entrypoint for enqueue
-and scheduling.
+dispatch. `connection/RuntimeTransportState.zig` owns framing, queue state and
+read/write scheduling without importing `AttachedClient`. Its `scheduleRead`
+and `pump` methods receive only a `TransportDriver`; each releases its
+reservation if the driver rejects the task. Native transport ports bind
+directly to `NativeLoop`, without recovering it through the client model.
+Local aliases named `runtime_transport` in client operations refer to the
+`runtime_io` entrypoint for enqueue and completion coordination.
 
 ## Bootstrap
 
@@ -41,7 +44,7 @@ atomically to the ordinary outbox, in order:
 2. `configure_terminal_colors`, so terminal queries use the host defaults;
 3. `request_runtime_state`, so reconnectable replicas can be rebuilt.
 
-Bootstrap only queues messages. The fresh GUI then calls `runtime_io.pump`
+Bootstrap only queues messages. The fresh GUI then calls `RuntimeTransportState.pump`
 explicitly to start the send actor; it does not rely on the side effect of a
 graphics-credit flush. The TUI finishes its color probes before queuing the
 same bootstrap. The send actor writes independently of reception. The initial
@@ -56,7 +59,7 @@ request_lifecycle.deliver / runtime_transport.enqueueInput
        |
 Outbox copies and folds bounded data
        |
-runtime_transport.pump
+RuntimeTransportState.pump(driver)
        |
 Outbox.beginSend -> schema encoder -> inbox producer reservation -> SocketChannel.send
        |
@@ -128,6 +131,8 @@ propagate without transport classifying their original message.
 
 ## Validation
 
+- `RuntimeTransportState.zig` exercises rejected read/write scheduling, retry
+  without duplicate reservations, and preservation of queued frame order.
 - `src/client/connection/runtime_transport.zig` checks partial-allocation cleanup
   and the exact three-frame bootstrap order over a real socketpair.
 - `src/client/connection/outbox_support.zig` proves one send claim, completion on success

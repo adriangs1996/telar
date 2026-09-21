@@ -12,7 +12,6 @@ const SizeType = @import("../../../platform/Size.zig");
 const HostUpdateType = @import("telar-client").HostUpdate;
 const TerminalSizeType = @import("telar-core").TerminalSize;
 const HostCapabilitiesType = @import("telar-client").HostCapabilities;
-const host_resources = @import("telar-client").operations.host_resources;
 
 /// Registers the next platform resize observation for this client.
 ///
@@ -49,7 +48,7 @@ fn wait(io: std.Io, watcher: *platform.ResizeWatcher) anyerror!void {
 pub fn apply(client: *Client, measurement: SizeType) !?HostCommitType {
     const update = resolve(client.model.hostCapabilities(), measurement);
 
-    return host_resources.apply(client, update);
+    return client.applyHostUpdate(update);
 }
 
 /// Resolves the first platform measurement before a client model exists.

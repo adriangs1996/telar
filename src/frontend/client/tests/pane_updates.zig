@@ -181,7 +181,7 @@ test "a frame already sent before workspace departure is harmless during handoff
     const graphics_visible = host(client).graphics_store.paneVisible(TestHarness.bootstrap_pane);
     const frames = client.telemetry.metrics.frames;
 
-    try runtime_transport.scheduleRead(client);
+    try client.runtime_transport.scheduleRead(client.transport_driver);
     switch (try host(client).inbox.receive()) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, null),

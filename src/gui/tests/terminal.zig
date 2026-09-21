@@ -1,4 +1,5 @@
 const input_support = @import("input_support.zig");
+const host_ports = @import("../host_ports.zig");
 const std = @import("std");
 const Session = @import("Session.zig");
 const core = @import("telar-core");
@@ -327,8 +328,8 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
 test "native driver joins a blocked socket read before freeing the shared client" {
     const session = try Session.init();
     defer session.deinit();
-    session.gui.app.transport_driver = @import("../host_ports.zig").transport(&session.gui.app);
-    try @import("telar-client").runtime_io.scheduleRead(&session.gui.app);
+    session.gui.app.transport_driver = host_ports.transport(session.gui.driver);
+    try session.gui.app.runtime_transport.scheduleRead(session.gui.app.transport_driver);
     try std.testing.expect(session.gui.app.runtime_transport.receive_pending);
 }
 

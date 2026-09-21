@@ -364,8 +364,8 @@ test "runtime review loads through its real worker and inbox after the previous 
     const session = try base();
     defer session.deinit();
     const gui = session.gui;
-    gui.app.transport_driver = host_ports.transport(&gui.app);
-    try client.runtime_io.scheduleRead(&gui.app);
+    gui.app.transport_driver = host_ports.transport(gui.driver);
+    try gui.app.runtime_transport.scheduleRead(gui.app.transport_driver);
     try gui.openChangeReview(Session.pane_id);
     var buffer: [128 * 1024]u8 = undefined;
     const request = (try core.decodeClient(try session.peer.receive(std.testing.io, &buffer))).query_change_review;

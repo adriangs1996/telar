@@ -59,10 +59,20 @@ const HostInputSourceType = @import("input/HostInputSource.zig");
 const TransportDriverType = @import("connection/TransportDriver.zig");
 const ConfigReloadWatcherType = @import("resources/ConfigReloadWatcher.zig");
 const ChangeReviewSession = @import("change_review/Session.zig");
+const config_reload = @import("resources/config_reload.zig");
+const BarConfiguration = @import("bars/Configuration.zig");
 
 comptime {
     std.debug.assert(max_expression_paste_bytes_module + 16 <= max_encoded_bytes);
 }
+
+const HostUpdate = @import("model/HostUpdate.zig");
+const HostCommit = @import("model/HostCommit.zig");
+const HostCapabilityObservation = @import("model/types.zig").HostCapabilityObservation;
+const runtime_io = @import("entrypoints/runtime_io.zig");
+const pane_graphics = @import("operations/panes/pane_graphics.zig");
+const pane_geometry = @import("operations/panes/pane_geometry.zig");
+const tab_snapshots = @import("operations/tabs/tab_snapshots.zig");
 
 const AttachedClient = @This();
 
@@ -220,6 +230,180 @@ pub fn editorExecutable(self: *const AttachedClient) []const u8 {
     return self.options.editor;
 }
 
+/// Commits validated geometry before touching resources. Delivery failure keeps
+/// the committed state; the caller ends the client session.
+/// Example: `_ = try self.applyHostUpdate(update);`
+pub fn applyHostUpdate(self: *AttachedClient, update: HostUpdate) !?HostCommit {
+    const commit = try self.model.reconcileHost(update) orelse return null;
+
+    try self.deliverHostCommit(commit);
+
+    return commit;
+}
+
+/// Applies a semantic terminal response through the same resource policy.
+/// Example: `_ = try self.observeHostCapability(observation);`
+pub fn observeHostCapability(self: *AttachedClient, observation: HostCapabilityObservation) !?HostCommit {
+    const commit = try self.model.observeHostCapability(observation) orelse return null;
+
+    try self.deliverHostCommit(commit);
+
+    return commit;
+}
+
+/// Resolves geometry when a probe settles a complete set of capabilities.
+/// Example: `_ = try self.reconcileHostCapabilities(capabilities);`
+pub fn reconcileHostCapabilities(self: *AttachedClient, capabilities: HostCapabilitiesType) !?HostCommit {
+    var size = self.model.hostSize();
+    const cell_size = capabilities.cellSize(size.cols, size.rows);
+    size.cell_width_px = cell_size.width;
+    size.cell_height_px = cell_size.height;
+
+    return self.applyHostUpdate(
+        .{
+            .size = size,
+            .capabilities = capabilities,
+        },
+    );
+}
+
+/// Delivers a current commit, stopping at the first failed resource operation.
+fn deliverHostCommit(self: *AttachedClient, commit: HostCommit) !void {
+    try validateHostCommit(&self.model, commit);
+
+    if (commit.capabilities) |change| {
+        if (!std.meta.eql(change.previous.terminal_colors, change.current.terminal_colors) and
+            (self.startup.phase == .opening or self.startup.phase == .active))
+        {
+            try runtime_io.enqueue(
+                self,
+                .{
+                    .configure_terminal_colors = change.current.terminal_colors,
+                },
+            );
+        }
+
+        if (change.previous.appearance != change.current.appearance and !self.options.theme_locked) {
+            const theme = switch (change.current.appearance) {
+                .unknown => null,
+                .light => self.appearance_themes.light,
+                .dark => self.appearance_themes.dark,
+            };
+
+            if (theme) |value| {
+                self.chrome.setTheme(value);
+            }
+        }
+
+        if (change.previous.images != change.current.images) {
+            pane_graphics.syncFallbacks(&self.model, self.graphics);
+
+            const size = self.model.hostSize();
+            try self.chrome.configureSidebar(
+                .{
+                    .support = change.current.images,
+                    .cell_width = size.cell_width_px,
+                    .cell_height = size.cell_height_px,
+                },
+            );
+            self.host_graphics.invalidatePlacements();
+        }
+    }
+
+    if (commit.resize) |resize| {
+        if (resize.grid_changed) {
+            try self.presentation.resize(resize.current.cols, resize.current.rows);
+            try self.chrome.resize(resize.current.cols, resize.current.rows);
+        }
+
+        if (resize.cell_size_changed) {
+            try self.chrome.configureSidebar(
+                .{
+                    .support = self.model.hostCapabilities().images,
+                    .cell_width = resize.current.cell_width_px,
+                    .cell_height = resize.current.cell_height_px,
+                },
+            );
+        }
+
+        self.host_graphics.invalidatePlacements();
+        try pane_geometry.offerActive(self, self.geometry().area);
+        try tab_snapshots.attachActive(self, self.geometry().area);
+    }
+}
+
+fn validateHostCommit(model: *const ModelType, commit: HostCommit) !void {
+    if (commit.capabilities == null and commit.resize == null) {
+        return error.EmptyHostCommit;
+    }
+
+    const version = model.version();
+
+    if (commit.capabilities) |change| {
+        if (!std.meta.eql(model.hostCapabilities(), change.current) or
+            version.host_capabilities != change.host_capabilities_revision)
+        {
+            return error.StaleHostCommit;
+        }
+    }
+
+    if (commit.resize) |resize| {
+        if (!std.meta.eql(model.hostSize(), resize.current) or version.host != resize.host_revision) {
+            return error.StaleHostCommit;
+        }
+    }
+}
+
+/// Selects the live configuration resources before scheduling their next watch.
+/// No configured file means no watch; incomplete ownership is an explicit error.
+/// Example: `try client.scheduleConfigReload();`
+pub fn scheduleConfigReload(self: *AttachedClient) !void {
+    const path = self.options.config_path orelse return;
+    const trust_path = self.options.trust_path orelse return error.ConfigurationNotLoaded;
+    const generation = self.lua_generation orelse return error.ConfigurationNotLoaded;
+    const registry = self.plugin_registry orelse return error.ConfigurationNotLoaded;
+
+    try config_reload.schedule(
+        &self.reload,
+        .{
+            .io = self.io,
+            .gpa = self.gpa,
+            .watcher = self.config_watcher,
+            .path = path,
+            .profile = self.options.profile,
+            .trust_path = trust_path,
+            .current_generation = generation,
+            .current_registry = registry,
+        },
+    );
+}
+
+/// Borrows bar sources only when Lua and the model agree on their generation.
+/// Example: `const configuration = client.barConfiguration() orelse return;`
+pub fn barConfiguration(self: *const AttachedClient) ?*const BarConfiguration {
+    const generation = self.lua_generation orelse return null;
+
+    if (generation.number != self.model.configurationGeneration()) {
+        return null;
+    }
+
+    return &generation.snapshot.bars;
+}
+
+/// Replaces bar deadlines from the active configuration and rearms their timer.
+/// Example: `try client.synchronizeBars();`
+pub fn synchronizeBars(self: *AttachedClient) !void {
+    self.bar_updates.synchronize(
+        .{
+            .generation = if (self.lua_generation) |generation| generation.number else self.model.configurationGeneration(),
+            .configuration = self.barConfiguration(),
+            .now_ns = core.monotonic(self.io),
+        },
+    );
+
+    try self.bar_updates.rearm(self.io, self.timers);
+}
+
 /// Snapshot the current exclusive keyboard owners without exposing client state.
 /// Example: `const captures_keys = key_policy.captures(self.keyRoutingAuthority());`
 pub fn keyRoutingAuthority(self: *const AttachedClient) KeyRoutingAuthority {
@@ -242,4 +426,59 @@ pub fn repeatPane(self: *const AttachedClient) ?core.PaneId {
     const model = self.model.activeTabModelConst() orelse return null;
     const pane = model.focusedPaneConst() orelse return null;
     return if (pane.attached) pane.id else null;
+}
+
+test "host resources reject empty and stale commits before calling ports" {
+    const app = try std.testing.allocator.create(AttachedClient);
+    defer std.testing.allocator.destroy(app);
+    // Only the model is initialized: invalid commits must never reach a host port.
+    app.model.initInto(
+        std.testing.allocator,
+        .{
+            .pane_gaps = false,
+            .host_size = .{
+                .cols = 80,
+                .rows = 24,
+            },
+        },
+    );
+    defer app.model.deinit();
+
+    const stale_capabilities = (try app.model.observeHostCapability(
+        .{
+            .images = .supported,
+        },
+    )).?;
+    _ = try app.model.observeHostCapability(
+        .{
+            .pointer_pixels = .supported,
+        },
+    );
+    const stale_size = (try app.model.reconcileHost(
+        .{
+            .capabilities = app.model.hostCapabilities(),
+            .size = .{
+                .cols = 100,
+                .rows = 30,
+            },
+        },
+    )).?;
+    _ = try app.model.reconcileHost(
+        .{
+            .capabilities = app.model.hostCapabilities(),
+            .size = .{
+                .cols = 101,
+                .rows = 30,
+            },
+        },
+    );
+
+    try std.testing.expectError(error.EmptyHostCommit, app.deliverHostCommit(
+        .{
+            .capabilities = null,
+            .resize = null,
+        },
+    ));
+    try std.testing.expectError(error.StaleHostCommit, app.deliverHostCommit(stale_capabilities));
+    try std.testing.expectError(error.StaleHostCommit, app.deliverHostCommit(stale_size));
 }

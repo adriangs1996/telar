@@ -2,10 +2,16 @@
 const std = @import("std");
 const client = @import("telar-client");
 const GuiClient = @import("../GuiClient.zig");
+const NativeLoop = @import("../NativeLoop.zig");
 
-/// Example: `app.timers = workers.timers(app);`
-pub fn timers(app: *client.AttachedClient) client.HostTimers {
-    return .{ .context = app, .arm_fn = arm, .animation_clock = .host };
+/// Timer tasks borrow their scheduler and complete through this native loop.
+/// Example: `app.timers = workers.timers(loop);`
+pub fn timers(loop: *NativeLoop) client.HostTimers {
+    return .{
+        .context = loop,
+        .arm_fn = arm,
+        .animation_clock = .host,
+    };
 }
 
 /// Example: `app.bar_runner = workers.bars(app);`
@@ -29,14 +35,60 @@ pub fn plugins(app: *client.AttachedClient) client.PluginWorkerRunner {
 }
 
 fn arm(context: *anyopaque, kind: client.TimerKind, scheduler: *client.Scheduler) !void {
-    const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    const inbox = &GuiClient.of(app).driver.inbox;
+    const loop: *NativeLoop = @ptrCast(@alignCast(context));
+    const inbox = &loop.inbox;
+
     switch (kind) {
-        .input => try inbox.start(.input_timeout, .{ client.wait, .{ app.io, scheduler } }),
-        .binding => try inbox.start(.binding_timeout, .{ client.wait, .{ app.io, scheduler } }),
-        .bar => try inbox.start(.bar_tick, .{ client.wait, .{ app.io, scheduler } }),
-        .notification => try inbox.start(.notification_tick, .{ client.wait, .{ app.io, scheduler } }),
-        .sidebar_animation => try inbox.start(.sidebar_animation_tick, .{ client.wait, .{ app.io, scheduler } }),
+        .input => try inbox.start(
+            .input_timeout,
+            .{
+                client.wait,
+                .{
+                    loop.io,
+                    scheduler,
+                },
+            },
+        ),
+        .binding => try inbox.start(
+            .binding_timeout,
+            .{
+                client.wait,
+                .{
+                    loop.io,
+                    scheduler,
+                },
+            },
+        ),
+        .bar => try inbox.start(
+            .bar_tick,
+            .{
+                client.wait,
+                .{
+                    loop.io,
+                    scheduler,
+                },
+            },
+        ),
+        .notification => try inbox.start(
+            .notification_tick,
+            .{
+                client.wait,
+                .{
+                    loop.io,
+                    scheduler,
+                },
+            },
+        ),
+        .sidebar_animation => try inbox.start(
+            .sidebar_animation_tick,
+            .{
+                client.wait,
+                .{
+                    loop.io,
+                    scheduler,
+                },
+            },
+        ),
     }
 }
 

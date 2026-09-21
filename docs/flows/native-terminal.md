@@ -52,7 +52,7 @@ budgets, wakeups and shutdown shared with the TUI and headless driver.
    multiplexer bindings are not activated without corresponding native UI.
 3. Geometry and detach: window size and font scale determine complete columns,
    rows and exact cell pixels, after the chrome bands (`ChromeMetrics`) are
-   taken off the window height. `host_resources.apply` and `pane_geometry.offerActive`
+   taken off the window height. `AttachedClient.applyHostUpdate` and `pane_geometry.offerActive`
    deliver `pane_resize` through the existing geometry authority.
    Trailing pixels belong to chrome. Closing a window stops GPU consumers, then
    cancels and joins socket tasks before releasing the shared model. It does not

@@ -175,15 +175,15 @@ pub fn init(params: client.ClientInit, driver: *NativeLoop) !*GuiClient {
     gui.app.attachment_catalog = host_ports.attachmentCatalog(&gui.app);
     gui.app.attachment_shelf = host_ports.attachmentShelf(&gui.app);
     gui.app.presentation = host_ports.presentation(&gui.app);
-    gui.app.timers = host_ports.timers(&gui.app);
+    gui.app.timers = host_ports.timers(driver);
     gui.app.bar_runner = host_ports.barCommands(&gui.app);
     gui.app.plugin_runner = host_ports.pluginWorkers(&gui.app);
     gui.app.path_completion_runner = host_ports.pathCompletions(&gui.app);
     gui.app.favicon_runner = host_ports.favicons(&gui.app);
     gui.app.clock = host_ports.clock(&gui.app);
     gui.app.host_input_source = host_ports.hostInput(&gui.app);
-    gui.app.transport_driver = host_ports.transport(&gui.app);
-    gui.app.config_watcher = host_ports.configWatcher(&gui.app);
+    gui.app.transport_driver = host_ports.transport(driver);
+    gui.app.config_watcher = host_ports.configWatcher(&driver.configuration);
 
     return gui;
 }
@@ -215,8 +215,7 @@ pub fn start(self: *GuiClient, colors: core.TerminalColors) !void {
     capabilities.pointer_pixels = .supported;
     capabilities.agent_panes = true;
 
-    _ = try client.operations.host_resources.apply(
-        &self.app,
+    _ = try self.app.applyHostUpdate(
         .{
             .size = self.app.model.hostSize(),
             .capabilities = capabilities,
@@ -233,10 +232,10 @@ pub fn start(self: *GuiClient, colors: core.TerminalColors) !void {
         },
     );
 
-    try client.runtime_io.scheduleRead(&self.app);
-    try client.runtime_io.pump(&self.app);
-    try client.operations.config_reloads.schedule(&self.app);
-    try client.operations.bar_updates.synchronize(&self.app);
+    try self.app.runtime_transport.scheduleRead(self.app.transport_driver);
+    try self.app.runtime_transport.pump(self.app.transport_driver);
+    try self.app.scheduleConfigReload();
+    try self.app.synchronizeBars();
 }
 
 /// Copies borrowed input before the host callback returns. A full input queue
@@ -1325,8 +1324,7 @@ pub fn resize(self: *GuiClient, size: core.TerminalSize, theme: client.TerminalT
         .palette = theme.palette,
     };
 
-    _ = try client.operations.host_resources.apply(
-        &self.app,
+    _ = try self.app.applyHostUpdate(
         .{
             .size = size,
             .capabilities = capabilities,

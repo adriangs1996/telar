@@ -126,12 +126,14 @@ pub fn Type(comptime Message: type) type {
         pub fn notify(inbox: *Inbox, message: Message) !void {
             inbox.mutex.lockUncancelable(inbox.io);
             defer inbox.mutex.unlock(inbox.io);
+
             if (!inbox.accepting) {
                 return error.InboxClosed;
             }
 
             for (0..inbox.len) |offset| {
                 const slot = inbox.order[(inbox.head + offset) % capacity];
+
                 if (@as(Field, inbox.items[slot]) == @as(Field, message)) {
                     inbox.items[slot] = message;
                     inbox.counters.coalesced +|= 1;

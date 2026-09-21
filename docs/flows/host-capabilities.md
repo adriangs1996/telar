@@ -19,11 +19,11 @@ host_capabilities.observe
        |
 protocol reply translation
        |
-host_resources.observe
+AttachedClient.observeHostCapability
        |
 ClientModel.observeHostCapability
        |
-host_resources.deliver
+AttachedClient.deliverHostCommit
        |
 physical host effects
        |
@@ -37,11 +37,11 @@ Presenter
        |
 host_capabilities.handleExpiry
        |
-host_resources.reconcile
+AttachedClient.reconcileHostCapabilities
        |
 ClientModel.reconcileHost
        |
-host_resources.deliver
+AttachedClient.deliverHostCommit
        |
 fallback host effects
        |
@@ -86,11 +86,11 @@ pixels and the geometry derived from them in one model transaction.
 
 ## Effects and consumers
 
-`host_resources.observe` and `reconcile` deliver a `HostCommit` only after the
-complete model transition. `host_resources.deliver` validates that the commit is still
+`AttachedClient.observeHostCapability` and `reconcileHostCapabilities` deliver a `HostCommit` only after the
+complete model transition. The private `AttachedClient.deliverHostCommit` validates that the commit is still
 current and owns every branch shared with host resizing. A Kitty graphics
 transition calls `pane_graphics.syncFallbacks`, which reads the committed
-capability and queries the graphics service while reconciling each bounded pane
+capability from the supplied model and queries the supplied graphics service while reconciling each bounded pane
 cell fallback. The host-resource operation then configures
 sidebar and overlay resources and invalidates physical placements. A geometry
 transition executes the same ordered screen, view and pane-size effects without
@@ -125,15 +125,17 @@ fallback, so a failed timer changes no capability state.
 - `src/client/model/Model.zig` proves independent probes, selective expiry,
   pixel precedence, atomic geometry and validation before mutation.
 - `src/frontend/client/tests/host_resources.zig` proves commit-before-delivery,
-  no-op suppression, stale-commit rejection and graphics/grid/cell-size ordering
-  through the existing host ports, including partial failures.
+  no-op suppression and graphics/grid/cell-size ordering through the existing
+  host ports, including partial failures.
+- The owner test in `src/client/AttachedClient.zig` checks empty and stale commits
+  before any host port can be accessed.
 - `src/client/operations/panes/pane_graphics.zig` owns bounded fallback
   traversal; `src/client/model/tests/input_and_frames.zig` and
   `src/frontend/client/tests/graphics_and_clipboard.zig` cover fallback ownership,
   repeated values and graphics recovery.
 - `src/frontend/client/controllers/host/host_capabilities.zig` owns terminal reply translation
   and probe expiry.
-- `src/client/operations/host/host_resources.zig` owns resource delivery shared
+- `src/client/AttachedClient.zig` owns resource delivery shared
   with resize, directly calling the GUI/TUI host ports.
 - `src/frontend/client/tests/` proves fallback reconciliation,
   presenter-owned scheduling, timeout idempotence and retained state after a

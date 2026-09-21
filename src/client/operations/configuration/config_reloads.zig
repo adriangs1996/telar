@@ -10,31 +10,9 @@ const Adoption = @import("../../resources/Adoption.zig");
 const ConfigurationCommitType = @import("../../model/ConfigurationCommit.zig");
 const AdoptionContext = @import("AdoptionContext.zig");
 const std = @import("std");
-const bar_updates = @import("bar_updates.zig");
 const sidebar_projection = @import("../notifications/sidebar_projection.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 const notification_flow = @import("../notifications/notifications.zig");
-
-/// Schedules the next reload attempt when this client owns a watched
-/// configuration.
-///
-/// ```zig
-/// try schedule(client);
-/// ```
-pub fn schedule(client: *Client) !void {
-    const path = client.options.config_path orelse return;
-
-    try reload_worker.schedule(&client.reload, .{
-        .io = client.io,
-        .gpa = client.gpa,
-        .watcher = client.config_watcher,
-        .path = path,
-        .profile = client.options.profile,
-        .trust_path = client.options.trust_path.?,
-        .current_generation = client.lua_generation.?,
-        .current_registry = client.plugin_registry.?,
-    });
-}
 
 /// Resolves one reload completion, applies its outcome and rearms the watcher.
 ///
@@ -88,7 +66,7 @@ pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Out
             break :adopted .{ .adopted = commit };
         },
     };
-    try schedule(client);
+    try client.scheduleConfigReload();
     return outcome;
 }
 
@@ -115,7 +93,7 @@ pub fn apply(client: *Client, adoption: Adoption) !ConfigurationCommitType {
     std.debug.assert(context.adoption.generation.number == commit.generation);
     context.swap();
     if (commit.bars_changed) {
-        try bar_updates.synchronize(client);
+        try client.synchronizeBars();
     }
     if (!client.options.theme_locked) {
         client.chrome.setTheme(snapshot.resolveTheme(client.model.hostCapabilities().appearance, null));

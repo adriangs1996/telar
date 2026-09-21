@@ -328,7 +328,7 @@ encodes input before applying the optional `.bottom` viewport intent. A changed
 viewport commits, updates graphics visibility and queues `set_pane_viewport`.
 The concrete input operation then calls `runtime_io.enqueueInput` directly.
 
-The outbox copies the bytes through `Outbox.pushInput`. `runtime_io.pump` calls
+The outbox copies the bytes through `Outbox.pushInput`. `RuntimeTransportState.pump` calls
 `RuntimeTransportState.prepareSend` and `Outbox.beginSend`, which encodes the
 head through `encodePaneInput`. The actual transport driver starts the owned
 send actor. Its `.sent` completion releases that claim before pumping the next

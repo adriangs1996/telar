@@ -133,7 +133,7 @@ neither runtime truth nor a common instance of navigation or focus.
 
 Shared operations receive `AttachedClient` or their model and named ports,
 never the concrete TUI aggregate. Host mutation and resource delivery live
-together in `operations/host/host_resources.zig`, without an intermediate
+together in `AttachedClient.zig`, without an intermediate
 handler or effects table. `presentation_projection` supplies host context and exposes physical
 resources separately. `Presenter` owns prepared rendering caches; the shared
 lifecycle owns observed, prepared and delivered revisions. Host output retains

@@ -35,7 +35,7 @@ test "update processes a horizontal split shortcut and its correlated runtime re
         .created = true,
     });
     const response = try client.RuntimeMessage.decode(std.testing.io, payload);
-    try client.runtime_io.scheduleRead(app);
+    try app.runtime_transport.scheduleRead(app.transport_driver);
     try session.driver.inbox.post(.{ .server = &response });
 
     try std.testing.expectEqual(@as(?u8, null), try gui.update());

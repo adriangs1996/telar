@@ -12,8 +12,6 @@ const host_inputs = @import("../input/host_inputs.zig");
 const host_resizes = @import("../host/host_resizes.zig");
 const runtime_transport = @import("telar-client").runtime_io;
 const client_telemetry = @import("../../resources/telemetry.zig");
-const bar_updates = @import("telar-client").operations.bar_updates;
-const config_reloads = @import("telar-client").operations.config_reloads;
 const supportsSharedMemory_module = @import("telar-client").supportsSharedMemory;
 
 /// Starts host negotiation and arms I/O without opening a child before its
@@ -32,10 +30,10 @@ pub fn start(client: *Client, request: Request) !void {
     try host_inputs.scheduleRead(client);
 
     try host_resizes.schedule(client, request.resize_watcher);
-    try runtime_transport.scheduleRead(client);
+    try client.runtime_transport.scheduleRead(client.transport_driver);
     try client_telemetry.start(client);
-    try bar_updates.synchronize(client);
-    try config_reloads.schedule(client);
+    try client.synchronizeBars();
+    try client.scheduleConfigReload();
 }
 
 /// Advances startup after an event. FIFO configuration precedes the state

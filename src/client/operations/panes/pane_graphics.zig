@@ -1,5 +1,7 @@
 //! Adapts pane-graphics reconciliation to the physical Kitty store and IPC.
 
+const Model = @import("../../model/Model.zig");
+const GraphicsRetention = @import("../../graphics/GraphicsRetention.zig");
 const Client = @import("../../AttachedClient.zig");
 const ApplicationPanesPaneGraphicsCommand = @import("../../application/panes/pane_graphics.zig").Command;
 const ApplicationPanesPaneGraphicsOutcome = @import("../../application/panes/pane_graphics.zig").Outcome;
@@ -58,18 +60,20 @@ pub fn apply(client: *Client, command: ApplicationPanesPaneGraphicsCommand) !App
     };
 }
 
-/// Reconciles all fallbacks when host support changes. Example: `syncFallbacks(client);`
-pub fn syncFallbacks(client: *Client) void {
-    const fallback_required = client.model.hostCapabilities().images != .supported;
+/// Reconciles all fallbacks when host support changes. Example: `syncFallbacks(model, graphics);`
+pub fn syncFallbacks(model: *Model, graphics: GraphicsRetention) void {
+    const fallback_required = model.hostCapabilities().images != .supported;
     var inspected: usize = 0;
-    var tabs = client.model.workspace.tabIterator();
+    var tabs = model.workspace.tabIterator();
+
     while (tabs.next()) |tab| {
         var panes = tab.model.paneIterator();
+
         while (panes.next()) |pane| {
             inspected += 1;
             const has_graphics = fallback_required and
-                client.graphics.hasPaneGraphics(pane.id);
-            _ = client.model.setPaneGraphicsFallback(pane.id, has_graphics);
+                graphics.hasPaneGraphics(pane.id);
+            _ = model.setPaneGraphicsFallback(pane.id, has_graphics);
         }
     }
 

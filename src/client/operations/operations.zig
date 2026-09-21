@@ -18,7 +18,6 @@ pub const copy_mode_pointer = @import("input/copy_mode_pointer.zig");
 pub const copy_modes = @import("input/copy_modes.zig");
 pub const favicons = @import("workspaces/favicons.zig");
 pub const history_palettes = @import("input/history_palettes.zig");
-pub const host_resources = @import("host/host_resources.zig");
 pub const key_routing = @import("input/key_routing.zig");
 pub const link_openings = @import("input/link_openings.zig");
 pub const lua_actions = @import("configuration/lua_actions.zig");

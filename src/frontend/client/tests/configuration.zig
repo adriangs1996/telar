@@ -1,5 +1,6 @@
 //! Client integration tests for configuration.
 
+const BarPosition = @import("telar-client").Position;
 const key_captures = @import("telar-client").captures;
 const TerminalClient = @import("../TerminalClient.zig");
 const host = TerminalClient.of;
@@ -891,4 +892,56 @@ test "clipboard image failures settle lifecycle without direct presentation" {
     try std.testing.expect(client.model.version().notifications > version_before_invalid.notifications);
     try std.testing.expectEqual(@as(u64, 0), host(client).view.kittyAttachments().ingressVersion());
     try std.testing.expectEqual(pending_before, host(client).presenter.pending_updates);
+}
+
+test "configuration watch rejects incomplete ownership before starting a worker" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    client.reload.force_next = true;
+    try client.scheduleConfigReload();
+    try std.testing.expect(client.reload.force_next);
+
+    client.options.config_path = "/unused/config.lua";
+    try std.testing.expectError(error.ConfigurationNotLoaded, client.scheduleConfigReload());
+    client.options.trust_path = "/unused/trust.json";
+    try std.testing.expectError(error.ConfigurationNotLoaded, client.scheduleConfigReload());
+    _ = try config_reloads.apply(client, try support.testingConfigAdoption(1, false));
+    const registry = client.plugin_registry;
+    client.plugin_registry = null;
+    defer client.plugin_registry = registry;
+    try std.testing.expectError(error.ConfigurationNotLoaded, client.scheduleConfigReload());
+    try std.testing.expect(client.reload.force_next);
+}
+
+test "bar configuration excludes Lua sources from a different model generation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    try std.testing.expect(client.barConfiguration() == null);
+    try client.synchronizeBars();
+    try std.testing.expect(client.bar_updates.nextDeadline() == null);
+    try std.testing.expect(!client.bar_updates.scheduler.pending);
+
+    _ = try config_reloads.apply(client, try support.testingConfigAdoption(1, false));
+    const generation = client.lua_generation.?;
+    try std.testing.expect(client.barConfiguration() == &generation.snapshot.bars);
+    const snapshot = &generation.snapshot;
+    _ = try client.model.applyConfiguration(
+        .{
+            .generation = generation.number + 1,
+            .sidebar_visible = snapshot.sidebar_visible,
+            .pane_gaps = snapshot.pane_gaps,
+            .window_title = snapshot.windowTitle(),
+            .bars = snapshot.bars.presentation(),
+        },
+    );
+    try std.testing.expect(client.barConfiguration() == null);
+    client.bar_updates.pending_callbacks = BarPosition.bottom_left.bit();
+    try client.synchronizeBars();
+    try std.testing.expectEqual(@as(u8, 0), client.bar_updates.pending_callbacks);
+    try std.testing.expect(client.bar_updates.nextDeadline() == null);
+    try std.testing.expect(!client.bar_updates.scheduler.pending);
 }

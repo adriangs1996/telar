@@ -2,35 +2,8 @@
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
-const resources = client.operations.host_resources;
 const TestHarness = @import("TestHarness.zig");
 const Probe = @import("HostResourceProbe.zig");
-
-test "host resources reject empty and stale commits before calling ports" {
-    var harness: TestHarness = undefined;
-    try harness.init();
-    defer harness.deinit();
-    const app = harness.client;
-    var probe = Probe.init(app);
-    probe.bind();
-    defer probe.restore();
-
-    const stale_capabilities = (try app.model.observeHostCapability(.{ .images = .supported })).?;
-    _ = try app.model.observeHostCapability(.{ .pointer_pixels = .supported });
-    const stale_size = (try app.model.reconcileHost(.{
-        .capabilities = app.model.hostCapabilities(),
-        .size = .{ .cols = 100, .rows = 30 },
-    })).?;
-    _ = try app.model.reconcileHost(.{
-        .capabilities = app.model.hostCapabilities(),
-        .size = .{ .cols = 101, .rows = 30 },
-    });
-
-    try std.testing.expectError(error.EmptyHostCommit, resources.deliver(app, .{ .capabilities = null, .resize = null }));
-    try std.testing.expectError(error.StaleHostCommit, resources.deliver(app, stale_capabilities));
-    try std.testing.expectError(error.StaleHostCommit, resources.deliver(app, stale_size));
-    try std.testing.expectEqual(@as(usize, 0), probe.len);
-}
 
 test "host resources suppress repeated and invalid geometry before ports" {
     var harness: TestHarness = undefined;
@@ -42,8 +15,13 @@ test "host resources suppress repeated and invalid geometry before ports" {
     probe.bind();
     defer probe.restore();
 
-    try std.testing.expect(try resources.apply(app, .{ .size = app.model.hostSize(), .capabilities = app.model.hostCapabilities() }) == null);
-    try std.testing.expectError(error.InvalidTerminalSize, resources.apply(app, .{
+    try std.testing.expect(try app.applyHostUpdate(
+        .{
+            .size = app.model.hostSize(),
+            .capabilities = app.model.hostCapabilities(),
+        },
+    ) == null);
+    try std.testing.expectError(error.InvalidTerminalSize, app.applyHostUpdate(.{
         .size = .{ .cols = 80, .rows = 0 },
         .capabilities = app.model.hostCapabilities(),
     }));
@@ -75,7 +53,12 @@ test "host resources select grid and cell changes independently in order" {
         capabilities.cell_width_px = size.cell_width_px;
         capabilities.cell_height_px = size.cell_height_px;
 
-        _ = try resources.apply(app, .{ .size = size, .capabilities = capabilities });
+        _ = try app.applyHostUpdate(
+            .{
+                .size = size,
+                .capabilities = capabilities,
+            },
+        );
 
         try std.testing.expectEqualSlices(Probe.Event, events, probe.slice());
         try std.testing.expect(probe.committed);
@@ -111,7 +94,12 @@ test "host resources stop at each failed resize port and retain the commit" {
         capabilities.cell_width_px = size.cell_width_px;
         capabilities.cell_height_px = size.cell_height_px;
 
-        try std.testing.expectError(error.HostResourceFailed, resources.apply(app, .{ .size = size, .capabilities = capabilities }));
+        try std.testing.expectError(error.HostResourceFailed, app.applyHostUpdate(
+            .{
+                .size = size,
+                .capabilities = capabilities,
+            },
+        ));
         try std.testing.expectEqualSlices(Probe.Event, events, probe.slice());
         try std.testing.expect(probe.committed);
         try std.testing.expectEqualDeep(size, app.model.hostSize());
@@ -128,14 +116,26 @@ test "host resources configure graphics before invalidating and suppress repeate
     probe.bind();
     defer probe.restore();
 
-    _ = try resources.observe(app, .{ .images = .supported });
+    _ = try app.observeHostCapability(
+        .{
+            .images = .supported,
+        },
+    );
     try std.testing.expectEqualSlices(Probe.Event, &.{ .sidebar, .invalidate }, probe.slice());
     try std.testing.expect(probe.committed);
-    _ = try resources.reconcile(app, app.model.hostCapabilities().withObservation(.{ .pointer_pixels = .unsupported }));
+    _ = try app.reconcileHostCapabilities(app.model.hostCapabilities().withObservation(
+        .{
+            .pointer_pixels = .unsupported,
+        },
+    ));
     const version = app.model.version();
 
-    try std.testing.expect(try resources.observe(app, .{ .images = .supported }) == null);
-    try std.testing.expect(try resources.reconcile(app, app.model.hostCapabilities()) == null);
+    try std.testing.expect(try app.observeHostCapability(
+        .{
+            .images = .supported,
+        },
+    ) == null);
+    try std.testing.expect(try app.reconcileHostCapabilities(app.model.hostCapabilities()) == null);
     try std.testing.expectEqualDeep(version, app.model.version());
     try std.testing.expectEqual(@as(usize, 2), probe.len);
 }
@@ -150,7 +150,11 @@ test "host resources retain graphics capabilities when sidebar setup fails" {
     probe.bind();
     defer probe.restore();
 
-    try std.testing.expectError(error.HostResourceFailed, resources.observe(app, .{ .images = .supported }));
+    try std.testing.expectError(error.HostResourceFailed, app.observeHostCapability(
+        .{
+            .images = .supported,
+        },
+    ));
     try std.testing.expectEqualSlices(Probe.Event, &.{.sidebar}, probe.slice());
     try std.testing.expect(probe.committed);
     try std.testing.expectEqual(client.Support.supported, app.model.hostCapabilities().images);

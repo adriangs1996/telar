@@ -27,12 +27,18 @@ state. See [Key routing](flows/key-routing.md) and the full
 
 ## Operation map
 
+Startup schedules socket tasks through `RuntimeTransportState.scheduleRead` and
+`pump`, passing the transport driver explicitly. `AttachedClient.scheduleConfigReload`
+and `synchronizeBars` select the live configuration; reload workers and bar timers
+receive only their own state and concrete dependencies. Native transport and timer
+ports bind to `NativeLoop`, and the configuration watcher binds to `ConfigurationReload`.
+
 | Trigger | Behavior entry | Reply or completion |
 | --- | --- | --- |
 | Configured action | [`action_routing.apply`](../src/client/operations/input/action_routing.zig) selects native, Lua or plugin; [`actions.apply`](../src/client/operations/input/actions.zig) enumerates native actions | Plugin/worker completion enters the process event switch with its identity |
 | Split pane | `actions.apply(.split_pane)` → [`pane_splits.request`](../src/client/operations/panes/pane_splits.zig) | `pane_opened` → `pane_openings.apply` → `pane_splits.confirm`; failure → `request_failures.apply` → `pane_splits.recover` |
 | Runtime reply | [`runtime_io.handleRead`](../src/client/entrypoints/runtime_io.zig) → [`server_messages.handleServerMessage`](../src/client/entrypoints/server_messages.zig) | The exhaustive switch calls concrete operations; receive storage remains borrowed only during dispatch |
-| Host capabilities / size | [`host_resources`](../src/client/operations/host/host_resources.zig) | Model commit, graphics, geometry and host delivery order are in that module |
+| Host capabilities / size | [`host_resources`](../src/client/AttachedClient.zig) | Model commit, graphics, geometry and host delivery order are in that module |
 | Pane focus, geometry, frame, attachment or closure | [`operations/panes`](../src/client/operations/panes/) | Each operation groups request, confirmation and recovery where applicable |
 | Tab / workspace changes | [`operations/tabs`](../src/client/operations/tabs/), [`operations/workspaces`](../src/client/operations/workspaces/) | Wire responses are cases in `server_messages`; request identity is consumed once |
 | Keyboard, mouse, paste, prompts and links | [`operations/input`](../src/client/operations/input/) | Direct policy over the client model and actual host/transport ports |

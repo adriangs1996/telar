@@ -27,24 +27,6 @@ pub fn snapshot(client: *const Client) Snapshot {
     return client.runtime_transport.outbox.snapshot();
 }
 
-/// Starts one runtime read while preserving a single outstanding token.
-///
-/// ```zig
-/// try runtime_transport.scheduleRead(client);
-/// ```
-pub fn scheduleRead(client: *Client) !void {
-    const state = &client.runtime_transport;
-    if (!state.beginRead()) {
-        return;
-    }
-
-    client.transport_driver.startRead(state) catch |err| {
-        state.cancelRead();
-
-        return err;
-    };
-}
-
 /// Releases one runtime read, dispatches its bounded message and rearms only
 /// while the client remains alive.
 ///
@@ -61,7 +43,7 @@ pub fn handleRead(client: *Client, result: anyerror!*const RuntimeMessage) !?u8 
     }
 
     try flushGraphicsCredits(client);
-    try scheduleRead(client);
+    try client.runtime_transport.scheduleRead(client.transport_driver);
 
     return null;
 }
@@ -86,12 +68,12 @@ pub fn handleSent(client: *Client, result: anyerror!void) !void {
 /// Owns a routed response until its asynchronous send completes. Example: `try runtime_transport.enqueueClientCompletion(client, reply);`
 pub fn enqueueClientCompletion(client: *Client, reply: ClientCommand) !void {
     try client.runtime_transport.outbox.pushClientCompletion(reply);
-    try pump(client);
+    try client.runtime_transport.pump(client.transport_driver);
 }
 
 pub fn enqueue(client: *Client, message: Message) !void {
     try client.runtime_transport.outbox.push(message);
-    try pump(client);
+    try client.runtime_transport.pump(client.transport_driver);
 }
 
 /// Copies bounded pane input and starts its write when idle.
@@ -106,7 +88,7 @@ pub fn enqueueInput(client: *Client, pane_id: PaneIdType, bytes: []const u8) !vo
         try client.runtime_transport.outbox.pushInput(pane_id, bytes);
     }
 
-    try pump(client);
+    try client.runtime_transport.pump(client.transport_driver);
 }
 
 /// Copies one tab rename and starts its write when idle.
@@ -116,7 +98,7 @@ pub fn enqueueInput(client: *Client, pane_id: PaneIdType, bytes: []const u8) !vo
 /// ```
 pub fn enqueueRename(client: *Client, rename: RenameTabType) !void {
     try client.runtime_transport.outbox.pushRename(rename);
-    try pump(client);
+    try client.runtime_transport.pump(client.transport_driver);
 }
 
 /// Copies one workspace rename and starts its write when idle.
@@ -126,7 +108,7 @@ pub fn enqueueRename(client: *Client, rename: RenameTabType) !void {
 /// ```
 pub fn enqueueWorkspaceRename(client: *Client, rename: RenameWorkspaceType) !void {
     try client.runtime_transport.outbox.pushWorkspaceRename(rename);
-    try pump(client);
+    try client.runtime_transport.pump(client.transport_driver);
 }
 
 /// Copies one workspace creation and starts its write when idle.
@@ -136,7 +118,7 @@ pub fn enqueueWorkspaceRename(client: *Client, rename: RenameWorkspaceType) !voi
 /// ```
 pub fn enqueueCreateWorkspace(client: *Client, request: CreateWorkspaceType) !void {
     try client.runtime_transport.outbox.pushCreateWorkspace(request);
-    try pump(client);
+    try client.runtime_transport.pump(client.transport_driver);
 }
 
 /// Copies one tab creation and starts its write when idle.
@@ -146,35 +128,35 @@ pub fn enqueueCreateWorkspace(client: *Client, request: CreateWorkspaceType) !vo
 /// ```
 pub fn enqueueCreateTab(client: *Client, request: CreateTabType) !void {
     try client.runtime_transport.outbox.pushCreateTab(request);
-    try pump(client);
+    try client.runtime_transport.pump(client.transport_driver);
 }
 
 /// Copies a prompt into its outbound slot before the editor can change it.
 /// Example: `try runtime_transport.enqueueAgentPrompt(client, request);`
 pub fn enqueueAgentPrompt(client: *Client, request: @import("telar-core").AgentPrompt) !void {
     try client.runtime_transport.outbox.pushAgentPrompt(request);
-    try pump(client);
+    try client.runtime_transport.pump(client.transport_driver);
 }
 
 /// Copies a page cursor before its reading window can change.
 /// Example: `try runtime_io.enqueueAgentHistory(client, request);`
 pub fn enqueueAgentHistory(client: *Client, request: @import("telar-core").QueryAgentHistory) !void {
     try client.runtime_transport.outbox.pushAgentHistory(request);
-    try pump(client);
+    try client.runtime_transport.pump(client.transport_driver);
 }
 
 /// Pins a query to copied provider session bytes before the view can change.
 /// Example: `try runtime_io.enqueueChangeReviewQuery(client, query);`
 pub fn enqueueChangeReviewQuery(client: *Client, query: core.QueryChangeReview) !void {
     try client.runtime_transport.outbox.pushChangeReviewQuery(query);
-    try pump(client);
+    try client.runtime_transport.pump(client.transport_driver);
 }
 
 /// Copies comment and path bytes before the originating editor can mutate them.
 /// Example: `try runtime_io.enqueueChangeReviewCommand(client, request);`
 pub fn enqueueChangeReviewCommand(client: *Client, request: core.ChangeReviewCommand) !void {
     try client.runtime_transport.outbox.pushChangeReviewCommand(request);
-    try pump(client);
+    try client.runtime_transport.pump(client.transport_driver);
 }
 
 /// Copies one notification request and starts its write when idle.
@@ -184,7 +166,7 @@ pub fn enqueueChangeReviewCommand(client: *Client, request: core.ChangeReviewCom
 /// ```
 pub fn enqueueNotification(client: *Client, request: ShowNotificationType) !void {
     try client.runtime_transport.outbox.pushNotification(request);
-    try pump(client);
+    try client.runtime_transport.pump(client.transport_driver);
 }
 
 /// Copies and coalesces one complete reconnectable client layout.
@@ -194,7 +176,7 @@ pub fn enqueueNotification(client: *Client, request: ShowNotificationType) !void
 /// ```
 pub fn enqueueClientLayout(client: *Client, update: ClientLayoutUpdateType) !void {
     try client.runtime_transport.outbox.pushClientLayout(update);
-    try pump(client);
+    try client.runtime_transport.pump(client.transport_driver);
 }
 
 /// Transfers every graphics credit that fits into the bounded outbox and
@@ -212,19 +194,7 @@ pub fn flushGraphicsCredits(client: *Client) !void {
         client.graphics.consumeCredit(credit);
     }
 
-    try pump(client);
-}
-
-/// Starts the next queued frame unless a send already owns the buffer.
-/// Example: `try runtime_io.pump(client);` after queuing a bootstrap.
-pub fn pump(client: *Client) !void {
-    const state = &client.runtime_transport;
-    const payload = try state.prepareSend() orelse return;
-    client.transport_driver.startSend(state, payload) catch |err| {
-        state.cancelSend();
-
-        return err;
-    };
+    try client.runtime_transport.pump(client.transport_driver);
 }
 
 fn recordMessage(client: *Client, observation: *const RuntimeMessage) void {

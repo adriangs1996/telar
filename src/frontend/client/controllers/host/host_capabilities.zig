@@ -12,7 +12,6 @@ const term = @import("../../../presentation/screen_support.zig");
 const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
 const HostCapabilityObservationType = @import("telar-client").HostCapabilityObservation;
 const HostCapabilitySupportType = @import("telar-client").HostCapabilitySupport;
-const host_resources = @import("telar-client").operations.host_resources;
 const std = @import("std");
 
 /// Starts the exterior-terminal probes through one owner.
@@ -93,7 +92,7 @@ pub fn observe(client: *Client, response: term.Event.TerminalResponse) !?HostCom
     }
 
     const observation = translate(response) orelse return null;
-    return host_resources.observe(client, observation);
+    return client.observeHostCapability(observation);
 }
 
 /// Settles unanswered probes and projects their fallback resources.
@@ -108,7 +107,7 @@ pub fn expire(client: *Client) !?HostCommitType {
         host(client).host_negotiation.zlib_support = .unsupported;
     }
 
-    return host_resources.reconcile(client, capabilities);
+    return client.reconcileHostCapabilities(capabilities);
 }
 
 /// Translates one parser reply into a protocol-free host observation.

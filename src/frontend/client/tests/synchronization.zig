@@ -41,7 +41,6 @@ const workspace_snapshots = @import("telar-client").operations.workspace_snapsho
 const ResyncRequiredType = @import("telar-core").ResyncRequired;
 const ApplicationSessionResyncRequiredOutcome = @import("telar-client").ApplicationSessionResyncRequiredOutcome;
 const resync_requirements = @import("telar-client").operations.resync_requirements;
-const runtime_io = @import("telar-client").runtime_io;
 
 test "pane opening rejects an unknown request without client effects" {
     var harness: TestHarness = undefined;
@@ -1307,7 +1306,7 @@ test "resync outbox failure releases its snapshot correlation so a later notice 
 
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version, client.model.version());
-    try runtime_io.pump(client);
+    try client.runtime_transport.pump(client.transport_driver);
     try harness.settle();
     var outgoing: [256]u8 = undefined;
     for (0..capacity_module) |_| {

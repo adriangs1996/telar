@@ -76,8 +76,8 @@ test "runtime reads own one token and do not rearm after shutdown" {
     defer harness.deinit();
     const client = harness.client;
 
-    try runtime_transport.scheduleRead(client);
-    try runtime_transport.scheduleRead(client);
+    try client.runtime_transport.scheduleRead(client.transport_driver);
+    try client.runtime_transport.scheduleRead(client.transport_driver);
     try std.testing.expect(client.runtime_transport.receive_pending);
 
     var payload: [64]u8 = undefined;

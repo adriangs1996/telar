@@ -25,23 +25,6 @@ pub const position_count = @typeInfo(PositionType).@"enum".fields.len;
 
 pub const CommandExecutionId = @import("../../bars/command_execution.zig").Id;
 
-/// Replaces all deadlines from the active typed configuration generation.
-///
-/// ```zig
-/// try synchronize(client);
-/// ```
-pub fn synchronize(client: *Client) !void {
-    const generation = client.lua_generation;
-    const configuration = activeConfiguration(client);
-    client.bar_updates.synchronize(.{
-        .generation = if (generation) |value| value.number else client.model.configurationGeneration(),
-        .configuration = configuration,
-        .now_ns = monotonic_module(client.io),
-    });
-
-    try rearm(client);
-}
-
 /// Completes one replaceable timer and folds all expired source ticks.
 ///
 /// ```zig
@@ -50,11 +33,11 @@ pub fn synchronize(client: *Client) !void {
 pub fn handleTick(client: *Client, result: anyerror!void) !void {
     try client.bar_updates.scheduler.complete(result);
     const generation = client.lua_generation orelse {
-        try synchronize(client);
+        try client.synchronizeBars();
         return;
     };
-    const configuration = activeConfiguration(client) orelse {
-        try synchronize(client);
+    const configuration = client.barConfiguration() orelse {
+        try client.synchronizeBars();
         return;
     };
     const due = client.bar_updates.takeDue(.{
@@ -67,7 +50,7 @@ pub fn handleTick(client: *Client, result: anyerror!void) !void {
     client.bar_updates.pending_commands |= due.command_mask;
     try invokeNextCallback(client, configuration);
     try startNextCommand(client);
-    try rearm(client);
+    try client.bar_updates.rearm(client.io, client.timers);
 }
 
 /// Resolves one command worker by exact identity and discards stale generations.
@@ -78,7 +61,7 @@ pub fn handleTick(client: *Client, result: anyerror!void) !void {
 pub fn completeCommand(client: *Client, completion: BarUpdatesCompletion) !void {
     const execution = client.bar_updates.finishCommand(completion.execution_id) orelse return;
     const generation = client.lua_generation;
-    const configuration = activeConfiguration(client);
+    const configuration = client.barConfiguration();
     if (generation != null and configuration != null and generation.?.number == execution.generation) {
         const source = configuration.?.source(execution.position);
         if (source.* == .command and source.command.generation == execution.generation) {
@@ -198,15 +181,6 @@ fn callbackContext(client: *const Client, output: ?[]const u8) BarCallbackContex
     };
 }
 
-fn activeConfiguration(client: *const Client) ?*const ConfigurationType {
-    const generation = client.lua_generation orelse return null;
-    if (generation.number != client.model.configurationGeneration()) {
-        return null;
-    }
-
-    return &generation.snapshot.bars;
-}
-
 fn invokeNextCallback(client: *Client, configuration: *const ConfigurationType) !void {
     for (std.enums.values(PositionType)) |position| {
         if (client.bar_updates.pending_callbacks & position.bit() == 0) {
@@ -232,7 +206,7 @@ fn startNextCommand(client: *Client) !void {
         return;
     }
     const generation = client.lua_generation orelse return;
-    const configuration = activeConfiguration(client) orelse return;
+    const configuration = client.barConfiguration() orelse return;
 
     for (std.enums.values(PositionType)) |position| {
         if (client.bar_updates.pending_commands & position.bit() == 0) {
@@ -251,21 +225,6 @@ fn startNextCommand(client: *Client) !void {
             return err;
         };
         return;
-    }
-}
-
-fn rearm(client: *Client) !void {
-    const scheduler = &client.bar_updates.scheduler;
-    const deadline_ns = if (client.bar_updates.pending_callbacks != 0)
-        monotonic_module(client.io)
-    else
-        client.bar_updates.nextDeadline();
-    switch (scheduler.update(client.io, deadline_ns)) {
-        .idle, .retained => {},
-        .schedule => client.timers.arm(.bar, scheduler) catch |err| {
-            scheduler.schedulingFailed();
-            return err;
-        },
     }
 }
 

@@ -7,6 +7,8 @@ const std = @import("std");
 const PositionType = @import("../../bars/model.zig").Position;
 const DueInput = @import("DueInput.zig");
 const Due = @import("Due.zig");
+const TimerKind = @import("../../resources/timers.zig").Kind;
+const HostTimers = @import("../../resources/HostTimers.zig");
 const State = @This();
 
 scheduler: SchedulerType = .{},
@@ -16,6 +18,22 @@ pending_callbacks: u8 = 0,
 pending_commands: u8 = 0,
 command_execution: ?CommandExecution = null,
 next_command_execution_id: u64 = 1,
+
+/// Keeps one timer for the earliest deadline or an immediate pending callback.
+/// A rejected timer releases its reservation so the next attempt can retry.
+/// Example: `try state.rearm(io, timers);`
+pub fn rearm(self: *State, io: std.Io, timers: HostTimers) !void {
+    const deadline_ns = if (self.pending_callbacks != 0) core.monotonic(io) else self.nextDeadline();
+
+    switch (self.scheduler.update(io, deadline_ns)) {
+        .idle, .retained => {},
+        .schedule => timers.arm(.bar, &self.scheduler) catch |err| {
+            self.scheduler.schedulingFailed();
+
+            return err;
+        },
+    }
+}
 
 pub fn synchronize(state: *State, input: Synchronization) void {
     state.generation = input.generation;
@@ -94,4 +112,61 @@ pub fn finishCommand(state: *State, execution_id: bar_updates.CommandExecutionId
 
     state.command_execution = null;
     return execution;
+}
+
+test "bar timer scheduling retries failure and reuses one pending worker" {
+    const Timer = struct {
+        reject: bool = true,
+        calls: usize = 0,
+
+        fn arm(raw: *anyopaque, kind: TimerKind, scheduler: *SchedulerType) !void {
+            const self: *@This() = @ptrCast(@alignCast(raw));
+            self.calls += 1;
+            try std.testing.expectEqual(.bar, kind);
+            try std.testing.expect(scheduler.pending);
+
+            if (self.reject) {
+                return error.TimerBusy;
+            }
+        }
+    };
+
+    var timer: Timer = .{};
+    const timers: HostTimers = .{
+        .context = &timer,
+        .arm_fn = Timer.arm,
+    };
+    var state: State = .{};
+    const io = std.testing.io;
+    try state.rearm(io, timers);
+    try std.testing.expectEqual(@as(usize, 0), timer.calls);
+    state.pending_callbacks = PositionType.bottom_left.bit();
+    try std.testing.expectError(error.TimerBusy, state.rearm(io, timers));
+    try std.testing.expect(!state.scheduler.pending);
+    timer.reject = false;
+    try state.rearm(io, timers);
+    try std.testing.expect(state.scheduler.pending);
+    const immediate = state.scheduler.deadline_ns.load(.acquire);
+    try std.testing.expect(immediate <= core.monotonic(io));
+    try state.rearm(io, timers);
+    try std.testing.expectEqual(@as(usize, 2), timer.calls);
+
+    state.pending_callbacks = 0;
+    state.deadlines[@intFromEnum(PositionType.bottom_left)] = immediate + std.time.ns_per_s;
+    try state.rearm(io, timers);
+    try std.testing.expectEqual(immediate + std.time.ns_per_s, state.scheduler.deadline_ns.load(.acquire));
+    try std.testing.expectEqual(@as(usize, 2), timer.calls);
+    state.synchronize(
+        .{
+            .generation = 2,
+            .configuration = null,
+            .now_ns = core.monotonic(io),
+        },
+    );
+    try state.rearm(io, timers);
+    try std.testing.expectEqual(bar_updates.no_deadline, state.scheduler.deadline_ns.load(.acquire));
+    try state.scheduler.complete({});
+    try state.rearm(io, timers);
+    try std.testing.expectEqual(@as(usize, 2), timer.calls);
+    try std.testing.expect(!state.scheduler.pending);
 }

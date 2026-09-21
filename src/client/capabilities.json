@@ -250,7 +250,6 @@
     "operations/operations.zig",
     "operations/host/Completion.zig",
     "operations/host/clipboard_images.zig",
-    "operations/host/host_resources.zig",
     "operations/input/PathCompletionsState.zig",
     "operations/input/action_routing.zig",
     "operations/input/actions.zig",

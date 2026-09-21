@@ -24,10 +24,8 @@ const HostClockType = @import("telar-client").HostClock;
 const LocalTimeType = @import("telar-client").LocalTime;
 const TransportDriverType = @import("telar-client").TransportDriver;
 const RuntimeTransportStateType = @import("telar-client").RuntimeTransportState;
-const name_prompts = @import("telar-client").operations.name_prompts;
 const ConfigReloadWatcherType = @import("telar-client").ConfigReloadWatcher;
 const ConfigWaitArgsType = @import("telar-client").ConfigWaitArgs;
-const config_reload = @import("telar-client").config_reload;
 const DeliveryType = @import("telar-client").Delivery;
 const InputType = @import("telar-client").NotificationInput;
 const AgentSoundType = @import("telar-core").AgentSound;
@@ -35,6 +33,8 @@ const CaptureRequestType = @import("telar-client").CaptureRequest;
 const CaptureType = @import("telar-client").Capture;
 const std = @import("std");
 const GuiClient = @import("GuiClient.zig");
+const NativeLoop = @import("NativeLoop.zig");
+const ConfigurationReload = @import("ConfigurationReload.zig");
 const host = GuiClient.of;
 const native = @import("native/native.zig");
 
@@ -123,14 +123,23 @@ pub fn clock(client: *Client) HostClockType {
     return .{ .context = client, .local_time_fn = localTime };
 }
 
-/// Example: `const port = transport(app);`.
-pub fn transport(client: *Client) TransportDriverType {
-    return .{ .context = client, .start_read_fn = startRuntimeRead, .start_send_fn = startRuntimeSend };
+/// Binds runtime I/O directly to the loop that owns its completion tasks.
+/// Example: `const port = transport(loop);`
+pub fn transport(loop: *NativeLoop) TransportDriverType {
+    return .{
+        .context = loop,
+        .start_read_fn = startRuntimeRead,
+        .start_send_fn = startRuntimeSend,
+    };
 }
 
-/// Example: `const port = configWatcher(app);`.
-pub fn configWatcher(client: *Client) ConfigReloadWatcherType {
-    return .{ .context = client, .start_fn = startConfigWatch };
+/// Binds configuration work to its owned worker and completion handoff.
+/// Example: `const port = configWatcher(&loop.configuration);`
+pub fn configWatcher(configuration: *ConfigurationReload) ConfigReloadWatcherType {
+    return .{
+        .context = configuration,
+        .start_fn = startConfigWatch,
+    };
 }
 
 fn adoptAttachment(_: *anyopaque, _: *CaptureType) !bool {
@@ -276,18 +285,26 @@ fn startCapture(_: *anyopaque, _: CaptureRequestType) !void {
 }
 
 fn startConfigWatch(context: *anyopaque, args: ConfigWaitArgsType) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    try host(client).driver.configuration.schedule(args);
+    const configuration: *ConfigurationReload = @ptrCast(@alignCast(context));
+
+    try configuration.schedule(args);
 }
 
 fn startRuntimeRead(context: *anyopaque, state: *RuntimeTransportStateType) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    try host(client).driver.startRead(state);
+    const loop: *NativeLoop = @ptrCast(@alignCast(context));
+
+    try loop.startRead(state);
 }
 
 fn startRuntimeSend(context: *anyopaque, state: *RuntimeTransportStateType, payload: []const u8) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    try host(client).driver.startSend(.{ .state = state, .bytes = payload });
+    const loop: *NativeLoop = @ptrCast(@alignCast(context));
+
+    try loop.startSend(
+        .{
+            .state = state,
+            .bytes = payload,
+        },
+    );
 }
 
 fn syncAttachmentTarget(_: *anyopaque, _: ?AttachmentTargetType) bool {
