@@ -7,7 +7,8 @@ const std = @import("std");
 const name_prompts = @import("telar-client").operations.name_prompts;
 const support = @import("support.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const InputHandler = @import("../resources/InputHandler.zig");
+const host_inputs = @import("../controllers/input/host_inputs.zig");
+const input_operations = @import("telar-client").operations;
 const encodeWorkspaceSnapshot_module = @import("telar-core").encodeWorkspaceSnapshot;
 const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
@@ -44,8 +45,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
 
     const version_before_request = client.model.version();
     const pending_updates_before_request = host(client).presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
-    try handler.forward("mainx\r");
+    try host_inputs.forward(client, "mainx\r");
 
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.name_prompt.active());
@@ -119,8 +119,7 @@ test "pending workspace operation keeps the rename prompt without sending" {
     const version_before_request = client.model.version();
 
     try std.testing.expect(name_prompts.beginWorkspaceRename(client));
-    var handler: InputHandler = .{ .client = client };
-    try handler.forward("x\r");
+    try host_inputs.forward(client, "x\r");
 
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.model.name_prompt.active());
@@ -129,7 +128,7 @@ test "pending workspace operation keeps the rename prompt without sending" {
     try support.expectNonPromptVersionEqual(version_before_request, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 
-    try handler.forward("\x1b");
+    try host_inputs.forward(client, "\x1b");
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.name_prompt.active());
 }
@@ -244,11 +243,10 @@ test "tab rename separates prompt submission canonical commit and presentation" 
     const pending_updates_before_request = host(client).presenter.pending_updates;
 
     try std.testing.expect(name_prompts.beginTabRename(client, TestHarness.bootstrap_location.tab_id));
-    var handler: InputHandler = .{ .client = client };
-    try std.testing.expect(handler.capturesKeys());
+    try std.testing.expect(input_operations.key_routing.captures(client));
 
-    try handler.forward("x");
-    try handler.forward("\r");
+    try host_inputs.forward(client, "x");
+    try host_inputs.forward(client, "\r");
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expectEqualStrings("shell", client.model.workspace.activeConst().?.labelSlice());
@@ -313,8 +311,7 @@ test "tab rename response must match the requested identity" {
     client.request_lifecycle.tracker = .{};
 
     try std.testing.expect(name_prompts.beginTabRename(client, TestHarness.bootstrap_location.tab_id));
-    var handler: InputHandler = .{ .client = client };
-    try handler.forward("x\r");
+    try host_inputs.forward(client, "x\r");
     const version_before_response = client.model.version();
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
@@ -348,8 +345,7 @@ test "a failed tab rename preserves the label and notifies" {
     client.request_lifecycle.tracker = .{};
 
     try std.testing.expect(name_prompts.beginTabRename(client, TestHarness.bootstrap_location.tab_id));
-    var handler: InputHandler = .{ .client = client };
-    try handler.forward("x\r");
+    try host_inputs.forward(client, "x\r");
     const version_before_failure = client.model.version();
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
@@ -381,8 +377,7 @@ test "pending tab operation keeps the rename prompt without sending" {
     const version_before_request = client.model.version();
 
     try std.testing.expect(name_prompts.beginTabRename(client, TestHarness.bootstrap_location.tab_id));
-    var handler: InputHandler = .{ .client = client };
-    try handler.forward("x\r");
+    try host_inputs.forward(client, "x\r");
 
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.model.name_prompt.active());
@@ -391,7 +386,7 @@ test "pending tab operation keeps the rename prompt without sending" {
     try support.expectNonPromptVersionEqual(version_before_request, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 
-    try handler.forward("\x1b");
+    try host_inputs.forward(client, "\x1b");
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.name_prompt.active());
 }
@@ -409,9 +404,8 @@ test "a full outbox keeps the tab rename prompt and rolls back correlation" {
     }
 
     try std.testing.expect(name_prompts.beginTabRename(client, TestHarness.bootstrap_location.tab_id));
-    var handler: InputHandler = .{ .client = client };
 
-    try std.testing.expectError(error.ClientOutboxFull, handler.forward("x\r"));
+    try std.testing.expectError(error.ClientOutboxFull, host_inputs.forward(client, "x\r"));
 
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.model.name_prompt.active());
@@ -433,8 +427,7 @@ test "escaping the prompt editor closes model state without changing mode" {
     try std.testing.expect(name_prompts.beginWorkspaceCreate(client));
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expect(!client.model.copyModeActive());
-    var handler: InputHandler = .{ .client = client };
-    try handler.forward("\x1b");
+    try host_inputs.forward(client, "\x1b");
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.name_prompt.active());
 }

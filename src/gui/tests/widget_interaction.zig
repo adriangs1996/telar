@@ -123,7 +123,7 @@ fn initSession() !*Session {
 
 fn send(session: *Session, event: Event) !void {
     try session.gui.input.acceptEvent(event);
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
 }
 
 fn editorTarget(session: *Session, wanted: Target.Field) !Target {
@@ -149,7 +149,7 @@ test "native prompt preedit owns bytes moves candidate caret and commits only to
     var bytes = [_]u8{ 'x', 'y' };
     try gui.input.acceptEvent(.{ .composition = .{ .target_id = target.id.target_id, .generation = target.id.generation, .text = &bytes, .selection_start = 2, .selection_end = 2 } });
     @memset(&bytes, 'z');
-    try gui.input.drain(&gui.app);
+    try gui.drainInput();
     try std.testing.expectEqualStrings("xy", gui.widgets.preedit.text());
     try std.testing.expectEqualStrings("hello", gui.app.model.name_prompt.currentConst().?.field.text());
     var after: native.TextContext = .{};
@@ -1512,7 +1512,7 @@ test "conversation controls focus their pane and stale controls cannot focus a r
 }
 
 fn adoptAgentBinding(session: *Session, binding: client.config_model.ConfiguredBinding) void {
-    session.gui.input.adopt(&session.gui.app, .{ .prefix = client.default_prefix, .bindings = &.{binding}, .escape_timeout_ns = std.time.ns_per_s, .sequence_timeout_ns = std.time.ns_per_hour });
+    session.gui.adoptBindings(.{ .prefix = client.default_prefix, .bindings = &.{binding}, .escape_timeout_ns = std.time.ns_per_s, .sequence_timeout_ns = std.time.ns_per_hour });
 }
 
 fn expectReleasedKeys(session: *Session) !void {
@@ -1561,23 +1561,22 @@ test "held agent scroll bindings pace transcript movement and stop on release" {
     try publish(session);
     adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up }));
     const pane = session.gui.app.model.agentPane(Session.pane_id).?;
-    var handler: @import("../input/InputHandler.zig") = .{ .app = &session.gui.app };
     var key: client.Key = .{ .code = .{ .char = .init("-") }, .mods = .{ .alt = true }, .physical = .{ .value = 45 } };
 
-    _ = try session.gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = 0 }, &handler);
+    _ = try session.gui.routeKey(.{ .key = key, .raw = "", .now_ns = 0 });
     try settleConversationScroll(session);
     try std.testing.expectEqual(@as(u32, 3), pane.transcript_scroll);
     key.phase = .repeat;
-    _ = try session.gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = 99 * std.time.ns_per_ms }, &handler);
+    _ = try session.gui.routeKey(.{ .key = key, .raw = "", .now_ns = 99 * std.time.ns_per_ms });
     try settleConversationScroll(session);
     try std.testing.expectEqual(@as(u32, 3), pane.transcript_scroll);
-    _ = try session.gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = 100 * std.time.ns_per_ms }, &handler);
+    _ = try session.gui.routeKey(.{ .key = key, .raw = "", .now_ns = 100 * std.time.ns_per_ms });
     try settleConversationScroll(session);
     try std.testing.expectEqual(@as(u32, 6), pane.transcript_scroll);
     key.phase = .release;
-    _ = try session.gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = 200 * std.time.ns_per_ms }, &handler);
+    _ = try session.gui.routeKey(.{ .key = key, .raw = "", .now_ns = 200 * std.time.ns_per_ms });
     key.phase = .repeat;
-    _ = try session.gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = 300 * std.time.ns_per_ms }, &handler);
+    _ = try session.gui.routeKey(.{ .key = key, .raw = "", .now_ns = 300 * std.time.ns_per_ms });
     try settleConversationScroll(session);
     try std.testing.expectEqual(@as(u32, 6), pane.transcript_scroll);
     try std.testing.expectEqualStrings("", pane.composerSlice());
@@ -1597,27 +1596,26 @@ test "agent scroll bindings respect transcript bounds and attachment identity" {
         }
     } else return error.MissingTranscript;
     try std.testing.expect(transcript.scroll_limit > 3);
-    var handler: @import("../input/InputHandler.zig") = .{ .app = &session.gui.app };
 
-    _ = try handler.action(.{ .scroll_pane = .down });
+    _ = try session.gui.executeAction(.{ .scroll_pane = .down });
     try settleConversationScroll(session);
     try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
     try client.agent_threads.scroll(&session.gui.app, pane.id, transcript.scroll_limit - 1);
-    _ = try handler.action(.{ .scroll_pane = .up });
+    _ = try session.gui.executeAction(.{ .scroll_pane = .up });
     try settleConversationScroll(session);
     try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
-    _ = try handler.action(.{ .scroll_pane = .up });
+    _ = try session.gui.executeAction(.{ .scroll_pane = .up });
     try settleConversationScroll(session);
     try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
 
     pane.attached = false;
-    try std.testing.expect(handler.repeatPolicy(.{ .scroll_pane = .down }) == null);
-    _ = try handler.action(.{ .scroll_pane = .down });
+    try std.testing.expect(client.operations.action_routing.repeatPolicy(&session.gui.app, .{ .scroll_pane = .down }) == null);
+    _ = try session.gui.executeAction(.{ .scroll_pane = .down });
     try settleConversationScroll(session);
     try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
     pane.attached = true;
     pane.attachment_generation += 1;
-    _ = try handler.action(.{ .scroll_pane = .down });
+    _ = try session.gui.executeAction(.{ .scroll_pane = .down });
     try settleConversationScroll(session);
     try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
     try std.testing.expectEqualStrings("", pane.composerSlice());
@@ -1786,7 +1784,7 @@ test "an agent chord timeout cannot restore pane focus before repaint" {
     _ = panes.focusPane(terminal);
     gui.input.router.binding_since_ns = 0;
     gui.input.router.sequence_timeout_ns = 0;
-    try gui.input.expire(&gui.app, {});
+    try gui.expireBinding({});
     try std.testing.expectEqual(terminal, panes.layout.focused());
     try std.testing.expectEqualStrings("", panes.findConst(Session.pane_id).?.composerSlice());
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 121 }, .phase = .release } });
@@ -1959,7 +1957,7 @@ test "agent unprefixed sequence timeout restores text and physical ownership to 
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 112 } } });
     session.gui.input.router.binding_since_ns = 0;
     session.gui.input.router.sequence_timeout_ns = 0;
-    try session.gui.input.expire(&session.gui.app, {});
+    try session.gui.expireBinding({});
     try std.testing.expectEqualStrings("g", session.gui.app.model.agentPane(Session.pane_id).?.composerSlice());
     try std.testing.expectEqual(visible, session.gui.app.model.sidebarVisible());
     try std.testing.expectEqual(@as(usize, 0), session.gui.input.router.leases.len);
@@ -2011,13 +2009,13 @@ test "one native input batch retires composer replay ownership before a terminal
     try gui.input.acceptEvent(.{ .pointer = .{ .kind = .press, .x = x, .y = y } });
     try gui.input.acceptEvent(.{ .pointer = .{ .kind = .release, .x = x, .y = y } });
     try gui.input.acceptEvent(.{ .text = .{ .bytes = "g", .physical = .{ .value = 115 } } });
-    try gui.input.drain(&gui.app);
+    try gui.drainInput();
     try std.testing.expectEqual(terminal, panes.layout.focused());
     try std.testing.expect(gui.input.router.bindingDeadline() != null);
     try std.testing.expectEqualStrings("", panes.findConst(Session.pane_id).?.composerSlice());
     gui.input.router.binding_since_ns = 0;
     gui.input.router.sequence_timeout_ns = 0;
-    try gui.input.expire(&gui.app, {});
+    try gui.expireBinding({});
     try session.settle();
     try std.testing.expectEqualStrings("g", session.input[0..session.input_len]);
     try std.testing.expectEqualStrings("", panes.findConst(Session.pane_id).?.composerSlice());
@@ -2888,4 +2886,19 @@ test "link clipboard confirmation remains visible when review opens before nativ
     try publish(session);
     try std.testing.expect(session.renderer.quads.items().len > before);
     try std.testing.expect(session.gui.chrome.animation.deadline_ns != null);
+}
+
+test "native batch routes text to a newly opened prompt and retires the composer replay target" {
+    const session = try agentSession();
+    defer session.deinit();
+    const gui = session.gui;
+    adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{"ctrl+r"}, .history_palette));
+    try std.testing.expect(try gui.acceptInput(.{ .key = .{ .code = .{ .char = .init("r") }, .mods = .{ .ctrl = true } } }));
+    try std.testing.expect(try gui.acceptInput(.{ .text = .{ .bytes = "x" } }));
+    try gui.drainInput();
+    try session.settle();
+
+    try std.testing.expectEqualStrings("x", gui.app.model.name_prompt.currentConst().?.field.text());
+    try std.testing.expectEqualStrings("", gui.app.model.agentPane(Session.pane_id).?.composerSlice());
+    try std.testing.expect(gui.input.binding_target == null);
 }

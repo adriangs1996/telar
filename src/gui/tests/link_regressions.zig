@@ -143,7 +143,7 @@ fn prefixAfterPointer(code: u32) !void {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const gui = fixture.session.gui;
-    gui.input.adopt(&gui.app, .{ .prefix = try client.parseKey("ctrl+space"), .bindings = &.{}, .escape_timeout_ns = std.time.ns_per_s, .sequence_timeout_ns = 10 * std.time.ns_per_s });
+    gui.adoptBindings(.{ .prefix = try client.parseKey("ctrl+space"), .bindings = &.{}, .escape_timeout_ns = std.time.ns_per_s, .sequence_timeout_ns = 10 * std.time.ns_per_s });
     try fixture.send(.{ .kind = 4, .code = ' ', .mods = 4, .physical = 50 });
     try fixture.send(.{ .kind = 4, .code = ' ', .physical = 50, .phase = 3 });
     try std.testing.expect(gui.input.router.prefixPending());

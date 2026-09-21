@@ -61,7 +61,7 @@ test "GUI reload preserves an in-flight frame and keeps input and receipt ACKs m
     try std.testing.expectEqual(pixels, session.renderer.atlas.?.pixels.ptr);
     try std.testing.expectEqualSlices(Quad, quads, session.renderer.quads.items());
     try session.gui.input.accept(.{ .kind = 1, .text = "echo ready", .len = 10 });
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
     try session.receiveFrame(2);
     try session.settle();
     try std.testing.expectEqualStrings("echo ready", session.input[0..session.input_len]);

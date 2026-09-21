@@ -344,8 +344,7 @@ fn routeAgentBinding(gui: *GuiClient, event: Event) !bool {
 
         // A binding may replace its composer with a tab or modal before keyUp.
         // Existing fallback leases still complete through their original router.
-        var handler: @import("../../input/InputHandler.zig") = .{ .app = &gui.app };
-        gui.input.stopped = try gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = client.monotonic(gui.app.io) }, &handler) == .stop;
+        _ = try gui.routeKey(.{ .key = key, .raw = "", .now_ns = client.monotonic(gui.app.io) });
         return true;
     }
 
@@ -381,8 +380,7 @@ fn routeAgentBinding(gui: *GuiClient, event: Event) !bool {
     }
 
     gui.widgets.cancelComposition();
-    var handler: @import("../../input/InputHandler.zig") = .{ .app = &gui.app, .widget_target = gui.input.binding_target };
-    gui.input.stopped = try gui.input.router.routeEvent(.{ .key = key, .raw = "", .now_ns = client.monotonic(gui.app.io) }, &handler) == .stop;
+    _ = try gui.routeKey(.{ .key = key, .raw = "", .now_ns = client.monotonic(gui.app.io) });
     return true;
 }
 

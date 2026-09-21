@@ -56,7 +56,13 @@ test "native semantic router resolves every TUI default action" {
         var router = try routing.build(.{ .prefix = client.default_prefix, .bindings = &.{}, .escape_timeout_ns = 1, .sequence_timeout_ns = 1 });
         var capture: ActionCapture = .{};
         for (binding.keys[0..binding.len]) |key| {
-            _ = try router.routeEvent(.{ .key = key, .raw = "", .now_ns = 1 }, &capture);
+            switch (router.routeEvent(.{ .key = key, .raw = "", .now_ns = 1 }, .{})) {
+                .action => |request| {
+                    _ = try capture.action(request.value);
+                },
+                .pending, .discard => {},
+                else => return error.UnexpectedForward,
+            }
         }
 
         try std.testing.expectEqualDeep(binding.action, capture.value.?);
@@ -73,7 +79,7 @@ test "native rename prompt receives pasted text without leaking to the child" {
     try std.testing.expect(session.gui.app.model.name_prompt.active());
     const text = "new workspace";
     try session.gui.input.accept(.{ .kind = 2, .text = text.ptr, .len = text.len });
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
     try session.settle();
     try std.testing.expectEqualStrings("shell" ++ text, session.gui.app.model.name_prompt.currentConst().?.field.text());
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
@@ -84,13 +90,13 @@ test "native custom prefix navigates pane focus fullscreen and copy mode" {
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    session.gui.input.adopt(&session.gui.app, .{ .prefix = try client.parseKey("ctrl+space"), .bindings = &.{}, .escape_timeout_ns = 1, .sequence_timeout_ns = 1 });
+    session.gui.adoptBindings(.{ .prefix = try client.parseKey("ctrl+space"), .bindings = &.{}, .escape_timeout_ns = 1, .sequence_timeout_ns = 1 });
     const model = session.gui.app.model.activeTabModel().?;
     const second: core.PaneId = @enumFromInt(11);
     try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
     try session.gui.input.accept(.{ .kind = 4, .code = ' ', .mods = 4 });
     try session.gui.input.accept(.{ .kind = 3, .code = 7 });
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
     try session.settle();
     try std.testing.expectEqual(Session.pane_id, model.layout.focused().?);
     try customChord(session, "z");
@@ -105,14 +111,14 @@ test "native custom prefix navigates pane focus fullscreen and copy mode" {
 fn chord(session: *Session, text: []const u8) !void {
     try session.gui.input.accept(.{ .kind = 4, .code = 'b', .mods = 4 });
     try session.gui.input.accept(.{ .kind = 1, .text = text.ptr, .len = text.len });
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
     try session.settle();
 }
 
 fn customChord(session: *Session, text: []const u8) !void {
     try session.gui.input.accept(.{ .kind = 4, .code = ' ', .mods = 4 });
     try session.gui.input.accept(.{ .kind = 1, .text = text.ptr, .len = text.len });
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
     try session.settle();
 }
 
@@ -154,7 +160,7 @@ test "native pointer rejects queued presses after geometry replacement" {
     try session.gui.input.accept(.{ .kind = 6, .code = 1, .x = 20, .y = 20 });
     session.gui.input.setGeometry(.{ 8, 8 }, app.model.hostSize());
     try session.gui.input.accept(.{ .kind = 6, .code = 2, .x = 20, .y = 20 });
-    try session.gui.input.drain(app);
+    try session.gui.drainInput();
     try session.settle();
     try std.testing.expect(app.model.pointerSelection() == null);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
@@ -164,15 +170,14 @@ test "native bindings preserve ownership through hot reload and matching release
     const session = try Session.init();
     defer session.deinit();
     try session.bootstrap();
-    const app = &session.gui.app;
     const binding = try client.config_model.ConfiguredBinding.parse(&.{"ctrl+k"}, .toggle_workspace_list);
-    session.gui.input.adopt(app, .{ .prefix = client.default_prefix, .bindings = &.{binding}, .escape_timeout_ns = 1, .sequence_timeout_ns = 1 });
+    session.gui.adoptBindings(.{ .prefix = client.default_prefix, .bindings = &.{binding}, .escape_timeout_ns = 1, .sequence_timeout_ns = 1 });
     try session.gui.input.accept(.{ .kind = 4, .code = 'k', .mods = 4, .physical = 9 });
-    try session.gui.input.drain(app);
-    session.gui.input.adopt(app, .{ .prefix = client.default_prefix, .bindings = &.{}, .escape_timeout_ns = 1, .sequence_timeout_ns = 1 });
+    try session.gui.drainInput();
+    session.gui.adoptBindings(.{ .prefix = client.default_prefix, .bindings = &.{}, .escape_timeout_ns = 1, .sequence_timeout_ns = 1 });
     try session.gui.input.accept(.{ .kind = 4, .code = 'k', .physical = 9, .phase = 2 });
     try session.gui.input.accept(.{ .kind = 4, .code = 'k', .physical = 9, .phase = 3 });
-    try session.gui.input.drain(app);
+    try session.gui.drainInput();
     try session.settle();
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }
@@ -217,7 +222,7 @@ test "native pointer rejects a newer layout even before a GPU flight starts" {
     try std.testing.expect(!app.presentation.inFlight());
     try session.gui.input.accept(.{ .kind = 6, .code = 1, .x = 10, .y = 10 });
     try session.gui.input.accept(.{ .kind = 6, .code = 2, .x = 10, .y = 10 });
-    try session.gui.input.drain(app);
+    try session.gui.drainInput();
     try session.settle();
     try std.testing.expect(app.model.pointerSelection() == null);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
@@ -240,10 +245,10 @@ test "native focus loss releases an acquired child mouse gesture" {
     const x = @as(f64, @floatFromInt(view.content.x)) * app.model.hostSize().cell_width_px + @as(f64, @floatFromInt(session.renderer.origin[0])) + 1;
     const y = @as(f64, @floatFromInt(view.content.y)) * app.model.hostSize().cell_height_px + @as(f64, @floatFromInt(session.renderer.origin[1])) + 1;
     try session.gui.input.accept(.{ .kind = 6, .code = 1, .x = x, .y = y });
-    try session.gui.input.drain(app);
+    try session.gui.drainInput();
     try session.settle();
     try std.testing.expect(session.gui.input.pointer.owners[0] == .child);
-    try session.gui.input.cancelPointer(app);
+    try session.gui.cancelPointer();
     try session.settle();
     try std.testing.expect(session.gui.input.pointer.owners[0] == .shared);
     try std.testing.expect(std.mem.endsWith(u8, session.input[0..session.input_len], "m"));
@@ -263,7 +268,7 @@ test "native mouse release reaches its original tab and a pane hidden by fullscr
     var release = press;
     release.code = 2;
     try input.accept(release);
-    try input.drain(app);
+    try session.gui.drainInput();
     const request = try core.decodeClient(session.pending.?);
     try std.testing.expectEqual(Session.pane_id, request.pane_input.pane_id);
     try std.testing.expect(std.mem.endsWith(u8, request.pane_input.bytes, "m"));
@@ -284,7 +289,7 @@ test "native mouse release reaches its original tab and a pane hidden by fullscr
     _ = model.layout.focusPane(second_pane);
     try std.testing.expect(model.viewForPane(Session.pane_id, app.geometry().area) == null);
     try input.accept(release);
-    try input.drain(app);
+    try session.gui.drainInput();
     const hidden_request = try core.decodeClient(session.pending.?);
     try std.testing.expectEqual(Session.pane_id, hidden_request.pane_input.pane_id);
     try std.testing.expect(std.mem.endsWith(u8, hidden_request.pane_input.bytes, "m"));
@@ -442,7 +447,7 @@ test "native application repeat keeps its pane when focus changes" {
     try drainInput(session);
     _ = model.layout.focusPane(second);
     try session.gui.input.accept(.{ .kind = 1, .text = "j".ptr, .len = 1, .physical = 39, .phase = 2 });
-    try session.gui.input.drain(app);
+    try session.gui.drainInput();
     const request = try core.decodeClient(session.pending.?);
     try std.testing.expectEqual(Session.pane_id, request.pane_input.pane_id);
     try std.testing.expectEqualStrings("j", request.pane_input.bytes);

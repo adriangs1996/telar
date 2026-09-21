@@ -15,7 +15,6 @@ const request_lifecycle = @import("telar-client").request_lifecycle;
 const client_startup = @import("../controllers/session/client_startup.zig");
 const platform = @import("../../platform/platform.zig");
 const rectSize_module = @import("telar-client").rectSize;
-const InputHandler = @import("../resources/InputHandler.zig");
 const kitty = @import("../../graphics/kitty.zig");
 const TerminalColorsType = @import("telar-core").TerminalColors;
 const encodeClientLayoutSnapshot_module = @import("telar-core").encodeClientLayoutSnapshot;
@@ -254,11 +253,11 @@ test "client startup waits for runtime layout before its initial open" {
     try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
     try std.testing.expect(!try client_startup.advance(client));
     try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
-    var input: InputHandler = .{ .client = client };
-    try input.terminalResponse(.{ .foreground_color = .{ .r = 255, .g = 255, .b = 255 } });
+    const input = client;
+    try host_inputs.terminalResponse(input, .{ .foreground_color = .{ .r = 255, .g = 255, .b = 255 } });
     try std.testing.expect(!try client_startup.advance(client));
     try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
-    try input.terminalResponse(.{ .background_color = .{ .r = 16, .g = 16, .b = 16 } });
+    try host_inputs.terminalResponse(input, .{ .background_color = .{ .r = 16, .g = 16, .b = 16 } });
     try std.testing.expect(!try client_startup.advance(client));
     try harness.settle();
 
@@ -310,9 +309,9 @@ test "startup timeout publishes unknown colors once and consumes late replies" {
     try std.testing.expectEqualDeep(TerminalColorsType{}, colors.configure_terminal_colors);
     try std.testing.expect((try harness.nextClientMessage(&buffer)) == .request_runtime_state);
 
-    var input: InputHandler = .{ .client = client };
+    const input = client;
     const revision = client.model.version();
-    try input.terminalResponse(.{ .background_color = .{ .r = 16, .g = 16, .b = 16 } });
+    try host_inputs.terminalResponse(input, .{ .background_color = .{ .r = 16, .g = 16, .b = 16 } });
     try std.testing.expectEqualDeep(revision, client.model.version());
     try std.testing.expect(!try client_startup.advance(client));
     try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);

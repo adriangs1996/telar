@@ -20,7 +20,8 @@ const plugin_actions = @import("telar-client").operations.plugin_actions;
 const WorkerResultType = @import("telar-client").WorkerResult;
 const stableId_module = @import("telar-core").stableId;
 const name_prompts = @import("telar-client").operations.name_prompts;
-const InputHandler = @import("../resources/InputHandler.zig");
+const host_inputs = @import("../controllers/input/host_inputs.zig");
+const input_operations = @import("telar-client").operations;
 const Action = @import("telar-client").Action;
 const ControlType = @import("telar-client").Control;
 const client_actions = @import("telar-client").operations.actions;
@@ -475,7 +476,6 @@ test "name prompt suppresses a configured action before source dispatch" {
     try std.testing.expect(name_prompts.beginActiveTabRename(client));
     const version = client.model.version();
     const outbox_len = client.runtime_transport.outbox.len;
-    var handler: InputHandler = .{ .client = client };
 
     const suppressed = [_]Action{
         .toggle_sidebar,
@@ -484,7 +484,7 @@ test "name prompt suppresses a configured action before source dispatch" {
         .{ .plugin = .{ .plugin = 1, .action = 1 } },
     };
     for (suppressed) |action| {
-        const control = try handler.action(action);
+        const control = try input_operations.action_routing.apply(client, action);
         try std.testing.expect(control == .continue_routing);
         try std.testing.expect(client.model.name_prompt.active());
         try std.testing.expect(client.model.sidebarVisible());
@@ -520,9 +520,8 @@ test "Lua callback applies a validated batch through model observation" {
     try harness.settleModelPresentation();
     const version_before = client.model.version();
     const pending_before = host(client).presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
 
-    const control = try handler.action(configured);
+    const control = try input_operations.action_routing.apply(client, configured);
 
     try std.testing.expect(control == .continue_routing);
     try std.testing.expect(client.model.workspaceListCollapsed());
@@ -564,9 +563,8 @@ test "Lua callback validates every plugin reference before native effects" {
     try harness.settleModelPresentation();
     const version_before = client.model.version();
     const pending_before = host(client).presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
 
-    const control = try handler.action(configured);
+    const control = try input_operations.action_routing.apply(client, configured);
 
     try std.testing.expect(control == .continue_routing);
     try std.testing.expect(client.model.sidebarVisible());
@@ -607,9 +605,8 @@ test "Lua expression emits semantic keys through pane input" {
     try harness.settleModelPresentation();
     const version_before = client.model.version();
     const pending_before = host(client).presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
 
-    const control = try handler.action(configured);
+    const control = try input_operations.action_routing.apply(client, configured);
 
     try std.testing.expect(control == .continue_routing);
     try std.testing.expectEqualDeep(version_before, client.model.version());
@@ -645,9 +642,8 @@ test "Lua expression paste uses pane modes and copy-mode authority" {
         \\}
     );
     const version = client.model.version();
-    var handler: InputHandler = .{ .client = client };
 
-    try std.testing.expectEqual(ControlType.continue_routing, try handler.action(configured));
+    try std.testing.expectEqual(ControlType.continue_routing, try input_operations.action_routing.apply(client, configured));
     try std.testing.expectEqualDeep(version, client.model.version());
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -659,7 +655,7 @@ test "Lua expression paste uses pane modes and copy-mode authority" {
     _ = try client_actions.apply(client, .enter_copy_mode);
     const copy_version = client.model.version();
     const outbox_len = client.runtime_transport.outbox.len;
-    try std.testing.expectEqual(ControlType.continue_routing, try handler.action(configured));
+    try std.testing.expectEqual(ControlType.continue_routing, try input_operations.action_routing.apply(client, configured));
 
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expectEqualDeep(copy_version, client.model.version());
@@ -687,9 +683,8 @@ test "Lua callback failure commits one diagnostic without direct presentation" {
     try harness.settleModelPresentation();
     const version_before = client.model.version();
     const pending_before = host(client).presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
 
-    const control = try handler.action(configured);
+    const control = try input_operations.action_routing.apply(client, configured);
 
     try std.testing.expect(control == .continue_routing);
     try std.testing.expect(std.mem.indexOf(
@@ -734,10 +729,9 @@ test "attachment modal captures semantic keys until escape closes it" {
     const version = client.model.version();
     const interaction_revision = host(client).view.interactionVersion();
     const pending_updates = host(client).presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
 
-    try std.testing.expect(handler.capturesKeys());
-    try handler.key(try parseKey_module("x"));
+    try std.testing.expect(input_operations.key_routing.captures(client));
+    try host_inputs.key(client, try parseKey_module("x"));
 
     try std.testing.expect(host(client).view.hasAttachmentModal());
     try std.testing.expectEqual(interaction_revision, host(client).view.interactionVersion());
@@ -745,10 +739,10 @@ test "attachment modal captures semantic keys until escape closes it" {
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
-    try handler.key(try parseKey_module("escape"));
+    try host_inputs.key(client, try parseKey_module("escape"));
 
     try std.testing.expect(!host(client).view.hasAttachmentModal());
-    try std.testing.expect(!handler.capturesKeys());
+    try std.testing.expect(!input_operations.key_routing.captures(client));
     try std.testing.expectEqual(interaction_revision + 1, host(client).view.interactionVersion());
     try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -769,9 +763,8 @@ test "control-v reaches the pane when no clipboard preview target exists" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    var handler: InputHandler = .{ .client = client };
 
-    try handler.key(try parseKey_module("ctrl+v"));
+    try host_inputs.key(client, try parseKey_module("ctrl+v"));
 
     try std.testing.expect(client.model.clipboardCapture() == null);
     try harness.settle();

@@ -8,7 +8,6 @@ const std = @import("std");
 const encodeKey_module = @import("telar-client").encodeKey;
 const Chunk = @import("../controllers/input/Chunk.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
-const InputHandler = @import("../resources/InputHandler.zig");
 const PointerShapeType = @import("telar-core").PointerShape;
 const CellType = @import("telar-core").Cell;
 const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
@@ -117,14 +116,13 @@ test "host pointer shape follows semantic hover through paced presentation" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    var handler: InputHandler = .{ .client = client };
 
     try std.testing.expectEqual(
         PointerShapeType.default,
         host(client).presenter.screen.presented_mouse_pointer.?,
     );
 
-    try handler.mouse(.{
+    try host_inputs.mouse(client, .{
         .x = host(client).view.regions.top.x,
         .y = host(client).view.regions.top.y,
         .kind = .move,
@@ -136,7 +134,7 @@ test "host pointer shape follows semantic hover through paced presentation" {
         host(client).presenter.screen.presented_mouse_pointer.?,
     );
 
-    try handler.mouse(.{
+    try host_inputs.mouse(client, .{
         .x = host(client).view.regions.sidebar.w - 1,
         .y = 5,
         .kind = .move,
@@ -148,7 +146,7 @@ test "host pointer shape follows semantic hover through paced presentation" {
         host(client).presenter.screen.presented_mouse_pointer.?,
     );
 
-    try handler.mouse(.{
+    try host_inputs.mouse(client, .{
         .x = host(client).view.regions.workbench.x,
         .y = host(client).view.regions.workbench.y,
         .kind = .move,
@@ -179,7 +177,7 @@ test "host pointer shape follows semantic hover through paced presentation" {
         try std.testing.expectEqual(shape, host(client).presenter.screen.presented_mouse_pointer.?);
     }
 
-    try handler.mouse(.{ .x = host(client).view.regions.top.x, .y = host(client).view.regions.top.y, .kind = .move });
+    try host_inputs.mouse(client, .{ .x = host(client).view.regions.top.x, .y = host(client).view.regions.top.y, .kind = .move });
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(PointerShapeType.pointer, host(client).presenter.screen.presented_mouse_pointer.?);
@@ -187,14 +185,14 @@ test "host pointer shape follows semantic hover through paced presentation" {
     _ = try client_actions.apply(client, .enter_copy_mode);
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    try handler.mouse(.{ .x = host(client).view.regions.workbench.x, .y = host(client).view.regions.workbench.y, .kind = .move });
-    try handler.key(.plain(.escape));
+    try host_inputs.mouse(client, .{ .x = host(client).view.regions.workbench.x, .y = host(client).view.regions.workbench.y, .kind = .move });
+    try host_inputs.key(client, .plain(.escape));
     try std.testing.expect(!client.model.copyModeActive());
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(PointerShapeType.default, host(client).presenter.screen.presented_mouse_pointer.?);
 
-    try handler.mouse(.{ .x = host(client).view.regions.workbench.x, .y = host(client).view.regions.workbench.y, .kind = .move });
+    try host_inputs.mouse(client, .{ .x = host(client).view.regions.workbench.x, .y = host(client).view.regions.workbench.y, .kind = .move });
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(PointerShapeType.zoom_in, host(client).presenter.screen.presented_mouse_pointer.?);
@@ -345,8 +343,7 @@ test "shared pane graphics reach the host inside the cell frame" {
     var images = host(client).graphics_store.images.iterator();
     const entry = images.next() orelse return error.ImageMissing;
     try std.testing.expect(!entry.value_ptr.delivery.host_acked);
-    var handler: InputHandler = .{ .client = client };
-    try handler.terminalResponse(.{ .kitty_graphics = .{
+    try host_inputs.terminalResponse(client, .{ .kitty_graphics = .{
         .image_id = entry.value_ptr.delivery.external_id,
         .supported = true,
     } });

@@ -13,7 +13,18 @@ const Client = @import("telar-client").AttachedClient;
 const runtime_transport = @import("telar-client").runtime_io;
 const mark_module = @import("telar-core").mark;
 const Chunk = @import("Chunk.zig");
-const InputHandler = @import("../../resources/InputHandler.zig");
+const key_routing = @import("telar-client").operations.key_routing;
+const KeyType = @import("telar-client").Key;
+const paste_routing = @import("telar-client").operations.paste_routing;
+const term = @import("../../../presentation/screen_support.zig");
+const MouseType = @import("telar-client").Mouse;
+const pointer_routing = @import("telar-client").operations.pointer_routing;
+const host_capabilities = @import("../host/host_capabilities.zig");
+const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
+const presentation_lifecycle = @import("../../presentation/presentation_lifecycle.zig");
+const action_routing = @import("telar-client").operations.action_routing;
+const ControlType = @import("telar-client").Control;
+const tab_drag = @import("tab_drag.zig");
 const monotonic_module = @import("telar-client").monotonic;
 const parseKey_module = @import("telar-client").parseKey;
 const default_prefix_module = @import("telar-client").default_prefix;
@@ -108,8 +119,10 @@ fn routeChunk(client: *Client) !bool {
     }
 
     if (client.startup.holdsInput()) {
-        var handler: InputHandler = .{ .client = client };
-        try state.startup_input.feed(chunk.slice(), &handler);
+        var early = chunk.slice();
+        while (try state.startup_input.next(&early)) |response| {
+            try terminalResponse(client, response);
+        }
         try scheduleRead(client);
         return false;
     }
@@ -142,13 +155,12 @@ pub fn replayStartup(client: *Client) !bool {
 fn routeBytes(client: *Client, bytes: []const u8) !bool {
     const state = &host(client).host_input;
     client.presentation.noteInput(monotonic_module(client.io));
-    var handler: InputHandler = .{ .client = client };
     const prefix_was_pending = state.router.prefixPending();
     const lease_overflows_before = state.router.leaseOverflowCount();
-    const control = try state.router.feed(.{
+    const control = try feed(client, .{
         .bytes = bytes,
         .now_ns = monotonic_module(client.io),
-    }, &handler);
+    });
     client.telemetry.metrics.key_lease_overflows +%= state.router.leaseOverflowCount() -% lease_overflows_before;
     if (control == .stop) {
         return true;
@@ -183,19 +195,173 @@ pub fn handleBindingTimeout(client: *Client, result: anyerror!void) !bool {
 
 fn expire(client: *Client, expiry: Expiry) !bool {
     const state = &host(client).host_input;
-    var handler: InputHandler = .{ .client = client };
     const prefix_was_pending = state.router.prefixPending();
     const control = switch (expiry) {
-        .input => try state.router.expireInput(monotonic_module(client.io), &handler),
-        .binding => try state.router.expireBinding(monotonic_module(client.io), &handler),
+        .input => if (state.router.expireInput(monotonic_module(client.io))) |event|
+            try decoded(client, event, monotonic_module(client.io))
+        else
+            .continue_routing,
+        .binding => try applyDecision(client, state.router.expireBinding(monotonic_module(client.io))),
     };
     if (control == .stop) {
+        state.router.clear();
         return true;
     }
 
     try finishRouting(client, prefix_was_pending);
 
     return false;
+}
+
+/// Routes one borrowed byte slice after the native router has replayed it.
+///
+/// ```zig
+/// try host_inputs.forward(client, bytes);
+/// ```
+pub fn forward(client: *Client, bytes: []const u8) !void {
+    if (std.mem.eql(u8, bytes, "\x1b[O")) {
+        _ = tab_drag.cancel(client);
+    }
+
+    if (std.mem.eql(u8, bytes, "\x1b") and tab_drag.cancel(client)) {
+        return;
+    }
+
+    _ = try key_routing.apply(client, .{ .bytes = bytes });
+}
+
+/// Routes one semantic host key after native binding resolution.
+///
+/// ```zig
+/// try host_inputs.key(client, pressed);
+/// ```
+pub fn key(client: *Client, value: KeyType) !void {
+    const escape_key = &host(client).view.tab_drag.escape_key;
+    if (value.physical) |physical| {
+        if (escape_key.*) |owner| {
+            if (owner.eql(physical)) {
+                if (value.phase == .release) {
+                    escape_key.* = null;
+                }
+
+                return;
+            }
+        }
+    }
+
+    if (value.code == .escape and tab_drag.cancel(client)) {
+        if (value.phase == .press) {
+            escape_key.* = value.physical;
+        }
+
+        return;
+    }
+
+    _ = try key_routing.apply(client, .{ .key = value });
+}
+
+pub fn mouse(client: *Client, event: MouseType) !void {
+    if (try tab_drag.retained(client, event)) {
+        return;
+    }
+
+    _ = try pointer_routing.apply(client, event);
+}
+
+/// Reconciles one host-terminal response without forwarding it: capability
+/// probe replies update the host model, and Kitty replies for pane images
+/// tell the graphics store whether the host took a shared object.
+///
+/// ```zig
+/// try host_inputs.terminalResponse(client, response);
+/// ```
+pub fn terminalResponse(client: *Client, response: term.Event.TerminalResponse) !void {
+    _ = try host_capabilities.observe(client, response);
+    switch (response) {
+        .kitty_graphics => |reply| {
+            if (!kitty_delivery.noteHostReply(&host(client).graphics_store, reply.image_id, reply.supported)) {
+                return;
+            }
+            try runtime_transport.flushGraphicsCredits(client);
+            try presentation_lifecycle.observe(client);
+        },
+        else => {},
+    }
+}
+
+/// Execute each decision before decoding the next event, so later keys observe
+/// changes to focus and modal state. Example: `_ = try host_inputs.feed(client, input);`
+pub fn feed(client: *Client, input: Router.Feed) !ControlType {
+    const router = &host(client).host_input.router;
+    var remaining = input;
+    while (router.next(&remaining)) |event| {
+        if (try decoded(client, event, input.now_ns) == .stop) {
+            router.clear();
+            return .stop;
+        }
+    }
+    return .continue_routing;
+}
+
+fn decoded(client: *Client, event: Router.Decoded, now_ns: u64) !ControlType {
+    const router = &host(client).host_input.router;
+    if (event.paste_content) {
+        _ = try paste_routing.content(client, event.raw);
+        return .continue_routing;
+    }
+    switch (event.event) {
+        .key => |value| {
+            errdefer router.eventFailed(value);
+            return applyDecision(client, router.routeEvent(.{ .key = value, .raw = event.raw, .now_ns = now_ns }, .{
+                .captures_keys = key_routing.captures(client),
+                .repeat_policy = if (router.repeatAction()) |held| action_routing.repeatPolicy(client, held) else null,
+            }));
+        },
+        .mouse => |value| {
+            router.cancelSequence();
+            try mouse(client, value);
+        },
+        .terminal_response => |value| {
+            router.observeHostResponse();
+            try terminalResponse(client, value);
+        },
+        .paste_start => {
+            _ = try applyDecision(client, router.interrupt());
+            _ = try paste_routing.start(client);
+        },
+        .paste_end => {
+            _ = try applyDecision(client, router.interrupt());
+            _ = try paste_routing.finish(client);
+        },
+        .incomplete => {
+            _ = try applyDecision(client, router.interrupt());
+        },
+    }
+    return .continue_routing;
+}
+
+fn applyDecision(client: *Client, decision: Router.Decision) !ControlType {
+    const router = &host(client).host_input.router;
+    switch (decision) {
+        .forward => |value| try key(client, value.key),
+        .replay => |value| {
+            for (value.held_keys[0..value.held_key_len]) |held| {
+                try key(client, held);
+            }
+            if (value.current_key) |current| {
+                try key(client, current);
+            }
+        },
+        .action => |request| {
+            const control = try action_routing.apply(client, request.value);
+            if (control == .continue_routing) {
+                router.actionCompleted(request, action_routing.repeatPolicy(client, request.value));
+            }
+            return control;
+        },
+        .pending, .discard => {},
+    }
+    return .continue_routing;
 }
 
 fn finishRouting(client: *Client, prefix_was_pending: bool) !void {

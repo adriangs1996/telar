@@ -10,7 +10,7 @@ request identity. The ownership map is [capabilities.md](capabilities.md);
 
 | Process | Start | Update | Input | Drawing / delivery |
 | --- | --- | --- | --- | --- |
-| GUI | [`GuiClient.start`](../src/gui/GuiClient.zig) | `GuiClient.update` → `dispatch` in the same file | `acceptInput` owns incoming bytes; `.input_ready` → `inputReady` → [`NativeInput.drain`](../src/gui/NativeInput.zig) | `prepare`; `.presented` → `complete` |
+| GUI | [`GuiClient.start`](../src/gui/GuiClient.zig) | `GuiClient.update` → `dispatch` in the same file | `acceptInput` owns incoming bytes; `.input_ready` → `inputReady` → [`GuiClient.drainInput`](../src/gui/GuiClient.zig) | `prepare`; `.presented` → `complete` |
 | TUI | [`run`](../src/frontend/client/run.zig) | [`events.update`](../src/frontend/client/entrypoints/events.zig) → `dispatch` in the same file | `.input` → [`host_inputs.handleOwnedRead`](../src/frontend/client/controllers/input/host_inputs.zig) | [`presentation_lifecycle`](../src/frontend/client/presentation/presentation_lifecycle.zig) observes changes, prepares drawing, and consumes write completion |
 | Runtime | [`Runtime.init` / `run`](../src/backend/runtime/Runtime.zig) | `Runtime.update`: exhaustive event switch | `.client_message` → client read admission → [`requests.dispatch`](../src/backend/runtime/application/requests.zig) | PTY/VT changes publish bounded cell frames; the runtime owns no window |
 
@@ -18,6 +18,12 @@ There are two processes and one state owner per client connection. The GUI and
 TUI are host alternatives, not additional runtime authorities. `AttachedClient`
 contains the shared client state; adapters embed it and own their rendering and
 OS resources. The runtime survives their exit.
+
+Keyboard routing has an explicit result boundary: `GenericRouter.routeEvent`
+returns `Decision` data. `GuiClient.applyInputDecision` and `host_inputs.applyDecision`
+execute it with an exhaustive switch, then route the next event against current
+state. See [Key routing](flows/key-routing.md) and the full
+[split trace](flows/pane-split.md).
 
 ## Operation map
 

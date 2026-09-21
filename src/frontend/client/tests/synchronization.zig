@@ -7,7 +7,8 @@ const std = @import("std");
 const pane_openings = @import("telar-client").operations.pane_openings;
 const RequestIdType = @import("telar-core").RequestId;
 const PaneOpenedType = @import("telar-core").PaneOpened;
-const InputHandler = @import("../resources/InputHandler.zig");
+const host_inputs = @import("../controllers/input/host_inputs.zig");
+const input_operations = @import("telar-client").operations;
 const client_actions = @import("telar-client").operations.actions;
 const TerminalSizeType = @import("telar-core").TerminalSize;
 const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
@@ -119,8 +120,7 @@ test "new tab request captures launch source geometry and continuation without m
     const version_before_request = harness.client.model.version();
     const pending_updates_before_request = host(harness.client).presenter.pending_updates;
 
-    const handler: InputHandler = .{ .client = harness.client };
-    _ = try client_actions.apply(handler.client, .new_tab);
+    _ = try client_actions.apply(harness.client, .new_tab);
     try harness.settle();
 
     var buffer: [512]u8 = undefined;
@@ -150,8 +150,7 @@ test "new pane inherits cwd from the focused runtime pane" {
     try harness.bootstrap();
     harness.client.options.arguments = &.{"/bin/sh"};
 
-    const handler: InputHandler = .{ .client = harness.client };
-    _ = try client_actions.apply(handler.client, .{ .split_pane = .horizontal });
+    _ = try client_actions.apply(harness.client, .{ .split_pane = .horizontal });
     try harness.settle();
 
     var buffer: [512]u8 = undefined;
@@ -170,9 +169,8 @@ test "new workspace inherits cwd from the focused runtime pane" {
     harness.client.options.arguments = &.{"/bin/sh"};
     harness.client.request_lifecycle.tracker = .{};
 
-    var handler: InputHandler = .{ .client = harness.client };
-    _ = try client_actions.apply(handler.client, .new_workspace);
-    try handler.forward("agents\r");
+    _ = try client_actions.apply(harness.client, .new_workspace);
+    try host_inputs.forward(harness.client, "agents\r");
     try harness.settle();
 
     var buffer: [512]u8 = undefined;
@@ -358,8 +356,7 @@ test "workspace handoff reserves its captured paste closing marker" {
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
     client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
-    var input_handler: InputHandler = .{ .client = client };
-    try input_handler.pasteStart();
+    _ = try input_operations.paste_routing.start(client);
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const opening = try harness.nextClientMessage(&buffer);
@@ -423,8 +420,7 @@ test "clicking a sidebar agent hands off directly to its pane" {
         .agents = client.model.agentSnapshot(),
         .force = true,
     });
-    var handler: InputHandler = .{ .client = client };
-    try handler.mouse(.{ .x = 4, .y = 4, .kind = .press });
+    try host_inputs.mouse(client, .{ .x = 4, .y = 4, .kind = .press });
     try harness.settle();
 
     var buffer: [256]u8 = undefined;

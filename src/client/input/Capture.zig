@@ -22,3 +22,23 @@ pub fn key(capture: *Capture, value: KeyType) !void {
 pub fn forward(_: *Capture, _: []const u8) !void {
     return error.UnexpectedRawInput;
 }
+
+const GenericRouter = @import("GenericRouter.zig").Type;
+const Router = GenericRouter(routing_tests.Action, .{ .max_bindings = 8, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 }, void);
+
+pub fn apply(self: *Capture, decision: Router.Decision) !keybind_module.Control {
+    switch (decision) {
+        .forward => |value| try self.key(value.key),
+        .replay => |value| {
+            for (value.held_keys[0..value.held_key_len]) |held| {
+                try self.key(held);
+            }
+            if (value.current_key) |current| {
+                try self.key(current);
+            }
+        },
+        .action => |request| return self.action(request.value),
+        .pending, .discard => {},
+    }
+    return .continue_routing;
+}

@@ -41,7 +41,7 @@ fn publish(session: *Session) !void {
 
 fn send(session: *Session, event: Event) !void {
     try session.gui.input.acceptEvent(event);
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
 }
 
 fn targetFor(session: *Session, action: Target.Action) !Target {

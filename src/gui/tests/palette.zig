@@ -277,19 +277,19 @@ test "native history keeps its own modal and records no palette rows" {
 fn chord(session: *Session, text: []const u8) !void {
     try session.gui.input.accept(.{ .kind = 4, .code = 'b', .mods = 4 });
     try session.gui.input.accept(.{ .kind = 1, .text = text.ptr, .len = text.len });
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
     try session.settle();
 }
 
 fn typeText(session: *Session, text: []const u8) !void {
     try session.gui.input.accept(.{ .kind = 1, .text = text.ptr, .len = text.len });
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
     try session.settle();
 }
 
 fn special(session: *Session, code: u32) !void {
     try session.gui.input.accept(.{ .kind = 3, .code = code });
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
     try session.settle();
 }
 

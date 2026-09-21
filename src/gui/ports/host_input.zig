@@ -1,7 +1,6 @@
 const client = @import("telar-client");
 const GuiClient = @import("../GuiClient.zig");
 const thread_items = @import("../widgets/interaction/thread_items.zig");
-const NativeInput = @import("../NativeInput.zig");
 
 /// Example: `app.host_input_source = host_input.port(app);`
 pub fn port(app: *client.AttachedClient) client.HostInputSource {
@@ -15,12 +14,12 @@ fn resumeRead(context: *anyopaque) !void {
 
 fn promptBytes(context: *anyopaque, bytes: []const u8) !void {
     const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    try NativeInput.routePromptBytes(app, bytes);
+    _ = try client.operations.name_prompts.handleInput(app, .{ .paste_text = bytes });
 }
 
 fn adopt(context: *anyopaque, config: client.RouterConfig) void {
     const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    GuiClient.of(app).input.adopt(app, config);
+    GuiClient.of(app).adoptBindings(config);
 }
 
 fn enterCopy(context: *anyopaque, pane_id: @import("telar-core").PaneId) bool {

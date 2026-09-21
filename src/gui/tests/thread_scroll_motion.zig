@@ -73,7 +73,7 @@ fn sendAt(session: *Session, target: Target, event: Event) !void {
     located.x = target.bounds.x + 2;
     located.y = target.bounds.y + 2;
     try session.gui.input.acceptEvent(.{ .scroll = located });
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
 }
 
 fn addAgentPane(session: *Session) !void {
@@ -282,7 +282,7 @@ test "native gesture and momentum keep their original pane when the pointer cros
     try sendAt(session, first, .{ .precise = true, .phase = .begin, .delta_y = -4 });
     try sendAt(session, second, .{ .precise = true, .phase = .update, .delta_y = -3 });
     try session.gui.input.acceptEvent(.{ .scroll = .{ .precise = true, .phase = .end, .x = -100, .y = -100 } });
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
     try sendAt(session, second, .{ .precise = true, .momentum = .begin, .delta_y = -2 });
     try sendAt(session, second, .{ .precise = true, .momentum = .end, .delta_y = -0.5 });
     const first_pane = session.gui.app.model.agentPane(Session.pane_id).?;

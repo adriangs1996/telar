@@ -249,7 +249,7 @@ test "native keyboard and clipboard use the focused pane and bracketed paste mod
     try session.gui.input.accept(.{ .kind = 3, .code = 1 });
     const pasted = "café\nsecond line";
     try session.gui.input.accept(.{ .kind = 2, .text = pasted.ptr, .len = pasted.len });
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
     try session.settle();
     try std.testing.expectEqualStrings("printf 'hola\\n'\r\x1b[200~café\nsecond line\x1b[201~", session.input[0..session.input_len]);
 }

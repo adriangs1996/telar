@@ -8,8 +8,12 @@ The client operation is [pane_splits.zig](../../src/client/operations/panes/pane
 ## Request
 
 Start with the process table in [entrypoints.md](../entrypoints.md). In the GUI,
-`GuiClient.update` dispatches `.input_ready`, and native binding resolution
-reaches `actions.apply`. Its `.split_pane` case directly calls
+`GuiClient.update` dispatches `.input_ready` to `GuiClient.drainInput`.
+`dispatchKey` (or the text branch) reaches `routeKey`, which calls
+`router.routeEvent(event, context)`. The router returns `.action` with
+`.split_pane = .horizontal`. `GuiClient.applyInputDecision` executes that request
+through `executeAction` → `action_routing.apply` → `actions.apply`.
+Its `.split_pane` case directly calls
 `pane_splits.request`. The default `<prefix> %` maps to `.horizontal`: the new
 pane is to the right of the original.
 

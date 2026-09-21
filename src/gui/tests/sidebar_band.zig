@@ -9,7 +9,6 @@ const ConfigFixture = @import("ConfigurationFixture.zig");
 const Session = @import("Session.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
 const SidebarBand = @import("../widgets/SidebarBand.zig");
-const InputHandler = @import("../input/InputHandler.zig");
 
 test {
     _ = SidebarBand;
@@ -123,19 +122,18 @@ test "the keyboard resize action moves the band by sixteen logical pixels withou
     const gui = fixture.session.gui;
     const renderer = &fixture.session.renderer;
     const shared = gui.app.model.sidebarWidth();
-    var handler: InputHandler = .{ .app = &gui.app };
     const revision = gui.chrome.revision;
-    try std.testing.expectEqual(client.Control.continue_routing, try handler.action(.{ .resize_sidebar = .right }));
+    try std.testing.expectEqual(client.Control.continue_routing, try gui.executeAction(.{ .resize_sidebar = .right }));
     try std.testing.expectEqual(@as(f32, 300), gui.sidebar.logical);
     try std.testing.expect(gui.chrome.revision != revision);
-    try std.testing.expectEqual(client.Control.continue_routing, try handler.action(.{ .resize_sidebar = .left }));
-    try std.testing.expectEqual(client.Control.continue_routing, try handler.action(.{ .resize_sidebar = .left }));
+    try std.testing.expectEqual(client.Control.continue_routing, try gui.executeAction(.{ .resize_sidebar = .left }));
+    try std.testing.expectEqual(client.Control.continue_routing, try gui.executeAction(.{ .resize_sidebar = .left }));
     try std.testing.expectEqual(@as(f32, 268), gui.sidebar.logical);
     try std.testing.expectEqual(shared, gui.app.model.sidebarWidth());
     try fixture.measure(.{ .width = renderer.viewport[0], .height = renderer.viewport[1], .scale = 1 });
     try std.testing.expectEqual(@as(u32, 268), renderer.sidebar.width);
     for (0..20) |_| {
-        _ = try handler.action(.{ .resize_sidebar = .right });
+        _ = try gui.executeAction(.{ .resize_sidebar = .right });
     }
 
     try std.testing.expectEqual(@as(f32, 480), gui.sidebar.logical);

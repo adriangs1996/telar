@@ -44,7 +44,7 @@ test "native admitted terminal key admits only a newer pane frame before cadence
     defer session.deinit();
     try begin(session);
     try session.gui.input.acceptEvent(.{ .key = .{ .code = .{ .char = .init("x") } } });
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
     try session.settle();
     try std.testing.expectEqualStrings("x", session.input[0..session.input_len]);
     try std.testing.expect(session.driver.frame_pacer.waitUntil(&.{currentPane(session)}, @intFromEnum(Time.after_input)) != null);
@@ -100,7 +100,7 @@ test "native local prefix shortcut grants no terminal frame grace" {
     defer session.deinit();
     try begin(session);
     try session.gui.input.acceptEvent(.{ .key = .{ .code = client.default_prefix.code, .mods = .{ .ctrl = true } } });
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
     try session.settle();
     try std.testing.expect(session.gui.projection().status_mode == .prefix);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
@@ -117,7 +117,7 @@ test "native older GPU completion preserves a newer input hint and sends no extr
     const token = try session.gui.prepare(&session.renderer);
     try std.testing.expect(token != 0);
     try session.gui.input.acceptEvent(.{ .key = .{ .code = .{ .char = .init("x") } } });
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
     try session.settle();
     try std.testing.expectEqualStrings("x", session.input[0..session.input_len]);
     try session.receiveFrame(@intFromEnum(Frame.echo));

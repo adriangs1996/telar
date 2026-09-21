@@ -17,6 +17,14 @@ const Message = @import("gui_event.zig").Message;
 const InputEvent = @import("input/event.zig").Event;
 const review_dispatch = @import("change_review/dispatch.zig");
 
+const input_routing = @import("input/router.zig");
+const widget_routing = @import("widgets/interaction/routing.zig");
+const KeyInput = @import("input/KeyInput.zig");
+const ClipboardResult = @import("input/ClipboardResult.zig");
+const ScrollSample = @import("input/ScrollSample.zig");
+const PointerEvent = @import("input/PointerEvent.zig");
+const PasteChunk = @import("PasteChunk.zig");
+
 const GuiClient = @This();
 
 app: client.AttachedClient,
@@ -179,9 +187,11 @@ pub fn update(self: *GuiClient) !?u8 {
     const status: ?u8 = turn: {
         var batch = try loop.inbox.begin();
         defer loop.inbox.end();
+
         while (try loop.inbox.next(&batch)) |event| {
             const path = core.enter(pathFor(event));
             defer path.restore();
+
             if (try self.dispatch(event)) |exit_status| {
                 break :turn exit_status;
             }
@@ -194,6 +204,7 @@ pub fn update(self: *GuiClient) !?u8 {
         try loop.configuration.poll(&self.app);
         break :turn null;
     };
+
     self.refreshPointer();
     return status;
 }
@@ -207,7 +218,7 @@ fn dispatch(self: *GuiClient, event: Message) !?u8 {
         .presented => |result| try self.complete(result.token, result.delivered),
         .configuration_ready => try self.driver.configuration.accept(&self.app),
         .input_timeout => |result| try result,
-        .binding_timeout => |result| try self.input.expire(&self.app, result),
+        .binding_timeout => |result| try self.expireBinding(result),
         .sidebar_animation_tick => |result| _ = try client.operations.sidebar_animations.handleTick(&self.app, result),
         .notification_tick => |result| _ = try client.operations.notifications.handleTick(&self.app, result),
         .bar_tick => |result| try client.operations.bar_updates.handleTick(&self.app, result),
@@ -230,7 +241,18 @@ fn dispatch(self: *GuiClient, event: Message) !?u8 {
 
 fn pathFor(event: Message) core.Path {
     return switch (event) {
-        .configuration_ready, .notification_tick, .bar_tick, .bar_command, .plugin_result, .link_opened, .path_completion, .favicon, .diagram_ready, .syntax_ready, .change_review_ready => .observation,
+        .configuration_ready,
+        .notification_tick,
+        .bar_tick,
+        .bar_command,
+        .plugin_result,
+        .link_opened,
+        .path_completion,
+        .favicon,
+        .diagram_ready,
+        .syntax_ready,
+        .change_review_ready,
+        => .observation,
         else => .interactive,
     };
 }
@@ -253,25 +275,390 @@ pub fn receive(gui: *GuiClient, result: anyerror!*const client.RuntimeMessage) !
 
 /// Consumes bounded native input and schedules another turn if it can advance.
 /// Example: `try gui.inputReady();`
-pub fn inputReady(gui: *GuiClient) !void {
-    if (gui.input.len != 0) {
-        gui.input_revision +%= 1;
-        try gui.input.drain(&gui.app);
-        try gui.resumeInput();
+pub fn inputReady(self: *GuiClient) !void {
+    if (self.input.len != 0) {
+        self.input_revision +%= 1;
+        try self.drainInput();
+        try self.resumeInput();
     }
+}
+
+/// Adopts bindings and retires the deadline of the previous keymap.
+/// Example: `gui.adoptBindings(config);`
+pub fn adoptBindings(self: *GuiClient, config: client.RouterConfig) void {
+    self.input.adopt(config);
+    _ = self.input.binding_timeout.update(self.app.io, null);
+}
+
+/// Stops before the shared outbox fills, resuming on transport completion.
+/// Example: `try gui.drainInput();`
+pub fn drainInput(self: *GuiClient) !void {
+    const app = &self.app;
+    const input = &self.input;
+
+    if (app.startup.holdsInput()) {
+        return;
+    }
+
+    var budget = client.DrainBudget.begin(app.io, input.len + input.recovery.len);
+    const pending = input.router.prefixPending();
+    while (!input.stopped and input.len != 0 and client.runtime_io.availableCapacity(app) >= 4 and budget.take(app.io)) {
+        app.presentation.noteInput(client.monotonic(app.io));
+        const overflows = input.router.leaseOverflowCount();
+        switch (input.front().?.*) {
+            .key => |key| try self.dispatchKey(key),
+            .text => |*text| {
+                if (!try self.widgetInput(.{ .text = text.text() })) {
+                    _ = try self.routeKey(.{ .key = text.key(), .raw = "", .now_ns = client.monotonic(app.io) });
+                }
+            },
+            .paste_start => {
+                _ = try self.applyInputDecision(input.router.interrupt());
+                input.widget_paste = try self.beginWidgetPaste();
+                if (!input.widget_paste) {
+                    _ = try client.operations.paste_routing.start(app);
+                }
+            },
+            .paste_text => |*chunk| {
+                if (input.widget_paste) {
+                    try self.widgetPaste(chunk.bytes[0..chunk.len]);
+                } else {
+                    _ = try client.operations.paste_routing.content(app, chunk.bytes[0..chunk.len]);
+                }
+            },
+            .paste_finish => {
+                if (input.widget_paste) {
+                    try self.endWidgetPaste();
+                } else {
+                    _ = try client.operations.paste_routing.finish(app);
+                }
+
+                input.widget_paste = false;
+            },
+            .release_recovery => {
+                if (!input.recovery.pointer_finished) {
+                    try input.pointer.cancel(app);
+                    self.chrome.cancelPointer();
+                    self.overlays.cancelPointer();
+                    _ = try self.widgetInput(.{ .focus = false });
+                    _ = try self.widgetInput(.{ .focus = self.focused });
+                    input.scroll_remainder = 0;
+                    input.recovery.pointer_finished = true;
+                    if (input.recovery.len != 0) {
+                        continue;
+                    }
+                }
+
+                if (input.recovery.next()) |key| {
+                    try self.dispatchKey(key);
+                    input.recovery.finish(key);
+                    if (input.recovery.len != 0) {
+                        continue;
+                    }
+                }
+
+                input.recovery.queued = false;
+                input.recovery.pointer_finished = false;
+            },
+            .pointer => |event| {
+                if (event.event.interruptsKeys()) {
+                    input.cancelBinding();
+                }
+
+                if (event.event.retained() or (event.geometry_revision == input.pointer.revision and event.gesture_revision == input.pointer.gesture_revision)) {
+                    if (try self.widgetInput(.{ .pointer = event.event })) {
+                        input.consume();
+                        continue;
+                    }
+                }
+
+                try input.pointer.apply(app, event);
+            },
+            .scroll => |*sample| {
+                if (!try self.dispatchScroll(sample)) {
+                    continue;
+                }
+            },
+            .owned_small => |index| {
+                _ = try self.widgetInput(input.small_events.view(index));
+            },
+            .composition_cancel => |value| _ = try self.widgetInput(.{ .composition = value }),
+            .owned_large => |index| {
+                if (!try self.dispatchClipboard(input.large_events.view(index).clipboard)) {
+                    continue;
+                }
+            },
+        }
+
+        app.telemetry.metrics.key_lease_overflows +%= input.router.leaseOverflowCount() -% overflows;
+        input.consume();
+    }
+
+    try self.finishInput(pending);
+}
+
+/// Resolve and execute one semantic key before accepting the next event.
+/// Example: `_ = try gui.routeKey(.{ .key = key, .raw = "", .now_ns = now });`
+pub fn routeKey(self: *GuiClient, event: input_routing.Type.KeyInput) !client.Control {
+    const input = &self.input;
+
+    errdefer input.router.eventFailed(event.key);
+    defer {
+        if (input.router.bindingDeadline() == null and !input.router.prefixPending()) {
+            input.binding_target = null;
+        }
+    }
+    const decision = input.router.routeEvent(event, .{
+        .captures_keys = client.operations.key_routing.captures(&self.app),
+        .repeat_policy = if (input.router.repeatAction()) |held| client.operations.action_routing.repeatPolicy(&self.app, held) else null,
+    });
+    const control = try self.applyInputDecision(decision);
+    input.stopped = control == .stop;
+    return control;
+}
+
+fn applyInputDecision(self: *GuiClient, decision: input_routing.Type.Decision) !client.Control {
+    const input = &self.input;
+
+    switch (decision) {
+        .forward => |value| {
+            _ = try client.operations.key_routing.apply(&self.app, .{ .key = value.key });
+        },
+        .replay => |value| {
+            for (value.held_keys[0..value.held_key_len]) |held| {
+                try self.deliverKey(held);
+            }
+            if (value.current_key) |current| {
+                if (client.operations.key_routing.captures(&self.app)) {
+                    _ = try client.operations.key_routing.apply(&self.app, .{ .key = current });
+                } else {
+                    try self.deliverKey(current);
+                }
+            }
+        },
+        .action => |request| {
+            const control = try self.executeAction(request.value);
+            if (control == .continue_routing) {
+                input.router.actionCompleted(request, client.operations.action_routing.repeatPolicy(&self.app, request.value));
+            }
+            return control;
+        },
+        .pending, .discard => {},
+    }
+    return .continue_routing;
+}
+
+fn deliverKey(self: *GuiClient, value: client.Key) !void {
+    const input = &self.input;
+
+    if (input.binding_target) |owner| {
+        if (value.phase == .press) {
+            try widget_routing.replayBindingKey(self, owner, value);
+            return;
+        }
+    }
+    _ = try client.operations.key_routing.apply(&self.app, .{ .key = value });
+}
+
+/// Agent scrolling uses delivered transcript geometry. The goto and suggest
+/// keys open the native palette already prefixed, and sidebar resize uses
+/// this window's pixel preference. Other actions keep the shared routing.
+/// Copy mode retires first, as the shared native action policy does.
+/// Example: `const control = try gui.executeAction(.new_tab);`
+pub fn executeAction(self: *GuiClient, value: client.Action) !client.Control {
+    if (value == .scroll_pane) {
+        if (try widget_routing.scrollFocusedThread(self, value.scroll_pane)) {
+            return .continue_routing;
+        }
+    }
+
+    const prefix: client.command_palette.Prefix = switch (value) {
+        .goto_picker => .goto,
+        .suggest_command => .suggest,
+        .resize_sidebar => |direction| {
+            _ = try client.operations.copy_modes.leave(&self.app);
+            if (self.sidebar.step(direction)) {
+                self.chrome.invalidate();
+            }
+
+            return .continue_routing;
+        },
+        else => return client.operations.action_routing.apply(&self.app, value),
+    };
+    if (client.operations.copy_modes.active(&self.app)) {
+        _ = try client.operations.copy_modes.leave(&self.app);
+    }
+
+    _ = client.operations.name_prompts.beginPalette(&self.app, prefix);
+    return .continue_routing;
+}
+
+fn dispatchKey(self: *GuiClient, key: KeyInput) !void {
+    const input = &self.input;
+
+    if (try self.widgetInput(.{ .key = key })) {
+        return;
+    }
+
+    if (key.code == .char and key.code.char.len == 1 and std.ascii.toLower(key.code.char.bytes[0]) == 'v' and (key.mods.super or (key.mods.ctrl and key.mods.shift))) {
+        if (key.phase == .press and key.target_id == 0) {
+            input.terminal_clipboard.read(self) catch |err| switch (err) {
+                error.HostRequestsFull => {},
+                else => return err,
+            };
+        }
+
+        return;
+    }
+
+    if (key.mods.super or key.target_id != 0) {
+        return;
+    }
+
+    _ = try self.routeKey(.{ .key = key.terminalKey(), .raw = "", .now_ns = client.monotonic(self.app.io) });
+}
+
+fn dispatchClipboard(self: *GuiClient, result: ClipboardResult) !bool {
+    const input = &self.input;
+
+    if (input.clipboard_offset == null) {
+        const kind = self.host.complete(result) orelse return true;
+        if (kind == .write) {
+            if (self.widgets.copy_feedback.complete(result, client.monotonic(self.app.io))) {
+                self.widgets.dispatcher.revision +%= 1;
+            }
+
+            if (result.target_id != 0) {
+                var completion = result;
+                completion.operation = .write;
+                _ = try self.widgetInput(.{ .clipboard = completion });
+            }
+
+            return true;
+        }
+
+        if (result.target_id != 0) {
+            _ = try self.widgetInput(.{ .clipboard = result });
+            return true;
+        }
+
+        if (!input.terminal_clipboard.take(self, result)) {
+            return true;
+        }
+
+        _ = try self.applyInputDecision(input.router.interrupt());
+        _ = try client.operations.pane_pastes.start(&self.app);
+        input.clipboard_offset = 0;
+        return false;
+    }
+
+    const offset = input.clipboard_offset.?;
+    if (offset < result.text.len) {
+        const count = PasteChunk.nextSize(result.text[offset..]);
+        _ = try client.operations.pane_pastes.content(&self.app, result.text[offset..][0..count]);
+        input.clipboard_offset = offset + count;
+        return false;
+    }
+
+    _ = try client.operations.pane_pastes.finish(&self.app);
+    input.clipboard_offset = null;
+    return true;
+}
+
+fn dispatchScroll(self: *GuiClient, sample: *ScrollSample) !bool {
+    const app = &self.app;
+    const input = &self.input;
+
+    if (sample.geometry_revision != input.pointer.revision or sample.gesture_revision != input.pointer.gesture_revision) {
+        input.scroll_remainder = 0;
+        return true;
+    }
+
+    const event = sample.event;
+    if (!sample.started) {
+        if (try self.widgetInput(.{ .scroll = event })) {
+            input.scroll_remainder = 0;
+            return true;
+        }
+
+        if (event.phase == .begin or event.phase == .cancel) {
+            input.scroll_remainder = 0;
+        }
+
+        if (event.phase == .cancel) {
+            return true;
+        }
+
+        const unit: f64 = if (event.precise) @floatFromInt(@max(1, input.pointer.geometry.size.cell_height_px)) else 1;
+        input.scroll_remainder += std.math.clamp(event.delta_y / unit, -32, 32);
+        sample.lines = @intFromFloat(std.math.clamp(@trunc(input.scroll_remainder), -32, 32));
+        input.scroll_remainder -= @floatFromInt(sample.lines);
+        sample.started = true;
+    }
+
+    if (sample.lines == 0) {
+        return true;
+    }
+
+    const pointer: PointerEvent = .{ .kind = if (sample.lines < 0) .scroll_up else .scroll_down, .mods = event.mods, .x = event.x, .y = event.y };
+    input.cancelBinding();
+    try input.pointer.apply(app, input.pointer.sample(pointer));
+    sample.lines += if (sample.lines < 0) @as(i8, 1) else -1;
+    return sample.lines == 0;
+}
+
+fn finishInput(self: *GuiClient, pending: bool) !void {
+    const app = &self.app;
+    const input = &self.input;
+
+    if (input.router.bindingDeadline() == null and !input.router.prefixPending()) {
+        input.binding_target = null;
+    }
+
+    if (pending != input.router.prefixPending()) {
+        input.presentation_revision +%= 1;
+    }
+
+    if (input.binding_timeout.update(app.io, input.router.bindingDeadline()) == .schedule) {
+        app.timers.arm(.binding, &input.binding_timeout) catch |err| {
+            input.binding_timeout.schedulingFailed();
+            return err;
+        };
+    }
+}
+
+/// Reserves one control slot to finish gestures even when ordinary input is
+/// saturated. Example: `try gui.cancelPointer();`
+pub fn cancelPointer(self: *GuiClient) !void {
+    const input = &self.input;
+
+    input.requestRecovery();
+    try self.drainInput();
+    try self.resumeInput();
+}
+
+/// Example: `try gui.expireBinding(result);`
+pub fn expireBinding(self: *GuiClient, result: anyerror!void) !void {
+    const app = &self.app;
+    const input = &self.input;
+
+    try input.binding_timeout.complete(result);
+    const pending = input.router.prefixPending();
+    input.stopped = try self.applyInputDecision(input.router.expireBinding(client.monotonic(app.io))) == .stop;
+    try self.finishInput(pending);
 }
 
 /// A clipboard response retains the widget that requested it across focus
 /// changes. Example: `try gui.requestClipboardRead(id, generation);`
-pub fn requestClipboardRead(gui: *GuiClient, target_id: u64, generation: u64) !void {
-    try @import("widgets/interaction/routing.zig").beginClipboardRead(gui, .{ .target_id = target_id, .generation = generation });
+pub fn requestClipboardRead(self: *GuiClient, target_id: u64, generation: u64) !void {
+    try @import("widgets/interaction/routing.zig").beginClipboardRead(self, .{ .target_id = target_id, .generation = generation });
 }
 
 /// Copies selected UTF-8 before the native host drains the request.
 /// Example: `try gui.requestClipboardWrite(selection);`
-pub fn requestClipboardWrite(gui: *GuiClient, bytes: []const u8) !void {
-    _ = try gui.host.write(bytes);
-    native.telar_gui_wake(gui.driver.fds[1]);
+pub fn requestClipboardWrite(self: *GuiClient, bytes: []const u8) !void {
+    _ = try self.host.write(bytes);
+    native.telar_gui_wake(self.driver.fds[1]);
 }
 
 /// Requests a link copy with a bottom confirmation after host success.
@@ -282,40 +669,40 @@ pub fn copyLink(self: *GuiClient, bytes: []const u8) !void {
 
 /// The editor can commit a cut only after the matching native write succeeds.
 /// Example: `const request = try gui.requestClipboardWriteOwned(owner, bytes);`
-pub fn requestClipboardWriteOwned(gui: *GuiClient, owner: @import("host/Owner.zig"), bytes: []const u8) !u64 {
-    const request = try gui.host.writeOwned(owner, bytes);
-    native.telar_gui_wake(gui.driver.fds[1]);
+pub fn requestClipboardWriteOwned(self: *GuiClient, owner: @import("host/Owner.zig"), bytes: []const u8) !u64 {
+    const request = try self.host.writeOwned(owner, bytes);
+    native.telar_gui_wake(self.driver.fds[1]);
     return request;
 }
 
 /// Example: `try gui.focus(true);`
-pub fn focus(gui: *GuiClient, focused: bool) !void {
-    gui.focused = focused;
+pub fn focus(self: *GuiClient, focused: bool) !void {
+    self.focused = focused;
     if (!focused) {
-        gui.widgets.thread_scroll.clear();
-        gui.widgets.tab_drag.cancel();
-        @import("widgets/interaction/message_links.zig").clear(gui);
-        @import("widgets/interaction/thread_selection.zig").cancel(gui);
+        self.widgets.thread_scroll.clear();
+        self.widgets.tab_drag.cancel();
+        @import("widgets/interaction/message_links.zig").clear(self);
+        @import("widgets/interaction/thread_selection.zig").cancel(self);
     }
-    gui.input_revision +%= 1;
-    _ = gui.widgets.dispatcher.route(.{ .focus = focused });
+    self.input_revision +%= 1;
+    _ = self.widgets.dispatcher.route(.{ .focus = focused });
     if (!focused) {
-        gui.widgets.preedit.clear();
+        self.widgets.preedit.clear();
     }
     if (!focused) {
-        gui.input.pointer.hover.clear();
-        gui.input.pointer.link_gesture.cancel();
-        gui.chrome.cancelPointer();
-        gui.overlays.cancelPointer();
-        try gui.input.cancelPointer(&gui.app);
+        self.input.pointer.hover.clear();
+        self.input.pointer.link_gesture.cancel();
+        self.chrome.cancelPointer();
+        self.overlays.cancelPointer();
+        try self.cancelPointer();
     }
 }
 
 /// Queue one readiness notification only when input can make progress.
 /// Example: `try gui.resumeInput();`
-pub fn resumeInput(gui: *GuiClient) !void {
-    if (gui.input.len != 0 and !gui.app.startup.holdsInput() and client.runtime_io.availableCapacity(&gui.app) >= 4) {
-        try gui.driver.inbox.notify(.input_ready);
+pub fn resumeInput(self: *GuiClient) !void {
+    if (self.input.len != 0 and !self.app.startup.holdsInput() and client.runtime_io.availableCapacity(&self.app) >= 4) {
+        try self.driver.inbox.notify(.input_ready);
     }
 }
 

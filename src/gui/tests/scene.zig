@@ -168,7 +168,7 @@ test "native prefix and chrome hover invalidate presentation without changing mo
     try session.settle();
     const version = session.gui.app.model.version();
     try session.gui.input.accept(.{ .kind = 4, .code = 'b', .mods = 4 });
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
     try std.testing.expectEqualDeep(version, session.gui.app.model.version());
     _ = session.gui.lifecycle.observe(session.gui.observation());
     try std.testing.expect(session.gui.lifecycle.needsPreparation());

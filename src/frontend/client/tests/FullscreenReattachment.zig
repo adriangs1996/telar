@@ -10,7 +10,7 @@ const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
 const PaneTargetType = @import("telar-core").PaneTarget;
 const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
-const InputHandler = @import("../resources/InputHandler.zig");
+const host_inputs = @import("../controllers/input/host_inputs.zig");
 const parseKey_module = @import("telar-client").parseKey;
 const FullscreenReattachment = @This();
 
@@ -60,9 +60,8 @@ pub fn confirmAttachment(scenario: FullscreenReattachment, pane_id: PaneIdType) 
 }
 
 pub fn expectInput(scenario: FullscreenReattachment, pane_id: PaneIdType) !void {
-    var handler: InputHandler = .{ .client = scenario.harness.client };
-    try std.testing.expectEqual(pane_id, handler.client.model.planPaneInput(.focused).?.pane_id);
-    try handler.key(try parseKey_module("x"));
+    try std.testing.expectEqual(pane_id, scenario.harness.client.model.planPaneInput(.focused).?.pane_id);
+    try host_inputs.key(scenario.harness.client, try parseKey_module("x"));
     try scenario.harness.settle();
     var buffer: [256]u8 = undefined;
     const message = try scenario.harness.nextClientMessage(&buffer);

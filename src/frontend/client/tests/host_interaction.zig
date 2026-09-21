@@ -10,8 +10,8 @@ const std = @import("std");
 const VersionType = @import("telar-client").Version;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const capacity_module = @import("telar-client").capacity;
-const InputHandler = @import("../resources/InputHandler.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
+const input_operations = @import("telar-client").operations;
 const encodeGraphicsImage_module = @import("telar-core").encodeGraphicsImage;
 const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
@@ -153,9 +153,8 @@ test "terminal pixel response keeps model host geometry authoritative" {
     try harness.bootstrap();
     const client = harness.client;
     const pending_updates = host(client).presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
 
-    try handler.terminalResponse(.{ .cell_pixels = .{
+    try host_inputs.terminalResponse(client, .{ .cell_pixels = .{
         .width = 12,
         .height = 24,
     } });
@@ -225,9 +224,8 @@ test "a Kitty capability response commits before fallback projection and present
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.graphics_placeholder);
     const version = client.model.version();
     const pending_updates = host(client).presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
 
-    try handler.terminalResponse(.{ .kitty_graphics = .{
+    try host_inputs.terminalResponse(client, .{ .kitty_graphics = .{
         .image_id = capabilities_module.query_image_id,
         .supported = true,
     } });
@@ -249,9 +247,8 @@ test "compression negotiation belongs to the TUI and does not revise the semanti
     defer harness.deinit();
     const client = harness.client;
     const version = client.model.version();
-    var handler: InputHandler = .{ .client = client };
 
-    try handler.terminalResponse(.{ .kitty_graphics = .{
+    try host_inputs.terminalResponse(client, .{ .kitty_graphics = .{
         .image_id = capabilities_module.zlib_query_image_id,
         .supported = true,
     } });
@@ -259,7 +256,7 @@ test "compression negotiation belongs to the TUI and does not revise the semanti
     try std.testing.expect(host(client).graphics_store.delivery.host_zlib);
     try std.testing.expectEqualDeep(version, client.model.version());
 
-    try handler.terminalResponse(.{ .kitty_graphics = .{
+    try host_inputs.terminalResponse(client, .{ .kitty_graphics = .{
         .image_id = capabilities_module.zlib_query_image_id,
         .supported = false,
     } });
@@ -404,14 +401,13 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     const version = client.model.version();
     const pending_updates = host(client).presenter.pending_updates;
     const pane_view = active.model.viewForPane(pane.id, host(client).view.workbench()).?;
-    var handler: InputHandler = .{ .client = client };
-    try handler.mouse(.{
+    try host_inputs.mouse(client, .{
         .x = pane_view.content.x,
         .y = pane_view.content.y,
         .kind = .move,
     });
 
-    try handler.mouse(.{
+    try host_inputs.mouse(client, .{
         .x = pane_view.content.x,
         .y = pane_view.content.y,
         .kind = .scroll_up,
@@ -421,7 +417,7 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     try std.testing.expect(!host(client).graphics_store.paneVisible(pane.id));
     try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
 
-    try handler.key(try parseKey_module("x"));
+    try host_inputs.key(client, try parseKey_module("x"));
 
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
     try std.testing.expect(host(client).graphics_store.paneVisible(pane.id));
@@ -505,11 +501,10 @@ test "a full outbox preserves the committed pane viewport and rejects input" {
     }
     const version = client.model.version();
     const pending_updates = host(client).presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        handler.key(try parseKey_module("x")),
+        host_inputs.key(client, try parseKey_module("x")),
     );
 
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
@@ -531,13 +526,12 @@ test "copy mode round trip: enter, select, copy, leave" {
     const version_before = client.model.version();
     const pending_updates_before = host(client).presenter.pending_updates;
 
-    var handler: InputHandler = .{ .client = client };
     try std.testing.expectEqual(
         ControlType.continue_routing,
-        try client_actions.apply(handler.client, .enter_copy_mode),
+        try client_actions.apply(client, .enter_copy_mode),
     );
     try std.testing.expect(client.model.copyModeActive());
-    try std.testing.expect(!handler.capturesKeys());
+    try std.testing.expect(!input_operations.key_routing.captures(client));
     try std.testing.expect(!name_prompts.beginActiveTabRename(client));
     try std.testing.expect(!client.model.name_prompt.active());
     try support.expectNonCopyVersionEqual(version_before, client.model.version());
@@ -560,13 +554,13 @@ test "copy mode round trip: enter, select, copy, leave" {
         host(client).view.workbench(),
     ).?;
     const mouse_version = client.model.version();
-    try handler.mouse(.{
+    try host_inputs.mouse(client, .{
         .x = pane_view.content.x,
         .y = pane_view.content.y,
         .kind = .press,
     });
     try std.testing.expectEqualDeep(mouse_version, client.model.version());
-    try handler.mouse(.{
+    try host_inputs.mouse(client, .{
         .x = pane_view.content.x,
         .y = pane_view.content.y,
         .kind = .scroll_up,
@@ -578,8 +572,8 @@ test "copy mode round trip: enter, select, copy, leave" {
     try std.testing.expectEqual(painted_cursor_y, host(client).presenter.compositor.copy.?.view.cursor.y);
 
     // While in copy mode, keys route to the selection, not the pane.
-    try handler.key(try parseKey_module("v"));
-    try handler.key(try parseKey_module("l"));
+    try host_inputs.key(client, try parseKey_module("v"));
+    try host_inputs.key(client, try parseKey_module("l"));
     try std.testing.expectEqual(@as(u16, 0), host(client).presenter.compositor.copy.?.view.cursor.x);
     try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
     try presentation_lifecycle.observe(client);
@@ -588,7 +582,7 @@ test "copy mode round trip: enter, select, copy, leave" {
     try std.testing.expect(host(client).presenter.compositor.copy.?.view.anchor != null);
 
     const version_before_copy = client.model.version();
-    try handler.key(try parseKey_module("enter"));
+    try host_inputs.key(client, try parseKey_module("enter"));
     try std.testing.expect(!client.model.copyModeActive());
     try support.expectNonCopyOrViewportVersionEqual(version_before_copy, client.model.version());
     try std.testing.expectEqual(version_before_copy.copy + 1, client.model.version().copy);
@@ -627,10 +621,9 @@ test "copy-mode o opens a file URI in an editor tab without leaving the mode" {
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "file:///tmp/a%20b.txt", .style = .{} });
     pane.cursor = .{ .visible = true, .x = 12, .y = 0 };
 
-    var handler: InputHandler = .{ .client = client };
     _ = try client_actions.apply(client, .enter_copy_mode);
     const version = client.model.version();
-    try handler.key(try parseKey_module("o"));
+    try host_inputs.key(client, try parseKey_module("o"));
 
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -660,15 +653,14 @@ test "a left click opens a file URI and owns the complete mouse gesture" {
         host(client).view.workbench(),
     ).?;
 
-    var handler: InputHandler = .{ .client = client };
-    try handler.mouse(.{
+    try host_inputs.mouse(client, .{
         .x = pane_view.content.x + 10,
         .y = pane_view.content.y,
         .kind = .press,
         .button = 0,
     });
     try std.testing.expect(client.link_pointer.owned);
-    try handler.mouse(.{
+    try host_inputs.mouse(client, .{
         .x = pane_view.content.x + 10,
         .y = pane_view.content.y,
         .kind = .release,
@@ -717,11 +709,10 @@ test "copy-mode pointer consumes outside wheels and exits a missing target" {
     try harness.bootstrap();
     const client = harness.client;
     const model = &client.model.workspace.active().?.model;
-    var handler: InputHandler = .{ .client = client };
-    _ = try client_actions.apply(handler.client, .enter_copy_mode);
+    _ = try client_actions.apply(client, .enter_copy_mode);
     const active_version = client.model.version();
 
-    try handler.mouse(.{
+    try host_inputs.mouse(client, .{
         .x = std.math.maxInt(u16),
         .y = std.math.maxInt(u16),
         .kind = .scroll_up,
@@ -732,7 +723,7 @@ test "copy-mode pointer consumes outside wheels and exits a missing target" {
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     try std.testing.expect(model.removePane(TestHarness.bootstrap_pane));
-    try handler.mouse(.{ .x = 0, .y = 0, .kind = .move });
+    try host_inputs.mouse(client, .{ .x = 0, .y = 0, .kind = .move });
 
     try std.testing.expect(!client.model.copyModeActive());
     try support.expectNonCopyVersionEqual(active_version, client.model.version());
@@ -750,14 +741,13 @@ test "a full outbox keeps copy mode and its selection active" {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
 
-    var handler: InputHandler = .{ .client = client };
-    _ = try client_actions.apply(handler.client, .enter_copy_mode);
-    try handler.key(try parseKey_module("v"));
+    _ = try client_actions.apply(client, .enter_copy_mode);
+    try host_inputs.key(client, try parseKey_module("v"));
     const version = client.model.version();
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        handler.key(try parseKey_module("enter")),
+        host_inputs.key(client, try parseKey_module("enter")),
     );
 
     try std.testing.expect(client.model.copyModeActive());

@@ -5,6 +5,7 @@
 //! The router then owns a sorted, bounded copy. Routing performs no allocation
 //! and never has to retain slices owned by the configuration parser.
 
+const collect = @import("routing_test_support.zig");
 const GenericBinding = @import("telar-client").GenericBinding;
 const GenericRouter = @import("GenericRouter.zig").Type;
 
@@ -44,15 +45,15 @@ test "terminal decoding and direct semantic input produce identical routing" {
     var decoded: SemanticCapture = .{};
     var semantic: SemanticCapture = .{};
 
-    _ = try terminal.feed(.{ .bytes = "\x1b[", .now_ns = 0 }, &decoded);
-    _ = try terminal.feed(.{ .bytes = "A\x1b[D\x1b[B", .now_ns = 1 }, &decoded);
+    _ = try collect.feed(&terminal, .{ .bytes = "\x1b[", .now_ns = 0 }, &decoded);
+    _ = try collect.feed(&terminal, .{ .bytes = "A\x1b[D\x1b[B", .now_ns = 1 }, &decoded);
     const events = [_]Key{
         .{ .code = .up, .physical = .{ .value = 0x110001 } },
         .{ .code = .left, .physical = .{ .value = 0x110003 } },
         .{ .code = .down, .physical = .{ .value = 0x110002 } },
     };
     for (events) |key_value| {
-        _ = try direct.routeEvent(.{ .key = key_value, .raw = "", .now_ns = 1 }, &semantic);
+        _ = try collect.routeEvent(&direct, .{ .key = key_value, .raw = "", .now_ns = 1 }, &semantic);
     }
 
     try std.testing.expectEqual(@as(usize, 1), semantic.action_count);
@@ -90,7 +91,7 @@ test "an active editor receives keys before configured bindings" {
     var router = try TestRouter.init(&bindings);
     var capture: GreedyCapture = .{};
 
-    _ = try router.feed(.{ .bytes = "a", .now_ns = 0 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "a", .now_ns = 0 }, &capture);
 
     try std.testing.expectEqual(@as(usize, 1), capture.key_count);
     try std.testing.expectEqual(@as(usize, 0), capture.action_count);
@@ -130,7 +131,7 @@ test "keymap accepts sibling sequences with one shared prefix" {
     };
     var router = try TestRouter.init(&siblings);
     var capture: Capture = .{};
-    _ = try router.feed(.{ .bytes = "\x02d\x02p", .now_ns = 0 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x02d\x02p", .now_ns = 0 }, &capture);
     try std.testing.expectEqualSlices(
         TestAction,
         &.{ .detach, .palette },
@@ -155,7 +156,7 @@ test "unbound input is byte-for-byte transparent" {
     var capture: Capture = .{};
 
     const input = "hello ñ\x1b[A\x1b[999~";
-    try std.testing.expectEqual(Control.continue_routing, try router.feed(.{ .bytes = input, .now_ns = 0 }, &capture));
+    try std.testing.expectEqual(Control.continue_routing, try collect.feed(&router, .{ .bytes = input, .now_ns = 0 }, &capture));
     try std.testing.expectEqualStrings(input, capture.slice());
     try std.testing.expectEqual(@as(usize, 0), capture.action_len);
 }
@@ -165,7 +166,7 @@ test "a configured sequence runs once and does not reach the pane" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{};
 
-    _ = try router.feed(.{ .bytes = "before\x02dafter", .now_ns = 100 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "before\x02dafter", .now_ns = 100 }, &capture);
     try std.testing.expectEqualStrings("beforeafter", capture.slice());
     try std.testing.expectEqualSlices(TestAction, &.{.detach}, capture.actions[0..capture.action_len]);
 }
@@ -180,7 +181,7 @@ test "CSI-u Ctrl bindings route without colliding with Backspace or Enter" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{};
 
-    _ = try router.feed(.{ .bytes = "\x1b[104;5u\x1b[106;5u\x1b[107;5u\x1b[108;5u", .now_ns = 100 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x1b[104;5u\x1b[106;5u\x1b[107;5u\x1b[108;5u", .now_ns = 100 }, &capture);
     try std.testing.expectEqualSlices(
         TestAction,
         &.{ .detach, .palette, .next, .detach },
@@ -199,9 +200,9 @@ test "modified Enter reaches the semantic handler at every chunk boundary" {
         for (1..sequence.len) |split| {
             var router = try TestRouter.init(&.{});
             var capture: GreedyCapture = .{};
-            _ = try router.feed(.{ .bytes = sequence[0..split], .now_ns = 0 }, &capture);
+            _ = try collect.feed(&router, .{ .bytes = sequence[0..split], .now_ns = 0 }, &capture);
             try std.testing.expectEqual(@as(usize, 0), capture.key_count);
-            _ = try router.feed(.{ .bytes = sequence[split..], .now_ns = 1 }, &capture);
+            _ = try collect.feed(&router, .{ .bytes = sequence[split..], .now_ns = 1 }, &capture);
             try std.testing.expectEqual(@as(usize, 1), capture.key_count);
             try std.testing.expectEqual(Key.Code.enter, capture.keys[0].code);
             try std.testing.expect(capture.keys[0].mods.shift);
@@ -216,9 +217,9 @@ test "an orphan Kitty release fails closed at every chunk boundary" {
     for (1..sequence.len) |split| {
         var router = try TestRouter.init(&.{});
         var capture: GreedyCapture = .{};
-        _ = try router.feed(.{ .bytes = sequence[0..split], .now_ns = 0 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = sequence[0..split], .now_ns = 0 }, &capture);
         try std.testing.expectEqual(@as(usize, 0), capture.key_count);
-        _ = try router.feed(.{ .bytes = sequence[split..], .now_ns = 1 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = sequence[split..], .now_ns = 1 }, &capture);
         try std.testing.expectEqual(@as(usize, 0), capture.key_count);
         try std.testing.expectEqual(@as(usize, 0), capture.action_count);
     }
@@ -232,7 +233,7 @@ test "an application-owned key keeps repeats and release" {
     var router = try TestRouter.init(&.{});
     var capture: SemanticCapture = .{};
 
-    _ = try router.feed(.{ .bytes = lifecycle, .now_ns = 0 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = lifecycle, .now_ns = 0 }, &capture);
 
     try std.testing.expectEqual(@as(usize, 3), capture.key_count);
     try std.testing.expectEqual(Key.Phase.press, capture.keys[0].phase);
@@ -250,7 +251,7 @@ test "a binding-owned key consumes repeats and release" {
     var router = try TestRouter.init(&bindings);
     var capture: SemanticCapture = .{};
 
-    _ = try router.feed(.{ .bytes = lifecycle, .now_ns = 0 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = lifecycle, .now_ns = 0 }, &capture);
 
     try std.testing.expectEqual(@as(usize, 1), capture.action_count);
     try std.testing.expectEqual(@as(usize, 0), capture.key_count);
@@ -263,26 +264,26 @@ test "holding a matched suffix repeats with pacing at every byte boundary" {
     for (0..repeated.len + 1) |split| {
         var router = try TestRouter.initWithPrefix(&bindings, default_prefix);
         var capture: SemanticCapture = .{ .repeat_policy = .{ .interval_ns = 100, .context = 7 } };
-        _ = try router.feed(.{ .bytes = "\x1b[98::98;5:1u\x1b[45::45;1:1u\x1b[98::98;1:3u", .now_ns = 0 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = "\x1b[98::98;5:1u\x1b[45::45;1:1u\x1b[98::98;1:3u", .now_ns = 0 }, &capture);
         try std.testing.expectEqual(@as(usize, 1), capture.action_count);
         try std.testing.expect(!router.prefixPending());
         try std.testing.expect(router.bindingDeadline() == null);
         try std.testing.expect(router.inputDeadline() == null);
 
-        _ = try router.feed(.{ .bytes = repeated, .now_ns = 99 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = repeated, .now_ns = 99 }, &capture);
         try std.testing.expectEqual(@as(usize, 1), capture.action_count);
-        _ = try router.feed(.{ .bytes = repeated[0..split], .now_ns = 100 }, &capture);
-        _ = try router.feed(.{ .bytes = repeated[split..], .now_ns = 100 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = repeated[0..split], .now_ns = 100 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = repeated[split..], .now_ns = 100 }, &capture);
         try std.testing.expectEqual(@as(usize, 2), capture.action_count);
 
-        _ = try router.feed(.{ .bytes = repeated ++ repeated ++ repeated, .now_ns = 1000 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = repeated ++ repeated ++ repeated, .now_ns = 1000 }, &capture);
         try std.testing.expectEqual(@as(usize, 3), capture.action_count);
-        _ = try router.feed(.{ .bytes = repeated, .now_ns = 1099 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = repeated, .now_ns = 1099 }, &capture);
         try std.testing.expectEqual(@as(usize, 3), capture.action_count);
-        _ = try router.feed(.{ .bytes = repeated, .now_ns = 1100 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = repeated, .now_ns = 1100 }, &capture);
         try std.testing.expectEqual(@as(usize, 4), capture.action_count);
 
-        _ = try router.feed(.{ .bytes = "\x1b[45::45;1:3u" ++ repeated, .now_ns = 2000 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = "\x1b[45::45;1:3u" ++ repeated, .now_ns = 2000 }, &capture);
         try std.testing.expectEqual(@as(usize, 4), capture.action_count);
         try std.testing.expectEqual(@as(usize, 0), capture.key_count);
         try std.testing.expect(router.repeating == null);
@@ -296,10 +297,10 @@ test "repeat pacing cannot catch up at clock saturation or regression" {
     const end = std.math.maxInt(u64);
     const repeated = "\x1b[45::45;1:2u";
 
-    _ = try router.feed(.{ .bytes = "\x1b[45::45;1:1u", .now_ns = end - 100 }, &capture);
-    _ = try router.feed(.{ .bytes = repeated ++ repeated, .now_ns = end }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x1b[45::45;1:1u", .now_ns = end - 100 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = repeated ++ repeated, .now_ns = end }, &capture);
     try std.testing.expectEqual(@as(usize, 2), capture.action_count);
-    _ = try router.feed(.{ .bytes = repeated, .now_ns = 0 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = repeated, .now_ns = 0 }, &capture);
     try std.testing.expectEqual(@as(usize, 2), capture.action_count);
 }
 
@@ -311,13 +312,13 @@ test "global hold repeats but separate physical taps stay immediate" {
     const release = "\x1b[45::45;1:3u";
     const repeated = "\x1b[45::45;3:2u";
 
-    _ = try router.feed(.{ .bytes = press, .now_ns = 0 }, &capture);
-    _ = try router.feed(.{ .bytes = repeated, .now_ns = 100 }, &capture);
-    _ = try router.feed(.{ .bytes = release ++ press, .now_ns = 101 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = press, .now_ns = 0 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = repeated, .now_ns = 100 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = release ++ press, .now_ns = 101 }, &capture);
     try std.testing.expectEqual(@as(usize, 3), capture.action_count);
-    _ = try router.feed(.{ .bytes = repeated, .now_ns = 200 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = repeated, .now_ns = 200 }, &capture);
     try std.testing.expectEqual(@as(usize, 3), capture.action_count);
-    _ = try router.feed(.{ .bytes = repeated, .now_ns = 201 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = repeated, .now_ns = 201 }, &capture);
     try std.testing.expectEqual(@as(usize, 4), capture.action_count);
     try std.testing.expectEqual(@as(usize, 0), capture.key_count);
 }
@@ -327,9 +328,9 @@ test "losing a held chord modifier cancels without leaking into the application"
     var router = try TestRouter.init(&bindings);
     var capture: SemanticCapture = .{ .repeat_policy = .{ .interval_ns = 100, .context = 7 } };
 
-    _ = try router.feed(.{ .bytes = "\x1b[45::45;3:1u", .now_ns = 0 }, &capture);
-    _ = try router.feed(.{ .bytes = "\x1b[45::45;1:2u", .now_ns = 100 }, &capture);
-    _ = try router.feed(.{ .bytes = "\x1b[45::45;3:2u\x1b[45::45;1:3u", .now_ns = 200 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x1b[45::45;3:1u", .now_ns = 0 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x1b[45::45;1:2u", .now_ns = 100 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x1b[45::45;3:2u\x1b[45::45;1:3u", .now_ns = 200 }, &capture);
     try std.testing.expectEqual(@as(usize, 1), capture.action_count);
     try std.testing.expectEqual(@as(usize, 0), capture.key_count);
     try std.testing.expect(router.repeating == null);
@@ -342,10 +343,10 @@ test "new input and reload cancel hold while preserving physical ownership" {
     for (interruptions) |interruption| {
         var router = try TestRouter.init(&bindings);
         var capture: SemanticCapture = .{ .repeat_policy = .{ .interval_ns = 100, .context = 7 } };
-        _ = try router.feed(.{ .bytes = "\x1b[45::45;1:1u", .now_ns = 0 }, &capture);
-        _ = try router.feed(.{ .bytes = interruption, .now_ns = 1 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = "\x1b[45::45;1:1u", .now_ns = 0 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = interruption, .now_ns = 1 }, &capture);
         const keys_before = capture.key_count;
-        _ = try router.feed(.{ .bytes = "\x1b[45::45;1:2u\x1b[45::45;1:3u", .now_ns = 100 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = "\x1b[45::45;1:2u\x1b[45::45;1:3u", .now_ns = 100 }, &capture);
         try std.testing.expectEqual(@as(usize, 1), capture.action_count);
         try std.testing.expectEqual(keys_before, capture.key_count);
         try std.testing.expect(router.repeating == null);
@@ -353,10 +354,10 @@ test "new input and reload cancel hold while preserving physical ownership" {
 
     var router = try TestRouter.init(&bindings);
     var capture: SemanticCapture = .{ .repeat_policy = .{ .interval_ns = 100, .context = 7 } };
-    _ = try router.feed(.{ .bytes = "\x1b[45::45;1:1u", .now_ns = 0 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x1b[45::45;1:1u", .now_ns = 0 }, &capture);
     var replacement = try TestRouter.init(&.{});
     replacement.inheritPhysicalLeases(&router);
-    _ = try replacement.feed(.{ .bytes = "\x1b[45::45;1:2u\x1b[45::45;1:3u", .now_ns = 100 }, &capture);
+    _ = try collect.feed(&replacement, .{ .bytes = "\x1b[45::45;1:2u\x1b[45::45;1:3u", .now_ns = 100 }, &capture);
     try std.testing.expectEqual(@as(usize, 1), capture.action_count);
     try std.testing.expectEqual(@as(usize, 0), capture.key_count);
     try std.testing.expect(replacement.repeating == null);
@@ -370,11 +371,11 @@ test "changed or unavailable repeat authority permanently cancels the hold" {
     for (replacements) |replacement| {
         var router = try TestRouter.init(&bindings);
         var capture: SemanticCapture = .{ .repeat_policy = original };
-        _ = try router.feed(.{ .bytes = "\x1b[45::45;1:1u", .now_ns = 0 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = "\x1b[45::45;1:1u", .now_ns = 0 }, &capture);
         capture.repeat_policy = replacement;
-        _ = try router.feed(.{ .bytes = "\x1b[45::45;1:2u", .now_ns = 1 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = "\x1b[45::45;1:2u", .now_ns = 1 }, &capture);
         capture.repeat_policy = original;
-        _ = try router.feed(.{ .bytes = "\x1b[45::45;1:2u", .now_ns = 100 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = "\x1b[45::45;1:2u", .now_ns = 100 }, &capture);
         try std.testing.expectEqual(@as(usize, 1), capture.action_count);
         try std.testing.expectEqual(@as(usize, 0), capture.key_count);
         try std.testing.expect(router.repeating == null);
@@ -391,11 +392,11 @@ test "a failed repeated action cancels further execution" {
         .physical = .{ .value = 45 },
     };
 
-    _ = try router.feed(.{ .bytes = "\x1b[45::45;1:1u", .now_ns = 0 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x1b[45::45;1:1u", .now_ns = 0 }, &capture);
     capture.fail_action = true;
-    try std.testing.expectError(error.ActionFailed, router.routeEvent(.{ .key = key_value, .raw = "", .now_ns = 100 }, &capture));
+    try std.testing.expectError(error.ActionFailed, collect.routeEvent(&router, .{ .key = key_value, .raw = "", .now_ns = 100 }, &capture));
     capture.fail_action = false;
-    _ = try router.routeEvent(.{ .key = key_value, .raw = "", .now_ns = 200 }, &capture);
+    _ = try collect.routeEvent(&router, .{ .key = key_value, .raw = "", .now_ns = 200 }, &capture);
     try std.testing.expectEqual(@as(usize, 1), capture.action_count);
     try std.testing.expect(router.repeating == null);
 }
@@ -406,12 +407,12 @@ test "releasing a physical prefix does not cancel its logical state" {
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: Capture = .{};
 
-    _ = try router.feed(.{ .bytes = "\x1b[115::115;5:1u" ++
+    _ = try collect.feed(&router, .{ .bytes = "\x1b[115::115;5:1u" ++
         "\x1b[115::115;1:3u", .now_ns = 0 }, &capture);
 
     try std.testing.expect(router.prefixPending());
     try std.testing.expectEqual(@as(usize, 0), capture.action_len);
-    _ = try router.feed(.{ .bytes = "d", .now_ns = 1 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "d", .now_ns = 1 }, &capture);
     try std.testing.expect(!router.prefixPending());
     try std.testing.expectEqualSlices(TestAction, &.{.detach}, capture.actions[0..capture.action_len]);
     try std.testing.expectEqualStrings("", capture.slice());
@@ -423,10 +424,10 @@ test "router replacement preserves a held application's owner" {
     var current = try TestRouter.init(&.{});
     var capture: SemanticCapture = .{};
 
-    _ = try current.feed(.{ .bytes = press, .now_ns = 0 }, &capture);
+    _ = try collect.feed(&current, .{ .bytes = press, .now_ns = 0 }, &capture);
     var replacement = try TestRouter.init(&.{});
     replacement.inheritPhysicalLeases(&current);
-    _ = try replacement.feed(.{ .bytes = release, .now_ns = 1 }, &capture);
+    _ = try collect.feed(&replacement, .{ .bytes = release, .now_ns = 1 }, &capture);
 
     try std.testing.expectEqual(@as(usize, 2), capture.key_count);
     try std.testing.expectEqual(Key.Phase.release, capture.keys[1].phase);
@@ -442,7 +443,7 @@ test "lease saturation drops a new physical lifecycle" {
             .code = .{ .char = .init("x") },
             .physical = .{ .value = value },
         };
-        _ = try router.routeEvent(.{ .key = key_value, .raw = "", .now_ns = 0 }, &capture);
+        _ = try collect.routeEvent(&router, .{ .key = key_value, .raw = "", .now_ns = 0 }, &capture);
     }
 
     try std.testing.expectEqual(@as(usize, max_physical_leases), capture.key_count);
@@ -454,13 +455,13 @@ test "failed application delivery does not leave native ownership" {
     var router = try TestRouter.init(&.{});
     var capture: SemanticCapture = .{ .fail_key = true };
 
-    try std.testing.expectError(error.KeyDeliveryFailed, router.routeEvent(.{ .key = .{
+    try std.testing.expectError(error.KeyDeliveryFailed, collect.routeEvent(&router, .{ .key = .{
         .code = .{ .char = .init("x") },
         .physical = identity,
     }, .raw = "", .now_ns = 0 }, &capture));
 
     capture.fail_key = false;
-    _ = try router.routeEvent(.{ .key = .{
+    _ = try collect.routeEvent(&router, .{ .key = .{
         .code = .{ .char = .init("x") },
         .phase = .release,
         .physical = identity,
@@ -474,7 +475,7 @@ test "a semantic mouse handler consumes reports before they reach the pane" {
     var router = try TestRouter.init(&bindings);
     var capture: MouseCapture = .{};
 
-    _ = try router.feed(.{ .bytes = "\x1b[<0;8;4M", .now_ns = 100 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x1b[<0;8;4M", .now_ns = 100 }, &capture);
     try std.testing.expectEqual(@as(usize, 1), capture.mouse_events);
     try std.testing.expectEqual(@as(usize, 0), capture.forwarded);
 }
@@ -485,8 +486,8 @@ test "a fragmented KGP capability reply is consumed at every split" {
     for (1..reply.len) |split| {
         var router = try TestRouter.init(&bindings);
         var capture: TerminalResponseCapture = .{};
-        _ = try router.feed(.{ .bytes = reply[0..split], .now_ns = 0 }, &capture);
-        _ = try router.feed(.{ .bytes = reply[split..], .now_ns = 1 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = reply[0..split], .now_ns = 0 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = reply[split..], .now_ns = 1 }, &capture);
         try std.testing.expectEqual(@as(usize, 0), capture.forwarded);
         try std.testing.expectEqual(@as(usize, 1), capture.responses);
         try std.testing.expect(capture.supported);
@@ -499,10 +500,10 @@ test "an asynchronous terminal response does not cancel prefix mode" {
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: TerminalResponseCapture = .{};
 
-    _ = try router.feed(.{ .bytes = "\x02\x1b_Gi=31;OK\x1b\\", .now_ns = 100 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x02\x1b_Gi=31;OK\x1b\\", .now_ns = 100 }, &capture);
     try std.testing.expect(router.prefixPending());
     try std.testing.expectEqual(@as(usize, 1), capture.responses);
-    _ = try router.feed(.{ .bytes = "d", .now_ns = 101 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "d", .now_ns = 101 }, &capture);
     try std.testing.expect(!router.prefixPending());
     try std.testing.expectEqual(@as(usize, 1), capture.actions);
     try std.testing.expectEqual(@as(usize, 0), capture.forwarded);
@@ -513,7 +514,7 @@ test "a failed sequence replays its bytes in order" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{};
 
-    _ = try router.feed(.{ .bytes = "\x02x", .now_ns = 100 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x02x", .now_ns = 100 }, &capture);
     try std.testing.expectEqualStrings("\x02x", capture.slice());
     try std.testing.expectEqual(@as(usize, 0), capture.action_len);
 }
@@ -524,14 +525,14 @@ test "a configured prefix waits without a binding deadline" {
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: Capture = .{};
 
-    _ = try router.feed(.{ .bytes = "\x02", .now_ns = 20 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x02", .now_ns = 20 }, &capture);
     try std.testing.expect(router.prefixPending());
     try std.testing.expectEqual(@as(?u64, null), router.bindingDeadline());
-    _ = try router.expireBinding(20 + 100 * default_sequence_timeout_ns, &capture);
+    _ = try collect.expireBinding(&router, 20 + 100 * default_sequence_timeout_ns, &capture);
     try std.testing.expect(router.prefixPending());
     try std.testing.expectEqualStrings("", capture.slice());
 
-    _ = try router.feed(.{ .bytes = "d", .now_ns = 21 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "d", .now_ns = 21 }, &capture);
     try std.testing.expect(!router.prefixPending());
     try std.testing.expectEqualSlices(TestAction, &.{.detach}, capture.actions[0..capture.action_len]);
 }
@@ -542,12 +543,12 @@ test "an invalid prefix suffix is consumed" {
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: Capture = .{};
 
-    _ = try router.feed(.{ .bytes = "\x02x", .now_ns = 100 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x02x", .now_ns = 100 }, &capture);
     try std.testing.expect(!router.prefixPending());
     try std.testing.expectEqualStrings("", capture.slice());
     try std.testing.expectEqual(@as(usize, 0), capture.action_len);
 
-    _ = try router.feed(.{ .bytes = "a", .now_ns = 101 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "a", .now_ns = 101 }, &capture);
     try std.testing.expectEqualStrings("a", capture.slice());
 }
 
@@ -557,9 +558,9 @@ test "escape cancels a pending prefix" {
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: Capture = .{};
 
-    _ = try router.feed(.{ .bytes = "\x02\x1b", .now_ns = 100 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x02\x1b", .now_ns = 100 }, &capture);
     try std.testing.expect(router.prefixPending());
-    _ = try router.expireInput(100 + default_escape_timeout_ns, &capture);
+    _ = try collect.expireInput(&router, 100 + default_escape_timeout_ns, &capture);
     try std.testing.expect(!router.prefixPending());
     try std.testing.expectEqualStrings("", capture.slice());
     try std.testing.expectEqual(@as(usize, 0), capture.action_len);
@@ -574,10 +575,10 @@ test "a global partial binding keeps its timeout beside a persistent prefix" {
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: Capture = .{};
 
-    _ = try router.feed(.{ .bytes = "\x18", .now_ns = 40 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x18", .now_ns = 40 }, &capture);
     try std.testing.expect(!router.prefixPending());
     try std.testing.expectEqual(@as(?u64, 40 + default_sequence_timeout_ns), router.bindingDeadline());
-    _ = try router.expireBinding(40 + default_sequence_timeout_ns, &capture);
+    _ = try collect.expireBinding(&router, 40 + default_sequence_timeout_ns, &capture);
     try std.testing.expectEqualStrings("\x18", capture.slice());
 }
 
@@ -598,11 +599,11 @@ test "a split terminal sequence waits and still matches" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{};
 
-    _ = try router.feed(.{ .bytes = "\x1b", .now_ns = 100 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x1b", .now_ns = 100 }, &capture);
     try std.testing.expectEqualStrings("", capture.slice());
     try std.testing.expectEqual(@as(?u64, 100 + default_escape_timeout_ns), router.inputDeadline());
 
-    _ = try router.feed(.{ .bytes = "[A", .now_ns = 101 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "[A", .now_ns = 101 }, &capture);
     try std.testing.expectEqualStrings("", capture.slice());
     try std.testing.expectEqualSlices(TestAction, &.{.next}, capture.actions[0..capture.action_len]);
     try std.testing.expectEqual(@as(?u64, null), router.inputDeadline());
@@ -616,8 +617,8 @@ test "terminal sequences are transparent at every chunk boundary" {
     while (split < input.len) : (split += 1) {
         var router = try TestRouter.init(&bindings);
         var capture: Capture = .{};
-        _ = try router.feed(.{ .bytes = input[0..split], .now_ns = 0 }, &capture);
-        _ = try router.feed(.{ .bytes = input[split..], .now_ns = 1 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = input[0..split], .now_ns = 0 }, &capture);
+        _ = try collect.feed(&router, .{ .bytes = input[split..], .now_ns = 1 }, &capture);
         try std.testing.expectEqualStrings(input, capture.slice());
     }
 }
@@ -627,11 +628,11 @@ test "a lone escape becomes a key after its timeout" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{};
 
-    _ = try router.feed(.{ .bytes = "\x1b", .now_ns = 5 }, &capture);
-    _ = try router.expireInput(5 + default_escape_timeout_ns - 1, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x1b", .now_ns = 5 }, &capture);
+    _ = try collect.expireInput(&router, 5 + default_escape_timeout_ns - 1, &capture);
     try std.testing.expectEqual(@as(usize, 0), capture.action_len);
 
-    _ = try router.expireInput(5 + default_escape_timeout_ns, &capture);
+    _ = try collect.expireInput(&router, 5 + default_escape_timeout_ns, &capture);
     try std.testing.expectEqualSlices(TestAction, &.{.palette}, capture.actions[0..capture.action_len]);
 }
 
@@ -640,8 +641,8 @@ test "an incomplete unknown sequence is forwarded after its timeout" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{};
 
-    _ = try router.feed(.{ .bytes = "\x1b[123", .now_ns = 9 }, &capture);
-    _ = try router.expireInput(9 + default_escape_timeout_ns, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x1b[123", .now_ns = 9 }, &capture);
+    _ = try collect.expireInput(&router, 9 + default_escape_timeout_ns, &capture);
     try std.testing.expectEqualStrings("\x1b[123", capture.slice());
 }
 
@@ -650,9 +651,9 @@ test "a partial binding replays after its timeout" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{};
 
-    _ = try router.feed(.{ .bytes = "\x02", .now_ns = 20 }, &capture);
+    _ = try collect.feed(&router, .{ .bytes = "\x02", .now_ns = 20 }, &capture);
     try std.testing.expectEqual(@as(?u64, 20 + default_sequence_timeout_ns), router.bindingDeadline());
-    _ = try router.expireBinding(20 + default_sequence_timeout_ns, &capture);
+    _ = try collect.expireBinding(&router, 20 + default_sequence_timeout_ns, &capture);
     try std.testing.expectEqualStrings("\x02", capture.slice());
 }
 
@@ -661,7 +662,21 @@ test "an action may stop routing the rest of its input chunk" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{ .stop_on_action = true };
 
-    try std.testing.expectEqual(Control.stop, try router.feed(.{ .bytes = "a\x02db", .now_ns = 0 }, &capture));
+    try std.testing.expectEqual(Control.stop, try collect.feed(&router, .{ .bytes = "a\x02db", .now_ns = 0 }, &capture));
     try std.testing.expectEqualStrings("a", capture.slice());
     try std.testing.expectEqualSlices(TestAction, &.{.detach}, capture.actions[0..capture.action_len]);
+}
+
+test "a full one-byte decoder preserves lone Escape until its deadline" {
+    const TinyRouter = GenericRouter(TestAction, .{ .max_bindings = 1, .max_keys = 1, .input_capacity = 1, .held_capacity = 1 });
+    var router = try TinyRouter.init(&.{});
+    var input: TinyRouter.Feed = .{ .bytes = "\x1b", .now_ns = 7 };
+    try std.testing.expect(router.next(&input) == null);
+    try std.testing.expectEqual(@as(usize, 0), input.bytes.len);
+    try std.testing.expect(router.expireInput(7 + router.escape_timeout_ns - 1) == null);
+    const escaped = router.expireInput(7 + router.escape_timeout_ns).?;
+    try std.testing.expect(escaped.event == .key);
+    try std.testing.expect(escaped.event.key.code == .escape);
+    try std.testing.expectEqualStrings("\x1b", escaped.raw);
+    try std.testing.expect(router.inputDeadline() == null);
 }

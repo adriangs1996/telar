@@ -85,7 +85,7 @@ fn withComment(snapshot: core.ChangeReviewSnapshotView, body: []const u8) core.C
 
 pub fn send(session: *Session, event: Event) !void {
     try session.gui.input.acceptEvent(event);
-    try session.gui.input.drain(&session.gui.app);
+    try session.gui.drainInput();
 }
 
 test "runtime review autosave acknowledges only submitted text while later typing stays queued" {

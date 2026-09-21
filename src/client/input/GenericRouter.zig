@@ -28,9 +28,40 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
             now_ns: u64,
         };
 
-        const Drain = struct {
+        pub const Context = struct {
+            captures_keys: bool = false,
+            repeat_policy: ?RepeatPolicy = null,
+        };
+
+        pub const ActionRequest = struct {
+            value: Action,
+            key: Key,
             now_ns: u64,
-            force_escape: bool,
+            repeated: bool = false,
+        };
+
+        pub const Replay = struct {
+            held_keys: [max_keys]Key = undefined,
+            held_key_len: u8 = 0,
+            held_raw: [held_capacity]u8 = undefined,
+            held_raw_len: usize = 0,
+            current_key: ?Key = null,
+            current_raw: []const u8 = "",
+        };
+
+        pub const Decision = union(enum) {
+            forward: struct { key: Key, raw: []const u8 },
+            replay: Replay,
+            action: ActionRequest,
+            pending,
+            discard,
+        };
+
+        const HostEvent = if (Decoder != void and @hasDecl(Decoder, "Event")) Decoder.Event else void;
+        pub const Decoded = struct {
+            event: HostEvent,
+            raw: []const u8,
+            paste_content: bool = false,
         };
 
         map: Map,
@@ -47,8 +78,6 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
         input_end: usize = 0,
         input_since_ns: ?u64 = null,
         binding_since_ns: ?u64 = null,
-        output: [input_capacity + held_capacity]u8 = undefined,
-        output_len: usize = 0,
         pasting: bool = false,
         escape_timeout_ns: u64 = keybind.default_escape_timeout_ns,
         sequence_timeout_ns: u64 = keybind.default_sequence_timeout_ns,
@@ -77,8 +106,8 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
             };
         }
 
-        pub fn prefixPending(router: *const Self) bool {
-            return router.prefix_pending;
+        pub fn prefixPending(self: *const Self) bool {
+            return self.prefix_pending;
         }
 
         /// Admits configured shortcuts before a local editor handles the key.
@@ -87,24 +116,24 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
         /// retain only an existing binding lease, independent of focus or modifiers.
         /// This query never advances a sequence or changes physical ownership.
         /// Example: `if (router.wantsBinding(key)) return routeGlobal(key);`
-        pub fn wantsBinding(router: *const Self, key: Key) bool {
+        pub fn wantsBinding(self: *const Self, key: Key) bool {
             if (key.phase != .press) {
                 const physical = key.physical orelse return false;
-                return router.leases.owner(physical) == .binding;
+                return self.leases.owner(physical) == .binding;
             }
 
-            if (router.depth != 0) {
+            if (self.depth != 0) {
                 return true;
             }
 
-            return router.map.matchingRange(.{ .start = 0, .end = router.map.len }, .{ .depth = 0, .key = key }) != null;
+            return self.map.matchingRange(.{ .start = 0, .end = self.map.len }, .{ .depth = 0, .key = key }) != null;
         }
 
         /// Returns a physical key to a widget after a chord replays into it.
         /// The widget then owns subsequent repeats and release; another key's
         /// retained repeat remains active. Example: `router.relinquishKey(physical);`
-        pub fn relinquishKey(router: *Self, physical: Key.Physical) void {
-            _ = router.releasePhysicalKey(physical);
+        pub fn relinquishKey(self: *Self, physical: Key.Physical) void {
+            _ = self.releasePhysicalKey(physical);
         }
 
         /// Copies physical ownership into a replacement router.
@@ -117,9 +146,9 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
         /// var replacement = try Router.init(bindings);
         /// replacement.inheritPhysicalLeases(&current);
         /// ```
-        pub fn inheritPhysicalLeases(router: *Self, previous: *const Self) void {
-            router.leases = previous.leases;
-            router.repeating = null;
+        pub fn inheritPhysicalLeases(self: *Self, previous: *const Self) void {
+            self.leases = previous.leases;
+            self.repeating = null;
         }
 
         /// Returns how many physical presses were dropped because the bounded
@@ -128,16 +157,16 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
         /// ```zig
         /// const dropped = router.leaseOverflowCount();
         /// ```
-        pub fn leaseOverflowCount(router: *const Self) u64 {
-            return router.leases.overflowCount();
+        pub fn leaseOverflowCount(self: *const Self) u64 {
+            return self.leases.overflowCount();
         }
 
         /// Returns the configured one-key suffix for a prefixed action. The
         /// client uses this to render help from the effective keymap instead
         /// of repeating default binding labels in the UI.
-        pub fn prefixedKeyForAction(router: *const Self, action: Action) ?Key {
-            const prefix = router.prefix orelse return null;
-            for (router.map.bindings[0..router.map.len]) |*binding| {
+        pub fn prefixedKeyForAction(self: *const Self, action: Action) ?Key {
+            const prefix = self.prefix orelse return null;
+            for (self.map.bindings[0..self.map.len]) |*binding| {
                 if (binding.len != 2 or keybind.keyOrder(binding.keys[0], prefix) != .eq) {
                     continue;
                 }
@@ -148,195 +177,93 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
             return null;
         }
 
-        /// Feeds host-terminal bytes through the compiled keymap.
-        ///
-        /// `handler.forward(bytes)` must finish using `bytes` before returning.
-        /// `handler.action(action)` returns `.stop` when the action ends input
-        /// processing, for example after detaching the client. An optional
-        /// `handler.repeatPolicy(action)` opts into paced physical repeats.
-        /// It must return null when the action or its current owner is unavailable.
-        /// Repeats retain the matched action, never re-enter sequence matching,
-        /// and schedule no timers or catch-up work.
-        /// For example: `const control = try router.feed(.{ .bytes = input, .now_ns = now }, handler);`.
-        pub fn feed(router: *Self, input: Feed, handler: anytype) !keybind.Control {
-            const bytes = input.bytes;
-            const now_ns = input.now_ns;
-            var offset: usize = 0;
-            while (offset < bytes.len) {
-                router.compactInput();
-                const take = @min(router.input.len - router.input_end, bytes.len - offset);
-                if (take == 0) {
-                    try router.recoverFullInput(handler);
-                    continue;
+        /// Consumes bytes only until the next host event. Borrowed raw bytes stay
+        /// valid until the next decoder call. Execute this event before pulling
+        /// another one: actions can change focus, capture or stop the client.
+        /// Example: `while (router.next(&feed)) |event| { try apply(event); }`
+        pub fn next(self: *Self, feed: *Feed) ?Decoded {
+            while (true) {
+                const pending = self.input[self.input_start..self.input_end];
+                const lone_escape = pending.len == 1 and pending[0] == 0x1b;
+                if (pending.len != 0 and !lone_escape) {
+                    if (term.parse(pending)) |parsed| {
+                        if (parsed.len != 0) {
+                            self.input_start += parsed.len;
+                            self.input_since_ns = null;
+                            const content = self.pasting and parsed.event != .paste_end;
+                            if (!content) {
+                                if (parsed.event == .paste_start) {
+                                    self.pasting = true;
+                                }
+                                if (parsed.event == .paste_end) {
+                                    self.pasting = false;
+                                }
+                            }
+
+                            return .{ .event = parsed.event, .raw = pending[0..parsed.len], .paste_content = content };
+                        }
+                    }
                 }
-                @memcpy(router.input[router.input_end..][0..take], bytes[offset..][0..take]);
-                router.input_end += take;
-                offset += take;
-                if (try router.drain(.{ .now_ns = now_ns, .force_escape = false }, handler) == .stop) {
-                    return .stop;
+
+                if (pending.len != 0 and self.input_since_ns == null) {
+                    self.input_since_ns = feed.now_ns;
                 }
+                if (feed.bytes.len == 0) {
+                    return null;
+                }
+
+                if (pending.len == self.input.len) {
+                    self.input_start = self.input_end;
+                    self.input_since_ns = null;
+                    return .{ .event = .incomplete, .raw = pending, .paste_content = self.pasting };
+                }
+
+                self.compactInput();
+                const count = @min(self.input.len - self.input_end, feed.bytes.len);
+                @memcpy(self.input[self.input_end..][0..count], feed.bytes[0..count]);
+                self.input_end += count;
+                feed.bytes = feed.bytes[count..];
             }
-            try router.flushOutput(handler);
-            return .continue_routing;
         }
 
-        pub fn inputDeadline(router: *const Self) ?u64 {
-            const since = router.input_since_ns orelse return null;
-            return since +| router.escape_timeout_ns;
+        pub fn inputDeadline(self: *const Self) ?u64 {
+            const since = self.input_since_ns orelse return null;
+            return since +| self.escape_timeout_ns;
         }
 
-        pub fn bindingDeadline(router: *const Self) ?u64 {
-            if (router.prefix_pending) {
+        pub fn bindingDeadline(self: *const Self) ?u64 {
+            if (self.prefix_pending) {
                 return null;
             }
-            const since = router.binding_since_ns orelse return null;
-            return since +| router.sequence_timeout_ns;
+            const since = self.binding_since_ns orelse return null;
+            return since +| self.sequence_timeout_ns;
         }
 
-        pub fn expireInput(router: *Self, now_ns: u64, handler: anytype) !keybind.Control {
-            const deadline = router.inputDeadline() orelse return .continue_routing;
+        /// Resolves a timed-out host sequence; malformed input remains explicitly
+        /// marked and must never be sent verbatim to a child terminal.
+        /// Example: `if (router.expireInput(now)) |event| try apply(event);`
+        pub fn expireInput(self: *Self, now_ns: u64) ?Decoded {
+            const deadline = self.inputDeadline() orelse return null;
             if (now_ns < deadline) {
-                return .continue_routing;
+                return null;
             }
 
-            const pending = router.input[router.input_start..router.input_end];
-            if (pending.len == 1 and pending[0] == 0x1b) {
-                if (try router.drain(.{ .now_ns = now_ns, .force_escape = true }, handler) == .stop) {
-                    return .stop;
-                }
-            } else {
-                try router.replayBinding(handler);
-                if (comptime !@hasDecl(@TypeOf(handler.*), "key")) {
-                    try router.appendOutput(pending, handler);
-                }
-                router.input_start = 0;
-                router.input_end = 0;
-                router.input_since_ns = null;
-            }
-            try router.flushOutput(handler);
-            return .continue_routing;
+            const pending = self.input[self.input_start..self.input_end];
+            const event: HostEvent = if (pending.len == 1 and pending[0] == 0x1b)
+                term.parse(pending).?.event
+            else
+                .incomplete;
+            self.input_start = self.input_end;
+            self.input_since_ns = null;
+            return .{ .event = event, .raw = pending, .paste_content = self.pasting and event != .paste_end };
         }
 
-        pub fn expireBinding(router: *Self, now_ns: u64, handler: anytype) !keybind.Control {
-            const deadline = router.bindingDeadline() orelse return .continue_routing;
+        pub fn expireBinding(self: *Self, now_ns: u64) Decision {
+            const deadline = self.bindingDeadline() orelse return .pending;
             if (now_ns < deadline) {
-                return .continue_routing;
+                return .pending;
             }
-            try router.replayBinding(handler);
-            try router.flushOutput(handler);
-            return .continue_routing;
-        }
-
-        fn drain(router: *Self, input: Drain, handler: anytype) !keybind.Control {
-            while (router.input_start < router.input_end) {
-                const pending = router.input[router.input_start..router.input_end];
-                if (!input.force_escape and pending.len == 1 and pending[0] == 0x1b) {
-                    if (router.input_since_ns == null) {
-                        router.input_since_ns = input.now_ns;
-                    }
-                    break;
-                }
-
-                const parsed = term.parse(pending) orelse break;
-                if (parsed.len == 0) {
-                    if (router.input_since_ns == null) {
-                        router.input_since_ns = input.now_ns;
-                    }
-                    break;
-                }
-
-                router.input_since_ns = null;
-                const raw = pending[0..parsed.len];
-                if (router.pasting and std.meta.activeTag(parsed.event) != .paste_end) {
-                    try router.flushOutput(handler);
-                    if (comptime @hasDecl(@TypeOf(handler.*), "pasteContent")) {
-                        try handler.pasteContent(raw);
-                    } else {
-                        try router.appendOutput(raw, handler);
-                    }
-                    router.input_start += parsed.len;
-                    continue;
-                }
-                switch (parsed.event) {
-                    .key => |key| {
-                        const control = try router.routeEvent(.{
-                            .key = key,
-                            .raw = raw,
-                            .now_ns = input.now_ns,
-                        }, handler);
-                        router.input_start += parsed.len;
-                        if (control == .stop) {
-                            router.clear();
-
-                            return .stop;
-                        }
-
-                        continue;
-                    },
-                    .mouse => |mouse| {
-                        router.repeating = null;
-                        if (comptime @hasDecl(@TypeOf(handler.*), "mouse")) {
-                            // A pointer action belongs to telar's visible UI.
-                            // Cancel a half-entered keybinding instead of
-                            // leaking its prefix into the focused PTY.
-                            router.resetMatch();
-                            router.binding_since_ns = null;
-                            try router.flushOutput(handler);
-                            try handler.mouse(mouse);
-                        } else {
-                            try router.replayBinding(handler);
-                            try router.appendOutput(raw, handler);
-                        }
-                    },
-                    .terminal_response => |response| {
-                        // Capability replies are asynchronous host protocol,
-                        // not user input. They cannot kick the user out of a
-                        // persistent prefix mode that is waiting for a key.
-                        if (!router.prefix_pending) {
-                            router.resetMatch();
-                            router.binding_since_ns = null;
-                        }
-                        try router.flushOutput(handler);
-                        if (comptime @hasDecl(@TypeOf(handler.*), "terminalResponse")) {
-                            try handler.terminalResponse(response);
-                        }
-                    },
-                    .paste_start => {
-                        router.repeating = null;
-                        try router.replayBinding(handler);
-                        try router.flushOutput(handler);
-                        router.pasting = true;
-                        if (comptime @hasDecl(@TypeOf(handler.*), "pasteStart")) {
-                            try handler.pasteStart();
-                        } else {
-                            try router.appendOutput(raw, handler);
-                        }
-                    },
-                    .paste_end => {
-                        try router.replayBinding(handler);
-                        try router.flushOutput(handler);
-                        router.pasting = false;
-                        if (comptime @hasDecl(@TypeOf(handler.*), "pasteEnd")) {
-                            try handler.pasteEnd();
-                        } else {
-                            try router.appendOutput(raw, handler);
-                        }
-                    },
-                    .incomplete => {
-                        try router.replayBinding(handler);
-                        if (comptime !@hasDecl(@TypeOf(handler.*), "key")) {
-                            try router.appendOutput(raw, handler);
-                        }
-                    },
-                }
-                router.input_start += parsed.len;
-            }
-
-            if (router.input_start == router.input_end) {
-                router.input_start = 0;
-                router.input_end = 0;
-            }
-            return .continue_routing;
+            return self.replayBinding();
         }
 
         pub const KeyInput = struct {
@@ -345,225 +272,174 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
             now_ns: u64,
         };
 
-        /// Routes a decoded press, repeat or release using the same key ownership.
-        /// Example: `_ = try router.routeEvent(.{ .key = key, .raw = "", .now_ns = now }, handler);`.
-        pub fn routeEvent(router: *Self, input: KeyInput, handler: anytype) !keybind.Control {
+        /// Decides ownership and binding resolution without calling application code.
+        /// Supply current capture/repeat policy before every event, then execute the
+        /// decision before routing another. Example: `const decision = router.routeEvent(event, context);`
+        pub fn routeEvent(self: *Self, input: KeyInput, context: Context) Decision {
             if (input.key.phase == .press) {
-                router.repeating = null;
+                self.repeating = null;
             }
 
-            const identity = input.key.physical orelse return router.handleKeyPress(input, handler);
-
-            switch (input.key.phase) {
-                .press => {
-                    if (!router.leases.acquire(identity, .binding)) {
-                        return .continue_routing;
-                    }
-                    errdefer _ = router.leases.release(identity);
-
-                    return router.handleKeyPress(input, handler);
-                },
-                .repeat => {
-                    if (router.leases.owner(identity) == .binding) {
-                        return router.repeatBinding(input, handler);
-                    }
-
-                    if (router.leases.owner(identity) != .application) {
-                        return .continue_routing;
-                    }
-
-                    try router.deliverApplicationKey(input, handler);
-
-                    return .continue_routing;
-                },
-                .release => {
-                    if (router.releasePhysicalKey(identity) != .application) {
-                        return .continue_routing;
-                    }
-
-                    try router.deliverApplicationKey(input, handler);
-
-                    return .continue_routing;
-                },
-            }
-        }
-
-        fn handleKeyPress(router: *Self, input: KeyInput, handler: anytype) !keybind.Control {
-            if (comptime @hasDecl(@TypeOf(handler.*), "capturesKeys")) {
-                if (handler.capturesKeys()) {
-                    try router.replayBinding(handler);
-                    router.transferKeyToApplication(input.key);
-                    try router.deliverApplicationKey(input, handler);
-
-                    return .continue_routing;
+            if (input.key.physical) |identity| {
+                switch (input.key.phase) {
+                    .press => {
+                        if (!self.leases.acquire(identity, .binding)) {
+                            return .discard;
+                        }
+                    },
+                    .repeat => {
+                        if (self.leases.owner(identity) == .binding) {
+                            return self.repeatBinding(input, context.repeat_policy);
+                        }
+                        if (self.leases.owner(identity) != .application) {
+                            return .discard;
+                        }
+                        return .{ .forward = .{ .key = input.key, .raw = input.raw } };
+                    },
+                    .release => {
+                        if (self.releasePhysicalKey(identity) != .application) {
+                            return .discard;
+                        }
+                        return .{ .forward = .{ .key = input.key, .raw = input.raw } };
+                    },
                 }
             }
 
-            const was_pending = router.depth != 0;
-            switch (router.routeKey(input.key, input.raw)) {
-                .forward => |forwarded| {
-                    router.transferKeyToApplication(forwarded.key);
-                    try router.deliverApplicationKey(.{
-                        .key = forwarded.key,
-                        .raw = forwarded.raw,
-                        .now_ns = input.now_ns,
-                    }, handler);
-                },
+            if (context.captures_keys) {
+                const previous = self.replayBinding();
+                self.transferKeyToApplication(input.key);
+                if (previous == .replay) {
+                    var replay = previous.replay;
+                    replay.current_key = input.key;
+                    replay.current_raw = input.raw;
+                    return .{ .replay = replay };
+                }
+                return .{ .forward = .{ .key = input.key, .raw = input.raw } };
+            }
+
+            const was_pending = self.depth != 0;
+            const routed = self.routeKey(input);
+            switch (routed) {
+                .forward => |forwarded| self.transferKeyToApplication(forwarded.key),
                 .replay => |replay| {
-                    router.transferKeysToApplication(replay.held_keys[0..replay.held_key_len]);
-                    router.transferKeyToApplication(replay.current_key);
-                    if (comptime @hasDecl(@TypeOf(handler.*), "key")) {
-                        try router.flushOutput(handler);
-                        for (replay.held_keys[0..replay.held_key_len]) |held_key| {
-                            try handler.key(held_key);
-                        }
-                        try handler.key(replay.current_key);
-                    } else {
-                        try router.appendOutput(replay.held_raw[0..replay.held_raw_len], handler);
-                        try router.appendOutput(replay.current_raw, handler);
-                    }
+                    self.transferKeysToApplication(replay.held_keys[0..replay.held_key_len]);
+                    self.transferKeyToApplication(replay.current_key.?);
                 },
                 .pending => {
-                    if (!was_pending and !router.prefix_pending) {
-                        router.binding_since_ns = input.now_ns;
+                    if (!was_pending and !self.prefix_pending) {
+                        self.binding_since_ns = input.now_ns;
                     }
                 },
-                .discard => {
-                    router.binding_since_ns = null;
-                },
-                .action => |action| {
-                    router.binding_since_ns = null;
-                    try router.flushOutput(handler);
-
-                    const control = try handler.action(action);
-                    if (comptime @hasDecl(@TypeOf(handler.*), "repeatPolicy")) {
-                        if (control == .continue_routing and input.key.physical != null) {
-                            if (handler.repeatPolicy(action)) |policy| {
-                                std.debug.assert(policy.interval_ns != 0);
-                                router.repeating = .{
-                                    .key = input.key,
-                                    .action = action,
-                                    .policy = policy,
-                                    .last_ns = input.now_ns,
-                                };
-                            }
-                        }
-                    }
-
-                    return control;
+                .discard => {},
+                .action => {
+                    self.binding_since_ns = null;
                 },
             }
-            if (router.depth == 0) {
-                router.binding_since_ns = null;
+            if (self.depth == 0) {
+                self.binding_since_ns = null;
             }
-
-            return .continue_routing;
+            return routed;
         }
 
-        fn repeatBinding(router: *Self, input: KeyInput, handler: anytype) !keybind.Control {
-            if (comptime !@hasDecl(@TypeOf(handler.*), "repeatPolicy")) {
-                return .continue_routing;
-            } else {
-                const held = router.repeating orelse return .continue_routing;
-                if (!held.key.physical.?.eql(input.key.physical.?)) {
-                    return .continue_routing;
-                }
+        /// Query the policy for this action in the current application state.
+        /// Example: `const policy = if (router.repeatAction()) |a| repeatPolicy(a) else null;`
+        pub fn repeatAction(self: *const Self) ?Action {
+            return if (self.repeating) |held| held.action else null;
+        }
 
-                const policy = handler.repeatPolicy(held.action);
-                if (keybind.keyOrder(held.key, input.key) != .eq or !std.meta.eql(policy, @as(?RepeatPolicy, held.policy))) {
-                    router.repeating = null;
-
-                    return .continue_routing;
-                }
-
-                if (input.now_ns -| held.last_ns < held.policy.interval_ns) {
-                    return .continue_routing;
-                }
-
-                // Late and batched repeats produce one step, not a replay of
-                // every interval missed while the client was busy.
-                router.repeating.?.last_ns = input.now_ns;
-                errdefer router.repeating = null;
-                try router.flushOutput(handler);
-
-                return handler.action(held.action);
+        /// Arm repeats only after a successful action, using its resulting owner.
+        /// Example: `router.actionCompleted(request, repeatPolicy(request.value));`
+        pub fn actionCompleted(self: *Self, request: ActionRequest, policy: ?RepeatPolicy) void {
+            if (request.repeated or request.key.physical == null) {
+                return;
+            }
+            if (policy) |value| {
+                std.debug.assert(value.interval_ns != 0);
+                self.repeating = .{ .key = request.key, .action = request.value, .policy = value, .last_ns = request.now_ns };
             }
         }
 
-        fn deliverApplicationKey(router: *Self, input: KeyInput, handler: anytype) !void {
-            if (comptime @hasDecl(@TypeOf(handler.*), "key")) {
-                try router.flushOutput(handler);
-                try handler.key(input.key);
-            } else {
-                try router.appendOutput(input.raw, handler);
+        /// Release a failed press and cancel repeats after delivery/action errors.
+        /// Example: `errdefer router.eventFailed(input.key);`
+        pub fn eventFailed(self: *Self, key: Key) void {
+            self.repeating = null;
+            if (key.phase == .press) {
+                if (key.physical) |physical| {
+                    _ = self.leases.release(physical);
+                }
             }
         }
 
-        fn releasePhysicalKey(router: *Self, physical: Key.Physical) ?LeaseOwner {
-            if (router.repeating) |held| {
+        fn repeatBinding(self: *Self, input: KeyInput, policy: ?RepeatPolicy) Decision {
+            const held = self.repeating orelse return .discard;
+            if (!held.key.physical.?.eql(input.key.physical.?)) {
+                return .discard;
+            }
+            if (keybind.keyOrder(held.key, input.key) != .eq or !std.meta.eql(policy, @as(?RepeatPolicy, held.policy))) {
+                self.repeating = null;
+                return .discard;
+            }
+            if (input.now_ns -| held.last_ns < held.policy.interval_ns) {
+                return .discard;
+            }
+
+            // A late or batched repeat produces one step, without catch-up work.
+            self.repeating.?.last_ns = input.now_ns;
+            return .{ .action = .{ .value = held.action, .key = input.key, .now_ns = input.now_ns, .repeated = true } };
+        }
+
+        fn releasePhysicalKey(self: *Self, physical: Key.Physical) ?LeaseOwner {
+            if (self.repeating) |held| {
                 if (held.key.physical.?.eql(physical)) {
-                    router.repeating = null;
+                    self.repeating = null;
                 }
             }
 
-            return router.leases.release(physical);
+            return self.leases.release(physical);
         }
 
-        fn transferKeyToApplication(router: *Self, key_value: Key) void {
+        fn transferKeyToApplication(self: *Self, key_value: Key) void {
             const identity = key_value.physical orelse return;
-            if (router.leases.owner(identity) == null) {
+            if (self.leases.owner(identity) == null) {
                 return;
             }
 
-            const transferred = router.leases.acquire(identity, .application);
+            const transferred = self.leases.acquire(identity, .application);
             std.debug.assert(transferred);
         }
 
-        fn transferKeysToApplication(router: *Self, keys: []const Key) void {
+        fn transferKeysToApplication(self: *Self, keys: []const Key) void {
             for (keys) |key_value| {
-                router.transferKeyToApplication(key_value);
+                self.transferKeyToApplication(key_value);
             }
         }
 
-        const Routed = union(enum) {
-            forward: struct { key: Key, raw: []const u8 },
-            replay: struct {
-                held_keys: [max_keys]Key,
-                held_key_len: u8,
-                held_raw: [held_capacity]u8,
-                held_raw_len: usize,
-                current_key: Key,
-                current_raw: []const u8,
-            },
-            discard,
-            pending,
-            action: Action,
-        };
-
-        fn routeKey(router: *Self, key: Key, raw: []const u8) Routed {
-            if (router.prefix_pending and keybind.isPlainEscape(key)) {
-                router.resetMatch();
+        fn routeKey(self: *Self, input: KeyInput) Decision {
+            const key = input.key;
+            const raw = input.raw;
+            if (self.prefix_pending and keybind.isPlainEscape(key)) {
+                self.resetMatch();
                 return .discard;
             }
-            const range = if (router.depth == 0)
-                Map.Range{ .start = 0, .end = router.map.len }
+            const range = if (self.depth == 0)
+                Map.Range{ .start = 0, .end = self.map.len }
             else
-                router.candidates;
-            const matched = router.map.matchingRange(range, .{ .depth = router.depth, .key = key }) orelse {
-                if (router.depth == 0) {
+                self.candidates;
+            const matched = self.map.matchingRange(range, .{ .depth = self.depth, .key = key }) orelse {
+                if (self.depth == 0) {
                     return .{ .forward = .{ .key = key, .raw = raw } };
                 }
-                if (router.prefix_pending) {
-                    router.resetMatch();
+                if (self.prefix_pending) {
+                    self.resetMatch();
                     return .discard;
                 }
-                const held_key_len = router.held_key_len;
-                const held_raw_len = router.held_len;
+                const held_key_len = self.held_key_len;
+                const held_raw_len = self.held_len;
                 var held_keys: [max_keys]Key = undefined;
                 var held_raw: [held_capacity]u8 = undefined;
-                @memcpy(held_keys[0..held_key_len], router.held_keys[0..held_key_len]);
-                @memcpy(held_raw[0..held_raw_len], router.held[0..held_raw_len]);
-                router.resetMatch();
+                @memcpy(held_keys[0..held_key_len], self.held_keys[0..held_key_len]);
+                @memcpy(held_raw[0..held_raw_len], self.held[0..held_raw_len]);
+                self.resetMatch();
                 return .{ .replay = .{
                     .held_keys = held_keys,
                     .held_key_len = held_key_len,
@@ -574,22 +450,22 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
                 } };
             };
 
-            const next_depth: usize = router.depth + 1;
-            const first = router.map.bindingAt(matched.start);
+            const next_depth: usize = self.depth + 1;
+            const first = self.map.bindingAt(matched.start);
             if (first.len == next_depth) {
                 const action = first.action;
-                router.resetMatch();
-                return .{ .action = action };
+                self.resetMatch();
+                return .{ .action = .{ .value = action, .key = key, .now_ns = input.now_ns } };
             }
 
-            if (router.held_len + raw.len > router.held.len) {
-                const held_key_len = router.held_key_len;
-                const held_raw_len = router.held_len;
+            if (self.held_len + raw.len > self.held.len) {
+                const held_key_len = self.held_key_len;
+                const held_raw_len = self.held_len;
                 var held_keys: [max_keys]Key = undefined;
                 var held_raw: [held_capacity]u8 = undefined;
-                @memcpy(held_keys[0..held_key_len], router.held_keys[0..held_key_len]);
-                @memcpy(held_raw[0..held_raw_len], router.held[0..held_raw_len]);
-                router.resetMatch();
+                @memcpy(held_keys[0..held_key_len], self.held_keys[0..held_key_len]);
+                @memcpy(held_raw[0..held_raw_len], self.held[0..held_raw_len]);
+                self.resetMatch();
                 return .{ .replay = .{
                     .held_keys = held_keys,
                     .held_key_len = held_key_len,
@@ -599,124 +475,95 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
                     .current_raw = raw,
                 } };
             }
-            @memcpy(router.held[router.held_len..][0..raw.len], raw);
-            router.held_len += raw.len;
-            router.held_keys[router.held_key_len] = key;
-            router.held_key_len += 1;
-            router.candidates = matched;
-            router.depth = @intCast(next_depth);
+            @memcpy(self.held[self.held_len..][0..raw.len], raw);
+            self.held_len += raw.len;
+            self.held_keys[self.held_key_len] = key;
+            self.held_key_len += 1;
+            self.candidates = matched;
+            self.depth = @intCast(next_depth);
             if (next_depth == 1) {
-                if (router.prefix) |prefix| {
-                    router.prefix_pending = keybind.keyOrder(key, prefix) == .eq;
+                if (self.prefix) |prefix| {
+                    self.prefix_pending = keybind.keyOrder(key, prefix) == .eq;
                 }
             }
             return .pending;
         }
 
-        /// Ends a partial chord before a semantic paste or pointer event.
-        /// Example: `try router.interrupt(handler);`
-        pub fn interrupt(router: *Self, handler: anytype) !void {
-            router.repeating = null;
-            try router.replayBinding(handler);
-            try router.flushOutput(handler);
+        /// Returns held keys before paste or another owner interrupts a chord.
+        /// Example: `try apply(router.interrupt());`
+        pub fn interrupt(self: *Self) Decision {
+            self.repeating = null;
+            return self.replayBinding();
+        }
+
+        /// Host capability replies preserve prefix mode and physical repeats.
+        /// Example: `router.observeHostResponse();`
+        pub fn observeHostResponse(self: *Self) void {
+            if (!self.prefix_pending) {
+                self.resetMatch();
+                self.binding_since_ns = null;
+            }
         }
 
         /// Drops a partial chord when a semantic pointer action takes ownership.
         /// Example: `router.cancelSequence();`
-        pub fn cancelSequence(router: *Self) void {
-            router.repeating = null;
-            router.resetMatch();
-            router.binding_since_ns = null;
+        pub fn cancelSequence(self: *Self) void {
+            self.repeating = null;
+            self.resetMatch();
+            self.binding_since_ns = null;
         }
 
-        fn replayBinding(router: *Self, handler: anytype) !void {
-            if (router.depth == 0) {
+        fn replayBinding(self: *Self) Decision {
+            if (self.depth == 0) {
+                return .discard;
+            }
+            defer self.resetMatch();
+            self.binding_since_ns = null;
+            if (self.prefix_pending) {
+                return .discard;
+            }
+            self.transferKeysToApplication(self.held_keys[0..self.held_key_len]);
+            var replay: Replay = .{};
+            replay.held_key_len = self.held_key_len;
+            replay.held_raw_len = self.held_len;
+            @memcpy(replay.held_keys[0..self.held_key_len], self.held_keys[0..self.held_key_len]);
+            @memcpy(replay.held_raw[0..self.held_len], self.held[0..self.held_len]);
+            return .{ .replay = replay };
+        }
+
+        fn resetMatch(self: *Self) void {
+            self.candidates = .{ .start = 0, .end = self.map.len };
+            self.depth = 0;
+            self.prefix_pending = false;
+            self.held_len = 0;
+            self.held_key_len = 0;
+        }
+
+        pub fn clear(self: *Self) void {
+            self.resetMatch();
+            self.input_start = 0;
+            self.input_end = 0;
+            self.input_since_ns = null;
+            self.binding_since_ns = null;
+            self.pasting = false;
+            self.leases.clear();
+            self.repeating = null;
+        }
+
+        fn compactInput(self: *Self) void {
+            if (self.input_start == 0) {
                 return;
             }
-            if (router.prefix_pending) {
-                router.resetMatch();
-                router.binding_since_ns = null;
-                return;
-            }
-            router.transferKeysToApplication(router.held_keys[0..router.held_key_len]);
-            if (comptime @hasDecl(@TypeOf(handler.*), "key")) {
-                try router.flushOutput(handler);
-                for (router.held_keys[0..router.held_key_len]) |held_key| {
-                    try handler.key(held_key);
-                }
-            } else {
-                try router.appendOutput(router.held[0..router.held_len], handler);
-            }
-            router.resetMatch();
-            router.binding_since_ns = null;
-        }
-
-        fn resetMatch(router: *Self) void {
-            router.candidates = .{ .start = 0, .end = router.map.len };
-            router.depth = 0;
-            router.prefix_pending = false;
-            router.held_len = 0;
-            router.held_key_len = 0;
-        }
-
-        fn clear(router: *Self) void {
-            router.resetMatch();
-            router.input_start = 0;
-            router.input_end = 0;
-            router.input_since_ns = null;
-            router.binding_since_ns = null;
-            router.output_len = 0;
-            router.pasting = false;
-            router.leases.clear();
-            router.repeating = null;
-        }
-
-        fn appendOutput(router: *Self, bytes: []const u8, handler: anytype) !void {
-            if (bytes.len > router.output.len) {
-                try router.flushOutput(handler);
-                try handler.forward(bytes);
-                return;
-            }
-            if (router.output_len + bytes.len > router.output.len) {
-                try router.flushOutput(handler);
-            }
-            @memcpy(router.output[router.output_len..][0..bytes.len], bytes);
-            router.output_len += bytes.len;
-        }
-
-        fn flushOutput(router: *Self, handler: anytype) !void {
-            if (router.output_len == 0) {
-                return;
-            }
-            try handler.forward(router.output[0..router.output_len]);
-            router.output_len = 0;
-        }
-
-        fn compactInput(router: *Self) void {
-            if (router.input_start == 0) {
-                return;
-            }
-            const len = router.input_end - router.input_start;
-            std.mem.copyForwards(u8, router.input[0..len], router.input[router.input_start..router.input_end]);
-            router.input_start = 0;
-            router.input_end = len;
-        }
-
-        fn recoverFullInput(router: *Self, handler: anytype) !void {
-            try router.replayBinding(handler);
-            if (comptime !@hasDecl(@TypeOf(handler.*), "key")) {
-                try router.appendOutput(router.input[router.input_start..router.input_end], handler);
-            }
-            router.input_start = 0;
-            router.input_end = 0;
-            router.input_since_ns = null;
-            try router.flushOutput(handler);
+            const len = self.input_end - self.input_start;
+            std.mem.copyForwards(u8, self.input[0..len], self.input[self.input_start..self.input_end]);
+            self.input_start = 0;
+            self.input_end = len;
         }
     };
 }
 
 fn testRouter() type {
-    return Type(@import("routing_tests.zig").Action, .{ .max_bindings = 8, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 }, struct {});
+    return Type(@import("routing_tests.zig").Action, .{ .max_bindings = 8, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 }, void);
 }
 
 test "binding admission finds configured direct and chord shortcuts without changing state" {
@@ -754,14 +601,14 @@ test "binding admission keeps ordinary chord misses with the router until replay
     const first = try keybind.parseKey("a");
     const miss = try keybind.parseKey("x");
     try std.testing.expect(router.wantsBinding(first));
-    _ = try router.routeEvent(.{ .key = first, .raw = "", .now_ns = 1 }, &capture);
+    _ = try capture.apply(router.routeEvent(.{ .key = first, .raw = "", .now_ns = 1 }, .{}));
     const deadline = router.bindingDeadline();
     try std.testing.expect(router.wantsBinding(try keybind.parseKey("b")));
     try std.testing.expect(router.wantsBinding(miss));
     try std.testing.expectEqual(deadline, router.bindingDeadline());
     try std.testing.expectEqual(@as(u8, 1), router.depth);
     try std.testing.expectEqual(@as(usize, 0), capture.key_count);
-    _ = try router.routeEvent(.{ .key = miss, .raw = "", .now_ns = 2 }, &capture);
+    _ = try capture.apply(router.routeEvent(.{ .key = miss, .raw = "", .now_ns = 2 }, .{}));
     try std.testing.expectEqual(@as(usize, 2), capture.key_count);
     try std.testing.expectEqualDeep(first, capture.keys[0]);
     try std.testing.expectEqualDeep(miss, capture.keys[1]);
@@ -775,7 +622,7 @@ test "binding admission resolves persistent prefix misses and Escape without cla
     var router = try Router.initWithPrefix(&.{try Binding.parse(&.{ "ctrl+b", "n" }, .next)}, prefix);
     var capture: @import("Capture.zig") = .{};
     for ([_][]const u8{ "x", "escape" }) |name| {
-        _ = try router.routeEvent(.{ .key = prefix, .raw = "", .now_ns = 1 }, &capture);
+        _ = try capture.apply(router.routeEvent(.{ .key = prefix, .raw = "", .now_ns = 1 }, .{}));
         const press = try keybind.parseKey(name);
         try std.testing.expect(router.wantsBinding(press));
         var repeat = press;
@@ -783,7 +630,7 @@ test "binding admission resolves persistent prefix misses and Escape without cla
         repeat.physical = .{ .value = 99 };
         try std.testing.expect(!router.wantsBinding(repeat));
         try std.testing.expect(router.prefixPending());
-        _ = try router.routeEvent(.{ .key = press, .raw = "", .now_ns = 2 }, &capture);
+        _ = try capture.apply(router.routeEvent(.{ .key = press, .raw = "", .now_ns = 2 }, .{}));
         try std.testing.expect(!router.prefixPending());
         try std.testing.expect(!router.wantsBinding(press));
     }
@@ -801,17 +648,17 @@ test "binding admission retains a physical shortcut through focus and keymap rep
     var event = try keybind.parseKey("ctrl+n");
     event.physical = .{ .value = 42 };
     try std.testing.expect(router.wantsBinding(event));
-    _ = try router.routeEvent(.{ .key = event, .raw = "", .now_ns = 1 }, &original);
+    _ = try original.apply(router.routeEvent(.{ .key = event, .raw = "", .now_ns = 1 }, .{}));
     router.cancelSequence();
     var replacement = try Router.init(&.{});
     replacement.inheritPhysicalLeases(&router);
     event.mods = .{};
     event.phase = .repeat;
     try std.testing.expect(replacement.wantsBinding(event));
-    _ = try replacement.routeEvent(.{ .key = event, .raw = "", .now_ns = 2 }, &other_focus);
+    _ = try other_focus.apply(replacement.routeEvent(.{ .key = event, .raw = "", .now_ns = 2 }, .{}));
     event.phase = .release;
     try std.testing.expect(replacement.wantsBinding(event));
-    _ = try replacement.routeEvent(.{ .key = event, .raw = "", .now_ns = 3 }, &other_focus);
+    _ = try other_focus.apply(replacement.routeEvent(.{ .key = event, .raw = "", .now_ns = 3 }, .{}));
     try std.testing.expect(!replacement.wantsBinding(event));
     try std.testing.expectEqual(@as(usize, 1), original.action_count);
     try std.testing.expectEqual(@as(usize, 0), other_focus.action_count);
@@ -826,7 +673,7 @@ test "binding admission cannot steal application repeats or releases when modifi
     var event = try keybind.parseKey("n");
     event.physical = .{ .value = 42 };
     try std.testing.expect(!router.wantsBinding(event));
-    _ = try router.routeEvent(.{ .key = event, .raw = "", .now_ns = 1 }, &capture);
+    _ = try capture.apply(router.routeEvent(.{ .key = event, .raw = "", .now_ns = 1 }, .{}));
     event.mods.ctrl = true;
     for ([_]Key.Phase{ .repeat, .release }) |phase| {
         event.phase = phase;
@@ -853,8 +700,8 @@ test "replayed chord keys can return their physical ownership to the original wi
     first.physical = .{ .value = 1 };
     var miss = try keybind.parseKey("x");
     miss.physical = .{ .value = 2 };
-    _ = try router.routeEvent(.{ .key = first, .raw = "", .now_ns = 1 }, &capture);
-    _ = try router.routeEvent(.{ .key = miss, .raw = "", .now_ns = 2 }, &capture);
+    _ = try capture.apply(router.routeEvent(.{ .key = first, .raw = "", .now_ns = 1 }, .{}));
+    _ = try capture.apply(router.routeEvent(.{ .key = miss, .raw = "", .now_ns = 2 }, .{}));
     try std.testing.expectEqual(@as(usize, 2), capture.key_count);
     router.relinquishKey(first.physical.?);
     router.relinquishKey(miss.physical.?);
@@ -862,9 +709,9 @@ test "replayed chord keys can return their physical ownership to the original wi
     // Stale routing cannot forward these lifecycles to a newly focused owner.
     var other_focus: @import("Capture.zig") = .{};
     first.phase = .repeat;
-    _ = try router.routeEvent(.{ .key = first, .raw = "", .now_ns = 3 }, &other_focus);
+    _ = try other_focus.apply(router.routeEvent(.{ .key = first, .raw = "", .now_ns = 3 }, .{}));
     miss.phase = .release;
-    _ = try router.routeEvent(.{ .key = miss, .raw = "", .now_ns = 4 }, &other_focus);
+    _ = try other_focus.apply(router.routeEvent(.{ .key = miss, .raw = "", .now_ns = 4 }, .{}));
     try std.testing.expectEqual(@as(usize, 0), other_focus.key_count);
     try std.testing.expectEqual(@as(usize, 0), other_focus.action_count);
 }
@@ -876,7 +723,7 @@ test "relinquishing a physical key preserves another shortcut repeat and cancels
     var capture: @import("Capture.zig") = .{};
     var event = try keybind.parseKey("ctrl+n");
     event.physical = .{ .value = 42 };
-    _ = try router.routeEvent(.{ .key = event, .raw = "", .now_ns = 1 }, &capture);
+    _ = try capture.apply(router.routeEvent(.{ .key = event, .raw = "", .now_ns = 1 }, .{}));
     router.repeating = .{ .key = event, .action = .next, .policy = .{ .interval_ns = 1, .context = 9 }, .last_ns = 1 };
     router.relinquishKey(.{ .value = 99 });
     try std.testing.expect(router.repeating != null);

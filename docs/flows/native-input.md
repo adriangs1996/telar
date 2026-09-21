@@ -69,8 +69,10 @@ native snapshot. No platform callback mutates the model directly.
 
 `input/router.zig` instantiates the shared key router without an escape decoder.
 It resolves the same configured prefix, built-in actions and Lua/plugin bindings
-as the TUI. `src/gui/input/InputHandler.zig` delegates keys and actions to
-`src/client/operations/input/`. Prompt editing, copy mode, pane focus, workspace
+as the TUI. `GuiClient.routeKey` supplies current capture/repeat policy and
+receives a typed decision. Its `applyInputDecision` switch executes keys or actions
+through `src/client/operations/input/`; `executeAction` contains the native
+palette, sidebar and transcript cases. Prompt editing, copy mode, pane focus, workspace
 and tab requests, splits, pane fullscreen and detach call the same concrete
 operations and runtime messages. Prefix status is projected from this effective
 router, and a replaceable `.binding` timer expires ordinary partial chords.

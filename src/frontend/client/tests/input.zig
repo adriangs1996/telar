@@ -7,7 +7,8 @@ const support = @import("support.zig");
 const CaptureType = @import("telar-client").Capture;
 const view_interactions = @import("telar-client").operations.view_interactions;
 const std = @import("std");
-const InputHandler = @import("../resources/InputHandler.zig");
+const host_inputs = @import("../controllers/input/host_inputs.zig");
+const input_operations = @import("telar-client").operations;
 const parseKey_module = @import("telar-client").parseKey;
 const clipboard_images = @import("telar-client").operations.clipboard_images;
 const BufferType = @import("telar-core").Buffer;
@@ -21,7 +22,6 @@ const InputModesType = @import("telar-core").InputModes;
 const CellType = @import("telar-core").Cell;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const Chunk = @import("../controllers/input/Chunk.zig");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
 const config_reloads = @import("telar-client").operations.config_reloads;
 const PaneIdType = @import("telar-core").PaneId;
 const enabled_module = @import("telar-core").enabled;
@@ -103,13 +103,12 @@ test "child marker deletion and prompt submission retire paired previews" {
         .x = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "> [Image #1]", .style = .{} }),
         .y = 0,
     };
-    var handler: InputHandler = .{ .client = client };
 
-    try handler.key(try parseKey_module("backspace"));
+    try host_inputs.key(client, try parseKey_module("backspace"));
 
     try std.testing.expectEqual(@as(u8, 0), host(client).view.kittyAttachments().snapshot().len);
     const pending = (try client.model.beginClipboardCapture(target)).?;
-    try handler.key(try parseKey_module("enter"));
+    try host_inputs.key(client, try parseKey_module("enter"));
     try std.testing.expect(client.model.clipboardCapture() == null);
     const completed = try support.testingClipboardCapture(client, pending, "private png");
 
@@ -151,8 +150,7 @@ test "Claude marker disappearance in a committed frame retires its paired previe
 
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(marker_frame));
     try std.testing.expectEqual(@as(u8, 1), host(client).view.kittyAttachments().snapshot().len);
-    var handler: InputHandler = .{ .client = client };
-    try handler.key(try parseKey_module("backspace"));
+    try host_inputs.key(client, try parseKey_module("backspace"));
     try std.testing.expectEqual(@as(u8, 1), host(client).view.kittyAttachments().snapshot().len);
 
     pane_buffer.clear(.{});
@@ -244,9 +242,8 @@ test "a Pi path removed by a word deletion retires its preview on the next frame
     try adoptPiPreview(client, target);
     try commitPiFrame(client, .{ .target = target, .prompt = "> " ++ pi_test_path, .id = 1 });
     try std.testing.expectEqual(@as(u8, 1), host(client).view.kittyAttachments().snapshot().len);
-    var handler: InputHandler = .{ .client = client };
 
-    try handler.key(try parseKey_module("ctrl+w"));
+    try host_inputs.key(client, try parseKey_module("ctrl+w"));
     try std.testing.expectEqual(@as(u8, 1), host(client).view.kittyAttachments().snapshot().len);
     try commitPiFrame(client, .{
         .target = target,
@@ -373,15 +370,14 @@ test "streamed paste captures target and framing while restoring its live viewpo
     const input_events = client.telemetry.metrics.input_events;
     const input_bytes = client.telemetry.metrics.input_bytes;
     const timing_count = client.telemetry.metrics.input_enqueue.count;
-    var handler: InputHandler = .{ .client = client };
 
-    try handler.pasteStart();
+    _ = try input_operations.paste_routing.start(client);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, client.model.panePasteSession().?.pane_id);
     try std.testing.expect(client.model.panePasteSession().?.bracketed_paste);
     pane.input_modes.bracketed_paste = false;
     try std.testing.expect(tab.focusPane(other_pane));
-    try handler.pasteContent("pasted");
-    try handler.pasteEnd();
+    _ = try input_operations.paste_routing.content(client, "pasted");
+    _ = try input_operations.paste_routing.finish(client);
 
     try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
@@ -413,9 +409,8 @@ test "streamed pane paste excludes prompt and copy-mode ownership until finish" 
     try harness.bootstrap();
     const client = harness.client;
     const version = client.model.version();
-    var handler: InputHandler = .{ .client = client };
 
-    try handler.pasteStart();
+    _ = try input_operations.paste_routing.start(client);
 
     try std.testing.expect(client.model.panePasteActive());
     try std.testing.expect(!client.model.enterCopyMode());
@@ -424,7 +419,7 @@ test "streamed pane paste excludes prompt and copy-mode ownership until finish" 
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expectEqualDeep(version, client.model.version());
 
-    try handler.pasteEnd();
+    _ = try input_operations.paste_routing.finish(client);
 
     try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expect(name_prompts.beginWorkspaceRename(client));
@@ -436,13 +431,12 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    var handler: InputHandler = .{ .client = client };
     try std.testing.expect(name_prompts.beginActiveTabRename(client));
 
-    try handler.pasteStart();
+    _ = try input_operations.paste_routing.start(client);
     try std.testing.expect(client.model.name_prompt.currentConst().?.pasting);
-    try handler.pasteContent(" one\r");
-    try handler.pasteEnd();
+    _ = try input_operations.paste_routing.content(client, " one\r");
+    _ = try input_operations.paste_routing.finish(client);
 
     const prompt = client.model.name_prompt.currentConst().?;
     try std.testing.expect(!prompt.pasting);
@@ -450,13 +444,13 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
     try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
-    try handler.key(try parseKey_module("escape"));
+    try host_inputs.key(client, try parseKey_module("escape"));
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expect(client.model.enterCopyMode());
 
-    try handler.pasteStart();
-    try handler.pasteContent("ignored");
-    try handler.pasteEnd();
+    _ = try input_operations.paste_routing.start(client);
+    _ = try input_operations.paste_routing.content(client, "ignored");
+    _ = try input_operations.paste_routing.finish(client);
 
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expect(!client.model.panePasteActive());
@@ -479,9 +473,8 @@ test "name prompt rejects pointer routing after host telemetry" {
     const version = client.model.version();
     const outbox_len = client.runtime_transport.outbox.len;
     const mouse_events = client.telemetry.metrics.mouse_events;
-    var handler: InputHandler = .{ .client = client };
 
-    try handler.mouse(.{
+    try host_inputs.mouse(client, .{
         .x = pane_view.content.x,
         .y = pane_view.content.y,
         .kind = .press,
@@ -516,17 +509,16 @@ test "mouse reports preserve scrollback and remain outside user-input telemetry"
     const input_bytes = client.telemetry.metrics.input_bytes;
     const timing_count = client.telemetry.metrics.input_enqueue.count;
     const mouse_events = client.telemetry.metrics.mouse_events;
-    var handler: InputHandler = .{ .client = client };
     const point: term.Event.Mouse = .{
         .x = pane_view.content.x,
         .y = pane_view.content.y,
         .kind = .move,
     };
 
-    try handler.mouse(point);
+    try host_inputs.mouse(client, point);
     var press = point;
     press.kind = .press;
-    try handler.mouse(press);
+    try host_inputs.mouse(client, press);
 
     try std.testing.expectEqual(@as(u32, 0), pane.scroll.offset);
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -562,9 +554,8 @@ test "mouse reports preserve exact host pixels relative to pane content" {
         pane.id,
         host(client).view.workbench(),
     ).?;
-    var handler: InputHandler = .{ .client = client };
 
-    try handler.mouse(.{
+    try host_inputs.mouse(client, .{
         .x = 0,
         .y = 0,
         .raw_x = @as(u32, pane_view.content.x) * 10 + 7,
@@ -596,9 +587,8 @@ test "alternate-screen wheel sends cursor keys to the pane under the pointer" {
     pane.scroll = .{ .total_rows = pane.buffer.h, .offset = 0 };
     const hovered_view = model.viewForPane(hovered, host(client).view.workbench()).?;
     const version = client.model.version();
-    var handler: InputHandler = .{ .client = client };
 
-    try handler.mouse(.{
+    try host_inputs.mouse(client, .{
         .x = hovered_view.content.x,
         .y = hovered_view.content.y,
         .kind = .scroll_up,
@@ -649,8 +639,7 @@ test "focused scroll bindings target focus rather than hover and normal input re
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
     other.scroll = .{ .total_rows = @as(u32, other.buffer.h) + 10, .offset = 10 };
     const hovered_view = model.viewForPane(hovered, host(client).view.workbench()).?;
-    var handler: InputHandler = .{ .client = client };
-    try handler.mouse(.{ .x = hovered_view.content.x, .y = hovered_view.content.y, .kind = .move });
+    try host_inputs.mouse(client, .{ .x = hovered_view.content.x, .y = hovered_view.content.y, .kind = .move });
     const version = client.model.version();
 
     try testingHostInput(client, "\x02-");
@@ -669,7 +658,7 @@ test "focused scroll bindings target focus rather than hover and normal input re
     try std.testing.expectEqual(focused, scrolled.set_pane_viewport.pane_id);
     try std.testing.expectEqual(@as(u32, 7), scrolled.set_pane_viewport.offset);
 
-    try handler.key(try parseKey_module("x"));
+    try host_inputs.key(client, try parseKey_module("x"));
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
     try std.testing.expect(host(client).graphics_store.paneVisible(focused));
     try harness.settle();
@@ -700,35 +689,34 @@ test "held scroll suffixes pace both viewport directions without queued steps" {
         const press = if (up) "\x02\x1b[45::45;1:1u" else "\x02\x1b[61::61;1:1u";
         const repeated = if (up) "\x1b[45::45;1:2u" else "\x1b[61::61;1:2u";
         const release = if (up) "\x1b[45::45;1:3u" else "\x1b[61::61;1:3u";
-        var handler: InputHandler = .{ .client = client };
         const ms = std.time.ns_per_ms;
 
-        _ = try host(client).host_input.router.feed(.{ .bytes = press, .now_ns = 0 }, &handler);
+        _ = try host_inputs.feed(client, .{ .bytes = press, .now_ns = 0 });
         try std.testing.expectEqual(@as(u32, if (up) 47 else 53), pane.scroll.offset);
-        _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 99 * ms }, &handler);
+        _ = try host_inputs.feed(client, .{ .bytes = repeated, .now_ns = 99 * ms });
         try std.testing.expectEqual(@as(u32, if (up) 47 else 53), pane.scroll.offset);
-        _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 100 * ms }, &handler);
+        _ = try host_inputs.feed(client, .{ .bytes = repeated, .now_ns = 100 * ms });
         try std.testing.expectEqual(@as(u32, if (up) 44 else 56), pane.scroll.offset);
 
         for (0..20) |_| {
-            _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 1000 * ms }, &handler);
+            _ = try host_inputs.feed(client, .{ .bytes = repeated, .now_ns = 1000 * ms });
         }
 
         try std.testing.expectEqual(@as(u32, if (up) 41 else 59), pane.scroll.offset);
         const version = client.model.version();
         const pending = client.runtime_transport.outbox.len;
-        _ = try host(client).host_input.router.feed(.{ .bytes = release, .now_ns = 1001 * ms }, &handler);
-        _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 2000 * ms }, &handler);
+        _ = try host_inputs.feed(client, .{ .bytes = release, .now_ns = 1001 * ms });
+        _ = try host_inputs.feed(client, .{ .bytes = repeated, .now_ns = 2000 * ms });
         try std.testing.expectEqualDeep(version, client.model.version());
         try std.testing.expectEqual(pending, client.runtime_transport.outbox.len);
         try std.testing.expect(host(client).host_input.router.inputDeadline() == null);
         try std.testing.expect(host(client).host_input.router.bindingDeadline() == null);
 
-        _ = try host(client).host_input.router.feed(.{ .bytes = press, .now_ns = 2001 * ms }, &handler);
+        _ = try host_inputs.feed(client, .{ .bytes = press, .now_ns = 2001 * ms });
         try std.testing.expectEqual(@as(u32, if (up) 38 else 62), pane.scroll.offset);
         pane.scroll.offset = if (up) 0 else 100;
         const at_edge = client.model.version();
-        _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 2101 * ms }, &handler);
+        _ = try host_inputs.feed(client, .{ .bytes = repeated, .now_ns = 2101 * ms });
         try std.testing.expectEqualDeep(at_edge, client.model.version());
     }
 }
@@ -750,17 +738,16 @@ test "a held global scroll cannot move a newly focused pane or resume after retu
     other.scroll = .{ .total_rows = @as(u32, other.buffer.h) + 100, .offset = 100 };
     const binding = try model_module.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up });
     host(client).host_input.replaceRouter(client.io, try host_inputs.Router.init(&.{binding}));
-    var handler: InputHandler = .{ .client = client };
     const repeated = "\x1b[45::45;3:2u";
 
-    _ = try host(client).host_input.router.feed(.{ .bytes = "\x1b[45::45;3:1u", .now_ns = 0 }, &handler);
-    _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 100 * std.time.ns_per_ms }, &handler);
+    _ = try host_inputs.feed(client, .{ .bytes = "\x1b[45::45;3:1u", .now_ns = 0 });
+    _ = try host_inputs.feed(client, .{ .bytes = repeated, .now_ns = 100 * std.time.ns_per_ms });
     try std.testing.expectEqual(@as(u32, 94), pane.scroll.offset);
     try std.testing.expect(model.focusPane(second));
-    _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 200 * std.time.ns_per_ms }, &handler);
+    _ = try host_inputs.feed(client, .{ .bytes = repeated, .now_ns = 200 * std.time.ns_per_ms });
     try std.testing.expectEqual(@as(u32, 100), other.scroll.offset);
     try std.testing.expect(model.focusPane(focused));
-    _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 300 * std.time.ns_per_ms }, &handler);
+    _ = try host_inputs.feed(client, .{ .bytes = repeated, .now_ns = 300 * std.time.ns_per_ms });
     try std.testing.expectEqual(@as(u32, 94), pane.scroll.offset);
     try std.testing.expectEqual(@as(u32, 100), other.scroll.offset);
 }
@@ -773,12 +760,11 @@ test "copy mode takes authority away from a held scroll binding" {
     const client = harness.client;
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 100, .offset = 100 };
-    var handler: InputHandler = .{ .client = client };
 
-    _ = try host(client).host_input.router.feed(.{ .bytes = "\x02\x1b[45::45;1:1u", .now_ns = 0 }, &handler);
+    _ = try host_inputs.feed(client, .{ .bytes = "\x02\x1b[45::45;1:1u", .now_ns = 0 });
     _ = try client_actions.apply(client, .enter_copy_mode);
     const version = client.model.version();
-    _ = try host(client).host_input.router.feed(.{ .bytes = "\x1b[45::45;1:2u", .now_ns = 100 * std.time.ns_per_ms }, &handler);
+    _ = try host_inputs.feed(client, .{ .bytes = "\x1b[45::45;1:2u", .now_ns = 100 * std.time.ns_per_ms });
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(@as(u32, 97), pane.scroll.offset);
@@ -830,14 +816,13 @@ test "held global scroll paces SGR reports without forwarding the binding chord"
     pane.mouse = .{ .tracking = .normal, .sgr = true };
     const binding = try model_module.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up });
     host(client).host_input.replaceRouter(client.io, try host_inputs.Router.init(&.{binding}));
-    var handler: InputHandler = .{ .client = client };
     const version = client.model.version();
     const repeated = "\x1b[45::45;3:2u";
 
-    _ = try host(client).host_input.router.feed(.{ .bytes = "\x1b[45::45;3:1u", .now_ns = 0 }, &handler);
-    _ = try host(client).host_input.router.feed(.{ .bytes = repeated, .now_ns = 99 * std.time.ns_per_ms }, &handler);
-    _ = try host(client).host_input.router.feed(.{ .bytes = repeated ++ repeated, .now_ns = 100 * std.time.ns_per_ms }, &handler);
-    _ = try host(client).host_input.router.feed(.{ .bytes = "\x1b[45::45;1:3u" ++ repeated, .now_ns = 200 * std.time.ns_per_ms }, &handler);
+    _ = try host_inputs.feed(client, .{ .bytes = "\x1b[45::45;3:1u", .now_ns = 0 });
+    _ = try host_inputs.feed(client, .{ .bytes = repeated, .now_ns = 99 * std.time.ns_per_ms });
+    _ = try host_inputs.feed(client, .{ .bytes = repeated ++ repeated, .now_ns = 100 * std.time.ns_per_ms });
+    _ = try host_inputs.feed(client, .{ .bytes = "\x1b[45::45;1:3u" ++ repeated, .now_ns = 200 * std.time.ns_per_ms });
     try std.testing.expectEqualDeep(version, client.model.version());
     try harness.settle();
 
@@ -873,8 +858,7 @@ test "focused scroll sends alternate-screen cursor keys only to the focused pane
     pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
     pane.scroll = .{ .total_rows = pane.buffer.h, .offset = 0 };
     const hovered_view = model.viewForPane(hovered, host(client).view.workbench()).?;
-    var handler: InputHandler = .{ .client = client };
-    try handler.mouse(.{ .x = hovered_view.content.x, .y = hovered_view.content.y, .kind = .move });
+    try host_inputs.mouse(client, .{ .x = hovered_view.content.x, .y = hovered_view.content.y, .kind = .move });
     const version = client.model.version();
 
     for ([_]ScrollDirectionType{ .up, .down }) |direction| {
@@ -922,9 +906,8 @@ test "focused scroll retires copy mode before moving the restored viewport" {
     const client = harness.client;
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
-    var handler: InputHandler = .{ .client = client };
     _ = try client_actions.apply(client, .enter_copy_mode);
-    try handler.key(try parseKey_module("g"));
+    try host_inputs.key(client, try parseKey_module("g"));
     try std.testing.expectEqual(@as(u32, 0), pane.scroll.offset);
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -1012,4 +995,32 @@ test "native thread view action flips the focused pane surface" {
         try std.testing.expectEqual(expected_surface, active.layout.surface(focused));
         try std.testing.expectEqualDeep(expected_version, client.model.version());
     }
+}
+
+test "one host batch observes a prompt opened by its preceding binding" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+
+    _ = try host_inputs.feed(client, .{ .bytes = "\x02Txyz", .now_ns = 1 });
+
+    try std.testing.expectEqualStrings("shellxyz", client.model.name_prompt.currentConst().?.field.text());
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+}
+
+test "detach stops a host batch before its remaining text reaches the pane" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const before = client.telemetry.metrics.input_events;
+
+    const control = try host_inputs.feed(client, .{ .bytes = "\x02dignored", .now_ns = 1 });
+
+    try std.testing.expectEqual(.stop, control);
+    try std.testing.expectEqual(before, client.telemetry.metrics.input_events);
+    try std.testing.expectEqual(@as(usize, 0), host(client).host_input.router.input_end);
 }

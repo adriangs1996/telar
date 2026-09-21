@@ -9,67 +9,57 @@ pending: [4096]u8 = undefined,
 pending_len: usize = 0,
 paste: bool = false,
 
-/// Example: `try state.feed(bytes, &terminal_response_handler);`.
-pub fn feed(state: *State, bytes: []const u8, handler: anytype) !void {
-    var offset: usize = 0;
-    while (offset < bytes.len) {
-        const count = @min(bytes.len - offset, state.pending.len - state.pending_len);
-        if (count == 0) {
+/// Retain early user input and yield host replies one at a time.
+/// Example: `while (try state.next(&bytes)) |reply| try observe(reply);`
+pub fn next(self: *State, incoming: *[]const u8) !?term.Event.TerminalResponse {
+    while (true) {
+        const count = @min(incoming.len, self.pending.len - self.pending_len);
+        @memcpy(self.pending[self.pending_len..][0..count], incoming.*[0..count]);
+        self.pending_len += count;
+        incoming.* = incoming.*[count..];
+        var offset: usize = 0;
+        defer self.consume(offset);
+        while (offset < self.pending_len) {
+            const bytes = self.pending[offset..self.pending_len];
+            if (self.paste) {
+                const end = "\x1b[201~";
+                if (std.mem.startsWith(u8, bytes, end)) {
+                    self.paste = false;
+                    try self.retain(bytes[0..end.len]);
+                    offset += end.len;
+                } else if (std.mem.startsWith(u8, end, bytes)) {
+                    break;
+                } else {
+                    try self.retain(bytes[0..1]);
+                    offset += 1;
+                }
+                continue;
+            }
+            if (bytes.len == 1 and bytes[0] == 0x1b) {
+                break;
+            }
+            const parsed = term.parse(bytes) orelse break;
+            if (parsed.len == 0) {
+                break;
+            }
+            offset += parsed.len;
+            switch (parsed.event) {
+                .terminal_response => |response| return response,
+                .incomplete => {},
+                else => {
+                    if (parsed.event == .paste_start) {
+                        self.paste = true;
+                    }
+                    try self.retain(bytes[0..parsed.len]);
+                },
+            }
+        }
+        if (incoming.len == 0) {
+            return null;
+        }
+        if (offset == 0 and self.pending_len == self.pending.len) {
             return error.StartupInputOverflow;
         }
-
-        @memcpy(state.pending[state.pending_len..][0..count], bytes[offset..][0..count]);
-        state.pending_len += count;
-        offset += count;
-        try state.drain(handler);
-    }
-}
-
-fn drain(state: *State, handler: anytype) !void {
-    var offset: usize = 0;
-    defer state.consume(offset);
-    while (offset < state.pending_len) {
-        const bytes = state.pending[offset..state.pending_len];
-        if (state.paste) {
-            const end = "\x1b[201~";
-            if (std.mem.startsWith(u8, bytes, end)) {
-                state.paste = false;
-                try state.retain(bytes[0..end.len]);
-                offset += end.len;
-            } else if (std.mem.startsWith(u8, end, bytes)) {
-                return;
-            } else {
-                try state.retain(bytes[0..1]);
-                offset += 1;
-            }
-
-            continue;
-        }
-
-        if (bytes.len == 1 and bytes[0] == 0x1b) {
-            return;
-        }
-
-        const parsed = term.parse(bytes) orelse return;
-        if (parsed.len == 0) {
-            return;
-        }
-
-        switch (parsed.event) {
-            .terminal_response => |response| {
-                try handler.terminalResponse(response);
-            },
-            .incomplete => {},
-            else => {
-                if (parsed.event == .paste_start) {
-                    state.paste = true;
-                }
-
-                try state.retain(bytes[0..parsed.len]);
-            },
-        }
-
-        offset += parsed.len;
     }
 }
 

@@ -16,7 +16,7 @@ pub fn text(commit: *const TextCommit) TextInput {
 }
 
 /// Preserves physical ownership and repeats when the shared router is the target.
-/// Example: `try router.routeEvent(.{ .key = commit.key(), .raw = "", .now_ns = now }, handler);`
+/// Example: `_ = try gui.routeKey(.{ .key = commit.key(), .raw = "", .now_ns = now });`
 pub fn key(commit: TextCommit) Key {
     return .{ .code = .{ .char = .{ .bytes = commit.bytes, .len = commit.len } }, .phase = commit.phase, .physical = commit.physical };
 }

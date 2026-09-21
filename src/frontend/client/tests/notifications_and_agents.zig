@@ -32,7 +32,7 @@ const DeliveryOutcomeType = @import("telar-client").DeliveryOutcome;
 const encodeNotificationShown_module = @import("telar-core").encodeNotificationShown;
 const PaneIdType = @import("telar-core").PaneId;
 const term = @import("../../presentation/screen_support.zig");
-const InputHandler = @import("../resources/InputHandler.zig");
+const host_inputs = @import("../controllers/input/host_inputs.zig");
 const encodeProxyStatus_module = @import("telar-core").encodeProxyStatus;
 const encodeSystemMetrics_module = @import("telar-core").encodeSystemMetrics;
 const SystemMetricsType = @import("telar-client").SystemMetrics;
@@ -472,9 +472,8 @@ test "toast activation commits by id before following its navigation target" {
     };
     const notification_click = click orelse return error.MissingNotificationHit;
     const version_before_activation = client.model.version();
-    var handler: InputHandler = .{ .client = client };
 
-    try handler.mouse(notification_click);
+    try host_inputs.mouse(client, notification_click);
 
     try std.testing.expectEqual(second_pane, active.layout.focused().?);
     try std.testing.expectEqual(
@@ -483,7 +482,7 @@ test "toast activation commits by id before following its navigation target" {
     );
     const version_after_activation = client.model.version();
 
-    try handler.mouse(notification_click);
+    try host_inputs.mouse(client, notification_click);
 
     try std.testing.expectEqualDeep(version_after_activation, client.model.version());
 }
@@ -704,9 +703,8 @@ test "workspace position navigation resolves the committed client model" {
     });
     _ = try server_messages.handleServerMessage(client, try decodeServer_module(list));
     const pending_updates_before = host(client).presenter.pending_updates;
-    const handler: InputHandler = .{ .client = client };
 
-    _ = try client_actions.apply(handler.client, .{ .select_workspace = 1 });
+    _ = try client_actions.apply(client, .{ .select_workspace = 1 });
 
     try std.testing.expect(client.model.workspaceLocation() == null);
     try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);

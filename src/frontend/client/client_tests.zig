@@ -45,7 +45,6 @@ test {
     _ = @import("presentation/presentation_lifecycle.zig");
     _ = @import("presentation/presentation_projection.zig");
     _ = @import("presentation/view.zig");
-    _ = @import("resources/InputHandler.zig");
     _ = @import("resources/host_output.zig");
     _ = @import("resources/telemetry.zig");
     _ = run;

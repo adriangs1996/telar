@@ -41,7 +41,7 @@ right-button link gestures through `link_openings` to `HostClipboard`.
 `link_regressions.zig` verifies copying without opening or child mouse reports.
 
 Link copy requests retain only the latest host request ID in `CopyFeedback`.
-`NativeInput.dispatchClipboard` first validates completion through the host
+`GuiClient.dispatchClipboard` first validates completion through the host
 service; only a successful matching write displays "Copy to clipboard". The
 passive label sits above the bottom status bar for two seconds, using the frame
 clock's expiration deadline rather than a polling timer. It never enters the

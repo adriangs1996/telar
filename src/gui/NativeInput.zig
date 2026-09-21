@@ -6,10 +6,9 @@ const decode_input = @import("native/decode_input.zig");
 const Item = @import("input_item.zig").Item;
 const core = @import("telar-core");
 const routing = @import("input/router.zig");
-const InputHandler = @import("input/InputHandler.zig");
 const PointerRouting = @import("input/PointerRouting.zig");
 const ReleaseRecovery = @import("input/ReleaseRecovery.zig");
-const GuiClient = @import("GuiClient.zig");
+const PasteChunk = @import("PasteChunk.zig");
 const KeyInput = @import("input/KeyInput.zig");
 const GenericEventPool = @import("input/GenericEventPool.zig").Type;
 const Input = @This();
@@ -39,54 +38,30 @@ pub fn init(config: client.RouterConfig) !Input {
 }
 
 /// Replaces bindings without transferring held keys to their new meanings.
-/// Example: `input.adopt(app, config);`
-pub fn adopt(input: *Input, app: *client.AttachedClient, config: client.RouterConfig) void {
+/// Example: `input.adopt(config);`
+pub fn adopt(self: *Input, config: client.RouterConfig) void {
     var replacement = routing.build(config) catch unreachable;
-    replacement.inheritPhysicalLeases(&input.router);
-    input.router = replacement;
-    input.binding_target = null;
-    input.presentation_revision +%= 1;
-    _ = input.binding_timeout.update(app.io, null);
+    replacement.inheritPhysicalLeases(&self.router);
+    self.router = replacement;
+    self.binding_target = null;
+    self.presentation_revision +%= 1;
 }
 
 /// Cancels a partial chord and its original widget before input changes owner.
 /// Held physical keys retain their leases. Example: `input.cancelBinding();`
-pub fn cancelBinding(input: *Input) void {
-    input.router.cancelSequence();
-    input.binding_target = null;
+pub fn cancelBinding(self: *Input) void {
+    self.router.cancelSequence();
+    self.binding_target = null;
 }
 
 /// Example: `input.setGeometry(renderer.origin, size);`
-pub fn setGeometry(input: *Input, origin: [2]u32, size: core.TerminalSize) void {
-    input.pointer.configure(origin, size);
-}
-
-/// Reserves one control slot to finish gestures even when ordinary input is
-/// saturated. Example: `try input.cancelPointer(app);`
-pub fn cancelPointer(input: *Input, app: *client.AttachedClient) !void {
-    input.scheduleRecovery();
-    try input.drain(app);
-    try app.host_input_source.resumeRead();
-}
-
-/// Prompt replay contains UTF-8 text, never a terminal escape stream.
-/// Example: `try Input.routePromptBytes(app, bytes);`
-pub fn routePromptBytes(app: *client.AttachedClient, bytes: []const u8) !void {
-    _ = try client.operations.name_prompts.handleInput(app, .{ .paste_text = bytes });
-}
-
-/// Example: `try input.expire(app, result);`
-pub fn expire(input: *Input, app: *client.AttachedClient, result: anyerror!void) !void {
-    try input.binding_timeout.complete(result);
-    var handler: InputHandler = .{ .app = app, .widget_target = input.binding_target };
-    const pending = input.router.prefixPending();
-    input.stopped = try input.router.expireBinding(client.monotonic(app.io), &handler) == .stop;
-    try input.finish(app, pending);
+pub fn setGeometry(self: *Input, origin: [2]u32, size: core.TerminalSize) void {
+    self.pointer.configure(origin, size);
 }
 
 /// Example: `const mode = input.statusMode(app.model.copyModeActive());`
-pub fn statusMode(input: *const Input, copy_mode_active: bool) client.Mode {
-    if (!input.router.prefixPending()) {
+pub fn statusMode(self: *const Input, copy_mode_active: bool) client.Mode {
+    if (!self.router.prefixPending()) {
         return if (copy_mode_active) .copy else .normal;
     }
 
@@ -94,7 +69,7 @@ pub fn statusMode(input: *const Input, copy_mode_active: bool) client.Mode {
     const actions = [_]client.Action{ .{ .split_pane = .horizontal }, .{ .split_pane = .vertical }, .new_tab, .new_workspace, .rename_tab, .rename_workspace, .close_pane, .enter_copy_mode };
     const labels = [_][]const u8{ "split right", "split down", "new tab", "new workspace", "rename tab", "rename workspace", "close pane", "copy mode" };
     for (actions, labels) |action, label| {
-        const key = input.router.prefixedKeyForAction(action) orelse continue;
+        const key = self.router.prefixedKeyForAction(action) orelse continue;
         hints.append(.{ .key = key, .label = label });
     }
 
@@ -103,25 +78,25 @@ pub fn statusMode(input: *const Input, copy_mode_active: bool) client.Mode {
 
 /// Copies borrowed native input before returning to the platform callback.
 /// A whole paste is admitted or rejected. Example: `try input.accept(event);`
-pub fn accept(input: *Input, event: NativeEvent) !void {
-    try input.acceptEvent(try decode_input.decode(event));
+pub fn accept(self: *Input, event: NativeEvent) !void {
+    try self.acceptEvent(try decode_input.decode(event));
 }
 
 /// Admits semantic input validated by the native decoder. Text and paste are
 /// copied into the bounded queue. Focus belongs to the driver's ordered inbox.
 /// Example: `try input.acceptEvent(try decode_input.decode(native_event));`
-pub fn acceptEvent(input: *Input, event: Event) !void {
+pub fn acceptEvent(self: *Input, event: Event) !void {
     switch (event) {
         .pointer => |pointer| {
-            input.reserve(1) catch |err| {
+            self.reserve(1) catch |err| {
                 if (pointer.kind != .release and pointer.kind != .leave) {
                     return err;
                 }
 
-                input.scheduleRecovery();
+                self.requestRecovery();
                 return;
             };
-            input.push(.{ .pointer = input.pointer.sample(pointer) });
+            self.push(.{ .pointer = self.pointer.sample(pointer) });
         },
         .text => |text| {
             if (text.target_id != 0 and text.phase == .release and text.physical != null) {
@@ -133,13 +108,13 @@ pub fn acceptEvent(input: *Input, event: Event) !void {
 
                 var key: KeyInput = .{ .code = .{ .char = .{ .bytes = @splat(0), .len = @intCast(bytes.len) } }, .phase = .release, .physical = text.physical, .target_id = text.target_id, .generation = text.generation };
                 @memcpy(key.code.char.bytes[0..bytes.len], bytes);
-                try input.pushKey(key, .key);
+                try self.pushKey(key, .key);
                 return;
             }
 
             if (text.target_id != 0) {
-                try input.reserve(1);
-                input.push(.{ .owned_small = try input.small_events.admit(event) });
+                try self.reserve(1);
+                self.push(.{ .owned_small = try self.small_events.admit(event) });
                 return;
             }
 
@@ -150,7 +125,7 @@ pub fn acceptEvent(input: *Input, event: Event) !void {
                 count += 1;
             }
 
-            input.reserve(count) catch |err| {
+            self.reserve(count) catch |err| {
                 if (count != 1 or text.phase != .release or text.physical == null) {
                     return err;
                 }
@@ -163,7 +138,7 @@ pub fn acceptEvent(input: *Input, event: Event) !void {
                     key.physical = text.physical;
                 }
 
-                try input.pushKey(key, .text);
+                try self.pushKey(key, .text);
             }
         },
         .paste => |text| {
@@ -182,301 +157,76 @@ pub fn acceptEvent(input: *Input, event: Event) !void {
             var offset: usize = 0;
             var chunks: usize = 0;
             while (offset < text.len) {
-                offset += pasteChunkSize(text[offset..]);
+                offset += PasteChunk.nextSize(text[offset..]);
                 chunks += 1;
             }
 
-            try input.reserve(chunks + 2);
-            input.push(.paste_start);
+            try self.reserve(chunks + 2);
+            self.push(.paste_start);
             offset = 0;
             while (offset < text.len) {
-                const count = pasteChunkSize(text[offset..]);
-                var chunk: @import("PasteChunk.zig") = .{ .len = @intCast(count) };
+                const count = PasteChunk.nextSize(text[offset..]);
+                var chunk: PasteChunk = .{ .len = @intCast(count) };
                 @memcpy(chunk.bytes[0..count], text[offset..][0..count]);
-                input.push(.{ .paste_text = chunk });
+                self.push(.{ .paste_text = chunk });
                 offset += count;
             }
 
-            input.push(.paste_finish);
+            self.push(.paste_finish);
         },
-        .key => |key| try input.pushKey(key, .key),
+        .key => |key| try self.pushKey(key, .key),
         .focus => return error.FocusRequiresHostDispatch,
         .scroll => |scroll| {
-            try input.reserve(1);
-            input.push(.{ .scroll = .{ .event = scroll, .geometry_revision = input.pointer.revision, .gesture_revision = input.pointer.gesture_revision } });
+            try self.reserve(1);
+            self.push(.{ .scroll = .{ .event = scroll, .geometry_revision = self.pointer.revision, .gesture_revision = self.pointer.gesture_revision } });
         },
         .clipboard => {
-            try input.reserve(1);
-            input.push(.{ .owned_large = try input.large_events.admit(event) });
+            try self.reserve(1);
+            self.push(.{ .owned_large = try self.large_events.admit(event) });
         },
         .composition => |value| {
             if (value.cancel) {
-                input.reserve(1) catch {
-                    input.scheduleRecovery();
+                self.reserve(1) catch {
+                    self.requestRecovery();
                     return;
                 };
 
-                input.push(.{ .composition_cancel = .{ .target_id = value.target_id, .generation = value.generation, .cancel = true } });
+                self.push(.{ .composition_cancel = .{ .target_id = value.target_id, .generation = value.generation, .cancel = true } });
                 return;
             }
 
-            try input.reserve(1);
-            input.push(.{ .owned_small = try input.small_events.admit(event) });
+            try self.reserve(1);
+            self.push(.{ .owned_small = try self.small_events.admit(event) });
         },
         .accessibility, .delete_surrounding => {
-            try input.reserve(1);
-            input.push(.{ .owned_small = try input.small_events.admit(event) });
+            try self.reserve(1);
+            self.push(.{ .owned_small = try self.small_events.admit(event) });
         },
     }
 }
 
-/// Stops before the shared outbox fills, resuming on transport completion.
-/// Example: `try input.drain(&gui.app);`
-pub fn drain(input: *Input, app: *client.AttachedClient) !void {
-    if (app.startup.holdsInput()) {
-        return;
+/// Borrow the oldest event until it is fully processed. Partial scroll/paste
+/// delivery retains the same slot. Example: `const event = input.front() orelse return;`
+pub fn front(self: *Input) ?*Item {
+    if (self.len == 0) {
+        return null;
     }
 
-    var budget = client.DrainBudget.begin(app.io, input.len + input.recovery.len);
-    var handler: InputHandler = .{ .app = app };
-    const gui = GuiClient.of(app);
-    const pending = input.router.prefixPending();
-    while (!input.stopped and input.len != 0 and client.runtime_io.availableCapacity(app) >= 4 and budget.take(app.io)) {
-        app.presentation.noteInput(client.monotonic(app.io));
-        const overflows = input.router.leaseOverflowCount();
-        switch (input.items[input.head]) {
-            .key => |key| try input.dispatchKey(&handler, key),
-            .text => |*text| {
-                if (!try gui.widgetInput(.{ .text = text.text() })) {
-                    input.stopped = try input.router.routeEvent(.{ .key = text.key(), .raw = "", .now_ns = client.monotonic(app.io) }, &handler) == .stop;
-                }
-            },
-            .paste_start => {
-                var replay: InputHandler = .{ .app = app, .widget_target = input.binding_target };
-                try input.router.interrupt(&replay);
-                input.widget_paste = try gui.beginWidgetPaste();
-                if (!input.widget_paste) {
-                    _ = try client.operations.paste_routing.start(app);
-                }
-            },
-            .paste_text => |*chunk| {
-                if (input.widget_paste) {
-                    try gui.widgetPaste(chunk.bytes[0..chunk.len]);
-                } else {
-                    _ = try client.operations.paste_routing.content(app, chunk.bytes[0..chunk.len]);
-                }
-            },
-            .paste_finish => {
-                if (input.widget_paste) {
-                    try gui.endWidgetPaste();
-                } else {
-                    _ = try client.operations.paste_routing.finish(app);
-                }
-
-                input.widget_paste = false;
-            },
-            .release_recovery => {
-                if (!input.recovery.pointer_finished) {
-                    try input.pointer.cancel(app);
-                    handler.cancelPointer();
-                    _ = try gui.widgetInput(.{ .focus = false });
-                    _ = try gui.widgetInput(.{ .focus = gui.focused });
-                    input.scroll_remainder = 0;
-                    input.recovery.pointer_finished = true;
-                    if (input.recovery.len != 0) {
-                        continue;
-                    }
-                }
-
-                if (input.recovery.next()) |key| {
-                    try input.dispatchKey(&handler, key);
-                    input.recovery.finish(key);
-                    if (input.recovery.len != 0) {
-                        continue;
-                    }
-                }
-
-                input.recovery.queued = false;
-                input.recovery.pointer_finished = false;
-            },
-            .pointer => |event| {
-                if (event.event.interruptsKeys()) {
-                    input.cancelBinding();
-                }
-
-                if (event.event.retained() or (event.geometry_revision == input.pointer.revision and event.gesture_revision == input.pointer.gesture_revision)) {
-                    if (try gui.widgetInput(.{ .pointer = event.event })) {
-                        input.head = (input.head + 1) % capacity;
-                        input.len -= 1;
-                        continue;
-                    }
-                }
-
-                try input.pointer.apply(app, event);
-            },
-            .scroll => |*sample| {
-                if (!try input.dispatchScroll(app, sample)) {
-                    continue;
-                }
-            },
-            .owned_small => |index| {
-                _ = try gui.widgetInput(input.small_events.view(index));
-                input.small_events.release(index);
-            },
-            .composition_cancel => |value| _ = try gui.widgetInput(.{ .composition = value }),
-            .owned_large => |index| {
-                if (!try input.dispatchClipboard(gui, input.large_events.view(index).clipboard)) {
-                    continue;
-                }
-
-                input.large_events.release(index);
-            },
-        }
-
-        app.telemetry.metrics.key_lease_overflows +%= input.router.leaseOverflowCount() -% overflows;
-        input.head = (input.head + 1) % capacity;
-        input.len -= 1;
-    }
-
-    try input.finish(app, pending);
+    return &self.items[self.head];
 }
 
-fn dispatchKey(input: *Input, handler: *InputHandler, key: KeyInput) !void {
-    if (try GuiClient.of(handler.app).widgetInput(.{ .key = key })) {
-        return;
+/// Release owned payload storage only after successful delivery, then advance
+/// the ring. Example: `try dispatch(event); input.consume();`
+pub fn consume(self: *Input) void {
+    std.debug.assert(self.len != 0);
+    switch (self.items[self.head]) {
+        .owned_small => |index| self.small_events.release(index),
+        .owned_large => |index| self.large_events.release(index),
+        else => {},
     }
 
-    if (key.code == .char and key.code.char.len == 1 and std.ascii.toLower(key.code.char.bytes[0]) == 'v' and (key.mods.super or (key.mods.ctrl and key.mods.shift))) {
-        if (key.phase == .press and key.target_id == 0) {
-            input.terminal_clipboard.read(GuiClient.of(handler.app)) catch |err| switch (err) {
-                error.HostRequestsFull => {},
-                else => return err,
-            };
-        }
-
-        return;
-    }
-
-    if (key.mods.super or key.target_id != 0) {
-        return;
-    }
-
-    input.stopped = try input.router.routeEvent(.{ .key = key.terminalKey(), .raw = "", .now_ns = client.monotonic(handler.app.io) }, handler) == .stop;
-}
-
-fn dispatchClipboard(input: *Input, gui: *GuiClient, result: @import("input/ClipboardResult.zig")) !bool {
-    if (input.clipboard_offset == null) {
-        const kind = gui.host.complete(result) orelse return true;
-        if (kind == .write) {
-            if (gui.widgets.copy_feedback.complete(result, client.monotonic(gui.app.io))) {
-                gui.widgets.dispatcher.revision +%= 1;
-            }
-
-            if (result.target_id != 0) {
-                var completion = result;
-                completion.operation = .write;
-                _ = try gui.widgetInput(.{ .clipboard = completion });
-            }
-
-            return true;
-        }
-
-        if (result.target_id != 0) {
-            _ = try gui.widgetInput(.{ .clipboard = result });
-            return true;
-        }
-
-        if (!input.terminal_clipboard.take(gui, result)) {
-            return true;
-        }
-
-        var handler: InputHandler = .{ .app = &gui.app };
-        try input.router.interrupt(&handler);
-        _ = try client.operations.pane_pastes.start(&gui.app);
-        input.clipboard_offset = 0;
-        return false;
-    }
-
-    const offset = input.clipboard_offset.?;
-    if (offset < result.text.len) {
-        const count = pasteChunkSize(result.text[offset..]);
-        _ = try client.operations.pane_pastes.content(&gui.app, result.text[offset..][0..count]);
-        input.clipboard_offset = offset + count;
-        return false;
-    }
-
-    _ = try client.operations.pane_pastes.finish(&gui.app);
-    input.clipboard_offset = null;
-    return true;
-}
-
-fn dispatchScroll(input: *Input, app: *client.AttachedClient, sample: *@import("input/ScrollSample.zig")) !bool {
-    if (sample.geometry_revision != input.pointer.revision or sample.gesture_revision != input.pointer.gesture_revision) {
-        input.scroll_remainder = 0;
-        return true;
-    }
-
-    const event = sample.event;
-    if (!sample.started) {
-        if (try GuiClient.of(app).widgetInput(.{ .scroll = event })) {
-            input.scroll_remainder = 0;
-            return true;
-        }
-
-        if (event.phase == .begin or event.phase == .cancel) {
-            input.scroll_remainder = 0;
-        }
-
-        if (event.phase == .cancel) {
-            return true;
-        }
-
-        const unit: f64 = if (event.precise) @floatFromInt(@max(1, input.pointer.geometry.size.cell_height_px)) else 1;
-        input.scroll_remainder += std.math.clamp(event.delta_y / unit, -32, 32);
-        sample.lines = @intFromFloat(std.math.clamp(@trunc(input.scroll_remainder), -32, 32));
-        input.scroll_remainder -= @floatFromInt(sample.lines);
-        sample.started = true;
-    }
-
-    if (sample.lines == 0) {
-        return true;
-    }
-
-    const pointer: @import("input/PointerEvent.zig") = .{ .kind = if (sample.lines < 0) .scroll_up else .scroll_down, .mods = event.mods, .x = event.x, .y = event.y };
-    input.cancelBinding();
-    try input.pointer.apply(app, input.pointer.sample(pointer));
-    sample.lines += if (sample.lines < 0) @as(i8, 1) else -1;
-    return sample.lines == 0;
-}
-
-fn finish(input: *Input, app: *client.AttachedClient, pending: bool) !void {
-    if (input.router.bindingDeadline() == null and !input.router.prefixPending()) {
-        input.binding_target = null;
-    }
-
-    if (pending != input.router.prefixPending()) {
-        input.presentation_revision +%= 1;
-    }
-
-    if (input.binding_timeout.update(app.io, input.router.bindingDeadline()) == .schedule) {
-        app.timers.arm(.binding, &input.binding_timeout) catch |err| {
-            input.binding_timeout.schedulingFailed();
-            return err;
-        };
-    }
-}
-
-fn pasteChunkSize(text: []const u8) usize {
-    if (text.len <= 256) {
-        return text.len;
-    }
-
-    var count: usize = 256;
-    while (text[count] & 0xc0 == 0x80) {
-        count -= 1;
-    }
-
-    return count;
+    self.head = (self.head + 1) % capacity;
+    self.len -= 1;
 }
 
 fn defaultRouter() routing.Type {
@@ -484,43 +234,45 @@ fn defaultRouter() routing.Type {
     return routing.build(.{ .prefix = client.default_prefix, .bindings = &.{}, .escape_timeout_ns = 25 * std.time.ns_per_ms, .sequence_timeout_ns = std.time.ns_per_s }) catch unreachable;
 }
 
-fn reserve(input: *const Input, count: usize) !void {
-    if (input.recovery.queued or count > (capacity - 1) -| input.len) {
+fn reserve(self: *const Input, count: usize) !void {
+    if (self.recovery.queued or count > (capacity - 1) -| self.len) {
         return error.NativeInputFull;
     }
 }
 
-fn pushKey(input: *Input, key: KeyInput, source: enum { key, text }) !void {
-    input.reserve(1) catch |err| {
+fn pushKey(self: *Input, key: KeyInput, source: enum { key, text }) !void {
+    self.reserve(1) catch |err| {
         if (key.phase != .release or key.physical == null) {
             return err;
         }
 
-        input.recovery.retain(key);
-        input.scheduleRecovery();
+        self.recovery.retain(key);
+        self.requestRecovery();
         return;
     };
 
-    input.push(switch (source) {
+    self.push(switch (source) {
         .key => .{ .key = key },
         .text => .{ .text = .{ .bytes = key.code.char.bytes, .len = key.code.char.len, .phase = key.phase, .physical = key.physical } },
     });
 }
 
-fn scheduleRecovery(input: *Input) void {
-    input.pointer.invalidateGestures();
-    if (input.recovery.queued) {
+/// Reserves ordered recovery even when ordinary event admission is saturated.
+/// Example: `input.requestRecovery();`
+pub fn requestRecovery(self: *Input) void {
+    self.pointer.invalidateGestures();
+    if (self.recovery.queued) {
         return;
     }
 
-    std.debug.assert(input.len < capacity);
-    input.push(.release_recovery);
-    input.recovery.queued = true;
+    std.debug.assert(self.len < capacity);
+    self.push(.release_recovery);
+    self.recovery.queued = true;
 }
 
-fn push(input: *Input, item: Item) void {
-    input.items[(input.head + input.len) % capacity] = item;
-    input.len += 1;
+fn push(self: *Input, item: Item) void {
+    self.items[(self.head + self.len) % capacity] = item;
+    self.len += 1;
 }
 
 test "native paste admission is atomic and owns the borrowed bytes" {
@@ -626,4 +378,22 @@ test "composition cancellation remains admissible with exhausted payload slots o
     try std.testing.expect(input.recovery.queued);
     try std.testing.expect(input.items[capacity - 1] == .release_recovery);
     try std.testing.expectEqual(capacity, input.len);
+}
+
+test "queued payloads survive borrowing and their slots can be reused across ring wrap" {
+    var input: Input = .{};
+    for (0..capacity + 1) |_| {
+        var bytes = [_]u8{ 'a', 'b' };
+        try input.acceptEvent(.{ .text = .{ .bytes = &bytes, .target_id = 1 } });
+        try input.acceptEvent(.{ .clipboard = .{ .request_id = 1, .target_id = 0, .generation = 0, .status = .success, .text = &bytes } });
+        @memset(&bytes, 'x');
+        const text = input.front().?;
+        try std.testing.expectEqualStrings("ab", input.small_events.view(text.owned_small).text.bytes);
+        try std.testing.expectEqual(text, input.front().?);
+        input.consume();
+        const clipboard = input.front().?;
+        try std.testing.expectEqualStrings("ab", input.large_events.view(clipboard.owned_large).clipboard.text);
+        input.consume();
+        try std.testing.expect(input.front() == null);
+    }
 }

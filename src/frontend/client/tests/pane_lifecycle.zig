@@ -6,7 +6,8 @@ const TestHarness = @import("TestHarness.zig");
 const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const InputHandler = @import("../resources/InputHandler.zig");
+const host_inputs = @import("../controllers/input/host_inputs.zig");
+const input_operations = @import("telar-client").operations;
 const client_actions = @import("telar-client").operations.actions;
 const FullscreenReattachment = @import("FullscreenReattachment.zig");
 const PaneDescriptorType = @import("telar-core").PaneDescriptor;
@@ -59,9 +60,8 @@ test "pane focus commits before reports resize and presentation" {
     _ = client.model.syncReportedPaneFocus().?;
     const version_before = client.model.version();
     const pending_updates_before = host(client).presenter.pending_updates;
-    const handler: InputHandler = .{ .client = client };
 
-    _ = try client_actions.apply(handler.client, .{ .focus_pane = .left });
+    _ = try client_actions.apply(client, .{ .focus_pane = .left });
 
     try std.testing.expectEqual(TestHarness.bootstrap_pane, model.layout.focused().?);
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
@@ -94,7 +94,7 @@ test "pane focus commits before reports resize and presentation" {
 
     const version_before_noop = client.model.version();
     const pending_updates_before_noop = host(client).presenter.pending_updates;
-    _ = try client_actions.apply(handler.client, .{ .focus_pane = .left });
+    _ = try client_actions.apply(client, .{ .focus_pane = .left });
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
@@ -303,13 +303,12 @@ test "mouse focus precedes forwarding its triggering press" {
         .y = first_view.content.y,
         .kind = .move,
     };
-    var handler: InputHandler = .{ .client = client };
-    try handler.mouse(point);
+    try host_inputs.mouse(client, point);
     const version_before = client.model.version();
     var press = point;
     press.kind = .press;
 
-    try handler.mouse(press);
+    try host_inputs.mouse(client, press);
 
     try std.testing.expectEqual(first, model.layout.focused().?);
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
@@ -379,9 +378,8 @@ test "pane resize publishes committed geometry before presentation" {
     const second_before = model.contentSize(second, area).?;
     const version_before = client.model.version();
     const pending_updates_before = host(client).presenter.pending_updates;
-    const handler: InputHandler = .{ .client = client };
 
-    _ = try client_actions.apply(handler.client, .{ .resize_pane = .left });
+    _ = try client_actions.apply(client, .{ .resize_pane = .left });
 
     const first_after = model.contentSize(first, area).?;
     const second_after = model.contentSize(second, area).?;
@@ -414,7 +412,7 @@ test "pane resize publishes committed geometry before presentation" {
 
     const version_before_noop = client.model.version();
     const pending_updates_before_noop = host(client).presenter.pending_updates;
-    _ = try client_actions.apply(handler.client, .{ .resize_pane = .up });
+    _ = try client_actions.apply(client, .{ .resize_pane = .up });
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
@@ -484,9 +482,8 @@ test "pane fullscreen publishes visible geometry without direct presentation sch
     const second_tiled = model.contentSize(second, area).?;
     const version_before_enter = client.model.version();
     const pending_updates_before_enter = host(client).presenter.pending_updates;
-    const handler: InputHandler = .{ .client = client };
 
-    _ = try client_actions.apply(handler.client, .toggle_pane_fullscreen);
+    _ = try client_actions.apply(client, .toggle_pane_fullscreen);
 
     try std.testing.expect(model.layout.isFullscreen());
     try std.testing.expect(model.contentSize(first, area) == null);
@@ -510,7 +507,7 @@ test "pane fullscreen publishes visible geometry without direct presentation sch
 
     const version_before_exit = client.model.version();
     const pending_updates_before_exit = host(client).presenter.pending_updates;
-    _ = try client_actions.apply(handler.client, .toggle_pane_fullscreen);
+    _ = try client_actions.apply(client, .toggle_pane_fullscreen);
 
     try std.testing.expect(!model.layout.isFullscreen());
     try std.testing.expectEqual(first_tiled, model.contentSize(first, area).?);
@@ -544,9 +541,8 @@ test "sidebar toggle commits chrome before geometry and presentation" {
     const shown_area = host(client).view.workbench();
     const version_before_hide = client.model.version();
     const pending_updates_before_hide = host(client).presenter.pending_updates;
-    const handler: InputHandler = .{ .client = client };
 
-    _ = try client_actions.apply(handler.client, .toggle_sidebar);
+    _ = try client_actions.apply(client, .toggle_sidebar);
 
     const hidden_area = host(client).view.workbench();
     try std.testing.expect(hidden_area.w > shown_area.w);
@@ -579,7 +575,7 @@ test "sidebar toggle commits chrome before geometry and presentation" {
 
     const version_before_show = client.model.version();
     const pending_updates_before_show = host(client).presenter.pending_updates;
-    _ = try client_actions.apply(handler.client, .toggle_sidebar);
+    _ = try client_actions.apply(client, .toggle_sidebar);
 
     try std.testing.expect(client.model.sidebarVisible());
     try std.testing.expect(host(client).view.sidebar_requested);
@@ -669,9 +665,8 @@ test "workspace list toggle is projected only by the presenter" {
     const client = harness.client;
     const version_before_collapse = client.model.version();
     const pending_updates_before_collapse = host(client).presenter.pending_updates;
-    const handler: InputHandler = .{ .client = client };
 
-    _ = try client_actions.apply(handler.client, .toggle_workspace_list);
+    _ = try client_actions.apply(client, .toggle_workspace_list);
 
     try std.testing.expect(client.model.workspaceListCollapsed());
     try std.testing.expect(!host(client).view.workspace_list_collapsed);
@@ -693,7 +688,7 @@ test "workspace list toggle is projected only by the presenter" {
 
     const version_before_expand = client.model.version();
     const pending_updates_before_expand = host(client).presenter.pending_updates;
-    _ = try client_actions.apply(handler.client, .toggle_workspace_list);
+    _ = try client_actions.apply(client, .toggle_workspace_list);
 
     try std.testing.expect(!client.model.workspaceListCollapsed());
     try std.testing.expect(host(client).view.workspace_list_collapsed);
@@ -999,9 +994,8 @@ test "tab detachment closes a captured bracketed paste before the pane detaches"
     try harness.bootstrap();
     const client = harness.client;
     client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
-    var handler: InputHandler = .{ .client = client };
 
-    try handler.pasteStart();
+    _ = try input_operations.paste_routing.start(client);
     try harness.settle();
 
     var message_buffer: [256]u8 = undefined;

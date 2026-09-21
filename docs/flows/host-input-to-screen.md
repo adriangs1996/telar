@@ -14,12 +14,12 @@ host TTY bytes
 host_inputs.handleRead
       |
       v
-keybind.Router.feed -> term.parse -> binding lease -> Router.routeKey
+host_inputs.feed -> Router.next -> term.parse -> Router.routeEvent
       |
       +---------------- configured sequence ----------------+
       |                                                      |
       v                                                      v
-InputHandler.key / forward / mouse                 InputHandler.action
+host_inputs.key / mouse                         applyDecision(.action)
       |                                                      |
 key_routing / pointer_routing                   action_routing.apply
       |                                                      |
@@ -76,7 +76,8 @@ The read completes as `.input`. The event loop delegates it to
 1. release the outstanding-read flag;
 2. stop on EOF;
 3. record input activity for media pacing;
-4. call `keybind.Router.feed` with an `InputHandler`;
+4. pull one decoded event with `Router.next`, resolve its typed decision and
+   execute it in `host_inputs` before pulling the next event;
 5. advance the visible input-routing revision when prefix state changed;
 6. synchronize input and binding deadlines;
 7. schedule the next TTY read.
@@ -88,7 +89,7 @@ any observed value changed.
 
 The routing implementation is in `src/client/input/GenericRouter.zig`. The TUI
 factory in `src/frontend/input/GenericRouter.zig` supplies `term.parse`; its
-specialized router's `feed` method buffers
+specialized router's `next` method buffers
 split terminal sequences. Decoder-free adapters call `routeEvent` with semantic
 keys. Both paths use the same compiled keymap. A fixed physical-key lease
 keeps repeat and release with the press's binding or application owner. The
@@ -112,11 +113,12 @@ waits for the old configuration's deadline.
 
 ## 2A. Telar action branch
 
-A complete configured sequence returns `.action` from `Router.routeKey`.
-`Router.drain` calls `InputHandler.action` in
-`src/frontend/client/resources/InputHandler.zig`; it does not forward the matched bytes.
+A complete configured sequence returns `.action` from `Router.routeEvent`.
+`host_inputs.applyDecision` executes it through `action_routing.apply` and
+stops reading the batch on `.stop` or an error. Only successful actions arm
+repeat state, using the resulting application's repeat policy.
 
-`InputHandler.action` delegates the matched value to `action_routing`. The
+`action_routing.apply` receives the matched value. The
 function checks prompt authority, then classifies three action sources:
 
 - built-in actions go to the shared `actions.apply` function, which performs its copy-mode
@@ -165,7 +167,7 @@ that the matched branch is consumed.
 
 ## 2B. Key and pane input branch
 
-An unmatched semantic key or replayed byte slice reaches `InputHandler`, which
+An unmatched or replayed semantic key reaches `host_inputs.key`, which
 delegates it to `key_routing`. `key_routing.apply` selects one attachment
 modal, name prompt, copy-mode or pane owner. A second fixed lease retains that
 application owner for the physical lifecycle; pane ownership stores the exact
@@ -191,7 +193,7 @@ and telemetry policy.
 
 ## 2C. Pointer interaction branch
 
-`InputHandler.mouse` delegates to `pointer_routing`. The adapter records host
+`host_inputs.mouse` delegates to `pointer_routing`. The adapter records host
 telemetry, rejects prompt-owned input or an absent active model, and converts
 supported host pixels to cells. `pointer_routing.apply` gives copy mode, the
 view, textual links and pane input exclusive refusal in that order. It knows
@@ -236,8 +238,8 @@ It then returns whether the triggering event was consumed.
 Tab selection and agent navigation consume the triggering pointer event.
 Explicitly consumed view chrome does the same. Pane focus remains routable so
 the newly focused child receives the press after focus resources commit. If an
-effect fails, dispatch stops before later effects and `InputHandler` does not
-forward the event. Otherwise `InputHandler` forwards only events that remain
+effect fails, dispatch stops before later effects and the input entrypoint does not
+forward the event. Otherwise pointer routing forwards only events that remain
 inside the workbench. It delegates them to `pane_mouse_inputs` without reading
 pane geometry or child mouse modes. `multiplexer.Model.planPaneMouse` resolves
 the pane snapshot, `pane_mouse_inputs.apply` chooses one viewport, alternate-scroll

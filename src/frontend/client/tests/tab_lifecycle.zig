@@ -21,7 +21,8 @@ const encodeRequestFailed_module = @import("telar-core").encodeRequestFailed;
 const support = @import("support.zig");
 const TabMovedType = @import("telar-core").TabMoved;
 const tab_moves = @import("telar-client").operations.tab_moves;
-const InputHandler = @import("../resources/InputHandler.zig");
+const host_inputs = @import("../controllers/input/host_inputs.zig");
+const input_operations = @import("telar-client").operations;
 const client_actions = @import("telar-client").operations.actions;
 const TabMoveDirectionType = @import("telar-core").TabMoveDirection;
 const ChangeType = @import("telar-client").Change;
@@ -417,9 +418,8 @@ test "move tab waits for the canonical response and preserves active identity" {
     const second = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
     const version_before_request = client.model.version();
     const pending_updates_before_request = host(client).presenter.pending_updates;
-    const handler: InputHandler = .{ .client = client };
 
-    _ = try client_actions.apply(handler.client, .{ .move_tab = .previous });
+    _ = try client_actions.apply(client, .{ .move_tab = .previous });
 
     try std.testing.expectEqual(@as(?usize, 1), client.model.workspace.indexOf(second.tab_id));
     try std.testing.expectEqualDeep(version_before_request, client.model.version());
@@ -471,9 +471,8 @@ test "pending tab operation suppresses a move request" {
     try client.request_lifecycle.tracker.add(@enumFromInt(90), .{ .rename_tab = second });
     const request_count = client.request_lifecycle.tracker.count;
     const next_request_id = client.request_lifecycle.next_request_id;
-    const handler: InputHandler = .{ .client = client };
 
-    _ = try client_actions.apply(handler.client, .{ .move_tab = .previous });
+    _ = try client_actions.apply(client, .{ .move_tab = .previous });
 
     try std.testing.expectEqual(request_count, client.request_lifecycle.tracker.count);
     try std.testing.expectEqual(next_request_id, client.request_lifecycle.next_request_id);
@@ -487,9 +486,8 @@ test "canonical tab move at an edge does not advance or schedule the model" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const handler: InputHandler = .{ .client = client };
 
-    _ = try client_actions.apply(handler.client, .{ .move_tab = .previous });
+    _ = try client_actions.apply(client, .{ .move_tab = .previous });
     try harness.settle();
 
     var message_buffer: [256]u8 = undefined;
@@ -523,9 +521,8 @@ test "tab move response must match the requested identity" {
     const client = harness.client;
     const second = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
     const version_before_response = client.model.version();
-    const handler: InputHandler = .{ .client = client };
 
-    _ = try client_actions.apply(handler.client, .{ .move_tab = .previous });
+    _ = try client_actions.apply(client, .{ .move_tab = .previous });
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&message_buffer);
@@ -555,9 +552,8 @@ test "a failed tab move preserves order and notifies" {
     const second = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
     const version_before_failure = client.model.version();
     const active_before_failure = client.model.activeTabLocation().?;
-    const handler: InputHandler = .{ .client = client };
 
-    _ = try client_actions.apply(handler.client, .{ .move_tab = .previous });
+    _ = try client_actions.apply(client, .{ .move_tab = .previous });
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&message_buffer);
@@ -585,8 +581,7 @@ test "select tab closes captured paste before detaching and requesting the targe
     try harness.allowTabSelection();
     const client = harness.client;
     client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
-    var handler: InputHandler = .{ .client = client };
-    try handler.pasteStart();
+    _ = try input_operations.paste_routing.start(client);
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
     const opening = try harness.nextClientMessage(&message_buffer);
@@ -597,7 +592,7 @@ test "select tab closes captured paste before detaching and requesting the targe
     const version_before_selection = client.model.version();
     const pending_updates_before_selection = host(client).presenter.pending_updates;
 
-    _ = try client_actions.apply(handler.client, .{ .select_tab = 1 });
+    _ = try client_actions.apply(client, .{ .select_tab = 1 });
 
     try std.testing.expectEqual(second, client.model.activeTabLocation().?);
     try std.testing.expectEqual(version_before_selection.tabs, client.model.version().tabs);
@@ -639,16 +634,15 @@ test "tab selection offset wraps while full turns remain no-ops" {
     const version_before_selection = client.model.version();
     const request_id_before_selection = client.request_lifecycle.next_request_id;
     const pending_updates_before_selection = host(client).presenter.pending_updates;
-    const handler: InputHandler = .{ .client = client };
 
-    _ = try client_actions.apply(handler.client, .{ .select_tab_offset = 2 });
+    _ = try client_actions.apply(client, .{ .select_tab_offset = 2 });
 
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqualDeep(version_before_selection, client.model.version());
     try std.testing.expectEqual(request_id_before_selection, client.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
-    _ = try client_actions.apply(handler.client, .{ .select_tab_offset = -1 });
+    _ = try client_actions.apply(client, .{ .select_tab_offset = -1 });
 
     try std.testing.expectEqualDeep(second, client.model.activeTabLocation().?);
     try std.testing.expectEqual(version_before_selection.active_tab + 1, client.model.version().active_tab);
@@ -671,9 +665,8 @@ test "pending tab snapshot suppresses tab selection without effects" {
     _ = try harness.addInactiveTab(@enumFromInt(2), second_pane);
     const version_before_selection = client.model.version();
     const next_request_id = client.request_lifecycle.next_request_id;
-    const handler: InputHandler = .{ .client = client };
 
-    _ = try client_actions.apply(handler.client, .{ .select_tab = 1 });
+    _ = try client_actions.apply(client, .{ .select_tab = 1 });
 
     try std.testing.expectEqual(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
@@ -692,9 +685,8 @@ test "close tab request detaches before delivery and rejection requests restorat
     client.request_lifecycle.tracker = .{};
     const version_before_request = client.model.version();
     const pending_updates_before_request = host(client).presenter.pending_updates;
-    const handler: InputHandler = .{ .client = client };
 
-    _ = try client_actions.apply(handler.client, .close_tab);
+    _ = try client_actions.apply(client, .close_tab);
 
     try std.testing.expectEqualDeep(version_before_request, client.model.version());
     try std.testing.expectEqual(pending_updates_before_request, host(client).presenter.pending_updates);
@@ -741,11 +733,10 @@ test "close tab capacity failure preserves attachment and request state" {
     const version_before = client.model.version();
     const focus_before = client.model.reportedPaneFocus();
     const next_request_id = client.request_lifecycle.next_request_id;
-    const handler: InputHandler = .{ .client = client };
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        client_actions.apply(handler.client, .close_tab),
+        client_actions.apply(client, .close_tab),
     );
 
     try std.testing.expectEqual(capacity_module - 1, @as(usize, client.runtime_transport.outbox.len));
@@ -797,8 +788,7 @@ test "close tab reserves its captured paste closing marker" {
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
     client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
-    var input_handler: InputHandler = .{ .client = client };
-    try input_handler.pasteStart();
+    _ = try input_operations.paste_routing.start(client);
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const opening = try harness.nextClientMessage(&buffer);
@@ -1181,13 +1171,12 @@ test "TUI tab drag emits one anchored move on release and never forwards the ges
     try std.testing.expectEqual(@as(usize, 3), hits.len);
     const first = hits[0].rect;
     const last = hits[2].rect;
-    var handler: InputHandler = .{ .client = app };
-    try handler.mouse(.{ .kind = .press, .x = last.x + 2, .y = last.y });
-    try handler.mouse(.{ .kind = .drag, .x = first.x, .y = first.y });
+    try host_inputs.mouse(app, .{ .kind = .press, .x = last.x + 2, .y = last.y });
+    try host_inputs.mouse(app, .{ .kind = .drag, .x = first.x, .y = first.y });
     try std.testing.expectEqual(@as(?usize, 2), app.model.workspace.indexOf(third.tab_id));
     try std.testing.expectEqual(@as(usize, 0), app.runtime_transport.outbox.len);
     try std.testing.expectEqual(TestHarness.bootstrap_location.tab_id, host(app).view.tab_drag.gesture.destination.?.relative_to.?);
-    try handler.mouse(.{ .kind = .release, .x = first.x, .y = first.y });
+    try host_inputs.mouse(app, .{ .kind = .release, .x = first.x, .y = first.y });
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const request = (try harness.nextClientMessage(&buffer)).move_tab;
@@ -1207,12 +1196,11 @@ test "TUI tab drag cancellation consumes releases outside the tab strip" {
     try harness.bootstrap();
     const app = harness.client;
     const rect = host(app).view.tab_drag.hits.registered()[0].rect;
-    var handler: InputHandler = .{ .client = app };
-    try handler.mouse(.{ .kind = .press, .x = rect.x, .y = rect.y });
-    try handler.key(.{ .code = .escape, .physical = .{ .value = 53 } });
-    try handler.mouse(.{ .kind = .drag, .x = 45, .y = 10 });
-    try handler.mouse(.{ .kind = .release, .x = 45, .y = 10 });
-    try handler.key(.{ .code = .escape, .phase = .release, .physical = .{ .value = 53 } });
+    try host_inputs.mouse(app, .{ .kind = .press, .x = rect.x, .y = rect.y });
+    try host_inputs.key(app, .{ .code = .escape, .physical = .{ .value = 53 } });
+    try host_inputs.mouse(app, .{ .kind = .drag, .x = 45, .y = 10 });
+    try host_inputs.mouse(app, .{ .kind = .release, .x = 45, .y = 10 });
+    try host_inputs.key(app, .{ .code = .escape, .phase = .release, .physical = .{ .value = 53 } });
     try std.testing.expect(!host(app).view.tab_drag.gesture.captured);
     try std.testing.expectEqual(@as(usize, 0), app.runtime_transport.outbox.len);
     try std.testing.expect(!app.runtime_transport.outbox.inFlight());

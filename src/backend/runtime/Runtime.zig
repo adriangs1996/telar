@@ -141,6 +141,7 @@ pub fn deinit(self: *Runtime) void {
     self.resources.listener.deinit(self.resources.io());
     self.application.deinitClients();
     self.application.deinitModel();
+
     if (self.resources.engine) |*engine| {
         engine.deinit();
     }

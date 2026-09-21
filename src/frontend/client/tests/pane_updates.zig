@@ -13,7 +13,6 @@ const CellType = @import("telar-core").Cell;
 const encodePaneCwd_module = @import("telar-core").encodePaneCwd;
 const encodePaneForeground_module = @import("telar-core").encodePaneForeground;
 const PaneIdType = @import("telar-core").PaneId;
-const InputHandler = @import("../resources/InputHandler.zig");
 const client_actions = @import("telar-client").operations.actions;
 const encodePaneExited_module = @import("telar-core").encodePaneExited;
 const support = @import("support.zig");
@@ -458,9 +457,8 @@ test "close pane request waits for the authoritative exit before committing" {
     });
     const version_before_request = client.model.version();
     const pending_updates_before_request = host(client).presenter.pending_updates;
-    const handler: InputHandler = .{ .client = client };
 
-    _ = try client_actions.apply(handler.client, .close_pane);
+    _ = try client_actions.apply(client, .close_pane);
 
     try std.testing.expect(client.model.workspace.findPane(closing_pane) != null);
     try std.testing.expectEqualDeep(version_before_request, client.model.version());

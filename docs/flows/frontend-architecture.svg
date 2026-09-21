@@ -27,7 +27,7 @@
   <text x="68" y="177" class="label">CLIENTE · HOST NATIVO</text>
   <text x="68" y="213" class="heading">GUI</text>
   <text x="68" y="247" class="code">GuiClient.start → update → dispatch</text>
-  <text x="68" y="277" class="body">acceptInput → inputReady → NativeInput.drain</text>
+  <text x="68" y="277" class="body">acceptInput → inputReady → GuiClient.drainInput</text>
   <text x="68" y="307" class="body">prepare → GPU → complete</text>
   <text x="68" y="341" class="small">NativeLoop: transporte, wakeup y vida de tareas.</text>
   <text x="68" y="373" class="code">src/gui/GuiClient.zig</text>

@@ -1,45 +1,48 @@
 # Key routing
 
-The native host router produces either a semantic key or a borrowed byte
-slice. A key press is assigned to one owner: an attachment modal, the name
-prompt, copy mode or the focused pane. Repeat and release retain that owner.
-The decision happens
-before editor parsing, copy movement, child encoding or media scheduling.
+The shared router returns a tagged `Decision`: `action`, `forward`, `replay`,
+`pending` or `discard`. It has no application callback or handler parameter.
+`Context` supplies current capture and repeat policy as data. The GUI and TUI
+execute each decision before routing the next event, including within a single
+host read. A focus change or newly opened prompt therefore affects the next key.
 
-This is client-owned interactive-path policy. `key_routing.apply` uses fixed
-values and retains no command beyond the synchronous operation. A prompt key uses a
-32-byte stack buffer. Raw bytes come from the router's bounded 4 KiB output,
-and `pane_inputs.send` enforces its 8 KiB command limit before enqueueing.
+The router owns bounded input/chord buffers, the compiled keymap and physical
+binding leases. It allocates no heap storage while routing. Host bytes borrowed
+from `next` remain valid until the next decoder call. The TUI forwards decoded
+keys; malformed host escape sequences never reach the child verbatim.
 
 ## End-to-end path
 
 ```text
-host TTY bytes
-      |
-keybind.Router
-      |
-semantic key or replayed bytes
-      |
-InputHandler.key / forward
-      |
-key_routing.apply
-      |
-key_routing.apply + authority snapshot + physical lease
-      |
-      +----------------+----------------+----------------+
-      |                |                |                |
-attachment modal   name prompt       copy mode        exact pane
-      |                |                |                |
-optional close    neutral encoding   copy_modes  pane_inputs.send
-                                                        |
-                                              confirmed Ctrl+V delivery
-                                                        |
-                                            clipboard preview start
+GUI: GuiClient.drainInput → dispatchKey → routeKey
+TUI: host_inputs.handleRead → feed → router.next → decoded
+                                        |
+                              router.routeEvent(event, context)
+                                        |
+                                   Decision
+                                        |
+                             host decision switch
+                          /                         \
+                    action request             key / replay
+                          |                         |
+             action_routing.apply          key_routing.apply
+                          |                         |
+                concrete operation         retained application owner
+                          |                         |
+           actionCompleted(post-action policy)   pane_inputs.send
 ```
 
-`InputHandler` implements the generic callback protocol expected by
-`keybind.Router`. It delegates each value. It does not inspect client owners,
-encode prompt keys, invoke copy mode, send pane input or recognize `Ctrl+V`.
+`GuiClient.executeAction` also applies native palette, sidebar and transcript behavior.
+`NativeInput` owns bounded event storage, key routing state and payload pools.
+It has no application argument or owner pointer. `GuiClient.drainInput` borrows
+its front event and calls `consume` only after processing completes. Partial
+scroll and clipboard delivery retain the front event. Binding expiry,
+configuration adoption and cancellation also enter `GuiClient` directly.
+
+A failed widget chord replays to its original widget identity; it cannot type
+into a newly focused composer. TUI mouse, paste and terminal responses are
+handled explicitly in `host_inputs.decoded`. Startup input similarly yields
+host responses while retaining early user input, without a callback object.
 
 `key_routing.apply` reads current authority and retained physical leases, then
 calls the selected concrete operation. Priority, exclusivity and follow-up order
@@ -47,7 +50,7 @@ are visible in the same module.
 
 ## Capture and ownership
 
-An attachment modal and a name prompt make `capturesKeys` true. The native
+An attachment modal and a name prompt make `Context.captures_keys` true. The native
 router first replays any pending binding state, then sends new semantic keys
 directly to the exclusive owner. Copy mode does not capture the router, so the
 user's configured prefix bindings remain available.
@@ -86,7 +89,8 @@ returns no delivery and the route ends without another effect.
 
 ## Held scroll bindings
 
-`InputHandler.repeatPolicy` delegates to action routing. Only native
+The host obtains `action_routing.repeatPolicy` after successful execution and
+passes it to `router.actionCompleted`. Only native
 `scroll_pane` actions opt in, with a 100 ms interval and the current `PaneId`
 as their owner token. Prompts, attachment modals, copy mode and
 missing or detached panes deny repeat authority. The initial action runs
@@ -99,7 +103,7 @@ held bindings target the focused pane and leave its composer unchanged.
 The client router retains one owned action, its final physical key and chord,
 its policy and its last execution timestamp. A matching binding-owned repeat
 rechecks authority and modifiers before checking elapsed monotonic time. A due
-repeat dispatches the captured action through `InputHandler.action`; it never
+repeat returns the captured action for the host to execute; it never
 re-runs keymap matching or requires the prefix again. Excess events are dropped.
 A late batch produces one step, with no timer, allocation or catch-up queue.
 The existing 64-entry lease table still bounds physical ownership.

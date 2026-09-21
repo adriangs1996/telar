@@ -9,7 +9,7 @@ test "configured copy-mode action enters the agent reader without VT state or dr
     try fixture.send(.{ .text = .{ .bytes = "keep draft" } });
     const composer = try fixture.target(.composer);
     const binding = try client.config_model.ConfiguredBinding.parse(&.{"ctrl+q"}, .enter_copy_mode);
-    gui.input.adopt(&gui.app, .{ .prefix = client.default_prefix, .bindings = &.{binding}, .escape_timeout_ns = std.time.ns_per_s, .sequence_timeout_ns = std.time.ns_per_s });
+    gui.adoptBindings(.{ .prefix = client.default_prefix, .bindings = &.{binding}, .escape_timeout_ns = std.time.ns_per_s, .sequence_timeout_ns = std.time.ns_per_s });
     try fixture.send(.{ .key = .{ .target_id = composer.id.target_id, .generation = composer.id.generation, .code = .{ .char = .init("q") }, .mods = .{ .ctrl = true }, .physical = .{ .value = 61 } } });
     try std.testing.expect(client.operations.copy_modes.active(&gui.app));
     try std.testing.expect(!gui.app.model.copyModeActive());

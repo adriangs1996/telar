@@ -10,8 +10,8 @@ test "startup preserves typing and partial escapes at every reply boundary" {
     for (0..stream.len + 1) |split| {
         var state: StartupInputState = .{};
         var capture: Capture = .{};
-        try state.feed(stream[0..split], &capture);
-        try state.feed(stream[split..], &capture);
+        try collect(&state, stream[0..split], &capture);
+        try collect(&state, stream[split..], &capture);
         try std.testing.expectEqual(@as(usize, 2), capture.replies);
         try std.testing.expectEqualStrings("hello\x1b[A!\x1b[", try state.finish());
     }
@@ -21,7 +21,7 @@ test "pasted terminal queries remain user data" {
     const bytes = "\x1b[200~\x1b]11;rgb:10/10/10\x07\x1b[201~";
     var state: StartupInputState = .{};
     var capture: Capture = .{};
-    try state.feed(bytes, &capture);
+    try collect(&state, bytes, &capture);
     try std.testing.expectEqual(@as(usize, 0), capture.replies);
     try std.testing.expectEqualStrings(bytes, try state.finish());
 }
@@ -29,6 +29,13 @@ test "pasted terminal queries remain user data" {
 test "startup buffers reject saturation instead of dropping keystrokes" {
     var state: StartupInputState = .{};
     var capture: Capture = .{};
-    try state.feed(&(@as([StartupInputState.capacity]u8, @splat('x'))), &capture);
-    try std.testing.expectError(error.StartupInputOverflow, state.feed("x", &capture));
+    try collect(&state, &(@as([StartupInputState.capacity]u8, @splat('x'))), &capture);
+    try std.testing.expectError(error.StartupInputOverflow, collect(&state, "x", &capture));
+}
+
+fn collect(state: *StartupInputState, bytes: []const u8, capture: *Capture) !void {
+    var remaining = bytes;
+    while (try state.next(&remaining)) |response| {
+        try capture.terminalResponse(response);
+    }
 }

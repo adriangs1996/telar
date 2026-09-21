@@ -37,7 +37,7 @@ pub fn publish(fixture: *Fixture) !void {
 
 pub fn send(fixture: *Fixture, event: @import("../input/event.zig").Event) !void {
     try fixture.session.gui.input.acceptEvent(event);
-    try fixture.session.gui.input.drain(&fixture.session.gui.app);
+    try fixture.session.gui.drainInput();
 }
 
 pub fn messages(fixture: *Fixture, texts: []const []const u8) !void {
