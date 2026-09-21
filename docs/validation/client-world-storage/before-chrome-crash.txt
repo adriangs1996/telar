@@ -1,0 +1,21 @@
+(lldb) target create "/private/tmp/telar-client-world-before"
+Current executable set to '/private/tmp/telar-client-world-before' (arm64).
+(lldb) settings set -- target.run-args  "--filter" "frontend.client_ui.chrome" "--samples" "1"
+(lldb) run
+telar benchmarks, Zig 0.16.0, ReleaseFast, aarch64-macos, 154x37
+1 samples, 40 ms target per sample
+
+warning: telar-client-world-before was compiled with optimization - stepping may behave oddly; variables may not be available.
+Process 45814 launched: '/private/tmp/telar-client-world-before' (arm64)
+Process 45814 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BAD_ACCESS (code=1, address=0x16ec5c110)
+    frame #0: 0x00000001001a7b28 telar-client-world-before`workspace.TabsModel.init(gpa=mem.Allocator @ 0x000000016eec8cf0) at TabsModel.zig:37:5 [opt] [inlined]
+   34   pending_layout_restore: ?PendingLayoutRestore = null,
+   35
+   36   pub fn init(gpa: std.mem.Allocator) Model {
+-> 37       return .{ .gpa = gpa };
+            ^
+   38   }
+   39
+   40   /// Initializes reserved tab storage directly in the owning client's model.
+Target 0: (telar-client-world-before) stopped.

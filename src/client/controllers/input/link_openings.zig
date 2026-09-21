@@ -163,8 +163,8 @@ fn openEditorPane(client: *Client, pane_id: PaneId, path: FilePathType) !void {
     const kind = core.editor.identify(editor);
     var reusable = false;
     if (kind != .unsupported and source.pane_generation != 0) {
-        for (&model.panes) |*slot| {
-            const pane = if (slot.*) |*value| value else continue;
+        var panes = model.paneConstIterator();
+        while (panes.next()) |pane| {
             reusable = reusable or core.editor.identify(pane.foregroundName()) == kind;
         }
     }

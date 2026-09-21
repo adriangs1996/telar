@@ -213,8 +213,8 @@ pub fn findPane(model: *Model, pane_id: PaneIdType) ?*PaneType {
 }
 
 pub fn detachAll(tab: *Tab) void {
-    for (&tab.model.panes) |*slot| {
-        const pane = if (slot.*) |*value| value else continue;
+    var panes = tab.model.paneIterator();
+    while (panes.next()) |pane| {
         pane.attached = false;
         pane.pending_frame_id = 0;
     }
@@ -243,8 +243,8 @@ pub fn reconcileTab(model: *Model, snapshot: PaneSnapshot, area: RectType) !*Tab
     const focused_before = tab.model.layout.focused();
     var removed: [max_panes_per_tab_module]PaneIdType = undefined;
     var removed_count: usize = 0;
-    for (&tab.model.panes) |*slot| {
-        const pane = if (slot.*) |*value| value else continue;
+    var panes = tab.model.paneIterator();
+    while (panes.next()) |pane| {
         if (std.mem.findScalar(PaneIdType, snapshot.panes, pane.id) == null) {
             removed[removed_count] = pane.id;
             removed_count += 1;

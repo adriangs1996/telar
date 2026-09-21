@@ -37,8 +37,8 @@ pub fn prepare(adapter: *Adapter, projection: ProjectionType) !?lifecycle_module
 
     var count: usize = 0;
     if (projection.model) |model| {
-        for (&model.panes) |*slot| {
-            const pane = if (slot.*) |*value| value else continue;
+        var panes = model.paneConstIterator();
+        while (panes.next()) |pane| {
             const len = pane.buffer.cells.len;
             if (len > headless.cell_capacity - count) {
                 return error.HeadlessCellBudgetExceeded;
@@ -55,8 +55,8 @@ pub fn prepare(adapter: *Adapter, projection: ProjectionType) !?lifecycle_module
     adapter.frame.focused = null;
     if (projection.model) |model| {
         adapter.frame.focused = model.layout.focused();
-        for (&model.panes) |*slot| {
-            const pane = if (slot.*) |*value| value else continue;
+        var panes = model.paneConstIterator();
+        while (panes.next()) |pane| {
             const start = adapter.frame.cell_count;
             const len = pane.buffer.cells.len;
             @memcpy(adapter.frame.cells[start..][0..len], pane.buffer.cells);

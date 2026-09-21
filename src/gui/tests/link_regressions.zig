@@ -90,7 +90,7 @@ test "native link hover clears on focus loss while transport defers gesture reco
     }
 
     try gui.focus(false);
-    _ = try gui.pump();
+    _ = try gui.update();
     try std.testing.expectEqual(@as(usize, 0), client.runtime_io.availableCapacity(&gui.app));
     try std.testing.expect(gui.input.recovery.queued);
     try std.testing.expect(gui.input.pointer.hover.link == null);
@@ -127,7 +127,7 @@ test "native pointer refreshes after resize ownership ends without a model or GP
     try fixture.send(released);
     try std.testing.expect(!gui.chrome.sidebar_resize_active);
     try std.testing.expectEqualDeep(version, gui.app.model.version());
-    _ = try gui.pump();
+    _ = try gui.update();
     try std.testing.expectEqual(.pointer, gui.input.pointer.hover.shape);
 }
 

@@ -54,8 +54,8 @@ pub fn flush(client: *Client) !void {
         return;
     }
     const tab = client.model.activeTabModel() orelse return;
-    for (&tab.panes) |*entry| {
-        const pane = if (entry.*) |*value| value else continue;
+    var panes = tab.paneIterator();
+    while (panes.next()) |pane| {
         if (pane.history_intent == null) {
             continue;
         }

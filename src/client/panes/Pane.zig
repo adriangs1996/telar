@@ -52,13 +52,13 @@ progress_state: PaneProgressStateType = .remove,
 progress_percent: ?u8 = null,
 title: []u8 = &.{},
 /// What the user is writing for the agent in this pane, owned like the title.
-composer_field: *ComposerField,
+composer_field: ComposerField = .{},
 composer_revision: u64 = 0,
 composer_images: ?*core.AgentImages = null,
 composer_content_revision: u64 = 0,
 kind: core.PaneKind = .terminal,
 pane_generation: u64 = 0,
-change_review: *ChangeReviewAvailability,
+change_review: ChangeReviewAvailability = .{},
 agent_thread: ?*core.AgentThreadSnapshot = null,
 agent_history: ?*@import("AgentHistoryWindow.zig") = null,
 history_intent: ?core.agent_history.Direction = null,
@@ -85,12 +85,6 @@ pub fn init(gpa: std.mem.Allocator, initial: InitialType) !Pane {
     const rows = try gpa.alloc(DamageRowType, initial.spec.size.rows);
     errdefer gpa.free(rows);
     @memset(rows, .{});
-    const composer_field = try gpa.create(ComposerField);
-    errdefer gpa.destroy(composer_field);
-    composer_field.* = .{};
-    const change_review = try gpa.create(ChangeReviewAvailability);
-    errdefer gpa.destroy(change_review);
-    change_review.* = .{};
     const text_metadata = try gpa.create(@import("telar-core").TextMetadata);
     errdefer gpa.destroy(text_metadata);
     text_metadata.* = try .init(gpa, initial.spec.size.rows);
@@ -101,8 +95,6 @@ pub fn init(gpa: std.mem.Allocator, initial: InitialType) !Pane {
         .location = initial.spec.location,
         .buffer = buffer,
         .damage_rows = rows,
-        .composer_field = composer_field,
-        .change_review = change_review,
         .attached = initial.attached,
         .scroll = .{ .total_rows = initial.spec.size.rows, .offset = 0 },
     };
@@ -111,8 +103,6 @@ pub fn init(gpa: std.mem.Allocator, initial: InitialType) !Pane {
 pub fn deinit(pane: *Pane) void {
     pane.gpa.free(pane.cwd);
     pane.gpa.free(pane.title);
-    pane.gpa.destroy(pane.composer_field);
-    pane.gpa.destroy(pane.change_review);
     if (pane.composer_images) |images| {
         pane.gpa.destroy(images);
     }
@@ -329,7 +319,7 @@ pub fn attach(self: *Pane, generation: u64) void {
     if (self.attached and self.attachment_generation == 0) {
         self.change_review.attachment_generation = generation;
     } else if (!self.attached or self.attachment_generation != generation) {
-        self.change_review.* = .{};
+        self.change_review = .{};
     }
 
     self.attached = true;
@@ -367,7 +357,7 @@ pub fn identify(pane: *Pane, kind: core.PaneKind, generation: u64) bool {
 
     pane.kind = kind;
     pane.pane_generation = generation;
-    pane.change_review.* = .{};
+    pane.change_review = .{};
     pane.transcript_scroll = 0;
     if (pane.agent_options) |options| {
         pane.gpa.destroy(options);
@@ -582,7 +572,7 @@ pub fn scrollConversation(pane: *Pane, delta: f64) bool {
 
 /// Applies bounded editor input without allocating. Example: `_ = pane.editComposer(.backspace);`
 pub fn editComposer(pane: *Pane, command: anytype) bool {
-    const field = pane.composer_field;
+    const field = &pane.composer_field;
     const previous = .{ field.len, field.head, field.anchor };
     const content_changed = switch (command) {
         .insert => |text| replacementChangesText(field, .{ @intCast(@min(field.head, field.anchor)), @intCast(@max(field.head, field.anchor)) }, text),

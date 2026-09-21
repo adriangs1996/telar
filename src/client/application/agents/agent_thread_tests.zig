@@ -647,10 +647,9 @@ test "history ownership retains at most sixteen windows and evicts an inactive r
     var count: usize = 0;
     for (&model.workspace.items) |*entry| {
         const tab = if (entry.*) |*value| value else continue;
-        for (&tab.model.panes) |*slot| {
-            if (slot.*) |*pane| {
-                count += @intFromBool(pane.agent_history != null);
-            }
+        var panes = tab.model.paneIterator();
+        while (panes.next()) |pane| {
+            count += @intFromBool(pane.agent_history != null);
         }
     }
     try std.testing.expectEqual(@as(usize, 16), count);

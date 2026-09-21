@@ -66,7 +66,9 @@ test "selection wraps and moving tabs preserves the active identity" {
     try std.testing.expect(model.selectOffset(std.math.maxInt(isize)));
     try std.testing.expectEqual(@as(TabIdType, @enumFromInt(2)), model.activeConst().?.location.tab_id);
     try std.testing.expect(!model.selectOffset(std.math.minInt(isize)));
+    const original_pane = model.findPane(@enumFromInt(1)).?;
     try std.testing.expectEqual(PositionChange.changed, try model.applyPosition(@enumFromInt(1), 1));
+    try std.testing.expectEqual(original_pane, model.findPane(@enumFromInt(1)).?);
     try std.testing.expectEqual(@as(TabIdType, @enumFromInt(2)), model.activeConst().?.location.tab_id);
     try std.testing.expectEqual(PositionChange.unchanged, try model.applyPosition(@enumFromInt(1), 1));
     try std.testing.expectError(error.TabNotFound, model.applyPosition(@enumFromInt(9), 0));

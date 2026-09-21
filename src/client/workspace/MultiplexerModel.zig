@@ -1,5 +1,5 @@
 const PaneSurfaceType = @import("telar-core").PaneSurface;
-const PaneIteratorType = @import("PaneIterator.zig");
+const GenericPaneIterator = @import("GenericPaneIterator.zig").Type;
 const PresentationCommitType = @import("../panes/PresentationCommit.zig");
 const std = @import("std");
 const LayoutType = @import("WorkspaceLayout.zig");
@@ -30,8 +30,8 @@ const Model = @This();
 /// Example: `const commit = model.presentationCommit();`.
 pub fn presentationCommit(model: *const Model) PresentationCommitType {
     var commit: PresentationCommitType = .{ .location = model.location };
-    for (&model.panes) |*slot| {
-        const pane = if (slot.*) |*value| value else continue;
+    var panes = model.paneConstIterator();
+    while (panes.next()) |pane| {
         commit.append(pane);
     }
     return commit;
@@ -39,7 +39,8 @@ pub fn presentationCommit(model: *const Model) PresentationCommitType {
 
 gpa: std.mem.Allocator,
 layout: LayoutType = .{},
-panes: [max_panes_per_tab]?PaneType = [_]?PaneType{null} ** max_panes_per_tab,
+/// Membership owns these records. Addresses survive tab moves; removal invalidates borrows.
+panes: [max_panes_per_tab]?*PaneType = @splat(null),
 pane_index: multiplexer.PaneIndex = .{},
 pane_count: usize = 0,
 location: ?TabLocationType = null,
@@ -53,8 +54,10 @@ pub fn init(gpa: std.mem.Allocator) Model {
 
 pub fn deinit(model: *Model) void {
     for (&model.panes) |*slot| {
-        if (slot.*) |*pane| {
+        if (slot.*) |pane| {
+            const gpa = pane.gpa;
             pane.deinit();
+            gpa.destroy(pane);
         }
         slot.* = null;
     }
@@ -66,10 +69,16 @@ pub fn setPaneGaps(model: *Model, enabled: bool) void {
     _ = model.layout.setPaneGaps(enabled);
 }
 
-pub const PaneIterator = @import("PaneIterator.zig");
+pub const PaneIterator = GenericPaneIterator(*PaneType);
+pub const ConstPaneIterator = GenericPaneIterator(*const PaneType);
 
-pub fn paneIterator(model: *Model) PaneIteratorType {
+pub fn paneIterator(model: *Model) PaneIterator {
     return .{ .panes = &model.panes };
+}
+
+/// Borrows live panes without granting mutation through a const model. Example: `var panes = model.paneConstIterator();`
+pub fn paneConstIterator(self: *const Model) ConstPaneIterator {
+    return .{ .panes = &self.panes };
 }
 
 pub fn focusedPane(model: *Model) ?*PaneType {
@@ -91,7 +100,7 @@ pub fn find(model: *Model, pane_id: PaneIdType) ?*PaneType {
         return null;
     }
     const slot = model.pane_index.get(raw_module(pane_id)) orelse return null;
-    return &model.panes[slot].?;
+    return model.panes[slot].?;
 }
 
 pub fn findConst(model: *const Model, pane_id: PaneIdType) ?*const PaneType {
@@ -99,7 +108,7 @@ pub fn findConst(model: *const Model, pane_id: PaneIdType) ?*const PaneType {
         return null;
     }
     const slot = model.pane_index.get(raw_module(pane_id)) orelse return null;
-    return &model.panes[slot].?;
+    return model.panes[slot].?;
 }
 
 /// Stores one pane working directory and reports whether its bounded
@@ -267,27 +276,25 @@ pub fn markAttached(model: *Model, pane_id: PaneIdType, generation: u64) !void {
     pane.attach(generation);
 }
 
-pub fn removePane(model: *Model, pane_id: PaneIdType) bool {
-    var removed = false;
-    for (&model.panes) |*slot| {
-        const pane = if (slot.*) |*value| value else continue;
-        if (pane.id != pane_id) {
-            continue;
-        }
-        pane.deinit();
-        slot.* = null;
-        model.pane_count -= 1;
-        removed = true;
-        break;
+pub fn removePane(self: *Model, pane_id: PaneIdType) bool {
+    if (pane_id == .invalid or raw_module(pane_id) == multiplexer.PaneIndex.tombstone_key) {
+        return false;
     }
-    if (removed) {
-        model.pane_index.remove(raw_module(pane_id));
+
+    const slot = self.pane_index.get(raw_module(pane_id)) orelse return false;
+    const pane = self.panes[slot].?;
+    const gpa = pane.gpa;
+    pane.deinit();
+    gpa.destroy(pane);
+    self.panes[slot] = null;
+    self.pane_count -= 1;
+    self.pane_index.remove(raw_module(pane_id));
+    _ = self.layout.remove(pane_id);
+    if (self.pane_count == 0) {
+        self.location = null;
     }
-    _ = model.layout.remove(pane_id);
-    if (model.pane_count == 0) {
-        model.location = null;
-    }
-    return removed;
+
+    return true;
 }
 
 pub fn focusPane(model: *Model, pane_id: PaneIdType) bool {
@@ -468,21 +475,20 @@ fn insertPane(model: *Model, spec: Spec, attached: bool) !void {
 
     for (&model.panes, 0..) |*slot, slot_index| {
         if (slot.* == null) {
-            slot.* = try PaneType.init(model.gpa, .{
+            const pane = try model.gpa.create(PaneType);
+            errdefer model.gpa.destroy(pane);
+            pane.* = try PaneType.init(model.gpa, .{
                 .spec = spec,
                 .attached = attached,
             });
+            slot.* = pane;
             model.pane_count += 1;
-            model.indexPane(spec.pane_id, @intCast(slot_index));
+            model.pane_index.put(raw_module(spec.pane_id), @intCast(slot_index));
 
             return;
         }
     }
     unreachable;
-}
-
-fn indexPane(model: *Model, pane_id: PaneIdType, pane_slot: u8) void {
-    model.pane_index.put(raw_module(pane_id), pane_slot);
 }
 
 /// Captures the mouse policy of an already resolved pane.
@@ -495,4 +501,66 @@ pub fn paneMousePlan(pane: *const PaneType, content: RectType) PaneMousePlan {
         .alternate_scroll = pane.input_modes.alternate_screen and pane.input_modes.alternate_scroll,
         .at_bottom = pane.scroll.atBottom(pane.buffer.h),
     };
+}
+
+test "pane insertion rolls back every allocation failure without retiring existing state" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, exerciseInsertion, .{});
+}
+
+fn exerciseInsertion(gpa: std.mem.Allocator) !void {
+    var self = Model.init(gpa);
+    defer self.deinit();
+    const location: TabLocationType = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
+    const first: PaneIdType = @enumFromInt(1);
+    const second: PaneIdType = @enumFromInt(2);
+    try self.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 1, .rows = 1 } });
+    const original = self.find(first).?;
+    try original.setComposer("keep draft");
+
+    self.addDiscovered(.{ .pane_id = second, .location = location, .area = .{ .w = 1, .h = 1 } }) catch |err| {
+        try std.testing.expectEqual(@as(usize, 1), self.pane_count);
+        try std.testing.expectEqual(@as(usize, 1), self.layout.count());
+        try std.testing.expect(self.find(second) == null);
+        try std.testing.expectEqual(original, self.find(first).?);
+        try std.testing.expectEqualStrings("keep draft", original.composerSlice());
+        return err;
+    };
+
+    try std.testing.expectEqual(original, self.find(first).?);
+    try std.testing.expect(self.removePane(second));
+    try std.testing.expect(!self.removePane(second));
+    try std.testing.expect(!self.removePane(.invalid));
+    try std.testing.expect(!self.removePane(@enumFromInt(multiplexer.PaneIndex.tombstone_key)));
+    try std.testing.expectEqualStrings("keep draft", original.composerSlice());
+}
+
+test "pane slots bound membership and reuse holes without moving live records" {
+    var accounting = std.testing.FailingAllocator.init(std.testing.allocator, .{});
+    var self = Model.init(accounting.allocator());
+    defer self.deinit();
+    const location: TabLocationType = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
+    for (0..max_panes_per_tab) |index| {
+        try self.addDiscovered(.{ .pane_id = @enumFromInt(index + 1), .location = location, .area = .{ .w = 1, .h = 1 } });
+    }
+
+    const kept_id: PaneIdType = @enumFromInt(max_panes_per_tab);
+    const kept = self.find(kept_id).?;
+    const attempts = accounting.alloc_index;
+    try std.testing.expectError(error.PaneLimitReached, self.addDiscovered(.{ .pane_id = @enumFromInt(max_panes_per_tab + 1), .location = location, .area = .{ .w = 1, .h = 1 } }));
+    try std.testing.expectEqual(attempts, accounting.alloc_index);
+    try std.testing.expect(self.removePane(@enumFromInt(1)));
+    try self.addDiscovered(.{ .pane_id = @enumFromInt(max_panes_per_tab + 1), .location = location, .area = .{ .w = 1, .h = 1 } });
+    try std.testing.expectEqual(kept, self.find(kept_id).?);
+
+    accounting.fail_index = accounting.alloc_index;
+    var panes = self.paneConstIterator();
+    try std.testing.expectEqual(@as(?*const PaneType, self.find(@enumFromInt(max_panes_per_tab + 1))), panes.next());
+    var count: usize = 1;
+    while (panes.next()) |_| {
+        count += 1;
+    }
+
+    try std.testing.expectEqual(max_panes_per_tab, count);
+    _ = self.presentationCommit();
+    try std.testing.expect(!accounting.has_induced_failure);
 }

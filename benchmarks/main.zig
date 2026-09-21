@@ -46,6 +46,7 @@ const ResultWriter = @import("ResultWriter.zig");
 const ExecutionResources = @import("ExecutionResources.zig");
 const Fixture = @import("Fixture.zig");
 const Config = @import("Config.zig");
+const client_storage = @import("client_storage.zig");
 const builtin = @import("builtin");
 
 pub const cols: u16 = 154;
@@ -75,6 +76,7 @@ const usage =
     \\  --json                Emit JSON Lines for storage and comparison
     \\  --enforce             Fail when a case exceeds its p99 release budget
     \\  --list                Print benchmark names without running them
+    \\  --storage             Report client sizes and live pane allocations as JSON Lines
     \\  --help                Print this help
 ;
 
@@ -796,6 +798,12 @@ pub fn main(init: std.process.Init) !void {
     var stdout_buffer: [16 * 1024]u8 = undefined;
     var stdout_writer = std.Io.File.stdout().writer(init.io, &stdout_buffer);
     const writer = &stdout_writer.interface;
+
+    if (config.storage) {
+        try client_storage.report(writer, init.gpa);
+        try writer.flush();
+        return;
+    }
 
     if (config.list) {
         for (cases) |case| {

@@ -369,13 +369,13 @@ test "runtime review loads through its real worker and inbox after the previous 
     try session.peer.send(std.testing.io, try core.encodeChangeReviewSnapshot(&buffer, response(session, 1)));
     while (!gui.app.change_review.loaded) {
         try session.driver.inbox.wait();
-        _ = try session.driver.drain(gui);
+        _ = try gui.update();
     }
     const token = try gui.prepare(&session.renderer);
     try std.testing.expect(gui.review.job != null);
     while (!gui.review.notified) {
         try session.driver.inbox.wait();
-        _ = try session.driver.drain(gui);
+        _ = try gui.update();
     }
     try std.testing.expectEqual(@as(u64, 0), gui.review.edition);
     try gui.complete(token, true);

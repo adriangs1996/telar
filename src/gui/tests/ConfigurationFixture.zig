@@ -67,7 +67,7 @@ pub fn wait(fixture: *Fixture) !void {
     try reload.poll(&fixture.session.gui.app);
     for (0..1000) |_| {
         if (reload.ready.load(.acquire)) {
-            _ = try fixture.session.gui.pump();
+            _ = try fixture.session.gui.update();
             if (!reload.ready.load(.acquire)) {
                 return;
             }

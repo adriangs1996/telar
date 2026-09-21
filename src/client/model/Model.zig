@@ -1253,10 +1253,10 @@ pub fn sidebarAnimationActive(model: *const Model) bool {
         return true;
     }
 
-    for (&model.workspace.items) |tab_slot| {
-        const tab = tab_slot orelse continue;
-        for (&tab.model.panes) |pane_slot| {
-            const pane = pane_slot orelse continue;
+    for (&model.workspace.items) |*tab_slot| {
+        const tab = if (tab_slot.*) |*value| value else continue;
+        var panes = tab.model.paneConstIterator();
+        while (panes.next()) |pane| {
             if (pane.progress_state == .set or pane.progress_state == .indeterminate) {
                 return true;
             }
@@ -2537,8 +2537,8 @@ pub fn planTabDetachment(model: *const Model, location: TabLocationType) !TabDet
     const tab = model_namespace.findTabConst(&model.workspace, location) orelse return error.UnexpectedTab;
     var plan: TabDetachmentPlanType = .{ .location = location };
 
-    for (&tab.model.panes) |*slot| {
-        const pane = if (slot.*) |*value| value else continue;
+    var panes = tab.model.paneConstIterator();
+    while (panes.next()) |pane| {
         plan.panes[plan.len] = .{
             .pane_id = pane.id,
             .attached = pane.attached,

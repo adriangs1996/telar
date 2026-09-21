@@ -47,7 +47,7 @@ pub fn capture(model: *const MultiplexerModel, agents: ?*const AgentSnapshotType
         .agent = agent,
         .composer = pane.composerSlice(),
         .composer_images = pane.composerImages(),
-        .composer_field = pane.composer_field,
+        .composer_field = &pane.composer_field,
         .composer_revision = pane.composer_revision,
         .attachment_generation = pane.attachment_generation,
         .kind = pane.kind,

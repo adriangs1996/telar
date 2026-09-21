@@ -23,8 +23,8 @@ pub fn init(gpa: std.mem.Allocator) !MultiplexerContext {
     try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
     try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(3), .location = location, .axis = .vertical, .area = area });
     try model.split(.{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(4), .location = location, .axis = .vertical, .area = area });
-    for (&model.panes) |*slot| {
-        const pane = if (slot.*) |*value| value else continue;
+    var panes = model.paneIterator();
+    while (panes.next()) |pane| {
         pane.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x" });
     }
     const screen = try ScreenType.init(gpa, main.cols, main.rows);

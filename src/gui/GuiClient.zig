@@ -13,6 +13,8 @@ const State = @import("widgets/interaction/State.zig");
 const Chrome = @import("widgets/Chrome.zig");
 const SyntaxService = @import("syntax/Service.zig");
 const ReviewPanel = @import("change_review/Panel.zig");
+const Message = @import("gui_event.zig").Message;
+const InputEvent = @import("input/event.zig").Event;
 const review_dispatch = @import("change_review/dispatch.zig");
 
 const GuiClient = @This();
@@ -132,10 +134,82 @@ pub fn start(gui: *GuiClient, colors: core.TerminalColors) !void {
     try client.controllers.bar_updates.synchronize(&gui.app);
 }
 
-pub fn pump(gui: *GuiClient) !?u8 {
-    const status = try gui.driver.drain(gui);
-    gui.refreshPointer();
+/// Copies borrowed input before the host callback returns. A full input queue
+/// rejects admission; inbox failures propagate to the host. Example: `_ = try gui.acceptInput(event);`
+pub fn acceptInput(self: *GuiClient, event: InputEvent) !bool {
+    if (event == .focus) {
+        // Focus transitions must remain ordered even when native input coalesces.
+        try self.driver.inbox.post(.{ .focus = event.focus });
+        return true;
+    }
+
+    self.input.acceptEvent(event) catch return false;
+    try self.driver.inbox.notify(.input_ready);
+    return true;
+}
+
+/// Drains one bounded turn, then folds reconnectable layout state once.
+/// Workers only publish owned messages; the window thread owns mutation.
+/// Example: `const status = try gui.update();`
+pub fn update(self: *GuiClient) !?u8 {
+    const loop = self.driver;
+    const status: ?u8 = turn: {
+        var batch = try loop.inbox.begin();
+        defer loop.inbox.end();
+        while (try loop.inbox.next(&batch)) |event| {
+            const path = core.enter(pathFor(event));
+            defer path.restore();
+            if (try self.dispatch(event)) |exit_status| {
+                break :turn exit_status;
+            }
+        }
+
+        if (batch.processed != 0) {
+            try client.client_layouts.observe(&self.app);
+        }
+
+        try loop.configuration.poll(&self.app);
+        break :turn null;
+    };
+    self.refreshPointer();
     return status;
+}
+
+fn dispatch(self: *GuiClient, event: Message) !?u8 {
+    switch (event) {
+        .server => |result| return self.receive(result),
+        .sent => |result| try client.runtime_io.handleSent(&self.app, result),
+        .input_ready => try self.inputReady(),
+        .focus => |focused| try self.focus(focused),
+        .presented => |result| try self.complete(result.token, result.delivered),
+        .configuration_ready => try self.driver.configuration.accept(&self.app),
+        .input_timeout => |result| try result,
+        .binding_timeout => |result| try self.input.expire(&self.app, result),
+        .sidebar_animation_tick => |result| _ = try client.controllers.sidebar_animations.handleTick(&self.app, result),
+        .notification_tick => |result| _ = try client.controllers.notifications.handleTick(&self.app, result),
+        .bar_tick => |result| try client.controllers.bar_updates.handleTick(&self.app, result),
+        .bar_command => |result| try client.controllers.bar_updates.completeCommand(&self.app, result),
+        .link_opened => |result| try client.controllers.link_openings.complete(&self.app, result),
+        .path_completion => |result| try client.controllers.path_completions.complete(&self.app, result),
+        .favicon => |result| self.landFavicon(result),
+        .diagram_ready => self.landDiagram(),
+        .syntax_ready => self.landSyntax(),
+        .change_review_ready => self.landChangeReview(),
+        .plugin_result => |result| {
+            if (try client.controllers.plugin_actions.complete(&self.app, result)) {
+                return 0;
+            }
+        },
+    }
+
+    return if (self.input.stopped) @as(u8, 0) else null;
+}
+
+fn pathFor(event: Message) core.Path {
+    return switch (event) {
+        .configuration_ready, .notification_tick, .bar_tick, .bar_command, .plugin_result, .link_opened, .path_completion, .favicon, .diagram_ready, .syntax_ready, .change_review_ready => .observation,
+        else => .interactive,
+    };
 }
 
 /// Applies one validated runtime message before releasing its receive borrow.

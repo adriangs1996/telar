@@ -1,0 +1,16 @@
+zig build -j2 --summary all
+Build Summary: 51/51 steps succeeded
+
+zig build test-client test-gui test-frontend codestyle -j2 --summary all
+Ran 19 tests in 0.032s
+telar-client module and capability boundaries passed
++- run test w
++- run test w
+Build Summary: 58/58 steps succeeded; 2319/2319 tests passed
+test-client success
++- run test 982 pass (982 total) 1s MaxRSS:47M
+test-gui success
++- run test 744 pass (744 total) 51s MaxRSS:192M
+test-frontend success
++- run test 593 pass (593 total) 10s MaxRSS:53M
+codestyle success

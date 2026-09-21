@@ -635,7 +635,7 @@ test "native tab drag sends one anchored move after release and waits for runtim
     const failed = try session.gui.prepare(&session.renderer);
     try session.gui.complete(failed, false);
     try send(session, .{ .pointer = .{ .kind = .release, .x = target.bounds.x + 2, .y = y } });
-    _ = try session.gui.pump();
+    _ = try session.gui.update();
     const request = (try core.decodeClient(session.pending.?)).move_tab;
     try std.testing.expectEqual(third, request.location.tab_id);
     try std.testing.expectEqual(Session.location.tab_id, request.relative_to.?);
@@ -1044,7 +1044,7 @@ test "agent prefix survives modifier hover and closes its pane after key release
 
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "x", .physical = .{ .value = 45 } } });
     try std.testing.expect(!gui.input.router.prefixPending());
-    _ = try gui.pump();
+    _ = try gui.update();
     const request = (try core.decodeClient(session.pending.?)).close_pane;
     try std.testing.expectEqual(Session.pane_id, request.pane_id);
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "x", .physical = .{ .value = 45 }, .phase = .release } });

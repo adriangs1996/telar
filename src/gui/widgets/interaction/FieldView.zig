@@ -39,7 +39,7 @@ pub fn captureClient(app: *const client.AttachedClient, target: Target) ?FieldVi
             return null;
         }
 
-        const value = pane.composer_field;
+        const value = &pane.composer_field;
         return .{ .text = value.text(), .head = @intCast(value.head), .anchor = @intCast(value.anchor) };
     }
 

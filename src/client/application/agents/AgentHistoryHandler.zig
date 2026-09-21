@@ -306,8 +306,8 @@ fn reserveWindow(handler: Handler) !void {
     var inactive: ?*Pane = null;
     for (&handler.model.workspace.items, 0..) |*slot, index| {
         const tab = if (slot.*) |*value| value else continue;
-        for (&tab.model.panes) |*entry| {
-            const value = if (entry.*) |*present| present else continue;
+        var panes = tab.model.paneIterator();
+        while (panes.next()) |value| {
             if (value.agent_history != null) {
                 count += 1;
                 if (index != handler.model.workspace.active_index and !value.agent_history.?.retained) {

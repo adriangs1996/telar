@@ -287,13 +287,12 @@ test "native inbox holds input and GPU completion until the consumer runs" {
     const token = try session.gui.prepare(&session.renderer);
     const inbox = &session.driver.inbox;
     var text = [_]u8{'x'} ** 80;
-    try session.gui.input.accept(.{ .kind = 1, .text = &text, .len = text.len });
+    try std.testing.expect(try session.gui.acceptInput(.{ .text = .{ .bytes = &text } }));
     @memset(&text, 'z');
-    try inbox.notify(.input_ready);
     try inbox.post(.{ .presented = .{ .token = token, .delivered = true } });
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
     try std.testing.expect(session.gui.lifecycle.active != null);
-    _ = try session.gui.pump();
+    _ = try session.gui.update();
     try std.testing.expect(session.gui.input.len >= 48);
     try session.settle();
     try std.testing.expectEqual(@as(usize, 80), session.input_len);
@@ -304,7 +303,7 @@ test "native inbox holds input and GPU completion until the consumer runs" {
     try std.testing.expect(session.gui.lifecycle.active == null);
     try std.testing.expectEqual(@as(usize, 1), session.ack_count);
     const consumed = inbox.snapshot().consumed;
-    _ = try session.gui.pump();
+    _ = try session.gui.update();
     try std.testing.expectEqual(consumed, inbox.snapshot().consumed);
 }
 

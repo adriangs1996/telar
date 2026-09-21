@@ -1,9 +1,8 @@
-//! Native wake endpoint and the GUI consumer of the shared bounded inbox.
+//! Native wake endpoint and producers of the shared bounded inbox.
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const native = @import("native/native.zig");
-const GuiClient = @import("GuiClient.zig");
 const Inbox = @import("gui_event.zig").Inbox;
 const Loop = @This();
 const FramePacer = @import("FramePacer.zig");
@@ -70,10 +69,4 @@ fn send(io: std.Io, request: @import("RuntimeSend.zig")) anyerror!void {
     core.mark(io, .client_send_start);
     defer core.mark(io, .client_send_done);
     try request.state.send(io, request.bytes);
-}
-
-/// The window thread is the only consumer. Workers and native callbacks only
-/// publish owned messages. Example: `const status = try loop.drain(gui);`
-pub fn drain(loop: *Loop, gui: *GuiClient) !?u8 {
-    return @import("entrypoints/events.zig").drain(loop, gui);
 }

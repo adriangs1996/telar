@@ -360,7 +360,7 @@ fn expectFaviconCard(name: []const u8, bytes: []const u8) !void {
         }
 
         try session.driver.inbox.wait();
-        _ = try gui.pump();
+        _ = try gui.update();
         const token = try gui.prepare(renderer);
         try gui.complete(token, true);
     }

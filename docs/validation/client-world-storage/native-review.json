@@ -1,0 +1,24 @@
+{
+  "fake_provider": true,
+  "model_calls": 0,
+  "review_action_counts": {
+    "empty-terminal": 0,
+    "empty-agent": 0,
+    "single-agent": 1,
+    "three-panes": 1,
+    "fullscreen-agent": 1,
+    "fullscreen-terminal": 0,
+    "restored": 1,
+    "reconnected": 1
+  },
+  "screenshots": [
+    "empty-agent.png",
+    "empty-terminal.png",
+    "fullscreen-agent.png",
+    "fullscreen-terminal.png",
+    "reconnected.png",
+    "restored.png",
+    "single-agent.png",
+    "three-panes.png"
+  ]
+}

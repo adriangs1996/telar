@@ -27,7 +27,7 @@ pub fn create(client: *Client) !void {
 /// Borrows the current attached composer for native editing. Example: `const editor = agent_threads.field(client, id) orelse return;`
 pub fn field(client: *const Client, pane_id: core.PaneId) ?*const Pane.ComposerField {
     const pane = client.model.agentPane(pane_id) orelse return null;
-    return pane.composer_field;
+    return &pane.composer_field;
 }
 
 /// Delivers semantic editor input without forwarding terminal bytes. Example: `try agent_threads.edit(client, id, .backspace);`

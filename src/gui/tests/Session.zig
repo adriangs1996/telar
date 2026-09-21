@@ -94,7 +94,7 @@ pub fn settle(session: *Session) !void {
     var count: usize = 0;
     while (true) {
         if (session.pending == null) {
-            _ = try session.gui.pump();
+            _ = try session.gui.update();
             if (session.pending == null) {
                 break;
             }

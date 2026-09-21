@@ -1,0 +1,26 @@
+{
+  "before": {
+    "frontend.multiplexer.compose_four": {
+      "median_ns_per_op": 42688,
+      "p95_ns_per_op": 43064,
+      "p99_ns_per_op": 44489
+    },
+    "frontend.multiplexer.patch_one_cell": {
+      "median_ns_per_op": 185,
+      "p95_ns_per_op": 192,
+      "p99_ns_per_op": 201
+    }
+  },
+  "after": {
+    "frontend.multiplexer.compose_four": {
+      "median_ns_per_op": 42971,
+      "p95_ns_per_op": 43325,
+      "p99_ns_per_op": 43505
+    },
+    "frontend.multiplexer.patch_one_cell": {
+      "median_ns_per_op": 185,
+      "p95_ns_per_op": 197,
+      "p99_ns_per_op": 203
+    }
+  }
+}

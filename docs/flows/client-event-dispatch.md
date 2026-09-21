@@ -57,8 +57,8 @@ left work. Queue inspection and resetting the empty event use the same mutex
 as publication, so a wake arriving during a drain cannot be lost.
 
 `notify` replaces a pending notification of the same tag. The GUI uses this
-only for input readiness and the latest focus value. Input bytes and runtime
-deltas use owned storage and FIFO admission; they are never discarded by this
+only for input readiness. Focus transitions use ordered `post` messages. Input
+bytes and runtime deltas use owned storage and FIFO admission; they are never discarded by this
 operation. FIFO plus finite admission bounds how much accepted work can precede
 another source. Media decode/compression and observation work keep their own
 workers; their completions carry results rather than heavy work to execute.
@@ -77,7 +77,11 @@ and observation for tests that deliberately execute one transition.
 use its task group. `ConfigurationReload` reserves a slot for its font/watch
 worker, retaining its own join and staged-resource lifetime. Native callbacks
 publish input readiness, focus and presentation completion. The window-thread
-consumer delegates to `GuiClient` and the shared runtime/config handlers.
+consumer is `GuiClient.update`, which classifies events and calls the shared
+runtime/config handlers directly. `NativeLoop` owns transport and wake resources,
+not dispatch policy. `GuiClient.acceptInput` copies native input into the bounded
+queue; `GuiClient.prepare` seals a frame and `GuiClient.complete` consumes the
+GPU result from the inbox.
 `Application` derives cursor state and prepares the latest projection after
 draining. Font adoption and geometry changes run on that same owner.
 

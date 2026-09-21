@@ -255,7 +255,7 @@ fn frameDelayNs(context: ?*anyopaque) callconv(.c) u64 {
 fn pump(context: ?*anyopaque) callconv(.c) c_int {
     const app = from(context);
     if (app.gui) |gui| {
-        app.exit_status = gui.pump() catch |err| blk: {
+        app.exit_status = gui.update() catch |err| blk: {
             app.fail(err);
             break :blk null;
         };
@@ -300,7 +300,7 @@ fn complete(context: ?*anyopaque, token: u64, delivered: c_int) callconv(.c) voi
 fn input(context: ?*anyopaque, event: native.InputEvent) callconv(.c) c_int {
     const app = from(context);
     const decoded = @import("native/decode_input.zig").decode(event) catch return 0;
-    if (decoded == .focus) {
+    if (decoded == .focus and app.gui == null) {
         // Losing focus must release gestures even if focus returns before drain.
         app.driver.inbox.post(.{ .focus = decoded.focus }) catch |err| {
             app.fail(err);
@@ -311,12 +311,11 @@ fn input(context: ?*anyopaque, event: native.InputEvent) callconv(.c) c_int {
 
     core.mark(app.params.io, .client_input);
     const gui = app.gui orelse return 0;
-    gui.input.acceptEvent(decoded) catch return 0;
-    app.driver.inbox.notify(.input_ready) catch |err| {
+    const accepted = gui.acceptInput(decoded) catch |err| {
         app.fail(err);
         return 0;
     };
-    return 1;
+    return @intFromBool(accepted);
 }
 
 fn now(app: *const Application) u64 {

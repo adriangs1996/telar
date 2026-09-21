@@ -87,7 +87,7 @@ test "native pane pointer shapes refresh under a stationary pointer and modal bl
         const shape: core.PointerShape = @enumFromInt(field.value);
         pane.pointer_shape = shape;
         gui.input.pointer.hover.dirty = true;
-        _ = try gui.pump();
+        _ = try gui.update();
         try std.testing.expectEqual(if (shape == .default) .text else shape, gui.input.pointer.hover.shape);
     }
 

@@ -8,6 +8,7 @@ sample_ns: u64 = 40 * std.time.ns_per_ms,
 json: bool = false,
 list: bool = false,
 enforce: bool = false,
+storage: bool = false,
 
 pub fn parse(args: []const []const u8) !Config {
     var config: Config = .{};
@@ -41,6 +42,8 @@ pub fn parse(args: []const []const u8) !Config {
             config.sample_ns = milliseconds * std.time.ns_per_ms;
         } else if (std.mem.eql(u8, arg, "--json")) {
             config.json = true;
+        } else if (std.mem.eql(u8, arg, "--storage")) {
+            config.storage = true;
         } else if (std.mem.eql(u8, arg, "--list")) {
             config.list = true;
         } else if (std.mem.eql(u8, arg, "--enforce")) {

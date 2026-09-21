@@ -21,8 +21,8 @@ pub fn capture(projection: ProjectionType) Geometry {
     const model = projection.model orelse return geometry;
     geometry.location = model.location;
     geometry.layout_revision = model.layout.currentRevision();
-    for (&model.panes) |*slot| {
-        const pane = if (slot.*) |*value| value else continue;
+    var panes = model.paneConstIterator();
+    while (panes.next()) |pane| {
         geometry.panes[geometry.len] = .{
             .id = pane.id,
             .attachment_generation = pane.attachment_generation,

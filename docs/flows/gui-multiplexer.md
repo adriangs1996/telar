@@ -145,7 +145,7 @@ terminal cells. Modal gestures cannot fall through to panes behind them.
 
 ## Execution and budgets
 
-`entrypoints/events.zig` is the sole consumer of GUI completions. It dispatches
+`GuiClient.update` is the sole consumer of GUI completions. It dispatches
 socket input, native input, presentation, configuration, binding deadlines,
 notifications, bar jobs and plugin jobs to the shared controllers. Host workers
 use the existing inbox/outbox execution model. Layout replication is observed
