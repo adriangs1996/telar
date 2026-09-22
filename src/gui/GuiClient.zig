@@ -578,7 +578,7 @@ fn dispatch(self: *GuiClient, event: Message) !?u8 {
         .notification_tick => |result| _ = try client.operations.notifications.handleTick(&self.app, result),
         .bar_tick => |result| try client.operations.bar_updates.handleTick(&self.app, result),
         .bar_command => |result| try client.operations.bar_updates.completeCommand(&self.app, result),
-        .link_opened => |result| try client.operations.link_openings.complete(&self.app, result),
+        .link_opened => |result| try self.app.completeLinkOpening(result),
         .path_completion => |result| try client.operations.path_completions.complete(&self.app, result),
         .favicon => |result| self.landFavicon(result),
         .diagram_ready => self.landDiagram(),
@@ -1182,7 +1182,7 @@ fn dispatchPointer(self: *GuiClient, value: PointerSample) !void {
                     pointer.link_gesture.cancel();
 
                     if (target) |selected| {
-                        _ = try client.operations.link_openings.apply(app, selected);
+                        _ = try app.openLink(selected);
                     }
                 }
 

@@ -23,7 +23,6 @@ const client_telemetry = @import("../resources/telemetry.zig");
 const config_reloads = @import("telar-client").operations.config_reloads;
 const plugin_actions = @import("telar-client").operations.plugin_actions;
 const clipboard_images = @import("telar-client").operations.clipboard_images;
-const link_openings = @import("telar-client").operations.link_openings;
 const PathType = @import("telar-core").Path;
 
 const EventTag = std.meta.Tag(TerminalClient.ClientEvent);
@@ -130,7 +129,7 @@ fn dispatch(client: *Client, event: TerminalClient.ClientEvent, resources: Resou
             }
         },
         .clipboard_image => |result| try clipboard_images.complete(client, result),
-        .link_opened => |result| try link_openings.complete(client, result),
+        .link_opened => |result| try client.completeLinkOpening(result),
         .path_completion => |completion| try path_completions.complete(client, completion),
     }
 

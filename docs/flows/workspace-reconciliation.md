@@ -9,8 +9,8 @@ operations/input/name_prompts.handleInput
   -> owned rename_workspace -> runtime rename
 
 rename reply or requested workspace_snapshot
-  -> entrypoints/AttachedClient.handleServerMessage
-  -> operations/workspaces/workspace_snapshots.apply
+  -> AttachedClient.handleServerMessage
+  -> AttachedClient.applyWorkspaceSnapshot
      -> consume rename/snapshot correlation and verify workspace
      -> bounded descriptor decoding -> Model.reconcileWorkspace
      -> ignore removed-tab requests; release removed-pane resources
@@ -57,7 +57,7 @@ known continuation. Model rejection performs no resource effects. Post-commit
 failure preserves the canonical replica and completed cleanup. Reconnect or a
 later snapshot repairs disposable resources. No operation schedules a draw.
 
-Source: `src/client/operations/workspaces/workspace_snapshots.zig`,
+Source: `src/client/AttachedClient.zig`,
 `workspace_renames.zig`, and `src/client/model/Model.zig`.
 Tests: `src/frontend/client/tests/synchronization.zig`,
 `renaming_and_telemetry.zig`, `src/client/model/tests/workspaces.zig`, and

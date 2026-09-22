@@ -14,7 +14,6 @@ const WorkspaceArrivalType = @import("../../model/WorkspaceArrival.zig");
 const workspace_transitions = @import("workspace_transitions.zig");
 const WorkspaceHandoffType = @import("../../application/workspaces/WorkspaceHandoff.zig");
 
-const tab_snapshots = @import("../tabs/tab_snapshots.zig");
 const Plan = @import("../../application/workspaces/Plan.zig");
 const WorkspaceHandoffFailure = @import("../../application/workspaces/WorkspaceHandoffFailure.zig");
 
@@ -134,7 +133,7 @@ fn restore(client: *Client) !void {
         try client.graphics.setPaneVisible(pane.pane_id, true);
     }
 
-    _ = try tab_snapshots.recover(client, location);
+    _ = try client.recoverTabSnapshot(location);
 }
 
 /// Constructs the exact runtime arrival with the remembered tab layout. Example: `try confirm(client, try arrival(client, opened));`

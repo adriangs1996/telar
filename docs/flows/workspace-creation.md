@@ -10,7 +10,7 @@ operations/input/name_prompts.handleInput
      -> AttachedClient.sendCreateWorkspaceRequest
   -> runtime commits workspace/root and replaces this client's attachments
   -> pane_opened(create_workspace continuation)
-  -> entrypoints/AttachedClient.handleServerMessage
+  -> AttachedClient.handleServerMessage
   -> operations/panes/AttachedClient.completePaneOpen
      -> workspace_creations.confirmation
      -> workspace_creations.confirm

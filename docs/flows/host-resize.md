@@ -109,7 +109,7 @@ but schedules no frame.
   shared by resize and capability observations.
 - `src/client/AttachedClient.zig` owns translation and bounded delivery
   of visible attached pane sizes.
-- `src/client/operations/tabs/tab_snapshots.zig` proves
+- `src/client/AttachedClient.zig` proves
   that a resize attaches only detached panes with content, once each, after a
   crowded layout left them detached.
 - `src/frontend/client/tests/` proves exact pane geometry,

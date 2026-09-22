@@ -12,7 +12,6 @@ const IntentOutcomeType = @import("../../application/input/IntentOutcome.zig");
 const sidebar_toggles = @import("../notifications/sidebar_toggles.zig");
 const agent_navigation = @import("../agents/agent_navigation.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
-const tab_creations = @import("../tabs/tab_creations.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
 const name_prompts = @import("name_prompts.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
@@ -79,7 +78,9 @@ fn applyIntent(context: *ViewInteractionsContext, intent: IntentType) !IntentOut
         },
         .rename_tab => |tab_id| _ = name_prompts.beginTabRename(client, tab_id),
         .create_tab => {
-            _ = try tab_creations.request(client, .{});
+            _ = try client.requestTabCreation(
+                .{},
+            );
         },
         .select_workspace => |workspace| _ = try workspace_handoffs.selectWorkspace(client, .{ .workspace = workspace }),
         .notification_activate => |id| _ = try notification_flow.activateNow(client, id),

@@ -11,7 +11,6 @@ const max_search_matches = @import("telar-core").max_search_matches;
 const SearchMatchType = @import("telar-core").SearchMatch;
 const pane_viewports = @import("../panes/pane_viewports.zig");
 const TargetType = @import("../../links/LinkTarget.zig");
-const link_openings = @import("link_openings.zig");
 const InputCopyModeDirection = @import("../../input/copy_mode.zig").Direction;
 const name_prompts_module = @import("name_prompts.zig");
 const CopySelectionType = @import("telar-core").CopySelection;
@@ -109,7 +108,7 @@ pub fn matches(client: *Client, view: PaneMatchesViewType) !ApplicationInputCopy
 }
 
 fn openLink(client: *Client, target: TargetType) !void {
-    _ = try link_openings.apply(client, target);
+    _ = try client.openLink(target);
 }
 
 fn openSearch(client: *Client, direction: InputCopyModeDirection) !void {

@@ -27,7 +27,7 @@ existing reset policy rather than blocking PTY input.
 ## Client boundary
 
 ```text
-entrypoints/AttachedClient.handleServerMessage(.graphics_*)
+AttachedClient.handleServerMessage(.graphics_*)
   -> operations/panes/pane_graphics.apply
      -> graphics.apply (physical resource store)
      -> changed: Model.setPaneGraphicsFallback

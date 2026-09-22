@@ -59,7 +59,11 @@ pub fn leave(gui: *GuiClient) bool {
 pub fn prepare(gui: *GuiClient) !void {
     const selection = &gui.widgets.thread_selection;
     if (selection.release) |owner| {
-        client.agent_history.unfreeze(&gui.app.model, owner.pane_id, owner.attachment_generation);
+        client.agent_reading.unfreeze(
+            &gui.app.model,
+            owner.pane_id,
+            owner.attachment_generation,
+        );
         selection.release = null;
     }
     const owner = selection.owner orelse return;
@@ -71,13 +75,21 @@ pub fn prepare(gui: *GuiClient) !void {
     if (!current or head == null or !valid(gui, head.?)) {
         cancel(gui);
         if (selection.release) |released| {
-            client.agent_history.unfreeze(&gui.app.model, released.pane_id, released.attachment_generation);
+            client.agent_reading.unfreeze(
+                &gui.app.model,
+                released.pane_id,
+                released.attachment_generation,
+            );
             selection.release = null;
         }
         return;
     }
     if (selection.retains(owner.pane_id) and !selection.frozen) {
-        selection.frozen = client.agent_history.freeze(&gui.app.model, owner.pane_id, owner.attachment_generation) catch |err| {
+        selection.frozen = client.agent_reading.freeze(
+            &gui.app.model,
+            owner.pane_id,
+            owner.attachment_generation,
+        ) catch |err| {
             _ = leave(gui);
             try client.operations.notifications.publishNow(&gui.app, .{ .level = .failure, .title = "Could not select messages", .message = @errorName(err) });
             return;
@@ -87,7 +99,11 @@ pub fn prepare(gui: *GuiClient) !void {
             return;
         }
     } else if (!selection.retains(owner.pane_id) and selection.frozen) {
-        client.agent_history.unfreeze(&gui.app.model, owner.pane_id, owner.attachment_generation);
+        client.agent_reading.unfreeze(
+            &gui.app.model,
+            owner.pane_id,
+            owner.attachment_generation,
+        );
         selection.frozen = false;
     }
     if (selection.dragging and selection.outside != 0) {
@@ -419,7 +435,7 @@ fn scroll(gui: *GuiClient, delta: i32) !void {
     const pane = gui.app.model.agentPane(owner.pane_id) orelse return;
     const next = std.math.clamp(pane.transcript_scroll + @as(f64, @floatFromInt(delta)), 0, target.scroll_limit);
     selection.blocked_edge = next == pane.transcript_scroll;
-    try client.agent_threads.scroll(&gui.app, owner.pane_id, next - pane.transcript_scroll);
+    _ = gui.app.model.scrollAgentThread(owner.pane_id, next - pane.transcript_scroll);
 }
 
 fn valid(gui: *const GuiClient, at: Position) bool {

@@ -135,7 +135,18 @@ fn choose(gui: *GuiClient, index: u8, execute: bool) !void {
             break :blk try std.fmt.bufPrint(&buffer, "${s} ", .{snapshot.skills.entries[skill].name(&snapshot.skills)});
         },
     };
-    try client.agent_threads.edit(&gui.app, pane_id, .{ .replace_range = .{ .range = .{ state.start, state.end }, .text = text } });
+    _ = gui.app.model.editAgentComposer(
+        pane_id,
+        .{
+            .replace_range = .{
+                .range = .{
+                    state.start,
+                    state.end,
+                },
+                .text = text,
+            },
+        },
+    );
     state.dismiss();
     restoreEditor(gui);
     gui.widgets.dispatcher.revision +%= 1;
@@ -156,7 +167,18 @@ pub fn submit(gui: *GuiClient, pane_id: core.PaneId) !void {
         if (action.argument.len == 0) {
             switch (action.kind) {
                 .skills => {
-                    try client.agent_threads.edit(&gui.app, pane_id, .{ .replace_range = .{ .range = .{ 0, @intCast(pane.composerSlice().len) }, .text = "$" } });
+                    _ = gui.app.model.editAgentComposer(
+                        pane_id,
+                        .{
+                            .replace_range = .{
+                                .range = .{
+                                    0,
+                                    @intCast(pane.composerSlice().len),
+                                },
+                                .text = "$",
+                            },
+                        },
+                    );
                     return;
                 },
                 .model, .permissions => {
@@ -167,7 +189,18 @@ pub fn submit(gui: *GuiClient, pane_id: core.PaneId) !void {
                                 return;
                             }
 
-                            try client.agent_threads.edit(&gui.app, pane_id, .{ .replace_range = .{ .range = .{ 0, @intCast(pane.composerSlice().len) }, .text = "" } });
+                            _ = gui.app.model.editAgentComposer(
+                                pane_id,
+                                .{
+                                    .replace_range = .{
+                                        .range = .{
+                                            0,
+                                            @intCast(pane.composerSlice().len),
+                                        },
+                                        .text = "",
+                                    },
+                                },
+                            );
                             gui.widgets.completions.dismiss();
                             try @import("composer_menu.zig").activate(gui, target);
                             return;
@@ -181,7 +214,7 @@ pub fn submit(gui: *GuiClient, pane_id: core.PaneId) !void {
         }
     }
 
-    try client.agent_threads.submit(&gui.app, pane_id);
+    try gui.app.submitAgentPrompt(pane_id);
 }
 
 fn restoreEditor(gui: *GuiClient) void {

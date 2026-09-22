@@ -108,7 +108,11 @@ pub fn advance(gui: *GuiClient, now_ns: u64) !void {
         entry.advance(now_ns);
         try apply(gui, entry);
         if (previous > 0 and entry.applied == 0 and !entry.has_newer and !gui.widgets.thread_selection.retains(pane.id) and !reviewing(gui, pane.id)) {
-            _ = client.agent_history.navigate(&gui.app.model, pane.id, .newer);
+            _ = client.agent_reading.navigate(
+                &gui.app.model,
+                pane.id,
+                .newer,
+            );
         }
     }
 }
@@ -143,7 +147,7 @@ fn apply(gui: *GuiClient, entry: *Entry) !void {
 
     const pane = gui.app.model.agentPane(entry.key.pane_id) orelse return;
     const next = entry.motion.spring.position / entry.step;
-    try client.agent_threads.scroll(&gui.app, pane.id, next - pane.transcript_scroll);
+    _ = gui.app.model.scrollAgentThread(pane.id, next - pane.transcript_scroll);
     entry.applied = pane.transcript_scroll;
 }
 
@@ -159,15 +163,27 @@ fn navigate(gui: *GuiClient, entry: *const Entry, delta: f64) void {
         return;
     }
 
-    client.agent_history.reverse(&gui.app.model, pane_id, if (delta > 0) .older else .newer);
+    client.agent_reading.reverse(
+        &gui.app.model,
+        pane_id,
+        if (delta > 0) .older else .newer,
+    );
     if (!entry.geometry_ready) {
         return;
     }
 
     if (delta > 0 and next == entry.limit) {
-        _ = client.agent_history.navigate(&gui.app.model, pane_id, .older);
+        _ = client.agent_reading.navigate(
+            &gui.app.model,
+            pane_id,
+            .older,
+        );
     } else if (delta < 0 and next == 0) {
-        _ = client.agent_history.navigate(&gui.app.model, pane_id, .newer);
+        _ = client.agent_reading.navigate(
+            &gui.app.model,
+            pane_id,
+            .newer,
+        );
     }
 }
 

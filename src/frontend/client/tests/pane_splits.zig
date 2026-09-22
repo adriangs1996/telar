@@ -246,3 +246,100 @@ test "editor split retains its explicit target and arguments despite another foc
     try std.testing.expectEqualStrings("src/main.zig", (try arguments.next()).?);
     try std.testing.expect(try arguments.next() == null);
 }
+
+test "routed pane focus reports applied or failed with the original correlation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const app = harness.client;
+    const before = app.model.version();
+    const pending = app.request_lifecycle.tracker.count;
+    var command: core.ClientCommand = .{
+        .request_id = @enumFromInt(91),
+        .route = .{
+            .id = 7,
+            .generation = 9,
+        },
+        .action = .pane_focus,
+        .target_id = @intFromEnum(TestHarness.bootstrap_pane),
+    };
+    var buffer: [core.ClientCommand.capacity]u8 = undefined;
+
+    _ = try app.handleServerMessage(
+        .{
+            .client_command = command,
+        },
+    );
+    try harness.settle();
+    const applied = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(applied == .complete_client_command);
+    try std.testing.expectEqual(command.request_id, applied.complete_client_command.request_id);
+    try std.testing.expectEqualDeep(command.route, applied.complete_client_command.route);
+    try std.testing.expectEqual(command.action, applied.complete_client_command.action);
+    try std.testing.expectEqual(.applied, applied.complete_client_command.status);
+
+    command.target_id = 0;
+    _ = try app.handleServerMessage(
+        .{
+            .client_command = command,
+        },
+    );
+    try harness.settle();
+    const failed = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(failed == .complete_client_command);
+    try std.testing.expectEqual(command.request_id, failed.complete_client_command.request_id);
+    try std.testing.expectEqualDeep(command.route, failed.complete_client_command.route);
+    try std.testing.expectEqual(command.action, failed.complete_client_command.action);
+    try std.testing.expectEqual(.failed, failed.complete_client_command.status);
+    try std.testing.expectEqualStrings("InvalidPaneId", failed.complete_client_command.text());
+    try std.testing.expectEqualDeep(before, app.model.version());
+    try std.testing.expectEqual(pending, app.request_lifecycle.tracker.count);
+}
+
+test "routed pane split acknowledges admission before runtime creation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const app = harness.client;
+    app.options.arguments = &.{
+        "/bin/sh",
+    };
+    const before = app.model.version();
+    var command: core.ClientCommand = .{
+        .request_id = @enumFromInt(91),
+        .route = .{
+            .id = 7,
+            .generation = 9,
+        },
+        .action = .pane_split,
+        .target_id = @intFromEnum(TestHarness.bootstrap_pane),
+    };
+    try command.setText("vertical");
+    _ = try app.handleServerMessage(
+        .{
+            .client_command = command,
+        },
+    );
+    try std.testing.expectEqualDeep(before, app.model.version());
+    try harness.settle();
+    var buffer: [core.ClientCommand.capacity]u8 = undefined;
+    const resized = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(resized == .pane_resize);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, resized.pane_resize.pane_id);
+    const created = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(created == .create_pane);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, created.create_pane.launch.cwd_source.?);
+    const continuation = app.request_lifecycle.tracker.take(created.create_pane.request_id).?;
+    try std.testing.expect(continuation == .split);
+    try std.testing.expectEqual(.vertical, continuation.split.axis);
+    const reply = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(reply == .complete_client_command);
+    try std.testing.expectEqual(command.request_id, reply.complete_client_command.request_id);
+    try std.testing.expectEqualDeep(command.route, reply.complete_client_command.route);
+    try std.testing.expectEqual(command.action, reply.complete_client_command.action);
+    try std.testing.expectEqual(.admitted, reply.complete_client_command.status);
+    try std.testing.expectEqualStrings("", reply.complete_client_command.text());
+    try std.testing.expectEqualDeep(before, app.model.version());
+}

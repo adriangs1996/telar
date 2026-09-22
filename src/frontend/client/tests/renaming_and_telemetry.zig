@@ -13,7 +13,6 @@ const input_operations = @import("telar-client").operations;
 const encodeWorkspaceSnapshot_module = @import("telar-core").encodeWorkspaceSnapshot;
 const decodeServer_module = @import("telar-core").decodeServer;
 const TabRenamedType = @import("telar-core").TabRenamed;
-const tab_renames = @import("telar-client").operations.tab_renames;
 const RequestIdType = @import("telar-core").RequestId;
 const TabLocationType = @import("telar-core").TabLocation;
 const encodeTabRenamed_module = @import("telar-core").encodeTabRenamed;
@@ -148,7 +147,11 @@ test "an unexpected tab rename is rejected without effects" {
         .label = "canonical",
     };
 
-    try std.testing.expectError(error.UnexpectedTabRenamed, tab_renames.apply(client, renamed));
+    try std.testing.expectError(error.UnexpectedTabRenamed, client.handleServerMessage(
+        .{
+            .tab_renamed = renamed,
+        },
+    ));
 
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
@@ -173,9 +176,17 @@ test "tab rename consumes an incompatible continuation before rejection" {
         .label = "canonical",
     };
 
-    try std.testing.expectError(error.UnexpectedTabRenamed, tab_renames.apply(client, renamed));
+    try std.testing.expectError(error.UnexpectedTabRenamed, client.handleServerMessage(
+        .{
+            .tab_renamed = renamed,
+        },
+    ));
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabRenamed, tab_renames.apply(client, renamed));
+    try std.testing.expectError(error.UnexpectedTabRenamed, client.handleServerMessage(
+        .{
+            .tab_renamed = renamed,
+        },
+    ));
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqualStrings("shell", client.model.workspace.activeConst().?.labelSlice());
 }
@@ -199,7 +210,11 @@ test "tab rename consumes a mismatched location before rejection" {
         .label = "canonical",
     };
 
-    try std.testing.expectError(error.UnexpectedTabRenamed, tab_renames.apply(client, renamed));
+    try std.testing.expectError(error.UnexpectedTabRenamed, client.handleServerMessage(
+        .{
+            .tab_renamed = renamed,
+        },
+    ));
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqualStrings("shell", client.model.workspace.activeConst().?.labelSlice());
@@ -225,9 +240,17 @@ test "tab rename consumes a canonical response rejected by the model" {
         .label = "canonical",
     };
 
-    try std.testing.expectError(error.UnexpectedTabRenamed, tab_renames.apply(client, renamed));
+    try std.testing.expectError(error.UnexpectedTabRenamed, client.handleServerMessage(
+        .{
+            .tab_renamed = renamed,
+        },
+    ));
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabRenamed, tab_renames.apply(client, renamed));
+    try std.testing.expectError(error.UnexpectedTabRenamed, client.handleServerMessage(
+        .{
+            .tab_renamed = renamed,
+        },
+    ));
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqualStrings("shell", client.model.workspace.activeConst().?.labelSlice());
 }

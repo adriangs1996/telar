@@ -10,7 +10,7 @@ AttachedClient.executeAction or GUI/TUI tab drag release
      -> pending-operation gate, resolve source and optional anchor
      -> AttachedClient.sendRuntimeRequest(move_tab)
   -> runtime canonical reorder -> tab_moved
-  -> entrypoints/AttachedClient.handleServerMessage
+  -> AttachedClient.handleServerMessage
   -> tab_moves.apply
      -> consume and verify exact move continuation
      -> Model.applyTabPosition

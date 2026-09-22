@@ -55,10 +55,25 @@ pub fn activate(gui: *GuiClient, target: Target) !void {
     }
 
     switch (selector.kind) {
-        .recent => try client.agent_threads.resumeConversation(&gui.app, selector.pane_id, choice.index),
-        .model => try client.agent_threads.selectModel(&gui.app, selector.pane_id, thread.transcript.?.models()[choice.index].idSlice()),
-        .effort => try client.agent_threads.selectEffort(&gui.app, selector.pane_id, thread.transcript.?.findModel(thread.options.modelSlice()).?.efforts()[choice.index]),
-        .access => try client.agent_threads.selectAccess(&gui.app, selector.pane_id, @enumFromInt(choice.index)),
+        .recent => try gui.app.resumeAgentConversation(selector.pane_id, choice.index),
+        .model => _ = gui.app.model.changeAgentOption(
+            selector.pane_id,
+            .{
+                .model = thread.transcript.?.models()[choice.index].idSlice(),
+            },
+        ),
+        .effort => _ = gui.app.model.changeAgentOption(
+            selector.pane_id,
+            .{
+                .effort = thread.transcript.?.findModel(thread.options.modelSlice()).?.efforts()[choice.index],
+            },
+        ),
+        .access => _ = gui.app.model.changeAgentOption(
+            selector.pane_id,
+            .{
+                .access = @enumFromInt(choice.index),
+            },
+        ),
     }
 
     close(gui);

@@ -34,6 +34,23 @@ restore the original size and propagates failure.
 Editor-driven splits call the same operation with an explicit target pane and
 command arguments; they do not substitute the current keyboard focus.
 
+## Routed API command
+
+A routed `.pane_split` command enters `AttachedClient.handleServerMessage` as
+`.client_command`. Private `completeClientCommand` owns the response, and
+`executeClientCommand` validates request status, parses the axis, resolves and
+focuses the explicit target, then calls `requestPaneSplit` directly.
+
+The response preserves the original command's request ID, client route and
+action. `.admitted` means pane creation was requested; it does not commit the
+layout. Only the later `pane_opened` does that. Synchronous validation or
+operation failures return `.failed` with the error name. Local commands such
+as focusing an existing pane return `.applied`.
+
+The command dispatcher and its pane, navigation, presentation, agent and layout
+helpers are private methods on `AttachedClient`. They expose no separate
+controller modules or callback table.
+
 ## Completion
 
 The runtime dispatches `.create_pane` from `requests.dispatch` directly to

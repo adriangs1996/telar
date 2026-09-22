@@ -178,7 +178,7 @@ test "runtime review newer editions remain explicit while its immutable patch st
     const session = try ready();
     defer session.deinit();
     const panel = session.gui.review;
-    try client.change_review.query(&session.gui.app, 1);
+    try session.gui.app.queryChangeReview(1);
     var snapshot = response(session, 2);
     snapshot.latest_edition_id = 2;
     snapshot.next_edition_id = 2;
@@ -204,7 +204,7 @@ test "runtime review failed preparation keeps the old edition read only and retr
     defer session.deinit();
     const gui = session.gui;
     const panel = gui.review;
-    try client.change_review.query(&gui.app, 1);
+    try gui.app.queryChangeReview(1);
     var snapshot = response(session, 2);
     snapshot.latest_edition_id = 2;
     snapshot.next_edition_id = 2;

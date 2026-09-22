@@ -6,7 +6,6 @@ const ApplicationInputPointerRoutingOutcome = @import("../../application/input/p
 const enabled_module = @import("telar-core").enabled;
 const PointerRoutingContext = @import("PointerRoutingContext.zig");
 const PointerCommandType = @import("../../application/input/PointerCommand.zig");
-const link_openings = @import("link_openings.zig");
 const AuthorityType = @import("../../application/input/pointer_routing.zig").Authority;
 const capture_module = @import("../../presentation/projection_support.zig").capture;
 const GeometryType = @import("../../presentation/Geometry.zig");
@@ -55,7 +54,7 @@ fn link(context: *PointerRoutingContext, command: PointerCommandType) !bool {
         return consumed;
     }
 
-    return link_openings.pointer(context.client, context.model.?, command.event);
+    return context.client.inputLinkPointer(context.model.?, command.event);
 }
 
 fn resolve(context: *PointerRoutingContext, event: MouseType) AuthorityType {

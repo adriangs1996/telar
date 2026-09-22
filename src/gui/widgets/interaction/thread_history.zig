@@ -24,13 +24,21 @@ pub fn delivered(gui: *GuiClient) !void {
             continue;
         }
         if (target.thread_reanchor) {
-            client.agent_history.anchor(&gui.app.model, pane.id, target.thread_resolved_scroll);
+            client.agent_reading.anchor(
+                &gui.app.model,
+                pane.id,
+                target.thread_resolved_scroll,
+            );
         }
         if (target.thread_skip_folded) {
-            _ = client.agent_history.skipFolded(&gui.app.model, pane.id);
+            _ = client.agent_reading.skipFolded(&gui.app.model, pane.id);
         } else if (target.thread_prefetch) |direction| {
-            client.agent_history.prefetch(&gui.app.model, pane.id, direction);
+            client.agent_reading.prefetch(
+                &gui.app.model,
+                pane.id,
+                direction,
+            );
         }
     }
-    try client.agent_history.flush(&gui.app);
+    try gui.app.flushAgentHistory();
 }

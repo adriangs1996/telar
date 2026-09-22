@@ -1,6 +1,7 @@
 //! Conversation controls resolve against the live attachment and stable item
 //! identity, even when input still refers to an older delivered frame.
 
+const client = @import("telar-client");
 const std = @import("std");
 
 const core = @import("telar-core");
@@ -28,7 +29,11 @@ pub fn activate(gui: *GuiClient, target: Target) !void {
             gui.widgets.thread_anchor.capture(.{ .control = control, .baseline = pane.transcript_scroll, .offset = target.thread_header_offset });
             gui.widgets.thread_expansions.toggle(control);
             if (control.operation == .toggle_work and gui.widgets.threadExpanded(control)) {
-                @import("telar-client").agent_history.revealWork(&gui.app.model, pane.id, control.source_key);
+                client.agent_reading.revealWork(
+                    &gui.app.model,
+                    pane.id,
+                    control.source_key,
+                );
             }
             gui.widgets.dispatcher.revision +%= 1;
         },
@@ -68,7 +73,7 @@ pub fn delivered(gui: *GuiClient) !void {
         return;
     }
 
-    try @import("telar-client").agent_threads.scroll(&gui.app, pane.id, resolution.scroll - request.baseline);
+    _ = gui.app.model.scrollAgentThread(pane.id, resolution.scroll - request.baseline);
 }
 
 /// Native failure never displays a successful copy. Example: `thread_items.copied(gui, result);`

@@ -94,7 +94,7 @@ pub fn open(gui: *GuiClient, control: Control) !void {
     const text = decoded.text();
     if (!std.mem.startsWith(u8, text, "/") and !std.ascii.startsWithIgnoreCase(text, "file:")) {
         const target = client.LinkTarget.init(text) catch return;
-        _ = try client.operations.link_openings.apply(&gui.app, target);
+        _ = try gui.app.openLink(target);
         clear(gui);
         return;
     }
@@ -103,7 +103,7 @@ pub fn open(gui: *GuiClient, control: Control) !void {
         try client.operations.notifications.publishNow(&gui.app, .{ .level = .warning, .title = "Could not open link", .message = @errorName(err) });
         return;
     };
-    _ = try client.operations.link_openings.openMessageFile(&gui.app, control.owner.pane_id, path);
+    _ = try gui.app.openMessageFile(control.owner.pane_id, path);
     clear(gui);
 }
 

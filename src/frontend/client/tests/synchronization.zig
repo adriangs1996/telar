@@ -30,10 +30,8 @@ const TabDescriptorType = @import("telar-core").TabDescriptor;
 const encodeWorkspaceSnapshot_module = @import("telar-core").encodeWorkspaceSnapshot;
 const PaneDescriptorType = @import("telar-core").PaneDescriptor;
 const AgentKeyType = @import("telar-client").AgentKey;
-const tab_snapshots = @import("telar-client").operations.tab_snapshots;
 const support = @import("support.zig");
 const VersionType = @import("telar-client").Version;
-const workspace_snapshots = @import("telar-client").operations.workspace_snapshots;
 const ResyncRequiredType = @import("telar-core").ResyncRequired;
 const ApplicationSessionResyncRequiredOutcome = @import("telar-client").ApplicationSessionResyncRequiredOutcome;
 const resync_requirements = @import("telar-client").operations.resync_requirements;
@@ -740,8 +738,12 @@ test "tab snapshots commit pane revisions before attaching and presenting" {
         },
     });
     try std.testing.expectEqual(
-        tab_snapshots.Outcome.applied,
-        try tab_snapshots.apply(client, (try decodeServer_module(snapshot)).tab_snapshot),
+        @as(?u8, null),
+        try client.handleServerMessage(
+            .{
+                .tab_snapshot = (try decodeServer_module(snapshot)).tab_snapshot,
+            },
+        ),
     );
 
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
@@ -926,9 +928,17 @@ test "tab snapshot consumes an incompatible continuation before rejection" {
     });
     const snapshot = (try decodeServer_module(encoded)).tab_snapshot;
 
-    try std.testing.expectError(error.UnexpectedTabSnapshot, tab_snapshots.apply(client, snapshot));
+    try std.testing.expectError(error.UnexpectedTabSnapshot, client.handleServerMessage(
+        .{
+            .tab_snapshot = snapshot,
+        },
+    ));
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabSnapshot, tab_snapshots.apply(client, snapshot));
+    try std.testing.expectError(error.UnexpectedTabSnapshot, client.handleServerMessage(
+        .{
+            .tab_snapshot = snapshot,
+        },
+    ));
     try std.testing.expectEqualDeep(VersionType{}, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
@@ -952,7 +962,11 @@ test "tab snapshot consumes a mismatched location before rejection" {
 
     try std.testing.expectError(
         error.UnexpectedTabSnapshot,
-        tab_snapshots.apply(client, (try decodeServer_module(encoded)).tab_snapshot),
+        client.handleServerMessage(
+            .{
+                .tab_snapshot = (try decodeServer_module(encoded)).tab_snapshot,
+            },
+        ),
     );
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(VersionType{}, client.model.version());
@@ -975,7 +989,11 @@ test "tab snapshot consumes correlation before a model rejection" {
 
     try std.testing.expectError(
         error.UnexpectedTab,
-        tab_snapshots.apply(client, (try decodeServer_module(encoded)).tab_snapshot),
+        client.handleServerMessage(
+            .{
+                .tab_snapshot = (try decodeServer_module(encoded)).tab_snapshot,
+            },
+        ),
     );
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(VersionType{}, client.model.version());
@@ -1006,7 +1024,11 @@ test "an unexpected workspace snapshot is rejected without effects" {
 
     try std.testing.expectError(
         error.UnexpectedWorkspaceSnapshot,
-        workspace_snapshots.apply(client, (try decodeServer_module(encoded)).workspace_snapshot),
+        client.handleServerMessage(
+            .{
+                .workspace_snapshot = (try decodeServer_module(encoded)).workspace_snapshot,
+            },
+        ),
     );
 
     try std.testing.expectEqual(request_count_before, client.request_lifecycle.tracker.count);
@@ -1036,9 +1058,17 @@ test "workspace snapshot consumes an incompatible continuation before rejection"
     });
     const snapshot = (try decodeServer_module(encoded)).workspace_snapshot;
 
-    try std.testing.expectError(error.UnexpectedWorkspaceSnapshot, workspace_snapshots.apply(client, snapshot));
+    try std.testing.expectError(error.UnexpectedWorkspaceSnapshot, client.handleServerMessage(
+        .{
+            .workspace_snapshot = snapshot,
+        },
+    ));
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedWorkspaceSnapshot, workspace_snapshots.apply(client, snapshot));
+    try std.testing.expectError(error.UnexpectedWorkspaceSnapshot, client.handleServerMessage(
+        .{
+            .workspace_snapshot = snapshot,
+        },
+    ));
     try std.testing.expectEqualDeep(VersionType{}, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
@@ -1067,7 +1097,11 @@ test "workspace snapshot consumes a mismatched workspace before rejection" {
 
     try std.testing.expectError(
         error.UnexpectedWorkspaceSnapshot,
-        workspace_snapshots.apply(client, (try decodeServer_module(encoded)).workspace_snapshot),
+        client.handleServerMessage(
+            .{
+                .workspace_snapshot = (try decodeServer_module(encoded)).workspace_snapshot,
+            },
+        ),
     );
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(VersionType{}, client.model.version());
@@ -1098,7 +1132,11 @@ test "workspace snapshot consumes correlation before a model rejection" {
 
     try std.testing.expectError(
         error.UnexpectedWorkspace,
-        workspace_snapshots.apply(client, (try decodeServer_module(encoded)).workspace_snapshot),
+        client.handleServerMessage(
+            .{
+                .workspace_snapshot = (try decodeServer_module(encoded)).workspace_snapshot,
+            },
+        ),
     );
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(VersionType{}, client.model.version());
@@ -1124,7 +1162,11 @@ test "workspace snapshots commit semantic revisions before presentation" {
             .{ .tab_id = @enumFromInt(2), .position = 1, .pane_count = 1, .label = "second" },
         },
     });
-    try workspace_snapshots.apply(client, (try decodeServer_module(snapshot)).workspace_snapshot);
+    _ = try client.handleServerMessage(
+        .{
+            .workspace_snapshot = (try decodeServer_module(snapshot)).workspace_snapshot,
+        },
+    );
 
     try std.testing.expectEqual(@as(usize, 2), client.model.workspace.count);
     try std.testing.expect(client.model.workspace.find(@enumFromInt(2)) != null);
@@ -1208,8 +1250,12 @@ test "workspace reconciliation retires removed state and restores the new active
         .panes = &.{},
     });
     try std.testing.expectEqual(
-        tab_snapshots.Outcome.ignored,
-        try tab_snapshots.apply(client, (try decodeServer_module(late_snapshot)).tab_snapshot),
+        @as(?u8, null),
+        try client.handleServerMessage(
+            .{
+                .tab_snapshot = (try decodeServer_module(late_snapshot)).tab_snapshot,
+            },
+        ),
     );
 
     try std.testing.expectEqual(request_count_before_late_snapshot - 1, client.request_lifecycle.tracker.count);

@@ -830,7 +830,12 @@ test "composer menus reject stale draft catalog attachment and retired menu choi
 
     const stale = choice orelse return error.MissingComposerChoice;
     const pane = session.gui.app.model.agentPane(Session.pane_id).?;
-    try client.agent_threads.selectEffort(&session.gui.app, Session.pane_id, try core.AgentEffort.init("high"));
+    _ = session.gui.app.model.changeAgentOption(
+        Session.pane_id,
+        .{
+            .effort = try core.AgentEffort.init("high"),
+        },
+    );
     try send(session, .{ .accessibility = .{ .target_id = stale.id.target_id, .generation = stale.id.generation, .action = .press } });
     try std.testing.expectEqual(.workspace, pane.agentOptions().access);
     try send(session, .{ .key = .{ .code = .escape } });
@@ -1431,14 +1436,14 @@ test "disclosure delivery cannot overwrite newer scrolling or a newer disclosure
     const target = try threadItemTarget(session, 42);
     try pressControl(session, target);
     const first = try session.draw();
-    try client.agent_threads.scroll(&session.gui.app, Session.pane_id, 7);
+    _ = session.gui.app.model.scrollAgentThread(Session.pane_id, 7);
     try input_support.presented(
         session.gui,
         first,
         true,
     );
     try std.testing.expectEqual(@as(u32, 7), session.gui.app.model.agentPane(Session.pane_id).?.transcript_scroll);
-    try client.agent_threads.scroll(&session.gui.app, Session.pane_id, 65536);
+    _ = session.gui.app.model.scrollAgentThread(Session.pane_id, 65536);
     try publish(session);
     const baseline = session.gui.app.model.agentPane(Session.pane_id).?.transcript_scroll;
     const expanded = try threadItemTarget(session, 42);
@@ -1482,7 +1487,7 @@ test "folded work retires obsolete scroll only after successful frame delivery" 
     try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
 
     // Restore an obsolete offset, as input against older geometry can do.
-    try client.agent_threads.scroll(&session.gui.app, pane.id, 100);
+    _ = session.gui.app.model.scrollAgentThread(pane.id, 100);
     const failed = try session.draw();
     try input_support.presented(
         session.gui,
@@ -1667,7 +1672,7 @@ test "agent scroll bindings respect transcript bounds and attachment identity" {
     );
     try settleConversationScroll(session);
     try std.testing.expectEqual(@as(u32, 0), pane.transcript_scroll);
-    try client.agent_threads.scroll(&session.gui.app, pane.id, transcript.scroll_limit - 1);
+    _ = session.gui.app.model.scrollAgentThread(pane.id, transcript.scroll_limit - 1);
     _ = try input_support.action(
         session.gui,
         .{
@@ -2304,7 +2309,7 @@ test "delayed composer cut cannot steal focus from another agent split" {
     const first = try composerTarget(session);
     try send(session, .{ .accessibility = .{ .action = .focus, .target_id = first.id.target_id, .generation = first.id.generation } });
     try send(session, .{ .text = .{ .bytes = "keep" } });
-    try client.agent_threads.edit(&gui.app, Session.pane_id, .select_all);
+    _ = gui.app.model.editAgentComposer(Session.pane_id, .select_all);
     try send(session, .{ .key = .{ .code = .{ .char = .init("x") }, .mods = .{ .super = true } } });
     var request: native.HostRequest = .{};
     try std.testing.expect(gui.host.next(&request));
@@ -2331,7 +2336,7 @@ test "delayed composer paste rejects changed draft and caret but preserves an un
     const target = try composerTarget(session);
     const pane = gui.app.model.agentPane(Session.pane_id).?;
     try send(session, .{ .text = .{ .bytes = "keep" } });
-    try client.agent_threads.edit(&gui.app, pane.id, .select_all);
+    _ = gui.app.model.editAgentComposer(pane.id, .select_all);
     try send(session, .{ .key = .{ .code = .{ .char = .init("v") }, .mods = .{ .super = true } } });
     var request: native.HostRequest = .{};
     try std.testing.expect(gui.host.next(&request));
@@ -2343,7 +2348,7 @@ test "delayed composer paste rejects changed draft and caret but preserves an un
     try send(session, .{ .key = .{ .code = .left } });
     try send(session, .{ .clipboard = .{ .request_id = request.request_id, .target_id = request.target_id, .generation = request.generation, .status = .success, .text = "stale" } });
     try std.testing.expectEqualStrings("changed", pane.composerSlice());
-    try client.agent_threads.edit(&gui.app, pane.id, .select_all);
+    _ = gui.app.model.editAgentComposer(pane.id, .select_all);
     try gui.requestClipboardRead(target.id.target_id, target.id.generation);
     try std.testing.expect(gui.host.next(&request));
     try send(session, .{ .clipboard = .{ .request_id = request.request_id, .target_id = request.target_id, .generation = request.generation, .status = .success, .text = "one\r\ntwo" } });
@@ -2364,7 +2369,12 @@ test "recent conversation menu resumes by keyboard without submitting or losing 
     try snapshot.recent.append(try core.RecentConversation.init("older", "Parser fixes"));
     try snapshot.recent.append(try core.RecentConversation.init("newer", "Input routing"));
     try receiveThread(session, &snapshot);
-    try client.agent_threads.edit(&session.gui.app, Session.pane_id, .{ .insert = "Continue from yesterday" });
+    _ = session.gui.app.model.editAgentComposer(
+        Session.pane_id,
+        .{
+            .insert = "Continue from yesterday",
+        },
+    );
     try publish(session);
     try pressControl(session, try composerSelector(session, .recent));
     try publish(session);
@@ -2471,11 +2481,16 @@ test "image removal revalidates the delivered draft and preserves remaining orde
     const session = try agentSession();
     defer session.deinit();
     const gui = session.gui;
-    try client.agent_threads.attachImage(&gui.app, Session.pane_id, "/tmp/first.png");
-    try client.agent_threads.attachImage(&gui.app, Session.pane_id, "/tmp/second.png");
+    try gui.app.attachAgentImage(Session.pane_id, "/tmp/first.png");
+    try gui.app.attachAgentImage(Session.pane_id, "/tmp/second.png");
     try publish(session);
     const first = try promptControl(session, "Remove image 1");
-    try client.agent_threads.edit(&gui.app, Session.pane_id, .{ .insert = "later" });
+    _ = gui.app.model.editAgentComposer(
+        Session.pane_id,
+        .{
+            .insert = "later",
+        },
+    );
     try pressControl(session, first);
     try std.testing.expectEqual(@as(u8, 2), gui.app.model.agentPane(Session.pane_id).?.composerImages().count);
     try publish(session);
@@ -2489,7 +2504,7 @@ test "image preview opens separately from removal and blocks draft input until E
     const session = try agentSession();
     defer session.deinit();
     const gui = session.gui;
-    try client.agent_threads.attachImage(&gui.app, Session.pane_id, "/tmp/preview.png");
+    try gui.app.attachAgentImage(Session.pane_id, "/tmp/preview.png");
     try publish(session);
     try pressControl(session, try promptControl(session, "Preview image 1"));
     try std.testing.expect(gui.widgets.image_preview != null);
@@ -2516,10 +2531,15 @@ test "image preview closes with its button and backdrop and rejects obsolete ima
     const session = try agentSession();
     defer session.deinit();
     const gui = session.gui;
-    try client.agent_threads.attachImage(&gui.app, Session.pane_id, "/tmp/preview.png");
+    try gui.app.attachAgentImage(Session.pane_id, "/tmp/preview.png");
     try publish(session);
     const stale = try promptControl(session, "Preview image 1");
-    try client.agent_threads.edit(&gui.app, Session.pane_id, .{ .insert = "later" });
+    _ = gui.app.model.editAgentComposer(
+        Session.pane_id,
+        .{
+            .insert = "later",
+        },
+    );
     try pressControl(session, stale);
     try std.testing.expect(gui.widgets.image_preview == null);
     for (0..2) |attempt| {

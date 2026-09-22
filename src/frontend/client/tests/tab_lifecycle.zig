@@ -5,7 +5,6 @@ const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const TabCreatedType = @import("telar-core").TabCreated;
 const std = @import("std");
-const tab_creations = @import("telar-client").operations.tab_creations;
 const RequestIdType = @import("telar-core").RequestId;
 const VersionType = @import("telar-client").Version;
 const TabLocationType = @import("telar-core").TabLocation;
@@ -27,7 +26,6 @@ const ChangeType = @import("telar-client").Change;
 const PaneIdType = @import("telar-core").PaneId;
 const capacity_module = @import("telar-client").capacity;
 const TabClosedType = @import("telar-core").TabClosed;
-const tab_closures = @import("telar-client").operations.tab_closures;
 const PaneTargetType = @import("telar-core").PaneTarget;
 const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const encodeResyncRequired_module = @import("telar-core").encodeResyncRequired;
@@ -52,7 +50,11 @@ test "an unexpected tab creation is rejected without effects" {
         .root_pane_id = @enumFromInt(20),
     };
 
-    try std.testing.expectError(error.UnexpectedTabCreated, tab_creations.apply(client, created));
+    try std.testing.expectError(error.UnexpectedTabCreated, client.handleServerMessage(
+        .{
+            .tab_created = created,
+        },
+    ));
 
     try std.testing.expectEqual(request_count_before, client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
@@ -79,9 +81,17 @@ test "tab creation consumes an incompatible continuation before rejection" {
         .root_pane_id = @enumFromInt(20),
     };
 
-    try std.testing.expectError(error.UnexpectedTabCreated, tab_creations.apply(client, created));
+    try std.testing.expectError(error.UnexpectedTabCreated, client.handleServerMessage(
+        .{
+            .tab_created = created,
+        },
+    ));
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabCreated, tab_creations.apply(client, created));
+    try std.testing.expectError(error.UnexpectedTabCreated, client.handleServerMessage(
+        .{
+            .tab_created = created,
+        },
+    ));
     try std.testing.expectEqualDeep(VersionType{}, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
@@ -107,7 +117,11 @@ test "tab creation consumes a mismatched workspace before rejection" {
         .root_pane_id = @enumFromInt(20),
     };
 
-    try std.testing.expectError(error.UnexpectedTabCreated, tab_creations.apply(client, created));
+    try std.testing.expectError(error.UnexpectedTabCreated, client.handleServerMessage(
+        .{
+            .tab_created = created,
+        },
+    ));
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(VersionType{}, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
@@ -145,12 +159,15 @@ test "tab lifecycle: created, renamed, moved, closed" {
         .label = "second",
         .root_pane_id = @enumFromInt(20),
     });
-    const creation = try tab_creations.apply(client, (try decodeServer_module(created)).tab_created);
+    _ = try client.handleServerMessage(
+        .{
+            .tab_created = (try decodeServer_module(created)).tab_created,
+        },
+    );
     @memset(&payload, 'x');
 
     try std.testing.expect(!client.notification_scheduler.pending);
-    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, creation.previous);
-    try std.testing.expectEqualDeep(second_location, creation.created);
+    try std.testing.expectEqualDeep(second_location, client.model.activeTabLocation().?);
     try std.testing.expectEqual(@as(usize, 2), client.model.workspace.count);
     try std.testing.expectEqual(second_location.tab_id, client.model.workspace.active().?.location.tab_id);
     try std.testing.expectEqualStrings("second", client.model.workspace.active().?.labelSlice());
@@ -296,11 +313,19 @@ test "rejected tab creation leaves the active tab attached" {
 
     try std.testing.expectError(
         error.TabAlreadyExists,
-        tab_creations.apply(client, response),
+        client.handleServerMessage(
+            .{
+                .tab_created = response,
+            },
+        ),
     );
 
     try std.testing.expectEqual(request_count_before_creation, client.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabCreated, tab_creations.apply(client, response));
+    try std.testing.expectError(error.UnexpectedTabCreated, client.handleServerMessage(
+        .{
+            .tab_created = response,
+        },
+    ));
     try std.testing.expectEqual(@as(usize, 1), client.model.workspace.count);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
@@ -869,7 +894,11 @@ test "an unexpected tab closure is rejected without effects" {
         .workspace_closed = true,
     };
 
-    try std.testing.expectError(error.UnexpectedTabClosed, tab_closures.apply(client, closed));
+    try std.testing.expectError(error.UnexpectedTabClosed, client.handleServerMessage(
+        .{
+            .tab_closed = closed,
+        },
+    ));
 
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
@@ -894,9 +923,17 @@ test "tab closure consumes an incompatible continuation before rejection" {
         .workspace_closed = true,
     };
 
-    try std.testing.expectError(error.UnexpectedTabClosed, tab_closures.apply(client, closed));
+    try std.testing.expectError(error.UnexpectedTabClosed, client.handleServerMessage(
+        .{
+            .tab_closed = closed,
+        },
+    ));
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabClosed, tab_closures.apply(client, closed));
+    try std.testing.expectError(error.UnexpectedTabClosed, client.handleServerMessage(
+        .{
+            .tab_closed = closed,
+        },
+    ));
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
 }
@@ -922,7 +959,11 @@ test "tab close response must match the requested identity" {
 
     try std.testing.expectError(
         error.UnexpectedTabClosed,
-        tab_closures.apply(client, (try decodeServer_module(closed)).tab_closed),
+        client.handleServerMessage(
+            .{
+                .tab_closed = (try decodeServer_module(closed)).tab_closed,
+            },
+        ),
     );
     try std.testing.expectEqual(@as(usize, 2), client.model.workspace.count);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
@@ -956,8 +997,12 @@ test "late correlated close after lifecycle removal is ignored" {
         .workspace_closed = false,
     });
     try std.testing.expectEqual(
-        tab_closures.Outcome.ignored,
-        try tab_closures.apply(client, (try decodeServer_module(response)).tab_closed),
+        @as(?u8, null),
+        try client.handleServerMessage(
+            .{
+                .tab_closed = (try decodeServer_module(response)).tab_closed,
+            },
+        ),
     );
 
     try std.testing.expectEqual(@as(usize, 1), client.model.workspace.count);
@@ -991,8 +1036,12 @@ test "inactive tab lifecycle closure changes only the tab collection" {
         .workspace_closed = false,
     });
     try std.testing.expectEqual(
-        tab_closures.Outcome.applied,
-        try tab_closures.apply(client, (try decodeServer_module(closed)).tab_closed),
+        @as(?u8, null),
+        try client.handleServerMessage(
+            .{
+                .tab_closed = (try decodeServer_module(closed)).tab_closed,
+            },
+        ),
     );
 
     try std.testing.expectEqual(@as(usize, 1), client.model.workspace.count);
@@ -1038,13 +1087,21 @@ test "invalid last tab closure has no semantic or cleanup effects" {
     });
     try std.testing.expectError(
         error.UnexpectedWorkspaceRemoval,
-        tab_closures.apply(client, (try decodeServer_module(closed)).tab_closed),
+        client.handleServerMessage(
+            .{
+                .tab_closed = (try decodeServer_module(closed)).tab_closed,
+            },
+        ),
     );
 
     try std.testing.expectEqual(@as(usize, 1), client.request_lifecycle.tracker.count);
     try std.testing.expectError(
         error.UnexpectedTabClosed,
-        tab_closures.apply(client, (try decodeServer_module(closed)).tab_closed),
+        client.handleServerMessage(
+            .{
+                .tab_closed = (try decodeServer_module(closed)).tab_closed,
+            },
+        ),
     );
     try std.testing.expectEqual(@as(usize, 1), client.model.workspace.count);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
@@ -1258,8 +1315,16 @@ test "tab creation validates labels before retaining a request" {
     const version = client.model.version();
     const next_request = client.request_lifecycle.next_request_id;
 
-    try std.testing.expectError(error.InvalidTabLabel, tab_creations.request(client, .{ .label = "bad\nlabel" }));
-    try std.testing.expectError(error.InvalidUtf8, tab_creations.request(client, .{ .label = "\xff" }));
+    try std.testing.expectError(error.InvalidTabLabel, client.requestTabCreation(
+        .{
+            .label = "bad\nlabel",
+        },
+    ));
+    try std.testing.expectError(error.InvalidUtf8, client.requestTabCreation(
+        .{
+            .label = "\xff",
+        },
+    ));
 
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(next_request, client.request_lifecycle.next_request_id);
@@ -1279,7 +1344,9 @@ test "tab creation outbox failure releases correlation without mutating the proj
     }
     const version = client.model.version();
 
-    try std.testing.expectError(error.ClientOutboxFull, tab_creations.request(client, .{}));
+    try std.testing.expectError(error.ClientOutboxFull, client.requestTabCreation(
+        .{},
+    ));
 
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -1311,12 +1378,20 @@ test "canonical tab creation remains committed when previous attachment retireme
         .root_pane_id = @enumFromInt(20),
     };
 
-    try std.testing.expectError(error.ClientOutboxFull, tab_creations.apply(client, created));
+    try std.testing.expectError(error.ClientOutboxFull, client.handleServerMessage(
+        .{
+            .tab_created = created,
+        },
+    ));
 
     try std.testing.expectEqualDeep(location, client.model.activeTabLocation().?);
     try std.testing.expectEqual(@as(usize, 2), client.model.workspace.count);
     try std.testing.expect(client.model.workspace.findPane(@enumFromInt(20)).?.attached);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabCreated, tab_creations.apply(client, created));
+    try std.testing.expectError(error.UnexpectedTabCreated, client.handleServerMessage(
+        .{
+            .tab_created = created,
+        },
+    ));
 }

@@ -6,8 +6,8 @@ and disposable resources for identities that remain canonical.
 ```text
 bootstrap / selection / recovery -> AttachedClient.requestTabSnapshot
   -> runtime encodes current descriptors for the requested stable location
-  -> entrypoints/AttachedClient.handleServerMessage(.tab_snapshot)
-  -> operations/tabs/tab_snapshots.apply
+  -> AttachedClient.handleServerMessage(.tab_snapshot)
+  -> AttachedClient.applyTabSnapshot
      -> consume exact correlation and decode bounded pane identities
      -> Model.reconcileTab
      -> ignore removed-pane requests and pane_resources.release
@@ -42,7 +42,7 @@ skipped. Geometry/focus operations resolve their target tab once and call
 Exact repeated snapshots can repair operational resources without inventing a
 model revision.
 
-`tab_snapshots.recover` owns singleton repair coalescence. Attachment rejection,
+`AttachedClient.recoverTabSnapshot` owns singleton repair coalescence. Attachment rejection,
 tab closure and failed workspace departure decide whether they need repair,
 then call it with the exact location. A pending snapshot is reused; otherwise
 one correlated request is queued.
@@ -51,7 +51,7 @@ Model rejection performs no resource cleanup. Post-commit resource failure
 keeps canonical membership and completed effects. A later snapshot or reconnect
 repairs disposable state. Decoding/retirement lists use fixed pane bounds.
 
-Source: `src/client/operations/tabs/tab_snapshots.zig` and
+Source: `src/client/AttachedClient.zig` and
 `src/client/model/Model.zig`.
 Tests: `src/frontend/client/tests/synchronization.zig`, `pane_lifecycle.zig`,
 `src/client/model/tests/tabs.zig`, workspace layout tests, and bounded request

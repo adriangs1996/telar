@@ -308,17 +308,17 @@ retryable, without polling the provider on every rendered frame.
 
 | Trigger | Client entrypoint | Wire request | Runtime owner |
 | --- | --- | --- | --- |
-| `prefix + a` | `agent_threads.create` → `tab_creations.request` | `create_tab` with kind `agent` | `operations/tabs.routeCreateTab`, pane launcher |
-| Composer edit | GUI widget routing, `agent_threads.edit` | none | client pane composer |
-| Model, effort or access choice | `agent_threads.selectModel`, `selectEffort`, `selectAccess` | included in the next `agent_prompt` | client draft, then runtime/provider validation |
-| Enter or Send | `agent_threads.submit` | `agent_prompt` | `requests.dispatch`, `agent_threads`, provider worker |
+| `prefix + a` | `AttachedClient.createAgentTab` → `AttachedClient.requestTabCreation` | `create_tab` with kind `agent` | `operations/tabs.routeCreateTab`, pane launcher |
+| Composer edit | GUI widget routing, `Model.editAgentComposer` | none | client pane composer |
+| Model, effort or access choice | `Model.changeAgentOption` | included in the next `agent_prompt` | client draft, then runtime/provider validation |
+| Enter or Send | `AttachedClient.submitAgentPrompt` | `agent_prompt` | `requests.dispatch`, `agent_threads`, provider worker |
 | `/` or `$` completion | `completions`, `CompletionState`, `CompletionMenu` | none | client draft and delivered widget identities |
-| `/clear` or `/rename` | `completions.submit`, `agent_threads.submit` | `agent_prompt` | `Codex.runCommand`, provider response, retained snapshot |
+| `/clear` or `/rename` | `completions.submit`, `AttachedClient.submitAgentPrompt` | `agent_prompt` | `Codex.runCommand`, provider response, retained snapshot |
 | Skill catalog refresh | provider `skills/changed`, `skills/list` | `agent_thread_snapshot` | `SkillCatalog`, provider worker |
-| Stop | `agent_threads.interrupt` | `agent_interrupt` | same runtime control path |
-| Approve or Decline | `agent_threads.approve` | `agent_approval` | same runtime control path |
-| Attach or reconnect | `agent_threads.query` | `query_agent_thread` | retained runtime snapshot |
-| Scroll beyond the reading window | `operations/agents/agent_history` | `query_agent_history` / `agent_history_page` | bounded reader, per-client delivery |
+| Stop | `AttachedClient.interruptAgent` | `agent_interrupt` | same runtime control path |
+| Approve or Decline | `AttachedClient.approveAgent` | `agent_approval` | same runtime control path |
+| Attach or reconnect | `AttachedClient.queryAgentThread` | `query_agent_thread` | retained runtime snapshot |
+| Scroll beyond the reading window | `AttachedClient.flushAgentHistory` / `applyAgentHistory` | `query_agent_history` / `agent_history_page` | bounded reader, per-client delivery |
 | Provider output | provider worker, runtime change receiver | `agent_thread_snapshot` | client model, `ThreadView`, GUI `ThreadPane` |
 
 The runtime pane owns either a PTY session or a managed agent session over

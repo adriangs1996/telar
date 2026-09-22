@@ -5,12 +5,12 @@ current projection and adopts only a canonical reply.
 
 ```text
 AttachedClient.executeAction
-  -> operations/tabs/tab_creations.request
+  -> AttachedClient.requestTabCreation
      -> pending-operation gate, label validation, Model.planTabCreation
      -> AttachedClient.sendCreateTabRequest -> owned create_tab outbox entry
   -> runtime creates tab/root and returns tab_created
-  -> entrypoints/AttachedClient.handleServerMessage
-  -> tab_creations.apply
+  -> AttachedClient.handleServerMessage
+  -> AttachedClient.completeTabCreation
      -> consume exact create_tab correlation
      -> Model.createTab
      -> tab_attachments.detach(previous)
@@ -35,7 +35,7 @@ launch the runtime commits/publishes it before attachment; a later attachment
 failure cannot undo canonical state. The successful reply contains runtime
 location, position, label and root identity.
 
-`tab_creations.apply` consumes correlation once and requires the expected
+`AttachedClient.completeTabCreation` consumes correlation once and requires the expected
 workspace. It constructs the root with the nonzero size retained from the
 request, even if host geometry changed meanwhile. Model construction is atomic:
 invalid or duplicate state preserves the previous tab and revisions. Valid
@@ -51,7 +51,7 @@ Runtime rejection becomes an owned failure notice. Unknown, incompatible,
 wrong-workspace or replayed replies cannot mutate tabs. Presentation observes
 model revisions; this operation does not draw.
 
-Source: `src/client/operations/tabs/tab_creations.zig` and
+Source: `src/client/AttachedClient.zig` and
 `src/client/operations/tabs/tab_attachments.zig`.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig`,
 `src/client/model/tests/tabs.zig`, `src/client/connection/outbox_support.zig`,

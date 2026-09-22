@@ -35,22 +35,22 @@ paste_failed: bool = false,
 pub fn open(self: *Self, app: *client.AttachedClient, pane_id: core.PaneId) !void {
     const state = &app.change_review;
     if (state.owner) |owner| {
-        if (owner.pane_id == pane_id and client.change_review.isAttached(app) and !state.session_changed) {
+        if (owner.pane_id == pane_id and app.isChangeReviewAttached() and !state.session_changed) {
             self.active = true;
             self.widget.changedOwner();
             if (state.pending == null) {
-                try client.change_review.query(app, self.edition);
+                try app.queryChangeReview(self.edition);
             }
             return;
         }
-        if ((self.dirty() or state.pending != null) and client.change_review.isAttached(app) and !state.session_changed) {
+        if ((self.dirty() or state.pending != null) and app.isChangeReviewAttached() and !state.session_changed) {
             self.active = true;
             self.status("Finish saving this review before opening another pane.");
             return;
         }
     }
 
-    try client.change_review.open(app, pane_id);
+    try app.openChangeReview(pane_id);
     self.active = true;
     self.edition = 0;
     self.revision = 0;
@@ -80,7 +80,7 @@ pub fn synchronize(self: *Self, app: *client.AttachedClient) !void {
         self.active = false;
         return;
     }
-    if (!client.change_review.isAttached(app) or state.session_changed) {
+    if (!app.isChangeReviewAttached() or state.session_changed) {
         self.widget.read_only = true;
         self.widget.loading = false;
         self.widget.model.editing = null;
@@ -89,7 +89,7 @@ pub fn synchronize(self: *Self, app: *client.AttachedClient) !void {
             self.widget.command = null;
             self.active = false;
             self.widget.changedOwner();
-            client.change_review.close(app);
+            app.closeChangeReview();
         }
         return;
     }
@@ -159,7 +159,7 @@ pub fn synchronize(self: *Self, app: *client.AttachedClient) !void {
         if (command == .refresh) {
             self.widget.command = null;
             self.refreshing = true;
-            try client.change_review.query(app, if (state.loaded) state.snapshot.edition_id else self.edition);
+            try app.queryChangeReview(if (state.loaded) state.snapshot.edition_id else self.edition);
             return;
         }
     }
@@ -181,7 +181,7 @@ pub fn synchronize(self: *Self, app: *client.AttachedClient) !void {
             .previous_edition, .next_edition => {
                 const edition = if (command == .previous_edition) self.previous else self.next;
                 if (edition != 0) {
-                    try client.change_review.query(app, edition);
+                    try app.queryChangeReview(edition);
                     self.widget.loading = true;
                     self.widget.read_only = true;
                     self.widget.model.editing = null;
@@ -192,7 +192,7 @@ pub fn synchronize(self: *Self, app: *client.AttachedClient) !void {
         }
     }
     if (self.active) {
-        client.change_review.refreshInvalidated(app);
+        app.refreshChangeReview();
     }
 }
 
@@ -397,7 +397,7 @@ fn makeRequest(self: *const Self, action: core.change_review.Action) core.Change
 }
 
 fn send(self: *Self, app: *client.AttachedClient, value: struct { request: core.ChangeReviewCommand, pending: Pending }) bool {
-    client.change_review.command(app, value.request) catch |err| {
+    app.commandChangeReview(value.request) catch |err| {
         self.blocked = true;
         self.status(@errorName(err));
         return false;

@@ -6,15 +6,15 @@ pane.
 
 ```text
 AttachedClient.executeAction
-  -> operations/tabs/tab_closures.request
+  -> AttachedClient.requestTabClose
      -> pending-operation gate and active location
      -> reserve close/recovery IDs and outbox capacity
      -> tab_attachments.detach
      -> AttachedClient.sendRuntimeRequest(close_tab)
 
 runtime tab_closed
-  -> entrypoints/AttachedClient.handleServerMessage
-  -> tab_closures.apply
+  -> AttachedClient.handleServerMessage
+  -> AttachedClient.completeTabClose
      -> correlate explicit reply or classify lifecycle event
      -> Model.removeTab
      -> retire requests and exact pane resources
@@ -30,7 +30,7 @@ this stage changes neither focus nor attachment state.
 
 The operation then detaches and queues `close_tab` without changing semantic
 membership. A partial local failure requests a coalesced canonical tab snapshot.
-A runtime rejection reaches `tab_closures.recover` before its notification;
+A runtime rejection reaches `AttachedClient.recoverTabClose` before its notification;
 repair is needed only while that tab is still active. Selecting an inactive
 rejected tab later requests the normal snapshot.
 
@@ -60,7 +60,7 @@ Canonical state survives any later client resource error. Reconnect rebuilds
 the projection. The flow uses bounded tab/pane stores, request tracking and
 outbox capacity, and never schedules presentation directly.
 
-Source: `src/client/operations/tabs/tab_closures.zig`, `tab_attachments.zig`,
+Source: `src/client/AttachedClient.zig`, `tab_attachments.zig`,
 `tab_snapshots.zig`, and `src/client/operations/workspaces/workspace_handoffs.zig`.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig` and `synchronization.zig`
 cover preflight, partial failures, correlation, late replies, exact cleanup,

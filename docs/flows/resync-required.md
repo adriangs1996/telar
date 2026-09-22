@@ -6,7 +6,7 @@ management replies precede the fixed resync message, which records workspace
 closure and a surviving canonical predecessor when applicable.
 
 ```text
-entrypoints/AttachedClient.handleServerMessage(.resync_required)
+AttachedClient.handleServerMessage(.resync_required)
   -> operations/session/resync_requirements.apply
      -> surviving workspace: verify identity, coalesce or request snapshot
      -> closed workspace: forget bookmark, request predecessor or return exit
@@ -21,7 +21,7 @@ mismatched identity returns `UnexpectedResync` without effects. A pending
 workspace snapshot coalesces the notice. Otherwise `request_lifecycle` registers
 and queues one request; failed enqueue removes its correlation so a later
 notice can retry. Requesting repair changes no model revision and schedules
-no draw. The correlated reply enters `workspace_snapshots.apply`.
+no draw. The correlated reply enters `AttachedClient.applyWorkspaceSnapshot`.
 
 Closure first forgets the invalid bookmark. With a predecessor it calls
 `workspace_handoffs.requestWorkspace`, whose admission, capacity, ordered

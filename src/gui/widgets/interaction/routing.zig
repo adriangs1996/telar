@@ -518,7 +518,7 @@ fn command(gui: *GuiClient, value: client.ModelNamePromptCommand) !void {
     if (!gui.app.model.name_prompt.active()) {
         if (gui.widgets.dispatcher.focusedTarget()) |target| {
             if (target.action == .composer and field(gui, target) != null) {
-                try client.agent_threads.edit(&gui.app, target.action.composer, value);
+                _ = gui.app.model.editAgentComposer(target.action.composer, value);
                 if (revision != editingRevision(gui)) {
                     gui.widgets.cancelComposition();
                 }
@@ -768,13 +768,25 @@ fn activateControl(gui: *GuiClient, target: Target) !void {
         .agent_control => |control| switch (control.kind) {
             .preview_image => @import("image_preview.zig").open(gui, target),
             .close_image => @import("image_preview.zig").close(gui),
-            .remove_image => client.agent_threads.removeImage(&gui.app, control.pane_id, .{ .index = control.image_index, .revision = control.composer_revision }),
+            .remove_image => _ = gui.app.model.removeAgentImage(
+                control.pane_id,
+                .{
+                    .index = control.image_index,
+                    .revision = control.composer_revision,
+                },
+            ),
             .submit => {
                 gui.widgets.thread_anchor.cancel(control.pane_id);
                 try @import("completions.zig").submit(gui, control.pane_id);
             },
-            .interrupt => try client.agent_threads.interrupt(&gui.app, control.pane_id),
-            .approve, .decline => try client.agent_threads.approve(&gui.app, .{ .pane_id = control.pane_id, .approval_id = control.approval_id, .accept = control.kind == .approve }),
+            .interrupt => try gui.app.interruptAgent(control.pane_id),
+            .approve, .decline => try gui.app.approveAgent(
+                .{
+                    .pane_id = control.pane_id,
+                    .approval_id = control.approval_id,
+                    .accept = control.kind == .approve,
+                },
+            ),
             .review => {
                 const pane = gui.app.model.agentPane(control.pane_id) orelse return;
                 const thread = pane.agent_thread orelse return;
@@ -788,7 +800,7 @@ fn activateControl(gui: *GuiClient, target: Target) !void {
                 gui.widgets.approval_review = if (closing) null else value;
                 gui.widgets.thread_anchor.cancel(control.pane_id);
                 gui.widgets.dispatcher.revision +%= 1;
-                try client.agent_threads.scroll(&gui.app, control.pane_id, if (closing) -65536 else 65536);
+                _ = gui.app.model.scrollAgentThread(control.pane_id, if (closing) -65536 else 65536);
             },
         },
         .prompt => |action| try command(gui, if (action == .submit) .submit else .cancel),
@@ -1119,7 +1131,7 @@ fn finishPaste(gui: *GuiClient, result: @import("../../input/ClipboardResult.zig
 
         if (result.image) {
             if (target.action == .composer) {
-                try client.agent_threads.attachImage(&gui.app, target.action.composer, result.text);
+                try gui.app.attachAgentImage(target.action.composer, result.text);
             }
 
             return;

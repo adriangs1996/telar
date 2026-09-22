@@ -5,12 +5,12 @@ records whether this connection can accept frames and send pane input; changing
 that flag alone does not advance a presentation revision.
 
 ```text
-tab_snapshots.apply / host resize / pane geometry or focus change
+AttachedClient.applyTabSnapshot / host resize / pane geometry or focus change
   -> resolve tab and area; require canonical membership
   -> AttachedClient.attachVisiblePanes: detached, visible, no pending attachment
   -> AttachedClient.sendRuntimeRequest(open_pane, exact pane and tab continuation)
   -> runtime attachment -> pane_opened
-  -> entrypoints/AttachedClient.handleServerMessage
+  -> AttachedClient.handleServerMessage
   -> operations/panes/AttachedClient.completePaneOpen
   -> AttachedClient.confirmPaneAttachment -> Model.confirmPaneAttachment
 ```
@@ -42,7 +42,7 @@ this disposable replica; runtime pane processes remain alive.
 
 `AttachedClient.failRuntimeRequest` sends a missing-pane rejection to
 `AttachedClient.recoverPaneAttachment`. Recovery requests a coalesced tab snapshot only
-when the same pane is still detached in the active tab. `tab_snapshots.recover`
+when the same pane is still detached in the active tab. `AttachedClient.recoverTabSnapshot`
 owns singleton snapshot coalescence. Canonical membership decides whether to
 remove the pane. An internal attachment failure reports the error without an
 immediate retry: an identical snapshot could otherwise repeat the same failure

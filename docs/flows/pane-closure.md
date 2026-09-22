@@ -12,7 +12,7 @@ AttachedClient.executeAction
   -> runtime requests idempotent child shutdown
 
 runtime pane_exited
-  -> entrypoints/AttachedClient.handleServerMessage
+  -> AttachedClient.handleServerMessage
   -> pane_closures.applyExit
      -> Model.retirePane
      -> retire attachment and close continuations

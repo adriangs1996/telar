@@ -5,12 +5,12 @@ closes only after a locally accepted request; it does not rename the replica.
 
 ```text
 operations/input/name_prompts.handleInput
-  -> operations/tabs/tab_renames.request
+  -> AttachedClient.requestTabRename
      -> pending-operation gate, validate label, resolve exact target
      -> AttachedClient.sendTabRenameRequest -> owned rename_tab
   -> runtime canonical rename -> tab_renamed
-  -> entrypoints/AttachedClient.handleServerMessage
-  -> tab_renames.apply
+  -> AttachedClient.handleServerMessage
+  -> AttachedClient.completeTabRename
      -> consume and verify exact rename continuation
      -> Model.renameTab
   -> adapter observes presentation revisions
@@ -39,7 +39,7 @@ cannot rename a tab. Known correlation is consumed before these checks, so
 replay cannot apply later. A correlated runtime failure preserves the old label
 and publishes the runtime notice. Reconnect rebuilds labels from snapshots.
 
-Source: `src/client/operations/tabs/tab_renames.zig` and
+Source: `src/client/AttachedClient.zig` and
 `src/client/operations/input/name_prompts.zig`.
 Tests: `src/frontend/client/tests/renaming_and_telemetry.zig`,
 `tab_lifecycle.zig`, `src/client/model/tests/tabs.zig`, and

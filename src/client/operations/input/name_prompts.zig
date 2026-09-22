@@ -22,7 +22,6 @@ const agent_navigation = @import("../agents/agent_navigation.zig");
 const SubmissionType = @import("../../model/Submission.zig");
 const workspace_creations = @import("../workspaces/workspace_creations.zig");
 const workspace_renames = @import("../workspaces/workspace_renames.zig");
-const tab_renames = @import("../tabs/tab_renames.zig");
 const OwnedSearchType = @import("../../connection/OwnedSearch.zig");
 const KeyType = @import("../../input/Key.zig");
 const ModelNamePromptCommand = @import("../../model/name_prompt.zig").Command;
@@ -381,7 +380,7 @@ fn submit(client: *Client, submission: SubmissionType) !bool {
             });
         },
         .rename_tab => |tab_id| blk: {
-            break :blk try tab_renames.request(client, .{
+            break :blk try client.requestTabRename(.{
                 .tab_id = tab_id,
                 .label = submission.name,
             });
