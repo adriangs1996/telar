@@ -9,7 +9,6 @@ const KeyRoutingOutcome = @import("../../application/input/KeyRoutingOutcome.zig
 const KeyRoutingAuthority = @import("../../application/input/KeyRoutingAuthority.zig");
 const name_prompts = @import("name_prompts.zig");
 const KeyType = @import("../../input/Key.zig");
-const copy_modes = @import("copy_modes.zig");
 const PaneCommandType = @import("../../application/input/PaneCommand.zig");
 const PaneIdType = @import("telar-core").PaneId;
 const pane_inputs = @import("pane_inputs.zig");
@@ -43,7 +42,11 @@ fn routePrompt(client: *Client, command: ApplicationInputKeyRoutingCommand) !voi
 }
 
 fn routeCopyKey(client: *Client, key: KeyType) !void {
-    _ = try copy_modes.key(client, key);
+    _ = try client.applyCopyMode(
+        .{
+            .key = key,
+        },
+    );
 }
 
 fn routePane(client: *Client, command: PaneCommandType) !?PaneIdType {

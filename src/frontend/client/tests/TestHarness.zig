@@ -4,8 +4,6 @@ const SocketChannelType = @import("telar-core").SocketChannel;
 const std = @import("std");
 const Client = @import("telar-client").AttachedClient;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const sidebar_animations = @import("telar-client").operations.sidebar_animations;
-const notification_flow = @import("telar-client").operations.notifications;
 const bar_updates = @import("telar-client").operations.bar_updates;
 const path_completions = @import("telar-client").operations.path_completions;
 const ClientMessageType = @import("telar-core").ClientMessage;
@@ -88,11 +86,11 @@ pub fn settle(harness: *TestHarness) !void {
             .sent => |result| try harness.client.completeRuntimeSend(result),
             .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
             .sidebar_animation_tick => |result| {
-                _ = try sidebar_animations.handleTick(harness.client, result);
+                _ = try harness.client.completeSidebarAnimationTick(result);
                 try presentation_lifecycle.observe(harness.client);
             },
             .notification_tick => |result| {
-                _ = try notification_flow.handleTick(harness.client, result);
+                _ = try harness.client.completeNotificationTick(result);
                 try presentation_lifecycle.observe(harness.client);
             },
             .bar_tick => |result| {
@@ -131,12 +129,12 @@ pub fn settleModelPresentation(harness: *TestHarness) !void {
             .sent => |result| try harness.client.completeRuntimeSend(result),
             .media_tick => |result| try presentation_lifecycle.handleMediaTick(harness.client, result),
             .sidebar_animation_tick => |result| {
-                _ = try sidebar_animations.handleTick(harness.client, result);
+                _ = try harness.client.completeSidebarAnimationTick(result);
                 try presentation_lifecycle.observe(harness.client);
                 target = harness.client.model.version();
             },
             .notification_tick => |result| {
-                _ = try notification_flow.handleTick(harness.client, result);
+                _ = try harness.client.completeNotificationTick(result);
                 try presentation_lifecycle.observe(harness.client);
                 target = harness.client.model.version();
             },

@@ -5,7 +5,7 @@ Requesting closure does not predict when shutdown and output draining finish.
 
 ```text
 AttachedClient.executeAction
-  -> operations/panes/pane_closures.request
+  -> AttachedClient.requestPaneClose
      -> pending pane-operation gate
      -> Model.planPaneClosure
      -> AttachedClient.sendRuntimeRequest(close_pane)
@@ -13,10 +13,10 @@ AttachedClient.executeAction
 
 runtime pane_exited
   -> AttachedClient.handleServerMessage
-  -> pane_closures.applyExit
+  -> AttachedClient.applyPaneExit
      -> Model.retirePane
      -> retire attachment and close continuations
-     -> pane_resources.release
+     -> AttachedClient.releasePaneResources
      -> active resources and geometry when the active tab remains nonempty
   -> adapter observes presentation revisions
 ```
@@ -50,8 +50,8 @@ remain applied, and the normal client error/reconnect path repairs disposable
 resources. This flow adds no queue; scans and cleanup are bounded by tab/pane
 capacity. Presentation follows model revisions, not an explicit draw request.
 
-Source: `src/client/operations/panes/pane_closures.zig` and
-`pane_resources.zig` in that directory.
+Source: `src/client/AttachedClient.zig`, particularly `requestPaneClose`,
+`applyPaneExit` and `releasePaneResources`.
 Tests: `src/frontend/client/tests/pane_lifecycle.zig`,
 `src/frontend/client/tests/tab_lifecycle.zig`,
 `src/client/model/tests/panes.zig`, and transport lifecycle integration tests.

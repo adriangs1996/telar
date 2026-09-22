@@ -7,7 +7,7 @@ labels and navigation.
 ```text
 runtime metadata cursors -> pane_cwd / pane_foreground
   -> AttachedClient.handleServerMessage
-  -> operations/panes/pane_metadata.applyCwd / applyForeground
+  -> Model.updatePaneMetadata / applyForeground
   -> Model.updatePaneMetadata
   -> multiplexer metadata storage
   -> adapter observes pane_metadata / pane_foreground revisions
@@ -37,7 +37,7 @@ bootstrap metadata even if a global update arrived before the local pane was
 constructed. Retirement frees owned CWD storage; reconnect receives current
 runtime facts through fresh cursors.
 
-Source: `src/client/operations/panes/pane_metadata.zig`,
+Source: `src/client/AttachedClient.zig`,
 `src/client/model/Model.zig`, and `src/client/workspace/`.
 Tests: `src/client/model/tests/panes.zig`, `tabs.zig`,
 `src/frontend/client/tests/pane_updates.zig`, and runtime workspace-snapshot /

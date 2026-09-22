@@ -92,7 +92,7 @@ The same function handles the resulting outcome.
 directive, keeps applied and obsolete outcomes quiet, and sends worker or
 authorization failures through `client_diagnostic.replace`. It then builds a
 bounded notification from the committed banner and calls
-`notifications.publishNow` after consuming the execution.
+`AttachedClient.publishNotificationNow` after consuming the execution.
 
 Authorized effects enter `AttachedClient.executeAction`, the shared dispatcher for
 native semantic actions regardless of whether they came from host input, Lua

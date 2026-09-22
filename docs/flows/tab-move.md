@@ -6,12 +6,12 @@ predicts the canonical absolute position.
 
 ```text
 AttachedClient.executeAction or GUI/TUI tab drag release
-  -> operations/tabs/tab_moves.request
+  -> AttachedClient.requestTabMove
      -> pending-operation gate, resolve source and optional anchor
      -> AttachedClient.sendRuntimeRequest(move_tab)
   -> runtime canonical reorder -> tab_moved
   -> AttachedClient.handleServerMessage
-  -> tab_moves.apply
+  -> AttachedClient.completeTabMove
      -> consume and verify exact move continuation
      -> Model.applyTabPosition
   -> adapter observes presentation revisions
@@ -56,14 +56,14 @@ entries while preserving their relative order, and publishes a canonical
 absolute position. Missing identities fail without mutation. Edge/self moves
 return the current position successfully. Other observing clients get resync.
 
-`tab_moves.apply` consumes correlation once and checks its type and exact
+`AttachedClient.completeTabMove` consumes correlation once and checks its type and exact
 location before committing the runtime position. Active identity remains fixed.
 Changed order advances only the tab revision; repeated positions are no-ops.
 Unknown, incompatible, mismatched, replayed or invalid-position replies cannot
 change order. A correlated failure keeps the old order and publishes an owned
 notice. Reconnect reads canonical order instead of replaying the request.
 
-Source: `src/client/operations/tabs/tab_moves.zig`,
+Source: `src/client/AttachedClient.zig`,
 `src/gui/widgets/interaction/tab_drag.zig`, and adapter tab-drag input.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig`,
 `src/gui/tests/widget_interaction.zig`, `src/gui/widgets/TabMotions.zig`, shared

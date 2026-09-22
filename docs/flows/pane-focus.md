@@ -6,7 +6,7 @@ each source reaches the same concrete operation.
 
 ```text
 host input -> input/actions or agent navigation
-  -> operations/panes/pane_focus.apply
+  -> AttachedClient.applyPaneFocus
      -> Model.focusPane
      -> AttachedClient.deliverPaneFocus
         -> attachment reservation and geometry
@@ -15,7 +15,7 @@ host input -> input/actions or agent navigation
   -> adapter observes presentation revisions
 ```
 
-`pane_focus.apply` accepts a stable identity or direction and commits before
+`AttachedClient.applyPaneFocus` accepts a stable identity or direction and commits before
 resource delivery. `Model.focusPane` resolves only within the active tab. An
 absent target, repeated identity or direction without a candidate is a no-op.
 Tiled navigation uses spatial geometry. Fullscreen left/right follows displayed
@@ -36,7 +36,7 @@ them updates report state without sending focus-out. Report state changes no
 presentation revision and its bytes are not counted as user input.
 
 Intentional tab detachment clears only that tab's report owner, before its
-`detach_pane` messages. Canonical pane retirement calls `pane_resources.release`
+`detach_pane` messages. Canonical pane retirement calls `AttachedClient.releasePaneResources`
 and silently forgets that exact owner. Canonical tab/workspace replacement can
 forget the entire obsolete reporting context through `pane_focus_reports.retire`.
 These paths do not send child input to a retired attachment.
@@ -51,7 +51,7 @@ preserves committed focus and completed effects; it propagates to the client
 loop. Reconnect rebuilds disposable state without stopping runtime panes.
 Operations do not draw: the adapter observes the changed model revision.
 
-Source: `src/client/operations/panes/pane_focus.zig`,
+Source: `src/client/AttachedClient.zig`,
 `AttachedClient.deliverPaneFocus` and `operations/panes/pane_focus_reports.zig`.
 Tests: `src/frontend/client/tests/pane_lifecycle.zig`,
 `src/frontend/client/tests/mouse_selection.zig`, and

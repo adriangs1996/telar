@@ -16,7 +16,7 @@ schema.agent_sound
         |
 server_messages dispatcher
         |
-agent_sounds.apply
+AttachedClient.applyAgentSound
         |
 ClientModel.knowsAgent
         |
@@ -24,14 +24,14 @@ sound.Playback.request
         |
 ClientEvent.sound_played <- sound.play host worker
         |
-agent_sounds.handlePlayed
+AttachedClient.completeAgentSound
         |
 sound.Playback.complete
 ```
 
 The runtime message carries a pane ID, pane generation and semantic sound
-kind. `agent_sounds.apply` translates that identity into an `AgentKey`.
-`agent_sounds.apply` schedules playback only when the current client
+kind. `AttachedClient.applyAgentSound` translates that identity into an `AgentKey`.
+`AttachedClient.applyAgentSound` schedules playback only when the current client
 replica contains the exact key. A delayed message for an earlier process
 cannot make noise after the numeric pane ID has been reused.
 
@@ -45,7 +45,7 @@ presenter sees no revision and schedules no frame.
 `sound.Playback` owns the effective `SoundConfig`, one active worker token and
 one optional queued `AgentSound`. `Client` holds that object but knows none of
 its queue transitions. The adapter starts workers through the client select
-and delegates every completion back to `agent_sounds.handlePlayed`.
+and delegates every completion back to `AttachedClient.completeAgentSound`.
 
 The queue has fixed depth. A request starts immediately when no worker is
 active. Further requests fold into the one queued value. `needs_input` wins
@@ -82,9 +82,9 @@ continues independently and later exact sound events may start a new queue.
   recovery.
 - `src/frontend/sound/worker.zig` owns the bounded host adapters; the cross
   build compiles the Linux and Windows paths.
-- `src/client/operations/agents/agent_sounds.zig` proves exact-identity
+- `src/client/AttachedClient.zig` proves exact-identity
   gating, stale suppression and effect-error propagation.
-- `src/client/operations/agents/agent_sounds.zig` owns protocol translation, worker
+- `src/client/AttachedClient.zig` owns protocol translation, worker
   scheduling and the completion entrypoint.
 - `src/frontend/client/tests/` proves wire identity, bounded queuing,
   unchanged model and presentation versions, and configuration adoption.

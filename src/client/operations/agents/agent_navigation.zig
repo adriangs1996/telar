@@ -4,7 +4,6 @@ const Client = @import("../../AttachedClient.zig");
 const AgentKeyType = @import("../../agents/AgentKey.zig");
 pub const Outcome = enum { ignored, focused, handoff_requested };
 const tab_selections = @import("../tabs/tab_selections.zig");
-const pane_focus = @import("../panes/pane_focus.zig");
 
 /// Resolves one sidebar agent key and applies its local navigation or handoff.
 ///
@@ -20,7 +19,14 @@ pub fn apply(client: *Client, key: AgentKeyType) !Outcome {
                     break :local .ignored;
                 }
             }
-            _ = try pane_focus.apply(client, .{ .target = .{ .pane_id = local.pane_id }, .area = client.geometry().area });
+            _ = try client.applyPaneFocus(
+                .{
+                    .target = .{
+                        .pane_id = local.pane_id,
+                    },
+                    .area = client.geometry().area,
+                },
+            );
             break :local .focused;
         },
         .handoff => |handoff| handoff: {

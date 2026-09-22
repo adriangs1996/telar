@@ -10,7 +10,7 @@ bootstrap / selection / recovery -> AttachedClient.requestTabSnapshot
   -> AttachedClient.applyTabSnapshot
      -> consume exact correlation and decode bounded pane identities
      -> Model.reconcileTab
-     -> ignore removed-pane requests and pane_resources.release
+     -> ignore removed-pane requests and AttachedClient.releasePaneResources
      -> AttachedClient.synchronizeActivePane
      -> AttachedClient.resizeAttachedPanes
      -> AttachedClient.attachVisiblePanes for visible detached panes

@@ -17,7 +17,7 @@ server_messages dispatcher
              |
 system_metrics adapter
              |
-system_metrics.apply
+Model.reconcileSystemMetrics
              |
 ClientModel.reconcileSystemMetrics
              |
@@ -42,8 +42,8 @@ which the metrics source omits.
 
 ## Client transaction
 
-`system_metrics.apply` translates the validated protocol message into the
-client domain value. `system_metrics.apply` delegates the transition
+`Model.reconcileSystemMetrics` translates the validated protocol message into the
+client domain value. `Model.reconcileSystemMetrics` delegates the transition
 to `ClientModel`; it has no view or presenter dependency.
 
 `ClientModel` is the sole owner of the client replica. Revision zero and newer
@@ -77,7 +77,7 @@ runtime's fresh delivery cursor supplies the current sample.
   encoding rules.
 - `src/client/model/Model.zig` proves ownership, stale handling, validation
   and isolated versioning.
-- `src/client/operations/agents/system_metrics.zig` proves the use-case
+- `src/client/AttachedClient.zig` proves the use-case
   boundary and retained state after rejection.
 - `src/frontend/client/tests/` proves protocol adaptation, absence of
   direct draw requests and presenter-owned status-bar projection.

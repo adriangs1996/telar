@@ -13,7 +13,6 @@ const std = @import("std");
 const NotificationsRootTarget = @import("telar-client").NotificationTarget;
 const RequestIdType = @import("telar-core").RequestId;
 const encodeNotification_module = @import("telar-core").encodeNotification;
-const notification_flow = @import("telar-client").operations.notifications;
 const LevelType = @import("telar-client").Level;
 const transition_duration_ns_module = @import("telar-client").transition_duration_ns;
 const NotificationType = @import("telar-client").Notification;
@@ -40,10 +39,7 @@ const PaneTargetType = @import("telar-core").PaneTarget;
 const encodeAgentSnapshot_module = @import("telar-core").encodeAgentSnapshot;
 const VersionType = @import("telar-client").Version;
 const support = @import("support.zig");
-const sidebar_animations = @import("telar-client").operations.sidebar_animations;
 const encodeAgentSound_module = @import("telar-core").encodeAgentSound;
-const agent_sounds = @import("telar-client").operations.agent_sounds;
-const ApplicationAgentsAgentSoundOutcome = @import("telar-client").operations.agent_sounds.Outcome;
 const AgentSoundType = @import("telar-core").AgentSound;
 const playback_support = @import("telar-client").sound_playback_support;
 const SnapshotType = @import("telar-client").SoundSnapshot;
@@ -163,15 +159,15 @@ test "a runtime notification translates and owns its wire payload" {
         .message = "Review its question",
     });
 
-    const publication = try notification_flow.applyRuntime(
-        client,
-        (try decodeServer_module(encoded)).notification,
+    _ = try client.handleServerMessage(
+        .{
+            .notification = (try decodeServer_module(encoded)).notification,
+        },
     );
     @memset(&payload, 'x');
 
     const item = client.model.notificationSnapshot().itemAt(0).?;
-    try std.testing.expectEqual(item.id, publication.id);
-    try std.testing.expectEqual(version_before.notifications + 1, publication.notifications_revision);
+    try std.testing.expectEqual(version_before.notifications + 1, client.model.version().notifications);
     try std.testing.expectEqual(LevelType.warning, item.level);
     try std.testing.expectEqual(
         NotificationsRootTarget{ .select_tab = @enumFromInt(3) },
@@ -269,7 +265,12 @@ test "notification request rolls correlation back when transport is full" {
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        notification_flow.requestDelivery(client, &notification),
+        client.executeAction(
+            .{
+                .notification = notification,
+            },
+            .effect,
+        ),
     );
 
     try std.testing.expectEqual(next_request_id + 1, client.request_lifecycle.next_request_id);
@@ -284,7 +285,7 @@ test "notification timer commits lifecycle state before presenter observation" {
     defer harness.deinit();
     const client = harness.client;
     const now_ns = monotonic_module(client.io);
-    _ = try notification_flow.publish(client, now_ns, .{
+    _ = try client.publishNotification(now_ns, .{
         .title = "Building",
         .message = "Lifecycle tick",
     });
@@ -293,7 +294,7 @@ test "notification timer commits lifecycle state before presenter observation" {
     try std.testing.expect(client.notification_scheduler.pending);
     switch (try host(client).inbox.receive()) {
         .notification_tick => |result| {
-            const change = (try notification_flow.handleTick(client, result)).?;
+            const change = (try client.completeNotificationTick(result)).?;
 
             try std.testing.expectEqual(
                 client.model.version().notifications,
@@ -326,7 +327,11 @@ test "an unexpected notification delivery report is rejected without effects" {
 
     try std.testing.expectError(
         error.UnexpectedNotificationReply,
-        notification_flow.applyDeliveryReport(client, shown),
+        client.handleServerMessage(
+            .{
+                .notification_shown = shown,
+            },
+        ),
     );
 
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
@@ -349,12 +354,20 @@ test "notification delivery consumes an incompatible continuation before rejecti
 
     try std.testing.expectError(
         error.UnexpectedNotificationReply,
-        notification_flow.applyDeliveryReport(client, shown),
+        client.handleServerMessage(
+            .{
+                .notification_shown = shown,
+            },
+        ),
     );
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectError(
         error.UnexpectedNotificationReply,
-        notification_flow.applyDeliveryReport(client, shown),
+        client.handleServerMessage(
+            .{
+                .notification_shown = shown,
+            },
+        ),
     );
     try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
     try std.testing.expect(!client.notification_scheduler.pending);
@@ -370,11 +383,15 @@ test "a delivered notification report consumes correlation without model effects
     try client.request_lifecycle.tracker.add(request_id, .notification);
 
     try std.testing.expectEqual(
-        DeliveryOutcomeType.delivered,
-        try notification_flow.applyDeliveryReport(client, .{
-            .request_id = request_id,
-            .delivered_clients = 2,
-        }),
+        @as(?u8, null),
+        try client.handleServerMessage(
+            .{
+                .notification_shown = .{
+                    .request_id = request_id,
+                    .delivered_clients = 2,
+                },
+            },
+        ),
     );
 
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
@@ -434,7 +451,7 @@ test "toast activation commits by id before following its navigation target" {
     try active.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = second_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = host(client).view.workbench() });
     try std.testing.expect(active.focusPane(TestHarness.bootstrap_pane));
 
-    try notification_flow.publishNow(client, .{
+    try client.publishNotificationNow(.{
         .title = "Ready",
         .message = "Open pane",
         .target = .{ .focus_pane = second_pane },
@@ -806,7 +823,7 @@ test "sidebar animation commits model state before the presenter observes it" {
     try std.testing.expectEqual(@as(u8, 0), client.model.sidebarAnimationFrame());
     switch (try host(client).inbox.receive()) {
         .sidebar_animation_tick => |result| {
-            const change = (try sidebar_animations.handleTick(client, result)).?;
+            const change = (try client.completeSidebarAnimationTick(result)).?;
 
             try std.testing.expectEqual(@as(u8, 1), change.frame);
             try std.testing.expectEqual(@as(u64, 1), change.sidebar_animation_revision);
@@ -878,9 +895,12 @@ test "agent sounds validate exact identity against the client model" {
         .pane_generation = 2,
         .sound = .ready,
     });
-    const stale = try agent_sounds.apply(client, (try decodeServer_module(unknown)).agent_sound);
+    _ = try client.handleServerMessage(
+        .{
+            .agent_sound = (try decodeServer_module(unknown)).agent_sound,
+        },
+    );
 
-    try std.testing.expectEqual(ApplicationAgentsAgentSoundOutcome.stale, stale);
     try std.testing.expect(!client.sound_playback.snapshot().active);
 
     const known = try encodeAgentSound_module(&payload, .{
@@ -888,9 +908,12 @@ test "agent sounds validate exact identity against the client model" {
         .pane_generation = 1,
         .sound = .ready,
     });
-    const accepted = try agent_sounds.apply(client, (try decodeServer_module(known)).agent_sound);
+    _ = try client.handleServerMessage(
+        .{
+            .agent_sound = (try decodeServer_module(known)).agent_sound,
+        },
+    );
 
-    try std.testing.expectEqual(ApplicationAgentsAgentSoundOutcome.accepted, accepted);
     try std.testing.expect(client.sound_playback.snapshot().active);
 
     const urgent = try encodeAgentSound_module(&payload, .{
@@ -898,9 +921,12 @@ test "agent sounds validate exact identity against the client model" {
         .pane_generation = 1,
         .sound = .needs_input,
     });
-    const queued = try agent_sounds.apply(client, (try decodeServer_module(urgent)).agent_sound);
+    _ = try client.handleServerMessage(
+        .{
+            .agent_sound = (try decodeServer_module(urgent)).agent_sound,
+        },
+    );
 
-    try std.testing.expectEqual(ApplicationAgentsAgentSoundOutcome.accepted, queued);
     try std.testing.expectEqual(AgentSoundType.needs_input, client.sound_playback.snapshot().queued.?);
     try std.testing.expectEqualDeep(version_before_sound, client.model.version());
     try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
@@ -920,7 +946,7 @@ test "agent sound completion releases a failed worker before scheduling its succ
     );
     try std.testing.expect(client.sound_playback.request(.needs_input) == .queued);
 
-    try agent_sounds.handlePlayed(client, error.SoundUnavailable);
+    try client.completeAgentSound(error.SoundUnavailable);
 
     try std.testing.expectEqual(SnapshotType{
         .configuration = .{},

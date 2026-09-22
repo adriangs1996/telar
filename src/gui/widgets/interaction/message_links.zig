@@ -100,7 +100,13 @@ pub fn open(gui: *GuiClient, control: Control) !void {
     }
 
     const path = client.FilePath.fromDestination(text) catch |err| {
-        try client.operations.notifications.publishNow(&gui.app, .{ .level = .warning, .title = "Could not open link", .message = @errorName(err) });
+        try gui.app.publishNotificationNow(
+            .{
+                .level = .warning,
+                .title = "Could not open link",
+                .message = @errorName(err),
+            },
+        );
         return;
     };
     _ = try gui.app.openMessageFile(control.owner.pane_id, path);

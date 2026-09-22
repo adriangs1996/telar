@@ -53,7 +53,7 @@ inline result or .pane_ingested -> Pipeline.handleIngested -> Application.pump
 Attachment.prepareNextCells -> cell.Sync.prepare -> schema.pane_frame -> socket
       |
       v
-AttachedClient.receiveRuntime -> server_messages -> pane_frames
+AttachedClient.receiveRuntime -> handleServerMessage -> applyPaneFrame
       |
 presentation_lifecycle.observe -> Presenter.presentDue -> presentation.Screen.flush
       |
@@ -147,7 +147,7 @@ tab-owned paste and focus state before detaching every runtime pane. See
 [Client detach](client-detach.md) for ordering and failure semantics.
 
 The notification action delegates wire translation, request correlation and
-owned outbox delivery to `notifications.requestDelivery`. See
+owned outbox delivery to `AttachedClient.requestNotificationDelivery`. See
 [Notifications](notifications.md) for request and report handling.
 
 `scroll-pane-up`, `scroll-pane-down` and the Lua `telar.action.scroll_pane`
@@ -441,10 +441,10 @@ schedules the next read only for a non-terminal outcome. See
 [Client runtime transport](runtime-transport.md) for buffer ownership, queue
 capacity and socket failure policy.
 
-The `.pane_frame` case calls `pane_frames.apply`, which commits through
+The `.pane_frame` case calls `AttachedClient.applyPaneFrame`, which commits through
 `ClientModel.applyPaneFrame`. The model validates the base, applies spans,
 reconciles scroll, input modes and copy state, then advances the frame revision.
-In the same synchronous call, `pane_frames.apply` queues `.frame_ack` before
+In the same synchronous call, `AttachedClient.applyPaneFrame` queues `.frame_ack` before
 updating graphics visibility and active resources. A broken base requests a
 snapshot without changing state or acknowledging that frame.
 

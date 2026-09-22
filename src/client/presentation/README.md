@@ -16,7 +16,7 @@ successful completion returns a delivery for `presentation_delivery.apply`.
 Preparation, failed delivery and cancellation never retire model damage.
 Obsolete tokens cannot consume a replacement flight. Receiving newer cells does
 not invalidate an older successful delivery: it retires only captured damage
-and leaves newer damage pending. Cell ACKs are sent by `pane_frames.apply`
+and leaves newer damage pending. Cell ACKs are sent by `AttachedClient.applyPaneFrame`
 after validation and application to owned model storage, before host-resource
 effects. Receiving bytes alone, a broken base, failed application or a detached
 frame never produces an ACK.

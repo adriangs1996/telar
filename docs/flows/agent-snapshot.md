@@ -9,11 +9,11 @@ validation and sidebar presentation. The view owns no second semantic copy.
 ```text
 runtime tracker → runtime delivery → agent_snapshot
   → AttachedClient.handleServerMessage
-  → agent_snapshots.apply
+  → AttachedClient.applyAgentSnapshot
       model.reconcileAgentSnapshot
       AttachedClient.synchronizePaneAttachments
       bounded notifications
-      sidebar_animations.synchronize
+      AttachedClient.synchronizeSidebarAnimation
   → event-loop presentation observation
 ```
 
@@ -22,7 +22,7 @@ pane position and bounded display labels immediately before encoding. Its
 per-client revision cursor sends the latest snapshot instead of replaying
 intermediate revisions.
 
-`agent_snapshots.apply` copies borrowed wire values into bounded inputs, commits
+`AttachedClient.applyAgentSnapshot` copies borrowed wire values into bounded inputs, commits
 the model and delivers the dependent resources in one synchronous operation.
 
 ## Model transaction
@@ -52,7 +52,7 @@ After the model accepts a newer snapshot, the operation calls
 `AttachedClient.resizeAttachedPanes`. This attachment-only synchronization does not
 emit child focus reports. The operation then translates transitions to
 `blocked`, `done` and `failed` into owned notifications, bounded by the center's
-capacity. It finally calls `sidebar_animations.synchronize` to arm working-agent
+capacity. It finally calls `AttachedClient.synchronizeSidebarAnimation` to arm working-agent
 animation without advancing a frame during snapshot application.
 
 Failure stops later delivery stages and preserves the canonical agent revision.

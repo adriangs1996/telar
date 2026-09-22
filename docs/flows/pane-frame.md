@@ -6,7 +6,7 @@ then consumes the latest model independently of runtime patch publication.
 
 ```text
 AttachedClient.handleServerMessage(.pane_frame)
-  -> operations/panes/pane_frames.apply
+  -> AttachedClient.applyPaneFrame
      -> Model.applyPaneFrame
         -> multiplexer / Pane.applyFrame and copy-state reconciliation
      -> detached: no effects
@@ -23,7 +23,7 @@ without mutation. Valid frames commit owned cells, cursor, child modes, scroll
 and copy-state pruning, then advance the frame revision even when visible cells
 are unchanged. Failed application does not publish a revision.
 
-`pane_frames.apply` enqueues the ACK before synchronizing graphics and active
+`AttachedClient.applyPaneFrame` enqueues the ACK before synchronizing graphics and active
 resources. A newly enabled child focus-report mode can therefore receive its
 focus-in after application acknowledgement. The operation keeps commit and
 ordered delivery in the same synchronous call; callers cannot substitute an
@@ -47,7 +47,7 @@ A reconstructed pane may reuse a wire frame ID but has a new client attachment
 generation. An old host completion cannot clear that pane's damage. Failed or
 cancelled host delivery clears no model damage and never claims presentation.
 
-Source: `src/client/operations/panes/pane_frames.zig`,
+Source: `src/client/AttachedClient.zig`,
 `src/client/model/Model.zig`, `src/client/panes/Pane.zig`, and
 `src/client/operations/session/presentation_delivery.zig`.
 Tests: `src/frontend/client/tests/pane_updates.zig`,

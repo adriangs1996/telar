@@ -663,7 +663,15 @@ test "native tab drag sends one anchored move after release and waits for runtim
     try std.testing.expectEqual(core.TabMoveDirection.previous, request.direction);
     try std.testing.expectEqual(@as(?usize, 2), session.gui.app.model.workspace.indexOf(third));
     try session.settle();
-    _ = try client.operations.tab_moves.apply(&session.gui.app, .{ .request_id = request.request_id, .location = request.location, .position = 0 });
+    _ = try session.gui.app.handleServerMessage(
+        .{
+            .tab_moved = .{
+                .request_id = request.request_id,
+                .location = request.location,
+                .position = 0,
+            },
+        },
+    );
     try std.testing.expectEqual(@as(?usize, 0), session.gui.app.model.workspace.indexOf(third));
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }

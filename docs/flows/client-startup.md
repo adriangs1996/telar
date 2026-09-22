@@ -44,7 +44,7 @@ pane activation -> replay retained input
 
 `controllers/session/client_startup.zig` is the TUI startup adapter. It owns
 the negotiation gate and bootstrap order. The common
-`operations/session/client_layouts.apply` restores runtime layout and requests
+`AttachedClient.restoreClientLayout` restores runtime layout and requests
 the initial pane without knowing about terminal probes. `run` waits on the
 inbox and calls `events.update`; each resource owner keeps its own token and
 rearming policy.

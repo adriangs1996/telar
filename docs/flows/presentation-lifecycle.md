@@ -77,7 +77,7 @@ when a reconstructed pane reuses the same wire frame number. Exact pending-frame
 matching prevents an old delivery from clearing newer damage.
 `presentation_delivery.apply` validates the bounded commit, commits model damage
 and flushes released graphics credit. The TUI adapter then schedules optional
-media work. This operation sends no cell ACK. `pane_frames.apply` acknowledges owned cells before
+media work. This operation sends no cell ACK. `AttachedClient.applyPaneFrame` acknowledges owned cells before
 resource delivery, so new patches can update the model while the sealed output
 is still in flight. The next preparation captures the latest state.
 

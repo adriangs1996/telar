@@ -61,16 +61,27 @@ test "hiding the only animated widget removes its frame deadline" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const app = &fixture.session.gui.app;
-    _ = try app.model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &.{.{
-        .key = .{ .pane_id = Session.pane_id, .pane_generation = 1 },
+    var bytes: [4096]u8 = undefined;
+    const snapshot = try core.encodeAgentSnapshot(&bytes, .{ .revision = 1, .entries = &.{.{
+        .pane_id = Session.pane_id,
+        .pane_generation = 1,
         .location = Session.location,
         .pane_index = 1,
+        .process_id = 1,
+        .session_id = @splat(0),
         .provider = .codex,
         .status = .working,
+        .source = .proxy_tls,
+        .authority = .active,
+        .confidence = 100,
+        .sequence = 1,
+        .observed_at_ms = 0,
+        .expires_at_ms = 1000,
     }} });
+    _ = try app.handleServerMessage(try core.decodeServer(snapshot));
     const version = app.model.version();
     try std.testing.expectEqual(.host, app.timers.animation_clock);
-    try std.testing.expectEqual(.active, try client.operations.sidebar_animations.synchronize(app));
+    try std.testing.expect(app.model.sidebarAnimationActive());
     try std.testing.expect(!app.sidebar_animation_scheduler.pending);
     try std.testing.expectEqual(version, app.model.version());
 
@@ -83,7 +94,6 @@ test "hiding the only animated widget removes its frame deadline" {
     fixture.chrome.now_ns += std.time.ns_per_s;
     projection = fixture.projection();
     try fixture.paint(projection);
-    _ = try client.operations.sidebar_animations.synchronize(app);
     try std.testing.expect(!app.sidebar_animation_scheduler.pending);
     try std.testing.expectEqual(@as(u32, 0), fixture.chrome.animation.wakeupAfter(fixture.chrome.now_ns));
     try std.testing.expect(!fixture.chrome.animation.due(std.math.maxInt(u64)));

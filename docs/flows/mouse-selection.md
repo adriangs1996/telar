@@ -21,12 +21,12 @@ InputHandler.mouse
     -> view_interactions: focus the clicked pane
     -> link_openings: ordinary links retain priority
     -> pane_mouse_inputs.apply: choose selection or child report
-    -> copy_modes.beginPointer -> copy_modes.beginPointer
+    -> Model.beginPointerSelection -> Model.beginPointerSelection
     -> ClientModel.beginPointerSelection
 
 captured drag / release
     -> copy_mode_pointer.apply
-    -> copy_modes.pointer -> copy_modes.execute
+    -> AttachedClient.applyCopyMode -> AttachedClient.applyCopyMode
     -> ClientModel.planCopyMode
     -> copy_selection before commit, on release only
     -> ClientModel.commitCopyMode

@@ -1,30 +1,10 @@
 //! Coordinates disposable history search, paging and inspection state.
 //! Operations own wire decoding and delivery; bounded model APIs own storage.
 
-const RequestFailedType = @import("telar-core").RequestFailed;
-const HistoryOutputType = @import("telar-core").HistoryOutput;
-const HistoryScopeType = @import("telar-core").HistoryScope;
 const ReadType = @import("Read.zig");
 const PageResult = @import("../../model/PageResult.zig");
 const std = @import("std");
 const ModelType = @import("../../model/Model.zig");
-
-test "inspection constraints change semantic scroll only when it exceeds the bound" {
-    const state = try std.testing.allocator.create(ModelType);
-    defer std.testing.allocator.destroy(state);
-    state.* = ModelType.init(std.testing.allocator, true);
-    defer state.deinit();
-    state.name_prompt.begin(.history_palette);
-    _ = state.name_prompt.apply(.toggle_inspection);
-    _ = state.name_prompt.apply(.page_down);
-    constrainInspection(state, 2);
-    try std.testing.expectEqual(@as(u32, 2), state.name_prompt.currentConst().?.detailScroll());
-    const revision = state.version();
-    constrainInspection(state, 2);
-    try std.testing.expectEqualDeep(revision, state.version());
-    constrainInspection(state, 0);
-    try std.testing.expectEqual(@as(u32, 0), state.name_prompt.currentConst().?.detailScroll());
-}
 
 pub fn begin(model: *ModelType, options: struct { enter_runs: bool, match_fuzzy: bool }) void {
     model.history_palette.begin();
@@ -45,10 +25,6 @@ pub fn select(model: *ModelType, index: u16, revision: u64) bool {
 
     model.name_prompt.updateHistory(.{ .selection = index, .reset_scroll = true });
     return true;
-}
-
-pub fn requestPage(model: *ModelType, id: u64, scope: HistoryScopeType) bool {
-    return model.history_palette.beginPageRequest(id, scope);
 }
 
 pub fn apply(model: *ModelType, page: PageResult) bool {
@@ -141,18 +117,6 @@ pub fn requestRead(model: *ModelType, request_id: u64, read: ReadType) bool {
     return true;
 }
 
-pub fn output(model: *ModelType, reply: HistoryOutputType) bool {
-    return model.history_palette.applyOutput(reply);
-}
-
-pub fn fail(model: *ModelType, reply: RequestFailedType) bool {
-    return model.history_palette.fail(reply);
-}
-
-pub fn reject(model: *ModelType, message: []const u8) void {
-    model.history_palette.setError(message);
-}
-
 pub fn requestDelete(model: *ModelType, request_id: u64, selection: u16) ?u64 {
     const palette = &model.history_palette;
     if (palette.len == 0 or palette.phase != .ready or palette.delete_request != 0 or !palette.track(request_id)) {
@@ -170,4 +134,21 @@ pub fn pruned(model: *ModelType, request_id: u64) bool {
 
     const prompt = model.name_prompt.currentConst() orelse return false;
     return prompt.target() == .history;
+}
+
+test "inspection constraints change semantic scroll only when it exceeds the bound" {
+    const state = try std.testing.allocator.create(ModelType);
+    defer std.testing.allocator.destroy(state);
+    state.* = ModelType.init(std.testing.allocator, true);
+    defer state.deinit();
+    state.name_prompt.begin(.history_palette);
+    _ = state.name_prompt.apply(.toggle_inspection);
+    _ = state.name_prompt.apply(.page_down);
+    constrainInspection(state, 2);
+    try std.testing.expectEqual(@as(u32, 2), state.name_prompt.currentConst().?.detailScroll());
+    const revision = state.version();
+    constrainInspection(state, 2);
+    try std.testing.expectEqualDeep(revision, state.version());
+    constrainInspection(state, 0);
+    try std.testing.expectEqual(@as(u32, 0), state.name_prompt.currentConst().?.detailScroll());
 }

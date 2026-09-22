@@ -10,33 +10,33 @@ starts exiting.
 ```text
 runtime notification                         local semantic event
         |                                              |
-notifications.applyRuntime                    operation
+AttachedClient.applyRuntimeNotification                    operation
         |                                              |
 wire-to-client translation              construct notifications.Input
         |                                              |
-notifications.publish <--------- adapter publishNow
+AttachedClient.publishNotification <--------- adapter publishNow
                                |
-                   notifications.publishNow
+                   AttachedClient.publishNotificationNow
                                |
                     ClientModel.publishNotification
                                |
              notifications.Center + Version.notifications
                                |
-                   notification_timers.reschedule
+                   AttachedClient.scheduleNotificationTimer
                                |
                        presentation_lifecycle.observe
                                |
                 Presenter -> View.render(snapshot)
 ```
 
-The dispatcher delegates a runtime event to `notifications.applyRuntime`. The
+The dispatcher delegates a runtime event to `AttachedClient.applyRuntimeNotification`. The
 adapter translates protocol level, target and millisecond duration into client
-notification values and calls `notifications.publishNow`, which samples time
+notification values and calls `AttachedClient.publishNotificationNow`, which samples time
 and applies the publication operation. Request failures, agent and proxy transitions,
 configuration or plugin diagnostics, and clipboard image failures enter
 as complete `notifications.Input` values. Those concrete operations call
-`notifications.publishNow`, which samples monotonic time and delegates to
-`notifications.publish` in the same module.
+`AttachedClient.publishNotificationNow`, which samples monotonic time and delegates to
+`AttachedClient.publishNotification` in the same module.
 Diagnostic-producing operations commit their banner before constructing
 the input. The notification operation commits its owned model state before it
 touches timer infrastructure.
@@ -54,7 +54,7 @@ semantic notification action
              |
      AttachedClient.executeAction
              |
-notifications.requestDelivery
+AttachedClient.requestNotificationDelivery
              |
 LifecycleState.nextId + AttachedClient.sendNotificationRequest
              |
@@ -80,7 +80,7 @@ show_notification request + notification continuation
                          |
                  notification_shown
                          |
-       notifications.applyDeliveryReport
+       AttachedClient.completeNotificationDelivery
                          |
          delivered or local failure publication
 ```
@@ -98,7 +98,7 @@ another request later.
 
 ## Time and presentation
 
-`notification_timers` asks
+`AttachedClient.scheduleNotificationTimer` asks
 `ClientModel.nextNotificationDeadline` for the next useful wakeup. Moving
 items wake at the presenter's frame interval, while stable items sleep until
 expiry. It uses the same `deadline_timer.Scheduler` as host input. The
@@ -107,8 +107,8 @@ select task. Replacing or removing a deadline sets the wake event rather than
 adding another task. Its fixed two-way select discards whichever wait loses
 the race.
 
-`notifications.handleTick` releases the completed task before checking its
-result. It then executes `notifications.handleTick`, which advances the
+`AttachedClient.completeNotificationTick` releases the completed task before checking its
+result. It then executes `AttachedClient.completeNotificationTick`, which advances the
 center from elapsed monotonic time, commits `Version.notifications` only when
 state changed and rearms the next deadline.
 
@@ -149,7 +149,7 @@ activate(id) or dismiss(id) intent
       |
 InputHandler
       |
-notifications.activate or notifications.dismiss
+AttachedClient.activateNotification or AttachedClient.dismissNotification
       |
 ClientModel commit + timer reschedule
       |
@@ -196,10 +196,10 @@ new notifications after reconciliation.
 - `src/client/application/notifications/notifications.zig` proves commit-before-
   timer-before-navigation ordering, delivery policy, stale interaction
   behavior and retained commits after effect failures.
-- `src/client/operations/notifications/notifications.zig` owns local timestamp acquisition,
+- `src/client/AttachedClient.zig` owns local timestamp acquisition,
   diagnostic publication, outbound action translation, delivery correlation
   and timer event ordering.
-- `src/client/resources/notification_timers.zig` maps model deadlines to the
+- `src/client/AttachedClient.zig` maps model deadlines to the
   shared scheduler and notification events.
 - `src/core/time/deadline_timer.zig` proves deadline replacement,
   removal, parking and pending-token release after successful and failed

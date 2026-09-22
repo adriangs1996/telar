@@ -2,6 +2,7 @@
 //! request lifecycle, configuration, plugins and the ports through which a
 //! presentation adapter supplies its host. Adapters embed it, build it in
 //! place and bind the ports before the first event.
+const copy_mode_tests = @import("copy_mode_tests.zig");
 const EditorOpening = @import("links/EditorOpening.zig");
 
 const core = @import("telar-core");
@@ -79,25 +80,18 @@ const Tab = @import("workspace/Tab.zig");
 const parseKey_module = @import("input/chord.zig").parseKey;
 const Action = @import("input/action.zig").Action;
 const ControlType = @import("input/keybind.zig").Control;
-const copy_modes = @import("operations/input/copy_modes.zig");
 const name_prompts = @import("operations/input/name_prompts.zig");
 const layout_updates = @import("resources/client_layouts.zig");
 const client_detachments = @import("operations/session/client_detachments.zig");
-const history_palettes = @import("operations/input/history_palettes.zig");
-const suggestions = @import("operations/input/suggestions.zig");
-const notification_flow = @import("operations/notifications/notifications.zig");
 const tab_selections = @import("operations/tabs/tab_selections.zig");
 const PaneFocusTarget = @import("model/types.zig").PaneFocusTarget;
-const pane_focus = @import("operations/panes/pane_focus.zig");
 const DirectionType = @import("input/action.zig").Direction;
 const pane_inputs = @import("operations/input/pane_inputs.zig");
 const KeyType = @import("input/Key.zig");
 const ScrollDirectionType = @import("input/action.zig").ScrollDirection;
 const pane_mouse_input = @import("operations/input/pane_mouse_inputs.zig");
 const sidebar_toggles = @import("operations/notifications/sidebar_toggles.zig");
-const pane_closures = @import("operations/panes/pane_closures.zig");
 const CommandTabType = @import("input/CommandTab.zig");
-const tab_moves = @import("operations/tabs/tab_moves.zig");
 const key_routing = @import("operations/input/key_routing.zig");
 const ApplicationInputLuaActionCommand = @import("application/input/lua_action.zig").Command;
 const lua_actions = @import("operations/configuration/lua_actions.zig");
@@ -117,18 +111,6 @@ const RequestFailedType = @import("telar-core").RequestFailed;
 const ApplicationSessionRequestFailureOutcome = @import("application/session/request_failure.zig").Outcome;
 const builtin = @import("builtin");
 const ServerMessageType = @import("telar-core").ServerMessage;
-const agent_sounds = @import("operations/agents/agent_sounds.zig");
-const agent_snapshots = @import("operations/agents/agent_snapshots.zig");
-const runtime_layouts = @import("operations/session/client_layouts.zig");
-const pane_clipboards = @import("operations/panes/pane_clipboards.zig");
-const pane_frames = @import("operations/panes/pane_frames.zig");
-const pane_focus_commands = @import("operations/panes/pane_focus_commands.zig");
-const pane_metadata = @import("operations/panes/pane_metadata.zig");
-const pane_progress = @import("operations/panes/pane_progress.zig");
-const proxy_status = @import("operations/agents/proxy_status.zig");
-const resync_requirements = @import("operations/session/resync_requirements.zig");
-const system_metrics = @import("operations/agents/system_metrics.zig");
-const workspace_lists = @import("operations/workspaces/workspace_lists.zig");
 
 /// Bindings obey prompt authority; validated native effects retain their caller's authority.
 const ActionOrigin = enum { binding, effect };
@@ -173,7 +155,6 @@ const AgentHistoryOperation = @import("connection/AgentHistoryOperation.zig");
 const AgentDecision = @import("application/agents/AgentDecision.zig");
 const TabSnapshotViewType = @import("telar-core").TabSnapshotView;
 const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
-const pane_resources = @import("operations/panes/pane_resources.zig");
 const TabLocation = @import("telar-core").TabLocation;
 const WorkspaceSnapshotViewType = @import("telar-core").WorkspaceSnapshotView;
 const max_tabs_per_workspace = @import("telar-core").max_tabs_per_workspace;
@@ -212,6 +193,71 @@ const WorkspaceRecovery = enum { retried, unrecoverable };
 
 const RequestWorkspaceCreation = @import("application/workspaces/RequestWorkspaceCreation.zig");
 const create_workspace = @import("application/workspaces/create_workspace.zig");
+
+const TabMovedType = @import("telar-core").TabMoved;
+const RequestTabMove = @import("application/tabs/RequestTabMove.zig");
+const FrameViewType = @import("telar-core").FrameView;
+const FrameAckType = @import("telar-core").FrameAck;
+const PaneFrameOutcomeType = @import("model/types.zig").PaneFrameOutcome;
+const attachment_prompts = @import("operations/input/attachment_prompts.zig");
+const PaneFrameRecoveryType = @import("model/PaneFrameRecovery.zig");
+const PaneProgressType = @import("telar-core").PaneProgress;
+const PaneProgressCommitType = @import("model/PaneProgressCommit.zig");
+const PaneFocusCommandType = @import("telar-core").PaneFocusCommand;
+const PaneFocusCompletion = @import("connection/PaneFocusCompletion.zig");
+const PaneDirectionType = @import("telar-core").PaneDirection;
+const PaneClosureType = @import("model/PaneClosure.zig");
+const types = @import("model/types.zig");
+const PaneExited = @import("telar-core").PaneExited;
+const CopyModeCommand = @import("model/types.zig").CopyModeCommand;
+const CopyModeOutcome = @import("application/input/copy_mode.zig").Outcome;
+const PaneMatchesViewType = @import("telar-core").PaneMatchesView;
+const SearchMatchType = @import("telar-core").SearchMatch;
+const history_browser = @import("application/input/history_browser.zig");
+const OwnedHistoryQueryType = @import("connection/OwnedHistoryQuery.zig");
+const HistoryResultsViewType = @import("telar-core").HistoryResultsView;
+const HistoryEntryType = @import("telar-core").HistoryEntry;
+const RequestIdType = @import("telar-core").RequestId;
+const pane_input_module = @import("application/input/pane_input.zig");
+const HistoryPasteRequest = @import("application/input/HistoryPasteRequest.zig");
+const HistoryPrunedType = @import("telar-core").HistoryPruned;
+const NotificationType = @import("input/Notification.zig");
+const NotificationShownType = @import("telar-core").NotificationShown;
+const NotificationDeliveryOutcome = @import("application/notifications/notifications.zig").DeliveryOutcome;
+const CoreNotification = @import("telar-core").Notification;
+const NotificationPublicationType = @import("model/NotificationPublication.zig");
+const NotificationInput = @import("notifications/NotificationInput.zig");
+const NotificationChangeType = @import("model/NotificationChange.zig");
+const NotificationId = @import("notifications/notifications.zig").Id;
+const NotificationActivationType = @import("model/NotificationActivation.zig");
+const NotificationTarget = @import("notifications/notifications.zig").Target;
+const AgentSoundNotificationType = @import("telar-core").AgentSoundNotification;
+const AgentSoundType = @import("telar-core").AgentSound;
+const ClientLayoutSnapshotViewType = @import("telar-core").ClientLayoutSnapshotView;
+const LayoutsType = @import("workspace/Layouts.zig");
+const sidebar_projection = @import("operations/notifications/sidebar_projection.zig");
+const SavedLayoutType = @import("workspace/SavedLayout.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const initial_request_id_module = @import("connection/lifecycle.zig").initial_request_id;
+const ResyncRequiredType = @import("telar-core").ResyncRequired;
+const OwnedSuggestionType = @import("connection/OwnedSuggestion.zig");
+const notification_capability = @import("notifications/notifications.zig");
+const ProxyStatusType = @import("telar-core").ProxyStatus;
+const ProxyStatusCommitType = @import("model/ProxyStatusCommit.zig");
+const agent_snapshot_delivery = @import("application/agents/agent_snapshot_delivery.zig");
+const AgentSnapshotViewType = @import("telar-core").AgentSnapshotView;
+const AgentSnapshotCommitType = @import("model/AgentSnapshotCommit.zig");
+const AgentInputType = @import("agents/AgentInput.zig");
+const PaneGraphicsCommand = @import("application/panes/pane_graphics.zig").Command;
+const PaneGraphicsOutcome = @import("application/panes/pane_graphics.zig").Outcome;
+const PaneFocusRequest = @import("model/PaneFocusRequest.zig");
+const PaneLayoutRequest = @import("model/PaneLayoutRequest.zig");
+const ActivityType = @import("application/notifications/sidebar_animation.zig").Activity;
+const SidebarAnimationChangeType = @import("model/SidebarAnimationChange.zig");
+const AgentSoundOutcome = enum { stale, accepted };
+const ResyncOutcome = enum { coalesced, snapshot_requested, handoff_requested, exit };
+const sidebar_animation_interval_ns = 120 * std.time.ns_per_ms;
 
 const AttachedClient = @This();
 
@@ -482,79 +528,105 @@ pub fn handleServerMessage(self: *AttachedClient, message: ServerMessageType) !?
             .applied, .ignored => {},
             .exit => return 0,
         },
-        .tab_moved => |moved| _ = try tab_moves.apply(self, moved),
-        .pane_frame => |frame| _ = try pane_frames.apply(self, frame),
-        .pane_cwd => |cwd| _ = try pane_metadata.applyCwd(self, cwd),
-        .pane_foreground => |foreground| _ = try pane_metadata.applyForeground(self, foreground),
-        .pane_title => |title| _ = try pane_metadata.applyTitle(self, title),
-        .pane_progress => |progress| _ = try pane_progress.apply(self, progress),
+        .tab_moved => |moved| _ = try self.completeTabMove(moved),
+        .pane_frame => |frame| _ = try self.applyPaneFrame(frame),
+        .pane_cwd => |cwd| _ = try self.model.updatePaneMetadata(
+            .{
+                .cwd = .{
+                    .pane_id = cwd.pane_id,
+                    .path = cwd.cwd,
+                },
+            },
+        ),
+        .pane_foreground => |foreground| _ = try self.model.updatePaneMetadata(
+            .{
+                .foreground = .{
+                    .pane_id = foreground.pane_id,
+                    .name = foreground.name,
+                },
+            },
+        ),
+        .pane_title => |title| _ = try self.model.updatePaneMetadata(
+            .{
+                .title = .{
+                    .pane_id = title.pane_id,
+                    .title = title.title,
+                },
+            },
+        ),
+        .pane_progress => |progress| _ = try self.applyPaneProgress(progress),
         .client_command => |command| try self.completeClientCommand(command),
-        .pane_focus_command => |command| try pane_focus_commands.apply(self, command),
-        .pane_matches => |found| _ = try copy_modes.matches(self, found),
-        .pane_clipboard => |clipboard| try pane_clipboards.apply(self, clipboard),
-        .pane_exited => |exited| _ = try pane_closures.applyExit(self, exited),
+        .pane_focus_command => |command| try self.completePaneFocusCommand(command),
+        .pane_matches => |found| _ = try self.applyPaneMatches(found),
+        .pane_clipboard => |clipboard| {
+            if (clipboard.pane_id == .invalid) {
+                return error.UnexpectedPane;
+            }
+            try self.host_clipboard.set(self.host_clipboard.context, clipboard.bytes);
+        },
+        .pane_exited => |exited| _ = try self.applyPaneExit(exited),
         .request_failed => |failure| {
-            if (!history_palettes.failed(self, failure)) {
+            if (!self.model.history_palette.fail(failure)) {
                 _ = try self.failRuntimeRequest(failure);
             }
         },
-        .notification => |notification| _ = try notification_flow.applyRuntime(self, notification),
-        .notification_shown => |shown| _ = try notification_flow.applyDeliveryReport(self, shown),
-        .agent_sound => |sound| _ = try agent_sounds.apply(self, sound),
-        .client_layout_snapshot => |snapshot| try runtime_layouts.apply(self, snapshot),
+        .notification => |notification| _ = try self.applyRuntimeNotification(notification),
+        .notification_shown => |shown| _ = try self.completeNotificationDelivery(shown),
+        .agent_sound => |sound| _ = try self.applyAgentSound(sound),
+        .client_layout_snapshot => |snapshot| try self.restoreClientLayout(snapshot),
         .resync_required => |required| {
-            if (try resync_requirements.apply(self, required) == .exit) {
+            if (try self.applyResyncRequirement(required) == .exit) {
                 return 0;
             }
         },
         .runtime_stopping => return 0,
-        .history_results => |results| _ = try history_palettes.apply(self, results),
-        .history_pruned => |confirmation| _ = try history_palettes.pruned(self, confirmation),
-        .history_output => |output| _ = history_palettes.output(self, output),
-        .command_suggestion => |suggested| _ = try suggestions.apply(self, suggested),
+        .history_results => |results| _ = try self.applyHistoryResults(results),
+        .history_pruned => |confirmation| _ = try self.completeHistoryPrune(confirmation),
+        .history_output => |output| _ = self.model.history_palette.applyOutput(output),
+        .command_suggestion => |suggested| _ = self.model.suggestion.apply(suggested),
         .client_command_result, .client_list, .pane_text, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
-        .proxy_status => |status| _ = try proxy_status.apply(self, status),
-        .agent_snapshot => |snapshot| _ = try agent_snapshots.apply(self, snapshot),
-        .system_metrics => |metrics| _ = try system_metrics.apply(self, metrics),
-        .workspace_list => |list| _ = try workspace_lists.apply(self, list),
-        .graphics_snapshot => |snapshot| _ = try pane_graphics.apply(
-            self,
+        .proxy_status => |status| _ = try self.applyProxyStatus(status),
+        .agent_snapshot => |snapshot| _ = try self.applyAgentSnapshot(snapshot),
+        .system_metrics => |metrics| _ = try self.model.reconcileSystemMetrics(
+            .{
+                .runtime_revision = metrics.revision,
+                .cpu_percent = metrics.cpu_percent,
+                .memory_used_decigib = metrics.memory_used_decigib,
+                .battery_percent = if (metrics.has_battery) metrics.battery_percent else null,
+            },
+        ),
+        .workspace_list => |list| _ = try self.model.applyWorkspaceList(list),
+        .graphics_snapshot => |snapshot| _ = try self.applyPaneGraphics(
             .{
                 .snapshot = snapshot,
             },
         ),
-        .graphics_image => |image| _ = try pane_graphics.apply(
-            self,
+        .graphics_image => |image| _ = try self.applyPaneGraphics(
             .{
                 .image = image,
             },
         ),
-        .graphics_shared_image => |image| _ = try pane_graphics.apply(
-            self,
+        .graphics_shared_image => |image| _ = try self.applyPaneGraphics(
             .{
                 .shared_image = image,
             },
         ),
-        .graphics_image_chunk => |chunk| _ = try pane_graphics.apply(
-            self,
+        .graphics_image_chunk => |chunk| _ = try self.applyPaneGraphics(
             .{
                 .image_chunk = chunk,
             },
         ),
-        .graphics_placement => |placement| _ = try pane_graphics.apply(
-            self,
+        .graphics_placement => |placement| _ = try self.applyPaneGraphics(
             .{
                 .placement = placement,
             },
         ),
-        .graphics_delete_image => |deleted| _ = try pane_graphics.apply(
-            self,
+        .graphics_delete_image => |deleted| _ = try self.applyPaneGraphics(
             .{
                 .delete_image = deleted,
             },
         ),
-        .graphics_delete_placement => |deleted| _ = try pane_graphics.apply(
-            self,
+        .graphics_delete_placement => |deleted| _ = try self.applyPaneGraphics(
             .{
                 .delete_placement = deleted,
             },
@@ -596,8 +668,8 @@ pub fn executeAction(self: *AttachedClient, value: Action, origin: ActionOrigin)
         else => {},
     }
 
-    if (value != .enter_copy_mode and copy_modes.active(self)) {
-        _ = try copy_modes.leave(self);
+    if (value != .enter_copy_mode and self.copyModeActive()) {
+        _ = try self.leaveCopyMode();
     }
 
     switch (value) {
@@ -614,14 +686,17 @@ pub fn executeAction(self: *AttachedClient, value: Action, origin: ActionOrigin)
                 .area = self.geometry().area,
             },
         ),
-        .focus_pane => |direction| _ = try self.focusPane(
+        .focus_pane => |direction| _ = try self.applyPaneFocus(
             .{
-                .direction = switch (direction) {
-                    .left => .left,
-                    .right => .right,
-                    .up => .up,
-                    .down => .down,
+                .target = .{
+                    .direction = switch (direction) {
+                        .left => .left,
+                        .right => .right,
+                        .up => .up,
+                        .down => .down,
+                    },
                 },
+                .area = self.geometry().area,
             },
         ),
         .navigate_pane => |direction| try self.navigatePane(direction),
@@ -659,7 +734,7 @@ pub fn executeAction(self: *AttachedClient, value: Action, origin: ActionOrigin)
                 .position = position,
             },
         ),
-        .close_pane => _ = try pane_closures.request(self),
+        .close_pane => _ = try self.requestPaneClose(),
         .new_tab => _ = try self.requestTabCreation(
             .{},
         ),
@@ -682,8 +757,7 @@ pub fn executeAction(self: *AttachedClient, value: Action, origin: ActionOrigin)
         ),
         .rename_tab => _ = name_prompts.beginActiveTabRename(self),
         .close_tab => _ = try self.requestTabClose(),
-        .move_tab => |direction| _ = try tab_moves.request(
-            self,
+        .move_tab => |direction| _ = try self.requestTabMove(
             .{
                 .direction = switch (direction) {
                     .previous => .previous,
@@ -697,12 +771,12 @@ pub fn executeAction(self: *AttachedClient, value: Action, origin: ActionOrigin)
 
             return .stop;
         },
-        .enter_copy_mode => _ = copy_modes.enter(self),
+        .enter_copy_mode => _ = self.enterCopyMode(),
         .command_tab => |*command| try self.createCommandTab(command),
         .goto_picker => _ = name_prompts.beginGotoPicker(self),
-        .history_palette => _ = try history_palettes.begin(self),
-        .suggest_command => _ = try suggestions.begin(self),
-        .notification => |*notification| _ = try notification_flow.requestDelivery(self, notification),
+        .history_palette => _ = try self.beginHistoryPalette(),
+        .suggest_command => _ = try self.beginSuggestion(),
+        .notification => |*notification| _ = try self.requestNotificationDelivery(notification),
         .lua_callback, .lua_expr, .plugin => unreachable,
     }
 
@@ -729,15 +803,6 @@ pub fn sendWorkspaceRenameRequest(self: *AttachedClient, rename: core.RenameWork
     );
     errdefer _ = self.request_lifecycle.tracker.take(rename.request_id);
     try self.runtime_transport.outbox.pushWorkspaceRename(rename);
-    try self.startRuntimeSend();
-}
-
-/// Registers correlation before copying the request; failed delivery removes only that registration.
-/// Example: `try self.sendNotificationRequest(request);`
-pub fn sendNotificationRequest(self: *AttachedClient, request: core.ShowNotification) !void {
-    try self.request_lifecycle.tracker.add(request.request_id, .notification);
-    errdefer _ = self.request_lifecycle.tracker.take(request.request_id);
-    try self.runtime_transport.outbox.pushNotification(request);
     try self.startRuntimeSend();
 }
 
@@ -813,29 +878,6 @@ pub fn synchronizePaneAttachments(self: *AttachedClient) !bool {
     }
 
     return true;
-}
-
-/// Delivers resources for a committed focus, including newly revealed panes. Example: `try self.deliverPaneFocus(focus, area);`
-pub fn deliverPaneFocus(self: *AttachedClient, focus: PaneFocus, area: core.Rect) !void {
-    const active = self.model.workspace.active() orelse return error.StalePaneFocus;
-    if (!std.meta.eql(active.location, focus.location) or
-        active.model.layout.focused() != focus.focused or
-        self.model.version().panes != focus.panes_revision)
-    {
-        return error.StalePaneFocus;
-    }
-
-    try self.synchronizeActivePane();
-    if (!focus.geometry_changed) {
-        return;
-    }
-
-    self.host_graphics.invalidatePlacements();
-    try self.resizeAttachedPanes(&active.model, area);
-
-    if (active.snapshot_loaded) {
-        try self.attachVisiblePanes(active, area);
-    }
 }
 
 /// Commits one split-edge move before delivering geometry. Example: `_ = try self.resizePane(command);`
@@ -1338,8 +1380,7 @@ pub fn flushAgentHistory(self: *AttachedClient) !void {
 /// Example: `try app.attachAgentImage(pane_id, path);`
 pub fn attachAgentImage(self: *AttachedClient, pane_id: core.PaneId, path: []const u8) !void {
     _ = self.model.attachAgentImage(pane_id, path) catch |err| {
-        try notification_flow.publishNow(
-            self,
+        try self.publishNotificationNow(
             .{
                 .level = .warning,
                 .title = "Image was not attached",
@@ -1660,6 +1701,365 @@ pub fn requestWorkspaceCreation(self: *AttachedClient, command: RequestWorkspace
     return true;
 }
 
+/// Validates one request and retains its correlation before delivery.
+/// Example: `_ = try self.requestTabMove(command);`
+pub fn requestTabMove(self: *AttachedClient, command: RequestTabMove) !bool {
+    if (self.request_lifecycle.tracker.has(.tab_operation)) {
+        return false;
+    }
+
+    const location = command.location orelse self.model.activeTabLocation() orelse return false;
+    const workspace = self.model.workspace.workspace orelse return false;
+    if (!std.meta.eql(workspace, location.workspace) or self.model.workspace.indexOf(location.tab_id) == null) {
+        return false;
+    }
+
+    if (command.relative_to) |anchor| {
+        if (anchor == location.tab_id or self.model.workspace.indexOf(anchor) == null) {
+            return false;
+        }
+    }
+
+    const request_id = try self.request_lifecycle.nextId();
+    try self.sendRuntimeRequest(
+        .{
+            .registration = .{
+                .request_id = request_id,
+                .continuation = .{
+                    .move_tab = location,
+                },
+            },
+            .message = .{
+                .move_tab = .{
+                    .request_id = request_id,
+                    .location = location,
+                    .direction = command.direction,
+                    .relative_to = command.relative_to,
+                },
+            },
+        },
+    );
+
+    return true;
+}
+
+/// Semantic actions include native conversation readers in copy-mode policy.
+/// Example: `_ = self.copyModeActive();`
+pub fn copyModeActive(self: *const AttachedClient) bool {
+    return self.model.copyModeActive() or self.host_input_source.threadCopyModeActive();
+}
+
+/// Leaves copy mode without copying the current selection.
+/// Example: `_ = try self.leaveCopyMode();`
+pub fn leaveCopyMode(self: *AttachedClient) !CopyModeOutcome {
+    const outcome = try self.applyCopyMode(.leave);
+    const native = self.host_input_source.leaveThreadCopyMode();
+    return if (outcome == .unchanged and native) .exited else outcome;
+}
+
+/// Example: `_ = try self.applyCopyMode(command);`
+pub fn applyCopyMode(self: *AttachedClient, command: CopyModeCommand) !CopyModeOutcome {
+    defer {
+        if (command == .cancel_pointer or (command == .pointer and command.pointer.release)) {
+            self.model.finishPointerGesture();
+        }
+    }
+
+    const plan = self.model.planCopyMode(command) orelse return .unchanged;
+    if (plan.open_link) |target| {
+        _ = try self.openLink(target);
+
+        return .unchanged;
+    }
+
+    if (plan.selection) |selection| {
+        try self.sendRuntime(
+            .{
+                .copy_selection = selection,
+            },
+        );
+    }
+
+    const commit = self.model.commitCopyMode(plan) orelse return .unchanged;
+    if (commit.viewport) |viewport| {
+        try pane_viewports.deliver(self, viewport);
+    }
+
+    if (plan.search) |direction| {
+        _ = name_prompts.beginCopySearch(self, direction);
+    }
+
+    return if (commit.active) .changed else .exited;
+}
+
+/// Sends one bounded history query in the palette's current scope and
+/// awaits only its reply. A scope whose value cannot be resolved from the
+/// committed model falls back to global.
+/// Example: `try self.queryHistory(query);`
+pub fn queryHistory(self: *AttachedClient, query: []const u8) !void {
+    history_browser.restart(&self.model);
+    try self.requestHistoryPage(query);
+}
+
+/// Loads selected detail only on demand and contains expected queue saturation.
+/// Example: `try self.refreshHistoryInspection();`
+pub fn refreshHistoryInspection(self: *AttachedClient) !void {
+    for (0..2) |_| {
+        const next = history_browser.nextRead(&self.model);
+        if (self.chrome.inspectionScrollLimit()) |limit| {
+            history_browser.constrainInspection(&self.model, limit);
+        }
+
+        const read = next orelse return;
+        const request_id = try self.request_lifecycle.nextId();
+        if (!history_browser.requestRead(
+            &self.model,
+            core.raw(request_id),
+            read,
+        )) {
+            return;
+        }
+
+        const message: RuntimeOutboundMessage = switch (read.kind) {
+            .command => .{
+                .query_history = .{
+                    .request_id = request_id,
+                    .entry_id = read.id,
+                    .limit = 1,
+                },
+            },
+            .output => .{
+                .read_history_output = .{
+                    .request_id = request_id,
+                    .id = read.id,
+                },
+            },
+        };
+
+        try self.enqueueHistoryRequest(message, request_id);
+    }
+}
+
+/// Pages in bounded batches while retaining the first query's insertion boundary.
+/// Example: `try self.navigateHistoryPage();`
+pub fn navigateHistoryPage(self: *AttachedClient) !void {
+    if (history_browser.navigate(&self.model)) {
+        try self.requestHistoryPage(self.model.name_prompt.currentConst().?.field.text());
+    }
+}
+
+/// Blocks incomplete or oversized pastes while keeping the browser open.
+/// Example: `_ = self.canSubmitHistory(selection);`
+pub fn canSubmitHistory(self: *AttachedClient, selection: u16) bool {
+    const palette = &self.model.history_palette;
+    const command = palette.commandAt(selection) orelse {
+        self.model.history_palette.setError(if (palette.phase == .loading) "Searching..." else "Command unavailable or capture truncated; cannot paste");
+        return false;
+    };
+
+    const active = self.model.workspace.activeConst() orelse return false;
+    const pane = active.model.focusedPaneConst() orelse return false;
+    const pane_input = pane_input_module;
+    pane_input.validateHistoryText(command, pane.input_modes.bracketed_paste) catch |err| {
+        self.model.history_palette.setError(if (err == error.UnframedHistoryText) "Multiline/tab paste requires shell bracketed-paste support" else "Command contains terminal controls; cannot paste");
+        return false;
+    };
+
+    const slots = (command.len + 13 + max_encoded_bytes - 1) / max_encoded_bytes;
+    if (self.runtime_transport.outbox.availableCapacity() < slots + 1) {
+        self.model.history_palette.setError("Input is busy; retry the command");
+        return false;
+    }
+
+    return true;
+}
+
+/// Pastes the selected command into the focused pane, optionally running it
+/// by appending Enter. Runs after the prompt closed, because
+/// `planPaneInput(.focused)` refuses input while a prompt is active; an
+/// empty result list means there is nothing to paste.
+/// Example: `try self.pasteHistorySelection(request);`
+pub fn pasteHistorySelection(self: *AttachedClient, request: HistoryPasteRequest) !void {
+    const palette = &self.model.history_palette;
+    if (palette.len == 0) {
+        return;
+    }
+
+    const index = @min(request.selection, @as(u16, palette.len) - 1);
+    const command = palette.commandAt(index) orelse return;
+    _ = try pane_inputs.historyPaste(
+        self,
+        .{
+            .text = command,
+            .run = request.run,
+        },
+    );
+}
+
+/// Sends one exact-entry deletion for the palette's selected row. The
+/// runtime answers with `history_pruned`, which requeries the palette so
+/// the row disappears only once it is actually gone.
+/// Example: `try self.deleteHistorySelection(selection);`
+pub fn deleteHistorySelection(self: *AttachedClient, selection: u16) !void {
+    const request_id = try self.request_lifecycle.nextId();
+    const id = history_browser.requestDelete(
+        &self.model,
+        core.raw(request_id),
+        selection,
+    ) orelse return;
+    try self.enqueueHistoryRequest(
+        .{
+            .delete_history = .{
+                .request_id = request_id,
+                .id = id,
+            },
+        },
+        request_id,
+    );
+}
+
+/// Publishes one owned notice through the application boundary.
+/// Example: `_ = try self.publishNotification(now_ns, input);`
+pub fn publishNotification(self: *AttachedClient, now_ns: u64, input: NotificationInput) !NotificationPublicationType {
+    const publication = self.model.publishNotification(now_ns, input);
+    try self.scheduleNotificationTimer();
+    try self.deliverHostNotification(input);
+    return publication;
+}
+
+/// Publishes one local notice at the current client monotonic timestamp.
+/// Example: `try self.publishNotificationNow(input);`
+pub fn publishNotificationNow(self: *AttachedClient, input: NotificationInput) !void {
+    _ = try self.publishNotification(core.monotonic(self.io), input);
+}
+
+/// Completes one physical timer before advancing and rearming notification
+/// state in the client model.
+/// Example: `_ = try self.completeNotificationTick(result);`
+pub fn completeNotificationTick(self: *AttachedClient, result: anyerror!void) !?NotificationChangeType {
+    try self.notification_scheduler.complete(result);
+
+    return self.advanceNotifications(core.monotonic(self.io));
+}
+
+/// Activates one current notification and follows its target at the client
+/// monotonic timestamp.
+/// Example: `_ = try self.activateNotificationNow(id);`
+pub fn activateNotificationNow(self: *AttachedClient, id: NotificationId) !?NotificationActivationType {
+    return self.activateNotification(id, core.monotonic(self.io));
+}
+
+/// Dismisses one current notification at the client monotonic timestamp.
+/// Example: `_ = try self.dismissNotificationNow(id);`
+pub fn dismissNotificationNow(self: *AttachedClient, id: NotificationId) !?NotificationChangeType {
+    return self.dismissNotification(id, core.monotonic(self.io));
+}
+
+/// Releases one playback worker and schedules its coalesced successor.
+/// Host playback errors drop that sound without stopping the queue.
+/// Example: `try self.completeAgentSound(result);`
+pub fn completeAgentSound(self: *AttachedClient, result: anyerror!void) !void {
+    _ = result catch {};
+    const next = self.sound_playback.complete() orelse return;
+
+    try self.startAgentSound(next);
+}
+
+/// Sends one bounded request for the focused pane and awaits only its
+/// reply. Without a focused pane there is nothing to give context, so the
+/// palette shows a failure instead of asking.
+/// Example: `try self.requestSuggestion(text);`
+pub fn requestSuggestion(self: *AttachedClient, text: []const u8) !void {
+    const pane_id = suggestionPane(&self.model) orelse {
+        self.model.suggestion.expect(1);
+        _ = self.model.suggestion.apply(
+            .{
+                .request_id = @enumFromInt(1),
+                .status = .failed,
+            },
+        );
+        return;
+    };
+
+    const request_id = try self.request_lifecycle.nextId();
+    var owned: OwnedSuggestionType = .{
+        .request_id = request_id,
+        .pane_id = pane_id,
+        .text_len = @intCast(@min(text.len, OwnedSuggestionType.max_text_bytes)),
+    };
+    @memcpy(owned.text[0..owned.text_len], text[0..owned.text_len]);
+
+    self.model.suggestion.expect(core.raw(request_id));
+    try self.sendRuntime(
+        .{
+            .suggest_command = owned,
+        },
+    );
+}
+
+/// Pastes the landed suggestion into the focused pane. Runs after the
+/// prompt closed, because `planPaneInput(.focused)` refuses input while a
+/// prompt is active. Nothing is pasted unless a suggestion is ready.
+/// Example: `try self.pasteSuggestion();`
+pub fn pasteSuggestion(self: *AttachedClient) !void {
+    const state = &self.model.suggestion;
+    if (state.phase != .ready) {
+        return;
+    }
+
+    _ = try pane_inputs.expressionPaste(self, state.textSlice());
+}
+
+/// Commits focus before synchronizing attachments and child focus.
+/// Example: `_ = try self.applyPaneFocus(command);`
+pub fn applyPaneFocus(self: *AttachedClient, command: PaneFocusRequest) !?PaneFocus {
+    const focus = self.model.focusPane(command) orelse return null;
+    try self.deliverPaneFocus(focus, command.area);
+
+    return focus;
+}
+
+/// Completes one timer, advances the model and rearms only active animation.
+/// Example: `_ = try self.completeSidebarAnimationTick(result);`
+pub fn completeSidebarAnimationTick(self: *AttachedClient, result: anyerror!void) !?SidebarAnimationChangeType {
+    try self.sidebar_animation_scheduler.complete(result);
+    const change = self.model.advanceSidebarAnimation() orelse return null;
+    try self.scheduleSidebarAnimation();
+    return change;
+}
+
+/// Registers correlation before copying the request; failed delivery removes only that registration.
+/// Example: `try self.sendNotificationRequest(request);`
+fn sendNotificationRequest(self: *AttachedClient, request: core.ShowNotification) !void {
+    try self.request_lifecycle.tracker.add(request.request_id, .notification);
+    errdefer _ = self.request_lifecycle.tracker.take(request.request_id);
+    try self.runtime_transport.outbox.pushNotification(request);
+    try self.startRuntimeSend();
+}
+
+/// Delivers resources for a committed focus, including newly revealed panes. Example: `try self.deliverPaneFocus(focus, area);`
+fn deliverPaneFocus(self: *AttachedClient, focus: PaneFocus, area: core.Rect) !void {
+    const active = self.model.workspace.active() orelse return error.StalePaneFocus;
+    if (!std.meta.eql(active.location, focus.location) or
+        active.model.layout.focused() != focus.focused or
+        self.model.version().panes != focus.panes_revision)
+    {
+        return error.StalePaneFocus;
+    }
+
+    try self.synchronizeActivePane();
+    if (!focus.geometry_changed) {
+        return;
+    }
+
+    self.host_graphics.invalidatePlacements();
+    try self.resizeAttachedPanes(&active.model, area);
+
+    if (active.snapshot_loaded) {
+        try self.attachVisiblePanes(active, area);
+    }
+}
+
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try self.sendCreateWorkspaceRequest(request);`
 fn sendCreateWorkspaceRequest(self: *AttachedClient, request: core.CreateWorkspace) !void {
@@ -1833,7 +2233,7 @@ fn executeClientCommand(self: *AttachedClient, reply: *core.ClientCommand) !void
             const pane_id: core.PaneId = @enumFromInt(reply.target_id);
             const tab = self.model.activeTabModelConst() orelse return error.NoActiveTab;
             const pane = tab.findConst(pane_id) orelse return error.PaneNotFound;
-            if (!pane.attached or copy_modes.active(self)) {
+            if (!pane.attached or self.copyModeActive()) {
                 return error.PaneViewportUnavailable;
             }
 
@@ -1884,9 +2284,7 @@ fn executeClientCommand(self: *AttachedClient, reply: *core.ClientCommand) !void
         },
         .pane_close => {
             try self.focusCommandPane(reply.target_id);
-            if (try pane_closures.request(
-                self,
-            ) == null) {
+            if (try self.requestPaneClose() == null) {
                 return error.PaneClosureUnavailable;
             }
 
@@ -2005,21 +2403,21 @@ fn executeClientCommand(self: *AttachedClient, reply: *core.ClientCommand) !void
             reply.status = .admitted;
         },
         .notification_dismiss => {
-            if (try notification_flow.dismissNow(self, @enumFromInt(reply.target_id)) == null) {
+            if (try self.dismissNotificationNow(@enumFromInt(reply.target_id)) == null) {
                 return error.NotificationNotFound;
             }
 
             reply.status = .applied;
         },
         .client_copy_mode => {
-            if (!copy_modes.active(self) and !copy_modes.enter(self)) {
+            if (!self.copyModeActive() and !self.enterCopyMode()) {
                 return error.CopyModeUnavailable;
             }
 
             reply.status = .applied;
         },
         .client_open_history => {
-            if (!try history_palettes.begin(self)) {
+            if (!try self.beginHistoryPalette()) {
                 return error.ClientPromptUnavailable;
             }
 
@@ -2190,11 +2588,14 @@ fn focusCommandPane(self: *AttachedClient, target_id: u64) !void {
         return;
     }
 
-    if (!try self.focusPane(
+    if (!((try self.applyPaneFocus(
         .{
-            .pane_id = pane_id,
+            .target = .{
+                .pane_id = pane_id,
+            },
+            .area = self.geometry().area,
         },
-    )) {
+    )) != null)) {
         return error.PaneFocusUnavailable;
     }
 }
@@ -2301,8 +2702,7 @@ fn applyCommandLayout(self: *AttachedClient, reply: *core.ClientCommand) !void {
         }
     }
 
-    try pane_focus.applyLayout(
-        self,
+    try self.applyPaneLayout(
         .{
             .location = tab.location,
             .layout = try WorkspaceLayout.fromClientLayout(tab),
@@ -2315,16 +2715,6 @@ fn applyCommandLayout(self: *AttachedClient, reply: *core.ClientCommand) !void {
     );
     reply.length = 0;
     reply.status = .applied;
-}
-
-fn focusPane(self: *AttachedClient, target: PaneFocusTarget) !bool {
-    return try pane_focus.apply(
-        self,
-        .{
-            .target = target,
-            .area = self.geometry().area,
-        },
-    ) != null;
 }
 
 fn navigatePane(self: *AttachedClient, direction: DirectionType) !void {
@@ -2347,14 +2737,17 @@ fn navigatePane(self: *AttachedClient, direction: DirectionType) !void {
         return;
     }
 
-    _ = try self.focusPane(
+    _ = try self.applyPaneFocus(
         .{
-            .direction = switch (direction) {
-                .left => .left,
-                .right => .right,
-                .up => .up,
-                .down => .down,
+            .target = .{
+                .direction = switch (direction) {
+                    .left => .left,
+                    .right => .right,
+                    .up => .up,
+                    .down => .down,
+                },
             },
+            .area = self.geometry().area,
         },
     );
 }
@@ -2395,7 +2788,7 @@ fn createCommandTab(self: *AttachedClient, command: *const CommandTabType) !void
 }
 
 fn executeLuaAction(self: *AttachedClient, command: ApplicationInputLuaActionCommand) !ControlType {
-    const copy_mode_active = copy_modes.active(self);
+    const copy_mode_active = self.copyModeActive();
     const outcome = try lua_actions.execute(self, command);
     switch (outcome) {
         .applied, .unavailable, .invocation_failed, .validation_failed => return .continue_routing,
@@ -2755,7 +3148,7 @@ fn failRuntimeRequest(self: *AttachedClient, failure: RequestFailedType) !Applic
         => {},
     }
 
-    try notification_flow.publishNow(self, request_failure.notification(
+    try self.publishNotificationNow(request_failure.notification(
         .{
             .continuation = continuation,
             .code = failure.code,
@@ -3054,8 +3447,7 @@ fn openExternalLink(self: *AttachedClient, target: LinkTarget) !void {
 }
 
 fn reportLinkFailure(self: *AttachedClient, err: anyerror) !void {
-    try notification_flow.publishNow(
-        self,
+    try self.publishNotificationNow(
         .{
             .level = .warning,
             .title = "Could not open link",
@@ -3139,8 +3531,7 @@ fn completeEditorOpen(self: *AttachedClient, reply: core.EditorOpened) !void {
                 return;
             }
 
-            _ = try pane_focus.apply(
-                self,
+            _ = try self.applyPaneFocus(
                 .{
                     .target = .{
                         .pane_id = reply.pane_id,
@@ -3198,8 +3589,7 @@ fn applyAgentHistory(self: *AttachedClient, response: core.AgentHistoryPageView)
 }
 
 fn reportAgentHistoryFailure(self: *AttachedClient, message: []const u8) !void {
-    try notification_flow.publishNow(
-        self,
+    try self.publishNotificationNow(
         .{
             .level = .failure,
             .title = "Could not load messages",
@@ -3210,8 +3600,7 @@ fn reportAgentHistoryFailure(self: *AttachedClient, message: []const u8) !void {
 
 fn createAgentTab(self: *AttachedClient) !void {
     if (!self.model.hostCapabilities().agent_panes) {
-        try notification_flow.publishNow(
-            self,
+        try self.publishNotificationNow(
             .{
                 .level = .info,
                 .title = "Agent panes require the GUI",
@@ -3318,7 +3707,7 @@ fn applyTabSnapshot(self: *AttachedClient, snapshot: TabSnapshotViewType) !TabSn
 
     for (reconciliation.removed_panes.slice()) |pane_id| {
         self.request_lifecycle.tracker.ignorePane(pane_id);
-        pane_resources.release(self, pane_id);
+        self.releasePaneResources(pane_id);
     }
 
     if (reconciliation.active) {
@@ -3386,7 +3775,7 @@ fn applyWorkspaceSnapshot(self: *AttachedClient, snapshot: WorkspaceSnapshotView
     }
 
     for (reconciliation.removed_panes.slice()) |pane_id| {
-        pane_resources.release(self, pane_id);
+        self.releasePaneResources(pane_id);
     }
 
     const active = self.model.workspace.active() orelse return error.StaleWorkspaceReconciliation;
@@ -3556,7 +3945,7 @@ fn completeTabClose(self: *AttachedClient, closed: TabClosedType) !TabCloseOutco
 
     self.request_lifecycle.tracker.ignoreTab(removal.removed.tab_id);
     for (removal.panes.slice()) |pane_id| {
-        pane_resources.release(self, pane_id);
+        self.releasePaneResources(pane_id);
     }
 
     if (removal.was_active) {
@@ -3769,7 +4158,7 @@ fn releaseWorkspace(self: *AttachedClient, departure: *const WorkspaceDeparture)
     }
 
     for (departure.panes.slice()) |pane_id| {
-        pane_resources.release(self, pane_id);
+        self.releasePaneResources(pane_id);
     }
 
     _ = self.model.forgetReportedPaneFocus();
@@ -3803,6 +4192,949 @@ fn activateWorkspace(self: *AttachedClient, activation: WorkspaceActivation) !vo
     try self.host_input_source.resumeRead();
     try self.requestWorkspaceSnapshot(activation.location.workspace);
     try self.requestTabSnapshot(activation.location);
+}
+
+/// Consumes one correlated runtime completion before committing canonical state.
+fn completeTabMove(self: *AttachedClient, moved: TabMovedType) !ChangeType {
+    const continuation = self.request_lifecycle.tracker.take(moved.request_id) orelse
+        return error.UnexpectedTabMoved;
+    const expected_location = switch (continuation) {
+        .move_tab => |location| location,
+        else => return error.UnexpectedTabMoved,
+    };
+
+    if (!std.meta.eql(expected_location, moved.location)) {
+        return error.UnexpectedTabMoved;
+    }
+
+    return self.model.applyTabPosition(moved.location, moved.position) catch return error.UnexpectedTabMoved;
+}
+
+/// Applies validated cells and acknowledges ownership before host resources.
+fn applyPaneFrame(self: *AttachedClient, frame: FrameViewType) !PaneFrameOutcomeType {
+    const started = core.now(self.io);
+    const outcome = try self.model.applyPaneFrame(frame);
+    switch (outcome) {
+        .detached => {},
+        .resync => |recovery| try self.requestPaneFrameSnapshot(recovery),
+        .applied => |commit| {
+            try self.acknowledgePaneFrame(
+                .{
+                    .pane_id = commit.pane_id,
+                    .frame_id = commit.frame_id,
+                },
+            );
+            if (self.graphics.paneVisible(commit.pane_id) != commit.graphics_visible) {
+                try self.graphics.setPaneVisible(commit.pane_id, commit.graphics_visible);
+            }
+
+            if (self.model.workspace.activeConst() != null) {
+                try self.synchronizeActivePane();
+            }
+        },
+    }
+
+    if (outcome == .applied) {
+        const commit = outcome.applied;
+        if (comptime core.enabled) {
+            self.telemetry.metrics.frames += 1;
+            self.telemetry.metrics.frame_cells += commit.cells;
+            self.telemetry.metrics.frame_spans += commit.spans;
+            self.telemetry.metrics.snapshots += @intFromBool(commit.snapshot);
+            self.telemetry.metrics.apply.observe(core.elapsed(started, core.now(self.io)));
+        }
+
+        if (attachment_prompts.reconcileFrame(self, commit.pane_id)) {
+            self.host_graphics.invalidatePlacements();
+            if (self.model.workspace.active()) |tab| {
+                try self.resizeAttachedPanes(&tab.model, self.geometry().area);
+            }
+        }
+    }
+
+    return outcome;
+}
+
+fn acknowledgePaneFrame(self: *AttachedClient, ack: FrameAckType) !void {
+    const started = core.now(self.io);
+    try self.sendRuntime(
+        .{
+            .frame_ack = ack,
+        },
+    );
+
+    if (comptime core.enabled) {
+        self.telemetry.metrics.ack_enqueue.observe(core.elapsed(started, core.now(self.io)));
+    }
+}
+
+fn requestPaneFrameSnapshot(self: *AttachedClient, recovery: PaneFrameRecoveryType) !void {
+    try self.sendRuntime(
+        .{
+            .request_snapshot = .{
+                .pane_id = recovery.pane_id,
+                .known_frame_id = recovery.known_frame_id,
+            },
+        },
+    );
+}
+
+/// Stores one decoded terminal progress report and maintains animation liveness.
+fn applyPaneProgress(self: *AttachedClient, message: PaneProgressType) !?PaneProgressCommitType {
+    const commit = self.model.updatePaneProgress(message) orelse return null;
+    _ = try self.synchronizeSidebarAnimation();
+    return commit;
+}
+
+/// Revalidates the source pane, applies the directional focus, and reports the
+/// result to the control connection through the runtime.
+fn completePaneFocusCommand(self: *AttachedClient, command: PaneFocusCommandType) !void {
+    const current = self.model.planPaneInput(.focused);
+    if (current == null or current.?.pane_id != command.pane_id) {
+        return self.sendPaneFocusCompletion(
+            command,
+            .{
+                .outcome = .source_not_focused,
+                .focused_pane_id = .invalid,
+            },
+        );
+    }
+
+    const focus = try self.applyPaneFocus(
+        .{
+            .target = .{
+                .direction = paneFocusDirection(command.direction),
+            },
+            .area = self.geometry().area,
+        },
+    );
+    if (focus) |changed| {
+        return self.sendPaneFocusCompletion(
+            command,
+            .{
+                .outcome = .focused,
+                .focused_pane_id = changed.focused,
+            },
+        );
+    }
+
+    return self.sendPaneFocusCompletion(
+        command,
+        .{
+            .outcome = .no_neighbor,
+            .focused_pane_id = command.pane_id,
+        },
+    );
+}
+
+fn sendPaneFocusCompletion(self: *AttachedClient, command: PaneFocusCommandType, completion: PaneFocusCompletion) !void {
+    try self.sendRuntime(
+        .{
+            .complete_pane_focus = .{
+                .requester = command.requester,
+                .request_id = command.request_id,
+                .pane_id = command.pane_id,
+                .pane_generation = command.pane_generation,
+                .outcome = completion.outcome,
+                .focused_pane_id = completion.focused_pane_id,
+            },
+        },
+    );
+}
+
+fn paneFocusDirection(value: PaneDirectionType) LayoutDirection {
+    return switch (value) {
+        .left => .left,
+        .right => .right,
+        .up => .up,
+        .down => .down,
+    };
+}
+
+/// Requests closure without mutating runtime-owned pane membership.
+fn requestPaneClose(self: *AttachedClient) !?PaneClosureType {
+    if (self.request_lifecycle.tracker.has(.pane_operation)) {
+        return null;
+    }
+
+    const closure = self.model.planPaneClosure() orelse return null;
+    const request_id = try self.request_lifecycle.nextId();
+    try self.sendRuntimeRequest(
+        .{
+            .registration = .{
+                .request_id = request_id,
+                .continuation = .{
+                    .close_pane = .{
+                        .pane_id = closure.pane_id,
+                        .location = closure.location,
+                    },
+                },
+            },
+            .message = .{
+                .close_pane = .{
+                    .request_id = request_id,
+                    .pane_id = closure.pane_id,
+                },
+            },
+        },
+    );
+    return closure;
+}
+
+/// Commits authoritative retirement and performs idempotent cleanup for late exits.
+fn applyPaneExit(self: *AttachedClient, exited: PaneExited) !types.PaneExit {
+    const transition = self.model.retirePane(exited.pane_id);
+    _ = self.request_lifecycle.tracker.ignoreAttachment(exited.pane_id);
+    _ = self.request_lifecycle.tracker.completePaneClose(exited.pane_id);
+    self.releasePaneResources(exited.pane_id);
+
+    const retirement = switch (transition) {
+        .retired => |retirement| retirement,
+        .stale => return transition,
+    };
+
+    if (!retirement.active) {
+        return transition;
+    }
+
+    self.host_graphics.invalidatePlacements();
+    try self.synchronizeActivePane();
+    if (!retirement.tab_empty) {
+        const tab = self.model.workspace.find(retirement.location.tab_id) orelse return error.StalePaneExit;
+        try self.resizeAttachedPanes(&tab.model, self.geometry().area);
+    }
+
+    return transition;
+}
+
+/// Enters copy mode on the attached focused pane.
+fn enterCopyMode(self: *AttachedClient) bool {
+    const tab = self.model.activeTabModelConst() orelse return false;
+    const pane = tab.focusedPaneConst() orelse return false;
+    if (pane.kind == .agent) {
+        if (!pane.attached or self.model.copyModeActive() or self.model.name_prompt.active() or self.model.pane_paste != null) {
+            return false;
+        }
+
+        return self.host_input_source.enterThreadCopyMode(pane.id);
+    }
+
+    return self.model.enterCopyMode();
+}
+
+/// Applies one runtime search reply to the active copy-mode state.
+fn applyPaneMatches(self: *AttachedClient, view: PaneMatchesViewType) !CopyModeOutcome {
+    var storage: [core.max_search_matches]SearchMatchType = undefined;
+    var count: usize = 0;
+    var iterator = view.matches();
+    while (try iterator.next()) |match| {
+        if (count == storage.len) {
+            break;
+        }
+        storage[count] = match;
+        count += 1;
+    }
+
+    return self.applyCopyMode(
+        .{
+            .matches = .{
+                .pane_id = view.pane_id,
+                .matches = storage[0..count],
+            },
+        },
+    );
+}
+
+/// Opens the palette and requests the unfiltered newest history.
+fn beginHistoryPalette(self: *AttachedClient) !bool {
+    if (!name_prompts.beginHistoryPalette(self)) {
+        return false;
+    }
+
+    history_browser.begin(
+        &self.model,
+        .{
+            .enter_runs = self.history_enter_runs,
+            .match_fuzzy = !self.history_match_fts,
+        },
+    );
+    try self.queryHistory("");
+    return true;
+}
+
+fn requestHistoryPage(self: *AttachedClient, query: []const u8) !void {
+    const request_id = try self.request_lifecycle.nextId();
+
+    var owned: OwnedHistoryQueryType = .{
+        .request_id = request_id,
+        .query_len = @intCast(@min(query.len, OwnedHistoryQueryType.max_query_bytes)),
+        .author = if (self.history_show_agent_commands) .all else .human,
+        .match = if (self.history_match_fts) .fts else .fuzzy,
+        .limit = core.max_history_results,
+        .offset = self.model.history_palette.pending_offset,
+        .snapshot_id = self.model.history_palette.snapshot_id,
+    };
+    @memcpy(owned.query[0..owned.query_len], query[0..owned.query_len]);
+    resolveHistoryScope(&self.model, &owned);
+    if (!self.model.history_palette.beginPageRequest(core.raw(request_id), owned.scope)) {
+        return;
+    }
+
+    self.sendRuntime(
+        .{
+            .query_history = owned,
+        },
+    ) catch |err| {
+        _ = self.model.history_palette.fail(
+            .{
+                .request_id = request_id,
+                .code = .resource_limit,
+                .message = "History request queue is full; retry",
+            },
+        );
+        if (err != error.ClientOutboxFull) {
+            return err;
+        }
+    };
+}
+
+fn resolveHistoryScope(model: *const ModelType, owned: *OwnedHistoryQueryType) void {
+    const prompt = model.name_prompt.currentConst() orelse return;
+    if (prompt.target() != .history) {
+        return;
+    }
+
+    switch (prompt.scope()) {
+        .global => {},
+        .workspace => {
+            const location = model.workspaceLocation() orelse return;
+            const workspace = switch (location) {
+                .workspace => |workspace| workspace,
+                .worktree => return,
+            };
+
+            const list = model.workspaceListSnapshot();
+            const index = list.indexOf(workspace) orelse return;
+            const path = list.pathAt(index);
+            if (path.len == 0 or path.len > OwnedHistoryQueryType.max_scope_bytes) {
+                return;
+            }
+
+            owned.scope = .workspace;
+            @memcpy(owned.scope_value[0..path.len], path);
+            owned.scope_value_len = @intCast(path.len);
+        },
+        .cwd => {
+            const active = model.workspace.activeConst() orelse return;
+            const pane = active.model.focusedPaneConst() orelse return;
+            const cwd = pane.cwdSlice();
+            if (cwd.len == 0 or cwd.len > OwnedHistoryQueryType.max_scope_bytes) {
+                return;
+            }
+
+            owned.scope = .cwd;
+            @memcpy(owned.scope_value[0..cwd.len], cwd);
+            owned.scope_value_len = @intCast(cwd.len);
+        },
+        .pane => {
+            const active = model.workspace.activeConst() orelse return;
+            const pane = active.model.focusedPaneConst() orelse return;
+            owned.scope = .pane;
+            owned.pane_id = pane.id;
+        },
+    }
+}
+
+/// Applies one runtime reply to the palette model. Stale replies and replies
+/// arriving after the palette closed change nothing visible.
+fn applyHistoryResults(self: *AttachedClient, view: HistoryResultsViewType) !bool {
+    var storage: [core.max_history_results]HistoryEntryType = undefined;
+    var count: usize = 0;
+    var iterator = view.entries();
+    while (try iterator.next()) |entry| {
+        if (count == storage.len) {
+            break;
+        }
+
+        storage[count] = entry;
+        count += 1;
+    }
+
+    const changed = history_browser.apply(
+        &self.model,
+        .{
+            .request_id = core.raw(view.request_id),
+            .entries = storage[0..count],
+            .snapshot_id = view.snapshot_id,
+            .has_more = view.has_more,
+            .now_ms = @intCast(std.Io.Timestamp.now(self.io, .real).toMilliseconds()),
+        },
+    );
+    if (changed) {
+        try self.refreshHistoryInspection();
+    }
+
+    return changed;
+}
+
+fn enqueueHistoryRequest(self: *AttachedClient, message: RuntimeOutboundMessage, request_id: RequestIdType) !void {
+    self.sendRuntime(message) catch |err| {
+        _ = self.model.history_palette.fail(
+            .{
+                .request_id = request_id,
+                .code = .resource_limit,
+                .message = "History queue is full; change selection or retry",
+            },
+        );
+        if (err != error.ClientOutboxFull) {
+            return err;
+        }
+    };
+}
+
+/// Requeries the palette after the runtime confirmed a deletion.
+fn completeHistoryPrune(self: *AttachedClient, confirmation: HistoryPrunedType) !bool {
+    if (!history_browser.pruned(&self.model, core.raw(confirmation.request_id))) {
+        return false;
+    }
+
+    try self.queryHistory(self.model.name_prompt.currentConst().?.field.text());
+    return true;
+}
+
+/// Delivers one bounded semantic notification through the runtime and records
+/// the continuation consumed by its delivery report.
+fn requestNotificationDelivery(self: *AttachedClient, notification: *const NotificationType) !RequestIdType {
+    const request_id = try self.request_lifecycle.nextId();
+    try self.sendNotificationRequest(
+        .{
+            .request_id = request_id,
+            .notification = .{
+                .level = notification.level,
+                .duration_ms = notification.duration_ms,
+                .target = notification.target,
+                .title = notification.title(),
+                .message = notification.message(),
+            },
+        },
+    );
+
+    return request_id;
+}
+
+/// Consumes one correlated runtime delivery report and applies its policy.
+fn completeNotificationDelivery(self: *AttachedClient, shown: NotificationShownType) !NotificationDeliveryOutcome {
+    const continuation = self.request_lifecycle.tracker.take(shown.request_id) orelse
+        return error.UnexpectedNotificationReply;
+    if (continuation != .notification) {
+        return error.UnexpectedNotificationReply;
+    }
+
+    if (shown.delivered_clients != 0) {
+        return .delivered;
+    }
+
+    try self.publishNotificationNow(
+        .{
+            .level = .failure,
+            .title = "Notification not delivered",
+            .message = "No connected client could accept the notification",
+        },
+    );
+    return .undelivered;
+}
+
+/// Translates and publishes one notification pushed by the runtime.
+fn applyRuntimeNotification(self: *AttachedClient, notification: CoreNotification) !NotificationPublicationType {
+    return self.publishNotification(
+        core.monotonic(self.io),
+        .{
+            .level = switch (notification.level) {
+                .info => .info,
+                .success => .success,
+                .warning => .warning,
+                .failure => .failure,
+            },
+            .title = notification.title,
+            .message = notification.message,
+            .target = switch (notification.target) {
+                .none => .none,
+                .pane => |pane_id| .{
+                    .focus_pane = pane_id,
+                },
+                .tab => |tab_id| .{
+                    .select_tab = tab_id,
+                },
+                .workspace => |workspace_id| .{
+                    .select_workspace = workspace_id,
+                },
+            },
+            .duration_ns = @as(u64, notification.duration_ms) * std.time.ns_per_ms,
+        },
+    );
+}
+
+/// Surfaces one published notice through the configured host channel. The
+/// in-app center always shows it; the host port owns `terminal` and `system`.
+fn deliverHostNotification(self: *AttachedClient, input: NotificationInput) !void {
+    if (self.notification_delivery == .telar) {
+        return;
+    }
+
+    try self.notifier.notify(self.notification_delivery, input);
+}
+
+/// Advances every notification lifecycle to one monotonic timestamp.
+fn advanceNotifications(self: *AttachedClient, now_ns: u64) !?NotificationChangeType {
+    const change = self.model.advanceNotifications(now_ns);
+    try self.scheduleNotificationTimer();
+    return change;
+}
+
+/// Activates one current notification identity and follows its target at most
+/// once.
+fn activateNotification(self: *AttachedClient, id: NotificationId, now_ns: u64) !?NotificationActivationType {
+    const activation = self.model.activateNotification(id, now_ns) orelse return null;
+    try self.scheduleNotificationTimer();
+    try self.navigateNotification(activation.target);
+    return activation;
+}
+
+/// Dismisses one current notification identity without navigation.
+fn dismissNotification(self: *AttachedClient, id: NotificationId, now_ns: u64) !?NotificationChangeType {
+    const change = self.model.dismissNotification(id, now_ns) orelse return null;
+    try self.scheduleNotificationTimer();
+    return change;
+}
+
+fn navigateNotification(self: *AttachedClient, target: NotificationTarget) !void {
+    switch (target) {
+        .none => {},
+        .select_tab => |tab_id| {
+            _ = try tab_selections.select(
+                self,
+                .{
+                    .target = .{
+                        .tab_id = tab_id,
+                    },
+                },
+            );
+        },
+        .select_workspace => |workspace| {
+            _ = try self.selectWorkspace(
+                .{
+                    .workspace = workspace,
+                },
+            );
+        },
+        .focus_pane => |pane_id| {
+            _ = try self.applyPaneFocus(
+                .{
+                    .target = .{
+                        .pane_id = pane_id,
+                    },
+                    .area = self.geometry().area,
+                },
+            );
+        },
+    }
+}
+
+/// Translates one runtime sound and applies it to an exact current agent.
+fn applyAgentSound(self: *AttachedClient, notification: AgentSoundNotificationType) !AgentSoundOutcome {
+    if (!self.model.knowsAgent(
+        .{
+            .pane_id = notification.pane_id,
+            .pane_generation = notification.pane_generation,
+        },
+    )) {
+        return .stale;
+    }
+
+    switch (self.sound_playback.request(notification.sound)) {
+        .ignored, .queued => {},
+        .start => |kind| try self.startAgentSound(kind),
+    }
+
+    return .accepted;
+}
+
+fn startAgentSound(self: *AttachedClient, kind: AgentSoundType) !void {
+    self.sound_port.start(kind) catch |err| {
+        self.sound_playback.schedulingFailed();
+        return err;
+    };
+}
+
+/// Consumes the single bootstrap snapshot, restores client-owned preferences
+/// and sends the initial attach-or-create request with the restored geometry.
+fn restoreClientLayout(self: *AttachedClient, snapshot: ClientLayoutSnapshotViewType) !void {
+    if (self.client_layouts.snapshot_received) {
+        return error.DuplicateClientLayoutSnapshot;
+    }
+
+    var saved_layouts: LayoutsType = .{};
+    var history: HistoryType = .{};
+    const restored = if (snapshot.restored)
+        try parseClientLayoutSnapshot(
+            snapshot,
+            &saved_layouts,
+            &history,
+        )
+    else
+        null;
+
+    if (snapshot.restored) {
+        if (self.model.restoreSidebarLayout(snapshot.sidebar_visible, snapshot.sidebar_width)) |change| {
+            try sidebar_projection.apply(self, change);
+        }
+
+        if (self.model.setWorkspaceListCollapsed(snapshot.workspace_list_collapsed)) |_| {
+            self.chrome.setWorkspaceListCollapsed(snapshot.workspace_list_collapsed);
+        }
+
+        self.model.restoreClientLayouts(saved_layouts);
+        self.navigation_history = history;
+    }
+
+    const size = rectSize_module(self.geometry().area) orelse
+        return error.TerminalTooSmall;
+    const request = self.initialPaneRequest(restored, size);
+    try self.sendRuntimeRequest(request);
+    try self.client_layouts.markSnapshotReceived();
+}
+
+fn parseClientLayoutSnapshot(snapshot: ClientLayoutSnapshotViewType, layouts: *LayoutsType, history: *HistoryType) !?SavedLayoutType {
+    var restored_active: ?SavedLayoutType = null;
+    var tabs = snapshot.tabs();
+    while (try tabs.next()) |tab| {
+        const saved: SavedLayoutType = .{
+            .location = tab.location,
+            .pane_id = tab.focused_pane,
+            .workspace_active = tab.workspace_active,
+            .layout = try WorkspaceLayout.fromClientLayout(tab),
+        };
+
+        try layouts.remember(saved);
+        if (tab.workspace_active) {
+            history.remember(
+                .{
+                    .location = tab.location,
+                    .pane_id = tab.focused_pane,
+                    .tab_layout = saved.layout,
+                },
+            );
+        }
+
+        if (snapshot.active_tab) |active_location| {
+            if (std.meta.eql(tab.location, active_location)) {
+                restored_active = saved;
+            }
+        }
+    }
+
+    if (snapshot.active_tab != null and restored_active == null) {
+        return error.InvalidClientLayoutActiveTab;
+    }
+
+    return restored_active;
+}
+
+fn initialPaneRequest(self: *AttachedClient, restored: ?SavedLayoutType, size: TerminalSizeType) ConnectionDelivery {
+    const fallback_workspace: ?WorkspaceIdType = if (restored) |saved| switch (saved.location.workspace) {
+        .workspace => |workspace_id| workspace_id,
+        .worktree => null,
+    } else null;
+
+    return .{
+        .registration = .{
+            .request_id = initial_request_id_module,
+            .continuation = .{
+                .initial_open = .{
+                    .fallback_workspace = fallback_workspace,
+                },
+            },
+        },
+        .message = .{
+            .open_pane = .{
+                .request_id = initial_request_id_module,
+                .target = if (restored) |saved| .{
+                    .pane = saved.pane_id,
+                } else .default,
+                .size = size,
+                .launch = if (restored == null) .{
+                    .cwd = self.options.cwd,
+                    .arguments = self.options.arguments,
+                } else null,
+            },
+        },
+    };
+}
+
+/// Resolves disposable client state and applies one validated runtime resync.
+/// The client loop maps only the returned `exit` outcome to process status.
+fn applyResyncRequirement(self: *AttachedClient, required: ResyncRequiredType) !ResyncOutcome {
+    if (required.workspace_closed) {
+        self.navigation_history.forget(required.workspace);
+        const previous = required.previous_workspace orelse return .exit;
+        _ = try self.requestWorkspace(previous);
+        return .handoff_requested;
+    }
+
+    const projected = self.model.workspaceLocation() orelse return error.UnexpectedResync;
+    if (!std.meta.eql(projected, required.workspace)) {
+        return error.UnexpectedResync;
+    }
+
+    if (self.request_lifecycle.tracker.has(.workspace_snapshot)) {
+        return .coalesced;
+    }
+
+    try self.requestWorkspaceSnapshot(required.workspace);
+    return .snapshot_requested;
+}
+
+/// Opens the palette with an empty request and no suggestion.
+fn beginSuggestion(self: *AttachedClient) !bool {
+    if (!name_prompts.beginSuggestPalette(self)) {
+        return false;
+    }
+
+    self.model.suggestion.begin();
+    return true;
+}
+
+fn suggestionPane(model: *const ModelType) ?PaneId {
+    const active = model.workspace.activeConst() orelse return null;
+    const pane = active.model.focusedPaneConst() orelse return null;
+    return pane.id;
+}
+
+/// Commits one decoded proxy state and announces only semantic transitions.
+fn applyProxyStatus(self: *AttachedClient, message: ProxyStatusType) !?ProxyStatusCommitType {
+    const commit = self.model.reconcileProxyStatus(message) orelse return null;
+
+    const trust_only = commit.previous == commit.active and commit.previous_scope == commit.scope;
+    try self.publishNotificationNow(
+        .{
+            .level = if (commit.active or commit.system_trusted) .warning else .info,
+            .title = if (trust_only)
+                if (commit.system_trusted) "Proxy CA trusted by system" else "Proxy CA removed from system trust"
+            else if (commit.active)
+                "TLS interception active"
+            else
+                "TLS interception stopped",
+            .message = if (trust_only)
+                if (commit.system_trusted) "The short-lived Telar CA is installed" else "The Telar CA is no longer installed"
+            else if (commit.active)
+                "Agent network traffic is being observed"
+            else
+                "Agent network traffic is no longer observed",
+            .duration_ns = if (commit.active or commit.system_trusted)
+                7 * std.time.ns_per_s
+            else
+                notification_capability.default_duration_ns,
+        },
+    );
+    return commit;
+}
+
+/// Maps one validated wire view into bounded agent inputs and synchronizes
+/// dependent client state after committing the canonical revision.
+fn applyAgentSnapshot(self: *AttachedClient, snapshot: AgentSnapshotViewType) !?AgentSnapshotCommitType {
+    var entries: [core.max_agent_snapshot_entries]AgentInputType = undefined;
+    var count: usize = 0;
+    var iterator = snapshot.entries();
+    while (try iterator.next()) |entry| {
+        entries[count] = .{
+            .key = .{
+                .pane_id = entry.pane_id,
+                .pane_generation = entry.pane_generation,
+            },
+            .location = entry.location,
+            .pane_index = entry.pane_index,
+            .workspace_label = entry.workspace_label,
+            .tab_label = entry.tab_label,
+            .session_title = entry.session_title,
+            .title_source = entry.title_source,
+            .title_state = entry.title_state,
+            .cwd_label = entry.cwd_label,
+            .provider = entry.provider,
+            .provider_name = entry.provider_name,
+            .display_name = entry.display_name,
+            .icon = entry.icon,
+            .attachments = entry.attachments,
+            .status = entry.status,
+            .blocked_reason = entry.blocked_reason,
+            .last_event = entry.last_event,
+            .status_age_s = entry.status_age_s,
+        };
+        count += 1;
+    }
+
+    const commit = try self.model.reconcileAgentSnapshot(
+        .{
+            .revision = snapshot.revision,
+            .agents = entries[0..count],
+        },
+    ) orelse return null;
+    _ = try self.synchronizePaneAttachments();
+
+    var alert_count: usize = 0;
+    const current = self.model.agentSnapshot();
+    for (commit.status_changes.slice()) |change| {
+        if (alert_count == notification_capability.max_items) {
+            break;
+        }
+
+        var message_buffer: [96]u8 = undefined;
+        const label = if (current.find(change.key)) |agent| agent.displayName() else core.generic_display_name;
+        const alert = agent_snapshot_delivery.alertInput(
+            change,
+            label,
+            &message_buffer,
+        ) orelse continue;
+        try self.publishNotificationNow(alert);
+        alert_count += 1;
+    }
+
+    _ = try self.synchronizeSidebarAnimation();
+    return commit;
+}
+
+/// Reconciles physical graphics and semantic fallback, recovering bounded ingress failures.
+fn applyPaneGraphics(self: *AttachedClient, command: PaneGraphicsCommand) !PaneGraphicsOutcome {
+    if (comptime core.enabled) {
+        switch (command) {
+            .image, .shared_image => self.telemetry.metrics.graphics_images += 1,
+            else => {},
+        }
+    }
+
+    const pane_id = command.paneId();
+    const resource = try pane_graphics.applyResources(self.graphics, command);
+
+    return switch (resource) {
+        .unchanged => .unchanged,
+        .changed => |state| block: {
+            if (state.pane_id != pane_id) {
+                return error.InvalidPaneGraphicsResult;
+            }
+
+            break :block .{
+                .applied = .{
+                    .pane_id = pane_id,
+                    .fallback = self.model.setPaneGraphicsFallback(
+                        pane_id,
+                        self.model.hostCapabilities().images != .supported and
+                            state.has_graphics,
+                    ),
+                },
+            };
+        },
+        .resync_required => |recovery_pane| block: {
+            if (recovery_pane != pane_id) {
+                return error.InvalidPaneGraphicsResult;
+            }
+
+            try self.sendRuntime(
+                .{
+                    .request_graphics_snapshot = .{
+                        .pane_id = pane_id,
+                    },
+                },
+            );
+            break :block .{
+                .resync_requested = pane_id,
+            };
+        },
+        .shared_mapping_failed => |recovery_pane| block: {
+            if (recovery_pane != pane_id) {
+                return error.InvalidPaneGraphicsResult;
+            }
+
+            try self.sendRuntime(
+                .{
+                    .configure_graphics = .{
+                        .shared = false,
+                    },
+                },
+            );
+            try self.sendRuntime(
+                .{
+                    .request_graphics_snapshot = .{
+                        .pane_id = pane_id,
+                    },
+                },
+            );
+            break :block .{
+                .shared_disabled = pane_id,
+            };
+        },
+    };
+}
+
+/// Commits a membership-checked layout before delivering its geometry.
+fn applyPaneLayout(self: *AttachedClient, request: PaneLayoutRequest) !void {
+    const focus = try self.model.applyPaneLayout(request);
+    try self.deliverPaneFocus(focus, request.area);
+}
+
+/// Releases exact pane authorities before physical resources; repeated release is harmless.
+fn releasePaneResources(self: *AttachedClient, pane_id: PaneId) void {
+    _ = self.model.releaseCopyMode(pane_id);
+    _ = self.model.releasePanePaste(pane_id);
+    _ = self.model.releaseReportedPaneFocus(pane_id);
+    self.graphics.clearPane(pane_id);
+}
+
+/// Ensures the current model has one future tick when animation is active.
+fn synchronizeSidebarAnimation(self: *AttachedClient) !ActivityType {
+    if (!self.model.sidebarAnimationActive()) {
+        return .inactive;
+    }
+
+    try self.scheduleSidebarAnimation();
+    return .active;
+}
+
+fn scheduleSidebarAnimation(self: *AttachedClient) !void {
+    if (self.timers.animation_clock == .host) {
+        return;
+    }
+
+    const scheduler = &self.sidebar_animation_scheduler;
+    if (scheduler.pending) {
+        return;
+    }
+
+    const deadline_ns = core.monotonic(self.io) +| sidebar_animation_interval_ns;
+    switch (scheduler.update(self.io, deadline_ns)) {
+        .idle, .retained => {},
+        .schedule => self.timers.arm(.sidebar_animation, scheduler) catch |err| {
+            scheduler.schedulingFailed();
+            return err;
+        },
+    }
+}
+
+/// Replaces the pending deadline from current model state and starts at most
+/// one inbox producer through the timer port.
+fn scheduleNotificationTimer(self: *AttachedClient) !void {
+    const scheduler = &self.notification_scheduler;
+    const now_ns = core.monotonic(self.io);
+    const deadline_ns = self.model.nextNotificationDeadline(
+        now_ns,
+        if (self.timers.animation_clock == .host) @import("std").math.maxInt(u64) else self.presentation.frameIntervalNs(),
+    );
+    switch (scheduler.update(self.io, deadline_ns)) {
+        .idle, .retained => {},
+        .schedule => self.timers.arm(.notification, scheduler) catch |err| {
+            scheduler.schedulingFailed();
+
+            return err;
+        },
+    }
 }
 
 test "layout export decodes to the same active pane and split tree" {
@@ -3839,4 +5171,8 @@ test "owned request deliveries roll back only their own correlation when the out
         sendCreateTabRequest,
         sendAgentPromptRequest,
     );
+}
+
+test "copy mode delegates agent readers after admission and preserves terminal behavior" {
+    try copy_mode_tests.agentReaders(enterCopyMode);
 }

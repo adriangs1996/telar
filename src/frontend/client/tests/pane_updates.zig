@@ -14,7 +14,6 @@ const encodePaneForeground_module = @import("telar-core").encodePaneForeground;
 const PaneIdType = @import("telar-core").PaneId;
 const encodePaneExited_module = @import("telar-core").encodePaneExited;
 const support = @import("support.zig");
-const pane_closures = @import("telar-client").operations.pane_closures;
 const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
 const TabLocationType = @import("telar-core").TabLocation;
 const IconType = @import("telar-client").Icon;
@@ -489,9 +488,11 @@ test "close pane request waits for the authoritative exit before committing" {
     const committed_version = client.model.version();
     const pending_updates_after_commit = host(client).presenter.pending_updates;
 
-    const repeated = try pane_closures.applyExit(client, (try decodeServer_module(exited)).pane_exited);
-    try std.testing.expect(repeated == .stale);
-    try std.testing.expectEqual(closing_pane, repeated.stale.pane_id);
+    _ = try client.handleServerMessage(
+        .{
+            .pane_exited = (try decodeServer_module(exited)).pane_exited,
+        },
+    );
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(committed_version, client.model.version());
@@ -525,11 +526,11 @@ test "an unrequested pane exit removes the pane silently" {
         .kind = .exited,
         .value = 0,
     });
-    const transition = try pane_closures.applyExit(client, (try decodeServer_module(exited)).pane_exited);
-    try std.testing.expect(transition == .retired);
-    try std.testing.expectEqual(TestHarness.bootstrap_pane, transition.retired.pane_id);
-    try std.testing.expect(transition.retired.active);
-    try std.testing.expect(transition.retired.tab_empty);
+    _ = try client.handleServerMessage(
+        .{
+            .pane_exited = (try decodeServer_module(exited)).pane_exited,
+        },
+    );
     try harness.settle();
 
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);

@@ -1123,7 +1123,13 @@ fn finishPaste(gui: *GuiClient, result: @import("../../input/ClipboardResult.zig
 
         if (result.status != .success) {
             if (result.status == .too_large or result.status == .cancelled) {
-                try client.operations.notifications.publishNow(&gui.app, .{ .level = .warning, .title = "Clipboard could not be pasted", .message = if (result.status == .too_large) "The clipboard image or attachment storage exceeds its size limit." else "The clipboard image could not be read or saved." });
+                try gui.app.publishNotificationNow(
+                    .{
+                        .level = .warning,
+                        .title = "Clipboard could not be pasted",
+                        .message = if (result.status == .too_large) "The clipboard image or attachment storage exceeds its size limit." else "The clipboard image could not be read or saved.",
+                    },
+                );
             }
 
             return;

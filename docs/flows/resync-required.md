@@ -7,7 +7,7 @@ closure and a surviving canonical predecessor when applicable.
 
 ```text
 AttachedClient.handleServerMessage(.resync_required)
-  -> operations/session/resync_requirements.apply
+  -> AttachedClient.applyResyncRequirement
      -> surviving workspace: verify identity, coalesce or request snapshot
      -> closed workspace: forget bookmark, request predecessor or return exit
 ```
@@ -33,7 +33,7 @@ The wire, tracker, outbox and history use their existing fixed bounds. Resync
 adds no queue or timer. Client death drops outstanding conversations; runtime
 membership survives and a fresh client can reconstruct its projection.
 
-Source: `src/client/operations/session/resync_requirements.zig`,
+Source: `src/client/AttachedClient.zig`,
 `src/client/connection/LifecycleState.zig`, and
 `src/client/AttachedClient.zig`.
 Tests: `src/frontend/client/tests/synchronization.zig` and `tab_lifecycle.zig`

@@ -1,6 +1,7 @@
 //! The TUI consumer classifies inbox messages and delegates each transition.
 //! Presentation observes the latest committed state once per bounded turn.
 
+const client_layouts = @import("telar-client").client_layouts;
 const TerminalClient = @import("../TerminalClient.zig");
 const host = TerminalClient.of;
 const std = @import("std");
@@ -8,17 +9,13 @@ const Client = @import("telar-client").AttachedClient;
 const Resources = @import("Resources.zig");
 const enter_module = @import("telar-core").enter;
 const client_startup = @import("../controllers/session/client_startup.zig");
-const client_layouts = @import("telar-client").client_layouts;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
 const host_resizes = @import("../controllers/host/host_resizes.zig");
 const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
-const sidebar_animations = @import("telar-client").operations.sidebar_animations;
-const notifications = @import("telar-client").operations.notifications;
 const bar_updates = @import("telar-client").operations.bar_updates;
 const path_completions = @import("telar-client").operations.path_completions;
-const agent_sounds = @import("telar-client").operations.agent_sounds;
 const client_telemetry = @import("../resources/telemetry.zig");
 const config_reloads = @import("telar-client").operations.config_reloads;
 const plugin_actions = @import("telar-client").operations.plugin_actions;
@@ -114,11 +111,11 @@ fn dispatch(client: *Client, event: TerminalClient.ClientEvent, resources: Resou
             kitty_delivery.completeCompression(&host(client).graphics_store, job);
             try host(client).presenter.requestMedia();
         },
-        .sidebar_animation_tick => |result| _ = try sidebar_animations.handleTick(client, result),
-        .notification_tick => |result| _ = try notifications.handleTick(client, result),
+        .sidebar_animation_tick => |result| _ = try client.completeSidebarAnimationTick(result),
+        .notification_tick => |result| _ = try client.completeNotificationTick(result),
         .bar_tick => |result| try bar_updates.handleTick(client, result),
         .bar_command => |completion| try bar_updates.completeCommand(client, completion),
-        .sound_played => |result| try agent_sounds.handlePlayed(client, result),
+        .sound_played => |result| try client.completeAgentSound(result),
         .notified => |result| _ = result catch {},
         .telemetry_tick => |result| client_telemetry.handleTick(client, result, resources.heap.snapshot()),
         .telemetry_written => |result| client_telemetry.handleWritten(client, result),

@@ -6,7 +6,7 @@ bounded replica for chrome and positional navigation.
 ```text
 runtime repository revision and per-client cursor -> workspace_list
   -> AttachedClient.handleServerMessage
-  -> operations/workspaces/workspace_lists.apply
+  -> Model.applyWorkspaceList
      -> decode bounded domain inputs
      -> Model.reconcileWorkspaceList
      -> classify stale, rejected or applied
@@ -34,7 +34,7 @@ revision and composes the latest immutable snapshot at the paced deadline.
 Several updates can fold into one presentation. A later valid runtime revision
 can recover from rejected input; reconnect obtains a fresh canonical snapshot.
 
-Source: `src/client/operations/workspaces/workspace_lists.zig`,
+Source: `src/client/model/Model.zig`,
 `src/client/model/Model.zig`, and `src/client/workspace/workspace_list.zig`.
 Tests: `src/client/model/tests/workspaces.zig`, workspace-list storage tests and
 `src/frontend/client/tests/notifications_and_agents.zig` cover revision

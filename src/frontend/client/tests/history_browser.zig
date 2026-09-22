@@ -4,7 +4,6 @@ const CharType = @import("telar-client").Char;
 const HistoryEntryType = @import("telar-core").HistoryEntry;
 const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
-const history = @import("telar-client").operations.history_palettes;
 const encodeHistoryResults_module = @import("telar-core").encodeHistoryResults;
 const decodeServer_module = @import("telar-core").decodeServer;
 const prompts = @import("telar-client").operations.name_prompts;
@@ -19,7 +18,8 @@ test "history input preserves search through inspection and pages past the first
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    try std.testing.expect(try history.begin(client));
+    _ = try client.executeAction(.history_palette, .binding);
+    try std.testing.expect(client.model.name_prompt.active());
     try harness.settle();
     var buffer: [8192]u8 = undefined;
     const query = (try harness.nextClientMessage(&buffer)).query_history;
@@ -48,7 +48,7 @@ test "history input preserves search through inspection and pages past the first
     const next = (try harness.nextClientMessage(&buffer)).query_history;
     try std.testing.expectEqual(@as(u32, 1), next.offset);
     try std.testing.expectEqual(@as(u64, 20), next.snapshot_id);
-    try std.testing.expect(!history.canSubmit(client, 0));
+    try std.testing.expect(!client.canSubmitHistory(0));
 
     const old = try encodeHistoryResults_module(&buffer, .{ .request_id = query.request_id, .entries = &.{entry} });
     _ = try client.handleServerMessage(try decodeServer_module(old));
@@ -69,7 +69,8 @@ test "history scope labels follow the effective runtime query" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    try std.testing.expect(try history.begin(client));
+    _ = try client.executeAction(.history_palette, .binding);
+    try std.testing.expect(client.model.name_prompt.active());
     try harness.settle();
     var buffer: [8192]u8 = undefined;
     _ = try harness.nextClientMessage(&buffer);
@@ -100,7 +101,8 @@ test "history submission sends a complete command longer than its preview" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    try std.testing.expect(try history.begin(client));
+    _ = try client.executeAction(.history_palette, .binding);
+    try std.testing.expect(client.model.name_prompt.active());
     try harness.settle();
     var buffer: [16384]u8 = undefined;
     const query = (try harness.nextClientMessage(&buffer)).query_history;

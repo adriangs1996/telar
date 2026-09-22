@@ -11,7 +11,7 @@ The runtime owns SQLite history and captured output. The client owns the search,
 loaded page, selection, inspection and scroll. Closing the client does not delete
 history. No database work runs in the input handler.
 
-`src/client/operations/input/history_palettes.zig` owns UI requests,
+`src/client/AttachedClient.zig` owns UI requests,
 correlation, wire delivery and response application. It calls concrete bounded
 algorithms in `src/client/application/input/history_browser.zig` against the
 history and prompt model APIs. `widgets/history_browser.zig` renders cells with
@@ -21,9 +21,9 @@ sequences or resize the child PTY.
 The external flow is:
 
 ```text
-history_palette action -> operations/input/history_palettes.begin
+history_palette action -> AttachedClient.beginHistoryPalette
   -> query_history -> runtime history_query -> observation worker -> SQLite
-  -> history_results -> entrypoints/server_messages -> history_palettes.apply
+  -> history_results -> AttachedClient.handleServerMessage -> AttachedClient.applyHistoryResults
   -> bounded model commit -> Version.history -> presenter -> history widget
 ```
 

@@ -17,7 +17,7 @@ operations/agents/agent_navigation.apply
        |
 ClientModel.planAgentNavigation
        |
-       +-- local tab -> tab_selections.select -> pane_focus.apply
+       +-- local tab -> tab_selections.select -> AttachedClient.applyPaneFocus
        |
        +-- remote pane -> AttachedClient.requestWorkspacePane
 ```

@@ -11,7 +11,6 @@ const ConfigurationCommitType = @import("../../model/ConfigurationCommit.zig");
 const AdoptionContext = @import("AdoptionContext.zig");
 const std = @import("std");
 const sidebar_projection = @import("../notifications/sidebar_projection.zig");
-const notification_flow = @import("../notifications/notifications.zig");
 
 /// Resolves one reload completion, applies its outcome and rearms the watcher.
 ///
@@ -45,7 +44,7 @@ pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Out
                 .diagnostic = diagnostic,
                 .invalid_fallback = client_diagnostic.formatted("configuration reload failed: invalid diagnostic text", .{}),
             });
-            try notification_flow.publishNow(client, .{
+            try client.publishNotificationNow(.{
                 .level = .failure,
                 .title = "Configuration rejected",
                 .message = client.model.diagnostic() orelse return error.ClientDiagnosticMissing,
@@ -57,7 +56,7 @@ pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Out
             const adoption = context.adoption orelse return error.ConfigReloadAdoptionMissing;
             context.adoption = null;
             const commit = try apply(client, adoption);
-            try notification_flow.publishNow(client, .{
+            try client.publishNotificationNow(.{
                 .level = .success,
                 .title = "Configuration reloaded",
                 .message = "The new settings are active",

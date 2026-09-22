@@ -574,8 +574,8 @@ fn dispatch(self: *GuiClient, event: Message) !?u8 {
         .configuration_ready => try self.driver.configuration.accept(&self.app),
         .input_timeout => |result| try result,
         .binding_timeout => |result| try self.expireBinding(result),
-        .sidebar_animation_tick => |result| _ = try client.operations.sidebar_animations.handleTick(&self.app, result),
-        .notification_tick => |result| _ = try client.operations.notifications.handleTick(&self.app, result),
+        .sidebar_animation_tick => |result| _ = try self.app.completeSidebarAnimationTick(result),
+        .notification_tick => |result| _ = try self.app.completeNotificationTick(result),
         .bar_tick => |result| try client.operations.bar_updates.handleTick(&self.app, result),
         .bar_command => |result| try client.operations.bar_updates.completeCommand(&self.app, result),
         .link_opened => |result| try self.app.completeLinkOpening(result),
@@ -659,7 +659,7 @@ pub fn cancelBinding(self: *GuiClient) void {
 
 fn statusMode(self: *const GuiClient) client.Mode {
     if (!self.router.prefixPending()) {
-        return if (client.operations.copy_modes.active(&self.app)) .copy else .normal;
+        return if (self.app.copyModeActive()) .copy else .normal;
     }
 
     var hints: client.Hints = .{};
@@ -944,7 +944,7 @@ fn executeAction(self: *GuiClient, value: client.Action) !client.Control {
         .goto_picker => .goto,
         .suggest_command => .suggest,
         .resize_sidebar => |direction| {
-            _ = try client.operations.copy_modes.leave(&self.app);
+            _ = try self.app.leaveCopyMode();
 
             if (self.sidebar.step(direction)) {
                 self.chrome.invalidate();
@@ -955,8 +955,8 @@ fn executeAction(self: *GuiClient, value: client.Action) !client.Control {
         else => return self.app.executeAction(value, .binding),
     };
 
-    if (client.operations.copy_modes.active(&self.app)) {
-        _ = try client.operations.copy_modes.leave(&self.app);
+    if (self.app.copyModeActive()) {
+        _ = try self.app.leaveCopyMode();
     }
 
     _ = client.operations.name_prompts.beginPalette(&self.app, prefix);

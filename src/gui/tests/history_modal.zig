@@ -188,7 +188,7 @@ test "history application selection rejects unrelated prompts and out of range r
     model.* = .init(std.testing.allocator, true);
     defer model.deinit();
     try model.history_palette.prepare(std.testing.allocator);
-    try std.testing.expect(client.history_browser.requestPage(model, 1, .global));
+    try std.testing.expect(model.history_palette.beginPageRequest(1, .global));
     try std.testing.expect(client.history_browser.apply(model, .{ .request_id = 1, .entries = &entries, .snapshot_id = 9, .has_more = false, .now_ms = 2000 }));
     const revision = model.history_palette.version();
     try std.testing.expect(!client.history_browser.select(model, 1, revision));

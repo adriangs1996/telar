@@ -8,9 +8,7 @@ const Client = @import("../../AttachedClient.zig");
 const TabIdType = @import("telar-core").TabId;
 const InputCopyModeDirection = @import("../../input/copy_mode.zig").Direction;
 const ApplicationInputNamePromptOutcome = @import("../../application/input/name_prompt.zig").Outcome;
-const history_palettes = @import("history_palettes.zig");
 const ListSnapshot = @import("ListSnapshot.zig");
-const suggestions = @import("suggestions.zig");
 const ResultsType = @import("../../model/Results.zig");
 const collect_module = @import("../../model/goto_picker.zig").collect;
 const std = @import("std");
@@ -146,14 +144,14 @@ pub fn selectHistoryRow(client: *Client, index: u16, revision: u64) !void {
         return;
     }
 
-    try history_palettes.refreshInspection(client);
+    try client.refreshHistoryInspection();
 }
 
 /// Scrolls output by logical lines and reapplies the adapter's exact bound.
 /// Example: `try scrollHistoryInspection(client, 1);`.
 pub fn scrollHistoryInspection(client: *Client, lines: i16) !void {
     history_browser.scrollInspection(&client.model, lines);
-    try history_palettes.refreshInspection(client);
+    try client.refreshHistoryInspection();
 }
 
 /// Accepts a directory row only while its landed listing is still current.
@@ -193,7 +191,7 @@ pub fn handleInput(client: *Client, input: Input) !ApplicationInputNamePromptOut
     const directory_before = directoryVersion(client);
     const outcome = try dispatchInput(client, input);
     try refreshHistoryQuery(client, before);
-    try history_palettes.navigatePage(client);
+    try client.navigateHistoryPage();
     if (outcome == .completion_requested) {
         try path_completions.acceptSelected(client);
     } else if (outcome == .cancelled or outcome == .finished) {
@@ -202,7 +200,7 @@ pub fn handleInput(client: *Client, input: Input) !ApplicationInputNamePromptOut
         try path_completions.refresh(client);
     }
     clampPickerSelection(client);
-    try history_palettes.refreshInspection(client);
+    try client.refreshHistoryInspection();
     discardEditedSuggestion(client, before);
     if (outcome == .finished) {
         var submission = before;
@@ -211,7 +209,7 @@ pub fn handleInput(client: *Client, input: Input) !ApplicationInputNamePromptOut
         try finishListSubmission(client, submission);
     }
     if (outcome == .removed and before.kind == .history) {
-        try history_palettes.deleteSelected(client, before.selection);
+        try client.deleteHistorySelection(before.selection);
     }
     return outcome;
 }
@@ -255,11 +253,11 @@ fn listSnapshot(client: *Client) ListSnapshot {
 fn finishListSubmission(client: *Client, before: ListSnapshot) !void {
     switch (before.kind) {
         .none => {},
-        .history => try history_palettes.pasteSelection(client, .{
+        .history => try client.pasteHistorySelection(.{
             .selection = before.selection,
             .run = client.history_enter_runs != before.alternate,
         }),
-        .suggest => try suggestions.pasteSuggestion(client),
+        .suggest => try client.pasteSuggestion(),
         .goto => {
             var results: ResultsType = .{};
             collect_module(pickerSources(client), before.textSlice(), &results);
@@ -298,7 +296,7 @@ fn refreshHistoryQuery(client: *Client, before: ListSnapshot) !void {
         return;
     }
 
-    try history_palettes.sendQuery(client, text);
+    try client.queryHistory(text);
 }
 
 /// Drops a landed or pending suggestion once its request text changed, so
@@ -391,7 +389,7 @@ fn submit(client: *Client, submission: SubmissionType) !bool {
         // `finishListSubmission` once the prompt no longer owns input.
         .history => blk: {
             const prompt = client.model.name_prompt.currentConst() orelse break :blk false;
-            if (!history_palettes.canSubmit(client, prompt.selection())) {
+            if (!client.canSubmitHistory(prompt.selection())) {
                 break :blk false;
             }
 
@@ -450,7 +448,7 @@ fn submitSuggestion(client: *Client, text: []const u8) !bool {
         return false;
     }
 
-    try suggestions.request(client, text);
+    try client.requestSuggestion(text);
     return false;
 }
 

@@ -10,9 +10,9 @@ still presses Enter in the shell: the engine suggests, it never executes.
 ```text
 suggest_command action
         |
-suggestions.begin -> name prompt (target .suggest) + model.suggestion.begin
+AttachedClient.beginSuggestion -> name prompt (target .suggest) + model.suggestion.begin
         |
-Enter with text -> name_prompts.submit(.suggest) -> suggestions.request
+Enter with text -> name_prompts.submit(.suggest) -> AttachedClient.requestSuggestion
         |
 model.suggestion.expect(request id)  (phase waiting, prompt stays open)
         |
@@ -46,7 +46,7 @@ suggestion.extractCommand: first non-empty line, fences stripped, ≤ 1024 bytes
         |
 ResponseQueue command_suggestion { request_id, status, text }  (client gone: dropped)
         |
-client suggestions.apply -> model.suggestion.apply(request id, status, text)
+client Suggestion.apply -> model.suggestion.apply(request id, status, text)
         |
 Version.suggestion -> presenter invalidate -> list modal frame
 ```

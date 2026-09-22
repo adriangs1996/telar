@@ -15,7 +15,7 @@ Agent.visibleStatus  (seen = false)  -> AgentStatus.done
 Tracker revision -> Delivery.prepare -> schema.agent_sound (working -> done)
                                      -> schema.agent_snapshot
         |
-agent_snapshots.apply -> ClientModel.reconcileAgentSnapshot
+AttachedClient.applyAgentSnapshot -> ClientModel.reconcileAgentSnapshot
         |
 AttachedClient.synchronizePaneAttachments
         |

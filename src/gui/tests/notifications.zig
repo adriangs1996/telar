@@ -143,8 +143,13 @@ test "GUI notification lifecycle wakes at semantic boundaries while the host own
     defer fixture.deinit();
     const app = &fixture.session.gui.app;
     const now = client.monotonic(app.io);
-    _ = app.model.publishNotification(now, .{ .title = "Ready", .message = "Done" });
-    try client.notification_timers.reschedule(app);
+    _ = try app.publishNotification(
+        now,
+        .{
+            .title = "Ready",
+            .message = "Done",
+        },
+    );
     try std.testing.expectEqual(.host, app.timers.animation_clock);
     try std.testing.expectEqual(now + client.transition_duration_ns, app.notification_scheduler.deadline_ns.load(.acquire));
     try std.testing.expect(Clock.frame_interval_ns < client.transition_duration_ns);

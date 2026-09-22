@@ -32,8 +32,6 @@ const AgentKeyType = @import("telar-client").AgentKey;
 const support = @import("support.zig");
 const VersionType = @import("telar-client").Version;
 const ResyncRequiredType = @import("telar-core").ResyncRequired;
-const ApplicationSessionResyncRequiredOutcome = @import("telar-client").ApplicationSessionResyncRequiredOutcome;
-const resync_requirements = @import("telar-client").operations.resync_requirements;
 
 test "pane opening rejects an unknown request without client effects" {
     var harness: TestHarness = undefined;
@@ -1285,12 +1283,20 @@ test "resync required requests one workspace snapshot and coalesces repeats" {
     };
 
     try std.testing.expectEqual(
-        ApplicationSessionResyncRequiredOutcome.snapshot_requested,
-        try resync_requirements.apply(client, required),
+        @as(?u8, null),
+        try client.handleServerMessage(
+            .{
+                .resync_required = required,
+            },
+        ),
     );
     try std.testing.expectEqual(
-        ApplicationSessionResyncRequiredOutcome.coalesced,
-        try resync_requirements.apply(client, required),
+        @as(?u8, null),
+        try client.handleServerMessage(
+            .{
+                .resync_required = required,
+            },
+        ),
     );
     try harness.settle();
 
@@ -1313,10 +1319,16 @@ test "resync rejects a workspace other than the current projection" {
 
     try std.testing.expectError(
         error.UnexpectedResync,
-        resync_requirements.apply(client, .{
-            .workspace = .{ .workspace = @enumFromInt(9) },
-            .workspace_closed = false,
-        }),
+        client.handleServerMessage(
+            .{
+                .resync_required = .{
+                    .workspace = .{
+                        .workspace = @enumFromInt(9),
+                    },
+                    .workspace_closed = false,
+                },
+            },
+        ),
     );
     try std.testing.expectEqual(next_request_id, client.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
@@ -1337,11 +1349,15 @@ test "resync keeps a closed bookmark forgotten when predecessor handoff is block
 
     try std.testing.expectError(
         error.WorkspaceSwitchWhileRequestPending,
-        resync_requirements.apply(client, .{
-            .workspace = TestHarness.bootstrap_location.workspace,
-            .workspace_closed = true,
-            .previous_workspace = @enumFromInt(2),
-        }),
+        client.handleServerMessage(
+            .{
+                .resync_required = .{
+                    .workspace = TestHarness.bootstrap_location.workspace,
+                    .workspace_closed = true,
+                    .previous_workspace = @enumFromInt(2),
+                },
+            },
+        ),
     );
     try std.testing.expect(
         client.navigation_history.find(TestHarness.bootstrap_location.workspace) == null,
@@ -1371,7 +1387,11 @@ test "resync outbox failure releases its snapshot correlation so a later notice 
     const version = client.model.version();
     const notice: ResyncRequiredType = .{ .workspace = TestHarness.bootstrap_location.workspace, .workspace_closed = false };
 
-    try std.testing.expectError(error.ClientOutboxFull, resync_requirements.apply(client, notice));
+    try std.testing.expectError(error.ClientOutboxFull, client.handleServerMessage(
+        .{
+            .resync_required = notice,
+        },
+    ));
 
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -1381,8 +1401,16 @@ test "resync outbox failure releases its snapshot correlation so a later notice 
         try std.testing.expect((try harness.nextClientMessage(&outgoing)) == .detach_pane);
     }
 
-    try std.testing.expectEqual(.snapshot_requested, try resync_requirements.apply(client, notice));
-    try std.testing.expectEqual(.coalesced, try resync_requirements.apply(client, notice));
+    try std.testing.expectEqual(@as(?u8, null), try client.handleServerMessage(
+        .{
+            .resync_required = notice,
+        },
+    ));
+    try std.testing.expectEqual(@as(?u8, null), try client.handleServerMessage(
+        .{
+            .resync_required = notice,
+        },
+    ));
     try std.testing.expectEqual(@as(usize, 1), client.request_lifecycle.tracker.count);
     try harness.settle();
     const recovery = try harness.nextClientMessage(&outgoing);

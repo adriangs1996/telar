@@ -62,7 +62,7 @@ before provisional attachment effects begin.
 
 `RuntimeTransportState.bootstrap` queues graphics/color configuration and the
 runtime-state subscription through the ordinary send actor. Reads are already
-armed. The later `client_layout_snapshot` enters `client_layouts.apply`, which
+armed. The later `client_layout_snapshot` enters `AttachedClient.restoreClientLayout`, which
 restores geometry and registers the fixed `initial_open` continuation before
 enqueueing its corresponding open request. Registration and send admission use
 the same rollback rule as other requests.

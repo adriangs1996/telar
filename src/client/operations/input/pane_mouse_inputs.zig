@@ -9,7 +9,6 @@ const ApplicationInputPaneMouseOutcome = @import("../../application/input/pane_m
 const PaneMouseInputsContext = @import("PaneMouseInputsContext.zig");
 const ResolvedType = @import("../../application/input/Resolved.zig");
 const EffectType = @import("../../application/input/pane_mouse.zig").Effect;
-const copy_modes = @import("copy_modes.zig");
 const monotonic_module = core.monotonic;
 const pane_viewports = @import("../panes/pane_viewports.zig");
 const std = @import("std");
@@ -113,7 +112,7 @@ fn resolve(context: *PaneMouseInputsContext, command: ApplicationInputPaneMouseC
 fn applyEffect(context: *PaneMouseInputsContext, effect: EffectType) !void {
     switch (effect) {
         .selection => |selection| {
-            _ = copy_modes.beginPointer(context.client, .{
+            _ = context.client.model.beginPointerSelection(.{
                 .pane_id = selection.plan.pane_id,
                 .position = .{
                     .x = selection.command.event.x - selection.plan.content.x,

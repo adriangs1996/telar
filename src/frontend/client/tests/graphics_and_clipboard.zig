@@ -15,7 +15,6 @@ const encodeRuntimeStopping_module = @import("telar-core").encodeRuntimeStopping
 const encodeHistoryResults_module = @import("telar-core").encodeHistoryResults;
 const encodeCommandSuggestion_module = @import("telar-core").encodeCommandSuggestion;
 const encodePaneClipboard_module = @import("telar-core").encodePaneClipboard;
-const pane_clipboards = @import("telar-client").operations.pane_clipboards;
 
 test "a graphics revision break requests a graphics snapshot" {
     var harness: TestHarness = undefined;
@@ -227,10 +226,14 @@ test "an invalid pane clipboard writes no host bytes" {
     defer harness.deinit();
     const before = harness.sink.fullCount();
 
-    try std.testing.expectError(error.UnexpectedPane, pane_clipboards.apply(harness.client, .{
-        .pane_id = .invalid,
-        .bytes = "rejected",
-    }));
+    try std.testing.expectError(error.UnexpectedPane, harness.client.handleServerMessage(
+        .{
+            .pane_clipboard = .{
+                .pane_id = .invalid,
+                .bytes = "rejected",
+            },
+        },
+    ));
 
     try std.testing.expectEqual(before, harness.sink.fullCount());
 }

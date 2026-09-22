@@ -91,7 +91,13 @@ pub fn prepare(gui: *GuiClient) !void {
             owner.attachment_generation,
         ) catch |err| {
             _ = leave(gui);
-            try client.operations.notifications.publishNow(&gui.app, .{ .level = .failure, .title = "Could not select messages", .message = @errorName(err) });
+            try gui.app.publishNotificationNow(
+                .{
+                    .level = .failure,
+                    .title = "Could not select messages",
+                    .message = @errorName(err),
+                },
+            );
             return;
         };
         if (!selection.frozen) {

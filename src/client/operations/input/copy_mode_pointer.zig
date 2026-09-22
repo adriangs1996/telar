@@ -8,7 +8,6 @@ const MouseType = @import("../../input/Mouse.zig");
 const CopyModePointerContext = @import("CopyModePointerContext.zig");
 const ApplicationInputCopyModePointerAuthority = @import("../../application/input/copy_mode_pointer.zig").Authority;
 const PointType = @import("telar-core").Point;
-const copy_modes = @import("copy_modes.zig");
 const PointerMotionType = @import("../../input/PointerMotion.zig");
 
 /// Gives copy mode first refusal for one cell-based pointer event.
@@ -53,19 +52,27 @@ fn resolve(context: *CopyModePointerContext, event: MouseType) ApplicationInputC
 }
 
 fn leave(context: *CopyModePointerContext) !void {
-    _ = try copy_modes.leave(context.client);
+    _ = try context.client.leaveCopyMode();
 }
 
 fn cancelPointer(context: *CopyModePointerContext) !void {
-    _ = try copy_modes.cancelPointer(context.client);
+    _ = try context.client.applyCopyMode(.cancel_pointer);
 }
 
 fn pointer(context: *CopyModePointerContext, motion: PointerMotionType) !void {
-    _ = try copy_modes.pointer(context.client, motion);
+    _ = try context.client.applyCopyMode(
+        .{
+            .pointer = motion,
+        },
+    );
 }
 
 fn vertical(context: *CopyModePointerContext, delta: i32) !void {
-    _ = try copy_modes.vertical(context.client, delta);
+    _ = try context.client.applyCopyMode(
+        .{
+            .vertical = delta,
+        },
+    );
 }
 
 fn route(context: *CopyModePointerContext, command: CopyModePointerCommand, authority: copy_mode_pointer.Authority) !copy_mode_pointer.Outcome {

@@ -12,7 +12,6 @@ const CaptureRequestType = @import("../../attachments/CaptureRequest.zig");
 const markerPolicy_module = @import("../../application/input/attachment_prompt.zig").markerPolicy;
 const ApplicationInputClipboardImageCompletionOutcome = @import("../../application/input/clipboard_image.zig").CompletionOutcome;
 const InputType = @import("../../notifications/NotificationInput.zig");
-const notification_flow = @import("../notifications/notifications.zig");
 
 /// Resolves the current target and schedules one best-effort media capture.
 ///
@@ -137,5 +136,5 @@ fn deliverOutcome(client: *Client, outcome: ApplicationInputClipboardImageComple
         },
     };
 
-    try notification_flow.publishNow(client, input);
+    try client.publishNotificationNow(input);
 }

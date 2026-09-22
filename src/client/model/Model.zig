@@ -1,3 +1,8 @@
+const WorkspaceListViewType = @import("telar-core").WorkspaceListView;
+const workspace_list_rejection = @import("../application/workspaces/workspace_list_snapshot.zig");
+const WorkspaceListOutcome = @import("../application/workspaces/workspace_list_snapshot.zig").Outcome;
+const max_workspace_list_entries_module = @import("telar-core").max_workspace_list_entries;
+const EntryInputType = @import("../workspace/EntryInput.zig");
 const AgentPromptIntent = @import("../application/agents/AgentPromptIntent.zig");
 const AgentOperation = @import("../connection/AgentOperation.zig");
 const PaneSurfaceType = @import("telar-core").PaneSurface;
@@ -898,6 +903,41 @@ pub fn setWorkspaceListCollapsed(model: *Model, collapsed: bool) ?WorkspaceListC
 /// ```
 pub fn toggleWorkspaceList(model: *Model) WorkspaceListCollapseType {
     return model.setWorkspaceListCollapsed(!model.workspace_list_collapsed).?;
+}
+
+/// Decodes a bounded runtime list and preserves the previous replica on rejection.
+/// Example: `_ = try self.applyWorkspaceList(list);`
+pub fn applyWorkspaceList(self: *Model, list: WorkspaceListViewType) !WorkspaceListOutcome {
+    var entries: [max_workspace_list_entries_module]EntryInputType = undefined;
+    var count: usize = 0;
+    var iterator = list.entries();
+    while (try iterator.next()) |entry| {
+        entries[count] = .{
+            .workspace = entry.workspace,
+            .name = entry.name,
+            .path = entry.path,
+            .tab_count = entry.tab_count,
+            .branch = entry.branch,
+            .dirty = entry.dirty,
+        };
+        count += 1;
+    }
+
+    const commit = self.reconcileWorkspaceList(
+        .{
+            .revision = list.revision,
+            .entries = entries[0..count],
+        },
+    ) catch |err| {
+        const rejection = workspace_list_rejection.classifyRejection(err) orelse return err;
+        return .{
+            .rejected = rejection,
+        };
+    };
+
+    return if (commit) |value| .{
+        .applied = value,
+    } else .stale;
 }
 
 /// Commits one newer runtime workspace-list replica atomically. Stale

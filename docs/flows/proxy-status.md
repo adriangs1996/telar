@@ -11,7 +11,7 @@ nor its transition rules.
 ```text
 runtime proxy configuration → runtime delivery → proxy_status
   → AttachedClient.handleServerMessage
-  → proxy_status.apply
+  → AttachedClient.applyProxyStatus
       model.reconcileProxyStatus
       notification for a changed transition
   → presentation observation → top-bar projection
@@ -26,10 +26,10 @@ state.
 
 ## Client transaction
 
-`proxy_status.apply` asks the model to reconcile the decoded triple. Equal
+`AttachedClient.applyProxyStatus` asks the model to reconcile the decoded triple. Equal
 values are no-ops. A changed value advances the proxy revision and returns the
 previous and current state. The same function selects the notification and
-calls `notifications.publishNow` immediately.
+calls `AttachedClient.publishNotificationNow` immediately.
 
 Enabling interception produces a warning; disabling it produces an informational
 notice. Trust-only changes describe trust installation or removal. A publication

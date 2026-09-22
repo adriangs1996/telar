@@ -48,7 +48,7 @@ An existing tab snapshot is retained. Otherwise an active change or stale
 membership requests one; an already loaded active tab receives geometry offers.
 Repeated canonical snapshots can repair resources without forcing a frame.
 
-`resync_requirements.apply` coalesces a workspace snapshot request; the reply
+`AttachedClient.applyResyncRequirement` coalesces a workspace snapshot request; the reply
 returns here. A workspace that disappears before runtime encoding returns a
 correlated failure rather than stale state.
 

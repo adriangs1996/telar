@@ -4,7 +4,7 @@ The client owns its visible scroll position. The runtime keeps an independent
 per-attachment projection so it can return the requested history rows.
 
 ```text
-operations/input/pane_inputs, pane_mouse_inputs or copy_modes
+pane_inputs, pane_mouse_inputs or AttachedClient.applyCopyMode
   -> operations/panes/pane_viewports.apply
      -> Model.setPaneViewport
      -> pane_viewports.deliver

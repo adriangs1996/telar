@@ -28,7 +28,7 @@ existing reset policy rather than blocking PTY input.
 
 ```text
 AttachedClient.handleServerMessage(.graphics_*)
-  -> operations/panes/pane_graphics.apply
+  -> AttachedClient.applyPaneGraphics
      -> graphics.apply (physical resource store)
      -> changed: Model.setPaneGraphicsFallback
      -> revision break: request_graphics_snapshot
@@ -40,7 +40,7 @@ committed host capability
   -> bounded pane traversal -> Model.setPaneGraphicsFallback
 ```
 
-`pane_graphics.apply` translates physical ingress results into semantic fallback
+`AttachedClient.applyPaneGraphics` translates physical ingress results into semantic fallback
 or runtime recovery directly. The resource store owns allocations, shared
 mappings, quotas, image identities and transmission damage. Accepted ingress
 advances its physical revision; stale deltas and rejected operations do not.

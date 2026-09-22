@@ -18,7 +18,6 @@ const encodeTabClosed_module = @import("telar-core").encodeTabClosed;
 const encodeRequestFailed_module = @import("telar-core").encodeRequestFailed;
 const support = @import("support.zig");
 const TabMovedType = @import("telar-core").TabMoved;
-const tab_moves = @import("telar-client").operations.tab_moves;
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 const input_operations = @import("telar-client").operations;
 const TabMoveDirectionType = @import("telar-core").TabMoveDirection;
@@ -376,7 +375,11 @@ test "an unexpected tab move is rejected without effects" {
         .position = 0,
     };
 
-    try std.testing.expectError(error.UnexpectedTabMoved, tab_moves.apply(client, moved));
+    try std.testing.expectError(error.UnexpectedTabMoved, client.handleServerMessage(
+        .{
+            .tab_moved = moved,
+        },
+    ));
 
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
@@ -401,9 +404,17 @@ test "tab move consumes an incompatible continuation before rejection" {
         .position = 0,
     };
 
-    try std.testing.expectError(error.UnexpectedTabMoved, tab_moves.apply(client, moved));
+    try std.testing.expectError(error.UnexpectedTabMoved, client.handleServerMessage(
+        .{
+            .tab_moved = moved,
+        },
+    ));
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabMoved, tab_moves.apply(client, moved));
+    try std.testing.expectError(error.UnexpectedTabMoved, client.handleServerMessage(
+        .{
+            .tab_moved = moved,
+        },
+    ));
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(@as(?usize, 0), client.model.workspace.indexOf(TestHarness.bootstrap_location.tab_id));
 }
@@ -424,9 +435,17 @@ test "tab move consumes a canonical response rejected by the model" {
         .position = 1,
     };
 
-    try std.testing.expectError(error.UnexpectedTabMoved, tab_moves.apply(client, moved));
+    try std.testing.expectError(error.UnexpectedTabMoved, client.handleServerMessage(
+        .{
+            .tab_moved = moved,
+        },
+    ));
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabMoved, tab_moves.apply(client, moved));
+    try std.testing.expectError(error.UnexpectedTabMoved, client.handleServerMessage(
+        .{
+            .tab_moved = moved,
+        },
+    ));
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(@as(?usize, 0), client.model.workspace.indexOf(TestHarness.bootstrap_location.tab_id));
 }
@@ -540,8 +559,12 @@ test "canonical tab move at an edge does not advance or schedule the model" {
         .position = 0,
     });
     try std.testing.expectEqual(
-        ChangeType.unchanged,
-        try tab_moves.apply(client, (try decodeServer_module(response)).tab_moved),
+        @as(?u8, null),
+        try client.handleServerMessage(
+            .{
+                .tab_moved = (try decodeServer_module(response)).tab_moved,
+            },
+        ),
     );
     try presentation_lifecycle.observe(client);
 
@@ -1283,7 +1306,15 @@ test "TUI tab drag emits one anchored move on release and never forwards the ges
     try std.testing.expectEqual(TestHarness.bootstrap_location.tab_id, request.relative_to.?);
     try std.testing.expectEqual(TabMoveDirectionType.previous, request.direction);
     try std.testing.expectEqual(@as(?usize, 2), app.model.workspace.indexOf(third.tab_id));
-    _ = try tab_moves.apply(app, .{ .request_id = request.request_id, .location = third, .position = 0 });
+    _ = try app.handleServerMessage(
+        .{
+            .tab_moved = .{
+                .request_id = request.request_id,
+                .location = third,
+                .position = 0,
+            },
+        },
+    );
     try std.testing.expectEqual(@as(?usize, 0), app.model.workspace.indexOf(third.tab_id));
     try std.testing.expect(!host(app).view.tab_drag.gesture.captured);
 }

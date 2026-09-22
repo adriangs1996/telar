@@ -45,11 +45,11 @@ budgets, wakeups and shutdown shared with the TUI and headless driver.
 
 1. Session and display: `bootstrap` queues `configure_graphics`,
    `configure_terminal_colors` and `request_runtime_state`. The shared
-   `client_layouts.apply` issues `open_pane`; shared operations consume
+   `AttachedClient.restoreClientLayout` issues `open_pane`; shared operations consume
    `pane_opened`, membership snapshots and `pane_frame`. `TerminalRenderer`
    borrows the projection, resolves the shared layout and draws each terminal
    leaf's cells and cursor. A presentation token captures only rendered panes.
-   `pane_frames.apply` acknowledges validated, owned cells immediately.
+   `AttachedClient.applyPaneFrame` acknowledges validated, owned cells immediately.
    Additional patches update that model while the GPU owns an older submission.
    GPU completion consumes the presentation token through
    `presentation_delivery.apply`, which retires captured damage and flushes

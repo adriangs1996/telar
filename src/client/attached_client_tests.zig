@@ -1,5 +1,6 @@
 //! Test bodies for AttachedClient. Private implementations are supplied by the
 //! owner's test declarations as concrete compile-time functions.
+const Notification = @import("input/Notification.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const AttachedClient = @import("AttachedClient.zig");
@@ -443,6 +444,15 @@ pub fn retainReviewAvailability(comptime open_session: fn (*AttachedClient, core
 pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameTab, RequestContinuation) anyerror!void, comptime create_tab: fn (*AttachedClient, core.CreateTab) anyerror!void, comptime prompt: fn (*AttachedClient, core.AgentPrompt, AgentOperation) anyerror!void) !void {
     const app = try std.testing.allocator.create(AttachedClient);
     defer std.testing.allocator.destroy(app);
+    app.model = ModelType.init(std.testing.allocator, true);
+    defer app.model.deinit();
+    app.host_input_source = .{
+        .context = app,
+        .resume_read_fn = undefined,
+        .route_prompt_bytes_fn = undefined,
+        .adopt_bindings_fn = undefined,
+    };
+
     app.request_lifecycle = .{};
     app.runtime_transport.outbox = .{};
     const pane_id: core.PaneId = @enumFromInt(1);
@@ -527,14 +537,20 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
                     .location = location,
                 },
             ),
-            .notification => app.sendNotificationRequest(
-                .{
-                    .request_id = request_id,
-                    .notification = .{
-                        .title = "finished",
+            .notification => block: {
+                _ = app.executeAction(
+                    .{
+                        .notification = try Notification.init(
+                            .{
+                                .title = "finished",
+                                .message = "",
+                            },
+                        ),
                     },
-                },
-            ),
+                    .effect,
+                ) catch |err| break :block err;
+                break :block {};
+            },
         };
 
         try std.testing.expectError(error.ClientOutboxFull, result);

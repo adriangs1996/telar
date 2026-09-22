@@ -16,7 +16,6 @@ const PluginResultType = @import("../../application/input/PluginResult.zig");
 const EffectBatchType = @import("../../config/EffectBatch.zig");
 const BatchDispositionType = @import("../../application/input/plugin_action.zig").BatchDisposition;
 const CompletionOutcomeType = @import("../../application/input/plugin_action.zig").CompletionOutcome;
-const notification_flow = @import("../notifications/notifications.zig");
 
 /// Resolves one configured action and schedules its work outside the input path.
 ///
@@ -147,7 +146,7 @@ fn deliverOutcome(client: *Client, outcome: CompletionOutcomeType) !bool {
 
 fn publishFailure(client: *Client, failure: FailurePublication) !void {
     _ = try client_diagnostic.replace(&client.model, .{ .diagnostic = failure.diagnostic });
-    try notification_flow.publishNow(client, .{
+    try client.publishNotificationNow(.{
         .level = .failure,
         .title = failure.title,
         .message = client.model.diagnostic() orelse return error.ClientDiagnosticMissing,

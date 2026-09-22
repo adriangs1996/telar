@@ -71,7 +71,7 @@ therefore survives an inactive proxy and a client reconnect.
   default paths, and direct platform command construction.
 - `src/cli/server.zig` proves separate private and system authority paths.
 - `src/core/schema_contract_test.zig` fixes the wire representation.
-- `src/client/operations/agents/proxy_status.zig` applies the committed status
+- `src/client/AttachedClient.zig` applies the committed status
   before publishing notifications; model observation and frontend notification
   integration tests cover exact transitions and no-op repeats.
 - `src/frontend/widgets/top_bar.zig` proves the trust-only badge stays visible

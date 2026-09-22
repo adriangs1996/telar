@@ -1,5 +1,6 @@
 //! Client integration tests for transport.
 
+const client_layout_resource = @import("telar-client").client_layouts;
 const TerminalClient = @import("../TerminalClient.zig");
 const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
@@ -25,7 +26,6 @@ const ClientTabLayoutType = @import("telar-core").ClientTabLayout;
 const ClientLayoutSnapshotType = @import("telar-core").ClientLayoutSnapshot;
 const max_client_layout_wire_bytes_module = @import("telar-core").max_client_layout_wire_bytes;
 const support = @import("support.zig");
-const client_layout_resource = @import("telar-client").client_layouts;
 
 test "host input arriving while no tab exists is dropped, not a crash" {
     // The workspace-handoff window: `tabs.deinit()` has run and the new

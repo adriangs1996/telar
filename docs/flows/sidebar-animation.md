@@ -16,15 +16,15 @@ accepted agent snapshot
         |
 agent_snapshots adapter
         |
-sidebar_animations.synchronize
+AttachedClient.synchronizeSidebarAnimation
         |
-sidebar_animations scheduler, one pending timer
+AttachedClient.sidebar_animation_scheduler, one pending timer
         |
 ClientEvent.sidebar_animation_tick
         |
-sidebar_animations.handleTick
+AttachedClient.completeSidebarAnimationTick
         |
-sidebar_animations.tick
+Model.advanceSidebarAnimation
         |
 ClientModel.advanceSidebarAnimation
         |
@@ -35,13 +35,13 @@ presentation_lifecycle.observe
 Presenter -> View.render(frame)
 ```
 
-`sidebar_animations.synchronize` checks model policy and asks the
+`AttachedClient.synchronizeSidebarAnimation` checks model policy and asks the
 scheduler for a future tick without changing the frame. The scheduler's
 `pending` bit coalesces repeated agent snapshots and rearm attempts into one
 select task.
 
-When the timer completes, `sidebar_animations.handleTick` first releases the
-pending token. `sidebar_animations.tick` then advances the frame if a
+When the timer completes, `AttachedClient.completeSidebarAnimationTick` first releases the
+pending token. `Model.advanceSidebarAnimation` then advances the frame if a
 working agent still exists and rearms the scheduler. If every agent has left
 `working`, the tick is a semantic no-op and the loop stops.
 
@@ -78,7 +78,7 @@ needed.
 - `src/client/application/notifications/sidebar_animation.zig` proves inactive
   no-ops, synchronization without mutation, commit-before-rearm ordering and
   retained commits after effect failure.
-- `src/client/operations/notifications/sidebar_animations.zig` owns the single pending timer
+- `src/client/AttachedClient.zig` owns the single pending timer
   and releases it before handling completion.
 - `src/frontend/client/presentation/Presenter.zig` observes the dedicated revision and
   supplies the model frame to the view.
