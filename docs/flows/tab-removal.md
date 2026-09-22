@@ -9,7 +9,7 @@ AttachedClient.executeAction
   -> AttachedClient.requestTabClose
      -> pending-operation gate and active location
      -> reserve close/recovery IDs and outbox capacity
-     -> tab_attachments.detach
+     -> AttachedClient.detachTab
      -> AttachedClient.sendRuntimeRequest(close_tab)
 
 runtime tab_closed
@@ -25,7 +25,7 @@ runtime tab_closed
 Before provisional detachment the request checks capacity for paste-end,
 focus-out, every attached or pending-open pane detach, and the close message.
 It also reserves enough request identities for closure and synchronous repair.
-`tab_attachments.requiredCapacity` is shared with workspace handoff. Failure at
+`tab_detachment.requiredCapacity` is shared with workspace handoff. Failure at
 this stage changes neither focus nor attachment state.
 
 The operation then detaches and queues `close_tab` without changing semantic
@@ -60,7 +60,7 @@ Canonical state survives any later client resource error. Reconnect rebuilds
 the projection. The flow uses bounded tab/pane stores, request tracking and
 outbox capacity, and never schedules presentation directly.
 
-Source: `src/client/AttachedClient.zig`, `tab_attachments.zig`,
+Source: `src/client/AttachedClient.zig`, `AttachedClient.zig`,
 `tab_snapshots.zig`, and `src/client/operations/workspaces/workspace_handoffs.zig`.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig` and `synchronization.zig`
 cover preflight, partial failures, correlation, late replies, exact cleanup,

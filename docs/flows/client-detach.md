@@ -7,7 +7,7 @@ available for another attachment.
 AttachedClient.executeAction(.detach)
   -> operations/session/client_detachments.apply
      -> capture bounded stable TabLocation list
-     -> operations/tabs/tab_attachments.detach for each location
+     -> AttachedClient.detachTab for each location
         -> finish tab-owned paste
         -> tab-owned focus-out
         -> detach, retire pending correlation, hide graphics per pane
@@ -16,7 +16,7 @@ AttachedClient.executeAction(.detach)
 ```
 
 `client_detachments.apply` captures tab locations before the first effect and
-walks them in stable client order. `tab_attachments.detach` plans one exact tab,
+walks them in stable client order. `AttachedClient.detachTab` plans one exact tab,
 then applies its effects in paste/focus/pane order. Pending opens also receive a
 detach and their continuations become ignored, so late confirmations cannot
 revive ownership. The model commits attachment flags and retires pending frames
@@ -33,7 +33,7 @@ normal error path terminates the client and destroys disposable resources while
 the runtime continues.
 
 Source: `src/client/operations/session/client_detachments.zig` and
-`src/client/operations/tabs/tab_attachments.zig`.
+`src/client/AttachedClient.zig`.
 Tests: `src/frontend/client/tests/pane_lifecycle.zig` covers stable multi-tab
 wire order, local attachment cleanup, exact paste/focus ownership, version
 silence and the final stop directive. Tab close/handoff tests exercise capacity

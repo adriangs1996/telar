@@ -4,7 +4,6 @@ const Client = @import("../../AttachedClient.zig");
 const std = @import("std");
 const max_tabs = @import("telar-core").max_tabs_per_workspace;
 const TabLocationType = @import("telar-core").TabLocation;
-const tab_attachments = @import("../tabs/tab_attachments.zig");
 
 /// Detaches every tab in stable client order before the event loop exits.
 ///
@@ -22,6 +21,6 @@ pub fn apply(client: *Client) !void {
     }
 
     for (locations[0..count]) |location| {
-        try tab_attachments.detach(client, location);
+        try client.detachTab(location);
     }
 }

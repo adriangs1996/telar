@@ -183,7 +183,8 @@ const WorkspaceTabInputType = @import("workspace/WorkspaceTabInput.zig");
 const PaneForeground = @import("telar-core").PaneForeground;
 const TabCreatedType = @import("telar-core").TabCreated;
 const TabCreationType = @import("model/TabCreation.zig");
-const tab_attachments = @import("operations/tabs/tab_attachments.zig");
+const tab_detachment = @import("tab_detachment.zig");
+const pane_pastes = @import("operations/input/pane_pastes.zig");
 const rectSize_module = @import("workspace/multiplexer.zig").rectSize;
 const RequestTabCreation = @import("application/tabs/RequestTabCreation.zig");
 const create_tab = @import("application/tabs/create_tab.zig");
@@ -1534,6 +1535,41 @@ pub fn requestTabRename(self: *AttachedClient, command: RequestRenameTab) !bool 
     );
 
     return true;
+}
+
+/// Finishes paste and focus, detaches in pane order, then commits detachment.
+/// A failure preserves completed effects; the caller chooses recovery or exit.
+/// Example: `try app.detachTab(location);`
+pub fn detachTab(self: *AttachedClient, location: TabLocation) !void {
+    const plan = try self.model.planTabDetachment(location);
+    if (plan.owns_paste) {
+        const outcome = try pane_pastes.finish(self);
+        std.debug.assert(outcome != .ignored);
+    }
+
+    if (plan.owns_reported_focus) {
+        const outcome = try pane_focus_reports.clear(self);
+        std.debug.assert(outcome == .applied);
+    }
+
+    for (plan.slice()) |pane| {
+        const pending = self.request_lifecycle.tracker.hasPane(.attachment, pane.pane_id);
+        if (!pane.attached and !pending) {
+            continue;
+        }
+
+        try self.sendRuntime(
+            .{
+                .detach_pane = .{
+                    .pane_id = pane.pane_id,
+                },
+            },
+        );
+        _ = self.request_lifecycle.tracker.ignoreAttachment(pane.pane_id);
+        try self.graphics.setPaneVisible(pane.pane_id, false);
+    }
+
+    try self.model.commitTabDetachment(plan);
 }
 
 /// Copies a page cursor before its reading window can change.
@@ -3281,7 +3317,7 @@ fn completeTabCreation(self: *AttachedClient, created: TabCreatedType) !TabCreat
             .size = requested.size,
         },
     );
-    try tab_attachments.detach(self, creation.previous);
+    try self.detachTab(creation.previous);
     try self.synchronizeActivePane();
 
     if (created.kind == .agent) {
@@ -3319,11 +3355,11 @@ fn requestTabClose(self: *AttachedClient) !bool {
     const location = self.model.activeTabLocation() orelse return false;
     const plan = try self.model.planTabDetachment(location);
     try self.request_lifecycle.ensureCanStart(2);
-    if (1 + tab_attachments.requiredCapacity(self, &plan) > self.runtime_transport.outbox.availableCapacity()) {
+    if (1 + tab_detachment.requiredCapacity(&plan, &self.request_lifecycle.tracker) > self.runtime_transport.outbox.availableCapacity()) {
         return error.ClientOutboxFull;
     }
 
-    tab_attachments.detach(self, location) catch |err| {
+    self.detachTab(location) catch |err| {
         _ = try self.recoverTabSnapshot(location);
         return err;
     };

@@ -20,7 +20,7 @@ continuation. Confirmation requires the same pane and tab, and `created=false`.
 The model accepts only a still-detached pane in the active tab. A switched tab,
 retired pane or repeated confirmation cannot revive the attachment.
 
-Tab retirement calls `tab_attachments.detach` with a stable `TabLocation`:
+Tab retirement calls `AttachedClient.detachTab` with a stable `TabLocation`:
 
 ```text
 Model.planTabDetachment

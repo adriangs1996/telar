@@ -1,5 +1,6 @@
 //! Workspace selection, bounded departure, arrival and remembered-pane recovery.
 
+const tab_detachment = @import("../../tab_detachment.zig");
 const Client = @import("../../AttachedClient.zig");
 const SelectionTargetType = @import("../../application/workspaces/workspace_handoff.zig").SelectionTarget;
 const WorkspaceIdType = @import("telar-core").WorkspaceId;
@@ -8,7 +9,6 @@ const PaneIdType = @import("telar-core").PaneId;
 const ApplicationWorkspacesWorkspaceHandoffTargetingTarget = @import("../../application/workspaces/workspace_handoff_targeting.zig").Target;
 const ApplicationWorkspacesWorkspaceHandoffAdmissionAuthority = @import("../../application/workspaces/workspace_handoff_admission.zig").Authority;
 const rectSize_module = @import("../../workspace/multiplexer.zig").rectSize;
-const tab_attachments = @import("../tabs/tab_attachments.zig");
 const OpenedPaneType = @import("../../application/panes/OpenedPane.zig");
 const WorkspaceArrivalType = @import("../../model/WorkspaceArrival.zig");
 const workspace_transitions = @import("workspace_transitions.zig");
@@ -101,7 +101,7 @@ fn request(client: *Client, target: ApplicationWorkspacesWorkspaceHandoffTargeti
     var tabs = client.model.workspace.tabIterator();
     while (tabs.next()) |tab| {
         const detachment = try client.model.planTabDetachment(tab.location);
-        required += tab_attachments.requiredCapacity(client, &detachment);
+        required += tab_detachment.requiredCapacity(&detachment, &client.request_lifecycle.tracker);
     }
 
     if (required > client.runtime_transport.outbox.availableCapacity()) {
@@ -110,7 +110,7 @@ fn request(client: *Client, target: ApplicationWorkspacesWorkspaceHandoffTargeti
 
     tabs = client.model.workspace.tabIterator();
     while (tabs.next()) |tab| {
-        tab_attachments.detach(client, tab.location) catch |err| {
+        client.detachTab(tab.location) catch |err| {
             restore(client) catch {};
             return err;
         };

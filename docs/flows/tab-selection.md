@@ -8,7 +8,7 @@ AttachedClient.executeAction, delivered tab click or agent navigation
   -> operations/tabs/tab_selections.select
      -> reject a pending tab snapshot
      -> Model.selectTab
-     -> tab_attachments.detach(previous)
+     -> AttachedClient.detachTab(previous)
      -> show selected graphics
      -> AttachedClient.synchronizeActivePane
      -> AttachedClient.requestTabSnapshot(selected location)
@@ -38,7 +38,7 @@ runtime tabs and PTYs remain alive. Presentation follows the active-tab revision
 and is scheduled only by the host adapter.
 
 Source: `src/client/operations/tabs/tab_selections.zig` and
-`tab_attachments.zig` in the same directory.
+`AttachedClient.zig` in the same directory.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig`, `pane_lifecycle.zig`,
 `src/client/model/tests/tabs.zig`, and `src/client/workspace/` tests cover target
 resolution, no-ops, wire order, exact ownership and canonical repair.

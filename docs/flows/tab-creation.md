@@ -13,7 +13,7 @@ AttachedClient.executeAction
   -> AttachedClient.completeTabCreation
      -> consume exact create_tab correlation
      -> Model.createTab
-     -> tab_attachments.detach(previous)
+     -> AttachedClient.detachTab(previous)
      -> AttachedClient.synchronizeActivePane
      -> request agent conversation when applicable
   -> adapter observes presentation revisions
@@ -52,7 +52,7 @@ wrong-workspace or replayed replies cannot mutate tabs. Presentation observes
 model revisions; this operation does not draw.
 
 Source: `src/client/AttachedClient.zig` and
-`src/client/operations/tabs/tab_attachments.zig`.
+`src/client/AttachedClient.zig`.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig`,
 `src/client/model/tests/tabs.zig`, `src/client/connection/outbox_support.zig`,
 and runtime/transport tab-lifecycle tests. The frontend suite includes invalid

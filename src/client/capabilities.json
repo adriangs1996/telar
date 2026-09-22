@@ -51,6 +51,7 @@
   ],
   "public": [
     "AttachedClient.zig",
+    "tab_detachment.zig",
     "agents/Agent.zig",
     "agents/AgentInput.zig",
     "agents/AgentKey.zig",
@@ -279,7 +280,6 @@
     "operations/session/client_layouts.zig",
     "operations/session/presentation_delivery.zig",
     "operations/session/resync_requirements.zig",
-    "operations/tabs/tab_attachments.zig",
     "operations/tabs/tab_moves.zig",
     "operations/tabs/tab_selections.zig",
     "operations/workspaces/FaviconRequest.zig",

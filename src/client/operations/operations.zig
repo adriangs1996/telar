@@ -44,7 +44,6 @@ pub const sidebar_projection = @import("notifications/sidebar_projection.zig");
 pub const sidebar_toggles = @import("notifications/sidebar_toggles.zig");
 pub const suggestions = @import("input/suggestions.zig");
 pub const system_metrics = @import("agents/system_metrics.zig");
-pub const tab_attachments = @import("tabs/tab_attachments.zig");
 pub const tab_moves = @import("tabs/tab_moves.zig");
 pub const tab_selections = @import("tabs/tab_selections.zig");
 pub const view_interactions = @import("input/view_interactions.zig");

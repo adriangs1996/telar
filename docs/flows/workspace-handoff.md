@@ -9,7 +9,7 @@ operations/input/actions, agent navigation, resync or canonical tab closure
   -> operations/workspaces/workspace_handoffs
      -> selectWorkspace / requestWorkspace / requestPane / followWorkspace
      -> request: target, admission and bounded preflight
-        -> tab_attachments.detach for each captured tab
+        -> AttachedClient.detachTab for each captured tab
         -> correlated open_pane
         -> Model.departWorkspace
         -> workspace_transitions.release
@@ -38,7 +38,7 @@ cannot restore a runtime identity that disappeared.
 
 Preflight checks two available request IDs (open and synchronous repair) before
 checking outbox capacity for paste-end, valid focus-out, every attached or
-pending-open detach, and the open. It shares `tab_attachments.requiredCapacity`
+pending-open detach, and the open. It shares `tab_detachment.requiredCapacity`
 with tab close. Failure occurs before any provisional effect and requests no
 repair because nothing changed.
 
@@ -76,7 +76,7 @@ normal pane buffer/bootstrap allocations before committing. Runtime panes
 survive client failure and reconnect.
 
 Source: `src/client/operations/workspaces/workspace_handoffs.zig`,
-`workspace_transitions.zig`, `src/client/operations/tabs/tab_attachments.zig`.
+`workspace_transitions.zig`, `src/client/AttachedClient.zig`.
 Tests: `src/frontend/client/tests/synchronization.zig`,
 `workspace_lifecycle.zig`, `notifications_and_agents.zig`, and
 `src/client/model/tests/workspaces.zig` cover preflight, partial failure,
