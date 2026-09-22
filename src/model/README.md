@@ -11,7 +11,9 @@ var effects: data.EffectBatch = .{};
 
 It owns reusable values, bounded state, and operations that maintain their
 invariants: input commands, request correlation, configuration diagnostics,
-layout values, notification state, and change review state. Each instance still
+layout values, notification state, and change review state. It also owns
+startup phases, request identity allocation, completion/favicon bookkeeping,
+and sound playback policy and queue state. Each instance still
 belongs to its runtime or client owner; importing the module shares definitions,
 not mutable state.
 
@@ -35,3 +37,9 @@ Run `zig build test-model` for the module's tests and boundary checks, without
 building a client or host adapter. `zig build check-model-boundaries` also rejects
 relative imports that bypass this public API and reverse imports from core/Lua.
 Changes to consumers must additionally pass their existing suites.
+
+Pane input contracts (`PaneInputCommand`, `PaneInputPayload`,
+`PreparedPaneInput`, `PaneInputDelivery`) depend on model definitions and core
+identities. `input_limits` owns their encoding bounds. Validation and effect
+execution remain in the client. `SoundPlayback` returns decisions; `SoundPort`
+executes host playback and stays in the client.

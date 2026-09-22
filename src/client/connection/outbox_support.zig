@@ -16,7 +16,6 @@ const OwnedNotification = @import("OwnedNotification.zig");
 const Outbox = @import("Outbox.zig");
 const core = @import("telar-core");
 const std = @import("std");
-const input_capability = @import("../input/input_namespace.zig");
 
 pub const capacity = core.max_panes_per_tab + 16;
 
@@ -93,7 +92,7 @@ test "adjacent input for one pane is folded without allocation" {
 
 test "a long paste reserves all chunks before mutating the outbox" {
     var outbox: Outbox = .{};
-    const command = "x" ** (input_capability.max_encoded_bytes + 128);
+    const command = "x" ** (data.input_limits.max_encoded_bytes + 128);
     const pane_id: core.PaneId = @enumFromInt(1);
     while (outbox.availableCapacity() > 1) {
         try outbox.push(.{ .delete_history = .{ .request_id = @enumFromInt(outbox.len + 1), .id = 1 } });
@@ -108,7 +107,7 @@ test "a long paste reserves all chunks before mutating the outbox" {
     }
 
     try outbox.pushInputBatch(pane_id, command);
-    var buffer: [input_capability.max_encoded_bytes + 64]u8 = undefined;
+    var buffer: [data.input_limits.max_encoded_bytes + 64]u8 = undefined;
     var offset: usize = 0;
     while (try outbox.beginSend(&buffer)) |encoded| {
         const message = try core.decodeClient(encoded);
@@ -548,7 +547,7 @@ test "routed completions retain their text through send and recycle bounded slot
 
 test "rejected editor argv releases its queue and launch slots" {
     var outbox: Outbox = .{};
-    const oversized = [_]u8{'x'} ** (input_capability.max_encoded_bytes + 1);
+    const oversized = [_]u8{'x'} ** (data.input_limits.max_encoded_bytes + 1);
     for (0..max_pending_launches + 1) |_| {
         try std.testing.expectError(error.InvalidArguments, outbox.push(.{ .create_pane = .{
             .request_id = @enumFromInt(2),
@@ -603,7 +602,7 @@ test "change review outbox owns range comment bytes and rejects overflow atomica
     try outbox.pushChangeReviewCommand(request);
     @memset(&path, 'x');
     @memset(&body, 'x');
-    var encoded: [input_capability.max_encoded_bytes]u8 = undefined;
+    var encoded: [data.input_limits.max_encoded_bytes]u8 = undefined;
     const sent = (try outbox.beginSend(&encoded)).?;
     const decoded = try core.decodeClient(sent);
     try std.testing.expectEqualStrings("src/main.zig", decoded.change_review_command.path);
@@ -626,7 +625,7 @@ test "change review query owns its provider conversation identity" {
     var conversation = "thread-A".*;
     try outbox.pushChangeReviewQuery(.{ .request_id = @enumFromInt(21), .pane_id = @enumFromInt(2), .pane_generation = 3, .edition_id = 7, .session = &conversation });
     @memset(&conversation, 'x');
-    var bytes: [input_capability.max_encoded_bytes]u8 = undefined;
+    var bytes: [data.input_limits.max_encoded_bytes]u8 = undefined;
     const sent = (try outbox.beginSend(&bytes)).?;
     try std.testing.expectEqualStrings("thread-A", (try core.decodeClient(sent)).query_change_review.session);
 }

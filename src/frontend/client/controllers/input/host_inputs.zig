@@ -28,7 +28,7 @@ pub const Router = GenericRouter(
 );
 
 comptime {
-    std.debug.assert(chunk_size <= client_module.max_encoded_bytes);
+    std.debug.assert(chunk_size <= data.input_limits.max_encoded_bytes);
 }
 
 /// Compiles an owned, allocation-free router from validated configuration.

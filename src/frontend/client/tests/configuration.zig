@@ -86,7 +86,7 @@ test "configuration adoption swaps ownership after commit and presents by versio
     try std.testing.expect(client.model.diagnostic() == null);
 
     try std.testing.expectEqualDeep(
-        client_module.sound_playback_support.RequestOutcome{ .start = .ready },
+        data.SoundRequestOutcome{ .start = .ready },
         client.sound_playback.request(.ready),
     );
     try std.testing.expect(client.sound_playback.request(.ready) == .queued);
@@ -113,7 +113,7 @@ test "configuration adoption swaps ownership after commit and presents by versio
         @as(u64, 750 * std.time.ns_per_ms),
         TerminalClient.of(client).host_input.router.sequence_timeout_ns,
     );
-    try std.testing.expectEqual(client_module.SoundSnapshot{
+    try std.testing.expectEqual(data.SoundSnapshot{
         .configuration = .{ .enabled = false },
         .active = true,
         .queued = null,

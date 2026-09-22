@@ -11,6 +11,7 @@ references/*
 !references/README.md
 .lavish/*
 state/
+!src/model/state/
 /coverage.lcov
 /*.zcov
 /test/fuzz/afl-out/

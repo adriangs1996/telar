@@ -42,7 +42,7 @@ ports bind to `NativeLoop`, and the configuration watcher binds to `Configuratio
 | Host capabilities / size | [`host_resources`](../src/client/AttachedClient.zig) | Model commit, graphics, geometry and host delivery order are in that module |
 | Pane focus and geometry delivery | `AttachedClient.deliverPaneFocus`, `resizePane`, `togglePaneFullscreen` | Private geometry delivery validates the committed revision before host effects |
 | Pane attachment | `AttachedClient.attachVisiblePanes` | `pane_opened` → private `confirmPaneAttachment`; failure → private `recoverPaneAttachment` |
-| Request correlation | `LifecycleState.nextId` and `AttachedClient.sendRuntimeRequest` or owned-payload send methods | `Tracker.take` consumes once; rejected delivery removes its own registration |
+| Request correlation | `model.RequestLifecycle.nextId` and `AttachedClient.sendRuntimeRequest` or owned-payload send methods | `Tracker.take` consumes once; rejected delivery removes its own registration |
 | Pane frames and closure | `AttachedClient.applyPaneFrame`, `requestPaneClose`, `applyPaneExit` | Private frame application owns ACK ordering and recovery; retirement releases pane resources even for repeated exits |
 | Tab / workspace changes | `AttachedClient.selectTab` and private tab operations | `AttachedClient` owns tab creation, rename, move, close and tab/workspace snapshot completion; request identity is consumed once |
 | Workspace switch / creation | `AttachedClient.selectWorkspace`, `requestWorkspace`, `requestWorkspacePane`, `requestWorkspaceCreation` | `pane_opened` → private arrival or replacement → resource activation; `request_failed` → private bounded fallback |

@@ -1,38 +1,8 @@
 //! Application use case for delivering semantic user input to one pane.
 
-const data = @import("model");
 const core = @import("telar-core");
-const input_capability = @import("../../input/input_namespace.zig");
 
 const std = @import("std");
-
-pub const max_bytes = input_capability.max_encoded_bytes;
-/// Keys one synthetic sequence may carry; each key encodes to at most 32 bytes.
-pub const max_keys: usize = input_capability.max_encoded_bytes / 32;
-
-pub const Source = enum {
-    host,
-    paste,
-    mouse,
-};
-
-pub const Payload = union(enum) {
-    bytes: []const u8,
-    key: data.Key,
-};
-
-pub const Command = @import("PaneInputCommand.zig");
-
-pub const PasteMarker = enum {
-    start,
-    finish,
-};
-
-pub const PasteMarkerCommand = @import("PasteMarkerCommand.zig");
-
-pub const PaneInputEffect = @import("PaneInputEffect.zig");
-
-pub const Delivery = @import("PaneInputDelivery.zig");
 
 /// Rejects terminal controls and unframed multiline text before history can send input.
 /// Example: `try validateHistoryText(command, modes.bracketed_paste);`.
@@ -66,8 +36,3 @@ test "history paste cannot smuggle terminal keys or escape its bracketed boundar
     try std.testing.expectError(error.UnsafeHistoryText, validateHistoryText("echo x\x03", false));
     try std.testing.expectError(error.UnsafeHistoryText, validateHistoryText("echo \xc2\x9b", true));
 }
-
-pub const EffectEvent = enum {
-    viewport,
-    input,
-};

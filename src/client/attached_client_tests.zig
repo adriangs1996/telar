@@ -1,7 +1,6 @@
 //! Test bodies for AttachedClient. Private implementations are supplied by the
 //! owner's test declarations as concrete compile-time functions.
 const data = @import("model");
-const input_namespace = @import("input/input_namespace.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const AttachedClient = @import("AttachedClient.zig");
@@ -245,7 +244,7 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
         .start_send_fn = Driver.send,
     };
 
-    var send_buffer: [input_namespace.max_encoded_bytes + 64]u8 = undefined;
+    var send_buffer: [data.input_limits.max_encoded_bytes + 64]u8 = undefined;
     const app = try std.testing.allocator.create(AttachedClient);
     defer std.testing.allocator.destroy(app);
     app.transport_driver = driver;
@@ -260,7 +259,7 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
     const pane: core.PaneId = @enumFromInt(1);
     var source = [_]u8{
         'x',
-    } ** (input_namespace.max_encoded_bytes + 1);
+    } ** (data.input_limits.max_encoded_bytes + 1);
 
     try std.testing.expectError(error.DriverBusy, app.sendRuntimeInput(
         .{
@@ -283,7 +282,7 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
     const first = try core.decodeClient(capture.payload);
     try std.testing.expect(first == .pane_input);
     try std.testing.expectEqual(pane, first.pane_input.pane_id);
-    try std.testing.expectEqualStrings("x" ** input_namespace.max_encoded_bytes, first.pane_input.bytes);
+    try std.testing.expectEqualStrings("x" ** data.input_limits.max_encoded_bytes, first.pane_input.bytes);
     try state.outbox.finishSend({});
     try start_send(app);
     const second = try core.decodeClient(capture.payload);

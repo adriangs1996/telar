@@ -909,14 +909,14 @@ test "agent sound completion releases a failed worker before scheduling its succ
     const pending_updates = TerminalClient.of(client).presenter.pending_updates;
 
     try std.testing.expectEqualDeep(
-        client_module.sound_playback_support.RequestOutcome{ .start = .ready },
+        data.SoundRequestOutcome{ .start = .ready },
         client.sound_playback.request(.ready),
     );
     try std.testing.expect(client.sound_playback.request(.needs_input) == .queued);
 
     try client.completeAgentSound(error.SoundUnavailable);
 
-    try std.testing.expectEqual(client_module.SoundSnapshot{
+    try std.testing.expectEqual(data.SoundSnapshot{
         .configuration = .{},
         .active = true,
         .queued = null,

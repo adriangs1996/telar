@@ -30,7 +30,6 @@ const history_browser = @import("application/input/history_browser.zig");
 const pane_input_module = @import("application/input/pane_input.zig");
 const agent_snapshot_delivery = @import("application/agents/agent_snapshot_delivery.zig");
 const encoding_support = @import("input/encoding_support.zig");
-const input_limits = @import("input/input_namespace.zig");
 const mouse_protocol_module = @import("input/mouse_protocol.zig");
 const name_prompt_opening = @import("application/input/name_prompt_opening.zig");
 const path_queries = @import("operations/input/path_completions.zig");
@@ -51,16 +50,13 @@ const AppearanceThemesType = @import("appearance/AppearanceThemes.zig");
 const RuntimeTransportState = @import("connection/RuntimeTransportState.zig");
 const TelemetryState = @import("resources/TelemetryState.zig");
 const ClientLayoutsState = @import("resources/ClientLayoutsState.zig");
-const StartupState = @import("operations/session/State.zig");
 const ModelType = @import("model/Model.zig");
 const HistoryType = @import("workspace/History.zig");
 const GenerationType = @import("config/Generation.zig");
 const RegistryType = @import("plugins/Registry.zig");
 const ConfigReloadState = @import("resources/ConfigReloadState.zig");
-const SoundPlaybackType = @import("agents/SoundPlayback.zig");
 const CaptureResourcesType = @import("attachments/CaptureResources.zig");
 const OpeningType = @import("links/Opening.zig");
-const LifecycleState = @import("connection/LifecycleState.zig");
 const BarUpdatesState = @import("operations/configuration/State.zig");
 const SoundPortType = @import("agents/SoundPort.zig");
 const HostNotifierType = @import("notifications/HostNotifier.zig");
@@ -77,9 +73,7 @@ const HostTimersType = @import("resources/HostTimers.zig");
 const BarCommandRunnerType = @import("bars/BarCommandRunner.zig");
 const PluginWorkerRunnerType = @import("plugins/PluginWorkerRunner.zig");
 const PathCompletionRunnerType = @import("completion/PathCompletionRunner.zig");
-const PathCompletionsStateType = @import("operations/input/PathCompletionsState.zig");
 const FaviconRunnerType = @import("completion/FaviconRunner.zig");
-const FaviconsStateType = @import("operations/workspaces/FaviconsState.zig");
 const HostClockType = @import("resources/HostClock.zig");
 const HostInputSourceType = @import("input/HostInputSource.zig");
 const TransportDriverType = @import("connection/TransportDriver.zig");
@@ -90,9 +84,6 @@ const Tab = @import("workspace/Tab.zig");
 const ConnectionDelivery = @import("connection/ConnectionDelivery.zig");
 const Pane = @import("panes/Pane.zig");
 const LayoutsType = @import("workspace/Layouts.zig");
-const Delivery = @import("application/input/PaneInputDelivery.zig");
-const Prepared = @import("application/input/Prepared.zig");
-const PaneInputCommand = @import("application/input/PaneInputCommand.zig");
 const ResultsType = @import("model/Results.zig");
 const SourcesType = @import("model/Sources.zig");
 const Adoption = @import("resources/Adoption.zig");
@@ -120,7 +111,7 @@ const FocusReportOutcome = enum { applied, unchanged };
 const AgentNavigationOutcome = enum { ignored, focused, handoff_requested };
 
 comptime {
-    std.debug.assert(data.effects.max_expression_paste_bytes + 16 <= input_limits.max_encoded_bytes);
+    std.debug.assert(data.effects.max_expression_paste_bytes + 16 <= data.input_limits.max_encoded_bytes);
 }
 
 const AttachedClient = @This();
@@ -132,14 +123,14 @@ options: OptionsType,
 client_identity: core.ClientIdentity,
 telemetry: TelemetryState,
 client_layouts: ClientLayoutsState = .{},
-startup: StartupState = .{},
+startup: data.StartupState = .{},
 model: ModelType,
 navigation_history: HistoryType = .{},
 lua_generation: ?*GenerationType,
 plugin_registry: ?*RegistryType,
 trust_store: ?*core.TrustStore,
 reload: ConfigReloadState,
-sound_playback: SoundPlaybackType,
+sound_playback: data.SoundPlayback,
 notification_delivery: data.NotificationDelivery = .telar,
 /// Whether the history palette lists automation-submitted commands too.
 history_show_agent_commands: bool = false,
@@ -155,13 +146,13 @@ appearance_themes: AppearanceThemesType = .{},
 clipboard_capture_resources: CaptureResourcesType = .{},
 link_opening: OpeningType = .{},
 link_pointer: data.Pointer = .{},
-request_lifecycle: LifecycleState = .{},
+request_lifecycle: data.RequestLifecycle = .{},
 change_review: data.ChangeReviewSession = .{},
 sidebar_animation_scheduler: core.DeadlineScheduler = .{},
 notification_scheduler: core.DeadlineScheduler = .{},
 bar_updates: BarUpdatesState = .{},
-path_completions: PathCompletionsStateType = .{},
-favicons: FaviconsStateType = .{},
+path_completions: data.PathCompletionsState = .{},
+favicons: data.FaviconsState = .{},
 /// Application key leases, owned by routing rather than by the host reader.
 input_leases: data.key_routing.Leases = .{},
 /// Host ports, bound by the adapter before the first event.
@@ -297,7 +288,7 @@ pub fn sendRuntime(self: *AttachedClient, message: outbox_support.Message) !void
 /// try self.sendRuntimeInput(.{ .pane_id = pane_id, .bytes = bytes });
 /// ```
 pub fn sendRuntimeInput(self: *AttachedClient, input: core.PaneInput) !void {
-    if (input.bytes.len > input_limits.max_encoded_bytes) {
+    if (input.bytes.len > data.input_limits.max_encoded_bytes) {
         try self.runtime_transport.outbox.pushInputBatch(input.pane_id, input.bytes);
     } else {
         try self.runtime_transport.outbox.pushInput(input.pane_id, input.bytes);
@@ -1529,7 +1520,7 @@ pub fn canSubmitHistory(self: *AttachedClient, selection: u16) bool {
         return false;
     };
 
-    const slots = (command.len + 13 + input_limits.max_encoded_bytes - 1) / input_limits.max_encoded_bytes;
+    const slots = (command.len + 13 + data.input_limits.max_encoded_bytes - 1) / data.input_limits.max_encoded_bytes;
     if (self.runtime_transport.outbox.availableCapacity() < slots + 1) {
         self.model.history_palette.setError("Input is busy; retry the command");
         return false;
@@ -1678,12 +1669,12 @@ pub fn synchronizeClientLayout(self: *AttachedClient) !void {
 
 /// Delivers one user-input command through the application boundary.
 /// Example: `_ = try app.sendPaneInput(command);`
-pub fn sendPaneInput(self: *AttachedClient, command: PaneInputCommand) !?Delivery {
+pub fn sendPaneInput(self: *AttachedClient, command: data.PaneInputCommand) !?data.PaneInputDelivery {
     const started = core.now(self.io);
 
     const plan = self.model.planPaneInput(command.target) orelse return null;
     var encoded: [32]u8 = undefined;
-    const prepared: Prepared = switch (command.payload) {
+    const prepared: data.PreparedPaneInput = switch (command.payload) {
         .bytes => |value| .{
             .source = command.source,
             .bytes = value,
@@ -5807,15 +5798,15 @@ fn deliverSidebarLayout(self: *AttachedClient, change: data.SidebarLayout) !void
 }
 
 /// Delivers one synthetic key sequence in a single pane-input transaction.
-fn sendPaneKeys(self: *AttachedClient, target: data.PaneInputTarget, keys: []const data.Key) !?Delivery {
+fn sendPaneKeys(self: *AttachedClient, target: data.PaneInputTarget, keys: []const data.Key) !?data.PaneInputDelivery {
     const started = core.now(self.io);
 
-    if (keys.len == 0 or keys.len > pane_input_module.max_keys) {
+    if (keys.len == 0 or keys.len > data.input_limits.max_synthetic_keys) {
         return error.InvalidInputLength;
     }
 
     const plan = self.model.planPaneInput(target) orelse return null;
-    var encoded: [input_limits.max_encoded_bytes]u8 = undefined;
+    var encoded: [data.input_limits.max_encoded_bytes]u8 = undefined;
     var len: usize = 0;
     for (keys) |key| {
         var key_bytes: [32]u8 = undefined;
@@ -5842,16 +5833,16 @@ fn sendPaneKeys(self: *AttachedClient, target: data.PaneInputTarget, keys: []con
 }
 
 /// Encodes one Lua paste decision against the current child modes.
-fn pasteExpression(self: *AttachedClient, text: []const u8) !?Delivery {
+fn pasteExpression(self: *AttachedClient, text: []const u8) !?data.PaneInputDelivery {
     const started = core.now(self.io);
 
     const plan = self.model.planPaneInput(.focused) orelse return null;
     const framing_bytes: usize = if (plan.input_modes.bracketed_paste) 12 else 0;
-    if (text.len > input_limits.max_encoded_bytes - framing_bytes) {
+    if (text.len > data.input_limits.max_encoded_bytes - framing_bytes) {
         return error.InvalidInputLength;
     }
 
-    var encoded: [input_limits.max_encoded_bytes]u8 = undefined;
+    var encoded: [data.input_limits.max_encoded_bytes]u8 = undefined;
     const bytes = try encoding_support.encodePaste(
         &encoded,
         text,
@@ -5869,7 +5860,7 @@ fn pasteExpression(self: *AttachedClient, text: []const u8) !?Delivery {
 
 /// Delivers one history command, with execution outside bracketed paste framing.
 /// Example: `_ = try historyPaste(client, .{ .text = command, .run = false });`.
-fn pasteHistoryCommand(self: *AttachedClient, text: []const u8, run: bool) !?Delivery {
+fn pasteHistoryCommand(self: *AttachedClient, text: []const u8, run: bool) !?data.PaneInputDelivery {
     const started = core.now(self.io);
 
     const plan = self.model.planPaneInput(.focused) orelse return null;
@@ -5897,7 +5888,7 @@ fn pasteHistoryCommand(self: *AttachedClient, text: []const u8, run: bool) !?Del
 }
 
 /// Delivers one explicit marker for an exact model-owned paste session.
-fn sendPasteMarker(self: *AttachedClient, session: data.PanePasteSession, boundary: data.PanePasteBoundary) !?Delivery {
+fn sendPasteMarker(self: *AttachedClient, session: data.PanePasteSession, boundary: data.PanePasteBoundary) !?data.PaneInputDelivery {
     const started = core.now(self.io);
 
     const plan = self.model.planPaneInput(
@@ -5920,7 +5911,7 @@ fn sendPasteMarker(self: *AttachedClient, session: data.PanePasteSession, bounda
     ));
 }
 
-fn recordPaneInput(self: *AttachedClient, started: u64, delivery: ?Delivery) ?Delivery {
+fn recordPaneInput(self: *AttachedClient, started: u64, delivery: ?data.PaneInputDelivery) ?data.PaneInputDelivery {
     const completed = delivery orelse return null;
 
     if (completed.byte_count != 0 and self.presentation.note_pane_input_fn != null) {
@@ -5938,7 +5929,7 @@ fn recordPaneInput(self: *AttachedClient, started: u64, delivery: ?Delivery) ?De
     return completed;
 }
 
-fn deliverPaneInput(self: *AttachedClient, plan: data.PaneInputPlan, prepared: Prepared) !Delivery {
+fn deliverPaneInput(self: *AttachedClient, plan: data.PaneInputPlan, prepared: data.PreparedPaneInput) !data.PaneInputDelivery {
     if (prepared.bytes.len == 0 or prepared.bytes.len > prepared.limit) {
         return error.InvalidInputLength;
     }

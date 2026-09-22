@@ -1,5 +1,5 @@
+const data = @import("model");
 const outbox_support = @import("outbox_support.zig");
-const root = @import("../input/input_namespace.zig");
 const OwnedLaunchCwd = @import("OwnedLaunchCwd.zig");
 const OwnedClientLayout = @import("OwnedClientLayout.zig");
 const Stats = @import("Stats.zig");
@@ -14,7 +14,7 @@ const core = @import("telar-core");
 const Outbox = @This();
 
 items: [outbox_support.capacity]outbox_support.Message = undefined,
-input_bytes: [outbox_support.capacity][root.max_encoded_bytes]u8 = undefined,
+input_bytes: [outbox_support.capacity][data.input_limits.max_encoded_bytes]u8 = undefined,
 launch_cwds: [outbox_support.max_pending_launches]OwnedLaunchCwd =
     [_]OwnedLaunchCwd{.{}} ** outbox_support.max_pending_launches,
 client_layouts: [2]OwnedClientLayout = [_]OwnedClientLayout{.{}} ** 2,
@@ -89,7 +89,7 @@ pub fn push(outbox: *Outbox, message: outbox_support.Message) !void {
 }
 
 pub fn pushInput(outbox: *Outbox, pane_id: core.PaneId, bytes: []const u8) !void {
-    if (bytes.len == 0 or bytes.len > root.max_encoded_bytes) {
+    if (bytes.len == 0 or bytes.len > data.input_limits.max_encoded_bytes) {
         return error.InvalidInputLength;
     }
     if (outbox.mutableTailIndex()) |index| {
@@ -120,7 +120,7 @@ pub fn pushInput(outbox: *Outbox, pane_id: core.PaneId, bytes: []const u8) !void
 /// Example: `try outbox.pushAgentPrompt(prompt);`
 pub fn pushAgentPrompt(outbox: *Outbox, prompt: core.AgentPrompt) !void {
     try prompt.images.validate();
-    if ((prompt.text.len == 0 and prompt.images.count == 0) or prompt.text.len > core.agent_thread.max_prompt_bytes or prompt.text.len > root.max_encoded_bytes or !std.unicode.utf8ValidateSlice(prompt.text) or std.mem.indexOfScalar(u8, prompt.text, 0) != null) {
+    if ((prompt.text.len == 0 and prompt.images.count == 0) or prompt.text.len > core.agent_thread.max_prompt_bytes or prompt.text.len > data.input_limits.max_encoded_bytes or !std.unicode.utf8ValidateSlice(prompt.text) or std.mem.indexOfScalar(u8, prompt.text, 0) != null) {
         return error.InvalidAgentPrompt;
     }
     if (!prompt.options.valid()) {
@@ -132,7 +132,7 @@ pub fn pushAgentPrompt(outbox: *Outbox, prompt: core.AgentPrompt) !void {
         total += path.len;
     }
 
-    if (total > root.max_encoded_bytes) {
+    if (total > data.input_limits.max_encoded_bytes) {
         return error.InvalidAgentPrompt;
     }
 
@@ -161,7 +161,7 @@ pub fn pushAgentHistory(outbox: *Outbox, query: core.QueryAgentHistory) !void {
     _ = try core.AgentHistoryCursor.init(query.cursor);
     _ = try core.AgentHistoryCursor.init(query.anchor);
     _ = try core.AgentHistoryCursor.init(query.anchor_turn);
-    if (query.cursor.len + query.anchor.len + query.anchor_turn.len > root.max_encoded_bytes) {
+    if (query.cursor.len + query.anchor.len + query.anchor_turn.len > data.input_limits.max_encoded_bytes) {
         return error.InvalidAgentHistoryCursor;
     }
     const index = try outbox.reserve();
@@ -186,7 +186,7 @@ pub fn pushChangeReviewQuery(self: *Outbox, query: core.QueryChangeReview) !void
 
 fn pushReview(self: *Outbox, value: anytype) !void {
     const query = @TypeOf(value) == core.QueryChangeReview;
-    var scratch: [root.max_encoded_bytes]u8 = undefined;
+    var scratch: [data.input_limits.max_encoded_bytes]u8 = undefined;
     const encoded = if (query) try core.encodeQueryChangeReview(&scratch, value) else try core.encodeChangeReviewCommand(&scratch, value);
     const index = try self.reserve();
     self.item_launch_cwd[index] = null;
@@ -201,14 +201,14 @@ pub fn pushInputBatch(outbox: *Outbox, pane_id: core.PaneId, bytes: []const u8) 
         return error.InvalidInputLength;
     }
 
-    const count = (bytes.len + root.max_encoded_bytes - 1) / root.max_encoded_bytes;
+    const count = (bytes.len + data.input_limits.max_encoded_bytes - 1) / data.input_limits.max_encoded_bytes;
     if (outbox.availableCapacity() < count) {
         return error.ClientOutboxFull;
     }
 
     var offset: usize = 0;
     while (offset < bytes.len) {
-        const end = @min(offset + root.max_encoded_bytes, bytes.len);
+        const end = @min(offset + data.input_limits.max_encoded_bytes, bytes.len);
         try outbox.pushInput(pane_id, bytes[offset..end]);
         offset = end;
     }
@@ -475,7 +475,7 @@ fn append(outbox: *Outbox, message: outbox_support.Message) !void {
     if (owned == .open_editor) {
         try owned.open_editor.validateWire();
         const request = owned.open_editor;
-        if (request.editor.len + request.path.len > root.max_encoded_bytes) {
+        if (request.editor.len + request.path.len > data.input_limits.max_encoded_bytes) {
             return error.InvalidEditorTarget;
         }
 
