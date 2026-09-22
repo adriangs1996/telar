@@ -5,7 +5,6 @@
 const history_browser = @import("../../application/input/history_browser.zig");
 const Client = @import("../../AttachedClient.zig");
 const name_prompts = @import("name_prompts.zig");
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const OwnedHistoryQueryType = @import("../../connection/OwnedHistoryQuery.zig");
 const max_history_results = @import("telar-core").max_history_results;
 const raw_module = @import("telar-core").raw;

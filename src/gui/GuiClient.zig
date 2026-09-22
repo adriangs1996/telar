@@ -952,7 +952,7 @@ fn executeAction(self: *GuiClient, value: client.Action) !client.Control {
 
             return .continue_routing;
         },
-        else => return client.operations.action_routing.apply(&self.app, value),
+        else => return self.app.executeAction(value, .binding),
     };
 
     if (client.operations.copy_modes.active(&self.app)) {
@@ -1644,7 +1644,7 @@ pub fn applyGraphics(self: *GuiClient, command: client.ApplicationPanesPaneGraph
 fn prepare(self: *GuiClient, renderer: *Renderer) !u64 {
     self.widgets.tab_drag.validate(&self.app.model);
 
-    if (!client.request_lifecycle.has(&self.app, .tab_operation)) {
+    if (!self.app.request_lifecycle.tracker.has(.tab_operation)) {
         self.widgets.tab_drop_pending = null;
     }
 

@@ -5,7 +5,7 @@ The client owns validated cells before acknowledging application. Presentation
 then consumes the latest model independently of runtime patch publication.
 
 ```text
-entrypoints/server_messages.handleServerMessage(.pane_frame)
+entrypoints/AttachedClient.handleServerMessage(.pane_frame)
   -> operations/panes/pane_frames.apply
      -> Model.applyPaneFrame
         -> multiplexer / Pane.applyFrame and copy-state reconciliation

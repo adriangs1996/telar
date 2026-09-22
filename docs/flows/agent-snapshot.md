@@ -8,10 +8,10 @@ validation and sidebar presentation. The view owns no second semantic copy.
 
 ```text
 runtime tracker → runtime delivery → agent_snapshot
-  → server_messages.handleServerMessage
+  → AttachedClient.handleServerMessage
   → agent_snapshots.apply
       model.reconcileAgentSnapshot
-      active_pane_resources.synchronizeAttachments
+      AttachedClient.synchronizePaneAttachments
       bounded notifications
       sidebar_animations.synchronize
   → event-loop presentation observation
@@ -48,7 +48,7 @@ focus or remote handoff selected from that plan.
 ## Effects and presentation
 
 After the model accepts a newer snapshot, the operation calls
-`active_pane_resources.synchronizeAttachments`. A shelf geometry change calls
+`AttachedClient.synchronizePaneAttachments`. A shelf geometry change calls
 `AttachedClient.resizeAttachedPanes`. This attachment-only synchronization does not
 emit child focus reports. The operation then translates transitions to
 `blocked`, `done` and `failed` into owned notifications, bounded by the center's

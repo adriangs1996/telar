@@ -21,7 +21,7 @@ request containing only coordinates.
 ```text
 host key, mouse wheel or native action
         |
-key_routing / copy_mode_pointer / actions.apply
+key_routing / copy_mode_pointer / AttachedClient.executeAction
         |
 copy_modes adapter
         |
@@ -59,7 +59,7 @@ the existing `copy_modes`. It allocates nothing, retains no pane pointer
 and adds no queue. A selected effect failure propagates and cannot fall through
 to view or pane mouse handling.
 
-`actions.apply` owns the exit rule for actions from host bindings, Lua
+`AttachedClient.executeAction` owns the exit rule for actions from host bindings, Lua
 batches and plugin batches. It receives a synchronous copy-mode authority
 snapshot, leaves copy mode before any action other than entry, then delegates
 the concrete action. A leave failure prevents that action; a later action
@@ -176,7 +176,7 @@ presentation state, never semantic authority inside `multiplexer.Pane`.
   viewport-after-commit ordering, including both failure policies.
 - `src/client/application/input/copy_mode_pointer.zig` proves exclusive
   pointer ownership, bounded wheel movement and selected-effect failures.
-- `src/client/operations/input/actions.zig` proves source-independent
+- `src/client/AttachedClient.zig` proves source-independent
   copy-mode preflight, the entry exception and partial failures.
 - `src/client/operations/input/copy_modes.zig` owns the selection outbox adapter.
 - `src/frontend/presentation/screen_support.zig` proves exact OSC 52 encoding,

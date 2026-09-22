@@ -2,11 +2,9 @@
 
 const Client = @import("../../AttachedClient.zig");
 const TabSnapshotViewType = @import("telar-core").TabSnapshotView;
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const std = @import("std");
 const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
 const PaneIdType = @import("telar-core").PaneId;
-const active_pane_resources = @import("../panes/active_pane_resources.zig");
 
 const pane_resources = @import("../panes/pane_resources.zig");
 
@@ -16,7 +14,7 @@ pub const Recovery = enum { coalesced, requested };
 
 /// Commits correlated membership before releasing panes and repairing attachments. Example: `_ = try apply(client, snapshot);`
 pub fn apply(client: *Client, snapshot: TabSnapshotViewType) !Outcome {
-    const continuation = request_lifecycle.consume(client, snapshot.request_id) orelse
+    const continuation = client.request_lifecycle.tracker.take(snapshot.request_id) orelse
         return error.UnexpectedTabSnapshot;
     const expected_location = switch (continuation) {
         .tab_snapshot => |location| location,
@@ -45,13 +43,13 @@ pub fn apply(client: *Client, snapshot: TabSnapshotViewType) !Outcome {
     }, client.geometry().area);
 
     for (reconciliation.removed_panes.slice()) |pane_id| {
-        request_lifecycle.ignorePane(client, pane_id);
+        client.request_lifecycle.tracker.ignorePane(pane_id);
         pane_resources.release(client, pane_id);
     }
 
     if (reconciliation.active) {
         const tab = client.model.workspace.find(reconciliation.location.tab_id) orelse return error.StaleTabReconciliation;
-        try active_pane_resources.synchronize(client);
+        try client.synchronizeActivePane();
         try client.resizeAttachedPanes(&tab.model, reconciliation.area);
         try client.attachVisiblePanes(tab, reconciliation.area);
     }
@@ -61,10 +59,10 @@ pub fn apply(client: *Client, snapshot: TabSnapshotViewType) !Outcome {
 
 /// Coalesces snapshot recovery until the pending response settles. Example: `_ = try recover(client, location);`
 pub fn recover(client: *Client, location: TabLocation) !Recovery {
-    if (request_lifecycle.has(client, .tab_snapshot)) {
+    if (client.request_lifecycle.tracker.has(.tab_snapshot)) {
         return .coalesced;
     }
 
-    try request_lifecycle.requestTabSnapshot(client, location);
+    try client.requestTabSnapshot(location);
     return .requested;
 }

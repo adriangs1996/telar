@@ -1,4 +1,3 @@
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
@@ -73,7 +72,7 @@ fn selectTabOffset(client: *Client, reply: *core.ClientCommand, offset: isize) !
         return error.NoActiveTab;
     }
 
-    if (request_lifecycle.has(client, .tab_snapshot)) {
+    if (client.request_lifecycle.tracker.has(.tab_snapshot)) {
         return error.ClientBusy;
     }
 

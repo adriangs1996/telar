@@ -35,12 +35,15 @@ ports bind to `NativeLoop`, and the configuration watcher binds to `Configuratio
 
 | Trigger | Behavior entry | Reply or completion |
 | --- | --- | --- |
-| Configured action | [`action_routing.apply`](../src/client/operations/input/action_routing.zig) selects native, Lua or plugin; [`actions.apply`](../src/client/operations/input/actions.zig) enumerates native actions | Plugin/worker completion enters the process event switch with its identity |
-| Split pane | `actions.apply(.split_pane)` → [`pane_splits.request`](../src/client/operations/panes/pane_splits.zig) | `pane_opened` → `pane_openings.apply` → `pane_splits.confirm`; failure → `request_failures.apply` → `pane_splits.recover` |
-| Runtime reply | [`AttachedClient.receiveRuntime`](../src/client/AttachedClient.zig) → [`server_messages.handleServerMessage`](../src/client/entrypoints/server_messages.zig) | The exhaustive switch calls concrete operations; receive storage remains borrowed only during dispatch |
+| Configured action | [`AttachedClient.executeAction`](../src/client/AttachedClient.zig) applies binding/effect authority and dispatches native, Lua or plugin actions | Plugin/worker completion enters the process event switch with its identity |
+| Split pane | `AttachedClient.executeAction(.split_pane)` → [`AttachedClient.requestPaneSplit`](../src/client/AttachedClient.zig) | `pane_opened` → `AttachedClient.completePaneOpen` → `AttachedClient.confirmPaneSplit`; failure → `AttachedClient.failRuntimeRequest` → `AttachedClient.recoverPaneSplit` |
+| Runtime reply | [`AttachedClient.receiveRuntime`](../src/client/AttachedClient.zig) → [`AttachedClient.handleServerMessage`](../src/client/AttachedClient.zig) | The exhaustive switch calls concrete operations; receive storage remains borrowed only during dispatch |
 | Host capabilities / size | [`host_resources`](../src/client/AttachedClient.zig) | Model commit, graphics, geometry and host delivery order are in that module |
-| Pane focus, geometry, frame, attachment or closure | [`operations/panes`](../src/client/operations/panes/) | Each operation groups request, confirmation and recovery where applicable |
-| Tab / workspace changes | [`operations/tabs`](../src/client/operations/tabs/), [`operations/workspaces`](../src/client/operations/workspaces/) | Wire responses are cases in `server_messages`; request identity is consumed once |
+| Pane focus and geometry delivery | `AttachedClient.deliverPaneFocus`, `resizePane`, `togglePaneFullscreen` | Private geometry delivery validates the committed revision before host effects |
+| Pane attachment | `AttachedClient.attachVisiblePanes` | `pane_opened` → private `confirmPaneAttachment`; failure → private `recoverPaneAttachment` |
+| Request correlation | `LifecycleState.nextId` and `AttachedClient.sendRuntimeRequest` or owned-payload send methods | `Tracker.take` consumes once; rejected delivery removes its own registration |
+| Pane frames and closure | [`operations/panes`](../src/client/operations/panes/) | Frame application and pane closure retain their existing operations |
+| Tab / workspace changes | [`operations/tabs`](../src/client/operations/tabs/), [`operations/workspaces`](../src/client/operations/workspaces/) | Wire responses are cases in `AttachedClient.handleServerMessage`; request identity is consumed once |
 | Keyboard, mouse, paste, prompts and links | [`operations/input`](../src/client/operations/input/) | Direct policy over the client model and actual host/transport ports |
 | Configuration / Lua / plugins / clipboard | [`operations/configuration`](../src/client/operations/configuration/), [`operations/host`](../src/client/operations/host/) | VM, OS and worker completions keep their existing lifetime and generation boundaries |
 | Agent state and history | [`operations/agents`](../src/client/operations/agents/) | Snapshot, sound, prompt and history messages call the corresponding operation; bounded reading-window algorithms receive the model directly |
@@ -53,8 +56,8 @@ ports bind to `NativeLoop`, and the configuration watcher binds to `Configuratio
 
 ```text
 GUI input / TUI binding
-  → actions.apply(.split_pane = .horizontal)
-  → pane_splits.request
+  → AttachedClient.executeAction(.split_pane = .horizontal)
+  → AttachedClient.requestPaneSplit
       plan size; retain request identity; enqueue create_pane
 
 runtime socket completion
@@ -64,9 +67,9 @@ runtime socket completion
       validate; launch and commit pane; attach; reply pane_opened
 
 client socket completion
-  → server_messages.handleServerMessage(.pane_opened)
-  → pane_openings.apply
-  → pane_splits.confirm
+  → AttachedClient.handleServerMessage(.pane_opened)
+  → AttachedClient.completePaneOpen
+  → AttachedClient.confirmPaneSplit
       validate correlation; commit layout; offer geometry and resources
 
 next presentation

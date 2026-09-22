@@ -5,8 +5,6 @@ const WorkspaceArrival = @import("../../model/WorkspaceArrival.zig");
 const WorkspaceDeparture = @import("../../model/WorkspaceDeparture.zig");
 const WorkspaceActivation = @import("../../model/WorkspaceActivation.zig");
 const pane_resources = @import("../panes/pane_resources.zig");
-const active_pane_resources = @import("../panes/active_pane_resources.zig");
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 
 const TerminalSize = @import("telar-core").TerminalSize;
 
@@ -61,8 +59,8 @@ pub fn activate(client: *Client, activation: WorkspaceActivation) !void {
     {
         return error.StaleWorkspaceActivation;
     }
-    try active_pane_resources.synchronize(client);
+    try client.synchronizeActivePane();
     try client.host_input_source.resumeRead();
-    try request_lifecycle.requestWorkspaceSnapshot(client, activation.location.workspace);
-    try request_lifecycle.requestTabSnapshot(client, activation.location);
+    try client.requestWorkspaceSnapshot(activation.location.workspace);
+    try client.requestTabSnapshot(activation.location);
 }

@@ -12,7 +12,6 @@ const tab_attachments = @import("../tabs/tab_attachments.zig");
 const OpenedPaneType = @import("../../application/panes/OpenedPane.zig");
 const WorkspaceArrivalType = @import("../../model/WorkspaceArrival.zig");
 const workspace_transitions = @import("workspace_transitions.zig");
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const WorkspaceHandoffType = @import("../../application/workspaces/WorkspaceHandoff.zig");
 
 const tab_snapshots = @import("../tabs/tab_snapshots.zig");
@@ -23,7 +22,7 @@ const WorkspaceRecovery = @import("../../application/workspaces/workspace_handof
 
 /// Resolves a listed workspace and requests a handoff only while idle. Example: `_ = try selectWorkspace(client, .{ .position = 1 });`
 pub fn selectWorkspace(client: *Client, target: SelectionTargetType) !bool {
-    if (request_lifecycle.busy(client)) {
+    if (!client.request_lifecycle.tracker.isEmpty()) {
         return false;
     }
 
@@ -87,7 +86,7 @@ fn request(client: *Client, target: ApplicationWorkspacesWorkspaceHandoffTargeti
 
     switch (authority) {
         .requested_departure => {
-            if (request_lifecycle.busy(client)) {
+            if (!client.request_lifecycle.tracker.isEmpty()) {
                 return error.WorkspaceSwitchWhileRequestPending;
             }
         },
@@ -98,7 +97,7 @@ fn request(client: *Client, target: ApplicationWorkspacesWorkspaceHandoffTargeti
         },
     }
 
-    try request_lifecycle.ensureCanStart(client, 2);
+    try client.request_lifecycle.ensureCanStart(2);
     var required: usize = 1;
     var tabs = client.model.workspace.tabIterator();
     while (tabs.next()) |tab| {
@@ -171,7 +170,7 @@ pub fn recover(client: *Client, failure: WorkspaceHandoffFailure) !WorkspaceReco
 
 fn sendHandoff(client: *Client, command: WorkspaceHandoffType) !void {
     const request_id = try client.request_lifecycle.nextId();
-    try request_lifecycle.deliver(client, .{
+    try client.sendRuntimeRequest(.{
         .registration = .{
             .request_id = request_id,
             .continuation = .{ .initial_open = .{ .fallback_workspace = command.fallback_workspace } },

@@ -97,7 +97,7 @@ editor. For normal host keys, `key_routing.apply` selects prompt authority
 before copy mode or pane input. `capturesKeys` bypasses configured bindings
 while the prompt is active. Mouse input and configured actions are suppressed
 in that interval. `pointer_routing.apply` receives no pointer authority, while
-`action_routing.apply` returns before selecting a native, Lua or plugin effect.
+`AttachedClient.executeAction` returns before selecting a native, Lua or plugin effect.
 See [Key routing](key-routing.md).
 
 The terminal adapter translates bytes into semantic editor commands. The state

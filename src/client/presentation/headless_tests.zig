@@ -1,4 +1,3 @@
-const server_messages = @import("../entrypoints/server_messages.zig");
 const PaneIdType = @import("telar-core").PaneId;
 const TabLocationType = @import("telar-core").TabLocation;
 const Fixture = @import("Fixture.zig");
@@ -11,9 +10,7 @@ const GeometryType = @import("Geometry.zig");
 const ImageType = @import("telar-core").Image;
 const retained = @import("../graphics/retained.zig");
 const store = @import("../graphics/store.zig");
-const pane_attachments = @import("../operations/panes/pane_attachments.zig");
 const PaneAttachmentType = @import("../model/PaneAttachment.zig");
-const types = @import("../model/types.zig");
 
 pub const pane_id: PaneIdType = @enumFromInt(1);
 pub const location: TabLocationType = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
@@ -233,11 +230,27 @@ test "reattachment prevents old presentation completion from retiring replacemen
     const old = try fixture.prepare();
     try fixture.model.commitTabDetachment(try fixture.model.planTabDetachment(location));
     const attachment: PaneAttachmentType = .{ .pane_id = pane_id, .location = location };
-    try std.testing.expectEqual(types.PaneAttachmentConfirmation.confirmed, try pane_attachments.confirm(&fixture.app, .{
-        .requested = attachment,
-        .confirmed = attachment,
-        .created = false,
-    }));
+    const request_id = try fixture.app.request_lifecycle.nextId();
+    try fixture.app.request_lifecycle.tracker.add(
+        request_id,
+        .{
+            .attach_pane = .{
+                .pane_id = attachment.pane_id,
+                .location = attachment.location,
+            },
+        },
+    );
+    _ = try fixture.app.handleServerMessage(
+        .{
+            .pane_opened = .{
+                .request_id = request_id,
+                .pane_id = attachment.pane_id,
+                .location = attachment.location,
+                .created = false,
+            },
+        },
+    );
+    try std.testing.expect(fixture.model.workspace.findPane(pane_id).?.attached);
     try sendFrame(fixture, .{ .text = 'B' });
     try fixture.expectAck(1);
     try fixture.complete(old, .delivered);
@@ -306,7 +319,7 @@ test "runtime stop exits production dispatch without changing client state" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const version = fixture.model.version();
-    try std.testing.expectEqual(@as(?u8, 0), try server_messages.handleServerMessage(&fixture.app, .runtime_stopping));
+    try std.testing.expectEqual(@as(?u8, 0), try fixture.app.handleServerMessage(.runtime_stopping));
     try std.testing.expectEqualDeep(version, fixture.model.version());
     try std.testing.expect(fixture.outbox.peek() == null);
 }
@@ -315,7 +328,14 @@ test "production dispatch owns borrowed pane metadata before receive reuse" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     var title = "review title".*;
-    try std.testing.expectEqual(@as(?u8, null), try server_messages.handleServerMessage(&fixture.app, .{ .pane_title = .{ .pane_id = pane_id, .title = &title } }));
+    try std.testing.expectEqual(@as(?u8, null), try fixture.app.handleServerMessage(
+        .{
+            .pane_title = .{
+                .pane_id = pane_id,
+                .title = &title,
+            },
+        },
+    ));
     @memset(&title, 'x');
     try std.testing.expectEqualStrings("review title", fixture.model.workspace.findPane(pane_id).?.titleSlice());
     try std.testing.expect(fixture.outbox.peek() == null);

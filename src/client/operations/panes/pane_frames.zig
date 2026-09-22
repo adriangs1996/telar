@@ -9,7 +9,6 @@ const enabled_module = @import("telar-core").enabled;
 const elapsed_module = @import("telar-core").elapsed;
 const attachment_prompts = @import("../input/attachment_prompts.zig");
 const PaneFrameRecoveryType = @import("../../model/PaneFrameRecovery.zig");
-const active_pane_resources = @import("active_pane_resources.zig");
 
 /// Applies validated cells and acknowledges ownership before host resources. Example: `_ = try apply(client, frame);`
 pub fn apply(client: *Client, frame: FrameViewType) !PaneFrameOutcomeType {
@@ -25,7 +24,7 @@ pub fn apply(client: *Client, frame: FrameViewType) !PaneFrameOutcomeType {
             }
 
             if (client.model.workspace.activeConst() != null) {
-                try active_pane_resources.synchronize(client);
+                try client.synchronizeActivePane();
             }
         },
     }

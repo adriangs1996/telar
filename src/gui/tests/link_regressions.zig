@@ -186,7 +186,7 @@ fn receiveLink(fixture: *Fixture, frame_id: u64, text: []const u8) !void {
         .scroll = .{ .total_rows = pane.buffer.h, .offset = 0 },
         .spans = &.{.{ .start = 0, .cells = cells[0..count] }},
     });
-    _ = try client.server_messages.handleServerMessage(&fixture.session.gui.app, try core.decodeServer(encoded));
+    _ = try fixture.session.gui.app.handleServerMessage(try core.decodeServer(encoded));
     @memset(&wire, 0xff);
 }
 

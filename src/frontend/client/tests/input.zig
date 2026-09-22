@@ -13,7 +13,6 @@ const parseKey_module = @import("telar-client").parseKey;
 const clipboard_images = @import("telar-client").operations.clipboard_images;
 const BufferType = @import("telar-core").Buffer;
 const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
-const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const Client = @import("telar-client").AttachedClient;
 const TargetType = @import("telar-client").AttachmentTarget;
@@ -28,9 +27,7 @@ const enabled_module = @import("telar-core").enabled;
 const name_prompts = @import("telar-client").operations.name_prompts;
 const term = @import("../../presentation/screen_support.zig");
 const model_module = @import("telar-client").config_model;
-const client_actions = @import("telar-client").operations.actions;
 const ScrollDirectionType = @import("telar-client").ScrollDirection;
-const active_pane_resources = @import("telar-client").operations.active_pane_resources;
 const pane_focus_reports = @import("telar-client").operations.pane_focus_reports;
 const PaneSurfaceType = @import("telar-core").PaneSurface;
 const ControlType = @import("telar-client").Control;
@@ -148,7 +145,7 @@ test "Claude marker disappearance in a committed frame retires its paired previe
         .spans = &.{.{ .start = 0, .cells = pane_buffer.cells }},
     });
 
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(marker_frame));
+    _ = try client.handleServerMessage(try decodeServer_module(marker_frame));
     try std.testing.expectEqual(@as(u8, 1), host(client).view.kittyAttachments().snapshot().len);
     try host_inputs.key(client, try parseKey_module("backspace"));
     try std.testing.expectEqual(@as(u8, 1), host(client).view.kittyAttachments().snapshot().len);
@@ -166,7 +163,7 @@ test "Claude marker disappearance in a committed frame retires its paired previe
         .spans = &.{.{ .start = 0, .cells = pane_buffer.cells }},
     });
 
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(empty_frame));
+    _ = try client.handleServerMessage(try decodeServer_module(empty_frame));
     try std.testing.expectEqual(@as(u8, 0), host(client).view.kittyAttachments().snapshot().len);
 }
 
@@ -202,7 +199,7 @@ fn commitPiFrame(client: *Client, input: PiFrame) !void {
         .spans = &.{.{ .start = 0, .cells = pane_buffer.cells }},
     });
 
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(frame));
+    _ = try client.handleServerMessage(try decodeServer_module(frame));
 }
 
 test "closing a Pi preview deletes its whole pasted path from the editor" {
@@ -296,7 +293,7 @@ test "host keys use the keyboard modes received in a pane frame" {
             .scroll = .{ .total_rows = 1, .offset = 0 },
             .spans = &.{.{ .start = 0, .cells = &cells }},
         });
-        _ = try server_messages.handleServerMessage(harness.client, try decodeServer_module(snapshot));
+        _ = try harness.client.handleServerMessage(try decodeServer_module(snapshot));
         try presentation_lifecycle.observe(harness.client);
         try harness.settleModelPresentation();
         const host_bytes = case.host;
@@ -762,7 +759,7 @@ test "copy mode takes authority away from a held scroll binding" {
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 100, .offset = 100 };
 
     _ = try host_inputs.feed(client, .{ .bytes = "\x02\x1b[45::45;1:1u", .now_ns = 0 });
-    _ = try client_actions.apply(client, .enter_copy_mode);
+    _ = try client.executeAction(.enter_copy_mode, .effect);
     const version = client.model.version();
     _ = try host_inputs.feed(client, .{ .bytes = "\x1b[45::45;1:2u", .now_ns = 100 * std.time.ns_per_ms });
     try std.testing.expect(client.model.copyModeActive());
@@ -862,7 +859,12 @@ test "focused scroll sends alternate-screen cursor keys only to the focused pane
     const version = client.model.version();
 
     for ([_]ScrollDirectionType{ .up, .down }) |direction| {
-        _ = try client_actions.apply(client, .{ .scroll_pane = direction });
+        _ = try client.executeAction(
+            .{
+                .scroll_pane = direction,
+            },
+            .effect,
+        );
         try std.testing.expectEqualDeep(version, client.model.version());
         try std.testing.expectEqual(focused, model.layout.focused().?);
         try harness.settle();
@@ -891,8 +893,18 @@ test "focused scroll without an active pane has no effects" {
     const client = harness.client;
     const version = client.model.version();
 
-    _ = try client_actions.apply(client, .{ .scroll_pane = .up });
-    _ = try client_actions.apply(client, .{ .scroll_pane = .down });
+    _ = try client.executeAction(
+        .{
+            .scroll_pane = .up,
+        },
+        .effect,
+    );
+    _ = try client.executeAction(
+        .{
+            .scroll_pane = .down,
+        },
+        .effect,
+    );
 
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
@@ -906,7 +918,7 @@ test "focused scroll retires copy mode before moving the restored viewport" {
     const client = harness.client;
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
-    _ = try client_actions.apply(client, .enter_copy_mode);
+    _ = try client.executeAction(.enter_copy_mode, .effect);
     try host_inputs.key(client, try parseKey_module("g"));
     try std.testing.expectEqual(@as(u32, 0), pane.scroll.offset);
     try harness.settle();
@@ -943,7 +955,7 @@ test "focus reporting emits focus-in only after the pane opts in" {
     const model = &client.model.workspace.active().?.model;
     model.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
     const input_events = client.telemetry.metrics.input_events;
-    try active_pane_resources.synchronize(client);
+    try client.synchronizeActivePane();
     try harness.settle();
 
     try std.testing.expect(client.model.reportedPaneFocus().?.focus_events);
@@ -988,7 +1000,7 @@ test "native thread view action flips the focused pane surface" {
     try std.testing.expectEqual(PaneSurfaceType.terminal, active.layout.surface(focused));
 
     for ([_]PaneSurfaceType{ .thread, .terminal }) |expected_surface| {
-        const control = try client_actions.apply(client, .toggle_thread_view);
+        const control = try client.executeAction(.toggle_thread_view, .effect);
 
         expected_version.panes +%= 1;
         try std.testing.expectEqual(ControlType.continue_routing, control);

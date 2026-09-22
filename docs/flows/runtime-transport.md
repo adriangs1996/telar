@@ -60,7 +60,7 @@ runtime layout determines the subsequent `open_pane` transaction.
 ```text
 concrete client operation
        |
-request_lifecycle.deliver -> AttachedClient.sendRuntime
+AttachedClient.sendRuntimeRequest -> AttachedClient.sendRuntime
        or AttachedClient.sendRuntimeInput
        |
 Outbox copies and folds bounded data
@@ -104,7 +104,7 @@ reserved inbox slot -> ClientEvent.server -> consumer dispatch
        |
 AttachedClient.receiveRuntime
        |
-server_messages.handleServerMessage
+AttachedClient.handleServerMessage
        |
 concrete client operation -> ClientModel or disposable resources
        |

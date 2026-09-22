@@ -23,7 +23,6 @@ const pointer_routing = @import("telar-client").operations.pointer_routing;
 const host_capabilities = @import("../host/host_capabilities.zig");
 const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
 const presentation_lifecycle = @import("../../presentation/presentation_lifecycle.zig");
-const action_routing = @import("telar-client").operations.action_routing;
 const ControlType = @import("telar-client").Control;
 const tab_drag = @import("tab_drag.zig");
 const monotonic_module = @import("telar-client").monotonic;
@@ -364,7 +363,7 @@ fn applyDecision(client: *Client, decision: Router.Decision) !ControlType {
             }
         },
         .action => |request| {
-            const control = try action_routing.apply(client, request.value);
+            const control = try client.executeAction(request.value, .binding);
             if (control == .continue_routing) {
                 router.actionCompleted(request, repeat_policy(request.value, client.repeatPane()));
             }

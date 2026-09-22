@@ -45,7 +45,7 @@ pub fn reply(session: *Session, snapshot: core.ChangeReviewSnapshotView) !void {
     try session.settle();
     var bytes: [128 * 1024]u8 = undefined;
     const encoded = try core.encodeChangeReviewSnapshot(&bytes, snapshot);
-    _ = try client.server_messages.handleServerMessage(&session.gui.app, try core.decodeServer(encoded));
+    _ = try session.gui.app.handleServerMessage(try core.decodeServer(encoded));
     @memset(&bytes, 0);
     try session.gui.review.synchronize(&session.gui.app);
 }
@@ -133,12 +133,24 @@ test "runtime review rejection preserves unsaved range draft and late success ca
     try panel.synchronize(&session.gui.app);
     const stale = response(session, 2);
     try session.settle();
-    _ = try client.server_messages.handleServerMessage(&session.gui.app, .{ .request_failed = .{ .request_id = stale.request_id, .code = .internal, .message = "Review changed; refresh before saving" } });
+    _ = try session.gui.app.handleServerMessage(
+        .{
+            .request_failed = .{
+                .request_id = stale.request_id,
+                .code = .internal,
+                .message = "Review changed; refresh before saving",
+            },
+        },
+    );
     try panel.synchronize(&session.gui.app);
     try std.testing.expect(panel.blocked);
     try std.testing.expect(panel.widget.changed_comments != 0);
     try std.testing.expectEqualStrings("keep my feedback", panel.widget.model.comments[index].body.text());
-    _ = try client.server_messages.handleServerMessage(&session.gui.app, .{ .change_review_snapshot = withComment(stale, "server reply") });
+    _ = try session.gui.app.handleServerMessage(
+        .{
+            .change_review_snapshot = withComment(stale, "server reply"),
+        },
+    );
     try panel.synchronize(&session.gui.app);
     try std.testing.expectEqualStrings("keep my feedback", panel.widget.model.comments[index].body.text());
     try std.testing.expect(panel.blocked);
@@ -305,7 +317,16 @@ test "runtime review coalesces new edition notices behind pending saves without 
     const index = draft(session, "feedback");
     try panel.synchronize(&session.gui.app);
     const save_id = session.gui.app.change_review.pending.?;
-    _ = try client.server_messages.handleServerMessage(&session.gui.app, .{ .change_review_changed = .{ .pane_id = Session.pane_id, .pane_generation = 77, .session = "thread-A", .latest_edition_id = 2 } });
+    _ = try session.gui.app.handleServerMessage(
+        .{
+            .change_review_changed = .{
+                .pane_id = Session.pane_id,
+                .pane_generation = 77,
+                .session = "thread-A",
+                .latest_edition_id = 2,
+            },
+        },
+    );
     try std.testing.expectEqual(save_id, session.gui.app.change_review.pending.?);
     try reply(session, withComment(response(session, 2), "feedback"));
     const query = (try core.decodeClient(session.pending.?)).query_change_review;
@@ -329,7 +350,16 @@ test "runtime review retains a retired conversation draft and explicitly reopens
     try gui.review.synchronize(&gui.app);
     const stale = response(session, 2);
     try session.settle();
-    _ = try client.server_messages.handleServerMessage(&gui.app, .{ .change_review_changed = .{ .pane_id = Session.pane_id, .pane_generation = 77, .session = "thread-B", .latest_edition_id = 0 } });
+    _ = try gui.app.handleServerMessage(
+        .{
+            .change_review_changed = .{
+                .pane_id = Session.pane_id,
+                .pane_generation = 77,
+                .session = "thread-B",
+                .latest_edition_id = 0,
+            },
+        },
+    );
     try gui.review.synchronize(&gui.app);
     try std.testing.expect(gui.review.widget.read_only);
     try std.testing.expectEqualStrings("copy this before closing", gui.review.widget.model.comments[index].body.text());
@@ -340,7 +370,11 @@ test "runtime review retains a retired conversation draft and explicitly reopens
     const request = (try core.decodeClient(session.pending.?)).query_change_review;
     try std.testing.expectEqual(@as(u64, 0), request.edition_id);
     try std.testing.expectEqualStrings("", request.session);
-    _ = try client.server_messages.handleServerMessage(&gui.app, .{ .change_review_snapshot = stale });
+    _ = try gui.app.handleServerMessage(
+        .{
+            .change_review_snapshot = stale,
+        },
+    );
     try std.testing.expectEqual(request.request_id, gui.app.change_review.pending.?);
     var snapshot = response(session, 1);
     snapshot.session = "thread-B";

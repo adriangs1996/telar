@@ -21,9 +21,9 @@ host_inputs.feed -> Router.next -> term.parse -> Router.routeEvent
       v                                                      v
 host_inputs.key / mouse                         applyDecision(.action)
       |                                                      |
-key_routing / pointer_routing                   action_routing.apply
+key_routing / pointer_routing                   AttachedClient.executeAction
       |                                                      |
-physical lease / owner selection             action_routing.apply
+physical lease / owner selection             binding authority / copy-mode preflight
       |                                                      |
 pane_inputs when child-owned                  native / Lua / plugin action
       |                                                      |
@@ -114,26 +114,26 @@ waits for the old configuration's deadline.
 ## 2A. Telar action branch
 
 A complete configured sequence returns `.action` from `Router.routeEvent`.
-`host_inputs.applyDecision` executes it through `action_routing.apply` and
+`host_inputs.applyDecision` executes it through `AttachedClient.executeAction` and
 stops reading the batch on `.stop` or an error. Only successful actions arm
 repeat state, using the resulting application's repeat policy.
 
-`action_routing.apply` receives the matched value. The
-function checks prompt authority, then classifies three action sources:
+`AttachedClient.executeAction(action, .binding)` checks prompt authority and
+selects the operation directly:
 
-- built-in actions go to the shared `actions.apply` function, which performs its copy-mode
-  preflight before dispatching;
+- built-in actions perform the copy-mode preflight before dispatching;
 - explicit Lua callbacks go through `lua_actions` and `lua_actions.execute`, then
   return semantic effects or semantic input;
 - plugin actions enter `plugin_actions.start`, then apply a current authorized
   semantic batch through the same dispatcher after `.plugin_result`. See
   [Plugin action](plugin-action.md) for its lifecycle and authority checks.
 
-An active name prompt suppresses every source before its first effect. Native
-actions from host bindings, validated Lua batches and authorized plugin batches
-share `actions.apply`: active copy mode exits before every action except
-copy-mode entry, then the adapter translates the action to its concrete use
-case. A Lua expression may return semantic keys or bounded paste. Keys re-enter
+An active name prompt suppresses configured bindings before their first effect.
+Validated Lua batches, authorized plugin batches and palette selections enter
+`AttachedClient.executeAction(action, .effect)`, retaining the authority of their
+caller. Both origins share the native action switch: active copy mode exits
+before every native action except copy-mode entry. A Lua expression may return
+semantic keys or bounded paste. Keys re-enter
 `key_routing.apply`; paste enters `pane_inputs.send` only when copy mode is not
 active. The adapter retains no returned slice after the synchronous call.
 Re-entered owners publish their own semantic or disposable revision.
@@ -436,7 +436,7 @@ state remain inline; no queue of obsolete frames is introduced.
 The client socket read completes at `AttachedClient.receiveRuntime`. That
 entrypoint releases its read token, uses the message decoded by the receive
 producer, delegates to
-`server_messages.handleServerMessage`, accounts flow-control credits and
+`AttachedClient.handleServerMessage`, accounts flow-control credits and
 schedules the next read only for a non-terminal outcome. See
 [Client runtime transport](runtime-transport.md) for buffer ownership, queue
 capacity and socket failure policy.
@@ -520,7 +520,7 @@ connection. Native hosts without the callback retain their local cadence.
   socket completion and one resumed TTY read token.
 - `a configured sequence runs once and does not reach the pane` in
   `src/frontend/input/keybind.zig` proves the Telar-action split.
-- `src/client/operations/input/action_routing.zig` proves prompt
+- `src/client/AttachedClient.zig` proves prompt
   suppression, source selection, Lua router control, input reinjection and
   selected-effect failure ordering.
 - `src/client/operations/input/pointer_routing.zig` proves copy, view and

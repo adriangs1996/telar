@@ -4,17 +4,17 @@ The runtime creates tabs and root panes. The client requests a tab from its
 current projection and adopts only a canonical reply.
 
 ```text
-operations/input/actions.apply
+AttachedClient.executeAction
   -> operations/tabs/tab_creations.request
      -> pending-operation gate, label validation, Model.planTabCreation
-     -> request_lifecycle.deliverCreateTab -> owned create_tab outbox entry
+     -> AttachedClient.sendCreateTabRequest -> owned create_tab outbox entry
   -> runtime creates tab/root and returns tab_created
-  -> entrypoints/server_messages.handleServerMessage
+  -> entrypoints/AttachedClient.handleServerMessage
   -> tab_creations.apply
      -> consume exact create_tab correlation
      -> Model.createTab
      -> tab_attachments.detach(previous)
-     -> active_pane_resources.synchronize
+     -> AttachedClient.synchronizeActivePane
      -> request agent conversation when applicable
   -> adapter observes presentation revisions
 ```

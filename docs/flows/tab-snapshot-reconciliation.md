@@ -4,14 +4,14 @@ The runtime owns pane membership. The client preserves layout, buffers, focus
 and disposable resources for identities that remain canonical.
 
 ```text
-bootstrap / selection / recovery -> request_lifecycle.requestTabSnapshot
+bootstrap / selection / recovery -> AttachedClient.requestTabSnapshot
   -> runtime encodes current descriptors for the requested stable location
-  -> entrypoints/server_messages.handleServerMessage(.tab_snapshot)
+  -> entrypoints/AttachedClient.handleServerMessage(.tab_snapshot)
   -> operations/tabs/tab_snapshots.apply
      -> consume exact correlation and decode bounded pane identities
      -> Model.reconcileTab
      -> ignore removed-pane requests and pane_resources.release
-     -> active_pane_resources.synchronize
+     -> AttachedClient.synchronizeActivePane
      -> AttachedClient.resizeAttachedPanes
      -> AttachedClient.attachVisiblePanes for visible detached panes
   -> adapter observes presentation revisions

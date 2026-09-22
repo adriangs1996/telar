@@ -15,7 +15,6 @@ const PluginExecutionType = @import("../../model/PluginExecution.zig");
 const PluginResultType = @import("../../application/input/PluginResult.zig");
 const EffectBatchType = @import("../../config/EffectBatch.zig");
 const BatchDispositionType = @import("../../application/input/plugin_action.zig").BatchDisposition;
-const client_actions = @import("../input/actions.zig");
 const CompletionOutcomeType = @import("../../application/input/plugin_action.zig").CompletionOutcome;
 const notification_flow = @import("../notifications/notifications.zig");
 
@@ -131,7 +130,7 @@ fn authorize(client: *Client, result: PluginResultType) !void {
 
 fn applyBatch(client: *Client, batch: *const EffectBatchType) !BatchDispositionType {
     for (batch.slice()) |effect| {
-        if (try client_actions.apply(client, effect) == .stop) {
+        if (try client.executeAction(effect, .effect) == .stop) {
             return .exit_client;
         }
     }

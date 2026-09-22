@@ -2,8 +2,8 @@
 
 A split is a runtime pane launch with a client-owned layout intention. The
 runtime decides whether the pane exists; the client decides where it is shown.
-The client operation is [pane_splits.zig](../../src/client/operations/panes/pane_splits.zig):
-`request`, `confirm`, `recover`.
+[AttachedClient.zig](../../src/client/AttachedClient.zig) owns
+`requestPaneSplit`, private `confirmPaneSplit` and private `recoverPaneSplit`.
 
 ## Request
 
@@ -12,17 +12,17 @@ Start with the process table in [entrypoints.md](../entrypoints.md). In the GUI,
 `dispatchKey` (or the text branch) reaches `routeKey`, which calls
 `router.routeEvent(event, context)`. The router returns `.action` with
 `.split_pane = .horizontal`. `GuiClient.applyInputDecision` executes that request
-through `executeAction` → `action_routing.apply` → `actions.apply`.
+through `executeAction` → `AttachedClient.executeAction`.
 Its `.split_pane` case directly calls
-`pane_splits.request`. The default `<prefix> %` maps to `.horizontal`: the new
+`AttachedClient.requestPaneSplit`. The default `<prefix> %` maps to `.horizontal`: the new
 pane is to the right of the original.
 
 ```text
-actions.apply(.split_pane)
-  → pane_splits.request
+AttachedClient.executeAction(.split_pane)
+  → AttachedClient.requestPaneSplit
       → model.planPaneSplit
       → enqueue provisional pane_resize
-      → sendRequest: retain correlation and enqueue create_pane
+      → sendPaneSplitRequest: retain correlation and enqueue create_pane
 ```
 
 Planning retains the exact tab, target pane, axis and request-time workbench.
@@ -42,14 +42,14 @@ answers with `pane_opened` or `request_failed`.
 
 ```text
 AttachedClient.receiveRuntime
-  → server_messages.handleServerMessage
-      → pane_openings.apply: consume request identity once
-          → pane_splits.confirm
+  → AttachedClient.handleServerMessage
+      → AttachedClient.completePaneOpen: consume request identity once
+          → AttachedClient.confirmPaneSplit
               → model.commitPaneSplit
               → active geometry / inactive detach / stale cleanup
 ```
 
-`confirm` rejects a different tab, the original pane identity or
+`confirmPaneSplit` rejects a different tab, the original pane identity or
 `created = false` before changing the model. It applies the freshly computed
 commit immediately; there is no separate effect API accepting retained or
 caller-constructed commits.
@@ -69,8 +69,8 @@ Pane geometry and active resource synchronization are concrete operations in
 
 ## Failure and races
 
-`request_failures.apply` consumes a failed request. Its concrete switch
-calls `pane_splits.recover` directly before publishing a failure notice.
+`AttachedClient.failRuntimeRequest` consumes a failed request. Its concrete switch
+calls `AttachedClient.recoverPaneSplit` directly before publishing a failure notice.
 Recovery resolves the retained target against current state: resize an attached
 active target, leave an inactive target alone, and suppress obsolete failure
 notifications for a retired target or tab.

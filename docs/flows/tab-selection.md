@@ -4,14 +4,14 @@ The active tab belongs to the client. Runtime membership remains canonical.
 All sources resolve their intent through one concrete operation:
 
 ```text
-operations/input/actions.apply, delivered tab click or agent navigation
+AttachedClient.executeAction, delivered tab click or agent navigation
   -> operations/tabs/tab_selections.select
      -> reject a pending tab snapshot
      -> Model.selectTab
      -> tab_attachments.detach(previous)
      -> show selected graphics
-     -> active_pane_resources.synchronize
-     -> request_lifecycle.requestTabSnapshot(selected location)
+     -> AttachedClient.synchronizeActivePane
+     -> AttachedClient.requestTabSnapshot(selected location)
   -> adapter observes presentation revisions
 ```
 

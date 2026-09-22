@@ -10,9 +10,9 @@ configuration is still current.
 ```text
 configured plugin action
         |
-InputHandler.action
+applyInputDecision / applyDecision
         |
-action_routing.apply
+AttachedClient.executeAction
         |
 plugin_actions.start
         |
@@ -28,7 +28,7 @@ plugin_actions.complete
         |
 finish exact id -> reject stale generation -> authorize whole batch
         |
-client_actions.apply -> focused client use cases
+AttachedClient.executeAction -> focused client use cases
         |
 ClientModel / bounded runtime outbox
         |
@@ -41,7 +41,7 @@ presentation_lifecycle.observe -> Presenter
 
 ## Start ownership and order
 
-`action_routing.apply` calls plugin_actions.start after prompt authority has
+`AttachedClient.executeAction` calls plugin_actions.start after prompt authority has
 accepted the configured action. It does not resolve a package, reserve model
 state or schedule work.
 
@@ -94,7 +94,7 @@ authorization failures through `client_diagnostic.replace`. It then builds a
 bounded notification from the committed banner and calls
 `notifications.publishNow` after consuming the execution.
 
-Authorized effects enter `client_actions.apply`, the shared dispatcher for
+Authorized effects enter `AttachedClient.executeAction`, the shared dispatcher for
 native semantic actions regardless of whether they came from host input, Lua
 or a plugin. It delegates to the existing focused use cases. Those use cases
 commit `ClientModel` or enqueue bounded runtime messages; they do not ask the

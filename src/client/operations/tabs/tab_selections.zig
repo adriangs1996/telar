@@ -1,13 +1,11 @@
 const Client = @import("../../AttachedClient.zig");
 const SelectTab = @import("../../application/tabs/SelectTab.zig");
 const TabSelection = @import("../../model/TabSelection.zig");
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const tab_attachments = @import("tab_attachments.zig");
-const active_pane_resources = @import("../panes/active_pane_resources.zig");
 
 /// Selects canonical identity, retires previous input authorities and requests current membership. Example: `_ = try select(client, command);`
 pub fn select(client: *Client, command: SelectTab) !?TabSelection {
-    if (request_lifecycle.has(client, .tab_snapshot)) {
+    if (client.request_lifecycle.tracker.has(.tab_snapshot)) {
         return null;
     }
 
@@ -22,7 +20,7 @@ pub fn select(client: *Client, command: SelectTab) !?TabSelection {
         try client.graphics.setPaneVisible(pane.id, true);
     }
 
-    try active_pane_resources.synchronize(client);
-    try request_lifecycle.requestTabSnapshot(client, selection.selected);
+    try client.synchronizeActivePane();
+    try client.requestTabSnapshot(selection.selected);
     return selection;
 }

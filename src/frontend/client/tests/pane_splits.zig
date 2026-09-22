@@ -3,8 +3,6 @@ const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const TestHarness = @import("TestHarness.zig");
-const splits = client.operations.pane_splits;
-const openings = client.operations.pane_openings;
 
 test "pending pane creation suppresses another split without changing state" {
     var harness: TestHarness = undefined;
@@ -14,12 +12,22 @@ test "pending pane creation suppresses another split without changing state" {
     const app = harness.client;
     app.options.arguments = &.{"/bin/sh"};
     const before = app.model.version();
-    const plan = (try splits.request(app, .{ .axis = .horizontal, .area = app.geometry().area })).?;
+    const plan = (try app.requestPaneSplit(
+        .{
+            .axis = .horizontal,
+            .area = app.geometry().area,
+        },
+    )).?;
     try std.testing.expectEqual(TestHarness.bootstrap_pane, plan.split.target_pane);
     const queued = app.runtime_transport.outbox.len;
     const next_id = app.request_lifecycle.next_request_id;
 
-    try std.testing.expect(try splits.request(app, .{ .axis = .vertical, .area = app.geometry().area }) == null);
+    try std.testing.expect(try app.requestPaneSplit(
+        .{
+            .axis = .vertical,
+            .area = app.geometry().area,
+        },
+    ) == null);
     try std.testing.expectEqual(queued, app.runtime_transport.outbox.len);
     try std.testing.expectEqual(next_id, app.request_lifecycle.next_request_id);
     try std.testing.expectEqualDeep(before, app.model.version());
@@ -36,8 +44,13 @@ test "split restores the original size when request identity allocation fails" {
     const plan = app.model.planPaneSplit(.{ .axis = .horizontal, .area = app.geometry().area }).?;
     app.request_lifecycle.next_request_id = std.math.maxInt(u64);
 
-    try std.testing.expectError(error.RequestIdExhausted, splits.request(app, .{ .axis = .horizontal, .area = app.geometry().area }));
-    try std.testing.expect(!client.request_lifecycle.has(app, .pane_operation));
+    try std.testing.expectError(error.RequestIdExhausted, app.requestPaneSplit(
+        .{
+            .axis = .horizontal,
+            .area = app.geometry().area,
+        },
+    ));
+    try std.testing.expect(!app.request_lifecycle.tracker.has(.pane_operation));
     try std.testing.expectEqualDeep(before, app.model.version());
     try harness.settle();
     var buffer: [512]u8 = undefined;
@@ -70,8 +83,12 @@ test "split rejects mismatched runtime confirmations without mutation or deliver
             .area = plan.split.area,
         } });
 
-        try std.testing.expectError(error.UnexpectedPane, openings.apply(app, opened));
-        try std.testing.expect(!client.request_lifecycle.has(app, .pane_operation));
+        try std.testing.expectError(error.UnexpectedPane, app.handleServerMessage(
+            .{
+                .pane_opened = opened,
+            },
+        ));
+        try std.testing.expect(!app.request_lifecycle.tracker.has(.pane_operation));
         try std.testing.expectEqualDeep(before, app.model.version());
         try std.testing.expectEqual(@as(usize, 0), app.runtime_transport.outbox.len);
     }
@@ -90,12 +107,29 @@ test "split retains the runtime creation when confirmation delivery fails" {
     const before = app.model.version();
     const pane: core.PaneId = @enumFromInt(21);
 
-    try std.testing.expectError(error.ClientOutboxFull, splits.confirm(app, .{
-        .requested = plan.split,
-        .confirmed_pane = pane,
-        .confirmed_location = plan.split.location,
-        .created = true,
-    }));
+    const request_id: core.RequestId = @enumFromInt(4);
+    try app.request_lifecycle.tracker.add(
+        request_id,
+        .{
+            .split = .{
+                .target_pane = plan.split.target_pane,
+                .location = plan.split.location,
+                .axis = plan.split.axis,
+                .area = plan.split.area,
+            },
+        },
+    );
+
+    try std.testing.expectError(error.ClientOutboxFull, app.handleServerMessage(
+        .{
+            .pane_opened = .{
+                .request_id = request_id,
+                .pane_id = pane,
+                .location = plan.split.location,
+                .created = true,
+            },
+        },
+    ));
     try std.testing.expect(app.model.workspace.findPane(pane).?.attached);
     try std.testing.expectEqual(pane, app.model.workspace.active().?.model.layout.focused().?);
     try std.testing.expectEqual(before.panes + 1, app.model.version().panes);
@@ -113,12 +147,29 @@ test "late split confirmation never detaches a currently represented pane" {
     try std.testing.expect(app.model.workspace.remove(plan.split.location.tab_id));
     const before = app.model.version();
 
-    try std.testing.expectError(error.StalePaneSplitConfirmation, splits.confirm(app, .{
-        .requested = plan.split,
-        .confirmed_pane = current,
-        .confirmed_location = plan.split.location,
-        .created = true,
-    }));
+    const request_id: core.RequestId = @enumFromInt(4);
+    try app.request_lifecycle.tracker.add(
+        request_id,
+        .{
+            .split = .{
+                .target_pane = plan.split.target_pane,
+                .location = plan.split.location,
+                .axis = plan.split.axis,
+                .area = plan.split.area,
+            },
+        },
+    );
+
+    try std.testing.expectError(error.StalePaneSplitConfirmation, app.handleServerMessage(
+        .{
+            .pane_opened = .{
+                .request_id = request_id,
+                .pane_id = current,
+                .location = plan.split.location,
+                .created = true,
+            },
+        },
+    ));
     try std.testing.expect(app.model.workspace.findPane(current).?.attached);
     try std.testing.expectEqualDeep(before, app.model.version());
     try std.testing.expectEqual(@as(usize, 0), app.runtime_transport.outbox.len);
@@ -143,12 +194,16 @@ test "split recovery preserves model state when its resize cannot be queued" {
         .area = plan.split.area,
     } });
 
-    try std.testing.expectError(error.ClientOutboxFull, client.operations.request_failures.apply(app, .{
-        .request_id = request_id,
-        .code = .internal,
-        .message = "launch failed",
-    }));
-    try std.testing.expect(!client.request_lifecycle.has(app, .pane_operation));
+    try std.testing.expectError(error.ClientOutboxFull, app.handleServerMessage(
+        .{
+            .request_failed = .{
+                .request_id = request_id,
+                .code = .internal,
+                .message = "launch failed",
+            },
+        },
+    ));
+    try std.testing.expect(!app.request_lifecycle.tracker.has(.pane_operation));
     try std.testing.expectEqual(@as(u8, 0), app.model.notificationSnapshot().count);
     try std.testing.expectEqualDeep(before, app.model.version());
 }
@@ -169,7 +224,7 @@ test "editor split retains its explicit target and arguments despite another foc
         .area = app.geometry().area,
     });
     const before = app.model.version();
-    const plan = (try splits.request(app, .{
+    const plan = (try app.requestPaneSplit(.{
         .axis = .vertical,
         .area = app.geometry().area,
         .target_pane = TestHarness.bootstrap_pane,

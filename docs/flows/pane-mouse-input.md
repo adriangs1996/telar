@@ -105,9 +105,9 @@ revision.
 ```text
 host binding or client Lua action
         |
-InputHandler.action -> action_routing -> actions
+applyInputDecision / applyDecision -> action_routing -> actions
         |
-actions.apply, then scroll_pane dispatch
+AttachedClient.executeAction, then scroll_pane dispatch
         |
 pane_mouse_inputs.apply(.focused_scroll)
         |
@@ -126,7 +126,7 @@ wheel event at the first content cell with button 64 or 65 and no modifiers.
 Pixel reports use host cell dimensions and the existing cell-center fallback,
 not raw pointer pixels. Empty pane content produces no resolution.
 
-`actions.apply` exits any active copy mode before dispatching this action,
+`AttachedClient.executeAction` exits any active copy mode before dispatching this action,
 restoring its entry viewport before the step. Plugin worker effects explicitly
 reject `scroll_pane`; client Lua bindings and callbacks use native dispatch.
 

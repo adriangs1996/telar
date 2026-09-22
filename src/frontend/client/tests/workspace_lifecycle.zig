@@ -8,7 +8,6 @@ const std = @import("std");
 const LayoutSnapshot = @import("telar-client").LayoutSnapshot;
 const TabLocationType = @import("telar-core").TabLocation;
 const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
-const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const support = @import("support.zig");
@@ -56,7 +55,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
         .location = new_location,
         .created = true,
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
+    _ = try client.handleServerMessage(try decodeServer_module(opened));
 
     try std.testing.expect(!client.notification_scheduler.pending);
     try std.testing.expectEqualDeep(
@@ -117,7 +116,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
         .location = prior_location,
         .created = false,
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(reopened));
+    _ = try client.handleServerMessage(try decodeServer_module(reopened));
     try harness.settle();
     var snapshot_request: RequestIdType = .none;
     while (snapshot_request == .none) switch (try harness.nextClientMessage(&message_buffer)) {
@@ -138,7 +137,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
             .{ .pane_id = bottom_right, .lifecycle = .running },
         },
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(snapshot));
+    _ = try client.handleServerMessage(try decodeServer_module(snapshot));
 
     var restored_geometry: LayoutSnapshot = .{};
     client.model.workspace.activeConst().?.model.layout.snapshot(workbench, &restored_geometry);
@@ -166,7 +165,7 @@ test "a failed workspace creation preserves the current projection" {
         .code = .spawn_failed,
         .message = "shell launch failed",
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(failed));
+    _ = try client.handleServerMessage(try decodeServer_module(failed));
 
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expectEqualDeep(location_before_failure, client.model.activeTabLocation().?);
@@ -234,12 +233,12 @@ test "canonical workspace replacement survives failure to deliver activation sna
         .created = true,
     });
 
-    try std.testing.expectError(error.ClientOutboxFull, server_messages.handleServerMessage(client, try decodeServer_module(opened)));
+    try std.testing.expectError(error.ClientOutboxFull, client.handleServerMessage(try decodeServer_module(opened)));
 
     try std.testing.expectEqualDeep(location, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.workspace.findPane(@enumFromInt(30)).?.attached);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.navigation_history.find(TestHarness.bootstrap_location.workspace).?.location);
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedRequest, server_messages.handleServerMessage(client, try decodeServer_module(opened)));
+    try std.testing.expectError(error.UnexpectedRequest, client.handleServerMessage(try decodeServer_module(opened)));
 }

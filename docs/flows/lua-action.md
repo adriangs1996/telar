@@ -9,9 +9,9 @@ semantic input. It never returns terminal bytes or mutates client objects.
 ```text
 configured binding
       |
-keybind.Router -> InputHandler.action
+Router.routeEvent -> applyInputDecision / applyDecision
       |
-action_routing.apply
+AttachedClient.executeAction
       |
 lua_actions.execute
       |
@@ -34,10 +34,10 @@ client-owned Generation.invokeCallback / invokeExpression
                     presentation_lifecycle.observe -> Presenter
 ```
 
-`InputHandler` only delegates the routed value. `action_routing.apply`
+The host consumes the router decision through `AttachedClient.executeAction`, which
 classifies its source and translates an expression decision into semantic keys
 or paste. It does not access the Lua generation, plugin registry or diagnostic
-buffer. Built-in effects reuse `client_actions.apply`. Plugin effects reuse
+buffer. Built-in effects reuse `AttachedClient.executeAction`. Plugin effects reuse
 the separate asynchronous [`pluginAction`](plugin-action.md) slice.
 
 ## State and ownership
@@ -84,7 +84,7 @@ the sequence.
 
 An expression returns `consume`, `forward_binding`, semantic keys or bounded
 paste. After a successful invocation, the operation clears any older
-diagnostic and returns the value to `action_routing.apply`. Keys pass through
+diagnostic and returns the value to `AttachedClient.executeAction`. Keys pass through
 `key_routing` and `key_routing.apply`; paste passes through
 `pane_inputs.expressionPaste`. Both use the focused child's acknowledged
 terminal modes and the existing pane-input target checks.

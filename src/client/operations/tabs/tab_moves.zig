@@ -3,14 +3,13 @@
 const Client = @import("../../AttachedClient.zig");
 const TabMovedType = @import("telar-core").TabMoved;
 const ChangeType = @import("../../model/types.zig").Change;
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const std = @import("std");
 
 const RequestTabMove = @import("../../application/tabs/RequestTabMove.zig");
 
 /// Validates one request and retains its correlation before delivery. Example: `_ = try request(client, command);`
 pub fn request(client: *Client, command: RequestTabMove) !bool {
-    if (request_lifecycle.has(client, .tab_operation)) {
+    if (client.request_lifecycle.tracker.has(.tab_operation)) {
         return false;
     }
 
@@ -27,7 +26,7 @@ pub fn request(client: *Client, command: RequestTabMove) !bool {
     }
 
     const request_id = try client.request_lifecycle.nextId();
-    try request_lifecycle.deliver(client, .{
+    try client.sendRuntimeRequest(.{
         .registration = .{
             .request_id = request_id,
             .continuation = .{ .move_tab = location },
@@ -45,7 +44,7 @@ pub fn request(client: *Client, command: RequestTabMove) !bool {
 
 /// Consumes one correlated runtime completion before committing canonical state. Example: `_ = try apply(client, response);`
 pub fn apply(client: *Client, moved: TabMovedType) !ChangeType {
-    const continuation = request_lifecycle.consume(client, moved.request_id) orelse
+    const continuation = client.request_lifecycle.tracker.take(moved.request_id) orelse
         return error.UnexpectedTabMoved;
     const expected_location = switch (continuation) {
         .move_tab => |location| location,

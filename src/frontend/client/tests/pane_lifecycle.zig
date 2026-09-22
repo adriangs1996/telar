@@ -8,11 +8,9 @@ const std = @import("std");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 const input_operations = @import("telar-client").operations;
-const client_actions = @import("telar-client").operations.actions;
 const FullscreenReattachment = @import("FullscreenReattachment.zig");
 const PaneDescriptorType = @import("telar-core").PaneDescriptor;
 const encodePaneForeground_module = @import("telar-core").encodePaneForeground;
-const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const DirectionType = @import("telar-client").Direction;
 const encodePaneFocusCommand_module = @import("telar-core").encodePaneFocusCommand;
@@ -25,7 +23,6 @@ const TabsModel = @import("telar-client").TabsModel;
 const encodeRequestFailed_module = @import("telar-core").encodeRequestFailed;
 const support = @import("support.zig");
 const tab_attachments = @import("telar-client").operations.tab_attachments;
-const active_pane_resources = @import("telar-client").operations.active_pane_resources;
 const ControlType = @import("telar-client").Control;
 const max_client_layout_wire_bytes_module = @import("telar-core").max_client_layout_wire_bytes;
 const encodeTabSnapshot_module = @import("telar-core").encodeTabSnapshot;
@@ -60,7 +57,12 @@ test "pane focus commits before reports resize and presentation" {
     const version_before = client.model.version();
     const pending_updates_before = host(client).presenter.pending_updates;
 
-    _ = try client_actions.apply(client, .{ .focus_pane = .left });
+    _ = try client.executeAction(
+        .{
+            .focus_pane = .left,
+        },
+        .effect,
+    );
 
     try std.testing.expectEqual(TestHarness.bootstrap_pane, model.layout.focused().?);
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
@@ -93,7 +95,12 @@ test "pane focus commits before reports resize and presentation" {
 
     const version_before_noop = client.model.version();
     const pending_updates_before_noop = host(client).presenter.pending_updates;
-    _ = try client_actions.apply(client, .{ .focus_pane = .left });
+    _ = try client.executeAction(
+        .{
+            .focus_pane = .left,
+        },
+        .effect,
+    );
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
@@ -138,21 +145,41 @@ test "fullscreen tab round trip reconnects panes revealed by focus or tiled layo
         try scenario.expectInput(sibling);
 
         if (exit_fullscreen) {
-            _ = try client_actions.apply(client, .toggle_pane_fullscreen);
+            _ = try client.executeAction(.toggle_pane_fullscreen, .effect);
             try harness.settle();
             var buffer: [256]u8 = undefined;
             const resize = try harness.nextClientMessage(&buffer);
             try std.testing.expect(resize == .pane_resize);
             try std.testing.expectEqual(sibling, resize.pane_resize.pane_id);
         } else {
-            _ = try client_actions.apply(client, .{ .focus_pane = .left });
-            _ = try client_actions.apply(client, .{ .focus_pane = .right });
-            _ = try client_actions.apply(client, .{ .focus_pane = .left });
+            _ = try client.executeAction(
+                .{
+                    .focus_pane = .left,
+                },
+                .effect,
+            );
+            _ = try client.executeAction(
+                .{
+                    .focus_pane = .right,
+                },
+                .effect,
+            );
+            _ = try client.executeAction(
+                .{
+                    .focus_pane = .left,
+                },
+                .effect,
+            );
         }
 
         try scenario.confirmAttachment(TestHarness.bootstrap_pane);
         if (exit_fullscreen) {
-            _ = try client_actions.apply(client, .{ .focus_pane = .left });
+            _ = try client.executeAction(
+                .{
+                    .focus_pane = .left,
+                },
+                .effect,
+            );
         } else {
             // Returning to the attached sibling resized it, but did not duplicate the pending open.
             var buffer: [256]u8 = undefined;
@@ -162,7 +189,12 @@ test "fullscreen tab round trip reconnects panes revealed by focus or tiled layo
         }
 
         try scenario.expectInput(TestHarness.bootstrap_pane);
-        _ = try client_actions.apply(client, .{ .focus_pane = .right });
+        _ = try client.executeAction(
+            .{
+                .focus_pane = .right,
+            },
+            .effect,
+        );
         if (!exit_fullscreen) {
             try harness.settle();
             var buffer: [256]u8 = undefined;
@@ -186,12 +218,17 @@ test "navigation forwards the canonical key only to Neovim at a Telar edge" {
             .pane_id = TestHarness.bootstrap_pane,
             .name = foreground_name,
         });
-        _ = try server_messages.handleServerMessage(harness.client, try decodeServer_module(foreground));
+        _ = try harness.client.handleServerMessage(try decodeServer_module(foreground));
 
         if (!std.mem.eql(u8, foreground_name, "nvim")) {
             const version = harness.client.model.version();
             for (std.enums.values(DirectionType)) |direction| {
-                _ = try client_actions.apply(harness.client, .{ .navigate_pane = direction });
+                _ = try harness.client.executeAction(
+                    .{
+                        .navigate_pane = direction,
+                    },
+                    .effect,
+                );
                 try std.testing.expectEqualDeep(version, harness.client.model.version());
                 try std.testing.expectEqual(@as(usize, 0), harness.client.runtime_transport.outbox.len);
             }
@@ -199,7 +236,12 @@ test "navigation forwards the canonical key only to Neovim at a Telar edge" {
             continue;
         }
 
-        _ = try client_actions.apply(harness.client, .{ .navigate_pane = .left });
+        _ = try harness.client.executeAction(
+            .{
+                .navigate_pane = .left,
+            },
+            .effect,
+        );
         try harness.settle();
 
         var message_buffer: [256]u8 = undefined;
@@ -224,7 +266,7 @@ test "runtime focus command reports a directionless client layout" {
         .pane_generation = 4,
         .direction = .left,
     });
-    _ = try server_messages.handleServerMessage(harness.client, try decodeServer_module(command));
+    _ = try harness.client.handleServerMessage(try decodeServer_module(command));
     try harness.settle();
 
     var message_buffer: [256]u8 = undefined;
@@ -253,8 +295,13 @@ test "navigation lets Neovim consume internal movement before Telar focus" {
 
     var payload: [128]u8 = undefined;
     const nvim = try encodePaneForeground_module(&payload, .{ .pane_id = second, .name = "nvim" });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(nvim));
-    _ = try client_actions.apply(client, .{ .navigate_pane = .left });
+    _ = try client.handleServerMessage(try decodeServer_module(nvim));
+    _ = try client.executeAction(
+        .{
+            .navigate_pane = .left,
+        },
+        .effect,
+    );
     try std.testing.expectEqual(second, client.model.workspace.active().?.model.layout.focused().?);
     try harness.settle();
 
@@ -264,8 +311,13 @@ test "navigation lets Neovim consume internal movement before Telar focus" {
     try std.testing.expectEqual(second, forwarded.pane_input.pane_id);
 
     const shell = try encodePaneForeground_module(&payload, .{ .pane_id = second, .name = "zsh" });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(shell));
-    _ = try client_actions.apply(client, .{ .navigate_pane = .left });
+    _ = try client.handleServerMessage(try decodeServer_module(shell));
+    _ = try client.executeAction(
+        .{
+            .navigate_pane = .left,
+        },
+        .effect,
+    );
     try std.testing.expectEqual(TestHarness.bootstrap_pane, client.model.workspace.active().?.model.layout.focused().?);
 }
 
@@ -378,7 +430,12 @@ test "pane resize publishes committed geometry before presentation" {
     const version_before = client.model.version();
     const pending_updates_before = host(client).presenter.pending_updates;
 
-    _ = try client_actions.apply(client, .{ .resize_pane = .left });
+    _ = try client.executeAction(
+        .{
+            .resize_pane = .left,
+        },
+        .effect,
+    );
 
     const first_after = model.contentSize(first, area).?;
     const second_after = model.contentSize(second, area).?;
@@ -411,7 +468,12 @@ test "pane resize publishes committed geometry before presentation" {
 
     const version_before_noop = client.model.version();
     const pending_updates_before_noop = host(client).presenter.pending_updates;
-    _ = try client_actions.apply(client, .{ .resize_pane = .up });
+    _ = try client.executeAction(
+        .{
+            .resize_pane = .up,
+        },
+        .effect,
+    );
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
@@ -435,7 +497,7 @@ test "single-pane fullscreen publishes bordered and restored geometry" {
     for ([_]bool{ true, false }) |fullscreen| {
         const version = client.model.version();
         const pending_updates = host(client).presenter.pending_updates;
-        _ = try client_actions.apply(client, .toggle_pane_fullscreen);
+        _ = try client.executeAction(.toggle_pane_fullscreen, .effect);
         const expected = if (fullscreen)
             TerminalSizeType{ .cols = area.w - 2, .rows = area.h - 2 }
         else
@@ -482,7 +544,7 @@ test "pane fullscreen publishes visible geometry without direct presentation sch
     const version_before_enter = client.model.version();
     const pending_updates_before_enter = host(client).presenter.pending_updates;
 
-    _ = try client_actions.apply(client, .toggle_pane_fullscreen);
+    _ = try client.executeAction(.toggle_pane_fullscreen, .effect);
 
     try std.testing.expect(model.layout.isFullscreen());
     try std.testing.expect(model.contentSize(first, area) == null);
@@ -506,7 +568,7 @@ test "pane fullscreen publishes visible geometry without direct presentation sch
 
     const version_before_exit = client.model.version();
     const pending_updates_before_exit = host(client).presenter.pending_updates;
-    _ = try client_actions.apply(client, .toggle_pane_fullscreen);
+    _ = try client.executeAction(.toggle_pane_fullscreen, .effect);
 
     try std.testing.expect(!model.layout.isFullscreen());
     try std.testing.expectEqual(first_tiled, model.contentSize(first, area).?);
@@ -541,7 +603,7 @@ test "sidebar toggle commits chrome before geometry and presentation" {
     const version_before_hide = client.model.version();
     const pending_updates_before_hide = host(client).presenter.pending_updates;
 
-    _ = try client_actions.apply(client, .toggle_sidebar);
+    _ = try client.executeAction(.toggle_sidebar, .effect);
 
     const hidden_area = host(client).view.workbench();
     try std.testing.expect(hidden_area.w > shown_area.w);
@@ -574,7 +636,7 @@ test "sidebar toggle commits chrome before geometry and presentation" {
 
     const version_before_show = client.model.version();
     const pending_updates_before_show = host(client).presenter.pending_updates;
-    _ = try client_actions.apply(client, .toggle_sidebar);
+    _ = try client.executeAction(.toggle_sidebar, .effect);
 
     try std.testing.expect(client.model.sidebarVisible());
     try std.testing.expect(host(client).view.sidebar_requested);
@@ -606,7 +668,12 @@ test "sidebar resize keybinding commits width before pane geometry" {
     const client = harness.client;
     const version = client.model.version();
 
-    _ = try client_actions.apply(client, .{ .resize_sidebar = .right });
+    _ = try client.executeAction(
+        .{
+            .resize_sidebar = .right,
+        },
+        .effect,
+    );
 
     try std.testing.expectEqual(@as(u16, 44), client.model.sidebarWidth());
     try std.testing.expectEqual(@as(u16, 44), host(client).view.regions.sidebar.w);
@@ -665,7 +732,7 @@ test "workspace list toggle is projected only by the presenter" {
     const version_before_collapse = client.model.version();
     const pending_updates_before_collapse = host(client).presenter.pending_updates;
 
-    _ = try client_actions.apply(client, .toggle_workspace_list);
+    _ = try client.executeAction(.toggle_workspace_list, .effect);
 
     try std.testing.expect(client.model.workspaceListCollapsed());
     try std.testing.expect(!host(client).view.workspace_list_collapsed);
@@ -687,7 +754,7 @@ test "workspace list toggle is projected only by the presenter" {
 
     const version_before_expand = client.model.version();
     const pending_updates_before_expand = host(client).presenter.pending_updates;
-    _ = try client_actions.apply(client, .toggle_workspace_list);
+    _ = try client.executeAction(.toggle_workspace_list, .effect);
 
     try std.testing.expect(!client.model.workspaceListCollapsed());
     try std.testing.expect(host(client).view.workspace_list_collapsed);
@@ -726,7 +793,7 @@ test "an active split commits once and presentation observes the model" {
         .location = TestHarness.bootstrap_location,
         .created = true,
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
+    _ = try client.handleServerMessage(try decodeServer_module(opened));
 
     const pane = client.model.workspace.findPane(split_pane).?;
     try std.testing.expect(pane.attached);
@@ -767,7 +834,7 @@ test "an inactive split is retained detached without a visible revision" {
         .created = true,
     });
 
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
+    _ = try client.handleServerMessage(try decodeServer_module(opened));
 
     try std.testing.expect(!client.model.workspace.findPane(split_pane).?.attached);
     try std.testing.expectEqualDeep(version_before, client.model.version());
@@ -808,7 +875,7 @@ test "a split reply for a retired tab detaches and refreshes canonical state" {
         .created = true,
     });
 
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
+    _ = try client.handleServerMessage(try decodeServer_module(opened));
 
     try std.testing.expect(client.model.workspace.findPane(split_pane) == null);
     try std.testing.expectEqualDeep(version_before, client.model.version());
@@ -848,7 +915,7 @@ test "a split reply replaces its target after canonical retirement" {
         .created = true,
     });
 
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
+    _ = try client.handleServerMessage(try decodeServer_module(opened));
 
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
     try std.testing.expect(client.model.workspace.findPane(split_pane).?.attached);
@@ -879,7 +946,7 @@ test "a failed split never resizes the tab selected afterwards" {
         .message = "launch failed",
     });
 
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(failed));
+    _ = try client.handleServerMessage(try decodeServer_module(failed));
 
     try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
     try support.expectOnlyNotificationVersionChanged(version_before, client.model.version());
@@ -908,7 +975,7 @@ test "a failed split for a retired target is silent" {
         .message = "target exited",
     });
 
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(failed));
+    _ = try client.handleServerMessage(try decodeServer_module(failed));
 
     try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqual(pending_updates_before, host(client).presenter.pending_updates);
@@ -935,7 +1002,7 @@ test "an attach reply marks the discovered pane attached" {
         .location = TestHarness.bootstrap_location,
         .created = false,
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
+    _ = try client.handleServerMessage(try decodeServer_module(opened));
 
     try std.testing.expect(client.model.workspace.findPane(discovered).?.attached);
     try std.testing.expectEqualDeep(version_before_confirmation, client.model.version());
@@ -980,7 +1047,7 @@ test "tab detachment retires an in-flight pane attachment" {
         .location = TestHarness.bootstrap_location,
         .created = false,
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
+    _ = try client.handleServerMessage(try decodeServer_module(opened));
 
     try std.testing.expect(!client.model.workspace.findPane(discovered).?.attached);
     try std.testing.expectEqual(pending_updates_before_confirmation, host(client).presenter.pending_updates);
@@ -1022,7 +1089,7 @@ test "tab detachment sends focus-out before the pane detaches" {
     const client = harness.client;
     client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
 
-    try active_pane_resources.synchronize(client);
+    try client.synchronizeActivePane();
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
     const focus_in = try harness.nextClientMessage(&message_buffer);
@@ -1049,7 +1116,7 @@ test "tab detachment preserves focus reported by another tab" {
     try harness.bootstrap();
     const client = harness.client;
     client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
-    try active_pane_resources.synchronize(client);
+    try client.synchronizeActivePane();
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
     const focus_in = try harness.nextClientMessage(&message_buffer);
@@ -1085,7 +1152,7 @@ test "detach action releases every tab before stopping the client" {
 
     try std.testing.expectEqual(
         ControlType.stop,
-        try client_actions.apply(client, .detach),
+        try client.executeAction(.detach, .effect),
     );
 
     try std.testing.expect(!client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
@@ -1115,8 +1182,13 @@ test "detach action captures layout changes from the same input batch" {
     active.snapshot_loaded = true;
     try client.client_layouts.markSnapshotReceived();
 
-    _ = try client_actions.apply(client, .{ .resize_sidebar = .right });
-    try std.testing.expectEqual(ControlType.stop, try client_actions.apply(client, .detach));
+    _ = try client.executeAction(
+        .{
+            .resize_sidebar = .right,
+        },
+        .effect,
+    );
+    try std.testing.expectEqual(ControlType.stop, try client.executeAction(.detach, .effect));
     try harness.settle();
 
     var buffer: [max_client_layout_wire_bytes_module]u8 = undefined;
@@ -1147,7 +1219,7 @@ test "a missing pane attachment keeps local membership until a canonical snapsho
         .code = .pane_not_found,
         .message = "pane disappeared",
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(failed));
+    _ = try client.handleServerMessage(try decodeServer_module(failed));
 
     const pane = client.model.workspace.findPane(discovered) orelse return error.PaneRemovedBeforeSnapshot;
     try std.testing.expect(!pane.attached);
@@ -1179,7 +1251,7 @@ test "an internal pane attachment failure waits for a later resync" {
         .code = .internal,
         .message = "resize failed",
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(failed));
+    _ = try client.handleServerMessage(try decodeServer_module(failed));
 
     const pane = client.model.workspace.findPane(discovered) orelse return error.PaneRemovedAfterInternalFailure;
     try std.testing.expect(!pane.attached);
@@ -1206,7 +1278,7 @@ test "a late pane attachment confirmation retired by a snapshot is ignored" {
         .location = TestHarness.bootstrap_location,
         .panes = &.{.{ .pane_id = TestHarness.bootstrap_pane, .lifecycle = .running }},
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(reconciled));
+    _ = try client.handleServerMessage(try decodeServer_module(reconciled));
     try std.testing.expect(client.model.workspace.findPane(discovered) == null);
     const pending_updates_before_confirmation = host(client).presenter.pending_updates;
 
@@ -1216,7 +1288,7 @@ test "a late pane attachment confirmation retired by a snapshot is ignored" {
         .location = TestHarness.bootstrap_location,
         .created = false,
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
+    _ = try client.handleServerMessage(try decodeServer_module(opened));
 
     try std.testing.expectEqual(pending_updates_before_confirmation, host(client).presenter.pending_updates);
 }
@@ -1241,7 +1313,7 @@ test "a late failed pane attachment does not notify or draw" {
         .message = "pane disappeared",
     });
 
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(failed));
+    _ = try client.handleServerMessage(try decodeServer_module(failed));
 
     try std.testing.expectEqual(pending_updates_before_failure, host(client).presenter.pending_updates);
     try std.testing.expect(!client.notification_scheduler.pending);

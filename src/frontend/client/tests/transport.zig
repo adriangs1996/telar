@@ -10,14 +10,12 @@ const capacity_module = @import("telar-client").capacity;
 const encodeSystemMetrics_module = @import("telar-core").encodeSystemMetrics;
 const encodeRuntimeStopping_module = @import("telar-core").encodeRuntimeStopping;
 const PaneIdType = @import("telar-core").PaneId;
-const request_lifecycle = @import("telar-client").request_lifecycle;
 const client_startup = @import("../controllers/session/client_startup.zig");
 const platform = @import("../../platform/platform.zig");
 const rectSize_module = @import("telar-client").rectSize;
 const kitty = @import("../../graphics/kitty.zig");
 const TerminalColorsType = @import("telar-core").TerminalColors;
 const encodeClientLayoutSnapshot_module = @import("telar-core").encodeClientLayoutSnapshot;
-const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const initial_request_id = @import("telar-client").initial_request_id;
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
@@ -27,6 +25,8 @@ const ClientTabLayoutType = @import("telar-core").ClientTabLayout;
 const ClientLayoutSnapshotType = @import("telar-core").ClientLayoutSnapshot;
 const max_client_layout_wire_bytes_module = @import("telar-core").max_client_layout_wire_bytes;
 const support = @import("support.zig");
+const AgentOptions = @import("telar-core").AgentOptions;
+const AgentEffort = @import("telar-core").AgentEffort;
 const client_layout_resource = @import("telar-client").client_layouts;
 
 test "host input arriving while no tab exists is dropped, not a crash" {
@@ -191,7 +191,7 @@ test "request delivery rolls correlation back when transport is full" {
     }
     const request_id = try client.request_lifecycle.nextId();
 
-    try std.testing.expectError(error.ClientOutboxFull, request_lifecycle.deliver(client, .{
+    try std.testing.expectError(error.ClientOutboxFull, client.sendRuntimeRequest(.{
         .registration = .{
             .request_id = request_id,
             .continuation = .{ .tab_snapshot = TestHarness.bootstrap_location },
@@ -201,8 +201,107 @@ test "request delivery rolls correlation back when transport is full" {
             .location = TestHarness.bootstrap_location,
         } },
     }));
-    try std.testing.expect(request_lifecycle.consume(client, request_id) == null);
+    try std.testing.expect(client.request_lifecycle.tracker.take(request_id) == null);
     try std.testing.expect(client.request_lifecycle.tracker.isEmpty());
+}
+
+test "owned request deliveries roll back only their own correlation when the outbox is full" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const retained = try client.request_lifecycle.nextId();
+    try client.request_lifecycle.tracker.add(retained, .notification);
+    while (client.runtime_transport.outbox.hasCapacity()) {
+        try client.runtime_transport.outbox.push(
+            .{
+                .detach_pane = .{
+                    .pane_id = TestHarness.bootstrap_pane,
+                },
+            },
+        );
+    }
+
+    var options: AgentOptions = .{
+        .effort = try AgentEffort.init("test-effort"),
+    };
+    try options.setModel("test-model");
+
+    const Delivery = enum { tab_rename, workspace_rename, workspace_create, tab_create, agent_prompt, notification };
+    for (std.enums.values(Delivery)) |delivery| {
+        const request_id = try client.request_lifecycle.nextId();
+        const location = TestHarness.bootstrap_location;
+        const result: anyerror!void = switch (delivery) {
+            .tab_rename => client.sendTabRenameRequest(
+                .{
+                    .request_id = request_id,
+                    .location = location,
+                    .label = "renamed",
+                },
+                .{
+                    .rename_tab = location,
+                },
+            ),
+            .workspace_rename => client.sendWorkspaceRenameRequest(
+                .{
+                    .request_id = request_id,
+                    .workspace = location.workspace,
+                    .name = "renamed",
+                },
+            ),
+            .workspace_create => client.sendCreateWorkspaceRequest(
+                .{
+                    .request_id = request_id,
+                    .name = "workspace",
+                    .size = client.model.hostSize(),
+                    .launch = .{
+                        .cwd = "/",
+                        .arguments = &.{},
+                    },
+                },
+            ),
+            .tab_create => client.sendCreateTabRequest(
+                .{
+                    .request_id = request_id,
+                    .workspace = location.workspace,
+                    .size = client.model.hostSize(),
+                    .launch = .{
+                        .cwd = "/",
+                        .arguments = &.{},
+                    },
+                },
+            ),
+            .agent_prompt => client.sendAgentPromptRequest(
+                .{
+                    .request_id = request_id,
+                    .pane_id = TestHarness.bootstrap_pane,
+                    .pane_generation = 1,
+                    .text = "review the changes",
+                    .options = options,
+                },
+                .{
+                    .pane_id = TestHarness.bootstrap_pane,
+                    .pane_generation = 1,
+                    .attachment_generation = 1,
+                    .location = location,
+                },
+            ),
+            .notification => client.sendNotificationRequest(
+                .{
+                    .request_id = request_id,
+                    .notification = .{
+                        .title = "finished",
+                    },
+                },
+            ),
+        };
+        try std.testing.expectError(error.ClientOutboxFull, result);
+        try std.testing.expect(client.request_lifecycle.tracker.take(request_id) == null);
+        try std.testing.expectEqual(@as(usize, 1), client.request_lifecycle.tracker.count);
+        try std.testing.expectEqual(capacity_module, client.runtime_transport.outbox.len);
+    }
+
+    try std.testing.expect(client.request_lifecycle.tracker.take(retained).? == .notification);
 }
 
 test "client startup validates geometry before request registration" {
@@ -284,10 +383,10 @@ test "client startup waits for runtime layout before its initial open" {
     try std.testing.expectEqual(client.client_identity, runtime_state.request_runtime_state.client_identity);
 
     const empty_layout = try encodeClientLayoutSnapshot_module(&buffer, .{ .restored = false });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(empty_layout));
+    _ = try client.handleServerMessage(try decodeServer_module(empty_layout));
     try harness.settle();
 
-    try std.testing.expect(request_lifecycle.has(client, .initial_open));
+    try std.testing.expect(client.request_lifecycle.tracker.has(.initial_open));
     const open = try harness.nextClientMessage(&buffer);
     try std.testing.expect(open == .open_pane);
     try std.testing.expectEqual(initial_request_id, open.open_pane.request_id);
@@ -383,7 +482,7 @@ test "restored client layout controls the initial attach geometry" {
     var buffer: [max_client_layout_wire_bytes_module]u8 = undefined;
     const payload = try encodeClientLayoutSnapshot_module(&buffer, restored);
 
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(payload));
+    _ = try client.handleServerMessage(try decodeServer_module(payload));
     try harness.settle();
 
     try std.testing.expect(client.model.sidebarVisible());
@@ -407,7 +506,7 @@ test "restored client layout controls the initial attach geometry" {
     const duplicate_payload = try encodeClientLayoutSnapshot_module(&buffer, restored);
     try std.testing.expectError(
         error.DuplicateClientLayoutSnapshot,
-        server_messages.handleServerMessage(client, try decodeServer_module(duplicate_payload)),
+        client.handleServerMessage(try decodeServer_module(duplicate_payload)),
     );
 }
 
@@ -425,7 +524,7 @@ test "sidebar preferences survive when retained pane layouts become stale" {
         .workspace_list_collapsed = true,
     });
 
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(payload));
+    _ = try client.handleServerMessage(try decodeServer_module(payload));
     try harness.settle();
 
     try std.testing.expectEqual(@as(u16, 51), client.model.sidebarWidth());

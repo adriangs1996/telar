@@ -3,7 +3,6 @@
 const Client = @import("../../AttachedClient.zig");
 const AgentKeyType = @import("../../agents/AgentKey.zig");
 pub const Outcome = enum { ignored, focused, handoff_requested };
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
@@ -26,7 +25,7 @@ pub fn apply(client: *Client, key: AgentKeyType) !Outcome {
             break :local .focused;
         },
         .handoff => |handoff| handoff: {
-            if (request_lifecycle.busy(client)) {
+            if (!client.request_lifecycle.tracker.isEmpty()) {
                 break :handoff .ignored;
             }
             _ = try workspace_handoffs.requestPane(client, handoff.pane_id, handoff.fallback_workspace);

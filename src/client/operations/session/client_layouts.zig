@@ -6,7 +6,6 @@ const LayoutsType = @import("../../workspace/Layouts.zig");
 const HistoryType = @import("../../workspace/History.zig");
 const sidebar_projection = @import("../notifications/sidebar_projection.zig");
 const rectSize_module = @import("../../workspace/multiplexer.zig").rectSize;
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const SavedLayoutType = @import("../../workspace/SavedLayout.zig");
 const LayoutType = @import("../../workspace/WorkspaceLayout.zig");
 const std = @import("std");
@@ -48,7 +47,7 @@ pub fn apply(client: *Client, snapshot: ClientLayoutSnapshotViewType) !void {
     const size = rectSize_module(client.geometry().area) orelse
         return error.TerminalTooSmall;
     const request = initialRequest(client, restored, size);
-    try request_lifecycle.deliver(client, request);
+    try client.sendRuntimeRequest(request);
     try client.client_layouts.markSnapshotReceived();
 }
 

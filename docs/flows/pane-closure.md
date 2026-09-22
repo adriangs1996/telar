@@ -4,15 +4,15 @@ The client removes a pane only after the runtime reports `pane_exited`.
 Requesting closure does not predict when shutdown and output draining finish.
 
 ```text
-operations/input/actions.apply
+AttachedClient.executeAction
   -> operations/panes/pane_closures.request
      -> pending pane-operation gate
      -> Model.planPaneClosure
-     -> request_lifecycle.deliver(close_pane)
+     -> AttachedClient.sendRuntimeRequest(close_pane)
   -> runtime requests idempotent child shutdown
 
 runtime pane_exited
-  -> entrypoints/server_messages.handleServerMessage
+  -> entrypoints/AttachedClient.handleServerMessage
   -> pane_closures.applyExit
      -> Model.retirePane
      -> retire attachment and close continuations

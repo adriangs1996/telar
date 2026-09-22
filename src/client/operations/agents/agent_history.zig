@@ -2,7 +2,6 @@
 const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const reading = @import("../../application/agents/agent_reading.zig");
-const lifecycle = @import("../../connection/request_lifecycle.zig");
 const AgentHistoryOperation = @import("../../connection/AgentHistoryOperation.zig");
 const notifications = @import("../notifications/notifications.zig");
 
@@ -18,7 +17,7 @@ pub const unfreeze = reading.unfreeze;
 /// Starts at most one history request for this connection after frame delivery.
 /// Example: `try agent_history.flush(client);`
 pub fn flush(client: *Client) !void {
-    if (lifecycle.has(client, .agent_history)) {
+    if (client.request_lifecycle.tracker.has(.agent_history)) {
         return;
     }
     const tab = client.model.activeTabModel() orelse return;
@@ -38,13 +37,18 @@ pub fn flush(client: *Client) !void {
             try report(client, @errorName(err));
             return;
         };
-        lifecycle.register(client, .{ .request_id = query.request_id, .continuation = .{ .agent_history = operation } }) catch |err| {
+        client.request_lifecycle.tracker.add(
+            query.request_id,
+            .{
+                .agent_history = operation,
+            },
+        ) catch |err| {
             _ = reading.failed(&client.model, operation, @errorName(err));
             try report(client, @errorName(err));
             return;
         };
         client.sendRuntimeAgentHistory(query) catch |err| {
-            _ = lifecycle.consume(client, query.request_id);
+            _ = client.request_lifecycle.tracker.take(query.request_id);
             _ = reading.failed(&client.model, operation, @errorName(err));
             try report(client, @errorName(err));
             return;
@@ -56,7 +60,7 @@ pub fn flush(client: *Client) !void {
 /// Consumes a page response once, before receive storage can be reused.
 /// Example: `_ = try agent_history.apply(client, response);`
 pub fn apply(client: *Client, response: core.AgentHistoryPageView) !bool {
-    const continuation = lifecycle.consume(client, response.request_id) orelse return false;
+    const continuation = client.request_lifecycle.tracker.take(response.request_id) orelse return false;
 
     defer reading.retired(&client.model);
     if (continuation == .ignored) {

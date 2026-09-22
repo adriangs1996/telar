@@ -9,7 +9,7 @@ operations/input/name_prompts.handleInput
   -> owned rename_workspace -> runtime rename
 
 rename reply or requested workspace_snapshot
-  -> entrypoints/server_messages.handleServerMessage
+  -> entrypoints/AttachedClient.handleServerMessage
   -> operations/workspaces/workspace_snapshots.apply
      -> consume rename/snapshot correlation and verify workspace
      -> bounded descriptor decoding -> Model.reconcileWorkspace

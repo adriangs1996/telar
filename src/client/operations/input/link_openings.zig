@@ -1,7 +1,6 @@
 //! Wires link intents to tab creation and bounded host workers.
 const std = @import("std");
 const core = @import("telar-core");
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
 
 const Client = @import("../../AttachedClient.zig");
@@ -13,7 +12,6 @@ const RectType = @import("telar-core").Rect;
 const extract_module = @import("../../links/cells.zig").extract;
 const FilePathType = @import("../../links/FilePath.zig");
 const tab_creations = @import("../tabs/tab_creations.zig");
-const pane_splits = @import("../panes/pane_splits.zig");
 const PaneId = @import("telar-core").PaneId;
 const notification_flow = @import("../notifications/notifications.zig");
 
@@ -172,7 +170,7 @@ fn openEditorPane(client: *Client, pane_id: PaneId, path: FilePathType) !void {
     request.request_id = try client.request_lifecycle.nextId();
     try client.editor_open.begin(request);
     errdefer _ = client.editor_open.complete(request.request_id);
-    try request_lifecycle.deliver(client, .{
+    try client.sendRuntimeRequest(.{
         .registration = .{ .request_id = request.request_id, .continuation = .{ .editor_open = .{
             .pane_id = pane_id,
             .pane_generation = source.pane_generation,
@@ -187,7 +185,7 @@ fn openEditorPane(client: *Client, pane_id: PaneId, path: FilePathType) !void {
 /// Example: `try editorOpened(client, reply);`
 pub fn editorOpened(client: *Client, reply: core.EditorOpened) !void {
     const request = client.editor_open.complete(reply.request_id) orelse return;
-    const continuation = request_lifecycle.consume(client, reply.request_id) orelse return;
+    const continuation = client.request_lifecycle.tracker.take(reply.request_id) orelse return;
     if (continuation != .editor_open) {
         return;
     }
@@ -214,7 +212,7 @@ pub fn editorOpened(client: *Client, reply: core.EditorOpened) !void {
 }
 
 fn splitEditorPane(client: *Client, request: core.OwnedEditorOpen) !void {
-    const plan = try pane_splits.request(client, .{
+    const plan = try client.requestPaneSplit(.{
         .axis = .horizontal,
         .area = client.geometry().area,
         .target_pane = request.pane_id,

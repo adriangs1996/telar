@@ -4,8 +4,8 @@ The client owns split geometry. The runtime accepts offered PTY sizes only from
 the workspace geometry owner. Follow the action directly into the operation:
 
 ```text
-operations/input/actions.apply
-  -> operations/panes/pane_geometry.resize
+AttachedClient.executeAction
+  -> AttachedClient.resizePane
      -> Model.resizePane
      -> validate committed location, focus, fullscreen and pane revision
      -> host_graphics.invalidatePlacements
@@ -40,7 +40,7 @@ completed effects, then reaches the client error path. Runtime rejection leaves
 the PTY size unchanged. A reconnect reconstructs disposable geometry and
 resources. No operation requests a draw; presentation observes the pane revision.
 
-Source: `src/client/operations/panes/pane_geometry.zig` and
+Source: `src/client/AttachedClient.zig` and
 `src/client/model/Model.zig`.
 Tests: `src/frontend/client/tests/pane_lifecycle.zig`,
 `src/frontend/client/tests/host_resources.zig`,

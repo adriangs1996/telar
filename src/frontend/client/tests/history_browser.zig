@@ -6,7 +6,6 @@ const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
 const history = @import("telar-client").operations.history_palettes;
 const encodeHistoryResults_module = @import("telar-core").encodeHistoryResults;
-const server = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const prompts = @import("telar-client").operations.name_prompts;
 const encodeHistoryOutput_module = @import("telar-core").encodeHistoryOutput;
@@ -28,14 +27,14 @@ test "history input preserves search through inspection and pages past the first
     try std.testing.expect(!query.distinct);
 
     const results = try encodeHistoryResults_module(&buffer, .{ .request_id = query.request_id, .entries = &.{entry}, .snapshot_id = 20, .has_more = true });
-    _ = try server.handleServerMessage(client, try decodeServer_module(results));
+    _ = try client.handleServerMessage(try decodeServer_module(results));
     _ = try prompts.handleInput(client, .{ .key = .{ .code = .{ .char = CharType.init("o") }, .mods = .{ .ctrl = true } } });
     try std.testing.expect(client.model.name_prompt.currentConst().?.inspecting());
     try harness.settle();
     const read = (try harness.nextClientMessage(&buffer)).read_history_output;
     try std.testing.expectEqual(entry.id, read.id);
     const output = try encodeHistoryOutput_module(&buffer, .{ .request_id = read.request_id, .id = read.id, .content = "done", .observed_bytes = 4, .truncated = false });
-    _ = try server.handleServerMessage(client, try decodeServer_module(output));
+    _ = try client.handleServerMessage(try decodeServer_module(output));
     try std.testing.expectEqualStrings("done", client.model.history_palette.outputSlice());
 
     _ = try prompts.handleInput(client, .{ .key = .{ .code = .page_down } });
@@ -52,10 +51,14 @@ test "history input preserves search through inspection and pages past the first
     try std.testing.expect(!history.canSubmit(client, 0));
 
     const old = try encodeHistoryResults_module(&buffer, .{ .request_id = query.request_id, .entries = &.{entry} });
-    _ = try server.handleServerMessage(client, try decodeServer_module(old));
+    _ = try client.handleServerMessage(try decodeServer_module(old));
     try std.testing.expect(client.model.history_palette.phase == .loading);
     const failure: RequestFailedType = .{ .request_id = next.request_id, .code = .resource_limit, .message = "Query busy" };
-    _ = try server.handleServerMessage(client, .{ .request_failed = failure });
+    _ = try client.handleServerMessage(
+        .{
+            .request_failed = failure,
+        },
+    );
     try std.testing.expect(client.model.history_palette.phase == .failed);
     try std.testing.expectEqualStrings("Query busy", client.model.history_palette.errorSlice());
 }
@@ -105,7 +108,7 @@ test "history submission sends a complete command longer than its preview" {
     var long_entry = entry;
     long_entry.command = command;
     const results = try encodeHistoryResults_module(&buffer, .{ .request_id = query.request_id, .entries = &.{long_entry} });
-    _ = try server.handleServerMessage(client, try decodeServer_module(results));
+    _ = try client.handleServerMessage(try decodeServer_module(results));
     client.history_enter_runs = false;
     _ = try prompts.handleInput(client, .{ .key = .{ .code = .enter } });
     try std.testing.expect(!client.model.name_prompt.active());

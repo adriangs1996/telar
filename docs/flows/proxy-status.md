@@ -10,7 +10,7 @@ nor its transition rules.
 
 ```text
 runtime proxy configuration → runtime delivery → proxy_status
-  → server_messages.handleServerMessage
+  → AttachedClient.handleServerMessage
   → proxy_status.apply
       model.reconcileProxyStatus
       notification for a changed transition

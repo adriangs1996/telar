@@ -11,7 +11,7 @@ conversation and how to expose the rejection.
 ```text
 schema.request_failed
         |
-request_failures.apply
+AttachedClient.failRuntimeRequest
         |
 consume request ID -> typed Continuation
         |
@@ -20,7 +20,7 @@ recover, ignore, publish a notification, or report fatal/error
 presentation_lifecycle.observe -> Presenter
 ```
 
-`request_failures.apply` consumes correlation once and switches directly on the
+`AttachedClient.failRuntimeRequest` consumes correlation once and switches directly on the
 retained operation. Unknown identities report the bounded runtime message and
 return `UnexpectedRequestFailure`. Known requests call their concrete recovery
 before publishing a notification; an error reports the runtime message once
@@ -72,11 +72,11 @@ new client to rebuild its projection.
 
 - `src/client/application/session/request_failure.zig` checks notification
   title, target, message and duration mapping.
-- `src/client/operations/session/request_failures.zig` owns correlation,
+- `src/client/AttachedClient.zig` owns correlation,
   concrete recovery dispatch and error reporting.
 - `src/frontend/client/tests/pane_splits.zig` checks that failed recovery
   consumes correlation without publishing a notification.
-- `src/client/connection/request_lifecycle.zig` proves bounded identity and
+- `src/client/connection/LifecycleState.zig` proves bounded identity and
   exactly-once correlation entrypoints.
 - `src/frontend/client/tests/` proves wire correlation, continuation
   consumption, recovery paths, targeted notices and fatal snapshot rejection.

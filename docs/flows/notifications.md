@@ -52,11 +52,11 @@ from a decoded runtime buffer survives the synchronous adapter call.
 ```text
 semantic notification action
              |
-     client_actions.apply
+     AttachedClient.executeAction
              |
 notifications.requestDelivery
              |
-LifecycleState.nextId + request_lifecycle.deliverNotification
+LifecycleState.nextId + AttachedClient.sendNotificationRequest
              |
       show_notification
 ```

@@ -1,14 +1,14 @@
 # Pane focus
 
 Pane focus belongs to one disposable client. The runtime owns pane processes
-and PTYs. Start at `operations/input/actions.apply`, mouse input, or agent navigation;
+and PTYs. Start at `AttachedClient.executeAction`, mouse input, or agent navigation;
 each source reaches the same concrete operation.
 
 ```text
 host input -> input/actions or agent navigation
   -> operations/panes/pane_focus.apply
      -> Model.focusPane
-     -> active_pane_resources.deliverFocus
+     -> AttachedClient.deliverPaneFocus
         -> attachment reservation and geometry
         -> pane_focus_reports.sync
         -> fullscreen geometry and missing attachments
@@ -21,7 +21,7 @@ absent target, repeated identity or direction without a candidate is a no-op.
 Tiled navigation uses spatial geometry. Fullscreen left/right follows displayed
 leaf order without wrapping; up/down does nothing. The split tree is retained.
 
-`active_pane_resources.deliverFocus` validates the exact location, identity and
+`AttachedClient.deliverPaneFocus` validates the exact location, identity and
 pane revision because compound input transactions also call it with a captured
 focus commit. It synchronizes the attachment shelf before focus reports; a
 changed shelf reservation re-offers geometry. A fullscreen focus change
@@ -42,7 +42,7 @@ forget the entire obsolete reporting context through `pane_focus_reports.retire`
 These paths do not send child input to a retired attachment.
 
 Tab, workspace, frame and snapshot operations call
-`active_pane_resources.synchronize` directly. Agent snapshots synchronize only
+`AttachedClient.synchronizeActivePane` directly. Agent snapshots synchronize only
 attachments because they cannot change terminal focus. A mouse click completes
 focus/resource effects before forwarding its triggering mouse event.
 
@@ -52,7 +52,7 @@ loop. Reconnect rebuilds disposable state without stopping runtime panes.
 Operations do not draw: the adapter observes the changed model revision.
 
 Source: `src/client/operations/panes/pane_focus.zig`,
-`active_pane_resources.zig` and `pane_focus_reports.zig` in the same directory.
+`AttachedClient.deliverPaneFocus` and `operations/panes/pane_focus_reports.zig`.
 Tests: `src/frontend/client/tests/pane_lifecycle.zig`,
 `src/frontend/client/tests/mouse_selection.zig`, and
 `src/client/model/tests/panes.zig`.

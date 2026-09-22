@@ -177,10 +177,15 @@ pub fn settle(session: *Session) !void {
 
 pub fn bootstrap(session: *Session) !void {
     const app = &session.gui.app;
-    _ = try client.request_lifecycle.registerInitial(app);
+    try app.request_lifecycle.tracker.add(
+        client.initial_request_id,
+        .{
+            .initial_open = .{},
+        },
+    );
     var buffer: [128]u8 = undefined;
     const opened = try core.encodePaneOpened(&buffer, .{ .request_id = client.initial_request_id, .pane_id = pane_id, .location = location, .created = true });
-    _ = try client.server_messages.handleServerMessage(app, try core.decodeServer(opened));
+    _ = try app.handleServerMessage(try core.decodeServer(opened));
     app.startup.phase = .active;
     try session.settle();
 }
@@ -206,7 +211,7 @@ pub fn receiveFrame(session: *Session, frame_id: u64) !void {
         .input_modes = .{ .bracketed_paste = true },
         .spans = &.{.{ .start = 0, .cells = if (frame_id == 1) cells[0..count] else cells[0..1] }},
     });
-    _ = try client.server_messages.handleServerMessage(&session.gui.app, try core.decodeServer(encoded));
+    _ = try session.gui.app.handleServerMessage(try core.decodeServer(encoded));
     @memset(&wire, 0xff);
 }
 

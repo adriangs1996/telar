@@ -16,7 +16,7 @@ operations/input/actions, agent navigation, resync or canonical tab closure
   -> adapter observes the empty projection
 
 pane_opened(initial_open continuation)
-  -> operations/panes/pane_openings.apply
+  -> operations/panes/AttachedClient.completePaneOpen
   -> workspace_handoffs.arrival / confirm
      -> Model.arriveWorkspace
      -> workspace_transitions.activate

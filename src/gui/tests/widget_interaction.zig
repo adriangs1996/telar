@@ -617,7 +617,7 @@ fn addDragTabs(session: *Session) !void {
     for (2..4) |id| {
         _ = try model.createTab(.{ .created = .{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(id) }, .position = @intCast(id - 1), .label = "tab", .root_pane_id = @enumFromInt(id * 10) }, .size = model.hostSize() });
     }
-    _ = client.request_lifecycle.consume(&session.gui.app, @enumFromInt(3));
+    _ = session.gui.app.request_lifecycle.tracker.take(@enumFromInt(3));
     try publish(session);
 }
 
@@ -689,7 +689,7 @@ test "native tab drag cancels on Escape focus loss and outside drops without pan
         try session.settle();
         try std.testing.expectEqual(@as(usize, 0), session.input_len);
         try std.testing.expectEqual(@as(?usize, 2), session.gui.app.model.workspace.indexOf(@enumFromInt(3)));
-        try std.testing.expect(!client.request_lifecycle.has(&session.gui.app, .tab_operation));
+        try std.testing.expect(!session.gui.app.request_lifecycle.tracker.has(.tab_operation));
     }
 }
 
@@ -729,7 +729,7 @@ fn agentSnapshot(session: *Session, status: core.agent_thread.Status, approval: 
     snapshot.item_storage[1] = .{ .identity = 2, .role = .assistant, .status = .completed, .text_offset = 24, .text_len = text.len - 24, .complete = true };
     var buffer: [65536]u8 = undefined;
     const bytes = try core.encodeAgentThreadSnapshot(&buffer, &snapshot);
-    _ = try client.server_messages.handleServerMessage(&session.gui.app, try core.decodeServer(bytes));
+    _ = try session.gui.app.handleServerMessage(try core.decodeServer(bytes));
 }
 
 fn linkSnapshot(session: *Session, text: []const u8) !void {
@@ -955,7 +955,7 @@ test "opening a selector focuses its agent split and closing restores that exact
     snapshot.pane_generation = 78;
     var buffer: [65536]u8 = undefined;
     const bytes = try core.encodeAgentThreadSnapshot(&buffer, snapshot);
-    _ = try client.server_messages.handleServerMessage(&session.gui.app, try core.decodeServer(bytes));
+    _ = try session.gui.app.handleServerMessage(try core.decodeServer(bytes));
     try publish(session);
     var trigger: ?Target = null;
     const registry = session.gui.widgets.dispatcher.maps.presented();
@@ -1241,7 +1241,7 @@ test "agent thread warm drawing allocates no glyph or quad storage and clips sma
 fn receiveThread(session: *Session, snapshot: *const core.AgentThreadSnapshot) !void {
     var buffer: [128 * 1024]u8 = undefined;
     const bytes = try core.encodeAgentThreadSnapshot(&buffer, snapshot);
-    _ = try client.server_messages.handleServerMessage(&session.gui.app, try core.decodeServer(bytes));
+    _ = try session.gui.app.handleServerMessage(try core.decodeServer(bytes));
 }
 
 fn activitySnapshot(session: *Session) !void {
@@ -2285,7 +2285,7 @@ test "resolved approval review no longer captures conversation history scrolling
     } else return error.MissingTranscript;
     try send(session, .{ .pointer = .{ .kind = .scroll_up, .x = transcript.bounds.x + 1, .y = transcript.bounds.y + 1 } });
     try std.testing.expectEqual(core.agent_history.Direction.older, pane.agent_history.?.pending.?);
-    try std.testing.expect(client.request_lifecycle.has(&session.gui.app, .agent_history));
+    try std.testing.expect(session.gui.app.request_lifecycle.tracker.has(.agent_history));
 }
 
 test "delayed composer cut cannot steal focus from another agent split" {
@@ -2430,7 +2430,13 @@ test "Command V attaches images and image-only send owns them through acknowledg
     try std.testing.expectEqual(@as(usize, 1), session.agent_prompt_count);
     try std.testing.expectEqualStrings("/tmp/clipboard.png", session.agent_images.path(0));
     try std.testing.expectEqual(@as(u8, 1), pane.composerImages().count);
-    _ = try client.server_messages.handleServerMessage(&gui.app, .{ .request_completed = .{ .request_id = session.agent_request_id } });
+    _ = try gui.app.handleServerMessage(
+        .{
+            .request_completed = .{
+                .request_id = session.agent_request_id,
+            },
+        },
+    );
     try std.testing.expectEqual(@as(u8, 0), pane.composerImages().count);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }
@@ -2583,7 +2589,7 @@ test "clicking an agent file link creates an editor pane in its source tab" {
     var response: [128]u8 = undefined;
     const editor_id: core.PaneId = @enumFromInt(99);
     const opened = try core.encodePaneOpened(&response, .{ .request_id = request.request_id, .pane_id = editor_id, .location = request.location, .created = true });
-    _ = try client.server_messages.handleServerMessage(&session.gui.app, try core.decodeServer(opened));
+    _ = try session.gui.app.handleServerMessage(try core.decodeServer(opened));
     try session.settle();
     const tab = session.gui.app.model.workspace.active().?;
     try std.testing.expectEqualDeep(Session.location, tab.location);
@@ -2669,7 +2675,11 @@ test "hook editions show one terminal review action and retired availability rej
     const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
     _ = pane.identify(.terminal, 77);
     const notice: core.ChangeReviewChanged = .{ .pane_id = Session.pane_id, .pane_generation = 77, .session = "hook-thread", .latest_edition_id = 1 };
-    _ = try client.server_messages.handleServerMessage(&gui.app, .{ .change_review_changed = notice });
+    _ = try gui.app.handleServerMessage(
+        .{
+            .change_review_changed = notice,
+        },
+    );
     try publish(session);
     const registry = gui.widgets.dispatcher.maps.presented();
     try std.testing.expectEqual(@as(usize, 1), reviewControlCount(session));
@@ -2678,12 +2688,25 @@ test "hook editions show one terminal review action and retired availability rej
     try std.testing.expect(target.activatable());
     try std.testing.expect(routing.eligible(gui, target));
     try std.testing.expectEqual(target.id, registry.at(.{ target.bounds.x + target.bounds.width / 2, target.bounds.y + target.bounds.height / 2 }).?.id);
-    _ = try client.server_messages.handleServerMessage(&gui.app, .{ .change_review_changed = .{ .pane_id = Session.pane_id, .pane_generation = 77, .session = "new-hook-thread", .latest_edition_id = 0 } });
+    _ = try gui.app.handleServerMessage(
+        .{
+            .change_review_changed = .{
+                .pane_id = Session.pane_id,
+                .pane_generation = 77,
+                .session = "new-hook-thread",
+                .latest_edition_id = 0,
+            },
+        },
+    );
     try std.testing.expect(!routing.eligible(gui, target));
     try publish(session);
     try std.testing.expectEqual(@as(usize, 0), reviewControlCount(session));
 
-    _ = try client.server_messages.handleServerMessage(&gui.app, .{ .change_review_changed = notice });
+    _ = try gui.app.handleServerMessage(
+        .{
+            .change_review_changed = notice,
+        },
+    );
     try publish(session);
     try std.testing.expectEqual(@as(usize, 1), reviewControlCount(session));
     pane.attachment_generation += 1;
@@ -2701,7 +2724,16 @@ test "managed review has exactly one action across single split and fullscreen l
     snapshot.thread_id_len = thread.len;
     snapshot.revision += 1;
     try receiveThread(session, &snapshot);
-    _ = try client.server_messages.handleServerMessage(&gui.app, .{ .change_review_changed = .{ .pane_id = Session.pane_id, .pane_generation = 77, .session = thread, .latest_edition_id = 1 } });
+    _ = try gui.app.handleServerMessage(
+        .{
+            .change_review_changed = .{
+                .pane_id = Session.pane_id,
+                .pane_generation = 77,
+                .session = thread,
+                .latest_edition_id = 1,
+            },
+        },
+    );
     try publish(session);
     try std.testing.expectEqual(@as(usize, 1), reviewControlCount(session));
 
@@ -2730,7 +2762,16 @@ test "managed review has exactly one action across single split and fullscreen l
     try std.testing.expectEqual(@as(usize, 0), reviewControlCount(session));
     try std.testing.expect(gui.app.model.togglePaneFullscreen(.{ .area = gui.region.area }) != null);
 
-    _ = try client.server_messages.handleServerMessage(&gui.app, .{ .change_review_changed = .{ .pane_id = terminal, .pane_generation = 78, .session = "terminal-thread", .latest_edition_id = 2 } });
+    _ = try gui.app.handleServerMessage(
+        .{
+            .change_review_changed = .{
+                .pane_id = terminal,
+                .pane_generation = 78,
+                .session = "terminal-thread",
+                .latest_edition_id = 2,
+            },
+        },
+    );
     try publish(session);
     try std.testing.expectEqual(@as(usize, 2), reviewControlCount(session));
 }
@@ -2839,7 +2880,7 @@ fn existingEditor(session: *Session, name: []const u8) !core.PaneId {
 fn editorReply(session: *Session, outcome: core.EditorOpened.Outcome) !void {
     const reply: core.EditorOpened = .{ .request_id = session.last_editor_open.?.request_id, .outcome = outcome, .pane_id = @enumFromInt(99), .pane_generation = 88 };
     var buffer: [128]u8 = undefined;
-    _ = try client.server_messages.handleServerMessage(&session.gui.app, try core.decodeServer(try core.encodeEditorOpened(&buffer, reply)));
+    _ = try session.gui.app.handleServerMessage(try core.decodeServer(try core.encodeEditorOpened(&buffer, reply)));
     try session.settle();
 }
 
@@ -2953,7 +2994,7 @@ test "review hides underlying message links before delivery and restores them af
         try std.testing.expect(opened == null);
     }
 
-    _ = try client.server_messages.handleServerMessage(&session.gui.app, .{ .change_review_snapshot = .{
+    _ = try session.gui.app.handleServerMessage(.{ .change_review_snapshot = .{
         .request_id = session.gui.app.change_review.pending.?,
         .pane_id = Session.pane_id,
         .pane_generation = 77,

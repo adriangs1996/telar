@@ -2,7 +2,6 @@ const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const Pane = @import("../../panes/Pane.zig");
 const AgentOperation = @import("../../connection/AgentOperation.zig");
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const tab_creations = @import("../tabs/tab_creations.zig");
 const notifications = @import("../notifications/notifications.zig");
 const Command = @import("../../model/name_prompt.zig").Command;
@@ -59,13 +58,13 @@ pub fn removeImage(client: *Client, pane_id: core.PaneId, removal: Pane.ImageRem
 /// Copies and correlates a prompt, preserving the draft until acknowledgement.
 /// Example: `try agent_threads.submit(client, pane_id);`
 pub fn submit(client: *Client, pane_id: core.PaneId) !void {
-    if (request_lifecycle.hasPane(client, .agent_prompt, pane_id)) {
+    if (client.request_lifecycle.tracker.hasPane(.agent_prompt, pane_id)) {
         return;
     }
 
     const intent = client.model.planAgentPrompt(pane_id) orelse return;
     const request_id = try client.request_lifecycle.nextId();
-    try request_lifecycle.deliverAgentPrompt(client, .{
+    try client.sendAgentPromptRequest(.{
         .request_id = request_id,
         .pane_id = pane_id,
         .pane_generation = intent.pane_generation,
@@ -84,12 +83,12 @@ pub fn submit(client: *Client, pane_id: core.PaneId) !void {
 /// Cancels the current agent turn through runtime authority. Example: `try agent_threads.interrupt(client, pane_id);`
 pub fn interrupt(client: *Client, pane_id: core.PaneId) !void {
     const pending = operation(client, pane_id) orelse return;
-    if (request_lifecycle.hasPane(client, .agent_control, pane_id)) {
+    if (client.request_lifecycle.tracker.hasPane(.agent_control, pane_id)) {
         return;
     }
 
     const request_id = try client.request_lifecycle.nextId();
-    try request_lifecycle.deliver(client, .{
+    try client.sendRuntimeRequest(.{
         .registration = .{ .request_id = request_id, .continuation = .{ .agent_control = pending } },
         .message = .{ .agent_interrupt = .{
             .request_id = request_id,
@@ -105,12 +104,12 @@ pub fn resumeConversation(client: *Client, pane_id: core.PaneId, index: u8) !voi
     const pending = operation(client, pane_id) orelse return;
     const pane = client.model.agentPane(pane_id) orelse return;
     const snapshot = pane.agent_thread orelse return;
-    if (!snapshot.canResume() or index >= snapshot.recent.count or request_lifecycle.hasPane(client, .agent_control, pane_id) or request_lifecycle.hasPane(client, .agent_prompt, pane_id)) {
+    if (!snapshot.canResume() or index >= snapshot.recent.count or client.request_lifecycle.tracker.hasPane(.agent_control, pane_id) or client.request_lifecycle.tracker.hasPane(.agent_prompt, pane_id)) {
         return;
     }
 
     const request_id = try client.request_lifecycle.nextId();
-    try request_lifecycle.deliver(client, .{
+    try client.sendRuntimeRequest(.{
         .registration = .{ .request_id = request_id, .continuation = .{ .agent_control = pending } },
         .message = .{ .agent_resume = .{
             .request_id = request_id,
@@ -128,12 +127,12 @@ pub fn approve(client: *Client, decision: AgentDecision) !void {
     const pane = client.model.agentPane(decision.pane_id) orelse return;
     const thread = pane.agent_thread orelse return;
     const approval = thread.pending_approval orelse return;
-    if (approval.id != decision.approval_id or request_lifecycle.hasPane(client, .agent_control, decision.pane_id)) {
+    if (approval.id != decision.approval_id or client.request_lifecycle.tracker.hasPane(.agent_control, decision.pane_id)) {
         return;
     }
 
     const request_id = try client.request_lifecycle.nextId();
-    try request_lifecycle.deliver(client, .{
+    try client.sendRuntimeRequest(.{
         .registration = .{ .request_id = request_id, .continuation = .{ .agent_control = pending } },
         .message = .{ .agent_approval = .{
             .request_id = request_id,
@@ -148,12 +147,12 @@ pub fn approve(client: *Client, decision: AgentDecision) !void {
 /// Requests the retained conversation after attachment or recovery. Example: `try agent_threads.query(client, pane_id);`
 pub fn query(client: *Client, pane_id: core.PaneId) !void {
     const pending = operation(client, pane_id) orelse return;
-    if (request_lifecycle.hasPane(client, .agent_query, pane_id)) {
+    if (client.request_lifecycle.tracker.hasPane(.agent_query, pane_id)) {
         return;
     }
 
     const request_id = try client.request_lifecycle.nextId();
-    try request_lifecycle.deliver(client, .{
+    try client.sendRuntimeRequest(.{
         .registration = .{ .request_id = request_id, .continuation = .{ .agent_query = pending } },
         .message = .{ .query_agent_thread = .{
             .request_id = request_id,
@@ -170,7 +169,7 @@ pub fn apply(client: *Client, snapshot: core.AgentThreadSnapshotView) !bool {
 
 /// Consumes successful agent requests exactly once. Example: `try agent_threads.completed(client, reply);`
 pub fn completed(client: *Client, reply: core.RequestCompleted) !void {
-    const continuation = request_lifecycle.consume(client, reply.request_id) orelse return error.UnexpectedControlReply;
+    const continuation = client.request_lifecycle.tracker.take(reply.request_id) orelse return error.UnexpectedControlReply;
     switch (continuation) {
         .agent_prompt => |pending| {
             _ = client.model.completeAgentPrompt(pending);

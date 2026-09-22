@@ -44,7 +44,7 @@ test "update processes a horizontal split shortcut and its correlated runtime re
 
     try std.testing.expectEqual(@as(?u8, null), try gui.update());
     try session.settle();
-    try std.testing.expect(!client.request_lifecycle.has(app, .pane_operation));
+    try std.testing.expect(!app.request_lifecycle.tracker.has(.pane_operation));
     try std.testing.expect(app.model.workspace.findPane(created).?.attached);
     try std.testing.expectEqual(created, app.model.workspace.active().?.model.layout.focused().?);
     try std.testing.expectEqual(before.panes + 1, app.model.version().panes);

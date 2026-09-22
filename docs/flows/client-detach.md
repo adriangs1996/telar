@@ -4,7 +4,7 @@ Detach ends this client only. Runtime panes, PTYs and terminal state remain
 available for another attachment.
 
 ```text
-operations/input/actions.apply(.detach)
+AttachedClient.executeAction(.detach)
   -> operations/session/client_detachments.apply
      -> capture bounded stable TabLocation list
      -> operations/tabs/tab_attachments.detach for each location

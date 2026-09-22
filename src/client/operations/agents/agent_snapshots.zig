@@ -8,7 +8,6 @@ const AgentSnapshotViewType = @import("telar-core").AgentSnapshotView;
 const AgentSnapshotCommitType = @import("../../model/AgentSnapshotCommit.zig");
 const max_agent_snapshot_entries_module = @import("telar-core").max_agent_snapshot_entries;
 const AgentInputType = @import("../../agents/AgentInput.zig");
-const active_pane_resources = @import("../panes/active_pane_resources.zig");
 const notification_flow = @import("../notifications/notifications.zig");
 const sidebar_animations = @import("../notifications/sidebar_animations.zig");
 
@@ -53,7 +52,7 @@ pub fn apply(client: *Client, snapshot: AgentSnapshotViewType) !?AgentSnapshotCo
         .revision = snapshot.revision,
         .agents = entries[0..count],
     }) orelse return null;
-    _ = try active_pane_resources.synchronizeAttachments(client);
+    _ = try client.synchronizePaneAttachments();
 
     var alert_count: usize = 0;
     const current = client.model.agentSnapshot();

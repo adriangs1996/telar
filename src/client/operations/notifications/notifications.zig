@@ -4,7 +4,6 @@ const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const NotificationType = @import("../../input/Notification.zig");
 const RequestIdType = @import("telar-core").RequestId;
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const NotificationShownType = @import("telar-core").NotificationShown;
 const DeliveryOutcome = @import("../../application/notifications/notifications.zig").DeliveryOutcome;
 const CoreNotification = @import("telar-core").Notification;
@@ -29,7 +28,7 @@ const pane_focus = @import("../panes/pane_focus.zig");
 /// ```
 pub fn requestDelivery(client: *Client, notification: *const NotificationType) !RequestIdType {
     const request_id = try client.request_lifecycle.nextId();
-    try request_lifecycle.deliverNotification(client, .{
+    try client.sendNotificationRequest(.{
         .request_id = request_id,
         .notification = .{
             .level = notification.level,
@@ -49,7 +48,7 @@ pub fn requestDelivery(client: *Client, notification: *const NotificationType) !
 /// const outcome = try applyDeliveryReport(client, shown);
 /// ```
 pub fn applyDeliveryReport(client: *Client, shown: NotificationShownType) !DeliveryOutcome {
-    const continuation = request_lifecycle.consume(client, shown.request_id) orelse
+    const continuation = client.request_lifecycle.tracker.take(shown.request_id) orelse
         return error.UnexpectedNotificationReply;
     if (continuation != .notification) {
         return error.UnexpectedNotificationReply;

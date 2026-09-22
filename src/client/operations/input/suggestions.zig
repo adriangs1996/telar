@@ -5,7 +5,6 @@
 
 const Client = @import("../../AttachedClient.zig");
 const name_prompts = @import("name_prompts.zig");
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const OwnedSuggestionType = @import("../../connection/OwnedSuggestion.zig");
 const raw_module = @import("telar-core").raw;
 const CommandSuggestionType = @import("telar-core").CommandSuggestion;

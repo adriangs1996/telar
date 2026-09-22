@@ -1,14 +1,13 @@
 //! Workspace rename requests correlated with canonical snapshots.
 
 const Client = @import("../../AttachedClient.zig");
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 
 const RequestRenameWorkspace = @import("../../application/workspaces/RequestRenameWorkspace.zig");
 const std = @import("std");
 
 /// Validates one request and retains its correlation before delivery. Example: `_ = try request(client, command);`
 pub fn request(client: *Client, command: RequestRenameWorkspace) !bool {
-    if (request_lifecycle.has(client, .workspace_operation)) {
+    if (client.request_lifecycle.tracker.has(.workspace_operation)) {
         return false;
     }
 
@@ -18,7 +17,7 @@ pub fn request(client: *Client, command: RequestRenameWorkspace) !bool {
     }
 
     const request_id = try client.request_lifecycle.nextId();
-    try request_lifecycle.deliverWorkspaceRename(client, .{
+    try client.sendWorkspaceRenameRequest(.{
         .request_id = request_id,
         .workspace = command.workspace,
         .name = command.name,

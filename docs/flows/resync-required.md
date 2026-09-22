@@ -6,7 +6,7 @@ management replies precede the fixed resync message, which records workspace
 closure and a surviving canonical predecessor when applicable.
 
 ```text
-entrypoints/server_messages.handleServerMessage(.resync_required)
+entrypoints/AttachedClient.handleServerMessage(.resync_required)
   -> operations/session/resync_requirements.apply
      -> surviving workspace: verify identity, coalesce or request snapshot
      -> closed workspace: forget bookmark, request predecessor or return exit
@@ -34,7 +34,7 @@ adds no queue or timer. Client death drops outstanding conversations; runtime
 membership survives and a fresh client can reconstruct its projection.
 
 Source: `src/client/operations/session/resync_requirements.zig`,
-`src/client/connection/request_lifecycle.zig`, and
+`src/client/connection/LifecycleState.zig`, and
 `src/client/operations/workspaces/workspace_handoffs.zig`.
 Tests: `src/frontend/client/tests/synchronization.zig` and `tab_lifecycle.zig`
 cover matching identity, coalescence, full-outbox retry, closed-bookmark retention

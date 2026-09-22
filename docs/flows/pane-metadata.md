@@ -6,7 +6,7 @@ labels and navigation.
 
 ```text
 runtime metadata cursors -> pane_cwd / pane_foreground
-  -> entrypoints/server_messages.handleServerMessage
+  -> entrypoints/AttachedClient.handleServerMessage
   -> operations/panes/pane_metadata.applyCwd / applyForeground
   -> Model.updatePaneMetadata
   -> multiplexer metadata storage

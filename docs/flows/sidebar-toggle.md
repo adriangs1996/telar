@@ -14,7 +14,7 @@ reply.
 ```text
 native, Lua, plugin or pointer sidebar action
         |
-client_actions.apply
+AttachedClient.executeAction
         |
 sidebar_toggles.toggle / sidebar_toggles.resize
         |

@@ -4,7 +4,6 @@ const std = @import("std");
 const Client = @import("../../AttachedClient.zig");
 const ResyncRequiredType = @import("telar-core").ResyncRequired;
 pub const Outcome = enum { coalesced, snapshot_requested, handoff_requested, exit };
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 
 /// Resolves disposable client state and applies one validated runtime resync.
@@ -25,10 +24,10 @@ pub fn apply(client: *Client, required: ResyncRequiredType) !Outcome {
     if (!std.meta.eql(projected, required.workspace)) {
         return error.UnexpectedResync;
     }
-    if (request_lifecycle.has(client, .workspace_snapshot)) {
+    if (client.request_lifecycle.tracker.has(.workspace_snapshot)) {
         return .coalesced;
     }
 
-    try request_lifecycle.requestWorkspaceSnapshot(client, required.workspace);
+    try client.requestWorkspaceSnapshot(required.workspace);
     return .snapshot_requested;
 }

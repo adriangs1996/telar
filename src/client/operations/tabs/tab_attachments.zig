@@ -2,7 +2,6 @@ const Client = @import("../../AttachedClient.zig");
 const std = @import("std");
 const pane_pastes = @import("../input/pane_pastes.zig");
 const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const TabDetachmentPlan = @import("../../model/TabDetachmentPlan.zig");
 
 const TabLocation = @import("telar-core").TabLocation;
@@ -12,7 +11,7 @@ pub fn requiredCapacity(client: *Client, plan: *const TabDetachmentPlan) usize {
     var required = @as(usize, @intFromBool(plan.paste_marker_required));
     required += @intFromBool(plan.focus_out_required);
     for (plan.slice()) |pane| {
-        required += @intFromBool(pane.attached or request_lifecycle.hasPane(client, .attachment, pane.pane_id));
+        required += @intFromBool(pane.attached or client.request_lifecycle.tracker.hasPane(.attachment, pane.pane_id));
     }
 
     return required;
@@ -32,7 +31,7 @@ pub fn detach(client: *Client, location: TabLocation) !void {
     }
 
     for (plan.slice()) |pane| {
-        const pending = request_lifecycle.hasPane(client, .attachment, pane.pane_id);
+        const pending = client.request_lifecycle.tracker.hasPane(.attachment, pane.pane_id);
         if (!pane.attached and !pending) {
             continue;
         }
@@ -44,7 +43,7 @@ pub fn detach(client: *Client, location: TabLocation) !void {
                 },
             },
         );
-        _ = request_lifecycle.ignoreAttachment(client, pane.pane_id);
+        _ = client.request_lifecycle.tracker.ignoreAttachment(pane.pane_id);
         try client.graphics.setPaneVisible(pane.pane_id, false);
     }
 

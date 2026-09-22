@@ -5,7 +5,6 @@ const core = @import("telar-core");
 const Client = @import("../../AttachedClient.zig");
 const Pane = @import("../../panes/Pane.zig");
 const Operation = @import("../../connection/ChangeReviewOperation.zig");
-const lifecycle = @import("../../connection/request_lifecycle.zig");
 
 /// Opens the latest review for any attached pane, preserving an already open edition.
 /// Example: `try change_review.open(client, pane_id);`
@@ -22,7 +21,12 @@ pub fn query(client: *Client, edition_id: u64) !void {
         return err;
     };
     const request_id = try client.request_lifecycle.nextId();
-    try lifecycle.register(client, .{ .request_id = request_id, .continuation = .{ .change_review_query = owner } });
+    try client.request_lifecycle.tracker.add(
+        request_id,
+        .{
+            .change_review_query = owner,
+        },
+    );
     begin(client, request_id);
     client.sendRuntimeChangeReviewQuery(
         .{
@@ -33,7 +37,7 @@ pub fn query(client: *Client, edition_id: u64) !void {
             .session = owner.sessionSlice(),
         },
     ) catch |err| {
-        _ = lifecycle.consume(client, request_id);
+        _ = client.request_lifecycle.tracker.take(request_id);
         _ = failed(client, owner, @errorName(err));
         return err;
     };
@@ -61,10 +65,15 @@ pub fn command(client: *Client, request: core.ChangeReviewCommand) !void {
     if (outgoing.expected_revision == 0) {
         outgoing.expected_revision = client.change_review.snapshot.revision;
     }
-    try lifecycle.register(client, .{ .request_id = outgoing.request_id, .continuation = .{ .change_review_command = owner } });
+    try client.request_lifecycle.tracker.add(
+        outgoing.request_id,
+        .{
+            .change_review_command = owner,
+        },
+    );
     begin(client, outgoing.request_id);
     client.sendRuntimeChangeReviewCommand(outgoing) catch |err| {
-        _ = lifecycle.consume(client, outgoing.request_id);
+        _ = client.request_lifecycle.tracker.take(outgoing.request_id);
         _ = failed(client, owner, @errorName(err));
         return err;
     };
@@ -73,7 +82,7 @@ pub fn command(client: *Client, request: core.ChangeReviewCommand) !void {
 /// Copies borrowed wire content before the next receive can overwrite it.
 /// Example: `_ = try change_review.apply(client, response);`
 pub fn apply(client: *Client, response: core.ChangeReviewSnapshotView) !bool {
-    const continuation = lifecycle.consume(client, response.request_id) orelse return false;
+    const continuation = client.request_lifecycle.tracker.take(response.request_id) orelse return false;
     const owner: Operation = switch (continuation) {
         .change_review_query, .change_review_command => |owner| owner,
         .ignored => {

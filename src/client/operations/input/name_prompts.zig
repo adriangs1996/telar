@@ -19,7 +19,6 @@ const ModelGotoPickerItem = @import("../../model/goto_picker.zig").Item;
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
 const agent_navigation = @import("../agents/agent_navigation.zig");
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const SubmissionType = @import("../../model/Submission.zig");
 const workspace_creations = @import("../workspaces/workspace_creations.zig");
 const workspace_renames = @import("../workspaces/workspace_renames.zig");
@@ -32,7 +31,6 @@ const path_completions = @import("path_completions.zig");
 const path_expansion = @import("../../completion/path_expansion.zig");
 const command_palette = @import("../../model/command_palette.zig");
 const CommandResultsType = @import("../../model/CommandResults.zig");
-const actions = @import("actions.zig");
 
 /// Starts workspace creation only when the current client can plan the
 /// request.
@@ -283,7 +281,7 @@ fn finishListSubmission(client: *Client, before: ListSnapshot) !void {
             }
 
             const index = @min(before.selection, @as(u16, results.len) - 1);
-            _ = try actions.apply(client, command_palette.entries[results.slice()[index].index].action);
+            _ = try client.executeAction(command_palette.entries[results.slice()[index].index].action, .effect);
         },
     }
 }
@@ -547,7 +545,7 @@ fn open(client: *Client, intent: name_prompt_opening.Intent) bool {
 
     const command: name_prompt.Begin = switch (intent) {
         .create_workspace => create: {
-            if (request_lifecycle.busy(client)) {
+            if (!client.request_lifecycle.tracker.isEmpty()) {
                 return false;
             }
             if (client.model.planWorkspaceCreation() == null) {

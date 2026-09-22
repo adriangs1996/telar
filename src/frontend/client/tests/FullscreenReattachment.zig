@@ -2,9 +2,7 @@ const TerminalClient = @import("../TerminalClient.zig");
 const host = TerminalClient.of;
 const TestHarnessType = @import("TestHarness.zig");
 const PaneDescriptorType = @import("telar-core").PaneDescriptor;
-const client_actions = @import("telar-client").operations.actions;
 const encodeTabSnapshot_module = @import("telar-core").encodeTabSnapshot;
-const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
@@ -18,7 +16,12 @@ harness: *TestHarnessType,
 
 pub fn selectTab(scenario: FullscreenReattachment, index: u8, panes: []const PaneDescriptorType) !void {
     const client = scenario.harness.client;
-    _ = try client_actions.apply(client, .{ .select_tab = index });
+    _ = try client.executeAction(
+        .{
+            .select_tab = index,
+        },
+        .effect,
+    );
     try scenario.harness.settle();
     var buffer: [512]u8 = undefined;
     const request = request: while (true) {
@@ -33,7 +36,7 @@ pub fn selectTab(scenario: FullscreenReattachment, index: u8, panes: []const Pan
         .location = request.location,
         .panes = panes,
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(snapshot));
+    _ = try client.handleServerMessage(try decodeServer_module(snapshot));
     try scenario.confirmAttachment(client.model.workspace.active().?.model.layout.focused().?);
 }
 
@@ -55,7 +58,7 @@ pub fn confirmAttachment(scenario: FullscreenReattachment, pane_id: PaneIdType) 
         .location = client.model.activeTabLocation().?,
         .created = false,
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(opened));
+    _ = try client.handleServerMessage(try decodeServer_module(opened));
     try std.testing.expect(client.model.workspace.findPane(pane_id).?.attached);
 }
 

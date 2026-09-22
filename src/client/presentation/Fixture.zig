@@ -1,6 +1,5 @@
 const Client = @import("../AttachedClient.zig");
 const core = @import("telar-core");
-const server_messages = @import("../entrypoints/server_messages.zig");
 const pane_inputs = @import("../operations/input/pane_inputs.zig");
 const presentation_delivery = @import("../operations/session/presentation_delivery.zig");
 const TransportState = @import("../connection/RuntimeTransportState.zig");
@@ -153,7 +152,7 @@ pub fn drain(fixture: *Fixture) !void {
         switch (message) {
             .server => |received| {
                 defer fixture.receive_pending = false;
-                _ = try server_messages.handleServerMessage(&fixture.app, received.message);
+                _ = try fixture.app.handleServerMessage(received.message);
             },
             .key => |value| try fixture.applyKey(value),
             .completed => |value| try fixture.deliver(value.token, value.outcome),

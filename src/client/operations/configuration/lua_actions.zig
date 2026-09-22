@@ -13,7 +13,6 @@ const ValidationType = @import("../../application/input/lua_action.zig").Validat
 const ActionType = @import("../../input/action.zig").Action;
 const DispositionType = @import("../../application/input/lua_action.zig").Disposition;
 const plugin_actions = @import("plugin_actions.zig");
-const client_actions = @import("../input/actions.zig");
 
 /// Evaluates one configured Lua action against a model value snapshot.
 ///
@@ -123,7 +122,7 @@ fn apply(context: *EvaluationContext, effect: ActionType) !DispositionType {
             break :plugin .continue_client;
         },
         .lua_callback, .lua_expr => error.InvalidCallbackResult,
-        else => switch (try client_actions.apply(context.client, effect)) {
+        else => switch (try context.client.executeAction(effect, .effect)) {
             .continue_routing => .continue_client,
             .stop => .exit_client,
         },

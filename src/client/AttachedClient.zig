@@ -69,14 +69,98 @@ comptime {
 const HostUpdate = @import("model/HostUpdate.zig");
 const HostCommit = @import("model/HostCommit.zig");
 const HostCapabilityObservation = @import("model/types.zig").HostCapabilityObservation;
-const server_messages = @import("entrypoints/server_messages.zig");
 const RuntimeOutboundMessage = @import("connection/outbox_support.zig").Message;
 const RuntimeMessage = @import("connection/RuntimeMessage.zig");
 const pane_graphics = @import("operations/panes/pane_graphics.zig");
 const MultiplexerModel = @import("workspace/MultiplexerModel.zig");
 const multiplexer = @import("workspace/multiplexer.zig");
 const Tab = @import("workspace/Tab.zig");
-const requests = @import("connection/request_lifecycle.zig");
+
+const parseKey_module = @import("input/chord.zig").parseKey;
+const Action = @import("input/action.zig").Action;
+const ControlType = @import("input/keybind.zig").Control;
+const copy_modes = @import("operations/input/copy_modes.zig");
+const name_prompts = @import("operations/input/name_prompts.zig");
+const workspace_handoffs = @import("operations/workspaces/workspace_handoffs.zig");
+const layout_updates = @import("resources/client_layouts.zig");
+const client_detachments = @import("operations/session/client_detachments.zig");
+const history_palettes = @import("operations/input/history_palettes.zig");
+const suggestions = @import("operations/input/suggestions.zig");
+const notification_flow = @import("operations/notifications/notifications.zig");
+const tab_selections = @import("operations/tabs/tab_selections.zig");
+const PaneFocusTarget = @import("model/types.zig").PaneFocusTarget;
+const pane_focus = @import("operations/panes/pane_focus.zig");
+const DirectionType = @import("input/action.zig").Direction;
+const pane_inputs = @import("operations/input/pane_inputs.zig");
+const KeyType = @import("input/Key.zig");
+const ScrollDirectionType = @import("input/action.zig").ScrollDirection;
+const pane_mouse_input = @import("operations/input/pane_mouse_inputs.zig");
+const sidebar_toggles = @import("operations/notifications/sidebar_toggles.zig");
+const pane_closures = @import("operations/panes/pane_closures.zig");
+const CommandTabType = @import("input/CommandTab.zig");
+const tab_creations = @import("operations/tabs/tab_creations.zig");
+const tab_closures = @import("operations/tabs/tab_closures.zig");
+const tab_moves = @import("operations/tabs/tab_moves.zig");
+const key_routing = @import("operations/input/key_routing.zig");
+const ApplicationInputLuaActionCommand = @import("application/input/lua_action.zig").Command;
+const lua_actions = @import("operations/configuration/lua_actions.zig");
+const plugin_actions = @import("operations/configuration/plugin_actions.zig");
+const RequestPaneSplit = @import("model/RequestPaneSplit.zig");
+const PaneSplit = @import("model/PaneSplit.zig");
+const PaneSplitPlan = @import("model/PaneSplitPlan.zig");
+const PaneSplitCommit = @import("model/PaneSplitCommit.zig");
+const ConfirmPaneSplit = @import("model/ConfirmPaneSplit.zig");
+const PaneOpenedType = @import("telar-core").PaneOpened;
+const OpenedPaneType = @import("application/panes/OpenedPane.zig");
+const WorkspaceCreationType = @import("application/panes/WorkspaceCreation.zig");
+const workspace_creations = @import("operations/workspaces/workspace_creations.zig");
+const agent_threads = @import("operations/agents/agent_threads.zig");
+const PaneAttachmentConfirmationType = @import("application/panes/PaneAttachmentConfirmation.zig");
+const agent_reading = @import("application/agents/agent_reading.zig");
+const request_failure = @import("application/session/request_failure.zig");
+const review_operations = @import("operations/change_review/change_review.zig");
+const RequestFailedType = @import("telar-core").RequestFailed;
+const ApplicationSessionRequestFailureOutcome = @import("application/session/request_failure.zig").Outcome;
+const builtin = @import("builtin");
+const link_openings = @import("operations/input/link_openings.zig");
+const ServerMessageType = @import("telar-core").ServerMessage;
+const agent_sounds = @import("operations/agents/agent_sounds.zig");
+const agent_snapshots = @import("operations/agents/agent_snapshots.zig");
+const agent_history = @import("operations/agents/agent_history.zig");
+const runtime_layouts = @import("operations/session/client_layouts.zig");
+const pane_clipboards = @import("operations/panes/pane_clipboards.zig");
+const pane_frames = @import("operations/panes/pane_frames.zig");
+const client_commands = @import("operations/session/client_commands.zig");
+const pane_focus_commands = @import("operations/panes/pane_focus_commands.zig");
+const pane_metadata = @import("operations/panes/pane_metadata.zig");
+const pane_progress = @import("operations/panes/pane_progress.zig");
+const proxy_status = @import("operations/agents/proxy_status.zig");
+const resync_requirements = @import("operations/session/resync_requirements.zig");
+const system_metrics = @import("operations/agents/system_metrics.zig");
+const tab_renames = @import("operations/tabs/tab_renames.zig");
+const tab_snapshots = @import("operations/tabs/tab_snapshots.zig");
+const workspace_lists = @import("operations/workspaces/workspace_lists.zig");
+const workspace_snapshots = @import("operations/workspaces/workspace_snapshots.zig");
+
+/// Bindings obey prompt authority; validated native effects retain their caller's authority.
+const ActionOrigin = enum { binding, effect };
+const SplitRecovery = enum { restored, not_required, stale };
+const PaneOpenOutcome = enum { workspace_arrived, workspace_created, pane_split, pane_attached, ignored };
+
+const ctrl_h = parseKey_module("ctrl+h") catch unreachable;
+const ctrl_j = parseKey_module("ctrl+j") catch unreachable;
+const ctrl_k = parseKey_module("ctrl+k") catch unreachable;
+const ctrl_l = parseKey_module("ctrl+l") catch unreachable;
+
+const ConnectionDelivery = @import("connection/ConnectionDelivery.zig");
+const RequestContinuation = @import("connection/requests.zig").Continuation;
+const AgentOperation = @import("connection/AgentOperation.zig");
+const pane_focus_reports = @import("operations/panes/pane_focus_reports.zig");
+const PaneFocus = @import("model/PaneFocus.zig");
+const ResizePaneRequest = @import("model/ResizePaneRequest.zig");
+const TogglePaneFullscreenRequest = @import("model/TogglePaneFullscreenRequest.zig");
+const PaneGeometryChange = @import("model/PaneGeometryChange.zig");
+const PaneAttachment = @import("model/PaneAttachment.zig");
 
 const AttachedClient = @This();
 
@@ -262,53 +346,6 @@ pub fn sendRuntimeInput(self: *AttachedClient, input: core.PaneInput) !void {
     try self.startRuntimeSend();
 }
 
-/// Copies one tab rename and starts its write when idle.
-///
-/// ```zig
-/// try self.sendRuntimeRename(rename);
-/// ```
-pub fn sendRuntimeRename(self: *AttachedClient, rename: core.RenameTab) !void {
-    try self.runtime_transport.outbox.pushRename(rename);
-    try self.startRuntimeSend();
-}
-
-/// Copies one workspace rename and starts its write when idle.
-///
-/// ```zig
-/// try self.sendRuntimeWorkspaceRename(rename);
-/// ```
-pub fn sendRuntimeWorkspaceRename(self: *AttachedClient, rename: core.RenameWorkspace) !void {
-    try self.runtime_transport.outbox.pushWorkspaceRename(rename);
-    try self.startRuntimeSend();
-}
-
-/// Copies one workspace creation and starts its write when idle.
-///
-/// ```zig
-/// try self.sendRuntimeCreateWorkspace(request);
-/// ```
-pub fn sendRuntimeCreateWorkspace(self: *AttachedClient, request: core.CreateWorkspace) !void {
-    try self.runtime_transport.outbox.pushCreateWorkspace(request);
-    try self.startRuntimeSend();
-}
-
-/// Copies one tab creation and starts its write when idle.
-///
-/// ```zig
-/// try self.sendRuntimeCreateTab(request);
-/// ```
-pub fn sendRuntimeCreateTab(self: *AttachedClient, request: core.CreateTab) !void {
-    try self.runtime_transport.outbox.pushCreateTab(request);
-    try self.startRuntimeSend();
-}
-
-/// Copies a prompt into its outbound slot before the editor can change it.
-/// Example: `try self.sendRuntimeAgentPrompt(request);`
-pub fn sendRuntimeAgentPrompt(self: *AttachedClient, request: core.AgentPrompt) !void {
-    try self.runtime_transport.outbox.pushAgentPrompt(request);
-    try self.startRuntimeSend();
-}
-
 /// Copies a page cursor before its reading window can change.
 /// Example: `try self.sendRuntimeAgentHistory(request);`
 pub fn sendRuntimeAgentHistory(self: *AttachedClient, request: core.QueryAgentHistory) !void {
@@ -327,16 +364,6 @@ pub fn sendRuntimeChangeReviewQuery(self: *AttachedClient, query: core.QueryChan
 /// Example: `try self.sendRuntimeChangeReviewCommand(request);`
 pub fn sendRuntimeChangeReviewCommand(self: *AttachedClient, request: core.ChangeReviewCommand) !void {
     try self.runtime_transport.outbox.pushChangeReviewCommand(request);
-    try self.startRuntimeSend();
-}
-
-/// Copies one notification request and starts its write when idle.
-///
-/// ```zig
-/// try self.sendRuntimeNotification(request);
-/// ```
-pub fn sendRuntimeNotification(self: *AttachedClient, request: core.ShowNotification) !void {
-    try self.runtime_transport.outbox.pushNotification(request);
     try self.startRuntimeSend();
 }
 
@@ -394,7 +421,7 @@ pub fn receiveRuntime(self: *AttachedClient, result: anyerror!*const RuntimeMess
     core.mark(self.io, .client_frame);
     const received = try self.runtime_transport.completeRead(result);
     self.telemetry.recordMessage(received);
-    const status = try server_messages.handleServerMessage(self, received.message);
+    const status = try self.handleServerMessage(received.message);
 
     if (status) |exit_status| {
         return exit_status;
@@ -405,6 +432,951 @@ pub fn receiveRuntime(self: *AttachedClient, result: anyerror!*const RuntimeMess
     try self.startRuntimeRead();
 
     return null;
+}
+
+/// Applies one decoded reply while its borrowed payload remains valid.
+/// Example: `_ = try self.handleServerMessage(message);`
+pub fn handleServerMessage(self: *AttachedClient, message: ServerMessageType) !?u8 {
+    switch (message) {
+        .change_review_changed => |notification| {
+            _ = review_operations.changed(self, notification);
+        },
+        .change_review_snapshot => |snapshot| {
+            _ = try review_operations.apply(self, snapshot);
+        },
+        .editor_opened => |reply| {
+            try link_openings.editorOpened(self, reply);
+        },
+        .agent_history_page => |page| {
+            _ = try agent_history.apply(self, page);
+        },
+        .agent_thread_snapshot => |snapshot| {
+            _ = try agent_threads.apply(self, snapshot);
+        },
+        .request_completed => |reply| {
+            try agent_threads.completed(self, reply);
+        },
+        .pane_opened => |opened| _ = try self.completePaneOpen(opened),
+        .tab_snapshot => |snapshot| _ = try tab_snapshots.apply(self, snapshot),
+        .workspace_snapshot => |snapshot| try workspace_snapshots.apply(self, snapshot),
+        .tab_created => |created| _ = try tab_creations.apply(self, created),
+        .tab_renamed => |renamed| _ = try tab_renames.apply(self, renamed),
+        .tab_closed => |closed| switch (try tab_closures.apply(self, closed)) {
+            .applied, .ignored => {},
+            .exit => return 0,
+        },
+        .tab_moved => |moved| _ = try tab_moves.apply(self, moved),
+        .pane_frame => |frame| _ = try pane_frames.apply(self, frame),
+        .pane_cwd => |cwd| _ = try pane_metadata.applyCwd(self, cwd),
+        .pane_foreground => |foreground| _ = try pane_metadata.applyForeground(self, foreground),
+        .pane_title => |title| _ = try pane_metadata.applyTitle(self, title),
+        .pane_progress => |progress| _ = try pane_progress.apply(self, progress),
+        .client_command => |command| try client_commands.apply(self, command),
+        .pane_focus_command => |command| try pane_focus_commands.apply(self, command),
+        .pane_matches => |found| _ = try copy_modes.matches(self, found),
+        .pane_clipboard => |clipboard| try pane_clipboards.apply(self, clipboard),
+        .pane_exited => |exited| _ = try pane_closures.applyExit(self, exited),
+        .request_failed => |failure| {
+            if (!history_palettes.failed(self, failure)) {
+                _ = try self.failRuntimeRequest(failure);
+            }
+        },
+        .notification => |notification| _ = try notification_flow.applyRuntime(self, notification),
+        .notification_shown => |shown| _ = try notification_flow.applyDeliveryReport(self, shown),
+        .agent_sound => |sound| _ = try agent_sounds.apply(self, sound),
+        .client_layout_snapshot => |snapshot| try runtime_layouts.apply(self, snapshot),
+        .resync_required => |required| {
+            if (try resync_requirements.apply(self, required) == .exit) {
+                return 0;
+            }
+        },
+        .runtime_stopping => return 0,
+        .history_results => |results| _ = try history_palettes.apply(self, results),
+        .history_pruned => |confirmation| _ = try history_palettes.pruned(self, confirmation),
+        .history_output => |output| _ = history_palettes.output(self, output),
+        .command_suggestion => |suggested| _ = try suggestions.apply(self, suggested),
+        .client_command_result, .client_list, .pane_text, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
+        .proxy_status => |status| _ = try proxy_status.apply(self, status),
+        .agent_snapshot => |snapshot| _ = try agent_snapshots.apply(self, snapshot),
+        .system_metrics => |metrics| _ = try system_metrics.apply(self, metrics),
+        .workspace_list => |list| _ = try workspace_lists.apply(self, list),
+        .graphics_snapshot => |snapshot| _ = try pane_graphics.apply(
+            self,
+            .{
+                .snapshot = snapshot,
+            },
+        ),
+        .graphics_image => |image| _ = try pane_graphics.apply(
+            self,
+            .{
+                .image = image,
+            },
+        ),
+        .graphics_shared_image => |image| _ = try pane_graphics.apply(
+            self,
+            .{
+                .shared_image = image,
+            },
+        ),
+        .graphics_image_chunk => |chunk| _ = try pane_graphics.apply(
+            self,
+            .{
+                .image_chunk = chunk,
+            },
+        ),
+        .graphics_placement => |placement| _ = try pane_graphics.apply(
+            self,
+            .{
+                .placement = placement,
+            },
+        ),
+        .graphics_delete_image => |deleted| _ = try pane_graphics.apply(
+            self,
+            .{
+                .delete_image = deleted,
+            },
+        ),
+        .graphics_delete_placement => |deleted| _ = try pane_graphics.apply(
+            self,
+            .{
+                .delete_placement = deleted,
+            },
+        ),
+    }
+    return null;
+}
+
+/// Executes a binding or a validated native effect with its existing prompt policy.
+/// Example: `_ = try self.executeAction(.{ .split_pane = .horizontal }, .binding);`
+pub fn executeAction(self: *AttachedClient, value: Action, origin: ActionOrigin) anyerror!ControlType {
+    if (origin == .binding and self.model.name_prompt.active()) {
+        return .continue_routing;
+    }
+
+    switch (value) {
+        .lua_callback, .lua_expr => {
+            std.debug.assert(origin == .binding);
+            return self.executeLuaAction(switch (value) {
+                .lua_callback => |reference| .{
+                    .callback = reference,
+                },
+                .lua_expr => |reference| .{
+                    .expression = reference,
+                },
+                else => unreachable,
+            });
+        },
+        .plugin => |requested| {
+            std.debug.assert(origin == .binding);
+            _ = try plugin_actions.start(
+                self,
+                requested,
+                self.model.callbackContext(),
+            );
+            return .continue_routing;
+        },
+        else => {},
+    }
+
+    if (value != .enter_copy_mode and copy_modes.active(self)) {
+        _ = try copy_modes.leave(self);
+    }
+
+    switch (value) {
+        .toggle_thread_view => {
+            _ = self.model.togglePaneSurface();
+        },
+        .scroll_pane => |direction| try self.scrollPane(direction),
+        .split_pane => |direction| _ = try self.requestPaneSplit(
+            .{
+                .axis = switch (direction) {
+                    .horizontal => .horizontal,
+                    .vertical => .vertical,
+                },
+                .area = self.geometry().area,
+            },
+        ),
+        .focus_pane => |direction| _ = try self.focusPane(
+            .{
+                .direction = switch (direction) {
+                    .left => .left,
+                    .right => .right,
+                    .up => .up,
+                    .down => .down,
+                },
+            },
+        ),
+        .navigate_pane => |direction| try self.navigatePane(direction),
+        .resize_pane => |direction| _ = try self.resizePane(
+            .{
+                .direction = switch (direction) {
+                    .left => .left,
+                    .right => .right,
+                    .up => .up,
+                    .down => .down,
+                },
+                .area = self.geometry().area,
+            },
+        ),
+        .toggle_pane_fullscreen => _ = try self.togglePaneFullscreen(
+            .{
+                .area = self.geometry().area,
+            },
+        ),
+        .toggle_sidebar => _ = try sidebar_toggles.toggle(self),
+        .resize_sidebar => |direction| _ = try sidebar_toggles.resize(
+            self,
+            .{
+                .direction = switch (direction) {
+                    .left => .narrower,
+                    .right => .wider,
+                },
+            },
+        ),
+        .toggle_workspace_list => _ = self.model.toggleWorkspaceList(),
+        .new_workspace => _ = name_prompts.beginWorkspaceCreate(self),
+        .rename_workspace => _ = name_prompts.beginWorkspaceRename(self),
+        .select_workspace => |position| _ = try workspace_handoffs.selectWorkspace(
+            self,
+            .{
+                .position = position,
+            },
+        ),
+        .close_pane => _ = try pane_closures.request(self),
+        .new_tab => _ = try tab_creations.request(
+            self,
+            .{},
+        ),
+        .new_agent_tab => try agent_threads.create(self),
+        .select_tab_offset => |offset| _ = try tab_selections.select(
+            self,
+            .{
+                .target = .{
+                    .offset = offset,
+                },
+            },
+        ),
+        .select_tab => |position| _ = try tab_selections.select(
+            self,
+            .{
+                .target = .{
+                    .position = position,
+                },
+            },
+        ),
+        .rename_tab => _ = name_prompts.beginActiveTabRename(self),
+        .close_tab => _ = try tab_closures.request(self),
+        .move_tab => |direction| _ = try tab_moves.request(
+            self,
+            .{
+                .direction = switch (direction) {
+                    .previous => .previous,
+                    .next => .next,
+                },
+            },
+        ),
+        .detach => {
+            try layout_updates.observe(self);
+            try client_detachments.apply(self);
+
+            return .stop;
+        },
+        .enter_copy_mode => _ = copy_modes.enter(self),
+        .command_tab => |*command| try self.createCommandTab(command),
+        .goto_picker => _ = name_prompts.beginGotoPicker(self),
+        .history_palette => _ = try history_palettes.begin(self),
+        .suggest_command => _ = try suggestions.begin(self),
+        .notification => |*notification| _ = try notification_flow.requestDelivery(self, notification),
+        .lua_callback, .lua_expr, .plugin => unreachable,
+    }
+
+    return .continue_routing;
+}
+
+fn focusPane(self: *AttachedClient, target: PaneFocusTarget) !bool {
+    return try pane_focus.apply(
+        self,
+        .{
+            .target = target,
+            .area = self.geometry().area,
+        },
+    ) != null;
+}
+
+fn navigatePane(self: *AttachedClient, direction: DirectionType) !void {
+    const key = navigationKey(direction);
+    if (std.mem.eql(
+        u8,
+        self.model.focusedPaneForeground(),
+        "nvim",
+    )) {
+        _ = try pane_inputs.send(
+            self,
+            .{
+                .target = .focused,
+                .source = .host,
+                .payload = .{
+                    .key = key,
+                },
+            },
+        );
+        return;
+    }
+
+    _ = try self.focusPane(
+        .{
+            .direction = switch (direction) {
+                .left => .left,
+                .right => .right,
+                .up => .up,
+                .down => .down,
+            },
+        },
+    );
+}
+
+fn navigationKey(direction: DirectionType) KeyType {
+    return switch (direction) {
+        .left => ctrl_h,
+        .right => ctrl_l,
+        .up => ctrl_k,
+        .down => ctrl_j,
+    };
+}
+
+fn scrollPane(self: *AttachedClient, direction: ScrollDirectionType) !void {
+    const model = self.model.activeTabModel() orelse return;
+
+    _ = try pane_mouse_input.apply(
+        self,
+        model,
+        .{
+            .focused_scroll = direction,
+        },
+    );
+}
+
+fn createCommandTab(self: *AttachedClient, command: *const CommandTabType) !void {
+    var arguments: [CommandTabType.max_arguments][]const u8 = undefined;
+    for (0..command.argument_count) |index| {
+        arguments[index] = command.argument(index);
+    }
+
+    _ = try tab_creations.request(
+        self,
+        .{
+            .label = command.label(),
+            .arguments = arguments[0..command.argument_count],
+        },
+    );
+}
+
+fn executeLuaAction(self: *AttachedClient, command: ApplicationInputLuaActionCommand) !ControlType {
+    const copy_mode_active = copy_modes.active(self);
+    const outcome = try lua_actions.execute(self, command);
+    switch (outcome) {
+        .applied, .unavailable, .invocation_failed, .validation_failed => return .continue_routing,
+        .exit => return .stop,
+        .input => |decision| switch (decision) {
+            .consume => {},
+            .forward_binding, .keys => |keys| for (keys.slice()) |key| {
+                _ = try key_routing.apply(
+                    self,
+                    .{
+                        .key = key,
+                    },
+                );
+            },
+            .paste => |paste| {
+                if (!copy_mode_active) {
+                    _ = try pane_inputs.expressionPaste(self, paste.slice());
+                }
+            },
+        },
+    }
+
+    return .continue_routing;
+}
+
+/// Registers correlation before copying the request; failed delivery removes only that registration.
+/// Example: `try self.sendRuntimeRequest(delivery);`
+pub fn sendRuntimeRequest(self: *AttachedClient, delivery: ConnectionDelivery) !void {
+    try self.request_lifecycle.tracker.add(delivery.registration.request_id, delivery.registration.continuation);
+    errdefer _ = self.request_lifecycle.tracker.take(delivery.registration.request_id);
+    try self.runtime_transport.outbox.push(delivery.message);
+    try self.startRuntimeSend();
+}
+
+/// Registers correlation before copying the request; failed delivery removes only that registration.
+/// Example: `try self.sendTabRenameRequest(rename, continuation);`
+pub fn sendTabRenameRequest(self: *AttachedClient, rename: core.RenameTab, continuation: RequestContinuation) !void {
+    try self.request_lifecycle.tracker.add(rename.request_id, continuation);
+    errdefer _ = self.request_lifecycle.tracker.take(rename.request_id);
+    try self.runtime_transport.outbox.pushRename(rename);
+    try self.startRuntimeSend();
+}
+
+/// Registers correlation before copying the request; failed delivery removes only that registration.
+/// Example: `try self.sendWorkspaceRenameRequest(rename);`
+pub fn sendWorkspaceRenameRequest(self: *AttachedClient, rename: core.RenameWorkspace) !void {
+    try self.request_lifecycle.tracker.add(
+        rename.request_id,
+        .{
+            .rename_workspace = rename.workspace,
+        },
+    );
+    errdefer _ = self.request_lifecycle.tracker.take(rename.request_id);
+    try self.runtime_transport.outbox.pushWorkspaceRename(rename);
+    try self.startRuntimeSend();
+}
+
+/// Registers correlation before copying the request; failed delivery removes only that registration.
+/// Example: `try self.sendCreateWorkspaceRequest(request);`
+pub fn sendCreateWorkspaceRequest(self: *AttachedClient, request: core.CreateWorkspace) !void {
+    try self.request_lifecycle.tracker.add(
+        request.request_id,
+        .{
+            .create_workspace = request.size,
+        },
+    );
+    errdefer _ = self.request_lifecycle.tracker.take(request.request_id);
+    try self.runtime_transport.outbox.pushCreateWorkspace(request);
+    try self.startRuntimeSend();
+}
+
+/// Registers correlation before copying the request; failed delivery removes only that registration.
+/// Example: `try self.sendCreateTabRequest(request);`
+pub fn sendCreateTabRequest(self: *AttachedClient, request: core.CreateTab) !void {
+    try self.request_lifecycle.tracker.add(
+        request.request_id,
+        .{
+            .create_tab = .{
+                .workspace = request.workspace,
+                .size = request.size,
+            },
+        },
+    );
+    errdefer _ = self.request_lifecycle.tracker.take(request.request_id);
+    try self.runtime_transport.outbox.pushCreateTab(request);
+    try self.startRuntimeSend();
+}
+
+/// Registers correlation before copying the request; failed delivery removes only that registration.
+/// Example: `try self.sendAgentPromptRequest(request, operation);`
+pub fn sendAgentPromptRequest(self: *AttachedClient, request: core.AgentPrompt, operation: AgentOperation) !void {
+    try self.request_lifecycle.tracker.add(
+        request.request_id,
+        .{
+            .agent_prompt = operation,
+        },
+    );
+    errdefer _ = self.request_lifecycle.tracker.take(request.request_id);
+    try self.runtime_transport.outbox.pushAgentPrompt(request);
+    try self.startRuntimeSend();
+}
+
+/// Registers correlation before copying the request; failed delivery removes only that registration.
+/// Example: `try self.sendNotificationRequest(request);`
+pub fn sendNotificationRequest(self: *AttachedClient, request: core.ShowNotification) !void {
+    try self.request_lifecycle.tracker.add(request.request_id, .notification);
+    errdefer _ = self.request_lifecycle.tracker.take(request.request_id);
+    try self.runtime_transport.outbox.pushNotification(request);
+    try self.startRuntimeSend();
+}
+
+/// Requests a canonical snapshot with its exact target retained until the reply.
+/// Example: `try self.requestTabSnapshot(location);`
+pub fn requestTabSnapshot(self: *AttachedClient, location: core.TabLocation) !void {
+    const request_id = try self.request_lifecycle.nextId();
+    try self.sendRuntimeRequest(
+        .{
+            .registration = .{
+                .request_id = request_id,
+                .continuation = .{
+                    .tab_snapshot = location,
+                },
+            },
+            .message = .{
+                .request_tab_snapshot = .{
+                    .request_id = request_id,
+                    .location = location,
+                },
+            },
+        },
+    );
+}
+
+/// Requests a canonical snapshot with its exact target retained until the reply.
+/// Example: `try self.requestWorkspaceSnapshot(workspace);`
+pub fn requestWorkspaceSnapshot(self: *AttachedClient, workspace: core.WorkspaceLocation) !void {
+    const request_id = try self.request_lifecycle.nextId();
+    try self.sendRuntimeRequest(
+        .{
+            .registration = .{
+                .request_id = request_id,
+                .continuation = .{
+                    .workspace_snapshot = workspace,
+                },
+            },
+            .message = .{
+                .request_workspace_snapshot = .{
+                    .request_id = request_id,
+                    .workspace = workspace,
+                },
+            },
+        },
+    );
+}
+
+/// Synchronizes the focused attachment before reporting child focus. Example: `try self.synchronizeActivePane();`
+pub fn synchronizeActivePane(self: *AttachedClient) !void {
+    _ = try self.synchronizePaneAttachments();
+    _ = try pane_focus_reports.sync(self);
+}
+
+/// Acknowledges a completed agent and reconciles its focused attachment shelf. Example: `_ = try self.synchronizePaneAttachments();`
+pub fn synchronizePaneAttachments(self: *AttachedClient) !bool {
+    if (self.model.takeAgentAcknowledgement()) |key| {
+        try self.sendRuntime(
+            .{
+                .acknowledge_agent = .{
+                    .pane_id = key.pane_id,
+                    .pane_generation = key.pane_generation,
+                },
+            },
+        );
+    }
+
+    if (!self.attachment_shelf.syncTarget(self.model.focusedAttachmentTarget())) {
+        return false;
+    }
+
+    if (self.model.workspace.active()) |tab| {
+        try self.resizeAttachedPanes(&tab.model, self.geometry().area);
+    }
+
+    return true;
+}
+
+/// Delivers resources for a committed focus, including newly revealed panes. Example: `try self.deliverPaneFocus(focus, area);`
+pub fn deliverPaneFocus(self: *AttachedClient, focus: PaneFocus, area: core.Rect) !void {
+    const active = self.model.workspace.active() orelse return error.StalePaneFocus;
+    if (!std.meta.eql(active.location, focus.location) or
+        active.model.layout.focused() != focus.focused or
+        self.model.version().panes != focus.panes_revision)
+    {
+        return error.StalePaneFocus;
+    }
+
+    try self.synchronizeActivePane();
+    if (!focus.geometry_changed) {
+        return;
+    }
+
+    self.host_graphics.invalidatePlacements();
+    try self.resizeAttachedPanes(&active.model, area);
+
+    if (active.snapshot_loaded) {
+        try self.attachVisiblePanes(active, area);
+    }
+}
+
+/// Commits one split-edge move before delivering geometry. Example: `_ = try self.resizePane(command);`
+pub fn resizePane(self: *AttachedClient, command: ResizePaneRequest) !?PaneGeometryChange {
+    const change = self.model.resizePane(command) orelse return null;
+    try self.deliverPaneGeometry(change);
+
+    return change;
+}
+
+/// Commits fullscreen state before delivering geometry. Example: `_ = try self.togglePaneFullscreen(command);`
+pub fn togglePaneFullscreen(self: *AttachedClient, command: TogglePaneFullscreenRequest) !?PaneGeometryChange {
+    const change = self.model.togglePaneFullscreen(command) orelse return null;
+    try self.deliverPaneGeometry(change);
+
+    return change;
+}
+
+/// Rejects obsolete geometry before invalidating placements and resizing attachments.
+fn deliverPaneGeometry(self: *AttachedClient, change: PaneGeometryChange) !void {
+    const active = self.model.workspace.active() orelse return error.StalePaneGeometry;
+    if (!std.meta.eql(active.location, change.location) or
+        active.model.layout.focused() != change.focused or
+        active.model.layout.isFullscreen() != change.fullscreen or
+        self.model.version().panes != change.panes_revision)
+    {
+        return error.StalePaneGeometry;
+    }
+
+    self.host_graphics.invalidatePlacements();
+    try self.resizeAttachedPanes(&active.model, change.area);
+
+    if (active.snapshot_loaded) {
+        try self.attachVisiblePanes(active, change.area);
+    }
+}
+
+/// A failed attachment repairs membership only while that pane is still detached.
+fn recoverPaneAttachment(self: *AttachedClient, attachment: PaneAttachment) !bool {
+    if (!self.model.needsPaneAttachment(attachment)) {
+        return false;
+    }
+
+    _ = try tab_snapshots.recover(self, attachment.location);
+    return true;
+}
+
+/// Requests creation without committing layout; restores geometry if delivery fails.
+/// Example: `_ = try self.requestPaneSplit(.{ .axis = .horizontal, .area = self.geometry().area });`
+pub fn requestPaneSplit(self: *AttachedClient, command: RequestPaneSplit) !?PaneSplitPlan {
+    if (self.request_lifecycle.tracker.has(.pane_operation)) {
+        return null;
+    }
+
+    const plan = self.model.planPaneSplit(command) orelse return null;
+    self.sendRuntime(
+        .{
+            .pane_resize = plan.provisional_resize,
+        },
+    ) catch |err| {
+        try self.sendRuntime(
+            .{
+                .pane_resize = plan.restore_resize,
+            },
+        );
+        return err;
+    };
+    self.sendPaneSplitRequest(plan) catch |err| {
+        try self.sendRuntime(
+            .{
+                .pane_resize = plan.restore_resize,
+            },
+        );
+        return err;
+    };
+
+    return plan;
+}
+
+fn sendPaneSplitRequest(self: *AttachedClient, plan: PaneSplitPlan) !void {
+    const request_id = try self.request_lifecycle.nextId();
+    try self.sendRuntimeRequest(
+        .{
+            .registration = .{
+                .request_id = request_id,
+                .continuation = .{
+                    .split = .{
+                        .target_pane = plan.split.target_pane,
+                        .location = plan.split.location,
+                        .axis = plan.split.axis,
+                        .area = plan.split.area,
+                    },
+                },
+            },
+            .message = .{
+                .create_pane = .{
+                    .request_id = request_id,
+                    .location = plan.split.location,
+                    .size = plan.new_pane_size,
+                    .launch = .{
+                        .cwd = self.options.cwd,
+                        .cwd_source = plan.split.target_pane,
+                        .arguments = if (plan.arguments.len != 0) plan.arguments else self.options.arguments,
+                    },
+                },
+            },
+        },
+    );
+}
+
+/// Adopts only the exact runtime reply. Apply effects immediately after the
+/// commit, without exposing a second API that accepts potentially stale commits.
+/// Runtime correlation supplies the exact pending split before committing it.
+fn confirmPaneSplit(self: *AttachedClient, command: ConfirmPaneSplit) !PaneSplitCommit {
+    if (!command.created or command.confirmed_pane == command.requested.target_pane or
+        !std.meta.eql(command.confirmed_location, command.requested.location))
+    {
+        return error.UnexpectedPane;
+    }
+
+    const commit = try self.model.commitPaneSplit(
+        .{
+            .split = command.requested,
+            .new_pane = command.confirmed_pane,
+        },
+    );
+    switch (commit.disposition) {
+        .active => {
+            const tab = self.model.workspace.find(commit.location.tab_id).?;
+            try self.resizeAttachedPanes(&tab.model, commit.area);
+            try self.synchronizeActivePane();
+        },
+        .inactive => {
+            try self.sendRuntime(
+                .{
+                    .detach_pane = .{
+                        .pane_id = commit.pane_id,
+                    },
+                },
+            );
+            try self.graphics.setPaneVisible(commit.pane_id, false);
+        },
+        .stale => {
+            // A late reply may reference an identity now represented elsewhere.
+            // Never detach a pane belonging to the current workspace view.
+            if (self.model.workspace.findPane(commit.pane_id) != null) {
+                return error.StalePaneSplitConfirmation;
+            }
+
+            try self.sendRuntime(
+                .{
+                    .detach_pane = .{
+                        .pane_id = commit.pane_id,
+                    },
+                },
+            );
+            if (self.model.workspace.workspace) |workspace| {
+                if (std.meta.eql(workspace, commit.location.workspace) and !self.request_lifecycle.tracker.has(.workspace_snapshot)) {
+                    try self.requestWorkspaceSnapshot(workspace);
+                }
+            }
+        },
+    }
+
+    return commit;
+}
+
+/// Restores only the still-active requested target. A retired target is stale;
+/// a target in an inactive tab is already detached and needs no resize.
+/// A rejected request restores the active target before the failure notice.
+fn recoverPaneSplit(self: *AttachedClient, split: PaneSplit) !SplitRecovery {
+    return switch (self.model.recoverPaneSplit(
+        .{
+            .split = split,
+            .area = self.geometry().area,
+        },
+    )) {
+        .resize => |resize| recovery: {
+            try self.sendRuntime(
+                .{
+                    .pane_resize = resize,
+                },
+            );
+            break :recovery .restored;
+        },
+        .not_required => .not_required,
+        .stale => .stale,
+    };
+}
+
+/// Consumes the request once before applying its confirmation and agent attachment.
+fn completePaneOpen(self: *AttachedClient, opened: PaneOpenedType) !PaneOpenOutcome {
+    const continuation = self.request_lifecycle.tracker.take(opened.request_id) orelse
+        return error.UnexpectedRequest;
+    const outcome: PaneOpenOutcome = switch (continuation) {
+        .initial_open => result: {
+            try self.arriveOpenedWorkspace(translateOpenedPane(opened));
+            break :result .workspace_arrived;
+        },
+        .create_workspace => |size| result: {
+            try self.createOpenedWorkspace(
+                .{
+                    .opened = translateOpenedPane(opened),
+                    .requested_size = size,
+                },
+            );
+            break :result .workspace_created;
+        },
+        .split => |split| result: {
+            _ = try self.confirmPaneSplit(
+                .{
+                    .requested = .{
+                        .target_pane = split.target_pane,
+                        .location = split.location,
+                        .axis = split.axis,
+                        .area = split.area,
+                    },
+                    .confirmed_pane = opened.pane_id,
+                    .confirmed_location = opened.location,
+                    .created = opened.created,
+                },
+            );
+            break :result .pane_split;
+        },
+        .attach_pane => |attachment| result: {
+            try self.confirmPaneAttachment(
+                .{
+                    .requested = .{
+                        .pane_id = attachment.pane_id,
+                        .location = attachment.location,
+                    },
+                    .opened = translateOpenedPane(opened),
+                },
+            );
+            break :result .pane_attached;
+        },
+        .ignored => .ignored,
+        else => return error.UnexpectedRequest,
+    };
+
+    if (outcome != .ignored) {
+        try agent_threads.opened(self, opened);
+    }
+
+    return outcome;
+}
+
+fn translateOpenedPane(opened: PaneOpenedType) OpenedPaneType {
+    return .{
+        .pane_id = opened.pane_id,
+        .location = opened.location,
+        .created = opened.created,
+    };
+}
+
+fn arriveOpenedWorkspace(self: *AttachedClient, opened: OpenedPaneType) !void {
+    try workspace_handoffs.confirm(self, try workspace_handoffs.arrival(self, opened));
+}
+
+fn createOpenedWorkspace(self: *AttachedClient, confirmation: WorkspaceCreationType) !void {
+    _ = try workspace_creations.confirm(self, workspace_creations.confirmation(
+        self,
+        confirmation.opened,
+        confirmation.requested_size,
+    ));
+}
+
+/// Rejects mismatched or newly created panes before committing an attachment.
+fn confirmPaneAttachment(self: *AttachedClient, confirmation: PaneAttachmentConfirmationType) !void {
+    const confirmed: PaneAttachment = .{
+        .pane_id = confirmation.opened.pane_id,
+        .location = confirmation.opened.location,
+    };
+    if (confirmation.opened.created or !std.meta.eql(confirmation.requested, confirmed)) {
+        return error.UnexpectedPane;
+    }
+
+    _ = try self.model.confirmPaneAttachment(confirmed);
+}
+
+/// Recovers the correlated operation before publishing its failure notification.
+fn failRuntimeRequest(self: *AttachedClient, failure: RequestFailedType) !ApplicationSessionRequestFailureOutcome {
+    const continuation = self.request_lifecycle.tracker.take(failure.request_id) orelse {
+        reportRuntimeFailure(failure.message);
+
+        return error.UnexpectedRequestFailure;
+    };
+    if (continuation == .ignored) {
+        review_operations.retired(self, failure.request_id);
+        agent_reading.retired(&self.model);
+    }
+    if (continuation == .agent_history) {
+        defer agent_reading.retired(
+            &self.model,
+        );
+        if (!agent_reading.failed(
+            &self.model,
+            continuation.agent_history,
+            failure.message,
+        )) {
+            return .ignored;
+        }
+    }
+    switch (continuation) {
+        .change_review_query, .change_review_command => |operation| {
+            if (!review_operations.failed(
+                self,
+                operation,
+                failure.message,
+            )) {
+                return .ignored;
+            }
+        },
+        else => {},
+    }
+    _ = self.editor_open.complete(failure.request_id);
+
+    errdefer reportRuntimeFailure(failure.message);
+    switch (continuation) {
+        .ignored => return .ignored,
+        .workspace_snapshot, .tab_snapshot => return error.RuntimeRequestFailed,
+        .initial_open => |open| {
+            const outcome = try workspace_handoffs.recover(
+                self,
+                .{
+                    .fallback_workspace = open.fallback_workspace,
+                    .code = failure.code,
+                },
+            );
+            return switch (outcome) {
+                .retried => .recovered,
+                .unrecoverable => error.RuntimeRequestFailed,
+            };
+        },
+        .split => |split| {
+            const outcome = try self.recoverPaneSplit(
+                .{
+                    .target_pane = split.target_pane,
+                    .location = split.location,
+                    .axis = split.axis,
+                    .area = split.area,
+                },
+            );
+            if (outcome == .stale) {
+                return .ignored;
+            }
+        },
+        .attach_pane => |attachment| {
+            if (failure.code == .pane_not_found) {
+                _ = try self.recoverPaneAttachment(
+                    .{
+                        .pane_id = attachment.pane_id,
+                        .location = attachment.location,
+                    },
+                );
+            }
+        },
+        .close_tab => |location| {
+            _ = try tab_closures.recover(self, location);
+        },
+        .close_pane,
+        .create_workspace,
+        .rename_workspace,
+        .create_tab,
+        .rename_tab,
+        .move_tab,
+        .notification,
+        .agent_prompt,
+        .agent_control,
+        .agent_query,
+        .agent_history,
+        .change_review_query,
+        .change_review_command,
+        .editor_open,
+        => {},
+    }
+
+    try notification_flow.publishNow(self, request_failure.notification(
+        .{
+            .continuation = continuation,
+            .code = failure.code,
+            .message = failure.message,
+        },
+    ));
+    return .notified;
+}
+
+fn reportRuntimeFailure(message: []const u8) void {
+    if (builtin.is_test) {
+        return;
+    }
+
+    std.debug.print(
+        "telar runtime: {s}\n",
+        .{
+            message,
+        },
+    );
 }
 
 /// Releases one runtime write, pumps its successor and resumes host input when
@@ -590,8 +1562,7 @@ pub fn attachVisiblePanes(self: *AttachedClient, tab: *Tab, area: core.Rect) !vo
 
         const size = tab.model.contentSize(pane.id, area) orelse continue;
         const request_id = try self.request_lifecycle.nextId();
-        try requests.deliver(
-            self,
+        try self.sendRuntimeRequest(
             .{
                 .registration = .{
                     .request_id = request_id,

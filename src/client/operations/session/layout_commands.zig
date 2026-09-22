@@ -2,7 +2,6 @@ const std = @import("std");
 const core = @import("telar-core");
 const Layout = @import("../../workspace/WorkspaceLayout.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const Client = @import("../../AttachedClient.zig");
 
 /// Exports the active tab with stable pane identities. Example: `try layout_commands.get(client, reply);`
@@ -51,7 +50,7 @@ test "layout export decodes to the same active pane and split tree" {
 
 /// Decodes one owned token before invoking the layout application boundary. Example: `try layout_commands.apply(client, reply);`
 pub fn apply(client: *Client, reply: *core.ClientCommand) !void {
-    if (request_lifecycle.busy(client)) {
+    if (!client.request_lifecycle.tracker.isEmpty()) {
         return error.ClientBusy;
     }
 

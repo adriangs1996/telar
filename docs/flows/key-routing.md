@@ -25,7 +25,7 @@ TUI: host_inputs.handleRead → feed → router.next → decoded
                           /                         \
                     action request             key / replay
                           |                         |
-             action_routing.apply          key_routing.apply
+             AttachedClient.executeAction          key_routing.apply
                           |                         |
                 concrete operation         retained application owner
                           |                         |

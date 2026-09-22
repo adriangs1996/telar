@@ -107,7 +107,7 @@ but schedules no frame.
   refresh requests and watcher rearming.
 - `src/client/AttachedClient.zig` owns ordered resource delivery
   shared by resize and capability observations.
-- `src/client/operations/panes/pane_geometry.zig` owns translation and bounded delivery
+- `src/client/AttachedClient.zig` owns translation and bounded delivery
   of visible attached pane sizes.
 - `src/client/operations/tabs/tab_snapshots.zig` proves
   that a resize attaches only detached panes with content, once each, after a

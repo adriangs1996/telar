@@ -7,11 +7,11 @@ The client owns its prompt, navigation history and disposable projection.
 operations/input/name_prompts.handleInput
   -> operations/workspaces/workspace_creations.request
      -> idle gate, validate name, choose CWD source, retain request size
-     -> request_lifecycle.deliverCreateWorkspace
+     -> AttachedClient.sendCreateWorkspaceRequest
   -> runtime commits workspace/root and replaces this client's attachments
   -> pane_opened(create_workspace continuation)
-  -> entrypoints/server_messages.handleServerMessage
-  -> operations/panes/pane_openings.apply
+  -> entrypoints/AttachedClient.handleServerMessage
+  -> operations/panes/AttachedClient.completePaneOpen
      -> workspace_creations.confirmation
      -> workspace_creations.confirm
         -> Model.replaceWorkspace

@@ -1,10 +1,8 @@
-const pane_splits = @import("../panes/pane_splits.zig");
 const std = @import("std");
 const Axis = @import("../../workspace/layout_support.zig").Axis;
 const pane_focus = @import("../panes/pane_focus.zig");
 const pane_closures = @import("../panes/pane_closures.zig");
 const Direction = @import("../../workspace/layout_support.zig").Direction;
-const pane_geometry = @import("../panes/pane_geometry.zig");
 const copy_modes = @import("../input/copy_modes.zig");
 const pane_viewports = @import("../panes/pane_viewports.zig");
 const agent_threads = @import("../agents/agent_threads.zig");
@@ -49,14 +47,23 @@ pub fn execute(client: *Client, reply: *core.ClientCommand) !void {
         },
         .pane_fullscreen => {
             try focusPane(client, reply.target_id);
-            const changed = try pane_geometry.toggleFullscreen(client, .{ .area = client.geometry().area }) orelse return error.PaneFullscreenUnavailable;
+            const changed = try client.togglePaneFullscreen(
+                .{
+                    .area = client.geometry().area,
+                },
+            ) orelse return error.PaneFullscreenUnavailable;
             reply.value = @intFromBool(changed.fullscreen);
             reply.status = .applied;
         },
         .pane_resize => {
             const direction = std.meta.stringToEnum(Direction, reply.text()) orelse return error.InvalidPaneDirection;
             try focusPane(client, reply.target_id);
-            if (try pane_geometry.resize(client, .{ .direction = direction, .area = client.geometry().area }) == null) {
+            if (try client.resizePane(
+                .{
+                    .direction = direction,
+                    .area = client.geometry().area,
+                },
+            ) == null) {
                 return error.PaneResizeUnavailable;
             }
 
@@ -80,7 +87,12 @@ pub fn execute(client: *Client, reply: *core.ClientCommand) !void {
         .pane_split => {
             const axis = std.meta.stringToEnum(Axis, reply.text()) orelse return error.InvalidSplitAxis;
             try focusPane(client, reply.target_id);
-            if (try pane_splits.request(client, .{ .axis = axis, .area = client.geometry().area }) == null) {
+            if (try client.requestPaneSplit(
+                .{
+                    .axis = axis,
+                    .area = client.geometry().area,
+                },
+            ) == null) {
                 return error.PaneCreationUnavailable;
             }
 
@@ -88,7 +100,12 @@ pub fn execute(client: *Client, reply: *core.ClientCommand) !void {
             reply.status = .admitted;
         },
         .pane_create => {
-            if (try pane_splits.request(client, .{ .axis = .horizontal, .area = client.geometry().area }) == null) {
+            if (try client.requestPaneSplit(
+                .{
+                    .axis = .horizontal,
+                    .area = client.geometry().area,
+                },
+            ) == null) {
                 return error.PaneCreationUnavailable;
             }
 

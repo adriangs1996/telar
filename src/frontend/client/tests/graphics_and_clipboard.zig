@@ -4,7 +4,6 @@ const TerminalClient = @import("../TerminalClient.zig");
 const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const encodeGraphicsSnapshot_module = @import("telar-core").encodeGraphicsSnapshot;
-const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const encodeGraphicsImage_module = @import("telar-core").encodeGraphicsImage;
 const std = @import("std");
@@ -30,7 +29,7 @@ test "a graphics revision break requests a graphics snapshot" {
         .revision = 8,
         .phase = .begin,
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(begin));
+    _ = try client.handleServerMessage(try decodeServer_module(begin));
     const image = try encodeGraphicsImage_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 9,
@@ -42,7 +41,7 @@ test "a graphics revision break requests a graphics snapshot" {
             .byte_len = 3,
         },
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(image));
+    _ = try client.handleServerMessage(try decodeServer_module(image));
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&buffer);
@@ -71,7 +70,7 @@ test "pane graphics commit their cell fallback before presenter observation" {
             .byte_len = 3,
         },
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(encoded));
+    _ = try client.handleServerMessage(try decodeServer_module(encoded));
 
     var committed = version_before;
     committed.pane_graphics += 1;
@@ -108,7 +107,7 @@ test "presenter observes physical graphics without a semantic fallback" {
             .byte_len = 3,
         },
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(encoded));
+    _ = try client.handleServerMessage(try decodeServer_module(encoded));
 
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(@as(u64, 1), host(client).graphics_store.ingressVersion());
@@ -127,7 +126,7 @@ test "presenter observes physical graphics without a semantic fallback" {
         .revision = 4,
         .key = .{ .image_id = 1, .generation = 1 },
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(stale));
+    _ = try client.handleServerMessage(try decodeServer_module(stale));
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(@as(u64, 1), host(client).graphics_store.ingressVersion());
@@ -155,7 +154,7 @@ test "shared graphics mapping failure downgrades before resynchronizing" {
         },
         .name = try ShmNameType.init("/telar-missing"),
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(encoded));
+    _ = try client.handleServerMessage(try decodeServer_module(encoded));
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
@@ -178,7 +177,7 @@ test "runtime stopping and stray history results" {
     const stopping = try encodeRuntimeStopping_module(&payload);
     try std.testing.expectEqual(
         @as(?u8, 0),
-        try server_messages.handleServerMessage(harness.client, try decodeServer_module(stopping)),
+        try harness.client.handleServerMessage(try decodeServer_module(stopping)),
     );
 
     const history = try encodeHistoryResults_module(&payload, .{
@@ -187,7 +186,7 @@ test "runtime stopping and stray history results" {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try server_messages.handleServerMessage(harness.client, try decodeServer_module(history)),
+        try harness.client.handleServerMessage(try decodeServer_module(history)),
     );
     try std.testing.expectEqual(@as(u8, 0), harness.client.model.history_palette.len);
 
@@ -198,7 +197,7 @@ test "runtime stopping and stray history results" {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try server_messages.handleServerMessage(harness.client, try decodeServer_module(suggestion)),
+        try harness.client.handleServerMessage(try decodeServer_module(suggestion)),
     );
     try std.testing.expectEqual(@as(u16, 0), harness.client.model.suggestion.text_len);
 }
@@ -214,7 +213,7 @@ test "a pane clipboard write reaches the host terminal" {
         .pane_id = TestHarness.bootstrap_pane,
         .bytes = "copied",
     });
-    _ = try server_messages.handleServerMessage(harness.client, try decodeServer_module(clipboard));
+    _ = try harness.client.handleServerMessage(try decodeServer_module(clipboard));
 
     try std.testing.expectEqual(
         @as(u64, "\x1b]52;c;Y29waWVk\x07".len),

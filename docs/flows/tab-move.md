@@ -5,12 +5,12 @@ sends captured source/anchor identities and before/after placement. Neither
 predicts the canonical absolute position.
 
 ```text
-operations/input/actions.apply or GUI/TUI tab drag release
+AttachedClient.executeAction or GUI/TUI tab drag release
   -> operations/tabs/tab_moves.request
      -> pending-operation gate, resolve source and optional anchor
-     -> request_lifecycle.deliver(move_tab)
+     -> AttachedClient.sendRuntimeRequest(move_tab)
   -> runtime canonical reorder -> tab_moved
-  -> entrypoints/server_messages.handleServerMessage
+  -> entrypoints/AttachedClient.handleServerMessage
   -> tab_moves.apply
      -> consume and verify exact move continuation
      -> Model.applyTabPosition

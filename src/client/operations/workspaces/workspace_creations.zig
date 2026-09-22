@@ -5,7 +5,6 @@ const OpenedPaneType = @import("../../application/panes/OpenedPane.zig");
 const TerminalSizeType = @import("telar-core").TerminalSize;
 const ConfirmWorkspaceCreationType = @import("../../application/workspaces/ConfirmWorkspaceCreation.zig");
 const workspace_transitions = @import("workspace_transitions.zig");
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const rectSize_module = @import("../../workspace/multiplexer.zig").rectSize;
 const WorkspaceReplacementType = @import("../../model/WorkspaceReplacement.zig");
 
@@ -16,7 +15,7 @@ const PaneIdType = @import("telar-core").PaneId;
 
 /// Validates one request and retains its correlation before delivery. Example: `_ = try request(client, command);`
 pub fn request(client: *Client, command: RequestWorkspaceCreation) !bool {
-    if (request_lifecycle.busy(client)) {
+    if (!client.request_lifecycle.tracker.isEmpty()) {
         return false;
     }
 
@@ -26,7 +25,7 @@ pub fn request(client: *Client, command: RequestWorkspaceCreation) !bool {
     else
         null;
     const request_id = try client.request_lifecycle.nextId();
-    try request_lifecycle.deliverCreateWorkspace(client, .{
+    try client.sendCreateWorkspaceRequest(.{
         .request_id = request_id,
         .size = rectSize_module(client.geometry().area) orelse return error.TerminalTooSmall,
         .name = command.name,

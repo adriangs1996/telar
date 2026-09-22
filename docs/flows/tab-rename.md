@@ -7,9 +7,9 @@ closes only after a locally accepted request; it does not rename the replica.
 operations/input/name_prompts.handleInput
   -> operations/tabs/tab_renames.request
      -> pending-operation gate, validate label, resolve exact target
-     -> request_lifecycle.deliverRename -> owned rename_tab
+     -> AttachedClient.sendTabRenameRequest -> owned rename_tab
   -> runtime canonical rename -> tab_renamed
-  -> entrypoints/server_messages.handleServerMessage
+  -> entrypoints/AttachedClient.handleServerMessage
   -> tab_renames.apply
      -> consume and verify exact rename continuation
      -> Model.renameTab

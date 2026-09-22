@@ -14,7 +14,6 @@ const encodeTabCreated_module = @import("telar-core").encodeTabCreated;
 const decodeServer_module = @import("telar-core").decodeServer;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const encodeTabRenamed_module = @import("telar-core").encodeTabRenamed;
-const server_messages = @import("telar-client").server_messages;
 const encodeTabMoved_module = @import("telar-core").encodeTabMoved;
 const encodeTabClosed_module = @import("telar-core").encodeTabClosed;
 const encodeRequestFailed_module = @import("telar-core").encodeRequestFailed;
@@ -23,12 +22,10 @@ const TabMovedType = @import("telar-core").TabMoved;
 const tab_moves = @import("telar-client").operations.tab_moves;
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 const input_operations = @import("telar-client").operations;
-const client_actions = @import("telar-client").operations.actions;
 const TabMoveDirectionType = @import("telar-core").TabMoveDirection;
 const ChangeType = @import("telar-client").Change;
 const PaneIdType = @import("telar-core").PaneId;
 const capacity_module = @import("telar-client").capacity;
-const active_pane_resources = @import("telar-client").operations.active_pane_resources;
 const TabClosedType = @import("telar-core").TabClosed;
 const tab_closures = @import("telar-client").operations.tab_closures;
 const PaneTargetType = @import("telar-core").PaneTarget;
@@ -186,7 +183,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
         .location = second_location,
         .label = "renamed",
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(renamed));
+    _ = try client.handleServerMessage(try decodeServer_module(renamed));
     try std.testing.expectEqualStrings(
         "renamed",
         client.model.workspace.find(second_location.tab_id).?.labelSlice(),
@@ -209,7 +206,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
         .location = second_location,
         .position = 0,
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(moved));
+    _ = try client.handleServerMessage(try decodeServer_module(moved));
     try std.testing.expectEqual(@as(?usize, 0), client.model.workspace.indexOf(second_location.tab_id));
 
     // Requested close of the active tab: the semantic commit precedes
@@ -233,7 +230,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try server_messages.handleServerMessage(client, try decodeServer_module(closed)),
+        try client.handleServerMessage(try decodeServer_module(closed)),
     );
 
     try std.testing.expectEqual(@as(usize, 1), client.model.workspace.count);
@@ -268,7 +265,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     });
     try std.testing.expectError(
         error.UnexpectedTabClosed,
-        server_messages.handleServerMessage(client, try decodeServer_module(unexpected)),
+        client.handleServerMessage(try decodeServer_module(unexpected)),
     );
 }
 
@@ -331,7 +328,7 @@ test "a failed tab creation preserves the current projection and notifies" {
         .message = "shell launch failed",
     });
 
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(failed));
+    _ = try client.handleServerMessage(try decodeServer_module(failed));
 
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expectEqualDeep(location_before_failure, client.model.activeTabLocation().?);
@@ -419,7 +416,12 @@ test "move tab waits for the canonical response and preserves active identity" {
     const version_before_request = client.model.version();
     const pending_updates_before_request = host(client).presenter.pending_updates;
 
-    _ = try client_actions.apply(client, .{ .move_tab = .previous });
+    _ = try client.executeAction(
+        .{
+            .move_tab = .previous,
+        },
+        .effect,
+    );
 
     try std.testing.expectEqual(@as(?usize, 1), client.model.workspace.indexOf(second.tab_id));
     try std.testing.expectEqualDeep(version_before_request, client.model.version());
@@ -445,7 +447,7 @@ test "move tab waits for the canonical response and preserves active identity" {
         .location = second,
         .position = 0,
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(response));
+    _ = try client.handleServerMessage(try decodeServer_module(response));
 
     try std.testing.expectEqual(@as(?usize, 0), client.model.workspace.indexOf(second.tab_id));
     try std.testing.expectEqual(TestHarness.bootstrap_location.tab_id, client.model.workspace.activeConst().?.location.tab_id);
@@ -472,7 +474,12 @@ test "pending tab operation suppresses a move request" {
     const request_count = client.request_lifecycle.tracker.count;
     const next_request_id = client.request_lifecycle.next_request_id;
 
-    _ = try client_actions.apply(client, .{ .move_tab = .previous });
+    _ = try client.executeAction(
+        .{
+            .move_tab = .previous,
+        },
+        .effect,
+    );
 
     try std.testing.expectEqual(request_count, client.request_lifecycle.tracker.count);
     try std.testing.expectEqual(next_request_id, client.request_lifecycle.next_request_id);
@@ -487,7 +494,12 @@ test "canonical tab move at an edge does not advance or schedule the model" {
     try harness.bootstrap();
     const client = harness.client;
 
-    _ = try client_actions.apply(client, .{ .move_tab = .previous });
+    _ = try client.executeAction(
+        .{
+            .move_tab = .previous,
+        },
+        .effect,
+    );
     try harness.settle();
 
     var message_buffer: [256]u8 = undefined;
@@ -522,7 +534,12 @@ test "tab move response must match the requested identity" {
     const second = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
     const version_before_response = client.model.version();
 
-    _ = try client_actions.apply(client, .{ .move_tab = .previous });
+    _ = try client.executeAction(
+        .{
+            .move_tab = .previous,
+        },
+        .effect,
+    );
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&message_buffer);
@@ -535,7 +552,7 @@ test "tab move response must match the requested identity" {
 
     try std.testing.expectError(
         error.UnexpectedTabMoved,
-        server_messages.handleServerMessage(client, try decodeServer_module(response)),
+        client.handleServerMessage(try decodeServer_module(response)),
     );
 
     try std.testing.expectEqual(@as(?usize, 1), client.model.workspace.indexOf(second.tab_id));
@@ -553,7 +570,12 @@ test "a failed tab move preserves order and notifies" {
     const version_before_failure = client.model.version();
     const active_before_failure = client.model.activeTabLocation().?;
 
-    _ = try client_actions.apply(client, .{ .move_tab = .previous });
+    _ = try client.executeAction(
+        .{
+            .move_tab = .previous,
+        },
+        .effect,
+    );
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&message_buffer);
@@ -564,7 +586,7 @@ test "a failed tab move preserves order and notifies" {
         .message = "tab not found",
     });
 
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(response));
+    _ = try client.handleServerMessage(try decodeServer_module(response));
 
     try std.testing.expectEqual(@as(?usize, 1), client.model.workspace.indexOf(second.tab_id));
     try std.testing.expectEqualDeep(active_before_failure, client.model.activeTabLocation().?);
@@ -592,7 +614,12 @@ test "select tab closes captured paste before detaching and requesting the targe
     const version_before_selection = client.model.version();
     const pending_updates_before_selection = host(client).presenter.pending_updates;
 
-    _ = try client_actions.apply(client, .{ .select_tab = 1 });
+    _ = try client.executeAction(
+        .{
+            .select_tab = 1,
+        },
+        .effect,
+    );
 
     try std.testing.expectEqual(second, client.model.activeTabLocation().?);
     try std.testing.expectEqual(version_before_selection.tabs, client.model.version().tabs);
@@ -635,14 +662,24 @@ test "tab selection offset wraps while full turns remain no-ops" {
     const request_id_before_selection = client.request_lifecycle.next_request_id;
     const pending_updates_before_selection = host(client).presenter.pending_updates;
 
-    _ = try client_actions.apply(client, .{ .select_tab_offset = 2 });
+    _ = try client.executeAction(
+        .{
+            .select_tab_offset = 2,
+        },
+        .effect,
+    );
 
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqualDeep(version_before_selection, client.model.version());
     try std.testing.expectEqual(request_id_before_selection, client.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
-    _ = try client_actions.apply(client, .{ .select_tab_offset = -1 });
+    _ = try client.executeAction(
+        .{
+            .select_tab_offset = -1,
+        },
+        .effect,
+    );
 
     try std.testing.expectEqualDeep(second, client.model.activeTabLocation().?);
     try std.testing.expectEqual(version_before_selection.active_tab + 1, client.model.version().active_tab);
@@ -666,7 +703,12 @@ test "pending tab snapshot suppresses tab selection without effects" {
     const version_before_selection = client.model.version();
     const next_request_id = client.request_lifecycle.next_request_id;
 
-    _ = try client_actions.apply(client, .{ .select_tab = 1 });
+    _ = try client.executeAction(
+        .{
+            .select_tab = 1,
+        },
+        .effect,
+    );
 
     try std.testing.expectEqual(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
@@ -686,7 +728,7 @@ test "close tab request detaches before delivery and rejection requests restorat
     const version_before_request = client.model.version();
     const pending_updates_before_request = host(client).presenter.pending_updates;
 
-    _ = try client_actions.apply(client, .close_tab);
+    _ = try client.executeAction(.close_tab, .effect);
 
     try std.testing.expectEqualDeep(version_before_request, client.model.version());
     try std.testing.expectEqual(pending_updates_before_request, host(client).presenter.pending_updates);
@@ -707,7 +749,7 @@ test "close tab request detaches before delivery and rejection requests restorat
         .code = .internal,
         .message = "close rejected",
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(failed));
+    _ = try client.handleServerMessage(try decodeServer_module(failed));
     try harness.settle();
 
     const recovery = try harness.nextClientMessage(&message_buffer);
@@ -736,7 +778,7 @@ test "close tab capacity failure preserves attachment and request state" {
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        client_actions.apply(client, .close_tab),
+        client.executeAction(.close_tab, .effect),
     );
 
     try std.testing.expectEqual(capacity_module - 1, @as(usize, client.runtime_transport.outbox.len));
@@ -755,7 +797,7 @@ test "close tab reserves its focus-out message" {
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
     client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
-    try active_pane_resources.synchronize(client);
+    try client.synchronizeActivePane();
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const focus_in = try harness.nextClientMessage(&buffer);
@@ -770,7 +812,7 @@ test "close tab reserves its focus-out message" {
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        client_actions.apply(client, .close_tab),
+        client.executeAction(.close_tab, .effect),
     );
 
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -802,7 +844,7 @@ test "close tab reserves its captured paste closing marker" {
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        client_actions.apply(client, .close_tab),
+        client.executeAction(.close_tab, .effect),
     );
 
     try std.testing.expect(client.model.panePasteActive());
@@ -905,7 +947,7 @@ test "late correlated close after lifecycle removal is ignored" {
         .location = second,
         .workspace_closed = false,
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(lifecycle));
+    _ = try client.handleServerMessage(try decodeServer_module(lifecycle));
     const version_after_lifecycle = client.model.version();
 
     const response = try encodeTabClosed_module(&payload, .{
@@ -1038,7 +1080,7 @@ test "closing the last workspace exits the client" {
     });
     try std.testing.expectEqual(
         @as(?u8, 0),
-        try server_messages.handleServerMessage(client, try decodeServer_module(closed)),
+        try client.handleServerMessage(try decodeServer_module(closed)),
     );
     try std.testing.expectEqual(@as(usize, 0), client.model.workspace.count);
     try std.testing.expect(client.model.activeTabLocation() == null);
@@ -1071,7 +1113,7 @@ test "tab removal follows the runtime predecessor after its workspace disappears
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try server_messages.handleServerMessage(client, try decodeServer_module(closed)),
+        try client.handleServerMessage(try decodeServer_module(closed)),
     );
 
     try std.testing.expect(client.model.workspaceLocation() == null);
@@ -1108,7 +1150,7 @@ test "resync follows the runtime predecessor after a workspace disappears" {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try server_messages.handleServerMessage(harness.client, try decodeServer_module(resync)),
+        try harness.client.handleServerMessage(try decodeServer_module(resync)),
     );
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -1143,7 +1185,7 @@ test "resync forgets the final workspace before exiting" {
 
     try std.testing.expectEqual(
         @as(?u8, 0),
-        try server_messages.handleServerMessage(client, try decodeServer_module(resync)),
+        try client.handleServerMessage(try decodeServer_module(resync)),
     );
     try std.testing.expect(
         client.navigation_history.find(TestHarness.bootstrap_location.workspace) == null,

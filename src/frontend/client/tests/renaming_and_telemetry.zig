@@ -11,7 +11,6 @@ const presentation_lifecycle = @import("../presentation/presentation_lifecycle.z
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 const input_operations = @import("telar-client").operations;
 const encodeWorkspaceSnapshot_module = @import("telar-core").encodeWorkspaceSnapshot;
-const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const TabRenamedType = @import("telar-core").TabRenamed;
 const tab_renames = @import("telar-client").operations.tab_renames;
@@ -72,7 +71,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
             .{ .tab_id = TestHarness.bootstrap_location.tab_id, .position = 0, .pane_count = 1, .label = "" },
         },
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(renamed));
+    _ = try client.handleServerMessage(try decodeServer_module(renamed));
 
     try std.testing.expectEqualStrings("mainx", client.model.workspace.workspaceName());
     try std.testing.expectEqual(version_before_request.workspace + 1, client.model.version().workspace);
@@ -100,7 +99,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
             .{ .tab_id = TestHarness.bootstrap_location.tab_id, .position = 0, .pane_count = 1, .label = "" },
         },
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(unchanged));
+    _ = try client.handleServerMessage(try decodeServer_module(unchanged));
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
@@ -273,7 +272,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
         .location = message.rename_tab.location,
         .label = "canonical",
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(renamed));
+    _ = try client.handleServerMessage(try decodeServer_module(renamed));
     @memset(&payload, 'x');
 
     try std.testing.expectEqualStrings("canonical", client.model.workspace.activeConst().?.labelSlice());
@@ -296,7 +295,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
         .location = TestHarness.bootstrap_location,
         .label = "canonical",
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(unchanged));
+    _ = try client.handleServerMessage(try decodeServer_module(unchanged));
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
@@ -329,7 +328,7 @@ test "tab rename response must match the requested identity" {
 
     try std.testing.expectError(
         error.UnexpectedTabRenamed,
-        server_messages.handleServerMessage(client, try decodeServer_module(response)),
+        client.handleServerMessage(try decodeServer_module(response)),
     );
 
     try std.testing.expectEqualStrings("shell", client.model.workspace.activeConst().?.labelSlice());
@@ -358,7 +357,7 @@ test "a failed tab rename preserves the label and notifies" {
         .message = "tab not found",
     });
 
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(response));
+    _ = try client.handleServerMessage(try decodeServer_module(response));
 
     try std.testing.expectEqualStrings("shell", client.model.workspace.activeConst().?.labelSlice());
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());

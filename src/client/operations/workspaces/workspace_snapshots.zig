@@ -2,11 +2,9 @@
 
 const Client = @import("../../AttachedClient.zig");
 const WorkspaceSnapshotViewType = @import("telar-core").WorkspaceSnapshotView;
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const std = @import("std");
 const max_tabs_per_workspace = @import("telar-core").max_tabs_per_workspace;
 const WorkspaceTabInputType = @import("../../workspace/WorkspaceTabInput.zig");
-const active_pane_resources = @import("../panes/active_pane_resources.zig");
 const PaneForeground = @import("telar-core").PaneForeground;
 const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
 
@@ -14,7 +12,7 @@ const pane_resources = @import("../panes/pane_resources.zig");
 
 /// Applies correlated canonical state, retires resources and repairs active geometry. Example: `try apply(client, snapshot);`
 pub fn apply(client: *Client, snapshot: WorkspaceSnapshotViewType) !void {
-    const continuation = request_lifecycle.consume(client, snapshot.request_id) orelse
+    const continuation = client.request_lifecycle.tracker.take(snapshot.request_id) orelse
         return error.UnexpectedWorkspaceSnapshot;
     const expected_workspace = switch (continuation) {
         .workspace_snapshot => |workspace| workspace,
@@ -60,7 +58,7 @@ pub fn apply(client: *Client, snapshot: WorkspaceSnapshotViewType) !void {
         .tabs = tabs[0..tab_count],
     });
     for (reconciliation.removed_tabs.slice()) |location| {
-        request_lifecycle.ignoreTab(client, location.tab_id);
+        client.request_lifecycle.tracker.ignoreTab(location.tab_id);
     }
 
     for (reconciliation.removed_panes.slice()) |pane_id| {
@@ -75,15 +73,15 @@ pub fn apply(client: *Client, snapshot: WorkspaceSnapshotViewType) !void {
             try client.graphics.setPaneVisible(pane.id, true);
         }
 
-        try active_pane_resources.synchronize(client);
+        try client.synchronizeActivePane();
     }
 
-    if (request_lifecycle.has(client, .tab_snapshot)) {
+    if (client.request_lifecycle.tracker.has(.tab_snapshot)) {
         return;
     }
 
     if (reconciliation.active_tab_changed or !reconciliation.active_snapshot_loaded) {
-        try request_lifecycle.requestTabSnapshot(client, reconciliation.active);
+        try client.requestTabSnapshot(reconciliation.active);
         return;
     }
 

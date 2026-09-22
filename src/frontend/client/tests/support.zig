@@ -25,7 +25,6 @@ const TargetType = @import("telar-client").AttachmentTarget;
 const AgentProviderType = @import("telar-core").AgentProvider;
 const AgentInputType = @import("telar-client").AgentInput;
 const builtin_table_module = @import("telar-core").builtin_table;
-const active_pane_resources = @import("telar-client").operations.active_pane_resources;
 const ClipboardCaptureType = @import("telar-client").ClipboardCapture;
 const CaptureType = @import("telar-client").Capture;
 
@@ -304,7 +303,7 @@ pub fn installTestingAttachmentProvider(client: *Client, generation: u64, provid
             .status = .working,
         }},
     });
-    _ = try active_pane_resources.synchronizeAttachments(client);
+    _ = try client.synchronizePaneAttachments();
 
     return target;
 }

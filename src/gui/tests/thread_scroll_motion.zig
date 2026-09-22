@@ -29,7 +29,7 @@ fn fixture() !*Session {
     @memcpy(snapshot.text_storage[0..text.len], text);
     var wire: [65536]u8 = undefined;
     const encoded = try core.encodeAgentThreadSnapshot(&wire, &snapshot);
-    _ = try client.server_messages.handleServerMessage(&session.gui.app, try core.decodeServer(encoded));
+    _ = try session.gui.app.handleServerMessage(try core.decodeServer(encoded));
     try publish(session);
     return session;
 }
@@ -96,7 +96,7 @@ fn addAgentPane(session: *Session) !void {
     snapshot.pane_generation = 78;
     var wire: [65536]u8 = undefined;
     const encoded = try core.encodeAgentThreadSnapshot(&wire, &snapshot);
-    _ = try client.server_messages.handleServerMessage(&session.gui.app, try core.decodeServer(encoded));
+    _ = try session.gui.app.handleServerMessage(try core.decodeServer(encoded));
     try publish(session);
 }
 
@@ -354,7 +354,7 @@ test "animated return to the live tail adopts the latest snapshot without anothe
     snapshot.item_storage[0].text_len += appended.len;
     var wire: [65536]u8 = undefined;
     const encoded = try core.encodeAgentThreadSnapshot(&wire, &snapshot);
-    _ = try client.server_messages.handleServerMessage(&session.gui.app, try core.decodeServer(encoded));
+    _ = try session.gui.app.handleServerMessage(try core.decodeServer(encoded));
     try std.testing.expectEqual(@as(u64, 1), window.live_revision);
     try std.testing.expectEqual(@as(f64, 1), pane.transcript_scroll);
 

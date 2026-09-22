@@ -13,11 +13,9 @@ const decodeClient_module = @import("telar-core").decodeClient;
 const PaneIdType = @import("telar-core").PaneId;
 const RequestIdType = @import("telar-core").RequestId;
 const encodeTabSnapshot_module = @import("telar-core").encodeTabSnapshot;
-const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const TabLocationType = @import("telar-core").TabLocation;
 const initial_request_id_module = @import("telar-client").initial_request_id;
-const request_lifecycle = @import("telar-client").request_lifecycle;
 const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
 const TabIdType = @import("telar-core").TabId;
 const TabsModel = @import("telar-client").TabsModel;
@@ -193,7 +191,7 @@ pub fn discoverAndRequestAttachment(harness: *TestHarness, pane_id: PaneIdType, 
             .{ .pane_id = pane_id, .lifecycle = .running },
         },
     });
-    _ = try server_messages.handleServerMessage(harness.client, try decodeServer_module(snapshot));
+    _ = try harness.client.handleServerMessage(try decodeServer_module(snapshot));
     try harness.settle();
 
     return harness.nextAttachmentRequest(pane_id, buffer);
@@ -209,7 +207,12 @@ pub const bootstrap_pane: PaneIdType = @enumFromInt(10);
 /// the client with one attached pane and its two snapshot requests (ids
 /// 2 and 3) delivered to the peer.
 pub fn bootstrap(harness: *TestHarness) !void {
-    try std.testing.expectEqual(initial_request_id_module, try request_lifecycle.registerInitial(harness.client));
+    try harness.client.request_lifecycle.tracker.add(
+        initial_request_id_module,
+        .{
+            .initial_open = .{},
+        },
+    );
     var payload: [128]u8 = undefined;
     const opened = try encodePaneOpened_module(&payload, .{
         .request_id = initial_request_id_module,
@@ -219,7 +222,7 @@ pub fn bootstrap(harness: *TestHarness) !void {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try server_messages.handleServerMessage(harness.client, try decodeServer_module(opened)),
+        try harness.client.handleServerMessage(try decodeServer_module(opened)),
     );
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -258,7 +261,7 @@ pub fn addInactiveTab(harness: *TestHarness, tab_id: TabIdType, pane_id: PaneIdT
 }
 
 pub fn allowTabSelection(harness: *TestHarness) !void {
-    const continuation = request_lifecycle.consume(harness.client, @enumFromInt(3)) orelse
+    const continuation = harness.client.request_lifecycle.tracker.take(@enumFromInt(3)) orelse
         return error.MissingBootstrapTabSnapshot;
     try std.testing.expect(continuation == .tab_snapshot);
 }

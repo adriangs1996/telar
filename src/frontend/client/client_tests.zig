@@ -5,7 +5,6 @@
 
 const Client = @import("telar-client").AttachedClient;
 const events = @import("entrypoints/events.zig");
-const runtime_messages = @import("telar-client").server_messages;
 const run = @import("run.zig");
 const std = @import("std");
 const Action = @import("telar-client").Action;
@@ -39,7 +38,6 @@ test {
     _ = @import("tests/tab_lifecycle.zig");
     _ = @import("tests/transport.zig");
     _ = @import("tests/workspace_lifecycle.zig");
-    _ = runtime_messages;
     _ = @import("presentation/Presenter.zig");
     _ = @import("presentation/history_inspection.zig");
     _ = @import("presentation/presentation_lifecycle.zig");

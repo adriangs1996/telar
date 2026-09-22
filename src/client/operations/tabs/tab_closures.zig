@@ -3,12 +3,10 @@
 const Client = @import("../../AttachedClient.zig");
 const TabClosedType = @import("telar-core").TabClosed;
 const RemovalTriggerType = @import("../../application/tabs/close_tab.zig").RemovalTrigger;
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const std = @import("std");
 const TabLocationType = @import("telar-core").TabLocation;
 const tab_attachments = @import("tab_attachments.zig");
 const TabCloseIntentType = @import("../../application/tabs/TabCloseIntent.zig");
-const active_pane_resources = @import("../panes/active_pane_resources.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 
 const tab_snapshots = @import("tab_snapshots.zig");
@@ -21,13 +19,13 @@ pub const Outcome = enum { applied, ignored, exit };
 
 /// Preflights all deliveries before detaching; failure requests canonical recovery. Example: `_ = try request(client);`
 pub fn request(client: *Client) !bool {
-    if (request_lifecycle.has(client, .tab_operation)) {
+    if (client.request_lifecycle.tracker.has(.tab_operation)) {
         return false;
     }
 
     const location = client.model.activeTabLocation() orelse return false;
     const plan = try client.model.planTabDetachment(location);
-    try request_lifecycle.ensureCanStart(client, 2);
+    try client.request_lifecycle.ensureCanStart(2);
     if (1 + tab_attachments.requiredCapacity(client, &plan) > client.runtime_transport.outbox.availableCapacity()) {
         return error.ClientOutboxFull;
     }
@@ -60,7 +58,7 @@ pub fn apply(client: *Client, closed: TabClosedType) !Outcome {
     const trigger: RemovalTriggerType = if (closed.request_id == .none)
         .lifecycle
     else requested: {
-        const continuation = request_lifecycle.consume(client, closed.request_id) orelse
+        const continuation = client.request_lifecycle.tracker.take(closed.request_id) orelse
             return error.UnexpectedTabClosed;
         const expected_location = switch (continuation) {
             .close_tab => |location| location,
@@ -91,12 +89,12 @@ pub fn apply(client: *Client, closed: TabClosedType) !Outcome {
 
     const removal = switch (commit) {
         .stale => |stale| {
-            request_lifecycle.ignoreTab(client, stale.location.tab_id);
+            client.request_lifecycle.tracker.ignoreTab(stale.location.tab_id);
             return .applied;
         },
         .removed => |removed| removed,
     };
-    request_lifecycle.ignoreTab(client, removal.removed.tab_id);
+    client.request_lifecycle.tracker.ignoreTab(removal.removed.tab_id);
     for (removal.panes.slice()) |pane_id| {
         pane_resources.release(client, pane_id);
     }
@@ -110,7 +108,7 @@ pub fn apply(client: *Client, closed: TabClosedType) !Outcome {
                 try client.graphics.setPaneVisible(pane.id, true);
             }
 
-            try active_pane_resources.synchronize(client);
+            try client.synchronizeActivePane();
             _ = try tab_snapshots.recover(client, location);
         }
     }
@@ -128,7 +126,7 @@ pub fn apply(client: *Client, closed: TabClosedType) !Outcome {
 fn send(client: *Client, intent: TabCloseIntentType) !void {
     const request_id = try client.request_lifecycle.nextId();
 
-    try request_lifecycle.deliver(client, .{
+    try client.sendRuntimeRequest(.{
         .registration = .{
             .request_id = request_id,
             .continuation = .{ .close_tab = intent.location },

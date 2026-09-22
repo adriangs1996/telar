@@ -11,9 +11,7 @@ const host_inputs = @import("../controllers/input/host_inputs.zig");
 const PointerShapeType = @import("telar-core").PointerShape;
 const CellType = @import("telar-core").Cell;
 const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
-const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
-const client_actions = @import("telar-client").operations.actions;
 const supportsSharedMemory_module = @import("telar-client").supportsSharedMemory;
 const host_resizes = @import("../controllers/host/host_resizes.zig");
 const ShmNameType = @import("telar-core").ShmName;
@@ -170,7 +168,7 @@ test "host pointer shape follows semantic hover through paced presentation" {
             .scroll = .{ .total_rows = 1, .offset = 0 },
             .spans = if (index == 0) &.{.{ .start = 0, .cells = &cells }} else &.{},
         });
-        _ = try server_messages.handleServerMessage(client, try decodeServer_module(encoded));
+        _ = try client.handleServerMessage(try decodeServer_module(encoded));
         try presentation_lifecycle.observe(client);
         try harness.settleModelPresentation();
         try std.testing.expectEqual(shape, host(client).presenter.screen.presented_mouse_pointer.?);
@@ -181,7 +179,7 @@ test "host pointer shape follows semantic hover through paced presentation" {
     try harness.settleModelPresentation();
     try std.testing.expectEqual(PointerShapeType.pointer, host(client).presenter.screen.presented_mouse_pointer.?);
 
-    _ = try client_actions.apply(client, .enter_copy_mode);
+    _ = try client.executeAction(.enter_copy_mode, .effect);
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     try host_inputs.mouse(client, .{ .x = host(client).view.regions.workbench.x, .y = host(client).view.regions.workbench.y, .kind = .move });
@@ -313,13 +311,13 @@ test "shared pane graphics reach the host inside the cell frame" {
         .image = image,
         .name = name,
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(shared));
+    _ = try client.handleServerMessage(try decodeServer_module(shared));
     const placement = try encodeGraphicsPlacement_module(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 1,
         .placement = .{ .key = image.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(placement));
+    _ = try client.handleServerMessage(try decodeServer_module(placement));
     try presentation_lifecycle.observe(client);
     try std.testing.expect(host(client).presenter.draw_pending);
     try harness.settleModelPresentation();
@@ -430,6 +428,6 @@ fn receiveCellFrame(harness: *TestHarness, frame_id: u64) !void {
         .scroll = .{ .total_rows = 2, .offset = 0 },
         .spans = &.{.{ .start = 0, .cells = if (frame_id == 1) &cells else cells[0..1] }},
     });
-    _ = try server_messages.handleServerMessage(harness.client, try decodeServer_module(payload));
+    _ = try harness.client.handleServerMessage(try decodeServer_module(payload));
     @memset(&wire, 0xff);
 }

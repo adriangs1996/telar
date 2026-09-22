@@ -26,10 +26,8 @@ const host_inputs = @import("../controllers/input/host_inputs.zig");
 const input_operations = @import("telar-client").operations;
 const Action = @import("telar-client").Action;
 const ControlType = @import("telar-client").Control;
-const client_actions = @import("telar-client").operations.actions;
 const CaptureType = @import("telar-client").Capture;
 const clipboard_images = @import("telar-client").operations.clipboard_images;
-const active_pane_resources = @import("telar-client").operations.active_pane_resources;
 
 test "config reload outcomes that carry no new generation" {
     var harness: TestHarness = undefined;
@@ -486,13 +484,29 @@ test "name prompt suppresses a configured action before source dispatch" {
         .{ .plugin = .{ .plugin = 1, .action = 1 } },
     };
     for (suppressed) |action| {
-        const control = try input_operations.action_routing.apply(client, action);
+        const control = try client.executeAction(action, .binding);
         try std.testing.expect(control == .continue_routing);
         try std.testing.expect(client.model.name_prompt.active());
         try std.testing.expect(client.model.sidebarVisible());
         try std.testing.expectEqualDeep(version, client.model.version());
         try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
     }
+}
+
+test "validated native effects preserve their authority while a name prompt is open" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    try std.testing.expect(name_prompts.beginActiveTabRename(client));
+    try std.testing.expect(client.model.sidebarVisible());
+
+    _ = try client.executeAction(.toggle_sidebar, .binding);
+    try std.testing.expect(client.model.sidebarVisible());
+    _ = try client.executeAction(.toggle_sidebar, .effect);
+    try std.testing.expect(!client.model.sidebarVisible());
+    try std.testing.expect(client.model.name_prompt.active());
 }
 
 test "Lua callback applies a validated batch through model observation" {
@@ -523,7 +537,7 @@ test "Lua callback applies a validated batch through model observation" {
     const version_before = client.model.version();
     const pending_before = host(client).presenter.pending_updates;
 
-    const control = try input_operations.action_routing.apply(client, configured);
+    const control = try client.executeAction(configured, .binding);
 
     try std.testing.expect(control == .continue_routing);
     try std.testing.expect(client.model.workspaceListCollapsed());
@@ -566,7 +580,7 @@ test "Lua callback validates every plugin reference before native effects" {
     const version_before = client.model.version();
     const pending_before = host(client).presenter.pending_updates;
 
-    const control = try input_operations.action_routing.apply(client, configured);
+    const control = try client.executeAction(configured, .binding);
 
     try std.testing.expect(control == .continue_routing);
     try std.testing.expect(client.model.sidebarVisible());
@@ -608,7 +622,7 @@ test "Lua expression emits semantic keys through pane input" {
     const version_before = client.model.version();
     const pending_before = host(client).presenter.pending_updates;
 
-    const control = try input_operations.action_routing.apply(client, configured);
+    const control = try client.executeAction(configured, .binding);
 
     try std.testing.expect(control == .continue_routing);
     try std.testing.expectEqualDeep(version_before, client.model.version());
@@ -645,7 +659,7 @@ test "Lua expression paste uses pane modes and copy-mode authority" {
     );
     const version = client.model.version();
 
-    try std.testing.expectEqual(ControlType.continue_routing, try input_operations.action_routing.apply(client, configured));
+    try std.testing.expectEqual(ControlType.continue_routing, try client.executeAction(configured, .binding));
     try std.testing.expectEqualDeep(version, client.model.version());
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -654,10 +668,10 @@ test "Lua expression paste uses pane modes and copy-mode authority" {
     try std.testing.expectEqual(TestHarness.bootstrap_pane, message.pane_input.pane_id);
     try std.testing.expectEqualStrings("\x1b[200~hello\x1b[201~", message.pane_input.bytes);
 
-    _ = try client_actions.apply(client, .enter_copy_mode);
+    _ = try client.executeAction(.enter_copy_mode, .effect);
     const copy_version = client.model.version();
     const outbox_len = client.runtime_transport.outbox.len;
-    try std.testing.expectEqual(ControlType.continue_routing, try input_operations.action_routing.apply(client, configured));
+    try std.testing.expectEqual(ControlType.continue_routing, try client.executeAction(configured, .binding));
 
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expectEqualDeep(copy_version, client.model.version());
@@ -686,7 +700,7 @@ test "Lua callback failure commits one diagnostic without direct presentation" {
     const version_before = client.model.version();
     const pending_before = host(client).presenter.pending_updates;
 
-    const control = try input_operations.action_routing.apply(client, configured);
+    const control = try client.executeAction(configured, .binding);
 
     try std.testing.expect(control == .continue_routing);
     try std.testing.expect(std.mem.indexOf(
@@ -825,7 +839,7 @@ test "clipboard image from a retired agent target is consumed and freed" {
     const completed = try support.testingClipboardCapture(client, execution, "private png");
 
     _ = try client.model.reconcileAgentSnapshot(.{ .revision = 2, .agents = &.{} });
-    _ = try active_pane_resources.synchronizeAttachments(client);
+    _ = try client.synchronizePaneAttachments();
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const version_before = client.model.version();

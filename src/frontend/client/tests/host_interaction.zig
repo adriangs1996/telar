@@ -15,7 +15,6 @@ const capacity_module = @import("telar-client").capacity;
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 const input_operations = @import("telar-client").operations;
 const encodeGraphicsImage_module = @import("telar-core").encodeGraphicsImage;
-const server_messages = @import("telar-client").server_messages;
 const decodeServer_module = @import("telar-core").decodeServer;
 const capabilities_module = @import("../../graphics/capabilities.zig");
 const SupportType = @import("telar-client").Support;
@@ -24,7 +23,6 @@ const client_events = @import("../entrypoints/events.zig");
 const support = @import("support.zig");
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
 const parseKey_module = @import("telar-client").parseKey;
-const client_actions = @import("telar-client").operations.actions;
 const ActionType = @import("telar-client").Action;
 const ControlType = @import("telar-client").Control;
 const name_prompts = @import("telar-client").operations.name_prompts;
@@ -349,7 +347,7 @@ test "a Kitty capability response commits before fallback projection and present
             .byte_len = 3,
         },
     });
-    _ = try server_messages.handleServerMessage(client, try decodeServer_module(encoded));
+    _ = try client.handleServerMessage(try decodeServer_module(encoded));
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.graphics_placeholder);
     const version = client.model.version();
     const pending_updates = host(client).presenter.pending_updates;
@@ -587,17 +585,27 @@ test "native scroll actions reuse bounded viewport delivery without forwarding i
     const pending_updates = host(client).presenter.pending_updates;
 
     for (0..4) |_| {
-        _ = try client_actions.apply(client, try ActionType.parse("scroll-pane-up"));
+        _ = try client.executeAction(try ActionType.parse("scroll-pane-up"), .effect);
     }
 
     try std.testing.expectEqual(@as(u32, 0), pane.scroll.offset);
-    _ = try client_actions.apply(client, .{ .scroll_pane = .up });
+    _ = try client.executeAction(
+        .{
+            .scroll_pane = .up,
+        },
+        .effect,
+    );
 
     for (0..4) |_| {
-        _ = try client_actions.apply(client, try ActionType.parse("scroll-pane-down"));
+        _ = try client.executeAction(try ActionType.parse("scroll-pane-down"), .effect);
     }
 
-    _ = try client_actions.apply(client, .{ .scroll_pane = .down });
+    _ = try client.executeAction(
+        .{
+            .scroll_pane = .down,
+        },
+        .effect,
+    );
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
     try std.testing.expectEqual(version.viewport + 8, client.model.version().viewport);
     try support.expectNonViewportVersionEqual(version, client.model.version());
@@ -657,7 +665,7 @@ test "copy mode round trip: enter, select, copy, leave" {
 
     try std.testing.expectEqual(
         ControlType.continue_routing,
-        try client_actions.apply(client, .enter_copy_mode),
+        try client.executeAction(.enter_copy_mode, .effect),
     );
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expect(!key_captures(client.keyRoutingAuthority()));
@@ -750,7 +758,7 @@ test "copy-mode o opens a file URI in an editor tab without leaving the mode" {
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "file:///tmp/a%20b.txt", .style = .{} });
     pane.cursor = .{ .visible = true, .x = 12, .y = 0 };
 
-    _ = try client_actions.apply(client, .enter_copy_mode);
+    _ = try client.executeAction(.enter_copy_mode, .effect);
     const version = client.model.version();
     try host_inputs.key(client, try parseKey_module("o"));
 
@@ -813,14 +821,14 @@ test "native action preflight retires copy mode before concrete delivery" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    _ = try client_actions.apply(client, .enter_copy_mode);
+    _ = try client.executeAction(.enter_copy_mode, .effect);
     const version = client.model.version();
 
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expect(client.model.sidebarVisible());
     try std.testing.expectEqual(
         ControlType.continue_routing,
-        try client_actions.apply(client, .toggle_sidebar),
+        try client.executeAction(.toggle_sidebar, .effect),
     );
 
     var expected = version;
@@ -838,7 +846,7 @@ test "copy-mode pointer consumes outside wheels and exits a missing target" {
     try harness.bootstrap();
     const client = harness.client;
     const model = &client.model.workspace.active().?.model;
-    _ = try client_actions.apply(client, .enter_copy_mode);
+    _ = try client.executeAction(.enter_copy_mode, .effect);
     const active_version = client.model.version();
 
     try host_inputs.mouse(client, .{
@@ -870,7 +878,7 @@ test "a full outbox keeps copy mode and its selection active" {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
 
-    _ = try client_actions.apply(client, .enter_copy_mode);
+    _ = try client.executeAction(.enter_copy_mode, .effect);
     try host_inputs.key(client, try parseKey_module("v"));
     const version = client.model.version();
 

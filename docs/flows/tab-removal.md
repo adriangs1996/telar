@@ -5,15 +5,15 @@ fact. The same path handles the lifecycle event after a tab loses its final
 pane.
 
 ```text
-operations/input/actions.apply
+AttachedClient.executeAction
   -> operations/tabs/tab_closures.request
      -> pending-operation gate and active location
      -> reserve close/recovery IDs and outbox capacity
      -> tab_attachments.detach
-     -> request_lifecycle.deliver(close_tab)
+     -> AttachedClient.sendRuntimeRequest(close_tab)
 
 runtime tab_closed
-  -> entrypoints/server_messages.handleServerMessage
+  -> entrypoints/AttachedClient.handleServerMessage
   -> tab_closures.apply
      -> correlate explicit reply or classify lifecycle event
      -> Model.removeTab

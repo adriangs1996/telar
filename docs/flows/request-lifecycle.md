@@ -16,6 +16,10 @@ Generated identities start at 2 because bootstrap owns identity 1. Zero marks
 an autonomous runtime lifecycle message, and `maxInt(u64)` is a terminal
 sentinel rather than a reusable identity.
 
+Queries, consumption and retirement call the tracker directly. No request
+registry method receives an `AttachedClient`. The connection owner coordinates
+registration with transport; the tracker only owns bounded correlation data.
+
 This state does not decide whether a tab move, pane split or snapshot is valid.
 Each operation constructs its protocol message and validates the matching
 response. It translates accepted wire values into model commands in the same
@@ -32,27 +36,28 @@ check one tracker slot and request-ID space
         |
 operation constructs message and Continuation
         |
-request_lifecycle.deliver
+AttachedClient.sendRuntimeRequest
         |
-Tracker.add -> AttachedClient.sendRuntime
+Tracker.add -> outbox owned copy -> startRuntimeSend
         |
 local rejection -> Tracker.take rollback
 ```
 
 The client loop is single threaded, so identity allocation and delivery cannot
-interleave with another request start. `deliver` registers the continuation
+interleave with another request start. `AttachedClient.sendRuntimeRequest` registers the continuation
 before it gives the message to transport. If bounded copying or outbox capacity
-rejects the message, `deliver` removes that continuation. It does not reuse the
+rejects the message, the sender removes that continuation. It does not reuse the
 identity.
 
-Renames, launches and notifications use delivery functions that call the
-outbox's owned-copy entrypoints. Fixed-size requests use `deliver` directly.
+Renames, launches, prompts and notifications use methods on `AttachedClient`
+that register correlation, copy the payload into the outbox, and start its write.
+The old separate uncorrelated send methods have been removed. Fixed-size requests use `sendRuntimeRequest` directly.
 The request lifecycle never borrows text beyond the synchronous call.
 
 Tab close and workspace handoff preflight two consecutive identities. Their
 failure paths may request a canonical tab snapshot after provisional attachment
 delivery fails.
-`ensureCanStart(client, 2)` proves both identities and one tracker slot exist
+`client.request_lifecycle.ensureCanStart(2)` proves both identities and one tracker slot exist
 before provisional attachment effects begin.
 
 `RuntimeTransportState.bootstrap` queues graphics/color configuration and the
@@ -69,7 +74,7 @@ AttachedClient.receiveRuntime
         |
 decoded terminal response
         |
-operation -> request_lifecycle.consume(request_id)
+operation -> Tracker.take(request_id)
         |
 typed Continuation
         |
@@ -78,11 +83,11 @@ verify request kind and exact target
 operation
 ```
 
-`consume` removes a known continuation before the operation validates its type or
+`Tracker.take` removes a known continuation before the operation validates its type or
 target. An incompatible, malformed or replayed terminal response therefore
 cannot reuse the same request. An unknown identity is a protocol error.
 
-Runtime `request_failed` follows the same rule. `request_failures.apply` consumes the
+Runtime `request_failed` follows the same rule. `AttachedClient.failRuntimeRequest` consumes the
 continuation once, then chooses recovery, notification or
 fatal client shutdown.
 
@@ -121,6 +126,8 @@ snapshots.
 - `request delivery rolls correlation back when transport is full` in
   `src/frontend/client/tests/` crosses the public request and transport
   boundaries and proves transactional rollback.
+- `owned request deliveries roll back only their own correlation when the outbox is full`
+  checks all six variable-payload send paths and preserves an unrelated request.
 - Bootstrap and the request-specific client tests prove exact wire identity,
   owned payload delivery, incompatible continuation rejection and late-response
   handling.
