@@ -1,6 +1,7 @@
 //! One three-row agent card: project and status, a regular-weight title,
 //! then the live event while working or the workspace branch at rest. The card paints only;
 //! the sidebar owns its position, its hit target and its clipping.
+const data = @import("model");
 const action_module = @import("action.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -21,7 +22,7 @@ pub const provider_alpha: f32 = 0.6;
 
 context: *const Context,
 bounds: Rect,
-agent: *const client.Agent,
+agent: *const data.Agent,
 geometry: CardGeometry,
 /// Seconds the status has held, including the time since the snapshot arrived.
 age_s: u32,
@@ -225,6 +226,6 @@ fn providerGlyph(card: AgentCard) []const u8 {
         return card.agent.iconGlyph();
     }
 
-    const icon = client.Icon.forProvider(card.agent.provider) orelse .provider_unknown;
+    const icon = data.icons.Icon.forProvider(card.agent.provider) orelse .provider_unknown;
     return icon.unicodeGlyph();
 }

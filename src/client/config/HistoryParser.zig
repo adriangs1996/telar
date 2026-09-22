@@ -3,7 +3,6 @@ const lua_api = @import("lua-api");
 const RuntimeSnapshotType = @import("RuntimeSnapshot.zig");
 const value = @import("lua_value.zig");
 const std = @import("std");
-const config_model = @import("model.zig");
 const history = @import("history.zig");
 const Parser = @This();
 
@@ -46,7 +45,7 @@ pub fn parsePath(parser: *Parser, absolute: c_int) !void {
         parser.diagnostic.set("config.runtime.history.path must be a string", .{});
         return error.InvalidConfig;
     };
-    if (path.len == 0 or path.len > config_model.max_history_path_bytes or std.mem.indexOfScalar(u8, path, 0) != null) {
+    if (path.len == 0 or path.len > data.config_values.max_history_path_bytes or std.mem.indexOfScalar(u8, path, 0) != null) {
         parser.diagnostic.set("config.runtime.history.path is invalid", .{});
         return error.InvalidConfig;
     }

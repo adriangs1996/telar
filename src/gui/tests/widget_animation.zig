@@ -1,3 +1,4 @@
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -14,7 +15,7 @@ test "a blocked pane animates without working agents and folds a rejected and la
     const second: core.PaneId = @enumFromInt(20);
     try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
     _ = model.layout.focusPane(Session.pane_id);
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &.{.{
         .key = .{ .pane_id = second, .pane_generation = 1 },
         .location = Session.location,

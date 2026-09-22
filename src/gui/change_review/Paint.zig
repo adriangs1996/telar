@@ -1,3 +1,4 @@
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -25,7 +26,7 @@ cursor_height: f32 = 0,
 pub fn draw(self: *Self) !void {
     const w = self.widget;
     const canvas = self.canvas;
-    canvas.theme = w.theme_override orelse client.theme_support.builtin(w.theme);
+    canvas.theme = w.theme_override orelse data.theme_support.builtin(w.theme);
     const width: f32 = @floatFromInt(canvas.viewport[0]);
     const height: f32 = @floatFromInt(canvas.viewport[1]);
     const p = canvas.chrome;

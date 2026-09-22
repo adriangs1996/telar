@@ -2,13 +2,8 @@
 const data = @import("model");
 const lua_api = @import("lua-api");
 const core = @import("telar-core");
-const role_module = @import("../syntax/role.zig");
 const std = @import("std");
 const value = @import("lua_value.zig");
-const Theme = @import("../appearance/Theme.zig");
-const TerminalTheme = @import("../appearance/TerminalTheme.zig");
-const Overrides = @import("../appearance/Overrides.zig");
-const themes = @import("../appearance/theme_support.zig");
 const Parser = @This();
 
 state: *lua_api.c.lua_State,
@@ -16,7 +11,7 @@ diagnostic: *data.Diagnostic,
 
 /// Selects the root/profile theme. The old client spelling is an exclusive alias.
 /// Example: `snapshot.theme = try parser.select(snapshot.theme);`
-pub fn select(parser: Parser, initial: Theme) !Theme {
+pub fn select(parser: Parser, initial: data.ColorTheme) !data.ColorTheme {
     const parent = lua_api.c.lua_absindex(parser.state, -1);
     _ = lua_api.c.lua_getfield(parser.state, parent, "theme");
     const primary = lua_api.c.lua_absindex(parser.state, -1);
@@ -45,10 +40,10 @@ pub fn select(parser: Parser, initial: Theme) !Theme {
 
 /// A name/base replaces the preset; a table without base overlays inherited values.
 /// Example: `const theme = try parser.parse(-1, parent_theme);`
-pub fn parse(parser: Parser, index: c_int, initial: Theme) !Theme {
+pub fn parse(parser: Parser, index: c_int, initial: data.ColorTheme) !data.ColorTheme {
     const absolute = lua_api.c.lua_absindex(parser.state, index);
     if (value.string(parser.state, absolute)) |name| {
-        return themes.fromName(name) orelse {
+        return data.theme_support.fromName(name) orelse {
             parser.diagnostic.set("unknown theme '{s}'", .{name});
             return error.InvalidConfig;
         };
@@ -63,7 +58,7 @@ pub fn parse(parser: Parser, index: c_int, initial: Theme) !Theme {
     _ = lua_api.c.lua_getfield(parser.state, absolute, "base");
     if (lua_api.c.lua_type(parser.state, -1) != lua_api.c.LUA_TNIL) {
         const name = value.string(parser.state, -1) orelse return parser.invalid("config.theme.base must be a string");
-        result = themes.fromName(name) orelse {
+        result = data.theme_support.fromName(name) orelse {
             parser.diagnostic.set("unknown base theme '{s}'", .{name});
             return error.InvalidConfig;
         };
@@ -90,7 +85,7 @@ pub fn parse(parser: Parser, index: c_int, initial: Theme) !Theme {
     return result;
 }
 
-fn syntax(self: Parser, theme: *Theme) !void {
+fn syntax(self: Parser, theme: *data.ColorTheme) !void {
     if (lua_api.c.lua_type(self.state, -1) != lua_api.c.LUA_TTABLE) {
         return self.invalid("theme.syntax must be a table of syntax roles");
     }
@@ -99,7 +94,7 @@ fn syntax(self: Parser, theme: *Theme) !void {
     lua_api.c.lua_pushnil(self.state);
     while (lua_api.c.lua_next(self.state, index) != 0) {
         const key = value.string(self.state, -2) orelse return self.invalid("theme.syntax roles must be strings");
-        const role = std.meta.stringToEnum(role_module.Role, key) orelse {
+        const role = std.meta.stringToEnum(data.role.Role, key) orelse {
             self.diagnostic.set("unknown syntax role '{s}'", .{key});
             return error.InvalidConfig;
         };
@@ -155,7 +150,7 @@ pub fn appearance(parser: Parser, snapshot: *@import("Snapshot.zig")) !void {
     value.pop(parser.state, 1);
 }
 
-fn chrome(parser: Parser) !Overrides {
+fn chrome(parser: Parser) !data.Overrides {
     if (lua_api.c.lua_type(parser.state, -1) != lua_api.c.LUA_TTABLE) {
         return parser.invalid("config.theme.colors must be a table");
     }
@@ -164,7 +159,7 @@ fn chrome(parser: Parser) !Overrides {
     lua_api.c.lua_pushnil(parser.state);
     while (lua_api.c.lua_next(parser.state, index) != 0) {
         const key = value.string(parser.state, -2) orelse return parser.invalid("theme colors contain a non-string field");
-        const known = inline for (std.meta.fields(Overrides)) |field| {
+        const known = inline for (std.meta.fields(data.Overrides)) |field| {
             if (std.mem.eql(u8, key, field.name)) {
                 break true;
             }
@@ -177,8 +172,8 @@ fn chrome(parser: Parser) !Overrides {
         value.pop(parser.state, 1);
     }
 
-    var overrides: Overrides = .{};
-    inline for (std.meta.fields(Overrides)) |field| {
+    var overrides: data.Overrides = .{};
+    inline for (std.meta.fields(data.Overrides)) |field| {
         _ = lua_api.c.lua_getfield(parser.state, index, field.name);
         if (lua_api.c.lua_type(parser.state, -1) != lua_api.c.LUA_TNIL) {
             @field(overrides, field.name) = try parser.color(field.name);
@@ -188,7 +183,7 @@ fn chrome(parser: Parser) !Overrides {
     return overrides;
 }
 
-fn terminal(parser: Parser, initial: TerminalTheme) !TerminalTheme {
+fn terminal(parser: Parser, initial: data.TerminalTheme) !data.TerminalTheme {
     if (lua_api.c.lua_type(parser.state, -1) != lua_api.c.LUA_TTABLE) {
         return parser.invalid("theme.terminal must be a table");
     }

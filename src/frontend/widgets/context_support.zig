@@ -41,7 +41,7 @@ test "Nerd Font icons retain a cell fallback and publish a graphical mark" {
     var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .hovered = null,
         .icon_theme = .nerd_font,
         .icon_plan = &plan,
@@ -58,7 +58,7 @@ test "Nerd Font icons retain a cell fallback and publish a graphical mark" {
     }));
     try std.testing.expectEqualStrings("C", buffer.at(1, 0).?.text());
     try std.testing.expectEqual(@as(u8, 1), plan.len);
-    try std.testing.expectEqual(client.Icon.cpu, plan.slice()[0].icon);
+    try std.testing.expectEqual(data.icons.Icon.cpu, plan.slice()[0].icon);
 }
 
 test "the telar mark stays graphical over a host-provided background" {
@@ -69,7 +69,7 @@ test "the telar mark stays graphical over a host-provided background" {
     var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .hovered = null,
         .icon_theme = .nerd_font,
         .icon_plan = &plan,
@@ -88,24 +88,24 @@ test "the telar mark publishes a graphical mark under the Unicode theme too" {
     var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .hovered = null,
         .icon_theme = .unicode,
         .icon_plan = &plan,
     };
     const style: core.Style = .{
-        .fg = client.theme_support.default_theme.palette.accent,
-        .bg = client.theme_support.default_theme.palette.panel_bg,
+        .fg = data.theme_support.default_theme.palette.accent,
+        .bg = data.theme_support.default_theme.palette.panel_bg,
     };
 
     _ = context.drawIcon(.{ .area = buffer.area(), .point = .{ .x = 1, .y = 0 }, .icon = .telar_mark, .style = style });
     try std.testing.expectEqual(@as(u8, 1), plan.len);
-    try std.testing.expectEqual(client.Icon.telar_mark, plan.slice()[0].icon);
+    try std.testing.expectEqual(data.icons.Icon.telar_mark, plan.slice()[0].icon);
     try std.testing.expectEqualStrings(" ", buffer.at(1, 0).?.text());
 
     _ = context.drawIcon(.{ .area = buffer.area(), .point = .{ .x = 2, .y = 0 }, .icon = .cpu, .style = style });
     try std.testing.expectEqual(@as(u8, 1), plan.len);
-    try std.testing.expectEqualStrings(client.Icon.cpu.unicodeGlyph(), buffer.at(2, 0).?.text());
+    try std.testing.expectEqualStrings(data.icons.Icon.cpu.unicodeGlyph(), buffer.at(2, 0).?.text());
 }
 
 test "Nerd Font theme keeps Unicode when terminal colors cannot be reproduced" {
@@ -116,7 +116,7 @@ test "Nerd Font theme keeps Unicode when terminal colors cannot be reproduced" {
     var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .hovered = null,
         .icon_theme = .nerd_font,
         .icon_plan = &plan,

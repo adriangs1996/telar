@@ -1,4 +1,5 @@
 //! Transient link affordances share the frame, without invalidating cell meshes.
+const data = @import("model");
 const Canvas = @import("Canvas.zig");
 const Hit = @import("../input/LinkHit.zig");
 const client = @import("telar-client");
@@ -7,7 +8,7 @@ const LinkRegions = @import("../render/LinkRegions.zig");
 const HoveredLink = @This();
 
 hit: *const Hit,
-pane: *const client.Pane,
+pane: *const data.Pane,
 
 /// Paints the captured link span and its clipped destination preview.
 /// Example: `try hovered_link.draw(canvas);`

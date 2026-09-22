@@ -571,7 +571,7 @@ test "system metrics commit before presenter-owned projection" {
     });
     _ = try client.handleServerMessage(try core.decodeServer(metrics));
 
-    try std.testing.expectEqualDeep(client_module.SystemMetrics{
+    try std.testing.expectEqualDeep(data.SystemMetrics{
         .runtime_revision = 7,
         .cpu_percent = 50,
         .memory_used_decigib = 10,
@@ -764,7 +764,7 @@ test "an agent snapshot replaces the sidebar replica" {
     try std.testing.expectEqualStrings("test-2", agent.tabLabel());
     try std.testing.expectEqualStrings("Improve agent sidebar", agent.sessionTitle());
     try std.testing.expectEqualStrings("~/sandbox/telar", agent.cwdLabel());
-    try std.testing.expectEqual(client_module.Version{ .agents = 1 }, harness.client.model.version());
+    try std.testing.expectEqual(data.Version{ .agents = 1 }, harness.client.model.version());
     try std.testing.expectEqual(pending_updates, TerminalClient.of(harness.client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(harness.client);
@@ -800,7 +800,7 @@ test "sidebar animation commits model state before the presenter observes it" {
     }
 
     try std.testing.expect(client.sidebar_animation_scheduler.pending);
-    try std.testing.expectEqual(client_module.Version{
+    try std.testing.expectEqual(data.Version{
         .agents = 1,
         .sidebar_animation = 1,
     }, client.model.version());
@@ -824,13 +824,13 @@ test "agent snapshot transitions raise bounded presentation alerts only once" {
     _ = try client.handleServerMessage(try core.decodeServer(initial));
 
     try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
-    try std.testing.expectEqual(client_module.Version{ .agents = 1 }, client.model.version());
+    try std.testing.expectEqual(data.Version{ .agents = 1 }, client.model.version());
 
     const changed = try support.encodeTestingAgentSnapshot(&payload, 2, .blocked);
     _ = try client.handleServerMessage(try core.decodeServer(changed));
     const notification = client.model.notificationSnapshot().itemAt(0).?;
 
-    try std.testing.expectEqual(client_module.Version{ .agents = 2, .notifications = 1 }, client.model.version());
+    try std.testing.expectEqual(data.Version{ .agents = 2, .notifications = 1 }, client.model.version());
     try std.testing.expectEqual(@as(u8, 1), client.model.notificationSnapshot().count);
     try std.testing.expectEqual(data.NotificationLevel.warning, notification.level);
     try std.testing.expectEqualStrings("Agent needs input", notification.title());
@@ -843,7 +843,7 @@ test "agent snapshot transitions raise bounded presentation alerts only once" {
     const stale = try support.encodeTestingAgentSnapshot(&payload, 1, .failed);
     _ = try client.handleServerMessage(try core.decodeServer(stale));
 
-    try std.testing.expectEqual(client_module.Version{ .agents = 2, .notifications = 1 }, client.model.version());
+    try std.testing.expectEqual(data.Version{ .agents = 2, .notifications = 1 }, client.model.version());
     try std.testing.expectEqual(@as(u8, 1), client.model.notificationSnapshot().count);
 }
 

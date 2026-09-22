@@ -1,3 +1,4 @@
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const kitty_protocol = @import("kitty_protocol");
@@ -56,7 +57,7 @@ pub fn configure(renderer: *Renderer, configuration: client.SidebarRendererInput
     return true;
 }
 
-pub fn prepare(renderer: *Renderer, area: core.Rect, palette: *const client.Palette) void {
+pub fn prepare(renderer: *Renderer, area: core.Rect, palette: *const data.Palette) void {
     renderer.frame_usable = renderer.supported and renderer.cell_width != 0 and
         renderer.cell_height != 0 and !area.isEmpty();
     const background = modal.rgb(palette.panel_bg) orelse {

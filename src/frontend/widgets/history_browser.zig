@@ -1,6 +1,7 @@
 //! Compact history browser with bounded text storage and visible-cell composition.
 //! History text reaches the host only through the ordinary cell renderer.
 
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Geometry = @import("Geometry.zig");
@@ -182,7 +183,7 @@ test "history retains result cells and selection while searching" {
     var buffer = try core.Buffer.init(std.testing.allocator, 120, 36);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var context: ContextType = .{ .buffer = &buffer, .hits = &hits, .palette = &client.theme_support.default_theme.palette, .hovered = null };
+    var context: ContextType = .{ .buffer = &buffer, .hits = &hits, .palette = &data.theme_support.default_theme.palette, .hovered = null };
     var field: picker.Field = .init("zig");
     const entry: Entry = .{ .id = 1, .pane_id = @enumFromInt(2), .command = "zig build", .cwd = "/work", .started_at_ms = 1000, .duration_ns = 1000000, .exit_code = 0, .status = .completed, .author = .human };
     var input: HistoryBrowserInput = .{ .field = &field, .entries = &.{entry}, .selection = 0, .scope = "global", .now_ms = 1000 };
@@ -209,7 +210,7 @@ test "history renderer puts the query below results and contains control bytes" 
     var buffer = try core.Buffer.init(std.testing.allocator, 120, 36);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var context: ContextType = .{ .buffer = &buffer, .hits = &hits, .palette = &client.theme_support.default_theme.palette, .hovered = null };
+    var context: ContextType = .{ .buffer = &buffer, .hits = &hits, .palette = &data.theme_support.default_theme.palette, .hovered = null };
     var field: picker.Field = .init("zig");
     const entry: Entry = .{ .id = 1, .pane_id = @enumFromInt(2), .command = "zig build\x1b[2J", .cwd = "/work", .started_at_ms = 1700000000000, .duration_ns = 1800000000, .exit_code = 7, .status = .completed, .author = .human };
     const input: HistoryBrowserInput = .{ .field = &field, .entries = &.{entry}, .selection = 0, .scope = "global", .now_ms = 1700000100000 };

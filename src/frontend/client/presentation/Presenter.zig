@@ -3,6 +3,7 @@
 //! back/front buffers. Shared presentation tokens become commits only after
 //! the host output adapter reports successful delivery.
 
+const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const std = @import("std");
@@ -576,7 +577,7 @@ fn syncWindowTitle(presenter: *Presenter, projection: client.Projection, writer:
     });
 }
 
-fn focusedPaneTitle(model: *const client.MultiplexerModel) []const u8 {
+fn focusedPaneTitle(model: *const data.MultiplexerModel) []const u8 {
     const pane_id = model.layout.focused() orelse return "";
     const pane = model.findConst(pane_id) orelse return "";
     return pane.titleSlice();

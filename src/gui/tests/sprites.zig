@@ -106,7 +106,7 @@ test "the card draws the sheet mark for the three providers and an unboxed glyph
     var fixture = try ChromeFixture.init();
     defer fixture.deinit();
     const renderer = &fixture.session.gui.renderer;
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &.{ agent(.claude, 51), agent(.codex, 52), agent(.pi, 53), agent(.unknown, 54), agent(@enumFromInt(7), 55) } });
     var projection = fixture.projection();
     projection.agents = &agents;
@@ -161,7 +161,7 @@ test "the card draws the sheet mark for the three providers and an unboxed glyph
 test "a warm repaint with sprites shapes rasterizes and allocates nothing" {
     var fixture = try ChromeFixture.init();
     defer fixture.deinit();
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     var inputs = [_]data.AgentInput{
         agent(.claude, 51),
         agent(.codex, 52),
@@ -223,7 +223,7 @@ test "the registry places one landed image per workspace and forgets a rebuilt p
     const gpa = std.testing.allocator;
     var page = try SpritePage.init(gpa, 16);
     defer page.deinit();
-    var workspaces: client.WorkspaceListSnapshot = .{};
+    var workspaces: data.WorkspaceListSnapshot = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = @enumFromInt(1), .name = "a", .path = "/a", .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "b", .path = "/b", .tab_count = 1 },
@@ -402,7 +402,7 @@ fn expectFaviconCard(name: []const u8, bytes: []const u8) !void {
     );
     try std.testing.expectEqual(version, renderer.sprites_version);
 
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &.{agent(.claude, 51)} });
     var projection = fixture.projection();
     projection.agents = &agents;

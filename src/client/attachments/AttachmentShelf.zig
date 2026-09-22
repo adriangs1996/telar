@@ -1,12 +1,11 @@
 const model_data = @import("model");
 const MarkerScreenType = @import("MarkerScreen.zig");
-const CaptureType = @import("Capture.zig");
 /// The adapter-owned attachment shelf and modal: adopting captures, keeping
 /// markers reconciled with the pane, and the modal's input ownership.
 const AttachmentShelf = @This();
 
 context: *anyopaque,
-adopt_fn: *const fn (*anyopaque, *CaptureType) anyerror!bool,
+adopt_fn: *const fn (*anyopaque, *model_data.Capture) anyerror!bool,
 reconcile_markers_fn: *const fn (*anyopaque, model_data.AttachmentTarget, MarkerScreenType) ?bool,
 sync_target_fn: *const fn (*anyopaque, ?model_data.AttachmentTarget) bool,
 remove_fn: *const fn (*anyopaque, model_data.AttachmentId) ?bool,
@@ -17,7 +16,7 @@ reservation_fn: *const fn (*anyopaque) ?model_data.PaneBottomReservation,
 
 /// Takes ownership of one capture; reports whether the layout changed.
 /// Example: `const layout_changed = try client.attachment_shelf.adopt(capture);`.
-pub fn adopt(port: AttachmentShelf, capture: *CaptureType) !bool {
+pub fn adopt(port: AttachmentShelf, capture: *model_data.Capture) !bool {
     return port.adopt_fn(port.context, capture);
 }
 

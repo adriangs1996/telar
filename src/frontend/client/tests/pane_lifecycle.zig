@@ -784,7 +784,7 @@ test "an inactive split is retained detached without a visible revision" {
     const client = harness.client;
     const first = client.model.workspace.active().?;
     const second_location = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
-    client_module.TabsModel.detachAll(first);
+    data.TabsModel.detachAll(first);
     try std.testing.expectEqualDeep(second_location, client.model.activeTabLocation().?);
 
     const split_pane: core.PaneId = @enumFromInt(21);
@@ -900,7 +900,7 @@ test "a failed split never resizes the tab selected afterwards" {
     const client = harness.client;
     const first = client.model.workspace.active().?;
     _ = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
-    client_module.TabsModel.detachAll(first);
+    data.TabsModel.detachAll(first);
 
     try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
         .target_pane = TestHarness.bootstrap_pane,

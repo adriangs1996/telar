@@ -443,7 +443,7 @@ test "a full outbox keeps the tab rename prompt and rolls back correlation" {
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expect(!client.request_lifecycle.tracker.has(.tab_operation));
-    try std.testing.expectEqual(client_module.capacity, @as(usize, client.runtime_transport.outbox.len));
+    try std.testing.expectEqual(data.outbox_support.capacity, @as(usize, client.runtime_transport.outbox.len));
     try std.testing.expectEqualStrings("shell", client.model.workspace.activeConst().?.labelSlice());
     try support.expectNonPromptVersionEqual(version_before_request, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);

@@ -17,7 +17,7 @@ discarded_gesture: bool = false,
 
 /// A replaced attachment never inherits its predecessor's velocity.
 /// Example: `const entry = motions.obtain(pane, now_ns) orelse return;`
-pub fn obtain(motions: *Motions, pane: *const client.Pane, now_ns: u64) ?*Entry {
+pub fn obtain(motions: *Motions, pane: *const data.Pane, now_ns: u64) ?*Entry {
     const key: data.AgentKey = .{
         .pane_id = pane.id,
         .pane_generation = pane.attachment_generation,

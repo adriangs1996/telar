@@ -21,6 +21,7 @@
 //! No runtime, PTY or child process is needed. The single-file layout is
 //! intentional here so the assembly and your widget can be read together.
 
+const data = @import("model");
 const macos_gui = @import("build/macos_gui.zig");
 const linux_gui = @import("build/linux_gui.zig");
 const event_module = @import("src/gui/input/event.zig");
@@ -156,7 +157,7 @@ const Runner = struct {
             .quads = &runner.renderer.quads,
             .metrics = runner.renderer.metrics,
             .origin = .{ 0, 0 },
-            .theme = client.theme_support.default_theme,
+            .theme = data.theme_support.default_theme,
             .chrome = runner.renderer.chrome,
             .viewport = runner.renderer.viewport,
             .sprites = if (runner.renderer.sprites) |*page| page else null,

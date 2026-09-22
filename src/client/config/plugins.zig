@@ -3,9 +3,7 @@
 const data = @import("model");
 const lua_api = @import("lua-api");
 const SnapshotType = @import("Snapshot.zig");
-const config_model = @import("model.zig");
 const value = @import("lua_value.zig");
-const PluginSpecType = @import("PluginSpec.zig");
 
 pub fn parse(state: *lua_api.c.lua_State, snapshot: *SnapshotType, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
@@ -15,8 +13,8 @@ pub fn parse(state: *lua_api.c.lua_State, snapshot: *SnapshotType, diagnostic: *
     }
 
     const count = lua_api.c.lua_rawlen(state, absolute);
-    if (count > config_model.max_plugins) {
-        diagnostic.set("config.plugins exceeds {d} entries", .{config_model.max_plugins});
+    if (count > data.config_values.max_plugins) {
+        diagnostic.set("config.plugins exceeds {d} entries", .{data.config_values.max_plugins});
         return error.InvalidConfig;
     }
 
@@ -36,12 +34,12 @@ pub fn parse(state: *lua_api.c.lua_State, snapshot: *SnapshotType, diagnostic: *
             .path = "plugin",
         }, diagnostic);
         const path = try value.requiredStringField(state, .{ .index = plugin_table, .name = "path" }, diagnostic);
-        if (path.len == 0 or path.len > config_model.max_plugin_path_bytes) {
+        if (path.len == 0 or path.len > data.config_values.max_plugin_path_bytes) {
             diagnostic.set("plugin {d} path is invalid", .{plugin_index + 1});
             return error.InvalidConfig;
         }
 
-        var spec: PluginSpecType = .{ .path_len = @intCast(path.len) };
+        var spec: data.PluginSpec = .{ .path_len = @intCast(path.len) };
         @memcpy(spec.path_bytes[0..path.len], path);
         _ = lua_api.c.lua_getfield(state, plugin_table, "enabled");
         if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {

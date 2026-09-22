@@ -1,7 +1,6 @@
 const routing_tests = @import("routing_tests.zig");
 const data = @import("model");
 const GenericKeymap = @import("GenericKeymap.zig").Type;
-const GenericBinding = @import("GenericBinding.zig").Type;
 const std = @import("std");
 
 pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime Decoder: type) type {
@@ -16,7 +15,7 @@ pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime 
     }
 
     const Map = GenericKeymap(Action, max_bindings, max_keys);
-    const BindingType = GenericBinding(Action, max_keys);
+    const BindingType = data.GenericBinding(Action, max_keys);
     const LeaseOwner = enum { binding, application };
     const Leases = data.GenericTable(LeaseOwner, data.keybind.max_physical_leases);
     return struct {
@@ -565,7 +564,7 @@ fn testRouter() type {
 
 test "binding admission finds configured direct and chord shortcuts without changing state" {
     const Router = testRouter();
-    const Binding = GenericBinding(routing_tests.Action, 4);
+    const Binding = data.GenericBinding(routing_tests.Action, 4);
     const parse = data.keybind.parseKey;
     const router = try Router.init(&.{
         try Binding.parse(&.{ "ctrl+k", "ctrl+c" }, .next),
@@ -592,7 +591,7 @@ test "binding admission finds configured direct and chord shortcuts without chan
 
 test "binding admission keeps ordinary chord misses with the router until replay" {
     const Router = testRouter();
-    const Binding = GenericBinding(routing_tests.Action, 4);
+    const Binding = data.GenericBinding(routing_tests.Action, 4);
     var router = try Router.init(&.{try Binding.parse(&.{ "a", "b" }, .next)});
     var capture: @import("Capture.zig") = .{};
     const first = try data.keybind.parseKey("a");
@@ -614,7 +613,7 @@ test "binding admission keeps ordinary chord misses with the router until replay
 
 test "binding admission resolves persistent prefix misses and Escape without claiming unleased repeats" {
     const Router = testRouter();
-    const Binding = GenericBinding(routing_tests.Action, 4);
+    const Binding = data.GenericBinding(routing_tests.Action, 4);
     const prefix = try data.keybind.parseKey("ctrl+b");
     var router = try Router.initWithPrefix(&.{try Binding.parse(&.{ "ctrl+b", "n" }, .next)}, prefix);
     var capture: @import("Capture.zig") = .{};
@@ -638,7 +637,7 @@ test "binding admission resolves persistent prefix misses and Escape without cla
 
 test "binding admission retains a physical shortcut through focus and keymap replacement" {
     const Router = testRouter();
-    const Binding = GenericBinding(routing_tests.Action, 4);
+    const Binding = data.GenericBinding(routing_tests.Action, 4);
     var router = try Router.init(&.{try Binding.parse(&.{"ctrl+n"}, .next)});
     var original: @import("Capture.zig") = .{};
     var other_focus: @import("Capture.zig") = .{};
@@ -664,7 +663,7 @@ test "binding admission retains a physical shortcut through focus and keymap rep
 
 test "binding admission cannot steal application repeats or releases when modifiers become a shortcut" {
     const Router = testRouter();
-    const Binding = GenericBinding(routing_tests.Action, 4);
+    const Binding = data.GenericBinding(routing_tests.Action, 4);
     var router = try Router.init(&.{try Binding.parse(&.{"ctrl+n"}, .next)});
     var capture: @import("Capture.zig") = .{};
     var event = try data.keybind.parseKey("n");
@@ -690,7 +689,7 @@ test "binding admission cannot steal application repeats or releases when modifi
 
 test "replayed chord keys can return their physical ownership to the original widget" {
     const Router = testRouter();
-    const Binding = GenericBinding(routing_tests.Action, 4);
+    const Binding = data.GenericBinding(routing_tests.Action, 4);
     var router = try Router.init(&.{try Binding.parse(&.{ "a", "b" }, .next)});
     var capture: @import("Capture.zig") = .{};
     var first = try data.keybind.parseKey("a");
@@ -715,7 +714,7 @@ test "replayed chord keys can return their physical ownership to the original wi
 
 test "relinquishing a physical key preserves another shortcut repeat and cancels its own" {
     const Router = testRouter();
-    const Binding = GenericBinding(routing_tests.Action, 4);
+    const Binding = data.GenericBinding(routing_tests.Action, 4);
     var router = try Router.init(&.{try Binding.parse(&.{"ctrl+n"}, .next)});
     var capture: @import("Capture.zig") = .{};
     var event = try data.keybind.parseKey("ctrl+n");

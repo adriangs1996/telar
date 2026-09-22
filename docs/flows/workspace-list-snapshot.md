@@ -34,8 +34,8 @@ revision and composes the latest immutable snapshot at the paced deadline.
 Several updates can fold into one presentation. A later valid runtime revision
 can recover from rejected input; reconnect obtains a fresh canonical snapshot.
 
-Source: `src/client/model/Model.zig`,
-`src/client/model/Model.zig`, and `src/client/workspace/workspace_list.zig`.
-Tests: `src/client/model/tests/workspaces.zig`, workspace-list storage tests and
+Source: `src/model/state/Model.zig`,
+`src/model/state/Model.zig`, and `src/model/workspace/workspace_list.zig`.
+Tests: `src/model/state/tests/workspaces.zig`, workspace-list storage tests and
 `src/frontend/client/tests/notifications_and_agents.zig` cover revision
 ownership, bounded rejection, navigation and presentation.

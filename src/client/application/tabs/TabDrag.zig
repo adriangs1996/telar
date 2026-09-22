@@ -1,7 +1,7 @@
 //! One tab gesture; adapters supply points in units of their drag threshold.
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
-const Model = @import("../../model/Model.zig");
 const TabMoveIntent = @import("TabMoveIntent.zig");
 const TabDrag = @This();
 
@@ -26,7 +26,7 @@ pub fn cancel(drag: *TabDrag) void {
 
 /// Source identity survives focus changes, but never workspace replacement.
 /// Example: `drag.validate(&client.model);`
-pub fn validate(drag: *TabDrag, model: *const Model) void {
+pub fn validate(drag: *TabDrag, model: *const data.Model) void {
     const source = drag.source orelse return;
     if (model.name_prompt.active() or !std.meta.eql(model.workspace.workspace, @as(?core.WorkspaceLocation, source.workspace)) or model.workspace.indexOf(source.tab_id) == null) {
         drag.cancel();

@@ -28,11 +28,11 @@ fn host(context: *anyopaque) *GuiClient {
     return GuiClient.of(app);
 }
 
-fn setTheme(context: *anyopaque, theme: client.ColorTheme) void {
+fn setTheme(context: *anyopaque, theme: data.ColorTheme) void {
     host(context).theme = theme;
 }
 
-fn setIcons(_: *anyopaque, _: client.Theme) void {}
+fn setIcons(_: *anyopaque, _: data.icons.Theme) void {}
 
 fn configureSidebar(_: *anyopaque, _: client.SidebarRendererInput) !void {}
 

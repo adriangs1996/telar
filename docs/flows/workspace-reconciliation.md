@@ -58,8 +58,8 @@ failure preserves the canonical replica and completed cleanup. Reconnect or a
 later snapshot repairs disposable resources. No operation schedules a draw.
 
 Source: `src/client/AttachedClient.zig`,
-`AttachedClient.requestWorkspaceRename`, and `src/client/model/Model.zig`.
+`AttachedClient.requestWorkspaceRename`, and `src/model/state/Model.zig`.
 Tests: `src/frontend/client/tests/synchronization.zig`,
-`renaming_and_telemetry.zig`, `src/client/model/tests/workspaces.zig`, and
+`renaming_and_telemetry.zig`, `src/model/state/tests/workspaces.zig`, and
 `tabs.zig` cover correlation, atomic validation, retained layouts, foreground
 metadata, cleanup, coalescence and canonical no-ops.

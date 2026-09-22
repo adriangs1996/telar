@@ -1,11 +1,12 @@
 //! Native drawing cadence and input grace, independent of GPU ownership.
 //! Callers supply visible pane identities and only record sealed preparations.
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const PaneInputGrace = @import("PaneInputGrace.zig");
 const FramePacer = @This();
 
-pub const Pane = client.PresentationCommit.PaneCommit;
+pub const Pane = data.PresentationCommit.PaneCommit;
 
 const OrdinaryBudget = enum(u32) { frame = 1 };
 

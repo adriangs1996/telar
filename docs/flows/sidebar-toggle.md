@@ -69,7 +69,7 @@ roll back the client preference.
 
 ## Validation
 
-- `src/client/model/Model.zig` owns visibility, width and chrome revisions.
+- `src/model/state/Model.zig` owns visibility, width and chrome revisions.
 - `src/client/AttachedClient.zig` validates each commit and delivers chrome,
   graphics invalidation and pane geometry in order.
 - `src/client/attached_client_tests.zig` rejects stale visibility, width and

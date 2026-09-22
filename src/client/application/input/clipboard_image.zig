@@ -3,7 +3,6 @@ const core = @import("telar-core");
 const model_data = @import("model");
 
 const CapturedImage = @import("CapturedImage.zig");
-const ModelType = @import("../../model/Model.zig");
 
 pub const StartOutcome = union(enum) {
     started: model_data.ClipboardCapture,
@@ -50,7 +49,7 @@ pub const CompletionEvent = enum {
     resize,
 };
 
-fn installFocusedTarget(model: *ModelType) !model_data.AttachmentTarget {
+fn installFocusedTarget(model: *model_data.Model) !model_data.AttachmentTarget {
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),

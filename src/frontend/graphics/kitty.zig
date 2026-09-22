@@ -1,5 +1,6 @@
 //! Kitty graphics delivery backed by the shared client resource catalog.
 
+const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const kitty_protocol = @import("kitty_protocol");
@@ -114,7 +115,7 @@ test "unchanged graphics emit no work and resize does not retransmit pixels" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
 
@@ -191,7 +192,7 @@ test "image transmission is paced across frames by the byte budget" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
 
@@ -561,7 +562,7 @@ test "continuous replacements complete and hand off without a blank frame" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 10, .rows = 5 } });
 
@@ -1115,7 +1116,7 @@ test "shared client pixels have a bounded POSIX lifetime" {
             .y = 0,
         },
     });
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1214,7 +1215,7 @@ test "a host acknowledgement retires a replaced shared image without probing" {
         .revision = 1,
         .placement = .{ .key = first.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
     });
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1277,7 +1278,7 @@ test "a host error reply reclaims the shared name and retransmits inline" {
         .revision = 1,
         .placement = .{ .key = image.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
     });
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1434,7 +1435,7 @@ test "a runtime-named image maps without copying and hands the host its name" {
             .y = 0,
         },
     });
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1520,7 +1521,7 @@ test "a control pass hands the host shared names and placements without pixel st
     // A shared-memory client also names its own images; a host that lost
     // one is served inline, which is the bulk pass's job.
     store.images.getPtr(client.identity(pane_id, inline_image.key)).?.delivery.force_direct = true;
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1565,7 +1566,7 @@ test "a control pass hands the host shared names and placements without pixel st
 
 test "a control pass emits nothing while a chunked transfer is open" {
     const pane_id: core.PaneId = @enumFromInt(1);
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1627,7 +1628,7 @@ test "a host that never consumes shared names loses them and gets pixels inline"
     var store = delivery.Store.initSharedMemory(std.testing.allocator);
     defer store.deinit();
     const pane_id: core.PaneId = @enumFromInt(1);
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },

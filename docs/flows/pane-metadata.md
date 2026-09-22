@@ -38,7 +38,7 @@ constructed. Retirement frees owned CWD storage; reconnect receives current
 runtime facts through fresh cursors.
 
 Source: `src/client/AttachedClient.zig`,
-`src/client/model/Model.zig`, and `src/client/workspace/`.
-Tests: `src/client/model/tests/panes.zig`, `tabs.zig`,
+`src/model/state/Model.zig`, and `src/client/workspace/`.
+Tests: `src/model/state/tests/panes.zig`, `tabs.zig`,
 `src/frontend/client/tests/pane_updates.zig`, and runtime workspace-snapshot /
 runtime-state tests.

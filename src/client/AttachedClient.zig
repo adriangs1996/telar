@@ -2,23 +2,18 @@
 //! request lifecycle, configuration, plugins and the ports through which a
 //! presentation adapter supplies its host. Adapters embed it, build it in
 //! place and bind the ports before the first event.
-const cells = @import("links/cells.zig");
 const lifecycle = @import("connection/lifecycle.zig");
-const goto_picker = @import("model/goto_picker.zig");
 const attachment_prompt = @import("application/input/attachment_prompt.zig");
 const markers_module = @import("attachments/markers.zig");
-const outbox_support = @import("connection/outbox_support.zig");
 const sidebar_animation = @import("application/notifications/sidebar_animation.zig");
 const plugin_action = @import("application/input/plugin_action.zig");
 const data = @import("model");
 const lua_diagnostics = @import("operations/configuration/lua_actions.zig");
 const copy_mode_tests = @import("copy_mode_tests.zig");
-const label_validation = @import("workspace/label_validation.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const config_reload = @import("resources/config_reload.zig");
 const pane_graphics = @import("operations/panes/pane_graphics.zig");
-const multiplexer = @import("workspace/multiplexer.zig");
 const name_prompts = @import("operations/input/name_prompts.zig");
 const layout_updates = @import("resources/client_layouts.zig");
 const pane_mouse_input = @import("operations/input/pane_mouse_inputs.zig");
@@ -44,56 +39,35 @@ const ctrl_k = data.chord.parseKey("ctrl+k") catch unreachable;
 const ctrl_l = data.chord.parseKey("ctrl+l") catch unreachable;
 const sidebar_animation_interval_ns = 120 * std.time.ns_per_ms;
 
-const OptionsType = @import("Options.zig");
+const Options = @import("Options.zig");
 const ClientInit = @import("ClientInit.zig");
-const AppearanceThemesType = @import("appearance/AppearanceThemes.zig");
 const RuntimeTransportState = @import("connection/RuntimeTransportState.zig");
 const TelemetryState = @import("resources/TelemetryState.zig");
-const ClientLayoutsState = @import("resources/ClientLayoutsState.zig");
-const ModelType = @import("model/Model.zig");
-const HistoryType = @import("workspace/History.zig");
-const GenerationType = @import("config/Generation.zig");
-const RegistryType = @import("plugins/Registry.zig");
+const Generation = @import("config/Generation.zig");
+const Registry = @import("plugins/Registry.zig");
 const ConfigReloadState = @import("resources/ConfigReloadState.zig");
-const CaptureResourcesType = @import("attachments/CaptureResources.zig");
-const OpeningType = @import("links/Opening.zig");
-const BarUpdatesState = @import("operations/configuration/State.zig");
-const SoundPortType = @import("agents/SoundPort.zig");
-const HostNotifierType = @import("notifications/HostNotifier.zig");
-const LinkOpenerType = @import("links/LinkOpener.zig");
-const CapturePortType = @import("attachments/CapturePort.zig");
-const HostClipboardType = @import("application/panes/Clipboard.zig");
-const HostGraphicsType = @import("graphics/HostGraphics.zig");
-const GraphicsRetentionType = @import("graphics/GraphicsRetention.zig");
-const HostChromeType = @import("presentation/HostChrome.zig");
-const AttachmentCatalogPortType = @import("attachments/AttachmentCatalogPort.zig");
-const AttachmentShelfType = @import("attachments/AttachmentShelf.zig");
-const HostPresentationType = @import("presentation/HostPresentation.zig");
-const HostTimersType = @import("resources/HostTimers.zig");
-const BarCommandRunnerType = @import("bars/BarCommandRunner.zig");
-const PluginWorkerRunnerType = @import("plugins/PluginWorkerRunner.zig");
-const PathCompletionRunnerType = @import("completion/PathCompletionRunner.zig");
-const FaviconRunnerType = @import("completion/FaviconRunner.zig");
-const HostClockType = @import("resources/HostClock.zig");
-const HostInputSourceType = @import("input/HostInputSource.zig");
-const TransportDriverType = @import("connection/TransportDriver.zig");
-const ConfigReloadWatcherType = @import("resources/ConfigReloadWatcher.zig");
-const BarConfiguration = @import("bars/Configuration.zig");
-const MultiplexerModel = @import("workspace/MultiplexerModel.zig");
-const Tab = @import("workspace/Tab.zig");
-const ConnectionDelivery = @import("connection/ConnectionDelivery.zig");
-const Pane = @import("panes/Pane.zig");
-const LayoutsType = @import("workspace/Layouts.zig");
-const ResultsType = @import("model/Results.zig");
-const SourcesType = @import("model/Sources.zig");
+const SoundPort = @import("agents/SoundPort.zig");
+const HostNotifier = @import("notifications/HostNotifier.zig");
+const LinkOpener = @import("links/LinkOpener.zig");
+const CapturePort = @import("attachments/CapturePort.zig");
+const HostClipboard = @import("application/panes/Clipboard.zig");
+const HostGraphics = @import("graphics/HostGraphics.zig");
+const GraphicsRetention = @import("graphics/GraphicsRetention.zig");
+const HostChrome = @import("presentation/HostChrome.zig");
+const AttachmentCatalogPort = @import("attachments/AttachmentCatalogPort.zig");
+const AttachmentShelf = @import("attachments/AttachmentShelf.zig");
+const HostPresentation = @import("presentation/HostPresentation.zig");
+const HostTimers = @import("resources/HostTimers.zig");
+const BarCommandRunner = @import("bars/BarCommandRunner.zig");
+const PluginWorkerRunner = @import("plugins/PluginWorkerRunner.zig");
+const PathCompletionRunner = @import("completion/PathCompletionRunner.zig");
+const FaviconRunner = @import("completion/FaviconRunner.zig");
+const HostClock = @import("resources/HostClock.zig");
+const HostInputSource = @import("input/HostInputSource.zig");
+const TransportDriver = @import("connection/TransportDriver.zig");
+const ConfigReloadWatcher = @import("resources/ConfigReloadWatcher.zig");
 const Adoption = @import("resources/Adoption.zig");
 const ConfiguredPlugins = @import("plugins/ConfiguredPlugins.zig");
-const PluginOverride = @import("resources/PluginOverride.zig");
-const PluginActionsCompletion = @import("plugins/PluginActionsCompletion.zig");
-const PluginResultType = @import("application/input/PluginResult.zig");
-const CaptureType = @import("attachments/Capture.zig");
-const Completion = @import("operations/host/Completion.zig");
-const CaptureRequestType = @import("attachments/CaptureRequest.zig");
 
 /// Bindings obey prompt authority; validated native effects retain their caller's authority.
 const ActionOrigin = enum { binding, effect };
@@ -119,15 +93,15 @@ const AttachedClient = @This();
 io: std.Io,
 gpa: std.mem.Allocator,
 runtime_transport: RuntimeTransportState,
-options: OptionsType,
+options: Options,
 client_identity: core.ClientIdentity,
 telemetry: TelemetryState,
-client_layouts: ClientLayoutsState = .{},
+client_layouts: data.ClientLayoutsState = .{},
 startup: data.StartupState = .{},
-model: ModelType,
-navigation_history: HistoryType = .{},
-lua_generation: ?*GenerationType,
-plugin_registry: ?*RegistryType,
+model: data.Model,
+navigation_history: data.NavigationHistory = .{},
+lua_generation: ?*Generation,
+plugin_registry: ?*Registry,
 trust_store: ?*core.TrustStore,
 reload: ConfigReloadState,
 sound_playback: data.SoundPlayback,
@@ -142,42 +116,42 @@ history_enter_runs: bool = false,
 history_match_fts: bool = false,
 /// Transient: the alternate flag of the list submission being finished.
 list_submission_alternate: bool = false,
-appearance_themes: AppearanceThemesType = .{},
-clipboard_capture_resources: CaptureResourcesType = .{},
-link_opening: OpeningType = .{},
+appearance_themes: data.AppearanceThemes = .{},
+clipboard_capture_resources: data.CaptureResources = .{},
+link_opening: data.Opening = .{},
 link_pointer: data.Pointer = .{},
 request_lifecycle: data.RequestLifecycle = .{},
 change_review: data.ChangeReviewSession = .{},
 sidebar_animation_scheduler: core.DeadlineScheduler = .{},
 notification_scheduler: core.DeadlineScheduler = .{},
-bar_updates: BarUpdatesState = .{},
+bar_updates: data.BarUpdatesState = .{},
 path_completions: data.PathCompletionsState = .{},
 favicons: data.FaviconsState = .{},
 /// Application key leases, owned by routing rather than by the host reader.
 input_leases: data.key_routing.Leases = .{},
 /// Host ports, bound by the adapter before the first event.
-sound_port: SoundPortType = undefined,
-notifier: HostNotifierType = undefined,
-link_opener: LinkOpenerType = undefined,
+sound_port: SoundPort = undefined,
+notifier: HostNotifier = undefined,
+link_opener: LinkOpener = undefined,
 editor_open: data.EditorOpening = .{},
-capture_port: CapturePortType = undefined,
-host_clipboard: HostClipboardType = undefined,
-host_graphics: HostGraphicsType = undefined,
-graphics: GraphicsRetentionType = undefined,
-chrome: HostChromeType = undefined,
-attachment_catalog: AttachmentCatalogPortType = undefined,
-attachment_shelf: AttachmentShelfType = undefined,
-presentation: HostPresentationType = undefined,
-timers: HostTimersType = undefined,
-bar_runner: BarCommandRunnerType = undefined,
-plugin_runner: PluginWorkerRunnerType = undefined,
-path_completion_runner: PathCompletionRunnerType = undefined,
+capture_port: CapturePort = undefined,
+host_clipboard: HostClipboard = undefined,
+host_graphics: HostGraphics = undefined,
+graphics: GraphicsRetention = undefined,
+chrome: HostChrome = undefined,
+attachment_catalog: AttachmentCatalogPort = undefined,
+attachment_shelf: AttachmentShelf = undefined,
+presentation: HostPresentation = undefined,
+timers: HostTimers = undefined,
+bar_runner: BarCommandRunner = undefined,
+plugin_runner: PluginWorkerRunner = undefined,
+path_completion_runner: PathCompletionRunner = undefined,
 /// Bound only by adapters that draw sprites; unset means no favicon lookups.
-favicon_runner: ?FaviconRunnerType = null,
-clock: HostClockType = undefined,
-host_input_source: HostInputSourceType = undefined,
-transport_driver: TransportDriverType = undefined,
-config_watcher: ConfigReloadWatcherType = undefined,
+favicon_runner: ?FaviconRunner = null,
+clock: HostClock = undefined,
+host_input_source: HostInputSource = undefined,
+transport_driver: TransportDriver = undefined,
+config_watcher: ConfigReloadWatcher = undefined,
 
 /// Builds the shared state in its final address. The model is megabytes, so
 /// nothing here passes it by value. Ports remain unbound.
@@ -277,7 +251,7 @@ pub fn editorExecutable(self: *const AttachedClient) []const u8 {
 
 /// Copies one fixed-size message and starts its write when idle.
 /// Example: `try self.sendRuntime(.{ .detach_pane = detach });`
-pub fn sendRuntime(self: *AttachedClient, message: outbox_support.Message) !void {
+pub fn sendRuntime(self: *AttachedClient, message: data.outbox_support.Message) !void {
     try self.runtime_transport.outbox.push(message);
     try self.startRuntimeSend();
 }
@@ -623,7 +597,7 @@ pub fn executeAction(self: *AttachedClient, value: data.Action, origin: ActionOr
 
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try self.sendRuntimeRequest(delivery);`
-pub fn sendRuntimeRequest(self: *AttachedClient, delivery: ConnectionDelivery) !void {
+pub fn sendRuntimeRequest(self: *AttachedClient, delivery: data.ConnectionDelivery) !void {
     try self.request_lifecycle.tracker.add(delivery.registration.request_id, delivery.registration.continuation);
     errdefer _ = self.request_lifecycle.tracker.take(delivery.registration.request_id);
     try self.runtime_transport.outbox.push(delivery.message);
@@ -782,7 +756,7 @@ pub fn reconcileHostCapabilities(self: *AttachedClient, capabilities: data.HostC
 
 /// Offers sizes for attached visible panes, reserving space for the attachment shelf.
 /// Example: `try self.resizeAttachedPanes(&tab.model, area);`
-pub fn resizeAttachedPanes(self: *AttachedClient, model: *MultiplexerModel, area: core.Rect) !void {
+pub fn resizeAttachedPanes(self: *AttachedClient, model: *data.MultiplexerModel, area: core.Rect) !void {
     var layout = model.layoutSnapshot(area).*;
     _ = layout.reserveBelowPane(self.attachment_shelf.reservation());
     var panes = model.paneIterator();
@@ -793,7 +767,7 @@ pub fn resizeAttachedPanes(self: *AttachedClient, model: *MultiplexerModel, area
         }
 
         const view = layout.find(pane.id) orelse continue;
-        var size = multiplexer.rectSize(view.content) orelse continue;
+        var size = data.multiplexer.rectSize(view.content) orelse continue;
         size.cell_width_px = model.cell_width_px;
         size.cell_height_px = model.cell_height_px;
         try self.sendRuntime(
@@ -833,7 +807,7 @@ pub fn scheduleConfigReload(self: *AttachedClient) !void {
 
 /// Borrows bar sources only when Lua and the model agree on their generation.
 /// Example: `const configuration = client.barConfiguration() orelse return;`
-pub fn barConfiguration(self: *const AttachedClient) ?*const BarConfiguration {
+pub fn barConfiguration(self: *const AttachedClient) ?*const data.BarConfiguration {
     const generation = self.lua_generation orelse return null;
 
     if (generation.number != self.model.configurationGeneration()) {
@@ -854,7 +828,7 @@ pub fn synchronizeBars(self: *AttachedClient) !void {
         },
     );
 
-    try self.bar_updates.rearm(self.io, self.timers);
+    try self.timers.rearmBars(self.io, &self.bar_updates);
 }
 
 /// Snapshot the current exclusive keyboard owners without exposing client state.
@@ -1005,7 +979,7 @@ pub fn openLink(self: *AttachedClient, target: data.LinkTarget) !bool {
 
 /// Gives a textual link first refusal before child mouse reporting.
 /// Example: `_ = try app.inputLinkPointer(model, event);`
-pub fn inputLinkPointer(self: *AttachedClient, model: *MultiplexerModel, event: data.Mouse) !bool {
+pub fn inputLinkPointer(self: *AttachedClient, model: *data.MultiplexerModel, event: data.Mouse) !bool {
     const command: data.LinksPointerCommand = .{
         .kind = switch (event.kind) {
             .press => .press,
@@ -1274,7 +1248,7 @@ pub fn requestTabCreation(self: *AttachedClient, command: data.RequestTabCreatio
         return false;
     }
 
-    try label_validation.validate(command.label, .new_tab);
+    try data.label_validation.validate(command.label, .new_tab);
     const plan = self.model.planTabCreation() orelse return false;
     const request_id = try self.request_lifecycle.nextId();
     try self.sendCreateTabRequest(
@@ -1283,7 +1257,7 @@ pub fn requestTabCreation(self: *AttachedClient, command: data.RequestTabCreatio
             .request_id = request_id,
             .workspace = plan.workspace,
             .label = command.label,
-            .size = multiplexer.rectSize(self.geometry().area) orelse return error.TerminalTooSmall,
+            .size = data.multiplexer.rectSize(self.geometry().area) orelse return error.TerminalTooSmall,
             .launch = .{
                 .cwd = self.options.cwd,
                 .cwd_source = plan.cwd_source,
@@ -1385,7 +1359,7 @@ pub fn requestWorkspaceCreation(self: *AttachedClient, command: data.RequestWork
         return false;
     }
 
-    try label_validation.validate(command.name, .workspace);
+    try data.label_validation.validate(command.name, .workspace);
     const cwd_source: ?core.PaneId = if (command.cwd.len == 0)
         self.model.planWorkspaceCreation() orelse return false
     else
@@ -1394,7 +1368,7 @@ pub fn requestWorkspaceCreation(self: *AttachedClient, command: data.RequestWork
     try self.sendCreateWorkspaceRequest(
         .{
             .request_id = request_id,
-            .size = multiplexer.rectSize(self.geometry().area) orelse return error.TerminalTooSmall,
+            .size = data.multiplexer.rectSize(self.geometry().area) orelse return error.TerminalTooSmall,
             .name = command.name,
             .create_cwd = command.create_cwd,
             .launch = .{
@@ -1770,7 +1744,7 @@ pub fn finishPanePaste(self: *AttachedClient) !data.PanePasteOutcome {
 /// Resolves a pointer event or focused scroll without exposing pane storage
 /// or child mouse modes to the caller.
 /// Example: `_ = try app.inputPaneMouse(model, command);`
-pub fn inputPaneMouse(self: *AttachedClient, model: *MultiplexerModel, command: data.PaneMouseCommand) !data.PaneMouseOutcome {
+pub fn inputPaneMouse(self: *AttachedClient, model: *data.MultiplexerModel, command: data.PaneMouseCommand) !data.PaneMouseOutcome {
     const area = self.geometry().area;
     const resolved: data.Resolved = switch (command) {
         .pointer => |pointer| .{
@@ -2151,7 +2125,7 @@ pub fn completeConfigReload(self: *AttachedClient, result: anyerror!config_reloa
 
 /// Consumes one worker completion and applies its authorized action batch.
 /// Example: `_ = try app.completePluginAction(completion);`
-pub fn completePluginAction(self: *AttachedClient, completion: PluginActionsCompletion) !bool {
+pub fn completePluginAction(self: *AttachedClient, completion: data.PluginActionsCompletion) !bool {
     const command: plugin_action.CompletionCommand = if (completion.result) |result|
         .{
             .succeeded = .{
@@ -2225,8 +2199,8 @@ pub fn completePathCompletion(self: *AttachedClient, completion: data.PathComple
 
 /// Consumes one worker event and adopts only its current exact result.
 /// Example: `try app.completeClipboardCapture(completion);`
-pub fn completeClipboardCapture(self: *AttachedClient, completion: Completion) !void {
-    var owned_capture: ?*CaptureType = null;
+pub fn completeClipboardCapture(self: *AttachedClient, completion: data.Completion) !void {
+    var owned_capture: ?*data.Capture = null;
     defer if (owned_capture) |capture| {
         capture.deinit(self.gpa);
     };
@@ -2376,7 +2350,7 @@ fn requestWorkspaceSnapshot(self: *AttachedClient, workspace: core.WorkspaceLoca
 /// Connects visible detached panes after canonical membership is loaded.
 /// Pending attachments are coalesced; failed delivery rolls back its correlation.
 /// Example: `if (tab.snapshot_loaded) { try self.attachVisiblePanes(tab, area); }`
-fn attachVisiblePanes(self: *AttachedClient, tab: *Tab, area: core.Rect) !void {
+fn attachVisiblePanes(self: *AttachedClient, tab: *data.Tab, area: core.Rect) !void {
     std.debug.assert(tab.snapshot_loaded);
     var panes = tab.model.paneIterator();
 
@@ -2429,7 +2403,7 @@ fn requestTabRename(self: *AttachedClient, command: data.RequestRenameTab) !bool
         return false;
     }
 
-    try label_validation.validate(command.label, .renamed_tab);
+    try data.label_validation.validate(command.label, .renamed_tab);
     const location = self.model.tabLocation(command.tab_id) orelse return false;
     const request_id = try self.request_lifecycle.nextId();
     try self.sendTabRenameRequest(
@@ -2488,7 +2462,7 @@ fn refreshHistoryInspection(self: *AttachedClient) !void {
             return;
         }
 
-        const message: outbox_support.Message = switch (read.kind) {
+        const message: data.outbox_support.Message = switch (read.kind) {
             .command => .{
                 .query_history = .{
                     .request_id = request_id,
@@ -3580,7 +3554,7 @@ fn translateOpenedPane(opened: core.PaneOpened) data.OpenedPane {
 }
 
 fn arriveOpenedWorkspace(self: *AttachedClient, opened: data.OpenedPane) !void {
-    const size = multiplexer.rectSize(self.geometry().area) orelse return error.TerminalTooSmall;
+    const size = data.multiplexer.rectSize(self.geometry().area) orelse return error.TerminalTooSmall;
     const activation = try self.model.arriveWorkspace(workspaceArrival(
         &self.navigation_history,
         opened,
@@ -3816,7 +3790,7 @@ fn deliverHostCommit(self: *AttachedClient, commit: data.HostCommit) !void {
     }
 }
 
-fn validateHostCommit(model: *const ModelType, commit: data.HostCommit) !void {
+fn validateHostCommit(model: *const data.Model, commit: data.HostCommit) !void {
     if (commit.capabilities == null and commit.resize == null) {
         return error.EmptyHostCommit;
     }
@@ -3955,21 +3929,21 @@ fn reportChangeReview(self: *AttachedClient, message: []const u8) void {
     self.model.chrome_revision +%= 1;
 }
 
-fn findReviewPane(model: *ModelType, pane_id: core.PaneId) ?*Pane {
+fn findReviewPane(model: *data.Model, pane_id: core.PaneId) ?*data.Pane {
     const pane = model.workspace.findPane(pane_id) orelse return null;
     return if (pane.attached and pane.pane_generation != 0) pane else null;
 }
 
-fn resolveReviewPane(model: *ModelType, owner: data.ChangeReviewOperation) ?*const Pane {
+fn resolveReviewPane(model: *data.Model, owner: data.ChangeReviewOperation) ?*const data.Pane {
     const pane = findReviewPane(model, owner.pane_id) orelse return null;
     return if (pane.pane_generation == owner.pane_generation and pane.attachment_generation == owner.attachment_generation) pane else null;
 }
 
-fn linkTargetAt(model: *MultiplexerModel, event: data.Mouse, area: core.Rect) ?data.LinkTarget {
+fn linkTargetAt(model: *data.MultiplexerModel, event: data.Mouse, area: core.Rect) ?data.LinkTarget {
     const plan = model.planPaneMouse(event, area) orelse return null;
     const pane = model.findConst(plan.pane_id) orelse return null;
 
-    return cells.extract(
+    return data.cells.extract(
         &pane.buffer,
         pane.scroll,
         .{
@@ -4222,7 +4196,7 @@ fn identifyOpenedPane(self: *AttachedClient, opened_pane: core.PaneOpened) !void
     }
 }
 
-fn agentOperation(model: *const ModelType, pane_id: core.PaneId) ?data.AgentOperation {
+fn agentOperation(model: *const data.Model, pane_id: core.PaneId) ?data.AgentOperation {
     const pane = model.agentPane(pane_id) orelse return null;
     return .{
         .pane_id = pane_id,
@@ -4560,7 +4534,7 @@ fn sendTabClose(self: *AttachedClient, intent: data.TabCloseIntent) !void {
 
 /// Preflights departure, queues the open, then retires the previous projection.
 fn requestWorkspaceSwitch(self: *AttachedClient, target: WorkspaceSwitchTarget, authority: WorkspaceSwitchAuthority) !data.WorkspaceDeparture {
-    const size = multiplexer.rectSize(self.geometry().area) orelse return error.TerminalTooSmall;
+    const size = data.multiplexer.rectSize(self.geometry().area) orelse return error.TerminalTooSmall;
     const command: data.WorkspaceHandoff = switch (target) {
         .workspace => |workspace| selected: {
             const bookmark = self.navigation_history.find(
@@ -4658,7 +4632,7 @@ fn recoverWorkspaceSwitch(self: *AttachedClient, fallback_workspace: ?core.Works
                 .workspace = workspace,
             },
             .fallback_workspace = null,
-            .size = multiplexer.rectSize(self.geometry().area) orelse return error.TerminalTooSmall,
+            .size = data.multiplexer.rectSize(self.geometry().area) orelse return error.TerminalTooSmall,
         },
     );
     return .retried;
@@ -4690,7 +4664,7 @@ fn sendWorkspaceOpen(self: *AttachedClient, command: data.WorkspaceHandoff) !voi
 }
 
 /// Restores a bookmark layout only when the runtime selected that exact tab.
-fn workspaceArrival(history: *const HistoryType, opened: data.OpenedPane, size: core.TerminalSize) data.WorkspaceArrival {
+fn workspaceArrival(history: *const data.NavigationHistory, opened: data.OpenedPane, size: core.TerminalSize) data.WorkspaceArrival {
     const bookmark = history.find(opened.location.workspace);
     const saved_layout = if (bookmark) |remembered|
         if (std.meta.eql(remembered.location, opened.location)) remembered.tab_layout else null
@@ -5058,7 +5032,7 @@ fn requestHistoryPage(self: *AttachedClient, query: []const u8) !void {
     };
 }
 
-fn resolveHistoryScope(model: *const ModelType, owned: *data.OwnedHistoryQuery) void {
+fn resolveHistoryScope(model: *const data.Model, owned: *data.OwnedHistoryQuery) void {
     const prompt = model.name_prompt.currentConst() orelse return;
     if (prompt.target() != .history) {
         return;
@@ -5137,7 +5111,7 @@ fn applyHistoryResults(self: *AttachedClient, view: core.HistoryResultsView) !bo
     return changed;
 }
 
-fn enqueueHistoryRequest(self: *AttachedClient, message: outbox_support.Message, request_id: core.RequestId) !void {
+fn enqueueHistoryRequest(self: *AttachedClient, message: data.outbox_support.Message, request_id: core.RequestId) !void {
     self.sendRuntime(message) catch |err| {
         _ = self.model.history_palette.fail(
             .{
@@ -5332,8 +5306,8 @@ fn restoreClientLayout(self: *AttachedClient, snapshot: core.ClientLayoutSnapsho
         return error.DuplicateClientLayoutSnapshot;
     }
 
-    var saved_layouts: LayoutsType = .{};
-    var history: HistoryType = .{};
+    var saved_layouts: data.SavedLayouts = .{};
+    var history: data.NavigationHistory = .{};
     const restored = if (snapshot.restored)
         try parseClientLayoutSnapshot(
             snapshot,
@@ -5356,14 +5330,14 @@ fn restoreClientLayout(self: *AttachedClient, snapshot: core.ClientLayoutSnapsho
         self.navigation_history = history;
     }
 
-    const size = multiplexer.rectSize(self.geometry().area) orelse
+    const size = data.multiplexer.rectSize(self.geometry().area) orelse
         return error.TerminalTooSmall;
     const request = self.initialPaneRequest(restored, size);
     try self.sendRuntimeRequest(request);
     try self.client_layouts.markSnapshotReceived();
 }
 
-fn parseClientLayoutSnapshot(snapshot: core.ClientLayoutSnapshotView, layouts: *LayoutsType, history: *HistoryType) !?data.SavedLayout {
+fn parseClientLayoutSnapshot(snapshot: core.ClientLayoutSnapshotView, layouts: *data.SavedLayouts, history: *data.NavigationHistory) !?data.SavedLayout {
     var restored_active: ?data.SavedLayout = null;
     var tabs = snapshot.tabs();
     while (try tabs.next()) |tab| {
@@ -5399,7 +5373,7 @@ fn parseClientLayoutSnapshot(snapshot: core.ClientLayoutSnapshotView, layouts: *
     return restored_active;
 }
 
-fn initialPaneRequest(self: *AttachedClient, restored: ?data.SavedLayout, size: core.TerminalSize) ConnectionDelivery {
+fn initialPaneRequest(self: *AttachedClient, restored: ?data.SavedLayout, size: core.TerminalSize) data.ConnectionDelivery {
     const fallback_workspace: ?core.WorkspaceId = if (restored) |saved| switch (saved.location.workspace) {
         .workspace => |workspace_id| workspace_id,
         .worktree => null,
@@ -5463,7 +5437,7 @@ fn beginSuggestion(self: *AttachedClient) !bool {
     return true;
 }
 
-fn suggestionPane(model: *const ModelType) ?core.PaneId {
+fn suggestionPane(model: *const data.Model) ?core.PaneId {
     const active = model.workspace.activeConst() orelse return null;
     const pane = active.model.focusedPaneConst() orelse return null;
     return pane.id;
@@ -6341,8 +6315,8 @@ fn finishPromptList(self: *AttachedClient, before: data.PromptListSnapshot) !voi
         ),
         .suggest => try self.pasteSuggestion(),
         .goto => {
-            var results: ResultsType = .{};
-            goto_picker.collect(
+            var results: data.Results = .{};
+            data.goto_picker.collect(
                 pickerSources(&self.model),
                 before.textSlice(),
                 &results,
@@ -6437,8 +6411,8 @@ fn constrainPickerSelection(self: *AttachedClient) void {
 }
 
 fn pickerCount(self: *AttachedClient, query: []const u8) u16 {
-    var results: ResultsType = .{};
-    goto_picker.collect(
+    var results: data.Results = .{};
+    data.goto_picker.collect(
         pickerSources(&self.model),
         query,
         &results,
@@ -6446,7 +6420,7 @@ fn pickerCount(self: *AttachedClient, query: []const u8) u16 {
     return results.len;
 }
 
-fn pickerSources(model: *const ModelType) SourcesType {
+fn pickerSources(model: *const data.Model) data.Sources {
     return .{
         .agents = model.agentSnapshot(),
         .workspaces = model.workspaceListSnapshot(),
@@ -6454,7 +6428,7 @@ fn pickerSources(model: *const ModelType) SourcesType {
     };
 }
 
-fn navigatePickerItem(self: *AttachedClient, item: goto_picker.Item) !void {
+fn navigatePickerItem(self: *AttachedClient, item: data.goto_picker.Item) !void {
     switch (item) {
         .workspace => |workspace| _ = try self.selectWorkspace(
             .{
@@ -7074,7 +7048,7 @@ fn setPluginEnabled(self: *AttachedClient, reply: *core.ClientCommand, enabled: 
         .registry = registry,
     };
     const index = try catalog.find(reply.text());
-    var override: PluginOverride = .{
+    var override: data.PluginOverride = .{
         .spec = generation.snapshot.plugins[index],
     };
     override.spec.enabled = enabled;
@@ -7161,7 +7135,7 @@ fn reportPluginStart(self: *AttachedClient, outcome: plugin_action.StartOutcome)
     return outcome;
 }
 
-fn authorizePluginResult(active_registry: ?*RegistryType, result: PluginResultType) !void {
+fn authorizePluginResult(active_registry: ?*Registry, result: data.PluginResult) !void {
     const registry = active_registry orelse return error.PluginRegistryUnavailable;
 
     try registry.authorizeBatch(
@@ -7412,7 +7386,7 @@ fn startPathCompletion(self: *AttachedClient) !void {
     };
 }
 
-fn focusedPaneCwd(model: *const ModelType) []const u8 {
+fn focusedPaneCwd(model: *const data.Model) []const u8 {
     const active = model.workspace.activeConst() orelse return "";
     const pane = active.model.focusedPaneConst() orelse return "";
     return pane.cwdSlice();
@@ -7438,7 +7412,7 @@ fn startClipboardCapture(self: *AttachedClient) !clipboard_image.StartOutcome {
 }
 
 fn scheduleClipboardCapture(self: *AttachedClient, capture: data.ClipboardCapture) !void {
-    const request: CaptureRequestType = .{
+    const request: data.CaptureRequest = .{
         .target = capture.target,
         .sequence = @intFromEnum(capture.id),
         .marker_policy = if (self.model.attachmentMarkers(capture.target)) |markers|
@@ -7450,7 +7424,7 @@ fn scheduleClipboardCapture(self: *AttachedClient, capture: data.ClipboardCaptur
     try self.capture_port.schedule(request);
 }
 
-fn adoptClipboardCapture(self: *AttachedClient, capture: *CaptureType) !bool {
+fn adoptClipboardCapture(self: *AttachedClient, capture: *data.Capture) !bool {
     const request = capture.request;
     var layout_changed = try self.attachment_shelf.adopt(capture);
     if (request.marker_policy.learnsIdentity()) {

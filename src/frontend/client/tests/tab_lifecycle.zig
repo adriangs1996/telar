@@ -72,7 +72,7 @@ test "tab creation consumes an incompatible continuation before rejection" {
             .tab_created = created,
         },
     ));
-    try std.testing.expectEqualDeep(client_module.Version{}, client.model.version());
+    try std.testing.expectEqualDeep(data.Version{}, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
@@ -103,7 +103,7 @@ test "tab creation consumes a mismatched workspace before rejection" {
         },
     ));
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectEqualDeep(client_module.Version{}, client.model.version());
+    try std.testing.expectEqualDeep(data.Version{}, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
@@ -798,7 +798,7 @@ test "close tab capacity failure preserves attachment and request state" {
     try harness.bootstrap();
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
-    while (client.runtime_transport.outbox.len < client_module.capacity - 1) {
+    while (client.runtime_transport.outbox.len < data.outbox_support.capacity - 1) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version_before = client.model.version();
@@ -810,7 +810,7 @@ test "close tab capacity failure preserves attachment and request state" {
         client.executeAction(.close_tab, .effect),
     );
 
-    try std.testing.expectEqual(client_module.capacity - 1, @as(usize, client.runtime_transport.outbox.len));
+    try std.testing.expectEqual(data.outbox_support.capacity - 1, @as(usize, client.runtime_transport.outbox.len));
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
     try std.testing.expectEqualDeep(focus_before, client.model.reportedPaneFocus());
     try std.testing.expectEqual(next_request_id, client.request_lifecycle.next_request_id);
@@ -832,7 +832,7 @@ test "close tab reserves its focus-out message" {
     const focus_in = try harness.nextClientMessage(&buffer);
     try std.testing.expect(focus_in == .pane_input);
     try std.testing.expectEqualStrings("\x1b[I", focus_in.pane_input.bytes);
-    while (client.runtime_transport.outbox.len < client_module.capacity - 2) {
+    while (client.runtime_transport.outbox.len < data.outbox_support.capacity - 2) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version = client.model.version();
@@ -865,7 +865,7 @@ test "close tab reserves its captured paste closing marker" {
     const opening = try harness.nextClientMessage(&buffer);
     try std.testing.expect(opening == .pane_input);
     try std.testing.expectEqualStrings("\x1b[200~", opening.pane_input.bytes);
-    while (client.runtime_transport.outbox.len < client_module.capacity - 2) {
+    while (client.runtime_transport.outbox.len < data.outbox_support.capacity - 2) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version = client.model.version();

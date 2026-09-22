@@ -1,5 +1,5 @@
-const model = @import("model.zig");
+const data = @import("model");
 const ParsedBinding = @This();
 
-binding: model.ConfiguredBinding,
+binding: data.config_values.ConfiguredBinding,
 prefixed: bool,

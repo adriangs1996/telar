@@ -1,3 +1,4 @@
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const std = @import("std");
@@ -14,7 +15,7 @@ const Screen = @This();
 
 front: core.Buffer,
 back: core.Buffer,
-damage_rows: []client.DamageRow,
+damage_rows: []data.DamageRow,
 full_damage: bool = true,
 gpa: std.mem.Allocator,
 
@@ -43,7 +44,7 @@ pub fn init(gpa: std.mem.Allocator, w: u16, h: u16) !Screen {
     errdefer front.deinit();
     var back = try core.Buffer.init(gpa, w, h);
     errdefer back.deinit();
-    const damage_rows = try gpa.alloc(client.DamageRow, h);
+    const damage_rows = try gpa.alloc(data.DamageRow, h);
     @memset(damage_rows, .{});
 
     var s: Screen = .{
@@ -103,12 +104,12 @@ pub fn patchCells(s: *Screen, start: u32, count: u32) ![]core.Cell {
         return error.PatchOutOfBounds;
     }
 
-    client.markRows(s.damage_rows, s.back.w, .{ .start = first, .count = len });
+    data.damage.markRows(s.damage_rows, s.back.w, .{ .start = first, .count = len });
     return s.back.cells[first..end];
 }
 
 pub fn resize(s: *Screen, w: u16, h: u16) !void {
-    const damage_rows = try s.gpa.alloc(client.DamageRow, h);
+    const damage_rows = try s.gpa.alloc(data.DamageRow, h);
     errdefer s.gpa.free(damage_rows);
     @memset(damage_rows, .{});
     try s.back.resize(w, h);

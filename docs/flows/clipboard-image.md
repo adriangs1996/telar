@@ -173,7 +173,7 @@ event does not wipe megabytes synchronously.
 
 ## Validation
 
-- `src/client/model/Model.zig` proves single-flight capture identity, exact
+- `src/model/state/Model.zig` proves single-flight capture identity, exact
   completion, target ownership, validation and identifier exhaustion.
 - `src/client/application/input/clipboard_image.zig` proves commit before
   scheduling, complete start classification, exact consumption, stale

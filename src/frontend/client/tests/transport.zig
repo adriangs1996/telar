@@ -1,5 +1,6 @@
 //! Client integration tests for transport.
 
+const data = @import("model");
 const client_module = @import("telar-client");
 const core = @import("telar-core");
 const TerminalClient = @import("../TerminalClient.zig");
@@ -50,7 +51,7 @@ test "host input reads pause at outbox capacity and resume with one token" {
         .sent => |result| try client.completeRuntimeSend(result),
         else => return error.UnexpectedEvent,
     }
-    try std.testing.expectEqual(client_module.capacity - 1, @as(usize, client.runtime_transport.outbox.len));
+    try std.testing.expectEqual(data.outbox_support.capacity - 1, @as(usize, client.runtime_transport.outbox.len));
     try std.testing.expect(client.runtime_transport.outbox.inFlight());
     try std.testing.expect(TerminalClient.of(client).host_input.read_pending);
 
@@ -141,7 +142,7 @@ test "graphics credits remain owned until the outbox accepts them" {
         else => return error.UnexpectedEvent,
     }
     try std.testing.expect(TerminalClient.of(client).graphics_store.peekCredit() == null);
-    try std.testing.expectEqual(client_module.capacity, @as(usize, client.runtime_transport.outbox.len));
+    try std.testing.expectEqual(data.outbox_support.capacity, @as(usize, client.runtime_transport.outbox.len));
     try std.testing.expect(client.runtime_transport.outbox.inFlight());
 }
 
@@ -230,7 +231,7 @@ test "client startup waits for runtime layout before its initial open" {
     defer harness.deinit();
     const client = harness.client;
     client.options.arguments = &.{"/bin/sh"};
-    const expected_size = client_module.rectSize(TerminalClient.of(client).view.workbench()).?;
+    const expected_size = data.multiplexer.rectSize(TerminalClient.of(client).view.workbench()).?;
 
     try client_startup.start(client, .{
         .resize_watcher = &watcher,
@@ -384,7 +385,7 @@ test "restored client layout controls the initial attach geometry" {
     try std.testing.expectEqual(pane_id, open.open_pane.target.pane);
     try std.testing.expect(open.open_pane.launch == null);
     try std.testing.expectEqualDeep(
-        client_module.rectSize(TerminalClient.of(client).view.workbench()).?,
+        data.multiplexer.rectSize(TerminalClient.of(client).view.workbench()).?,
         open.open_pane.size,
     );
 

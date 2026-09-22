@@ -8,7 +8,8 @@ locations below are not permission to import every file they contain.
 Concrete types and generic families follow [Zig source layout](zig-source-layout.md).
 Capabilities expose explicit public files, not mandatory directory barrels.
 The package entrypoints are `src/core/core.zig`, `src/backend/backend.zig`,
-`src/client/client.zig` and `src/frontend/frontend.zig`. They export canonical
+`src/client/client.zig`, `src/model/model.zig`, `src/gui/gui.zig` and
+`src/frontend/frontend.zig`. They export canonical
 values needed across Zig module boundaries.
 
 For `telar-client`, `src/client/capabilities.json` records:
@@ -92,19 +93,22 @@ capability needs an indivisible invariant to justify it.
 
 `telar-client` shares implementation across independent connections. It owns
 neither runtime truth nor a common instance of navigation or focus.
+`model` provides data definitions and state transitions; each attached client
+owns its instances. The [extraction audit](attached-client-model-audit.md) records
+which imports remain services and why.
 
 | Capability | Location | Owns |
 | --- | --- | --- |
 | Attached client | `src/client/AttachedClient.zig` | Shared aggregate: model, transport, configuration, plugins, host ports |
 | Operations | `src/client/operations/` | Concrete policies, state mutations, request correlation and host delivery |
-| Model | `src/client/model/Model.zig` | Disposable semantic state and transitions |
+| Model | `src/model/state/Model.zig` | Disposable semantic state and transitions |
 | Shared values | `src/model/model.zig` | Public value contracts and bounded state; depends only on core |
 | Client domain algorithms | `src/client/application/` | Client-specific operations; no required dispatch layer |
-| Entrypoints | `src/client/entrypoints/server_messages.zig` | Synchronous decoded-message dispatch |
-| Panes | `src/client/panes/` | Cells, damage, child modes and attachment-aware commits |
-| Workspace | `src/client/workspace/` | Tabs, splits, navigation and explicit geometry |
+| Message dispatch | `AttachedClient.handleServerMessage` | Synchronous decoded-message dispatch |
+| Panes | `src/model/panes/` | Cells, damage, child modes and attachment-aware commits |
+| Workspace | `src/model/workspace/` | Tabs, splits, navigation and explicit geometry |
 | Input | `src/client/input/` | Semantic values, bindings, leases, editing and child encoding |
-| Connection | `src/client/connection/` | Bounded outbox, correlation, validated runtime messages and transport state |
+| Connection | `src/client/connection/`, `src/model/connection/` | Client socket and driver; model-owned bounded messages, outbox and correlation |
 | Execution | `src/client/execution/` | Producer admission, bounded inbox, wakeups, finite drains and completion generations |
 | Resources | `src/client/resources/` | Clock, timers, configuration reload, layout persistence and telemetry state |
 | Presentation | `src/client/presentation/` | Projections, preparation, completion, geometry and title port |
@@ -114,7 +118,7 @@ neither runtime truth nor a common instance of navigation or focus.
 | Notifications and bars | `src/client/notifications/`, `src/client/bars/` | Semantic control state |
 | Links | `src/client/links/` | Targets, URI rules and pointer ownership |
 | Configuration | `src/client/config/` | Typed configuration, client-owned Lua generation and bounded callback values |
-| Appearance | `src/client/appearance/` | Named color themes, palette roles and overrides |
+| Appearance | `src/model/appearance/` | Named color themes, palette roles and overrides |
 | Plugins | `src/client/plugins/` | Registry, protocol and isolated workers |
 | Transport | `src/client/transport/` | Client-side local connection and handshake |
 
@@ -144,9 +148,10 @@ existing event driver or permits cancelling a partially written terminal diff.
 ## Dependency direction
 
 ```text
-telar-frontend -> telar-client -> telar-core <- telar-backend
-       |                             ^
-       +-----------------------------+
+telar-frontend / telar-gui -> telar-client -> telar-core <- telar-backend
+           |                     |              ^
+           +-----------> model <-+              |
+                           +--------------------+
 ```
 
 A native adapter imports `telar-client`. Its only named project dependency is

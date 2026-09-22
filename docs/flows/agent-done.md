@@ -96,7 +96,7 @@ silent.
 - `src/backend/runtime/application/operations/agents.zig` contains the direct
   acknowledgement operation and stale accounting.
 - `src/core/schema_contract_test.zig` pins the `acknowledge_agent` bytes.
-- `src/client/model/tests/observations.zig` proves once-per-completion
+- `src/model/state/tests/observations.zig` proves once-per-completion
   acknowledgement and its reset.
 - `src/client/AttachedClient.zig` enqueues acknowledgement
   before attachment synchronization; client notification/agent integration

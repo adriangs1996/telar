@@ -1,6 +1,7 @@
 //! Starts one constructed client in the order required by request
 //! correlation, the runtime handshake and asynchronous event sources.
 
+const data = @import("model");
 const client_module = @import("telar-client");
 const TerminalClient = @import("../../TerminalClient.zig");
 const Request = @import("Request.zig");
@@ -17,7 +18,7 @@ const client_telemetry = @import("../../resources/telemetry.zig");
 /// try start(client, .{ .resize_watcher = &watcher });
 /// ```
 pub fn start(client: *client_module.AttachedClient, request: Request) !void {
-    _ = client_module.rectSize(client.geometry().area) orelse
+    _ = data.multiplexer.rectSize(client.geometry().area) orelse
         return error.TerminalTooSmall;
     client.startup.phase = .probing;
     try host_capabilities.begin(client);

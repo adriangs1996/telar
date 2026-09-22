@@ -1,16 +1,12 @@
-const AgentHistoryWindow = @import("../../panes/AgentHistoryWindow.zig");
-const outbox_support = @import("../../connection/outbox_support.zig");
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
-const Model = @import("../../model/Model.zig");
-const Outbox = @import("../../connection/Outbox.zig");
 const reading = @import("agent_reading.zig");
 
 const pane_id: core.PaneId = @enumFromInt(1);
 const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
 
-fn bootstrap(model: *Model) !void {
+fn bootstrap(model: *data.Model) !void {
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 40, .rows = 10 } });
     const handler = model;
     try std.testing.expect(handler.identifyPane(.{
@@ -57,7 +53,7 @@ fn fixtureOptions() !core.AgentOptions {
 }
 
 test "created agent tabs immediately expose the attached composer and preserve workspace" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 40, .rows = 10 } });
     const agent_id: core.PaneId = @enumFromInt(2);
@@ -82,7 +78,7 @@ test "created agent tabs immediately expose the attached composer and preserve w
 }
 
 test "agent conversation survives receive reuse and rejects stale generations and revisions" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
     try bootstrap(&model);
     const handler = &model;
@@ -109,14 +105,14 @@ test "agent conversation survives receive reuse and rejects stale generations an
 }
 
 test "independent clients retain activity identities and child status across snapshot replacement" {
-    const first = try std.testing.allocator.create(Model);
+    const first = try std.testing.allocator.create(data.Model);
     defer std.testing.allocator.destroy(first);
-    first.* = Model.init(std.testing.allocator, true);
+    first.* = data.Model.init(std.testing.allocator, true);
     defer first.deinit();
     try bootstrap(first);
-    const second = try std.testing.allocator.create(Model);
+    const second = try std.testing.allocator.create(data.Model);
     defer std.testing.allocator.destroy(second);
-    second.* = Model.init(std.testing.allocator, true);
+    second.* = data.Model.init(std.testing.allocator, true);
     defer second.deinit();
     try bootstrap(second);
     const first_handler = first;
@@ -157,7 +153,7 @@ test "independent clients retain activity identities and child status across sna
 }
 
 test "agent prompt acknowledgements preserve later edits and replacement attachments" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
     try bootstrap(&model);
     const handler = &model;
@@ -187,7 +183,7 @@ test "agent prompt acknowledgements preserve later edits and replacement attachm
 }
 
 test "composer editing is atomic at UTF-8 and capacity boundaries" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
     try bootstrap(&model);
     const handler = &model;
@@ -206,7 +202,7 @@ test "composer editing is atomic at UTF-8 and capacity boundaries" {
 }
 
 test "prompt acknowledgement clears unchanged content after cursor or selection changes" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
     try bootstrap(&model);
     const handler = &model;
@@ -233,7 +229,7 @@ test "prompt acknowledgement clears unchanged content after cursor or selection 
 }
 
 test "queued prompts own their text and serialize agent identity" {
-    var outbox: Outbox = .{};
+    var outbox: data.Outbox = .{};
     try std.testing.expectError(error.InvalidAgentPrompt, outbox.pushAgentPrompt(.{
         .request_id = @enumFromInt(6),
         .pane_id = pane_id,
@@ -258,12 +254,12 @@ test "queued prompts own their text and serialize agent identity" {
     try std.testing.expectEqualStrings("fake-model", decoded.agent_prompt.options.modelSlice());
     try std.testing.expectEqualStrings("low", decoded.agent_prompt.options.effort.idSlice());
     try std.testing.expectEqual(core.AgentAccess.workspace, decoded.agent_prompt.options.access);
-    try std.testing.expect(@sizeOf(@import("../../connection/OwnedAgentPrompt.zig")) < 512);
+    try std.testing.expect(@sizeOf(data.OwnedAgentPrompt) < 512);
     try outbox.finishSend({});
 }
 
 test "agent draft settings use the catalog and survive streaming without changing catalog identity" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
     try bootstrap(&model);
     const handler = &model;
@@ -288,10 +284,10 @@ test "agent draft settings use the catalog and survive streaming without changin
     try std.testing.expectEqualStrings("high", prompt.options.effort.idSlice());
 }
 
-fn historyModel() !*Model {
-    const model = try std.testing.allocator.create(Model);
+fn historyModel() !*data.Model {
+    const model = try std.testing.allocator.create(data.Model);
     errdefer std.testing.allocator.destroy(model);
-    model.* = Model.init(std.testing.allocator, true);
+    model.* = data.Model.init(std.testing.allocator, true);
     errdefer model.deinit();
     try bootstrap(model);
     var bytes: [4096]u8 = undefined;
@@ -306,7 +302,7 @@ fn historyModel() !*Model {
     return model;
 }
 
-fn historyOperation(model: *Model, generation: u64) data.AgentHistoryOperation {
+fn historyOperation(model: *data.Model, generation: u64) data.AgentHistoryOperation {
     const pane = model.agentPane(pane_id).?;
     return .{ .owner = .{ .pane_id = pane_id, .pane_generation = pane.pane_generation, .attachment_generation = pane.attachment_generation, .location = pane.location }, .view_generation = generation };
 }
@@ -335,7 +331,7 @@ test "folded history scanning is bounded and preserves its seam across retries" 
     const page = try std.testing.allocator.create(core.AgentHistoryPage);
     defer std.testing.allocator.destroy(page);
     page.* = window.pages[0];
-    for (0..AgentHistoryWindow.max_scan_pages) |index| {
+    for (0..data.AgentHistoryWindow.max_scan_pages) |index| {
         try std.testing.expect(reading.skipFolded(handler, pane_id));
         const query = (try reading.begin(handler, pane_id)).?;
         try std.testing.expect(!reading.skipFolded(handler, pane_id));
@@ -536,7 +532,7 @@ test "history input does not allocate and failed admission keeps the live conver
 }
 
 test "queued agent history cursors own reused input without inflating message metadata" {
-    var outbox: Outbox = .{};
+    var outbox: data.Outbox = .{};
     var cursor = "provider-cursor".*;
     var anchor = "provider-item".*;
     var anchor_turn = "provider-turn".*;
@@ -557,7 +553,7 @@ test "queued agent history cursors own reused input without inflating message me
     try std.testing.expectEqualStrings("provider-item", initial.anchor);
     try std.testing.expectEqualStrings("provider-turn", initial.anchor_turn);
     try std.testing.expectEqualStrings("", initial.cursor);
-    try std.testing.expect(@sizeOf(outbox_support.Message) < 512);
+    try std.testing.expect(@sizeOf(data.outbox_support.Message) < 512);
 }
 
 test "hidden history completions update their window without invalidating the visible tab" {
@@ -655,7 +651,7 @@ test "history ownership retains at most sixteen windows and evicts an inactive r
     try std.testing.expect(model.agentPane(@enumFromInt(17)).?.agent_history != null);
     try std.testing.expectEqual(selected, model.agentPane(pane_id).?.agent_history.?);
     try std.testing.expect(selected.retained);
-    try std.testing.expect(@sizeOf(@import("../../panes/AgentHistoryWindow.zig")) <= 2 * 1024 * 1024);
+    try std.testing.expect(@sizeOf(data.AgentHistoryWindow) <= 2 * 1024 * 1024);
 }
 
 test "a live provider item without turn identity falls back to persisted tail" {
@@ -724,7 +720,7 @@ test "selection retains historical pages and retires late provider responses bef
 }
 
 test "resumed snapshot loads history once and preserves a later composer draft" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
     try bootstrap(&model);
     const handler = &model;
@@ -770,7 +766,7 @@ test "a new conversation retires old history requests while preserving the next 
 }
 
 test "image drafts survive failed admission later edits and stale acknowledgement" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
     try bootstrap(&model);
     const handler = &model;

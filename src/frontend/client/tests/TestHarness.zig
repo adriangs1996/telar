@@ -1,3 +1,4 @@
+const data = @import("model");
 const core = @import("telar-core");
 const client_module = @import("telar-client");
 const TerminalClient = @import("../TerminalClient.zig");
@@ -237,7 +238,7 @@ pub fn addTab(harness: *TestHarness, tab_id: core.TabId, pane_id: core.PaneId) !
 pub fn addInactiveTab(harness: *TestHarness, tab_id: core.TabId, pane_id: core.PaneId) !core.TabLocation {
     const location = try harness.addTab(tab_id, pane_id);
     const tab = harness.client.model.workspace.find(tab_id).?;
-    client_module.TabsModel.detachAll(tab);
+    data.TabsModel.detachAll(tab);
     try TerminalClient.of(harness.client).graphics_store.setPaneVisible(pane_id, false);
     try std.testing.expect(harness.client.model.workspace.select(bootstrap_location.tab_id));
 

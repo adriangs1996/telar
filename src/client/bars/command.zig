@@ -1,13 +1,12 @@
 //! Bounded external command worker for configured bar data sources.
 
-const model = @import("model.zig");
+const data = @import("model");
 const std = @import("std");
-const CommandType = @import("BarCommand.zig");
 const Output = @import("Output.zig");
 const builtin = @import("builtin");
 
-pub fn run(io: std.Io, command: CommandType) !Output {
-    var argument_storage: [model.max_command_args][]const u8 = undefined;
+pub fn run(io: std.Io, command: data.BarCommand) !Output {
+    var argument_storage: [data.bar_values.max_command_args][]const u8 = undefined;
     const argv = command.argumentSlice(&argument_storage);
     if (argv.len == 0) {
         return error.EmptyBarCommand;
@@ -16,7 +15,7 @@ pub fn run(io: std.Io, command: CommandType) !Output {
     const allocator = std.heap.page_allocator;
     const result = try std.process.run(allocator, io, .{
         .argv = argv,
-        .stdout_limit = .limited(model.max_text_bytes + 2),
+        .stdout_limit = .limited(data.bar_values.max_text_bytes + 2),
         .stderr_limit = .limited(4096),
         .timeout = .{ .duration = .{
             .clock = .awake,
@@ -36,7 +35,7 @@ pub fn run(io: std.Io, command: CommandType) !Output {
     }
 
     const trimmed = std.mem.trim(u8, result.stdout, " \t\r\n");
-    if (trimmed.len > model.max_text_bytes) {
+    if (trimmed.len > data.bar_values.max_text_bytes) {
         return error.BarCommandOutputTooLong;
     }
     for (trimmed) |byte| {
@@ -67,7 +66,7 @@ test "command runner executes argv directly and validates one display line" {
         return error.SkipZigTest;
     }
 
-    var command: CommandType = .{
+    var command: data.BarCommand = .{
         .generation = 1,
         .interval_ns = std.time.ns_per_s,
         .timeout_ms = 1_000,

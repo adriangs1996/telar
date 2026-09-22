@@ -125,7 +125,7 @@ test "cell fallback connects every border edge and graphical frame keeps corners
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .hovered = null,
     };
     var field: Field = .{};

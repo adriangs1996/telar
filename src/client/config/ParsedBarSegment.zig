@@ -1,7 +1,6 @@
-const icons = @import("../layout/icons.zig");
-const StyleType = @import("../bars/Style.zig");
+const data = @import("model");
 const ParsedBarSegment = @This();
 
 text: []const u8,
-icon: ?icons.Icon,
-style: StyleType,
+icon: ?data.icons.Icon,
+style: data.Style,

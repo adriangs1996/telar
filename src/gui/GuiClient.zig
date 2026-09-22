@@ -96,7 +96,7 @@ input_revision: u64 = 0,
 focused: bool = true,
 widgets: State = .{},
 region: shared_model.Region,
-theme: client.ColorTheme,
+theme: shared_model.ColorTheme,
 chrome: Chrome = .{},
 
 /// The sidebar band width preference; the shared model keeps only visibility.
@@ -1572,7 +1572,7 @@ pub fn adoptSidebarWidth(self: *GuiClient, width: u32) void {
 
 /// Publishes exact font metrics and lets shared geometry negotiate the PTY.
 /// Example: `try gui.resize(size, renderer.theme);`
-pub fn resize(self: *GuiClient, size: core.TerminalSize, theme: client.TerminalTheme) !void {
+pub fn resize(self: *GuiClient, size: core.TerminalSize, theme: shared_model.TerminalTheme) !void {
     var capabilities = self.app.model.hostCapabilities();
 
     capabilities.window_width_px = @as(u32, size.cols) * size.cell_width_px;

@@ -1,5 +1,5 @@
-const PresentationCommitType = @import("../panes/PresentationCommit.zig");
+const data = @import("model");
 const Delivery = @This();
 
-commit: PresentationCommitType,
+commit: data.PresentationCommit,
 media_pending: bool,

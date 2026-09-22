@@ -113,7 +113,7 @@ is replaced.
 
 - `src/client/config/` proves the Lua schema, exact tabs ownership,
   top-right restriction, immutable callback context and bounded result parser.
-- `src/client/bars/model.zig` proves bounded content, typed presentation
+- `src/model/bars/model.zig` proves bounded content, typed presentation
   state, generation checks and equal-value folding.
 - `src/client/bars/command.zig` proves direct argv execution and bounded
   single-line output.

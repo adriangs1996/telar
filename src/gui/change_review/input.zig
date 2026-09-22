@@ -1,3 +1,4 @@
+const data = @import("model");
 const event_module = @import("../input/event.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -319,7 +320,7 @@ pub fn activate(w: *Widget, value: struct { kind: actions.Kind, item: usize = 0 
             w.reviewed_changed = true;
         },
         .theme => {
-            const themes = std.meta.tags(client.theme_support.Builtin);
+            const themes = std.meta.tags(data.theme_support.Builtin);
             w.theme = themes[(@intFromEnum(w.theme) + 1) % themes.len];
         },
         else => {},

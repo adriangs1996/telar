@@ -1,6 +1,7 @@
 //! Turns the client's cell colors into shader colors. A cell color may defer
 //! to the host; the window is its own host, so `default` resolves to the
 //! fallback the caller names.
+const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const Color = @import("Color.zig");
@@ -35,7 +36,7 @@ fn cubeLevel(step: u8) u8 {
     return if (step == 0) 0 else 55 + step * 40;
 }
 
-const ansi = (client.TerminalTheme{}).palette;
+const ansi = (data.TerminalTheme{}).palette;
 
 test "default defers to the fallback and rgb passes through" {
     const std = @import("std");

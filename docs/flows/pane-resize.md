@@ -41,7 +41,7 @@ the PTY size unchanged. A reconnect reconstructs disposable geometry and
 resources. No operation requests a draw; presentation observes the pane revision.
 
 Source: `src/client/AttachedClient.zig` and
-`src/client/model/Model.zig`.
+`src/model/state/Model.zig`.
 Tests: `src/frontend/client/tests/pane_lifecycle.zig`,
 `src/frontend/client/tests/host_resources.zig`,
-`src/client/model/tests/panes.zig`, and runtime pane-resize/cell-projection tests.
+`src/model/state/tests/panes.zig`, and runtime pane-resize/cell-projection tests.

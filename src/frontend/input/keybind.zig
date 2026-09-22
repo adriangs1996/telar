@@ -22,7 +22,7 @@ const TerminalResponseCapture = @import("TerminalResponseCapture.zig");
 // ---------------------------------------------------------------------------
 
 pub const TestAction = enum { detach, palette, next };
-const TestBinding = client.GenericBinding(TestAction, 4);
+const TestBinding = data.GenericBinding(TestAction, 4);
 const TestRouter = GenericRouter(TestAction, .{ .max_bindings = 16, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 });
 
 test "terminal decoding and direct semantic input produce identical routing" {
@@ -132,7 +132,7 @@ test "keymap accepts sibling sequences with one shared prefix" {
 
 test "keymap action representation does not affect sequence identity" {
     const SmallAction = enum(u8) { detach, palette };
-    const SmallBinding = client.GenericBinding(SmallAction, 4);
+    const SmallBinding = data.GenericBinding(SmallAction, 4);
     const SmallRouter = GenericRouter(SmallAction, .{ .max_bindings = 16, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 });
     const siblings = [_]SmallBinding{
         try .parse(&.{ "ctrl+b", "d" }, .detach),

@@ -126,7 +126,7 @@ trigger.
 
 - `src/client/resources/config_reload.zig` owns rejected-load cleanup and the
   asynchronous handoff of generation, registry and trust ownership.
-- `src/client/model/Model.zig` validates generation ordering and commits settings.
+- `src/model/state/Model.zig` validates generation ordering and commits settings.
 - `src/client/AttachedClient.zig` performs the resource transfer and physical
   effects, preserving the adopted generation after a downstream failure.
 - `src/frontend/client/tests/configuration.zig` exercises reload outcomes,

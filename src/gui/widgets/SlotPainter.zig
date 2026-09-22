@@ -1,5 +1,6 @@
 //! One configured bar slot in a cell row supplied by its parent's canvas.
 //! Tabs have their own widget and leave this slot empty.
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
@@ -7,9 +8,9 @@ const BarContent = @import("BarContent.zig");
 const MetricsLabel = @import("MetricsLabel.zig");
 const SlotPainter = @This();
 
-slot: *const client.Slot,
+slot: *const data.bar_values.Slot,
 area: core.Rect = .{},
-metrics: ?client.SystemMetrics = null,
+metrics: ?data.SystemMetrics = null,
 
 /// Measures one slot in cells for the caller's own layout.
 /// Example: `const right_width = painter.width();`

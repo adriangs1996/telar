@@ -1,4 +1,5 @@
 //! Disposable scroll bounds and attention order, independent of frame widgets.
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -18,7 +19,7 @@ ordered: SnapshotMark = .{},
 
 /// Sorts only when the snapshot identity changes, retaining indices rather
 /// than borrowed agents. Example: `state.observe(projection.agents);`
-pub fn observe(state: *SidebarState, snapshot: *const client.AgentSnapshot) void {
+pub fn observe(state: *SidebarState, snapshot: *const data.AgentSnapshot) void {
     const mark = SnapshotMark.of(snapshot);
     if (state.ordered.eql(mark)) {
         return;
@@ -72,6 +73,6 @@ pub fn ordering(state: *const SidebarState) []const u8 {
     return state.order[0..state.order_len];
 }
 
-fn indexLessThan(agents: []const client.Agent, left: u8, right: u8) bool {
+fn indexLessThan(agents: []const data.Agent, left: u8, right: u8) bool {
     return client.agent_attention.lessThan({}, &agents[left], &agents[right]);
 }

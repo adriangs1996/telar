@@ -65,11 +65,11 @@ pub fn draw(palette: CommandPalette, canvas: *Canvas) !void {
     const prompt = palette.projection.prompt.?;
     const colors = canvas.theme.palette;
     const scale = if (palette.scale > 0) palette.scale else 1;
-    var goto_results: client.Results = .{};
+    var goto_results: data.Results = .{};
     var action_results: data.CommandResults = .{};
     const total: u16 = switch (prompt.paletteMode()) {
         .goto => blk: {
-            client.collect(palette.sources(), prompt.paletteQuery(), &goto_results);
+            data.goto_picker.collect(palette.sources(), prompt.paletteQuery(), &goto_results);
             break :blk goto_results.len;
         },
         .actions => blk: {
@@ -114,7 +114,7 @@ pub fn draw(palette: CommandPalette, canvas: *Canvas) !void {
             try canvas.fill(row, colors.surface0);
         }
 
-        var label_storage: [client.max_label_bytes]u8 = undefined;
+        var label_storage: [data.goto_picker.max_label_bytes]u8 = undefined;
         var key_storage: [key_label.max_bytes]u8 = undefined;
         var child = switch (prompt.paletteMode()) {
             .goto => palette.pickerRow(goto_results.slice()[index].item, &label_storage),
@@ -147,7 +147,7 @@ fn drawLegend(canvas: *Canvas, row: core.Rect, mode: data.command_palette.Prefix
     }
 }
 
-fn sources(palette: CommandPalette) client.Sources {
+fn sources(palette: CommandPalette) data.Sources {
     return .{ .agents = palette.projection.agents, .workspaces = palette.projection.workspaces, .tabs = palette.projection.tabs };
 }
 
@@ -165,8 +165,8 @@ fn drawField(canvas: *Canvas, row: core.Rect, prompt: data.Prompt) !void {
     }
 }
 
-fn pickerRow(palette: CommandPalette, item: client.ModelGotoPickerItem, storage: *[client.max_label_bytes]u8) PaletteRow {
-    const label = client.describe(palette.sources(), item, storage);
+fn pickerRow(palette: CommandPalette, item: data.goto_picker.Item, storage: *[data.goto_picker.max_label_bytes]u8) PaletteRow {
+    const label = data.goto_picker.describe(palette.sources(), item, storage);
     const split = std.mem.indexOf(u8, label, "  ") orelse label.len;
     const icon: []const u8 = switch (item) {
         .workspace => "■",

@@ -4,7 +4,6 @@ const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const AttachedClient = @import("AttachedClient.zig");
-const ModelType = @import("model/Model.zig");
 const RuntimeTransportState = @import("connection/RuntimeTransportState.zig");
 const TransportDriverType = @import("connection/TransportDriver.zig");
 
@@ -12,7 +11,7 @@ const TransportDriverType = @import("connection/TransportDriver.zig");
 /// Example: `try attached_client_tests.layoutRoundTrip(writeCommandLayout);`
 pub fn layoutRoundTrip(comptime write_layout: fn (*const AttachedClient, *core.ClientCommand) anyerror!void) !void {
     var app: AttachedClient = undefined;
-    app.model = ModelType.init(std.testing.allocator, true);
+    app.model = data.Model.init(std.testing.allocator, true);
     defer app.model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{
@@ -324,7 +323,7 @@ pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*AttachedClient
     const app = try std.testing.allocator.create(AttachedClient);
     const model = &app.model;
     defer std.testing.allocator.destroy(app);
-    model.* = ModelType.init(std.testing.allocator, true);
+    model.* = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
     app.change_review = .{};
     const session = &app.change_review;
@@ -378,7 +377,7 @@ pub fn retainReviewAvailability(comptime open_session: fn (*AttachedClient, core
     const app = try std.testing.allocator.create(AttachedClient);
     const model = &app.model;
     defer std.testing.allocator.destroy(app);
-    model.* = ModelType.init(std.testing.allocator, true);
+    model.* = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
     app.change_review = .{};
     const session = &app.change_review;
@@ -439,7 +438,7 @@ pub fn retainReviewAvailability(comptime open_session: fn (*AttachedClient, core
 pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameTab, data.RequestsContinuation) anyerror!void, comptime create_tab: fn (*AttachedClient, core.CreateTab) anyerror!void, comptime prompt: fn (*AttachedClient, core.AgentPrompt, data.AgentOperation) anyerror!void) !void {
     const app = try std.testing.allocator.create(AttachedClient);
     defer std.testing.allocator.destroy(app);
-    app.model = ModelType.init(std.testing.allocator, true);
+    app.model = data.Model.init(std.testing.allocator, true);
     defer app.model.deinit();
     app.host_input_source = .{
         .context = app,
@@ -563,7 +562,7 @@ pub fn rejectStaleSidebarCommits(comptime deliver: fn (*AttachedClient, data.Sid
     const app = try std.testing.allocator.create(AttachedClient);
     defer std.testing.allocator.destroy(app);
     // Uninitialized ports make accidental delivery of a rejected commit invalid.
-    app.model = ModelType.init(std.testing.allocator, true);
+    app.model = data.Model.init(std.testing.allocator, true);
     defer app.model.deinit();
     const committed = app.model.toggleSidebar();
 

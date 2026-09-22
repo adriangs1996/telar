@@ -1,11 +1,8 @@
 //! Atomic client configuration generation and its compiled Lua callbacks.
 
 const data = @import("model");
-const icons = @import("../layout/icons.zig");
 const sidebar_rendering = @import("sidebar_rendering.zig");
 const core = @import("telar-core");
-const model = @import("../bars/model.zig");
-const config_model = @import("model.zig");
 const std = @import("std");
 const lua_api = @import("lua-api");
 const BarCallbackContext = @import("BarCallbackContext.zig");
@@ -14,11 +11,10 @@ const DecisionInput = @import("DecisionInput.zig");
 const lua_value = @import("lua_value.zig");
 const Generation = @import("Generation.zig");
 const default_bindings = @import("default_bindings.zig");
-const theme_mod = @import("../appearance/theme_support.zig");
 
 pub const api_version: u16 = 2;
 
-pub const max_binding_suffix_keys = config_model.max_binding_keys - 1;
+pub const max_binding_suffix_keys = data.config_values.max_binding_keys - 1;
 
 pub const max_config_bytes = 1024 * 1024;
 
@@ -252,7 +248,7 @@ test "client config compiles theme, bindings, and callbacks" {
     try std.testing.expect(generation.snapshot.sound.enabled);
     try std.testing.expect(!generation.snapshot.sound.ready);
     try std.testing.expect(generation.snapshot.sound.needs_input);
-    try std.testing.expectEqual(icons.Theme.nerd_font, generation.snapshot.icon_theme);
+    try std.testing.expectEqual(data.icons.Theme.nerd_font, generation.snapshot.icon_theme);
     try std.testing.expectEqual(sidebar_rendering.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     try std.testing.expectEqual(@as(u64, 40 * std.time.ns_per_ms), generation.snapshot.input_escape_timeout_ns);
     try std.testing.expectEqual(@as(u64, 750 * std.time.ns_per_ms), generation.snapshot.input_sequence_timeout_ns);
@@ -660,12 +656,12 @@ test "client bars compile styled static dynamic and command sources" {
 
     const left = &generation.snapshot.bars.bottom[0].static;
     try std.testing.expectEqual(@as(u8, 2), left.segment_count);
-    try std.testing.expectEqual(icons.Icon.cpu, left.slice()[0].icon.?);
+    try std.testing.expectEqual(data.icons.Icon.cpu, left.slice()[0].icon.?);
     try std.testing.expectEqualStrings(" CPU", left.text(left.slice()[0]));
-    try std.testing.expectEqualDeep(model.Color{ .palette = .teal }, left.slice()[0].style.foreground.?);
-    try std.testing.expectEqualDeep(model.Color{ .value = .{ .rgb = .{ 1, 2, 3 } } }, left.slice()[0].style.background.?);
+    try std.testing.expectEqualDeep(data.bar_values.Color{ .palette = .teal }, left.slice()[0].style.foreground.?);
+    try std.testing.expectEqualDeep(data.bar_values.Color{ .value = .{ .rgb = .{ 1, 2, 3 } } }, left.slice()[0].style.background.?);
     try std.testing.expect(left.slice()[0].style.bold);
-    try std.testing.expectEqualDeep(model.Color{ .value = .{ .indexed = 7 } }, left.slice()[1].style.foreground.?);
+    try std.testing.expectEqualDeep(data.bar_values.Color{ .value = .{ .indexed = 7 } }, left.slice()[1].style.foreground.?);
     try std.testing.expect(left.slice()[1].style.italic);
     try std.testing.expect(generation.snapshot.bars.bottom[1] == .tabs);
 
@@ -704,7 +700,7 @@ test "client bars compile styled static dynamic and command sources" {
     const clock = try generation.invokeBar(.{ .reference = top.callback, .context = context }, &diagnostic);
     try std.testing.expectEqual(@as(u64, std.time.ns_per_s), top.interval_ns);
     try std.testing.expectEqual(@as(u8, 1), clock.segment_count);
-    try std.testing.expectEqual(icons.Icon.battery_full, clock.slice()[0].icon.?);
+    try std.testing.expectEqual(data.icons.Icon.battery_full, clock.slice()[0].icon.?);
     try std.testing.expectEqualStrings(" 2026-09-01 13:05:09 61%", clock.text(clock.slice()[0]));
     try std.testing.expect(!clock.slice()[0].style.faint);
 
@@ -753,8 +749,8 @@ test "client bars default the sidebar footer to metrics and accept a bounded slo
     var diagnostic: data.Diagnostic = .{};
     const defaults = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2 }", .source_name = "@config.lua", .number = 1 });
     defer defaults.deinit();
-    try std.testing.expectEqualDeep([3]model.Source{ .metrics, .empty, .empty }, defaults.snapshot.bars.sidebar_footer);
-    try std.testing.expectEqualDeep([3]model.Slot{ .metrics, .empty, .empty }, defaults.snapshot.bars.presentation().sidebar_footer);
+    try std.testing.expectEqualDeep([3]data.bar_values.Source{ .metrics, .empty, .empty }, defaults.snapshot.bars.sidebar_footer);
+    try std.testing.expectEqualDeep([3]data.bar_values.Slot{ .metrics, .empty, .empty }, defaults.snapshot.bars.presentation().sidebar_footer);
 
     const source =
         \\local t = require('telar')
@@ -774,11 +770,11 @@ test "client bars default the sidebar footer to metrics and accept a bounded slo
     try std.testing.expect(layout.isLive(.sidebar_footer_right));
     try std.testing.expect(!layout.isLive(.sidebar_footer_left));
     try std.testing.expectEqual(@as(u64, 3), layout.generation);
-    try std.testing.expectEqualDeep([3]model.Source{ .metrics, .empty, .tabs }, generation.snapshot.bars.bottom);
+    try std.testing.expectEqualDeep([3]data.bar_values.Source{ .metrics, .empty, .tabs }, generation.snapshot.bars.bottom);
 
     const hidden = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { bars = { sidebar_footer = {} } } }", .source_name = "@config.lua", .number = 4 });
     defer hidden.deinit();
-    try std.testing.expectEqualDeep([3]model.Source{ .empty, .empty, .empty }, hidden.snapshot.bars.sidebar_footer);
+    try std.testing.expectEqualDeep([3]data.bar_values.Source{ .empty, .empty, .empty }, hidden.snapshot.bars.sidebar_footer);
 }
 
 test "client bars reject invalid positions timing and tab ownership" {
@@ -913,7 +909,7 @@ test "runtime config compiles bounded graphics, proxy, and description values" {
     try std.testing.expectEqual(@as(usize, 2), intercept_hosts.len);
     try std.testing.expectEqualStrings("api.example.com", intercept_hosts[0]);
     try std.testing.expectEqualStrings("updates.example.com", intercept_hosts[1]);
-    var arguments: [config_model.max_agent_description_command_args][]const u8 = undefined;
+    var arguments: [data.config_values.max_agent_description_command_args][]const u8 = undefined;
     const description_command = &generation.snapshot.runtime.agent_descriptions;
     try std.testing.expect(description_command.enabled());
     try std.testing.expectEqual(@as(u32, 12_000), description_command.timeout_ms);
@@ -945,7 +941,7 @@ test "runtime engine parses its command, deadline and idle interval" {
     try std.testing.expect(engine.enabled());
     try std.testing.expectEqual(@as(u32, 20_000), engine.timeout_ms);
     try std.testing.expectEqual(@as(u32, 120_000), generation.snapshot.runtime.engine_idle_timeout_ms);
-    var arguments: [config_model.max_agent_description_command_args][]const u8 = undefined;
+    var arguments: [data.config_values.max_agent_description_command_args][]const u8 = undefined;
     const argv = engine.arguments(&arguments);
     try std.testing.expectEqual(@as(usize, 5), argv.len);
     try std.testing.expectEqualStrings("--no-tools", argv[4]);
@@ -1360,8 +1356,8 @@ test "appearance themes parse and reject unknown names" {
     var diagnostic: data.Diagnostic = .{};
     var generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { appearance = { light = \"catppuccin\", dark = \"vesper\" } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
-    try std.testing.expectEqual(theme_mod.Builtin.catppuccin, generation.snapshot.theme_light.?.base);
-    try std.testing.expectEqual(theme_mod.Builtin.vesper, generation.snapshot.theme_dark.?.base);
+    try std.testing.expectEqual(data.theme_support.Builtin.catppuccin, generation.snapshot.theme_light.?.base);
+    try std.testing.expectEqual(data.theme_support.Builtin.vesper, generation.snapshot.theme_dark.?.base);
 
     var invalid: data.Diagnostic = .{};
     try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &invalid }, .{ .source = "return { api_version = 2, client = { appearance = { light = \"neon\" } } }", .source_name = "@config.lua", .number = 1 }));

@@ -1,3 +1,4 @@
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -121,7 +122,7 @@ test "work spans history page seams and keeps disclosure when its first retained
     var canvas = fixture.canvas();
     const value = try snapshot();
     defer std.testing.allocator.destroy(value);
-    const window = try std.testing.allocator.create(client.AgentHistoryWindow);
+    const window = try std.testing.allocator.create(data.AgentHistoryWindow);
     defer std.testing.allocator.destroy(window);
     window.start(value, 1);
     window.pages[1] = window.pages[0];

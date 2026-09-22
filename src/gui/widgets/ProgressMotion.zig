@@ -16,7 +16,7 @@ transition: Transition = .{ .from = 0, .to = 1, .started_ns = 0, .duration_ns = 
 
 /// Retargets from the visible eased value, folding any frames that were missed.
 /// Example: `const fraction = motion.sample(pane, &clock);`
-pub fn sample(motion: *ProgressMotion, pane: *const client.Pane, clock: *FrameClock) f32 {
+pub fn sample(motion: *ProgressMotion, pane: *const data.Pane, clock: *FrameClock) f32 {
     const target = reported(pane);
     if (pane.progress_state != .set or pane.progress_percent == null or !motion.known) {
         motion.from = target;
@@ -38,7 +38,7 @@ pub fn sample(motion: *ProgressMotion, pane: *const client.Pane, clock: *FrameCl
 
 /// Unknown percentages have no determinate fill; bounds remain valid for all u8 values.
 /// Example: `const fraction = ProgressMotion.reported(pane);`
-pub fn reported(pane: *const client.Pane) f32 {
+pub fn reported(pane: *const data.Pane) f32 {
     return @as(f32, @floatFromInt(@min(pane.progress_percent orelse 0, 100))) / 100;
 }
 

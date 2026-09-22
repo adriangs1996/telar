@@ -1,4 +1,5 @@
 //! Frame-local geometry for a bounded conversation. Row identity never is position.
+const data = @import("model");
 const ThreadOrder = @import("ThreadOrder.zig");
 const ThreadWork = @import("ThreadWork.zig");
 const client = @import("telar-client");
@@ -10,7 +11,7 @@ const Flow = @This();
 
 bounds: Rect,
 thread: client.ThreadView,
-rows: [2 * client.AgentHistoryWindow.capacity * core.agent_thread.max_items]View = undefined,
+rows: [2 * data.AgentHistoryWindow.capacity * core.agent_thread.max_items]View = undefined,
 len: usize = 0,
 height: f32 = 0,
 scroll_limit: f64 = 0,
@@ -246,24 +247,24 @@ fn itemKey(view: View) u64 {
         return view.work_key;
     }
 
-    return client.AgentHistoryWindow.itemKey(view.thread.transcript.?, view.item);
+    return data.AgentHistoryWindow.itemKey(view.thread.transcript.?, view.item);
 }
 
-fn uniqueItems(window: *const client.AgentHistoryWindow) [client.AgentHistoryWindow.capacity]u64 {
+fn uniqueItems(window: *const data.AgentHistoryWindow) [data.AgentHistoryWindow.capacity]u64 {
     const page_size = core.agent_thread.max_items;
-    var masks: [client.AgentHistoryWindow.capacity]u64 = @splat(0);
-    var slots: [2 * client.AgentHistoryWindow.capacity * page_size]u16 = @splat(0);
+    var masks: [data.AgentHistoryWindow.capacity]u64 = @splat(0);
+    var slots: [2 * data.AgentHistoryWindow.capacity * page_size]u16 = @splat(0);
     var page_index: usize = window.count;
     while (page_index > 0) {
         page_index -= 1;
         const snapshot = &window.pages[page_index].snapshot;
         for (snapshot.items(), 0..) |*item, index| {
             if (item.source_len != 0) {
-                var slot: usize = @intCast(client.AgentHistoryWindow.itemKey(snapshot, item) % slots.len);
+                var slot: usize = @intCast(data.AgentHistoryWindow.itemKey(snapshot, item) % slots.len);
                 const repeated = while (slots[slot] != 0) : (slot = (slot + 1) % slots.len) {
                     const previous = slots[slot] - 1;
                     const newer = &window.pages[previous / page_size].snapshot;
-                    if (client.AgentHistoryWindow.sameFragment(.{ .snapshot = snapshot, .item = item }, .{ .snapshot = newer, .item = &newer.items()[previous % page_size] })) {
+                    if (data.AgentHistoryWindow.sameFragment(.{ .snapshot = snapshot, .item = item }, .{ .snapshot = newer, .item = &newer.items()[previous % page_size] })) {
                         break true;
                     }
                 } else false;

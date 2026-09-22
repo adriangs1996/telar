@@ -1,4 +1,5 @@
 //! Reusable native change-review surface. Runtime and experiments supply editions.
+const data = @import("model");
 const event_module = @import("../input/event.zig");
 const std = @import("std");
 const client = @import("telar-client");
@@ -25,7 +26,7 @@ command: ?enum { close, previous_edition, next_edition, refresh } = null,
 changed_comments: u32 = 0,
 deleted_comments: u32 = 0,
 reviewed_changed: bool = false,
-theme_override: ?client.ColorTheme = null,
+theme_override: ?data.ColorTheme = null,
 edition_id: u64 = 1,
 source_label: []const u8 = "",
 previous_edition: bool = false,
@@ -35,8 +36,8 @@ read_only: bool = false,
 delivery: enum { idle, queued, pending, sending, sent, failed } = .idle,
 live_status: [320]u8 = undefined,
 model: client.ChangeReviewModel = .{},
-roles: [2][syntax_limits.source_bytes]client.SyntaxRole = undefined,
-theme: client.theme_support.Builtin = .shade,
+roles: [2][syntax_limits.source_bytes]data.role.Role = undefined,
+theme: data.theme_support.Builtin = .shade,
 widgets: ?*State = null,
 generation: u64 = 1,
 text_revision: u64 = 1,

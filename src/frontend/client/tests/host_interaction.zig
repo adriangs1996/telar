@@ -39,7 +39,7 @@ test "host resize commits before resources and presents by model version" {
     };
     try std.testing.expectEqualDeep(expected, commit.current);
     try std.testing.expectEqualDeep(expected, client.model.hostSize());
-    try std.testing.expectEqual(client_module.Version{
+    try std.testing.expectEqual(data.Version{
         .host = 1,
         .host_capabilities = 1,
         .workspace = 1,
@@ -109,7 +109,7 @@ test "host resize retains committed geometry after outbox backpressure" {
     try std.testing.expect(TerminalClient.of(client).presenter.screen.sizeMatches(90, 28));
     try std.testing.expectEqual(@as(u16, 90), TerminalClient.of(client).view.scratch.w);
     try std.testing.expectEqual(@as(u16, 28), TerminalClient.of(client).view.scratch.h);
-    try std.testing.expectEqual(@as(usize, client_module.capacity), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, data.outbox_support.capacity), client.runtime_transport.outbox.len);
     try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
 }
 
@@ -212,7 +212,7 @@ test "host resize rolls back rejected attachment correlation after offering conn
         client.geometry().area,
     );
 
-    while (client.runtime_transport.outbox.len < client_module.capacity - 1) {
+    while (client.runtime_transport.outbox.len < data.outbox_support.capacity - 1) {
         try client.runtime_transport.outbox.push(
             .{
                 .detach_pane = .{
@@ -235,7 +235,7 @@ test "host resize rolls back rejected attachment correlation after offering conn
 
     try std.testing.expectEqual(initial_request_id + 1, client.request_lifecycle.next_request_id);
     try std.testing.expect(!client.request_lifecycle.tracker.hasPane(.attachment, sibling));
-    try std.testing.expectEqual(@as(usize, client_module.capacity), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, data.outbox_support.capacity), client.runtime_transport.outbox.len);
     try std.testing.expectEqual(@as(u16, 100), client.model.hostSize().cols);
     try std.testing.expect(!client.model.workspace.active().?.model.find(sibling).?.attached);
 }
@@ -257,7 +257,7 @@ test "oversized host measurement changes neither model nor capabilities" {
 
     try std.testing.expectEqualDeep(host_size, client.model.hostSize());
     try std.testing.expectEqualDeep(capabilities, client.model.hostCapabilities());
-    try std.testing.expectEqualDeep(client_module.Version{}, client.model.version());
+    try std.testing.expectEqualDeep(data.Version{}, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
@@ -399,7 +399,7 @@ test "client event dispatch observes a completed capability expiry" {
     try std.testing.expectEqual(data.EnvironmentSupport.unsupported, capabilities.images);
     try std.testing.expectEqual(data.EnvironmentSupport.unsupported, TerminalClient.of(client).host_negotiation.zlib_support);
     try std.testing.expectEqual(data.EnvironmentSupport.unsupported, capabilities.pointer_pixels);
-    try std.testing.expectEqual(client_module.Version{
+    try std.testing.expectEqual(data.Version{
         .host_capabilities = 1,
     }, client.model.version());
     try std.testing.expectEqual(pending_updates + 1, TerminalClient.of(client).presenter.pending_updates);
@@ -494,7 +494,7 @@ test "capability effect failure retains the committed fallback" {
     );
 
     try std.testing.expectEqual(data.EnvironmentSupport.unsupported, client.model.hostCapabilities().images);
-    try std.testing.expectEqual(client_module.Version{
+    try std.testing.expectEqual(data.Version{
         .host_capabilities = 1,
     }, client.model.version());
     try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
@@ -878,5 +878,5 @@ test "a full outbox keeps copy mode and its selection active" {
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expect(client.model.copyModeProjection().?.view.anchor != null);
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(client_module.capacity, @as(usize, client.runtime_transport.outbox.len));
+    try std.testing.expectEqual(data.outbox_support.capacity, @as(usize, client.runtime_transport.outbox.len));
 }

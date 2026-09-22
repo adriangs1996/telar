@@ -1,38 +1,29 @@
 const data = @import("model");
 const core = @import("telar-core");
-const VersionType = @import("../model/Version.zig");
 const PresentationIngress = @import("PresentationIngress.zig");
-const MultiplexerModel = @import("../workspace/MultiplexerModel.zig");
-const TabsModel = @import("../workspace/TabsModel.zig");
-const SnapshotType = @import("../agents/AgentSnapshot.zig");
-const WorkspaceListSnapshot = @import("../workspace/WorkspaceListSnapshot.zig");
-const HistoryPaletteState = @import("../model/HistoryPaletteState.zig");
-const SuggestionState = @import("../model/SuggestionState.zig");
-const SystemMetricsType = @import("../model/SystemMetrics.zig");
-const StateType = @import("../bars/State.zig");
 const hints_support = @import("../input/hints_support.zig");
 const CopyProjectionType = @import("../workspace/CopyProjection.zig");
 const ThreadViewType = @import("ThreadView.zig");
 const Projection = @This();
 
-version: VersionType,
+version: data.Version,
 geometry: data.Region,
 presentation_ingress: PresentationIngress = .{},
-model: ?*const MultiplexerModel,
-tabs: *const TabsModel,
-agents: *const SnapshotType,
+model: ?*const data.MultiplexerModel,
+tabs: *const data.TabsModel,
+agents: *const data.AgentSnapshot,
 sidebar_animation_frame: u8,
 notifications: *const data.Center,
-workspaces: *const WorkspaceListSnapshot,
+workspaces: *const data.WorkspaceListSnapshot,
 prompt: ?data.Prompt,
-history: *const HistoryPaletteState,
-suggestion: *const SuggestionState,
+history: *const data.HistoryPaletteState,
+suggestion: *const data.SuggestionState,
 path_completion: *const data.PathCompletionState,
 proxy_tls_active: bool,
 proxy_tls_scope: core.ProxyScope,
 proxy_system_trusted: bool,
-system_metrics: ?SystemMetricsType,
-bar_state: *const StateType,
+system_metrics: ?data.SystemMetrics,
+bar_state: *const data.BarsState,
 status_mode: hints_support.Mode,
 diagnostic: ?[]const u8,
 copy: ?CopyProjectionType,

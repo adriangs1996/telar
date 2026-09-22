@@ -1,3 +1,4 @@
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const std = @import("std");
@@ -12,10 +13,10 @@ const Label = @This();
 buffer: [core.max_tab_label_bytes + 32]u8 = undefined,
 len: usize = 0,
 fullscreen: bool,
-icon: ?client.Icon = null,
+icon: ?data.icons.Icon = null,
 icon_column: u16 = 0,
 
-pub fn init(tab: *const client.Tab, index: usize) Label {
+pub fn init(tab: *const data.Tab, index: usize) Label {
     var label: Label = .{
         .fullscreen = tab.model.layout.isFullscreen(),
         .icon = tab.labelIcon(),
@@ -26,7 +27,7 @@ pub fn init(tab: *const client.Tab, index: usize) Label {
 }
 
 /// Uses the focused application before the tab collection arrives. Example: const label = Label.initModel(model);
-pub fn initModel(model: *const client.MultiplexerModel) Label {
+pub fn initModel(model: *const data.MultiplexerModel) Label {
     const pane = model.focusedPaneConst();
     var label: Label = .{
         .fullscreen = model.layout.isFullscreen(),
@@ -81,7 +82,7 @@ pub fn draw(label: *const Label, context: *ContextType, placement: Placement) vo
 }
 
 test "automatic tab labels draw the application icon while manual labels retain their text" {
-    var tab = client.Tab.init(std.testing.allocator, .{
+    var tab = data.Tab.init(std.testing.allocator, .{
         .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(45) },
         .label = "",
         .pane_gaps = true,
@@ -104,7 +105,7 @@ test "automatic tab labels draw the application icon while manual labels retain 
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .hovered = null,
         .icon_plan = &plan,
     };
@@ -113,14 +114,14 @@ test "automatic tab labels draw the application icon while manual labels retain 
         .style = .{ .fg = .{ .rgb = .{ 220, 220, 220 } }, .bg = .{ .rgb = .{ 30, 30, 30 } } },
     };
     automatic.draw(&context, placement);
-    try std.testing.expectEqualStrings(client.Icon.app_editor.unicodeGlyph(), buffer.at(5, 0).?.text());
+    try std.testing.expectEqualStrings(data.icons.Icon.app_editor.unicodeGlyph(), buffer.at(5, 0).?.text());
     try std.testing.expectEqualStrings("n", buffer.at(7, 0).?.text());
     try std.testing.expectEqual(@as(u8, 0), plan.len);
 
     context.icon_theme = .nerd_font;
     automatic.draw(&context, placement);
     try std.testing.expectEqual(@as(u8, 1), plan.len);
-    try std.testing.expectEqual(client.Icon.app_editor, plan.slice()[0].icon);
+    try std.testing.expectEqual(data.icons.Icon.app_editor, plan.slice()[0].icon);
     try std.testing.expectEqual(@as(u16, 5), plan.slice()[0].area.x);
 
     tab.setLabel("My editor");
@@ -135,7 +136,7 @@ test "automatic tab labels draw the application icon while manual labels retain 
 }
 
 test "tab application icons remain within clipped labels" {
-    var tab = client.Tab.init(std.testing.allocator, .{
+    var tab = data.Tab.init(std.testing.allocator, .{
         .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(45) },
         .label = "",
         .pane_gaps = true,
@@ -149,7 +150,7 @@ test "tab application icons remain within clipped labels" {
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .hovered = null,
         .icon_theme = .nerd_font,
         .icon_plan = &plan,
@@ -169,11 +170,11 @@ test "tab application icons remain within clipped labels" {
 }
 
 test "tab label fallback uses the foreground application before collection metadata arrives" {
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     const pending = Label.initModel(&model);
     try std.testing.expectEqualStrings("   shell ", pending.text());
-    try std.testing.expectEqual(client.Icon.app_terminal, pending.icon.?);
+    try std.testing.expectEqual(data.icons.Icon.app_terminal, pending.icon.?);
 
     try model.addRoot(.{
         .pane_id = @enumFromInt(1),
@@ -183,7 +184,7 @@ test "tab label fallback uses the foreground application before collection metad
     _ = model.focusedPane().?.setForegroundName("git");
     const label = Label.initModel(&model);
     try std.testing.expectEqualStrings("   git ", label.text());
-    try std.testing.expectEqual(client.Icon.app_git, label.icon.?);
+    try std.testing.expectEqual(data.icons.Icon.app_git, label.icon.?);
     try std.testing.expectEqual(label.width(), tab_bar.desiredWidth(.{
         .tabs = null,
         .model = &model,

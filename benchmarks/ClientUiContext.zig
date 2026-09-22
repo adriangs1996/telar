@@ -6,13 +6,13 @@ const std = @import("std");
 const main = @import("main.zig");
 const ClientUiContext = @This();
 
-tabs: client.TabsModel,
+tabs: data.TabsModel,
 screen: frontend.Screen,
 view: frontend.State,
 
 pub fn init(gpa: std.mem.Allocator, tab_count: usize) !ClientUiContext {
     std.debug.assert(tab_count >= 1 and tab_count <= core.max_tabs_per_workspace);
-    var tabs = client.TabsModel.init(gpa);
+    var tabs = data.TabsModel.init(gpa);
     errdefer tabs.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     try tabs.bootstrap(.{

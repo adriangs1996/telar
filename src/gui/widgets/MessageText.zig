@@ -1,4 +1,5 @@
 //! Markdown conversation text with one layout path for measurement and paint.
+const data = @import("model");
 const MessageTable = @import("MessageTable.zig");
 const Theme = @import("../diagrams/Theme.zig");
 const TextFit = @import("TextFit.zig");
@@ -171,7 +172,7 @@ test "offscreen Markdown decorations cannot exhaust the visible frame quad budge
     defer quads.deinit();
     try quads.quads.ensureTotalCapacity(std.testing.allocator, 96);
     quads.limit = 96;
-    var canvas: Canvas = .{ .atlas = &atlas, .quads = &quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 }, .theme = client.theme_support.default_theme, .chrome = .{ .body = 16, .title = 18, .small = 12 } };
+    var canvas: Canvas = .{ .atlas = &atlas, .quads = &quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 }, .theme = data.theme_support.default_theme, .chrome = .{ .body = 16, .title = 18, .small = 12 } };
     var storage: [48 * 1024]u8 = undefined;
     const pattern = "---\n- bullet\n> quote\n```zig\ncode\n```\n";
     var len: usize = 0;

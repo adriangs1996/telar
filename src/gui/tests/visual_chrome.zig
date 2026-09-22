@@ -34,7 +34,7 @@ test "chrome bands leave complete cells below them and share the pointer origin"
         try std.testing.expect(chrome.vertical() + @as(u32, size.rows + 1) * size.cell_height_px > 700);
         var quads = QuadList.init(std.testing.allocator);
         defer quads.deinit();
-        const canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = client.theme_support.default_theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
+        const canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = data.theme_support.default_theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
         const bands = Bands.resolve(&canvas);
         try std.testing.expectEqual(@as(f32, @floatFromInt(renderer.origin[1])), bands.top_bar.y + bands.top_bar.height);
         try std.testing.expectEqual(@as(f32, 0), bands.top_bar.x);
@@ -86,8 +86,8 @@ test "tab strip hits keep stable tab identities and the plus creates a tab" {
     try std.testing.expectEqual(@as(usize, 2), TabStrip.firstVisible(2, &widths, .{ .available = 150, .gap = 5 }));
 }
 
-fn blockedAgents(location: core.TabLocation, status: core.AgentStatus) !client.AgentSnapshot {
-    var agents: client.AgentSnapshot = .{};
+fn blockedAgents(location: core.TabLocation, status: core.AgentStatus) !data.AgentSnapshot {
+    var agents: data.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &.{
         .{ .key = .{ .pane_id = @enumFromInt(20), .pane_generation = 1 }, .location = location, .pane_index = 1, .provider = .claude, .status = status, .blocked_reason = .permission, .status_age_s = 30, .display_name = "Claude" },
         .{ .key = .{ .pane_id = Session.pane_id, .pane_generation = 1 }, .location = Session.location, .pane_index = 1, .provider = .codex, .status = .working, .status_age_s = 250, .display_name = "Codex" },
@@ -129,7 +129,7 @@ test "a blocked agent marks its tab and project independently of selection" {
     const tabs = &fixture.session.gui.app.model.workspace;
     _ = try tabs.addCreated(.{ .location = second_location, .position = 1, .label = "editor", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
     _ = tabs.select(Session.location.tab_id);
-    var workspaces: client.WorkspaceListSnapshot = .{};
+    var workspaces: data.WorkspaceListSnapshot = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = Session.location.workspace.workspace, .name = "telar", .path = "/telar", .tab_count = 2 },
         .{ .workspace = @enumFromInt(9), .name = "server", .path = "/server", .tab_count = 1 },
@@ -285,7 +285,7 @@ test "warm chrome with rings chips dots and toasts allocates and shapes nothing"
     const second: core.PaneId = @enumFromInt(20);
     try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .vertical, .area = fixture.projection().geometry.area });
     _ = model.layout.focusPane(Session.pane_id);
-    var workspaces: client.WorkspaceListSnapshot = .{};
+    var workspaces: data.WorkspaceListSnapshot = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = Session.location.workspace.workspace, .name = "telar", .path = "/Users/me/sandbox/telar", .branch = "main", .tab_count = 1 },
     } });

@@ -3,9 +3,9 @@ const client = @import("telar-client");
 const PickerSources = @This();
 
 prompt: *data.Prompt,
-agents: *const client.AgentSnapshot,
-workspaces: *const client.WorkspaceListSnapshot,
-tabs: ?*const client.TabsModel,
-history: *const client.HistoryPaletteState,
-suggestion: *const client.SuggestionState,
+agents: *const data.AgentSnapshot,
+workspaces: *const data.WorkspaceListSnapshot,
+tabs: ?*const data.TabsModel,
+history: *const data.HistoryPaletteState,
+suggestion: *const data.SuggestionState,
 graphical_frame: bool,

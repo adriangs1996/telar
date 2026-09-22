@@ -54,4 +54,4 @@ Source: `src/client/AttachedClient.zig`, particularly `requestPaneClose`,
 `applyPaneExit` and `releasePaneResources`.
 Tests: `src/frontend/client/tests/pane_lifecycle.zig`,
 `src/frontend/client/tests/tab_lifecycle.zig`,
-`src/client/model/tests/panes.zig`, and transport lifecycle integration tests.
+`src/model/state/tests/panes.zig`, and transport lifecycle integration tests.

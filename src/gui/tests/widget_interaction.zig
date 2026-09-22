@@ -1608,7 +1608,7 @@ test "conversation controls focus their pane and stale controls cannot focus a r
     try std.testing.expectEqual(second, panes.layout.focused());
 }
 
-fn adoptAgentBinding(session: *Session, binding: client.config_model.ConfiguredBinding) void {
+fn adoptAgentBinding(session: *Session, binding: data.config_values.ConfiguredBinding) void {
     session.gui.adoptBindings(
         .{
             .prefix = data.keybind.default_prefix,
@@ -1713,7 +1713,7 @@ test "held agent scroll bindings pace transcript movement and stop on release" {
     defer session.deinit();
     try linkSnapshot(session, "Earlier output\n" ** 80);
     try publish(session);
-    adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up }));
+    adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up }));
     const pane = session.gui.app.model.agentPane(Session.pane_id).?;
     var key: data.Key = .{
         .code = .{
@@ -1969,7 +1969,7 @@ test "an agent chord timeout cannot restore pane focus before repaint" {
     defer session.deinit();
     const gui = session.gui;
     const target = try composerTarget(session);
-    adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
+    adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 121 } } });
     const panes = gui.app.model.activeTabModel().?;
     const terminal: core.PaneId = @enumFromInt(21);
@@ -1998,7 +1998,7 @@ test "agent direct navigation binding leaves the composer and releases its origi
     _ = panes.focusPane(Session.pane_id);
     try publish(session);
     const target = try composerTarget(session);
-    adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{"ctrl+l"}, .{ .navigate_pane = .right }));
+    adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{"ctrl+l"}, .{ .navigate_pane = .right }));
     try send(session, .{ .key = .{ .target_id = target.id.target_id, .generation = target.id.generation, .code = .{ .char = .init("l") }, .mods = .{ .ctrl = true }, .physical = .{ .value = 101 } } });
     try std.testing.expectEqual(terminal, panes.layout.focused());
     try publish(session);
@@ -2019,7 +2019,7 @@ test "agent direct history binding releases through the modal using the retired 
     const session = try agentSession();
     defer session.deinit();
     const target = try composerTarget(session);
-    adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{"ctrl+r"}, .history_palette));
+    adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{"ctrl+r"}, .history_palette));
     try send(session, .{ .key = .{ .target_id = target.id.target_id, .generation = target.id.generation, .code = .{ .char = .init("r") }, .mods = .{ .ctrl = true }, .physical = .{ .value = 102 } } });
     try std.testing.expectEqual(.history, std.meta.activeTag(session.gui.app.model.name_prompt.currentConst().?.target()));
     try publish(session);
@@ -2062,7 +2062,7 @@ test "agent global bindings preserve prompt and open selector capture" {
     for ([_]bool{ false, true }) |menu| {
         const session = try agentSession();
         defer session.deinit();
-        adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{"ctrl+r"}, .history_palette));
+        adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{"ctrl+r"}, .history_palette));
         if (menu) {
             try pressControl(session, try composerSelector(session, .access));
         } else {
@@ -2092,7 +2092,7 @@ test "agent global shortcuts reject stale native generations and replaced attach
     const session = try agentSession();
     defer session.deinit();
     const target = try composerTarget(session);
-    adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{"ctrl+r"}, .history_palette));
+    adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{"ctrl+r"}, .history_palette));
     try send(session, .{ .key = .{ .target_id = target.id.target_id, .generation = target.id.generation + 1, .code = .{ .char = .init("r") }, .mods = .{ .ctrl = true }, .physical = .{ .value = 107 } } });
     try send(session, .{ .key = .{ .target_id = target.id.target_id, .generation = target.id.generation + 1, .code = .{ .char = .init("r") }, .physical = .{ .value = 107 }, .phase = .release } });
     try std.testing.expect(!session.gui.app.model.name_prompt.active());
@@ -2108,7 +2108,7 @@ test "agent held editor keys cannot acquire a newly configured global meaning" {
     defer session.deinit();
     const target = try composerTarget(session);
     try send(session, .{ .key = .{ .target_id = target.id.target_id, .generation = target.id.generation, .code = .{ .char = .init("r") }, .mods = .{ .ctrl = true }, .physical = .{ .value = 109 } } });
-    adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{"ctrl+r"}, .history_palette));
+    adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{"ctrl+r"}, .history_palette));
     try send(session, .{ .key = .{ .target_id = target.id.target_id, .generation = target.id.generation, .code = .{ .char = .init("r") }, .mods = .{ .ctrl = true }, .physical = .{ .value = 109 }, .phase = .repeat } });
     try std.testing.expect(!session.gui.app.model.name_prompt.active());
     try send(session, .{ .key = .{ .target_id = target.id.target_id, .generation = target.id.generation, .code = .{ .char = .init("r") }, .physical = .{ .value = 109 }, .phase = .release } });
@@ -2125,7 +2125,7 @@ test "agent unprefixed sequences consume matches and replay mismatches to the co
         const session = try agentSession();
         defer session.deinit();
         const target = try composerTarget(session);
-        adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
+        adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
         const visible = session.gui.app.model.sidebarVisible();
         try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 110 } } });
         try std.testing.expectEqualStrings("", session.gui.app.model.agentPane(Session.pane_id).?.composerSlice());
@@ -2145,7 +2145,7 @@ test "agent unprefixed sequence timeout restores text and physical ownership to 
     const session = try agentSession();
     defer session.deinit();
     const target = try composerTarget(session);
-    adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
+    adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
     const visible = session.gui.app.model.sidebarVisible();
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 112 } } });
     session.gui.router.binding_since_ns = 0;
@@ -2167,7 +2167,7 @@ test "agent IME commits never start or complete a global character binding" {
     const session = try agentSession();
     defer session.deinit();
     const target = try composerTarget(session);
-    adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
+    adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
     const visible = session.gui.app.model.sidebarVisible();
     try send(session, .{ .composition = .{ .target_id = target.id.target_id, .generation = target.id.generation, .text = "g", .selection_start = 1, .selection_end = 1 } });
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g" } });
@@ -2186,7 +2186,7 @@ test "one native input batch retires composer replay ownership before a terminal
     const session = try agentSession();
     defer session.deinit();
     const gui = session.gui;
-    adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
+    adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
     const panes = gui.app.model.activeTabModel().?;
     const terminal: core.PaneId = @enumFromInt(21);
     try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
@@ -3149,7 +3149,7 @@ test "native batch routes text to a newly opened prompt and retires the composer
     const session = try agentSession();
     defer session.deinit();
     const gui = session.gui;
-    adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{"ctrl+r"}, .history_palette));
+    adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{"ctrl+r"}, .history_palette));
     try std.testing.expect(try gui.acceptInput(.{ .key = .{ .code = .{ .char = .init("r") }, .mods = .{ .ctrl = true } } }));
     try std.testing.expect(try gui.acceptInput(.{ .text = .{ .bytes = "x" } }));
     try input_support.pump(gui);

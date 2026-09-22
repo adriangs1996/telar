@@ -22,7 +22,7 @@ pub fn reportedPaneId(client: *const client_module.AttachedClient) ?core.PaneId 
     return reported.pane_id;
 }
 
-pub fn expectNonPromptVersionEqual(expected: client_module.Version, actual: client_module.Version) !void {
+pub fn expectNonPromptVersionEqual(expected: data.Version, actual: data.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.diagnostic, actual.diagnostic);
@@ -47,7 +47,7 @@ pub fn expectNonPromptVersionEqual(expected: client_module.Version, actual: clie
     try std.testing.expectEqual(expected.viewport, actual.viewport);
 }
 
-pub fn expectNonCopyVersionEqual(expected: client_module.Version, actual: client_module.Version) !void {
+pub fn expectNonCopyVersionEqual(expected: data.Version, actual: data.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.diagnostic, actual.diagnostic);
@@ -72,7 +72,7 @@ pub fn expectNonCopyVersionEqual(expected: client_module.Version, actual: client
     try std.testing.expectEqual(expected.viewport, actual.viewport);
 }
 
-pub fn expectNonCopyOrViewportVersionEqual(expected: client_module.Version, actual: client_module.Version) !void {
+pub fn expectNonCopyOrViewportVersionEqual(expected: data.Version, actual: data.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.diagnostic, actual.diagnostic);
@@ -96,7 +96,7 @@ pub fn expectNonCopyOrViewportVersionEqual(expected: client_module.Version, actu
     try std.testing.expectEqual(expected.prompt, actual.prompt);
 }
 
-pub fn expectNonViewportVersionEqual(expected: client_module.Version, actual: client_module.Version) !void {
+pub fn expectNonViewportVersionEqual(expected: data.Version, actual: data.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.diagnostic, actual.diagnostic);
@@ -121,7 +121,7 @@ pub fn expectNonViewportVersionEqual(expected: client_module.Version, actual: cl
     try std.testing.expectEqual(expected.copy, actual.copy);
 }
 
-pub fn expectOnlyNotificationVersionChanged(expected: client_module.Version, actual: client_module.Version) !void {
+pub fn expectOnlyNotificationVersionChanged(expected: data.Version, actual: data.Version) !void {
     try std.testing.expect(actual.notifications > expected.notifications);
 
     var normalized = actual;
@@ -288,8 +288,8 @@ pub fn installTestingAttachmentProvider(client: *client_module.AttachedClient, g
     return target;
 }
 
-pub fn testingClipboardCapture(client: *client_module.AttachedClient, execution: data.ClipboardCapture, bytes: []const u8) !*client_module.Capture {
-    const capture = try client.gpa.create(client_module.Capture);
+pub fn testingClipboardCapture(client: *client_module.AttachedClient, execution: data.ClipboardCapture, bytes: []const u8) !*data.Capture {
+    const capture = try client.gpa.create(data.Capture);
     errdefer client.gpa.destroy(capture);
     capture.* = .{
         .request = .{

@@ -4,11 +4,11 @@ const data = @import("model");
 const CompositionInput = @This();
 
 area: core.Rect,
-palette: *const client.Palette,
+palette: *const data.Palette,
 copy: ?client.CopyProjection = null,
 bottom_reservation: ?data.PaneBottomReservation = null,
 progress_animation_frame: u8 = 0,
 force: bool = false,
 /// Agents shown by thread surfaces and the revision that invalidates them.
-agents: ?*const client.AgentSnapshot = null,
+agents: ?*const data.AgentSnapshot = null,
 agents_revision: u64 = 0,

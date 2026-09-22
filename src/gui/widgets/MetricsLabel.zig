@@ -1,3 +1,4 @@
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -6,7 +7,7 @@ const MetricsLabel = @This();
 bytes: [96]u8 = undefined,
 len: usize = 0,
 
-pub fn init(values: ?client.SystemMetrics) MetricsLabel {
+pub fn init(values: ?data.SystemMetrics) MetricsLabel {
     var label: MetricsLabel = .{};
     const metrics = values orelse return label;
     const written = std.fmt.bufPrint(&label.bytes, " CPU {d}%  MEM {d}.{d}G", .{ metrics.cpu_percent, metrics.memory_used_decigib / 10, metrics.memory_used_decigib % 10 }) catch unreachable;

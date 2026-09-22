@@ -312,7 +312,7 @@ fn runOutboxInput(context: *OutboxContext, iterations: usize) !u64 {
 }
 
 pub const KeybindAction = enum(u8) { detach, palette };
-pub const KeybindBinding = client.GenericBinding(KeybindAction, 4);
+pub const KeybindBinding = data.GenericBinding(KeybindAction, 4);
 pub const KeybindRouter = frontend.GenericRouter(KeybindAction, .{
     .max_bindings = 16,
     .max_keys = 4,
@@ -419,11 +419,11 @@ fn runLayoutFocus(context: *LayoutContext, iterations: usize) !u64 {
 
 /// Composes one model over the whole host screen with the default palette,
 /// the way the presenter does for a client without chrome.
-pub fn composeFullScreen(compositor: *frontend.Compositor, model: *const client.MultiplexerModel, screen: *frontend.Screen) !frontend.CompositionResult {
+pub fn composeFullScreen(compositor: *frontend.Compositor, model: *const data.MultiplexerModel, screen: *frontend.Screen) !frontend.CompositionResult {
     return compositor.render(.{
         .model = model,
         .screen = screen,
-        .input = .{ .area = screen.back.area(), .palette = &client.theme_support.default_theme.palette },
+        .input = .{ .area = screen.back.area(), .palette = &data.theme_support.default_theme.palette },
     });
 }
 

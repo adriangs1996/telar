@@ -5,9 +5,7 @@ const core = @import("telar-core");
 const presentation_delivery = @import("../operations/session/presentation_delivery.zig");
 const TransportState = @import("../connection/RuntimeTransportState.zig");
 const Credit = @import("../graphics/Credit.zig");
-const ModelType = @import("../model/Model.zig");
 const AdapterType = @import("HeadlessAdapter.zig");
-const OutboxType = @import("../connection/Outbox.zig");
 const retained_module = @import("../graphics/retained.zig");
 const StateType = @import("../workspace/State.zig");
 const std = @import("std");
@@ -19,7 +17,7 @@ const GenericInbox = @import("../execution/GenericInbox.zig").Type;
 const Fixture = @This();
 
 app: Client,
-model: *ModelType,
+model: *model_data.Model,
 connection: core.SocketChannel,
 peer: core.SocketChannel,
 pending: ?[]const u8 = null,
@@ -28,7 +26,7 @@ receive_buffer: [64 * 1024]u8 = undefined,
 received: model_data.RuntimeMessage = undefined,
 receive_pending: bool = false,
 adapter: AdapterType = .{},
-outbox: *OutboxType,
+outbox: *model_data.Outbox,
 graphics: retained_module.Store,
 geometry: StateType = .{},
 activations: usize = 0,

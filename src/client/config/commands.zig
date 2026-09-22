@@ -4,7 +4,6 @@ const data = @import("model");
 const lua_api = @import("lua-api");
 const RuntimeSnapshotType = @import("RuntimeSnapshot.zig");
 const value = @import("lua_value.zig");
-const config_model = @import("model.zig");
 const CommandInput = @import("CommandInput.zig");
 const CommandSpecType = @import("CommandSpec.zig");
 const std = @import("std");
@@ -51,9 +50,9 @@ pub fn parseEngine(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, d
         .field = "idle_timeout_ms",
         .label = "config.runtime.engine",
         .bounds = .{
-            .default = config_model.default_engine_idle_timeout_ms,
-            .min = config_model.min_engine_idle_timeout_ms,
-            .max = config_model.max_engine_idle_timeout_ms,
+            .default = data.config_values.default_engine_idle_timeout_ms,
+            .min = data.config_values.min_engine_idle_timeout_ms,
+            .max = data.config_values.max_engine_idle_timeout_ms,
         },
     }, diagnostic);
 }
@@ -68,8 +67,8 @@ fn parseCommand(state: *lua_api.c.lua_State, input: CommandInput, diagnostic: *d
 
     const command_table = lua_api.c.lua_absindex(state, -1);
     const count = lua_api.c.lua_rawlen(state, command_table);
-    if (count == 0 or count > config_model.max_agent_description_command_args) {
-        diagnostic.set("{s}.command must contain 1..{d} arguments", .{ input.label, config_model.max_agent_description_command_args });
+    if (count == 0 or count > data.config_values.max_agent_description_command_args) {
+        diagnostic.set("{s}.command must contain 1..{d} arguments", .{ input.label, data.config_values.max_agent_description_command_args });
         return error.InvalidConfig;
     }
     try value.ensureArrayOnly(state, .{
@@ -88,10 +87,10 @@ fn parseCommand(state: *lua_api.c.lua_State, input: CommandInput, diagnostic: *d
         };
         if ((argument_index == 0 and argument.len == 0) or
             argument.len > std.math.maxInt(u16) or
-            argument.len > config_model.max_agent_description_command_bytes - command.byte_len or
+            argument.len > data.config_values.max_agent_description_command_bytes - command.byte_len or
             std.mem.indexOfScalar(u8, argument, 0) != null)
         {
-            diagnostic.set("{s}.command exceeds its {d}-byte limit", .{ input.label, config_model.max_agent_description_command_bytes });
+            diagnostic.set("{s}.command exceeds its {d}-byte limit", .{ input.label, data.config_values.max_agent_description_command_bytes });
             return error.InvalidConfig;
         }
 
@@ -107,8 +106,8 @@ fn parseCommand(state: *lua_api.c.lua_State, input: CommandInput, diagnostic: *d
         .label = input.label,
         .bounds = .{
             .default = command.timeout_ms,
-            .min = config_model.min_agent_description_timeout_ms,
-            .max = config_model.max_agent_description_timeout_ms,
+            .min = data.config_values.min_agent_description_timeout_ms,
+            .max = data.config_values.max_agent_description_timeout_ms,
         },
     }, diagnostic);
     return command;

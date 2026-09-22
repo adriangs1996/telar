@@ -55,4 +55,4 @@ Source: `src/client/AttachedClient.zig`,
 `AttachedClient.deliverPaneFocus` and `AttachedClient.synchronizeReportedFocus`.
 Tests: `src/frontend/client/tests/pane_lifecycle.zig`,
 `src/frontend/client/tests/mouse_selection.zig`, and
-`src/client/model/tests/panes.zig`.
+`src/model/state/tests/panes.zig`.

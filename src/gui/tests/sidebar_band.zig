@@ -72,7 +72,7 @@ test "the band clamps to its bounds and to twenty workbench columns and hides be
 test "a pointer on a card focuses its agent and a pointer in the gap hits nothing" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &agents_input });
     var projection = fixture.projection();
     projection.agents = &agents;

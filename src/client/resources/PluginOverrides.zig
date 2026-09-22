@@ -1,13 +1,12 @@
+const data = @import("model");
 const std = @import("std");
-const model = @import("../config/model.zig");
 const Snapshot = @import("../config/Snapshot.zig");
-const Override = @import("PluginOverride.zig");
 const Overrides = @This();
-items: [model.max_plugins]Override = undefined,
+items: [data.config_values.max_plugins]data.PluginOverride = undefined,
 count: u8 = 0,
 
 /// Replaces one owned override without retaining configuration memory. Example: `try overrides.set(value);`
-pub fn set(self: *Overrides, value: Override) !void {
+pub fn set(self: *Overrides, value: data.PluginOverride) !void {
     for (self.items[0..self.count]) |*item| {
         if (std.mem.eql(u8, item.spec.path(), value.spec.path())) {
             const identity = value.plugin_id orelse item.plugin_id;
@@ -78,12 +77,12 @@ test "captured overrides are independent and disabling removes only that plugin'
     original.plugins[0] = .{ .path_len = 1 };
     original.plugins[0].path_bytes[0] = 'x';
     original.binding_count = 2;
-    original.bindings[0] = try model.ConfiguredBinding.init(&.{original.prefix}, .{ .plugin = .{ .plugin = 7, .action = 8 } });
+    original.bindings[0] = try data.config_values.ConfiguredBinding.init(&.{original.prefix}, .{ .plugin = .{ .plugin = 7, .action = 8 } });
     original.bindings_prefixed[0] = true;
-    original.bindings[1] = try model.ConfiguredBinding.init(&.{original.prefix}, .toggle_sidebar);
+    original.bindings[1] = try data.config_values.ConfiguredBinding.init(&.{original.prefix}, .toggle_sidebar);
     original.bindings_prefixed[1] = false;
     var overrides: Overrides = .{};
-    var value: Override = .{ .spec = original.plugins[0], .plugin_id = 7 };
+    var value: data.PluginOverride = .{ .spec = original.plugins[0], .plugin_id = 7 };
     value.spec.enabled = false;
     try overrides.set(value);
     const captured = overrides;

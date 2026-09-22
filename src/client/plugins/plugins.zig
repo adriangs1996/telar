@@ -7,7 +7,6 @@ const core = @import("telar-core");
 const data = @import("model");
 const std = @import("std");
 const WorkerRequest = @import("WorkerRequest.zig");
-const WorkerResult = @import("WorkerResult.zig");
 const protocol = @import("protocol.zig");
 const LoadContext = @import("LoadContext.zig");
 const Package = @import("Package.zig");
@@ -15,12 +14,11 @@ const generation_support = @import("../config/generation_support.zig");
 const Installation = @import("Installation.zig");
 const FingerprintUpdate = @import("FingerprintUpdate.zig");
 const Registry = @import("Registry.zig");
-const model = @import("../config/model.zig");
 
 pub const max_package_files = 256;
 pub const max_package_bytes = 16 * 1024 * 1024;
 
-pub fn executeWorker(io: std.Io, gpa: std.mem.Allocator, request: WorkerRequest) !WorkerResult {
+pub fn executeWorker(io: std.Io, gpa: std.mem.Allocator, request: WorkerRequest) !data.WorkerResult {
     var nonce: [16]u8 = undefined;
     try io.randomSecure(&nonce);
     const nonce_hex = std.fmt.bytesToHex(nonce, .lower);
@@ -512,7 +510,7 @@ test "configured plugin actions resolve before the keymap becomes active" {
         .root_len = 0,
     };
     registry.count = 1;
-    const binding = try model.ConfiguredBinding.parse(
+    const binding = try data.config_values.ConfiguredBinding.parse(
         &.{"escape"},
         .{ .plugin = .{
             .plugin = core.stableId(manifest.id()),

@@ -120,7 +120,7 @@ authority.
 
 ## Validation
 
-- `src/client/model/Model.zig` proves callback-context projection,
+- `src/model/state/Model.zig` proves callback-context projection,
   diagnostic validation, equality and revision behavior.
 - `src/client/application/configuration/client_diagnostic.zig` proves shared
   diagnostic validation, fallback and clear semantics.

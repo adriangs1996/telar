@@ -1,18 +1,19 @@
 //! Requested bytes, not allocator overhead or RSS. Use the same fixture on both revisions.
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
 
 /// Reports fixed capacity separately from live pane payloads. Example: `try client_storage.report(writer, gpa);`
 pub fn report(writer: *std.Io.Writer, gpa: std.mem.Allocator) !void {
-    inline for (.{ client.AttachedClient, client.Model, client.TabsModel, client.Tab, client.MultiplexerModel, client.Pane }) |T| {
+    inline for (.{ client.AttachedClient, data.Model, data.TabsModel, data.Tab, data.MultiplexerModel, data.Pane }) |T| {
         try writer.print("{{\"type\":\"size\",\"name\":\"{s}\",\"bytes\":{d}}}\n", .{ @typeName(T), @sizeOf(T) });
     }
 
     for ([_]usize{ 0, 1, 8, core.max_panes_per_tab }) |count| {
         var accounting = std.testing.FailingAllocator.init(gpa, .{});
         const allocator = accounting.allocator();
-        const model = try allocator.create(client.MultiplexerModel);
+        const model = try allocator.create(data.MultiplexerModel);
         model.* = .init(allocator);
         defer allocator.destroy(model);
         defer model.deinit();

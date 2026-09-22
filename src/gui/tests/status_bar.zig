@@ -10,7 +10,7 @@ const colors = @import("../render/cell_colors.zig");
 test "native bottom widgets preserve configured positions and legacy top content" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var state: client.State = .{};
+    var state: data.BarsState = .{};
     const red = core.Color{ .rgb = .{ 255, 0, 0 } };
     const green = core.Color{ .rgb = .{ 0, 255, 0 } };
     const blue = core.Color{ .rgb = .{ 0, 0, 255 } };
@@ -48,7 +48,7 @@ test "native footer reserves TLS ahead of widgets and mode hints in narrow windo
     fixture.session.gui.theme.palette.yellow = tls_color;
     fixture.session.gui.theme.palette.red = tls_color;
     const widget_color = core.Color{ .rgb = .{ 0, 255, 0 } };
-    var state: client.State = .{};
+    var state: data.BarsState = .{};
     state.layout.bottom = .{ try colored("left widget that exceeds the viewport", widget_color), .tabs, try colored("right widget that exceeds the viewport", widget_color) };
     state.layout.top_right = try colored("legacy widget that exceeds the viewport", widget_color);
     var hints: client.Hints = .{};
@@ -96,7 +96,7 @@ test "native footer clips tall terminal line spacing without hiding configured w
     const renderer = &fixture.session.gui.renderer;
     try std.testing.expect(renderer.metrics.cell_height > renderer.chrome.status_bar);
     const color = core.Color{ .rgb = .{ 0, 255, 0 } };
-    var state: client.State = .{};
+    var state: data.BarsState = .{};
     state.layout.bottom = .{ try colored("visible", color), .empty, .tabs };
     state.layout.top_right = try colored("legacy", color);
     var projection = fixture.projection();
@@ -114,8 +114,8 @@ test "native footer clips tall terminal line spacing without hiding configured w
     }
 }
 
-fn colored(text: []const u8, color: core.Color) !client.Slot {
-    var content: client.Content = .{};
+fn colored(text: []const u8, color: core.Color) !data.bar_values.Slot {
+    var content: data.Content = .{};
     try content.append(.{ .text = text, .style = .{ .background = .{ .value = color } } });
     return .{ .content = content };
 }

@@ -1,12 +1,11 @@
 const data = @import("model");
 const std = @import("std");
-const CaptureType = @import("Capture.zig");
 const retained = @import("retained.zig");
 
 const target: data.AttachmentTarget = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 };
 
-fn capture(gpa: std.mem.Allocator, sequence: u64) !*CaptureType {
-    const result = try gpa.create(CaptureType);
+fn capture(gpa: std.mem.Allocator, sequence: u64) !*data.Capture {
+    const result = try gpa.create(data.Capture);
     errdefer gpa.destroy(result);
     result.* = .{
         .request = .{ .target = target, .sequence = sequence },

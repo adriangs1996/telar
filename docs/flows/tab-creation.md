@@ -54,7 +54,7 @@ model revisions; this operation does not draw.
 Source: `src/client/AttachedClient.zig` and
 `src/client/AttachedClient.zig`.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig`,
-`src/client/model/tests/tabs.zig`, `src/client/connection/outbox_support.zig`,
+`src/model/state/tests/tabs.zig`, `src/model/connection/outbox_support.zig`,
 and runtime/transport tab-lifecycle tests. The frontend suite includes invalid
 labels, full-outbox correlation rollback and a confirmed creation whose later
 attachment retirement fails.

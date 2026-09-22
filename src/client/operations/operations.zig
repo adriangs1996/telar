@@ -1,7 +1,8 @@
 //! Shared client operations grouped by behavior. Process event switches call
 //! these functions with concrete client state; host services keep their ports.
 
-pub const ClipboardImageCompletion = @import("host/Completion.zig");
+const data = @import("model");
+pub const ClipboardImageCompletion = data.Completion;
 pub const bar_updates = @import("configuration/bar_updates.zig");
 pub const copy_mode_pointer = @import("input/copy_mode_pointer.zig");
 pub const favicons = @import("workspaces/favicons.zig");

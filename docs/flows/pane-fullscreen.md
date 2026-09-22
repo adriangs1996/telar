@@ -84,7 +84,7 @@ runtime authority; otherwise canonical display order supplies the layout.
 Graphics are rebuilt. No operation directly schedules a draw.
 
 Source: `src/client/AttachedClient.zig`,
-`src/client/AttachedClient.zig` and `src/client/model/Model.zig`.
+`src/client/AttachedClient.zig` and `src/model/state/Model.zig`.
 Tests: `src/frontend/client/tests/pane_lifecycle.zig`,
 `src/frontend/client/tests/FullscreenReattachment.zig`,
 `src/frontend/client/tests/pane_splits.zig`, and shared model/layout tests.

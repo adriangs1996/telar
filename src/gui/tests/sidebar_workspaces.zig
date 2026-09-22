@@ -43,7 +43,7 @@ test "project and agent scrolling are independent and clipped to their delivered
     defer fixture.deinit();
     try projects(&fixture, core.max_workspace_list_entries);
     try fixture.measure(.{ .width = 1100, .height = 360, .scale = 1 });
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     var entries: [8]data.AgentInput = undefined;
     for (&entries, 0..) |*entry, index| {
         entry.* = .{ .key = .{ .pane_id = @enumFromInt(index + 100), .pane_generation = 1 }, .location = Session.location, .pane_index = @intCast(index + 1), .provider = .codex, .status = .working };
@@ -132,7 +132,7 @@ test "projects use text contrast for selection and a card background only on hov
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try projects(&fixture, 3);
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &.{.{ .key = .{ .pane_id = Session.pane_id, .pane_generation = 1 }, .location = Session.location, .pane_index = 1, .provider = .codex, .status = .blocked }} });
     for ([_]f32{ 1, 2 }) |scale| {
         try fixture.measure(.{ .width = 1600, .height = 1200, .scale = scale });
@@ -214,7 +214,7 @@ fn workspaceId(index: usize) core.WorkspaceId {
 }
 
 fn projects(fixture: *Fixture, count: usize) !void {
-    var entries: [core.max_workspace_list_entries]client.EntryInput = undefined;
+    var entries: [core.max_workspace_list_entries]data.EntryInput = undefined;
     for (entries[0..count], 0..) |*entry, index| {
         entry.* = .{ .workspace = workspaceId(index), .name = if (index == 0) "telar" else "another project with a long name", .path = if (index == 0) "/sandbox/telar" else "/work/another-project-with-a-long-path", .tab_count = 1 };
     }

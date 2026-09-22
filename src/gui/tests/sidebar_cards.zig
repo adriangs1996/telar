@@ -65,7 +65,7 @@ fn ring(quads: []const Quad) ?Quad {
 test "the sidebar orders six agents by attention and maps one hit per card" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
@@ -93,7 +93,7 @@ test "the sidebar orders six agents by attention and maps one hit per card" {
 test "replacement sidebar widgets retain scrolling and clip their own card controls" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
@@ -127,7 +127,7 @@ test "replacement sidebar widgets retain scrolling and clip their own card contr
     const clipped = band_hits.find(.{ .focus_agent = entries[expected_order[0]].key }).?;
     try std.testing.expectEqual(first.area.y, clipped.area.y);
     try std.testing.expectEqual(first.area.height - 20, clipped.area.height);
-    var empty: client.AgentSnapshot = .{};
+    var empty: data.AgentSnapshot = .{};
     _ = try empty.replace(.{ .revision = 1, .agents = &.{} });
     projection.agents = &empty;
     renderer.quads.clear();
@@ -142,7 +142,7 @@ test "replacement sidebar widgets retain scrolling and clip their own card contr
 test "the selected card is the focused pane's agent and carries the fill and ring" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
@@ -172,7 +172,7 @@ test "the selected card is the focused pane's agent and carries the fill and rin
 test "narrow cards keep status in the first row and clip every token to its card" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
@@ -209,10 +209,10 @@ test "narrow cards keep status in the first row and clip every token to its card
 test "card detail follows working state and the agent workspace across branch-only revisions" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     var input = entries[1];
     const own_workspace = input.location.workspace.workspace;
-    var workspaces: client.WorkspaceListSnapshot = .{};
+    var workspaces: data.WorkspaceListSnapshot = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = @enumFromInt(900), .name = "other", .path = "/other", .tab_count = 1, .branch = "wrong-branch" },
         .{ .workspace = own_workspace, .name = "telar", .path = "/telar", .tab_count = 1, .branch = "feature/sidebar" },
@@ -250,7 +250,7 @@ test "card detail follows working state and the agent workspace across branch-on
 test "the working pulse samples the status alpha from presentation time" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
@@ -273,7 +273,7 @@ test "the working pulse samples the status alpha from presentation time" {
 test "sidebar clocks survive unrelated snapshot changes" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
@@ -292,7 +292,7 @@ test "sidebar clocks survive unrelated snapshot changes" {
 test "a snapshot refresh cannot rewind a working duration already painted" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     var input = entries[0];
     input.status = .working;
     input.status_age_s = 5;
@@ -314,11 +314,11 @@ test "a snapshot refresh cannot rewind a working duration already painted" {
 test "a warm sidebar repaint with six agents allocates nothing" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &entries });
     var projection = fixture.projection();
     projection.agents = &agents;
-    var workspaces: client.WorkspaceListSnapshot = .{};
+    var workspaces: data.WorkspaceListSnapshot = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = Session.location.workspace.workspace, .name = "telar", .path = "/sandbox/telar", .tab_count = 1 },
         .{ .workspace = @enumFromInt(8), .name = "a long project name that needs truncation", .path = "/work/a-long-workspace-path-that-needs-truncation", .tab_count = 1 },

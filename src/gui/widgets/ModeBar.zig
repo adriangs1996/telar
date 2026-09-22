@@ -63,7 +63,7 @@ fn hint(canvas: *Canvas, pen: *HintPen, label: Label) !bool {
     return true;
 }
 
-fn plain(palette: client.Palette, text: []const u8) Label {
+fn plain(palette: data.Palette, text: []const u8) Label {
     return .{ .text = text, .color = palette.subtext0 };
 }
 

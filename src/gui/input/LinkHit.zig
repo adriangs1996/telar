@@ -1,4 +1,5 @@
 //! Owned identity and visible bounds of a link under the native pointer.
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -10,7 +11,7 @@ location: core.TabLocation,
 content: core.Rect,
 scroll_offset: u32 = 0,
 area: core.Rect,
-match: client.LinkMatch,
+match: data.LinkMatch,
 
 /// A gesture can open only the same target in the same attached pane and cells.
 /// Example: `if (pressed.eql(&released)) open(pressed.match.target);`

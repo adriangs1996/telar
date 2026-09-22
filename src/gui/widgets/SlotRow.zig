@@ -1,5 +1,6 @@
 //! Lays three Lua-configured bar slots left, centre and right in one cell
 //! row lent to the status bar's pixel band.
+const data = @import("model");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
@@ -8,9 +9,9 @@ const SlotPainter = @import("SlotPainter.zig");
 const bar_regions = @import("bar_regions.zig");
 const SlotRow = @This();
 
-slots: *const [3]client.Slot,
+slots: *const [3]data.bar_values.Slot,
 area: Rect,
-metrics: ?client.SystemMetrics = null,
+metrics: ?data.SystemMetrics = null,
 
 /// Paints the three slots inside one chrome cell row. A slot that paints
 /// nothing gives its space to the custom slots so they share the row.

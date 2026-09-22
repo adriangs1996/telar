@@ -54,9 +54,9 @@ confirmation cannot replace the model. Empty-source confirmation remains valid
 for recovery. Presentation is driven by the committed revision.
 
 Source: `src/client/AttachedClient.zig`,
-`src/client/model/Model.zig`, and `src/client/workspace/History.zig`.
+`src/model/state/Model.zig`, and `src/model/workspace/NavigationHistory.zig`.
 Tests: `src/frontend/client/tests/workspace_lifecycle.zig`,
-`src/client/model/tests/workspaces.zig`, bounded outbox tests and runtime
+`src/model/state/tests/workspaces.zig`, bounded outbox tests and runtime
 creation tests cover owned requests, atomic replacement, no stale detach/focus,
 snapshot ordering, full-outbox failure and retained canonical state after
 activation delivery failure.

@@ -5,7 +5,6 @@ const std = @import("std");
 const Session = @import("Session.zig");
 
 test "native theme backgrounds share window opacity across bands and pane headers" {
-    const client = @import("telar-client");
     var fixture = try ChromeFixture.init();
     defer fixture.deinit();
     const renderer = &fixture.session.gui.renderer;
@@ -14,10 +13,10 @@ test "native theme backgrounds share window opacity across bands and pane header
     const panes = model.activeTabModel().?;
     try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(20), .location = Session.location, .axis = .horizontal, .area = projection.geometry.area });
     var overlays: @import("../widgets/overlays/Overlays.zig") = .{};
-    var scene: @import("../render/Scene.zig") = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = client.theme_support.builtin(.vesper) };
+    var scene: @import("../render/Scene.zig") = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = model_data.theme_support.builtin(.vesper) };
 
-    for ([_]client.theme_support.Builtin{ .vesper, .shade, .catppuccin, .tokyo_night, .terminal }) |theme| {
-        scene.theme = client.theme_support.builtin(theme);
+    for ([_]model_data.theme_support.Builtin{ .vesper, .shade, .catppuccin, .tokyo_night, .terminal }) |theme| {
+        scene.theme = model_data.theme_support.builtin(theme);
         for ([_]f32{ 1, 0.95, 0.5, 0, 1 }) |opacity| {
             renderer.config.window.background_opacity = opacity;
             _ = try scene.prepare(fixture.projection());
@@ -42,7 +41,7 @@ test "native theme backgrounds share window opacity across bands and pane header
     }
 
     renderer.config.window.background_opacity = 0.5;
-    scene.theme = client.theme_support.builtin(.vesper);
+    scene.theme = model_data.theme_support.builtin(.vesper);
     model.name_prompt.begin(.create_workspace);
     _ = try scene.prepare(fixture.projection());
     const modal = overlays.prepared().native_modal.?;
@@ -50,7 +49,6 @@ test "native theme backgrounds share window opacity across bands and pane header
 }
 
 test "agent and terminal panes share the configured theme background opacity and blur" {
-    const client = @import("telar-client");
     var fixture = try ChromeFixture.init();
     defer fixture.deinit();
     const renderer = &fixture.session.gui.renderer;
@@ -59,10 +57,10 @@ test "agent and terminal panes share the configured theme background opacity and
     try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(20), .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
     try std.testing.expect(model.identifyPane(.{ .request_id = @enumFromInt(1), .pane_id = Session.pane_id, .location = Session.location, .created = false, .kind = .agent, .pane_generation = 77 }));
     var overlays: @import("../widgets/overlays/Overlays.zig") = .{};
-    var scene: @import("../render/Scene.zig") = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = client.theme_support.builtin(.vesper) };
+    var scene: @import("../render/Scene.zig") = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = model_data.theme_support.builtin(.vesper) };
     renderer.config.window.background_blur = 40;
-    for ([_]client.theme_support.Builtin{ .vesper, .shade, .catppuccin, .tokyo_night, .terminal }) |theme| {
-        scene.theme = client.theme_support.builtin(theme);
+    for ([_]model_data.theme_support.Builtin{ .vesper, .shade, .catppuccin, .tokyo_night, .terminal }) |theme| {
+        scene.theme = model_data.theme_support.builtin(theme);
         if (theme == .terminal) {
             scene.theme.terminal.background = .{ 17, 43, 71 };
         }

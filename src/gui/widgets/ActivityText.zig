@@ -1,5 +1,6 @@
 //! Visible activity text uses the scene's single clock. Idle text never
 //! schedules work, and animation only changes cached glyph opacity.
+const data = @import("model");
 const GlyphAtlas = @import("../text/GlyphAtlas.zig");
 const assets = @import("assets");
 const QuadList = @import("../render/QuadList.zig");
@@ -41,7 +42,7 @@ test "activity animates cached glyphs and parks when complete or invisible" {
     var quads = QuadList.init(std.testing.allocator);
     defer quads.deinit();
     var clock: FrameClock = .{};
-    var canvas: Canvas = .{ .atlas = &atlas, .quads = &quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 }, .theme = client.theme_support.default_theme, .animation = &clock, .chrome = .{ .body = 16, .title = 18, .small = 12 } };
+    var canvas: Canvas = .{ .atlas = &atlas, .quads = &quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 }, .theme = data.theme_support.default_theme, .animation = &clock, .chrome = .{ .body = 16, .title = 18, .small = 12 } };
     var activity: ActivityText = .{ .bounds = .{ .x = 0, .y = 0, .width = 240, .height = 32 }, .label = .{ .text = "Thinking", .face = .sans, .size = .body }, .active = true };
     clock.begin(0);
     try activity.draw(&canvas);

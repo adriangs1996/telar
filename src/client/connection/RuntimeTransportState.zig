@@ -1,6 +1,5 @@
 const data = @import("model");
 const core = @import("telar-core");
-const OutboxType = @import("Outbox.zig");
 const std = @import("std");
 const Bootstrap = @import("Bootstrap.zig");
 const State = @This();
@@ -10,7 +9,7 @@ send_buffer: []u8,
 receive_buffer: []u8,
 read_buffer: []u8,
 received: data.RuntimeMessage = undefined,
-outbox: OutboxType = .{},
+outbox: data.Outbox = .{},
 receive_pending: bool = false,
 
 /// Reserves the single receive buffer before a read actor starts.

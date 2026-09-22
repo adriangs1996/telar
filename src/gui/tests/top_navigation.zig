@@ -1,3 +1,4 @@
+const data = @import("model");
 const QuadList = @import("../render/QuadList.zig");
 const Quad_module = @import("../render/Quad.zig");
 const std = @import("std");
@@ -16,7 +17,7 @@ test "workspace departure retains the delivered indicators and overflow window u
     try fixture.showSidebar(false);
     const model = &fixture.session.gui.app.model;
     const ids = [_]core.WorkspaceId{ Session.location.workspace.workspace, @enumFromInt(9), @enumFromInt(30), @enumFromInt(40), @enumFromInt(50) };
-    var entries: [ids.len]client.EntryInput = undefined;
+    var entries: [ids.len]data.EntryInput = undefined;
     for (ids, &entries) |id, *entry| {
         entry.* = .{ .workspace = id, .name = "project", .path = "/project", .tab_count = 1 };
     }
@@ -137,7 +138,7 @@ test "native project indicators use numbers instead of names and attention does 
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.showSidebar(false);
-    var workspaces: client.WorkspaceListSnapshot = .{};
+    var workspaces: data.WorkspaceListSnapshot = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = Session.location.workspace.workspace, .name = "a", .path = "/a", .tab_count = 1 },
         .{ .workspace = @enumFromInt(9), .name = "a deliberately long workspace name", .path = "/long", .tab_count = 1 },
@@ -154,7 +155,7 @@ test "native project indicators use numbers instead of names and attention does 
 
     const active = fixture.bandTarget(.{ .select_workspace = Session.location.workspace.workspace }).?;
     const before_dot = try firstInk(fixture.session.gui.renderer.quads.items(), active);
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &.{.{ .key = .{ .pane_id = Session.pane_id, .pane_generation = 1 }, .location = Session.location, .pane_index = 1, .provider = .codex, .status = .blocked }} });
     projection.agents = &agents;
     try fixture.paint(projection);
@@ -167,7 +168,7 @@ test "native workspace overflow counters keep nearest hidden destinations withou
     defer fixture.deinit();
     try fixture.showSidebar(false);
     try fixture.measure(.{ .width = 488, .height = 700, .scale = 1 });
-    var workspaces: client.WorkspaceListSnapshot = .{};
+    var workspaces: data.WorkspaceListSnapshot = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = @enumFromInt(4), .name = "one", .path = "/one", .tab_count = 1 },
         .{ .workspace = @enumFromInt(8), .name = "two", .path = "/two", .tab_count = 1 },
@@ -246,7 +247,7 @@ test "native navigation names unlisted workspaces and worktrees without selectin
     const tabs = try createTabs();
     defer std.testing.allocator.destroy(tabs);
     defer tabs.deinit();
-    const workspaces = try std.testing.allocator.create(client.WorkspaceListSnapshot);
+    const workspaces = try std.testing.allocator.create(data.WorkspaceListSnapshot);
     defer std.testing.allocator.destroy(workspaces);
     workspaces.* = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
@@ -282,7 +283,7 @@ test "native project indicators keep all seven projects in stable positions acro
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.showSidebar(false);
-    const workspaces = try std.testing.allocator.create(client.WorkspaceListSnapshot);
+    const workspaces = try std.testing.allocator.create(data.WorkspaceListSnapshot);
     defer std.testing.allocator.destroy(workspaces);
     workspaces.* = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
@@ -535,8 +536,8 @@ fn hasApplicationMark(quads: []const Quad, bounds: Rect) bool {
     return false;
 }
 
-fn createTabs() !*client.TabsModel {
-    const tabs = try std.testing.allocator.create(client.TabsModel);
-    tabs.* = client.TabsModel.init(std.testing.allocator);
+fn createTabs() !*data.TabsModel {
+    const tabs = try std.testing.allocator.create(data.TabsModel);
+    tabs.* = data.TabsModel.init(std.testing.allocator);
     return tabs;
 }

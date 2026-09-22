@@ -1,9 +1,7 @@
 const core = @import("telar-core");
 const data = @import("model");
-const model = @import("../config/model.zig");
 const Package = @import("Package.zig");
 const LoadContext = @import("LoadContext.zig");
-const PluginSpecType = @import("../config/PluginSpec.zig");
 const plugins = @import("plugins.zig");
 const std = @import("std");
 const Invocation = @import("Invocation.zig");
@@ -11,21 +9,21 @@ const WorkerRequest = @import("WorkerRequest.zig");
 const BatchAuthorization = @import("BatchAuthorization.zig");
 const Registry = @This();
 
-packages: [model.max_plugins]Package = undefined,
+packages: [data.config_values.max_plugins]Package = undefined,
 count: u8 = 0,
 grants: [core.max_grants]core.Grant = undefined,
 grant_count: u8 = 0,
 
 /// Loads enabled plugin packages without persisted capability grants.
 /// For example: `const registry = try Registry.load(context, specs);`.
-pub fn load(context: LoadContext, specs: []const PluginSpecType) !Registry {
+pub fn load(context: LoadContext, specs: []const data.PluginSpec) !Registry {
     const empty: core.TrustStore = .{};
     return loadWithTrust(context, specs, &empty);
 }
 
 /// Loads enabled plugin packages and their persisted capability grants.
 /// For example: `const registry = try Registry.loadWithTrust(context, specs, trust);`.
-pub fn loadWithTrust(context: LoadContext, specs: []const PluginSpecType, trust: *const core.TrustStore) !Registry {
+pub fn loadWithTrust(context: LoadContext, specs: []const data.PluginSpec, trust: *const core.TrustStore) !Registry {
     var registry: Registry = .{};
     registry.grant_count = trust.count;
     for (trust.entries[0..trust.count], 0..) |entry, index|
@@ -34,7 +32,7 @@ pub fn loadWithTrust(context: LoadContext, specs: []const PluginSpecType, trust:
         if (!spec.enabled) {
             continue;
         }
-        if (registry.count == model.max_plugins) {
+        if (registry.count == data.config_values.max_plugins) {
             return error.TooManyPlugins;
         }
         const package = try plugins.loadPackage(context, spec.path());
@@ -72,7 +70,7 @@ pub fn resolve(registry: *const Registry, requested: data.PluginAction) !Invocat
     return error.PluginNotConfigured;
 }
 
-pub fn validateConfiguredActions(registry: *const Registry, bindings: []const model.ConfiguredBinding) !void {
+pub fn validateConfiguredActions(registry: *const Registry, bindings: []const data.config_values.ConfiguredBinding) !void {
     for (bindings) |binding| switch (binding.action) {
         .plugin => |requested| _ = try registry.resolve(requested),
         else => {},

@@ -167,7 +167,7 @@ presentation state, never semantic authority inside `multiplexer.Pane`.
 
 - `src/model/input/copy_mode.zig` proves fixed-state motions, selection and
   frame reconciliation.
-- `src/client/model/Model.zig` proves entry authority, independent
+- `src/model/state/Model.zig` proves entry authority, independent
   revisions, no-ops, stale-plan rejection, frame reconciliation and exact pane
   release.
 - `src/model/application/input/copy_mode.zig` proves copy-before-exit and

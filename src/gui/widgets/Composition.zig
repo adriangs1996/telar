@@ -13,7 +13,7 @@ overlays: *@import("overlays/Overlays.zig"),
 canvas: *Canvas,
 link: ?*const @import("../input/LinkHit.zig") = null,
 context: Context = undefined,
-commit: client.PresentationCommit = .{},
+commit: data.PresentationCommit = .{},
 
 /// Selects the frame's widgets in painter order without emitting quads. The
 /// returned list borrows this composition and the caller's projection until draw.

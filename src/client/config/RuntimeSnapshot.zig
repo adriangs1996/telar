@@ -1,17 +1,16 @@
+const data = @import("model");
 const core = @import("telar-core");
-const model = @import("model.zig");
-const ProxyInterceptHosts = @import("ProxyInterceptHosts.zig");
 const CommandSpec = @import("CommandSpec.zig");
 const RuntimeSnapshot = @This();
 
 graphics_pane_bytes: usize = core.max_image_bytes_per_pane,
 graphics_global_bytes: usize = core.max_image_bytes_global,
-history_path_bytes: [model.max_history_path_bytes]u8 = undefined,
+history_path_bytes: [data.config_values.max_history_path_bytes]u8 = undefined,
 history_path_len: u16 = 0,
 proxy_enabled: bool = false,
-proxy_ca_dir_bytes: [model.max_proxy_path_bytes]u8 = undefined,
+proxy_ca_dir_bytes: [data.config_values.max_proxy_path_bytes]u8 = undefined,
 proxy_ca_dir_len: u16 = 0,
-proxy_intercept_hosts: ProxyInterceptHosts = model.defaultProxyInterceptHosts(),
+proxy_intercept_hosts: data.ProxyInterceptHosts = data.config_values.defaultProxyInterceptHosts(),
 proxy_capture_enabled: bool = false,
 proxy_capture_max_part_bytes: usize = core.default_capture_part_bytes,
 proxy_capture_max_exchange_bytes: usize = core.default_capture_exchange_bytes,
@@ -19,13 +18,13 @@ proxy_capture_max_total_bytes: usize = core.default_capture_total_bytes,
 proxy_capture_join_timeout_ms: u32 = core.default_capture_join_timeout_ms,
 agent_descriptions: CommandSpec = .{},
 engine: CommandSpec = .{},
-engine_idle_timeout_ms: u32 = model.default_engine_idle_timeout_ms,
+engine_idle_timeout_ms: u32 = data.config_values.default_engine_idle_timeout_ms,
 agent_manifests: core.Table = core.builtin_table,
 history_filters: core.Filters = .{},
 history_output_capture: bool = false,
 session_persist: bool = true,
 session_resume_agents: bool = true,
-session_path_bytes: [model.max_history_path_bytes]u8 = undefined,
+session_path_bytes: [data.config_values.max_history_path_bytes]u8 = undefined,
 session_path_len: u16 = 0,
 
 pub fn historyPath(snapshot: *const RuntimeSnapshot) ?[]const u8 {

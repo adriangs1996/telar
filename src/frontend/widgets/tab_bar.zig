@@ -1,5 +1,6 @@
 //! Ordered tab navigation.
 
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const ContextType = @import("Context.zig");
@@ -71,7 +72,7 @@ fn hoveredStyle(context: *const ContextType) core.Style {
     };
 }
 
-fn renderCollection(context: *ContextType, input: TabBarInput, collection: *const client.TabsModel) void {
+fn renderCollection(context: *ContextType, input: TabBarInput, collection: *const data.TabsModel) void {
     if (collection.count == 0) {
         return;
     }
@@ -159,7 +160,7 @@ fn bouncingPosition(width: u16, frame: u8) u16 {
 }
 
 /// The active tab is always visible; earlier tabs are added while they fit.
-fn firstVisibleIndex(collection: *const client.TabsModel, available: u16) usize {
+fn firstVisibleIndex(collection: *const data.TabsModel, available: u16) usize {
     var first_visible = collection.active_index;
     var used = tabWidth(collection, first_visible, available);
     while (first_visible > 0) {
@@ -178,7 +179,7 @@ fn firstVisibleIndex(collection: *const client.TabsModel, available: u16) usize 
 
 /// The block anchors to its alignment edge: when the tabs do not fill the
 /// region the unused cells stay on the other side.
-fn visibleWidth(collection: *const client.TabsModel, first_visible: usize, available: u16) u16 {
+fn visibleWidth(collection: *const data.TabsModel, first_visible: usize, available: u16) u16 {
     var total: u16 = 0;
     for (first_visible..collection.count) |index| {
         const gap: u16 = if (index != first_visible) tab_gap else 0;
@@ -192,7 +193,7 @@ fn visibleWidth(collection: *const client.TabsModel, first_visible: usize, avail
     return total;
 }
 
-fn tabWidth(collection: *const client.TabsModel, index: usize, available: u16) u16 {
+fn tabWidth(collection: *const data.TabsModel, index: usize, available: u16) u16 {
     const tab = if (collection.items[index]) |*value| value else return 0;
     return @min(Label.init(tab, index).width(), available);
 }

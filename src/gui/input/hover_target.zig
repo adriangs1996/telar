@@ -57,7 +57,7 @@ pub fn resolve(gui: *const GuiClient, mouse: data.Mouse, mods: u32) Target {
 
             const reporting = pane.mouse.tracking != .none;
             const row = pane.scroll.offset + (mouse.y - view.content.y);
-            const found = client.resolveLink(pane, .{ .x = mouse.x - view.content.x, .y = row }) orelse return base;
+            const found = data.cells.resolve(pane, .{ .x = mouse.x - view.content.x, .y = row }) orelse return base;
             const start_x = if (row == found.start.y) found.start.x else 0;
             const end_x = @min(if (row == found.end.y) found.end.x else pane.buffer.w, view.content.w);
             if (start_x >= end_x) {

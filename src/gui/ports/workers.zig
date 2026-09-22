@@ -108,7 +108,7 @@ fn startPlugin(context: *anyopaque, job: client.PluginActionsJob) !void {
     try GuiClient.of(app).driver.inbox.start(.plugin_result, .{ executePlugin, .{ app.io, app.gpa, job } });
 }
 
-fn executePlugin(io: std.Io, gpa: std.mem.Allocator, job: client.PluginActionsJob) client.PluginActionsCompletion {
+fn executePlugin(io: std.Io, gpa: std.mem.Allocator, job: client.PluginActionsJob) data.PluginActionsCompletion {
     return .{ .execution_id = job.execution_id, .result = client.executeWorker(io, gpa, job.request) };
 }
 

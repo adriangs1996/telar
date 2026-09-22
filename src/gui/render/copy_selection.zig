@@ -11,7 +11,7 @@ pub fn forPane(projection: ?client.CopyProjection, id: core.PaneId) ?data.CopyMo
 
 /// Resolves keyboard copy position from absolute scrollback to the visible frame.
 /// Example: `const cursor = copy_selection.cursor(pane, selection);`
-pub fn cursor(pane: *const client.Pane, selection: ?data.CopyModeView) core.Cursor {
+pub fn cursor(pane: *const data.Pane, selection: ?data.CopyModeView) core.Cursor {
     const copy = selection orelse return pane.cursor;
     if (copy.pointer) {
         return pane.cursor;

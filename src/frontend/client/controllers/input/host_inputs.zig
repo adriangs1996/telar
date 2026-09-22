@@ -20,8 +20,8 @@ const held_binding_bytes = 128;
 pub const Router = GenericRouter(
     data.Action,
     .{
-        .max_bindings = client_module.config_model.max_bindings,
-        .max_keys = client_module.config_model.max_binding_keys,
+        .max_bindings = data.config_values.max_bindings,
+        .max_keys = data.config_values.max_binding_keys,
         .input_capacity = chunk_size,
         .held_capacity = held_binding_bytes,
     },
@@ -464,7 +464,7 @@ test "router replacement clears obsolete deadlines and visible prefix state" {
 test "prefix status uses only the effective host input router" {
     const prefix = try data.chord.parseKey("ctrl+s");
     const suffix = try data.chord.parseKey("t");
-    const binding = try client_module.config_model.ConfiguredBinding.init(&.{ prefix, suffix }, .new_tab);
+    const binding = try data.config_values.ConfiguredBinding.init(&.{ prefix, suffix }, .new_tab);
     var router = try Router.initWithPrefix(&.{binding}, prefix);
     router.prefix_pending = true;
     const state: State = .{ .file = undefined, .router = router };

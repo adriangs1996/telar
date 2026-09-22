@@ -145,7 +145,7 @@ propagate without transport classifying their original message.
   duplicate reservations, and preservation of queued frame order.
 - `src/client/connection/runtime_transport.zig` checks partial-allocation cleanup
   and the exact three-frame bootstrap order over a real socketpair.
-- `src/client/connection/outbox_support.zig` proves one send claim, completion on success
+- `src/model/connection/outbox_support.zig` proves one send claim, completion on success
   and failure, copied payload ownership, folding rules and saturation bounds.
 - `runtime reads own one token and do not rearm after shutdown` in
   `src/frontend/client/tests/` crosses the real framed socket and

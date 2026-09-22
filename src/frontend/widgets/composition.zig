@@ -3,6 +3,7 @@
 //! This is deliberately linear. Reading `render` shows every visible widget,
 //! its region, its order, and the only conditional replacement in the frame.
 
+const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const ContextType = @import("Context.zig");
@@ -101,7 +102,7 @@ fn renderBottom(context: *ContextType, input: CompositionInput) void {
     });
 
     for (slots, regions.items, 0..) |*slot, area, index| {
-        const alignment: client.Alignment = switch (index) {
+        const alignment: data.bar_values.Alignment = switch (index) {
             0 => .left,
             1 => .center,
             else => .right,
@@ -124,7 +125,7 @@ fn renderBottom(context: *ContextType, input: CompositionInput) void {
     }
 }
 
-fn bottomDesiredWidth(slot: *const client.Slot, input: CompositionInput) u16 {
+fn bottomDesiredWidth(slot: *const data.bar_values.Slot, input: CompositionInput) u16 {
     return switch (slot.*) {
         .empty => 0,
         .content => |*content| content.width(),

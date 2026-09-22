@@ -73,7 +73,7 @@ needed.
 
 ## Validation
 
-- `src/client/model/Model.zig` proves active-only frame advancement and
+- `src/model/state/Model.zig` proves active-only frame advancement and
   isolated versioning.
 - `src/client/application/notifications/sidebar_animation.zig` proves inactive
   no-ops, synchronization without mutation, commit-before-rearm ordering and

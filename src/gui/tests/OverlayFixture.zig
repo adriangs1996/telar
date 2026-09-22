@@ -1,3 +1,4 @@
+const data = @import("model");
 const frame_widget = @import("../widgets/frame_widget.zig");
 const std = @import("std");
 const client = @import("telar-client");
@@ -7,7 +8,7 @@ const Canvas = @import("../widgets/Canvas.zig");
 const Overlays = @import("../widgets/overlays/Overlays.zig");
 const Fixture = @This();
 
-model: client.Model,
+model: data.Model,
 renderer: Renderer,
 overlays: Overlays = .{},
 widgets: @import("../widgets/interaction/State.zig") = .{},
@@ -37,7 +38,7 @@ pub fn projection(fixture: *Fixture) client.Projection {
 }
 
 pub fn canvas(fixture: *Fixture) Canvas {
-    return .{ .atlas = &fixture.renderer.atlas.?, .quads = &fixture.renderer.quads, .metrics = fixture.renderer.metrics, .origin = fixture.renderer.origin, .theme = client.theme_support.default_theme, .chrome = fixture.renderer.chrome, .viewport = fixture.renderer.viewport };
+    return .{ .atlas = &fixture.renderer.atlas.?, .quads = &fixture.renderer.quads, .metrics = fixture.renderer.metrics, .origin = fixture.renderer.origin, .theme = data.theme_support.default_theme, .chrome = fixture.renderer.chrome, .viewport = fixture.renderer.viewport };
 }
 
 pub fn paint(fixture: *Fixture) !void {

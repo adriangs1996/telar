@@ -75,7 +75,7 @@ runtime's fresh delivery cursor supplies the current sample.
 - `src/backend/runtime/delivery/` proves per-client latest-state delivery.
 - `src/core/schema/schema.zig` proves wire validation and optional-battery
   encoding rules.
-- `src/client/model/Model.zig` proves ownership, stale handling, validation
+- `src/model/state/Model.zig` proves ownership, stale handling, validation
   and isolated versioning.
 - `src/client/AttachedClient.zig` proves the use-case
   boundary and retained state after rejection.

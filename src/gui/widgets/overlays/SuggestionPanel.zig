@@ -1,4 +1,5 @@
 //! Request, command preview and submission controls for the native palette.
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("../Canvas.zig");
@@ -14,7 +15,7 @@ hits: *PaletteHits,
 
 /// Fits the bounded command, reserving separate request and action rows.
 /// Example: `const rows = SuggestionPanel.height(projection.suggestion, width);`
-pub fn height(state: *const client.SuggestionState, width: u16) u16 {
+pub fn height(state: *const data.SuggestionState, width: u16) u16 {
     const lines: WrappedLines = .{ .text = state.textSlice(), .width = width -| 8 };
     return @intCast(@max(15, @min(lines.count(), 32) + 13));
 }

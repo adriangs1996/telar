@@ -116,7 +116,7 @@ pub fn configWatcher(configuration: *ConfigurationReload) client_module.ConfigRe
     };
 }
 
-fn adoptAttachment(_: *anyopaque, _: *client_module.Capture) !bool {
+fn adoptAttachment(_: *anyopaque, _: *data.Capture) !bool {
     return false;
 }
 
@@ -254,7 +254,7 @@ fn setPaneGraphicsVisible(context: *anyopaque, pane_id: core.PaneId, visible: bo
     try GuiClient.of(client).graphics_store.setPaneVisible(pane_id, visible);
 }
 
-fn startCapture(_: *anyopaque, _: client_module.CaptureRequest) !void {
+fn startCapture(_: *anyopaque, _: data.CaptureRequest) !void {
     return error.NativeServiceUnavailable;
 }
 

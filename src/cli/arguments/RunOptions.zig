@@ -1,3 +1,4 @@
+const data = @import("model");
 const backend = @import("telar-backend");
 const client = @import("telar-client");
 const std = @import("std");
@@ -6,7 +7,7 @@ const RunOptions = @This();
 
 command: backend.Command,
 command_set: bool = false,
-theme: client.ColorTheme = client.theme_support.default_theme,
+theme: data.ColorTheme = data.theme_support.default_theme,
 theme_set: bool = false,
 sidebar_rendering: client.SidebarRendering = .automatic,
 sidebar_renderer_set: bool = false,
@@ -40,7 +41,7 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOpti
                 return error.MissingThemeName;
             }
 
-            options.theme = client.theme_support.fromName(std.mem.span(args[command_start + 1])) orelse
+            options.theme = data.theme_support.fromName(std.mem.span(args[command_start + 1])) orelse
                 return error.UnknownTheme;
             theme_set = true;
             options.theme_set = true;
@@ -52,7 +53,7 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOpti
                 return error.DuplicateThemeOption;
             }
 
-            options.theme = client.theme_support.fromName(arg["--theme=".len..]) orelse
+            options.theme = data.theme_support.fromName(arg["--theme=".len..]) orelse
                 return error.UnknownTheme;
             theme_set = true;
             options.theme_set = true;

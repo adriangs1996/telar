@@ -60,7 +60,7 @@ Canonical state survives any later client resource error. Reconnect rebuilds
 the projection. The flow uses bounded tab/pane stores, request tracking and
 outbox capacity, and never schedules presentation directly.
 
-Source: `src/client/AttachedClient.zig` and `src/client/model/Model.zig`.
+Source: `src/client/AttachedClient.zig` and `src/model/state/Model.zig`.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig` and `synchronization.zig`
 cover preflight, partial failures, correlation, late replies, exact cleanup,
 predecessor following and exit. Model and runtime transport tests cover

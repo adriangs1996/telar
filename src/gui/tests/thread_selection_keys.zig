@@ -9,7 +9,7 @@ test "configured copy-mode action enters the agent reader without VT state or dr
     const gui = fixture.session.gui;
     try fixture.send(.{ .text = .{ .bytes = "keep draft" } });
     const composer = try fixture.target(.composer);
-    const binding = try client.config_model.ConfiguredBinding.parse(&.{"ctrl+q"}, .enter_copy_mode);
+    const binding = try data.config_values.ConfiguredBinding.parse(&.{"ctrl+q"}, .enter_copy_mode);
     gui.adoptBindings(
         .{
             .prefix = data.keybind.default_prefix,

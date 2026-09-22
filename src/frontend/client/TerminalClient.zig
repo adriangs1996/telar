@@ -20,7 +20,7 @@ const presentation_lifecycle = @import("presentation/presentation_lifecycle.zig"
 
 pub const InputRouter = host_inputs.Router;
 pub const Options = client_module.Options;
-pub const AppearanceThemes = client_module.AppearanceThemes;
+pub const AppearanceThemes = data.AppearanceThemes;
 
 pub const ClientEvent = union(enum) {
     /// Bytes read into `host_input.chunk`; zero is EOF.
@@ -44,7 +44,7 @@ pub const ClientEvent = union(enum) {
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
     config_reload: anyerror!client_module.ConfigReload,
-    plugin_result: client_module.PluginActionsCompletion,
+    plugin_result: data.PluginActionsCompletion,
     path_completion: data.PathCompletionCompletion,
     clipboard_image: client_module.operations.ClipboardImageCompletion,
     link_opened: anyerror!void,

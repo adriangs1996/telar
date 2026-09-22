@@ -56,7 +56,7 @@ pub fn bindingExpired(gui: *GuiClient) !void {
 /// Trigger a configured binding through host admission instead of invoking an
 /// internal action directly. Example: `_ = try input_support.action(gui, .toggle_sidebar);`
 pub fn action(gui: *GuiClient, value: data.actions.Action) !data.keybind.Control {
-    const binding = try client.config_model.ConfiguredBinding.parse(&.{"alt+z"}, value);
+    const binding = try data.config_values.ConfiguredBinding.parse(&.{"alt+z"}, value);
     gui.adoptBindings(.{
         .prefix = data.keybind.default_prefix,
         .bindings = &.{binding},

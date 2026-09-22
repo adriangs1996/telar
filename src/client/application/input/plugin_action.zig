@@ -1,18 +1,15 @@
 //! Application policy for one bounded client plugin execution.
 const model_data = @import("model");
 
-const PluginExecutionType = @import("../../model/PluginExecution.zig");
-const PluginResult = @import("PluginResult.zig");
-
 pub const StartOutcome = union(enum) {
-    started: PluginExecutionType,
+    started: model_data.PluginExecution,
     busy,
     unavailable,
     rejected: anyerror,
 };
 
 pub const CompletionCommand = union(enum) {
-    succeeded: PluginResult,
+    succeeded: model_data.PluginResult,
     failed: struct {
         execution_id: model_data.PluginExecutionId,
         reason: anyerror,

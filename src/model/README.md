@@ -13,9 +13,10 @@ It owns reusable values, bounded state, and operations that maintain their
 invariants: input commands, request correlation, configuration diagnostics,
 layout values, notification state, and change review state. It also owns
 startup phases, request identity allocation, completion/favicon bookkeeping,
-and sound playback policy and queue state. Each instance still
-belongs to its runtime or client owner; importing the module shares definitions,
-not mutable state.
+sound playback policy and queue state, the client model, panes, tabs,
+navigation history, themes, bar state, capture buffers and bounded message
+delivery. Each instance still belongs to its runtime or client owner; importing
+the module shares definitions, not mutable state.
 
 `model.zig` lists the public declarations. Each concrete struct is an implicit
 PascalCase file. Standalone enums and unions have their own PascalCase files
@@ -43,3 +44,9 @@ Pane input contracts (`PaneInputCommand`, `PaneInputPayload`,
 identities. `input_limits` owns their encoding bounds. Validation and effect
 execution remain in the client. `SoundPlayback` returns decisions; `SoundPort`
 executes host playback and stays in the client.
+
+The [AttachedClient audit](../../docs/attached-client-model-audit.md) records every
+type import reviewed in the final extraction and explains the retained services.
+Bar state calculates deadlines; `HostTimers.rearmBars` executes the host timer
+operation. Bounded message delivery lives here; sockets and asynchronous I/O
+remain in the client.

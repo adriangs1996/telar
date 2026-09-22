@@ -4,7 +4,6 @@ const std = @import("std");
 const core = @import("telar-core");
 const Snapshot = @import("../../config/Snapshot.zig");
 const Query = @import("../../config/ConfigurationQuery.zig");
-const model = @import("../../config/model.zig");
 pub const Section = enum { client, theme, gui, input, runtime, binding };
 
 /// Writes one immutable configuration section into the bounded reply writer.
@@ -67,7 +66,7 @@ fn writeAction(action: data.Action, writer: *std.Io.Writer) !void {
 test "configuration queries serialize occupied bindings and reject missing indices" {
     var snapshot: Snapshot = .{};
     snapshot.binding_count = 1;
-    snapshot.bindings[0] = try model.ConfiguredBinding.init(&.{snapshot.prefix}, .{ .command_tab = try data.CommandTab.init(&.{ "echo", "ready" }, "test") });
+    snapshot.bindings[0] = try data.config_values.ConfiguredBinding.init(&.{snapshot.prefix}, .{ .command_tab = try data.CommandTab.init(&.{ "echo", "ready" }, "test") });
     snapshot.bindings_prefixed[0] = true;
     var buffer: [4096]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);

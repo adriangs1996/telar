@@ -93,9 +93,9 @@ but schedules no frame.
 
 ## Validation
 
-- `src/client/workspace/tabs.zig` proves that current and future tabs share
+- `src/model/workspace/tabs.zig` proves that current and future tabs share
   one cell geometry.
-- `src/client/model/Model.zig` proves validation, atomic capability and
+- `src/model/state/Model.zig` proves validation, atomic capability and
   geometry commits, no-op behavior and isolated host revisions.
 - `src/frontend/client/tests/host_resources.zig` proves commit-before-delivery,
   exact branch ordering, no-op policy and failures at each fallible host port.

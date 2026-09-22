@@ -52,7 +52,7 @@ keeps canonical membership and completed effects. A later snapshot or reconnect
 repairs disposable state. Decoding/retirement lists use fixed pane bounds.
 
 Source: `src/client/AttachedClient.zig` and
-`src/client/model/Model.zig`.
+`src/model/state/Model.zig`.
 Tests: `src/frontend/client/tests/synchronization.zig`, `pane_lifecycle.zig`,
-`src/client/model/tests/tabs.zig`, workspace layout tests, and bounded request
+`src/model/state/tests/tabs.zig`, workspace layout tests, and bounded request
 tracker/outbox tests.

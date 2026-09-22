@@ -10,7 +10,7 @@ pub fn platformSupported() bool {
     return builtin.os.tag == .macos;
 }
 
-pub fn captureClipboard(gpa: std.mem.Allocator, request: client.CaptureRequest, orphan: *?*client.Capture) !*client.Capture {
+pub fn captureClipboard(gpa: std.mem.Allocator, request: data.CaptureRequest, orphan: *?*data.Capture) !*data.Capture {
     try request.target.validate();
     std.debug.assert(orphan.* == null);
     const image = try readClipboardPng(gpa);
@@ -18,7 +18,7 @@ pub fn captureClipboard(gpa: std.mem.Allocator, request: client.CaptureRequest, 
         std.crypto.secureZero(u8, image.png);
         gpa.free(image.png);
     }
-    const capture = try gpa.create(client.Capture);
+    const capture = try gpa.create(data.Capture);
     capture.* = .{
         .request = request,
         .png = image.png,

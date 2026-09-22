@@ -5,6 +5,7 @@
 //! without scaling, so the border keeps one physical thickness on every side.
 //! Modal text and the rectangular body stay in the cell buffer.
 
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Asset = @import("Asset.zig");
@@ -154,7 +155,7 @@ pub fn optionalAreaEql(a: ?core.Rect, b: ?core.Rect) bool {
 
 // The Kitty frame needs an explicit RGB `panel_bg`; the default Shade
 // theme inherits the host background, so these tests draw the Vesper chrome.
-const opaque_palette = client.theme_support.builtin(.vesper).palette;
+const opaque_palette = data.theme_support.builtin(.vesper).palette;
 
 test "rounded modal assets are exact-size bounded and transparent outside corners" {
     var renderer = ModalRenderer.init(std.testing.allocator);
@@ -184,7 +185,7 @@ test "modal assets use the same background as the client chrome" {
     var renderer = ModalRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var palette = client.theme_support.default_theme.palette;
+    var palette = data.theme_support.default_theme.palette;
     palette.panel_bg = .{ .rgb = .{ 1, 2, 3 } };
     palette.surface0 = .{ .rgb = .{ 4, 5, 6 } };
 

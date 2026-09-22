@@ -1,3 +1,4 @@
+const data = @import("model");
 const core = @import("telar-core");
 const workspace_identity = @import("workspace_identity.zig");
 const action_module = @import("action.zig");
@@ -28,7 +29,7 @@ pub fn workspaceId(context: *const Context) ?core.WorkspaceId {
 
 /// Shares one status clock between cards and pane headers.
 /// Example: `const seconds = context.statusAge(agent);`
-pub fn statusAge(context: *const Context, agent: *const client.Agent) u32 {
+pub fn statusAge(context: *const Context, agent: *const data.Agent) u32 {
     return if (context.ages) |ages| ages.seconds(agent) else agent.statusAgeSeconds();
 }
 

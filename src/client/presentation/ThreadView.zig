@@ -1,23 +1,20 @@
-const AgentType = @import("../agents/Agent.zig");
-const AgentSnapshotType = @import("../agents/AgentSnapshot.zig");
-const MultiplexerModel = @import("../workspace/MultiplexerModel.zig");
 /// The content a thread surface shows: the agent running in the pane and the
 /// composer draft. Transcript items arrive once the runtime indexes them;
 /// until then the header alone identifies the agent.
+const data = @import("model");
 const ThreadView = @This();
 const core = @import("telar-core");
-const Pane = @import("../panes/Pane.zig");
 
 pane_id: core.PaneId,
-agent: ?*const AgentType,
+agent: ?*const data.Agent,
 composer: []const u8,
 composer_images: ?*const core.AgentImages = null,
-composer_field: ?*const Pane.ComposerField = null,
+composer_field: ?*const data.Pane.ComposerField = null,
 composer_revision: u64 = 0,
 attachment_generation: u64 = 0,
 kind: core.PaneKind = .terminal,
 transcript: ?*const core.AgentThreadSnapshot = null,
-history: ?*const @import("../panes/AgentHistoryWindow.zig") = null,
+history: ?*const data.AgentHistoryWindow = null,
 history_generation: u64 = 0,
 transcript_scroll: f64 = 0,
 transcript_anchor_revision: u64 = 0,
@@ -34,7 +31,7 @@ branch: []const u8 = "",
 /// ```zig
 /// const thread = ThreadView.capture(model, agents, pane_id) orelse return;
 /// ```
-pub fn capture(model: *const MultiplexerModel, agents: ?*const AgentSnapshotType, pane_id: core.PaneId) ?ThreadView {
+pub fn capture(model: *const data.MultiplexerModel, agents: ?*const data.AgentSnapshot, pane_id: core.PaneId) ?ThreadView {
     const pane = model.findConst(pane_id) orelse return null;
     const agent = if (agents) |snapshot| found: {
         const key = snapshot.keyForPane(pane.location, pane_id) orelse break :found null;

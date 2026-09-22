@@ -1,4 +1,5 @@
 //! Native unified diffs share one measured flow with their visible text geometry.
+const data = @import("model");
 const TextFit = @import("TextFit.zig");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -21,7 +22,7 @@ paint: bool,
 y: f32 = 0,
 digits: usize = 3,
 syntax_paint: SyntaxPaint = .{},
-roles: ?[]const client.SyntaxRole = null,
+roles: ?[]const data.role.Role = null,
 annotations: ?DiffAnnotations = null,
 
 /// Measures all lines but paints and retains selectable geometry only in view.

@@ -24,15 +24,15 @@ test {
 }
 
 test "capture resources release one completed worker result" {
-    var resources: client.CaptureResources = .{};
-    const request: client.CaptureRequest = .{
+    var resources: data.CaptureResources = .{};
+    const request: data.CaptureRequest = .{
         .target = .{
             .pane_id = @enumFromInt(7),
             .pane_generation = 3,
         },
         .sequence = 1,
     };
-    const capture = try std.testing.allocator.create(client.Capture);
+    const capture = try std.testing.allocator.create(data.Capture);
     capture.* = .{
         .request = request,
         .png = try std.testing.allocator.dupe(u8, "png"),
@@ -47,15 +47,15 @@ test "capture resources release one completed worker result" {
 }
 
 test "capture resources free a cancelled worker result" {
-    var resources: client.CaptureResources = .{};
-    const request: client.CaptureRequest = .{
+    var resources: data.CaptureResources = .{};
+    const request: data.CaptureRequest = .{
         .target = .{
             .pane_id = @enumFromInt(9),
             .pane_generation = 4,
         },
         .sequence = 1,
     };
-    const capture = try std.testing.allocator.create(client.Capture);
+    const capture = try std.testing.allocator.create(data.Capture);
     capture.* = .{
         .request = request,
         .png = try std.testing.allocator.dupe(u8, "private image"),
@@ -68,8 +68,8 @@ test "capture resources free a cancelled worker result" {
     try std.testing.expect(resources.orphan == null);
 }
 
-fn testCapture(gpa: std.mem.Allocator, request: client.CaptureRequest, bytes: []const u8) !*client.Capture {
-    const capture = try gpa.create(client.Capture);
+fn testCapture(gpa: std.mem.Allocator, request: data.CaptureRequest, bytes: []const u8) !*data.Capture {
+    const capture = try gpa.create(data.Capture);
     errdefer gpa.destroy(capture);
     capture.* = .{
         .request = request,
@@ -80,7 +80,7 @@ fn testCapture(gpa: std.mem.Allocator, request: client.CaptureRequest, bytes: []
     return capture;
 }
 
-fn testRequest(sequence: u64, target: data.AttachmentTarget) client.CaptureRequest {
+fn testRequest(sequence: u64, target: data.AttachmentTarget) data.CaptureRequest {
     return .{
         .target = target,
         .sequence = sequence,

@@ -25,7 +25,7 @@ const first_image_id: u32 = 0x80001000;
 const first_placement_id: u32 = 0x80001100;
 pub const toast_z_index: i32 = 1000;
 
-pub fn resolveColors(palette: *const client.Palette) ?Colors {
+pub fn resolveColors(palette: *const data.Palette) ?Colors {
     return .{
         .surface0 = rgb(palette.surface0) orelse return null,
         .text = rgb(palette.text) orelse return null,
@@ -97,7 +97,7 @@ test "terminal-derived palettes keep the cell fallback" {
     renderer.prepare(.{
         .area = .{ .w = 48, .h = 4 },
         .center = &center,
-        .palette = &client.theme_support.builtin(.terminal).palette,
+        .palette = &data.theme_support.builtin(.terminal).palette,
     });
     try std.testing.expect(!renderer.frame_usable);
     try std.testing.expect(!renderer.coversAll());
@@ -115,11 +115,11 @@ test "Nerd Font theme rasterizes the close icon into graphical toasts" {
     renderer.prepare(.{
         .area = .{ .w = 48, .h = 4 },
         .center = &center,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .icon_theme = .nerd_font,
     });
     try std.testing.expect(renderer.frame_usable);
-    try std.testing.expectEqual(client.Theme.nerd_font, renderer.slots[0].key.?.icon_theme);
+    try std.testing.expectEqual(data.icons.Theme.nerd_font, renderer.slots[0].key.?.icon_theme);
 }
 
 test "toast pixel cache is bounded independently of wire pacing" {
@@ -143,7 +143,7 @@ test "large toast transmission is chunked across bounded media passes" {
     });
     _ = center.advance(data.notifications.transition_duration_ns);
     const area: core.Rect = .{ .x = 20, .y = 1, .w = 48, .h = 4 };
-    renderer.prepare(.{ .area = area, .center = &center, .palette = &client.theme_support.default_theme.palette });
+    renderer.prepare(.{ .area = area, .center = &center, .palette = &data.theme_support.default_theme.palette });
     try std.testing.expect(renderer.transmissionPending());
     try std.testing.expect(!renderer.coversAll());
 
@@ -171,7 +171,7 @@ test "large toast transmission is chunked across bounded media passes" {
 
     _ = center.dismiss(id, data.notifications.transition_duration_ns);
     _ = center.advance(data.notifications.transition_duration_ns + data.notifications.transition_duration_ns / 2);
-    renderer.prepare(.{ .area = area, .center = &center, .palette = &client.theme_support.default_theme.palette });
+    renderer.prepare(.{ .area = area, .center = &center, .palette = &data.theme_support.default_theme.palette });
     var moving: Io.Writer.Allocating = .init(std.testing.allocator);
     defer moving.deinit();
     _ = try renderer.write(&moving.writer, true);
@@ -179,7 +179,7 @@ test "large toast transmission is chunked across bounded media passes" {
     try std.testing.expect(std.mem.indexOf(u8, moving.written(), "a=p") != null);
 
     _ = center.advance(data.notifications.transition_duration_ns * 2);
-    renderer.prepare(.{ .area = area, .center = &center, .palette = &client.theme_support.default_theme.palette });
+    renderer.prepare(.{ .area = area, .center = &center, .palette = &data.theme_support.default_theme.palette });
     var removed: Io.Writer.Allocating = .init(std.testing.allocator);
     defer removed.deinit();
     _ = try renderer.write(&removed.writer, true);
@@ -196,17 +196,17 @@ test "rasterization waits for media idle and oversized cells fall back" {
     const area: core.Rect = .{ .w = 48, .h = 4 };
 
     renderer.setMediaIdle(false);
-    renderer.prepare(.{ .area = area, .center = &center, .palette = &client.theme_support.default_theme.palette });
+    renderer.prepare(.{ .area = area, .center = &center, .palette = &data.theme_support.default_theme.palette });
     try std.testing.expect(renderer.render_deferred);
     try std.testing.expect(renderer.damaged());
     try std.testing.expect(!renderer.transmissionPending());
 
     renderer.setMediaIdle(true);
-    renderer.prepare(.{ .area = area, .center = &center, .palette = &client.theme_support.default_theme.palette });
+    renderer.prepare(.{ .area = area, .center = &center, .palette = &data.theme_support.default_theme.palette });
     try std.testing.expect(renderer.transmissionPending());
 
     _ = renderer.configure(.{ .support = .supported, .cell_width = 40, .cell_height = 80 });
-    renderer.prepare(.{ .area = area, .center = &center, .palette = &client.theme_support.default_theme.palette });
+    renderer.prepare(.{ .area = area, .center = &center, .palette = &data.theme_support.default_theme.palette });
     try std.testing.expect(!renderer.frame_usable);
     try std.testing.expect(!renderer.coversAll());
 }

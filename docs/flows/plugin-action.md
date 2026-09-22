@@ -120,7 +120,7 @@ presenter compare versions and schedule at most the required paced frame.
 
 ## Validation
 
-- `src/client/model/Model.zig` proves single-flight reservation, exact
+- `src/model/state/Model.zig` proves single-flight reservation, exact
   identity matching, generation retention and identifier exhaustion.
 - `src/client/application/input/plugin_action.zig` proves prepare/commit/
   schedule order, rollback, stale suppression, completion ordering, diagnostic

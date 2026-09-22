@@ -48,12 +48,12 @@ generation. An old host completion cannot clear that pane's damage. Failed or
 cancelled host delivery clears no model damage and never claims presentation.
 
 Source: `src/client/AttachedClient.zig`,
-`src/client/model/Model.zig`, `src/client/panes/Pane.zig`, and
+`src/model/state/Model.zig`, `src/model/panes/Pane.zig`, and
 `src/client/operations/session/presentation_delivery.zig`.
 Tests: `src/frontend/client/tests/pane_updates.zig`,
 `src/client/presentation/headless_tests.zig`,
 `src/frontend/client/tests/presentation.zig`, `src/gui/tests/terminal.zig`,
-and `src/client/panes/tests.zig` cover base recovery, ACK ordering, busy/failed
+and `src/model/panes/tests.zig` cover base recovery, ACK ordering, busy/failed
 consumers, owned buffers, allocation failures and attachment-generation ABA.
 
 ## Terminal text metadata

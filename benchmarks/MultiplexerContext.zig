@@ -1,3 +1,4 @@
+const data = @import("model");
 const client = @import("telar-client");
 const frontend = @import("telar-frontend");
 const core = @import("telar-core");
@@ -5,12 +6,12 @@ const std = @import("std");
 const main = @import("main.zig");
 const MultiplexerContext = @This();
 
-model: client.MultiplexerModel,
+model: data.MultiplexerModel,
 screen: frontend.Screen,
 compositor: frontend.Compositor,
 
 pub fn init(gpa: std.mem.Allocator) !MultiplexerContext {
-    var model = client.MultiplexerModel.init(gpa);
+    var model = data.MultiplexerModel.init(gpa);
     errdefer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },

@@ -3,8 +3,6 @@
 const core = @import("telar-core");
 const model_data = @import("model");
 
-const ModelType = @import("../../model/Model.zig");
-
 pub const Intent = union(enum) {
     create_workspace,
     rename_workspace,
@@ -27,7 +25,7 @@ pub fn renameTab(tab_id: core.TabId, label: []const u8) model_data.PromptBegin {
     } };
 }
 
-fn cancelPrompt(model: *ModelType) !void {
+fn cancelPrompt(model: *model_data.Model) !void {
     if (model.name_prompt.apply(.cancel) != .cancelled) {
         return error.PromptNotCancelled;
     }

@@ -1,10 +1,11 @@
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const labels = @import("history_labels.zig");
 const HistoryDetails = @This();
 
-history: *const client.HistoryPaletteState,
+history: *const data.HistoryPaletteState,
 selection: u16,
 header: [80]u8 = undefined,
 header_len: usize = 0,
@@ -17,7 +18,7 @@ duration_len: usize = 0,
 
 /// Borrows a selected command and formats its bounded metadata on the stack.
 /// Example: `var detail = HistoryDetails.init(history, selection);`.
-pub fn init(history: *const client.HistoryPaletteState, selection: u16) HistoryDetails {
+pub fn init(history: *const data.HistoryPaletteState, selection: u16) HistoryDetails {
     const entry = &history.slice()[selection];
     var detail: HistoryDetails = .{ .history = history, .selection = selection };
     var exit_storage: [16]u8 = undefined;

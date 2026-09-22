@@ -1,3 +1,4 @@
+const data = @import("model");
 const client = @import("telar-client");
 const frontend = @import("telar-frontend");
 const core = @import("telar-core");
@@ -6,13 +7,13 @@ const Fixture = @import("Fixture.zig");
 const main = @import("main.zig");
 const IncrementalComposeContext = @This();
 
-model: client.MultiplexerModel,
+model: data.MultiplexerModel,
 screen: frontend.Screen,
 compositor: frontend.Compositor,
 payloads: [2][]const u8,
 
 pub fn init(gpa: std.mem.Allocator, fixture: *const Fixture) !IncrementalComposeContext {
-    var model = client.MultiplexerModel.init(gpa);
+    var model = data.MultiplexerModel.init(gpa);
     errdefer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },

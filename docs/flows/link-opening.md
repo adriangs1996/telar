@@ -82,7 +82,7 @@ are rejected. No command or URI is evaluated through a shell.
 ## Validation
 
 - `src/core/link.zig`: scheme allowlist, punctuation, Unicode, and length limits.
-- `src/client/links/cells.zig`: row, OSC 8 and soft-wrap resolution.
+- `src/model/links/cells.zig`: row, OSC 8 and soft-wrap resolution.
 - `src/backend/pane/TextMetadataCapture.zig`: VT identity, wide cells, wrap and quotas.
 - `src/gui/tests/links.zig`, `link_regressions.zig`, `link_metadata.zig`: release
   ownership, presented identity, cancellation, metadata and retained rendering.

@@ -1,3 +1,4 @@
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Context = @import("Context.zig");
@@ -10,7 +11,7 @@ const ChangeReviewButton = @import("ChangeReviewButton.zig");
 const FullscreenStrip = @This();
 
 context: *const Context,
-model: *const client.MultiplexerModel,
+model: *const data.MultiplexerModel,
 area: core.Rect,
 
 /// Fullscreen hides terminal leaves, but every pane remains directly reachable.

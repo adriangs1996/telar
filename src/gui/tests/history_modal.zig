@@ -1,3 +1,4 @@
+const data = @import("model");
 const ModalMotion = @import("../widgets/overlays/ModalMotion.zig");
 const event_module = @import("../input/event.zig");
 const input_support = @import("input_support.zig");
@@ -184,7 +185,7 @@ test "native history inspection and scope controls keep query ownership" {
 }
 
 test "history application selection rejects unrelated prompts and out of range rows" {
-    const model = try std.testing.allocator.create(client.Model);
+    const model = try std.testing.allocator.create(data.Model);
     defer std.testing.allocator.destroy(model);
     model.* = .init(std.testing.allocator, true);
     defer model.deinit();

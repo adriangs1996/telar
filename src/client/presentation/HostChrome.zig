@@ -1,7 +1,5 @@
-const icons = @import("../layout/icons.zig");
 const data = @import("model");
 const sidebar_rendering = @import("../config/sidebar_rendering.zig");
-const ColorThemeType = @import("../appearance/Theme.zig");
 const SidebarRendererInputType = @import("../layout/SidebarRendererInput.zig");
 const ViewInteractionCommandType = @import("../application/input/ViewInteractionCommand.zig");
 /// The adapter's chrome as the client application drives it: appearance,
@@ -10,8 +8,8 @@ const ViewInteractionCommandType = @import("../application/input/ViewInteraction
 const HostChrome = @This();
 
 context: *anyopaque,
-set_theme_fn: *const fn (*anyopaque, ColorThemeType) void,
-set_icon_theme_fn: *const fn (*anyopaque, icons.Theme) void,
+set_theme_fn: *const fn (*anyopaque, data.ColorTheme) void,
+set_icon_theme_fn: *const fn (*anyopaque, data.icons.Theme) void,
 configure_sidebar_fn: *const fn (*anyopaque, SidebarRendererInputType) anyerror!void,
 resize_fn: *const fn (*anyopaque, u16, u16) anyerror!void,
 set_sidebar_layout_fn: *const fn (*anyopaque, bool, u16) void,
@@ -23,11 +21,11 @@ region_fn: *const fn (*anyopaque) data.Region,
 inspection_scroll_limit_fn: *const fn (*anyopaque) ?u32,
 link_pointer_fn: ?*const fn (*anyopaque, data.Mouse) bool = null,
 
-pub fn setTheme(port: HostChrome, theme: ColorThemeType) void {
+pub fn setTheme(port: HostChrome, theme: data.ColorTheme) void {
     port.set_theme_fn(port.context, theme);
 }
 
-pub fn setIconTheme(port: HostChrome, theme: icons.Theme) void {
+pub fn setIconTheme(port: HostChrome, theme: data.icons.Theme) void {
     port.set_icon_theme_fn(port.context, theme);
 }
 

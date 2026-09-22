@@ -18,7 +18,7 @@ last_precise: bool = false,
 
 /// Page anchors change coordinates, while explicit navigation replaces motion.
 /// Example: `entry.synchronize(pane, now_ns);`
-pub fn synchronize(entry: *Motion, pane: *const client.Pane, now_ns: u64) void {
+pub fn synchronize(entry: *Motion, pane: *const data.Pane, now_ns: u64) void {
     if (entry.anchor_revision != pane.transcript_anchor_revision) {
         entry.motion.translate((pane.transcript_scroll - entry.applied) * entry.step);
     } else if (entry.applied != pane.transcript_scroll) {
@@ -303,8 +303,8 @@ fn testGeometry(limit: f64) @import("Target.zig") {
     return .{ .bounds = .{ .x = 0, .y = 0, .width = 100, .height = 100 }, .action = .{ .transcript = @enumFromInt(1) }, .scroll_limit = limit, .scroll_step = 24 };
 }
 
-fn testPane() !client.Pane {
-    return client.Pane.init(std_module.testing.allocator, .{
+fn testPane() !data.Pane {
+    return data.Pane.init(std_module.testing.allocator, .{
         .spec = .{
             .pane_id = @enumFromInt(1),
             .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },

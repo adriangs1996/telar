@@ -1,3 +1,4 @@
+const data = @import("model");
 const ComposerLayout = @import("ComposerLayout.zig");
 const AgentCard = @import("AgentCard.zig");
 const TextFit = @import("TextFit.zig");
@@ -120,7 +121,7 @@ fn drawContext(composer: Composer, canvas: *Canvas, bounds: Rect) !void {
     _ = try canvas.textAt(.{ .x = row.x + icon_width, .y = row.y, .width = @max(0, folder_width - icon_width), .height = row.height }, .{ .text = fitted, .face = .sans, .size = .small, .color = palette.subtext0 });
     if (branch_width > 0) {
         const x = row.x + row.width - branch_width;
-        try canvas.iconAt(.{ .x = x, .y = row.y, .width = canvas.chrome.px(22), .height = row.height }, .{ .text = client.Icon.app_git.nerdGlyph(), .color = palette.subtext0, .size = .small });
+        try canvas.iconAt(.{ .x = x, .y = row.y, .width = canvas.chrome.px(22), .height = row.height }, .{ .text = data.icons.Icon.app_git.nerdGlyph(), .color = palette.subtext0, .size = .small });
         const branch = try (@import("TextFit.zig"){ .canvas = canvas, .width = @max(0, branch_width - canvas.chrome.px(22)) }).fit(.{ .text = composer.thread.branch, .face = .sans, .size = .small }, &storage);
         _ = try canvas.textAt(.{ .x = x + canvas.chrome.px(22), .y = row.y, .width = @max(0, branch_width - canvas.chrome.px(22)), .height = row.height }, .{ .text = branch, .face = .sans, .size = .small, .color = palette.subtext0 });
     }

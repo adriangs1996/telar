@@ -1,4 +1,5 @@
 //! A project identity: favicon, name and path, with attention separate from selection.
+const data = @import("model");
 const AgentCard = @import("AgentCard.zig");
 const client = @import("telar-client");
 const std = @import("std");
@@ -63,7 +64,7 @@ pub fn draw(row: WorkspaceRow, canvas: *Canvas) !void {
 fn drawAttention(row: WorkspaceRow, canvas: *Canvas, area: Rect) !f32 {
     const workspace = row.context.projection.workspaces.workspaceAt(row.index);
     var count: u8 = 0;
-    var urgent: ?*const client.Agent = null;
+    var urgent: ?*const data.Agent = null;
     for (row.context.projection.agents.slice()) |*agent| {
         if (!std.meta.eql(agent.location.workspace, core.WorkspaceLocation{ .workspace = workspace }) or !attention.needsInput(agent.status)) {
             continue;

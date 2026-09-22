@@ -82,7 +82,7 @@ suggestion at 1024; the engine's own prompt and reply caps bound the rest.
 
 - `src/backend/runtime/application/suggestion.zig` proves prompt bounds and
   reply reduction.
-- `src/client/model/suggestion.zig` proves stale-reply rejection,
+- `src/model/state/suggestion.zig` proves stale-reply rejection,
   edit invalidation and failure phases.
 - `src/model/state/name_prompt.zig` proves the palette's submit
   and selection commands.

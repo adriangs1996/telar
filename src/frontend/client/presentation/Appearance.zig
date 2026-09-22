@@ -1,5 +1,6 @@
+const data = @import("model");
 const client = @import("telar-client");
 const Appearance = @This();
 
-theme: client.ColorTheme,
-icons: client.Theme = .unicode,
+theme: data.ColorTheme,
+icons: data.icons.Theme = .unicode,

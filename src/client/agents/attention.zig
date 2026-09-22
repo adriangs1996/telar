@@ -7,7 +7,6 @@
 
 const data = @import("model");
 const core = @import("telar-core");
-const Agent = @import("Agent.zig");
 const std = @import("std");
 
 /// Attention groups from most to least urgent.
@@ -41,7 +40,7 @@ pub fn group(status: core.AgentStatus) Group {
 /// ```zig
 /// std.sort.pdq(*const Agent, agents, {}, attention.lessThan);
 /// ```
-pub fn lessThan(_: void, left: *const Agent, right: *const Agent) bool {
+pub fn lessThan(_: void, left: *const data.Agent, right: *const data.Agent) bool {
     return compare(left, right) == .lt;
 }
 
@@ -50,7 +49,7 @@ pub fn lessThan(_: void, left: *const Agent, right: *const Agent) bool {
 /// ```zig
 /// const first = if (attention.compare(a, b) == .lt) a else b;
 /// ```
-pub fn compare(left: *const Agent, right: *const Agent) std.math.Order {
+pub fn compare(left: *const data.Agent, right: *const data.Agent) std.math.Order {
     const by_group = std.math.order(@intFromEnum(group(left.status)), @intFromEnum(group(right.status)));
     if (by_group != .eq) {
         return by_group;
@@ -69,8 +68,8 @@ pub fn compare(left: *const Agent, right: *const Agent) std.math.Order {
     return std.math.order(left.key.pane_generation, right.key.pane_generation);
 }
 
-fn testingAgent(pane: u64, status: core.AgentStatus, age: u32) !Agent {
-    return try Agent.init(testingInput(pane, status, age));
+fn testingAgent(pane: u64, status: core.AgentStatus, age: u32) !data.Agent {
+    return try data.Agent.init(testingInput(pane, status, age));
 }
 
 fn testingInput(pane: u64, status: core.AgentStatus, age: u32) data.AgentInput {
@@ -125,7 +124,7 @@ test "equal groups and ages fall back to the pane key so the order is stable" {
 }
 
 test "sorting a mixed list yields the sidebar order" {
-    var agents = [_]Agent{
+    var agents = [_]data.Agent{
         try testingAgent(1, .ready, 10),
         try testingAgent(2, .working, 30),
         try testingAgent(3, .blocked, 90),
@@ -134,12 +133,12 @@ test "sorting a mixed list yields the sidebar order" {
         try testingAgent(6, .unknown, 0),
         try testingAgent(7, .failed, 20),
     };
-    var order: [agents.len]*const Agent = undefined;
+    var order: [agents.len]*const data.Agent = undefined;
     for (&agents, 0..) |*agent, index| {
         order[index] = agent;
     }
 
-    std.sort.pdq(*const Agent, &order, {}, lessThan);
+    std.sort.pdq(*const data.Agent, &order, {}, lessThan);
 
     const expected = [_]u64{ 7, 3, 5, 2, 4, 1, 6 };
     for (expected, order) |pane, agent| {

@@ -1,3 +1,4 @@
+const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
@@ -22,9 +23,9 @@ configured_history_path: ?[:0]const u8 = null,
 configured_proxy_directory: ?[]u8 = null,
 proxy_intercept_host_storage: [core.max_intercept_hosts][]const u8 = undefined,
 proxy_intercept_hosts: []const []const u8 = &.{},
-description_arguments: [client.max_agent_description_command_args][]const u8 = undefined,
+description_arguments: [data.config_values.max_agent_description_command_args][]const u8 = undefined,
 agent_description_options: ?backend.AgentDescriptionOptions = null,
-engine_arguments: [client.max_agent_description_command_args][]const u8 = undefined,
+engine_arguments: [data.config_values.max_agent_description_command_args][]const u8 = undefined,
 engine_options: ?backend.Options = null,
 agent_manifests: core.Table = core.builtin_table,
 history_filters: core.Filters = .{},

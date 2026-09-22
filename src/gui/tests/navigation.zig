@@ -200,7 +200,7 @@ test "native bindings preserve ownership through hot reload and matching release
     const session = try Session.init();
     defer session.deinit();
     try session.bootstrap();
-    const binding = try client.config_model.ConfiguredBinding.parse(&.{"ctrl+k"}, .toggle_workspace_list);
+    const binding = try data.config_values.ConfiguredBinding.parse(&.{"ctrl+k"}, .toggle_workspace_list);
     session.gui.adoptBindings(
         .{
             .prefix = data.keybind.default_prefix,

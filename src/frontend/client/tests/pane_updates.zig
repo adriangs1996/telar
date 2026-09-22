@@ -1,5 +1,6 @@
 //! Client integration tests for pane updates.
 
+const data = @import("model");
 const core = @import("telar-core");
 const client_module = @import("telar-client");
 const TerminalClient = @import("../TerminalClient.zig");
@@ -377,7 +378,7 @@ test "pane foreground and focus update automatic tab labels through presentation
     try expectBootstrapTab(&harness, "Claude Code", .provider_claude);
 }
 
-fn expectBootstrapTab(harness: *const TestHarness, name: []const u8, icon: client_module.Icon) !void {
+fn expectBootstrapTab(harness: *const TestHarness, name: []const u8, icon: data.icons.Icon) !void {
     const terminal = TerminalClient.of(harness.client);
     const screen = &terminal.presenter.screen;
     for (terminal.view.hits.registered()) |entry| {

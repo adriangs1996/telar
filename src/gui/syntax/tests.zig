@@ -1,3 +1,4 @@
+const data = @import("model");
 const gui_event = @import("../gui_event.zig");
 const std = @import("std");
 const client = @import("telar-client");
@@ -15,10 +16,10 @@ test "new language extensions select bundled grammars and project keyword captur
     const keywords = .{ "package", "public", "public", "fun", "func", "return", "return", "@implementation" };
     inline for (files, lines, keywords) |file, line, keyword| {
         const text = "Updated " ++ file ++ "\n@@ -0,0 +1 @@\n+" ++ line ++ "\n";
-        var roles: [text.len]client.SyntaxRole = undefined;
+        var roles: [text.len]data.role.Role = undefined;
         var worker: DiffHighlighter = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = text, .roles = &roles };
         try worker.run();
-        try std.testing.expectEqual(client.SyntaxRole.keyword, roles[std.mem.indexOf(u8, text, keyword).?]);
+        try std.testing.expectEqual(data.role.Role.keyword, roles[std.mem.indexOf(u8, text, keyword).?]);
     }
 }
 
@@ -32,14 +33,14 @@ test "language aliases keep C and C++ case-sensitive and ambiguous headers expli
 
 test "Tree-sitter captures map to original diff bytes with independent versions and hunks" {
     const text = "Updated main.ts\n@@ -1,2 +1 @@\n-/* old comment\n-let stale = true; */\n+const fresh = 1;\n@@ -20 +20 @@\n-old\n+const next = 2;\n";
-    var roles: [text.len]client.SyntaxRole = undefined;
+    var roles: [text.len]data.role.Role = undefined;
     var worker: DiffHighlighter = .{ .allocator = std.testing.allocator, .io = std.testing.io, .text = text, .roles = &roles };
     try worker.run();
-    try std.testing.expectEqual(client.SyntaxRole.comment, roles[std.mem.indexOf(u8, text, "stale").?]);
-    try std.testing.expectEqual(client.SyntaxRole.keyword, roles[std.mem.indexOf(u8, text, "const fresh").?]);
-    try std.testing.expectEqual(client.SyntaxRole.keyword, roles[std.mem.indexOf(u8, text, "const next").?]);
-    try std.testing.expectEqual(client.SyntaxRole.plain, roles[0]);
-    try std.testing.expectEqual(client.SyntaxRole.plain, roles[std.mem.indexOf(u8, text, "+const").?]);
+    try std.testing.expectEqual(data.role.Role.comment, roles[std.mem.indexOf(u8, text, "stale").?]);
+    try std.testing.expectEqual(data.role.Role.keyword, roles[std.mem.indexOf(u8, text, "const fresh").?]);
+    try std.testing.expectEqual(data.role.Role.keyword, roles[std.mem.indexOf(u8, text, "const next").?]);
+    try std.testing.expectEqual(data.role.Role.plain, roles[0]);
+    try std.testing.expectEqual(data.role.Role.plain, roles[std.mem.indexOf(u8, text, "+const").?]);
 }
 
 test "syntax cache retains tokens without jobs on repaint and owns immutable input" {
@@ -59,7 +60,7 @@ test "syntax cache retains tokens without jobs on repaint and owns immutable inp
     for (0..3) |_| {
         store.beginFrame();
         const roles = store.request(source).?;
-        try std.testing.expectEqual(client.SyntaxRole.parameter, roles[parameter]);
+        try std.testing.expectEqual(data.role.Role.parameter, roles[parameter]);
         try std.testing.expect(store.nextJob() == null);
     }
 }
@@ -114,7 +115,7 @@ test "syntax service adopts only notified results and rolls back closed inbox ad
 
 test "syntax worker rejects allocator failure and oversized jobs without publishing partial colors" {
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
-    var roles: [source.len]client.SyntaxRole = undefined;
+    var roles: [source.len]data.role.Role = undefined;
     var worker: DiffHighlighter = .{ .allocator = failing.allocator(), .io = std.testing.io, .text = source, .roles = &roles };
     try std.testing.expectError(error.OutOfMemory, worker.run());
     const store = try std.testing.allocator.create(Store);

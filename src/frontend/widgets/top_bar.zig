@@ -5,6 +5,7 @@
 //! The list collapses to `active +N` on user request or when the row cannot
 //! fit it; the TLS badge remains while interception or system trust is on.
 
+const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const ContextType = @import("Context.zig");
@@ -18,7 +19,7 @@ const widget = @import("context_support.zig");
 const WorkspaceNames = @import("WorkspaceNames.zig");
 const PlanType = @import("../ui/Plan.zig");
 
-pub const empty_right: client.Slot = .empty;
+pub const empty_right: data.bar_values.Slot = .empty;
 
 pub fn render(context: *ContextType, input: TopBarInput) void {
     const area = input.area;
@@ -202,7 +203,7 @@ fn renderList(context: *ContextType, input: TopBarInput, list: ListInput) void {
 }
 
 fn drawWorkspace(context: *ContextType, draw: WorkspaceDraw) u16 {
-    var label_buffer: [client.max_name_bytes + 4]u8 = undefined;
+    var label_buffer: [data.workspace_list.max_name_bytes + 4]u8 = undefined;
     const label = std.fmt.bufPrint(&label_buffer, " {s} ", .{
         workspaceNameAt(.{
             .snapshot = draw.snapshot,
@@ -271,7 +272,7 @@ fn listFits(names: WorkspaceNames, available: u16) bool {
     return listWidth(names.snapshot, names.active_index, names.active_name) <= available;
 }
 
-fn listWidth(snapshot: *const client.WorkspaceListSnapshot, active_index: ?usize, active_name: []const u8) u16 {
+fn listWidth(snapshot: *const data.WorkspaceListSnapshot, active_index: ?usize, active_name: []const u8) u16 {
     var total: u16 = 0;
     for (0..snapshot.count) |index| {
         total +|= core.measure(workspaceNameAt(.{
@@ -285,7 +286,7 @@ fn listWidth(snapshot: *const client.WorkspaceListSnapshot, active_index: ?usize
 
 fn workspaceNameAt(names: WorkspaceNames, index: usize) []const u8 {
     if (names.active_name.len != 0 and names.active_index != null and names.active_index.? == index) {
-        return client.truncateName(names.active_name);
+        return data.workspace_list.truncateName(names.active_name);
     }
 
     return names.snapshot.nameAt(index);
@@ -344,8 +345,8 @@ test "worktree locations fall back to their id and missing locations to a dash" 
 }
 
 test "the list collapses when the row cannot fit every workspace" {
-    var snapshot: client.WorkspaceListSnapshot = .{};
-    const entries = [_]client.EntryInput{
+    var snapshot: data.WorkspaceListSnapshot = .{};
+    const entries = [_]data.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1 },
     };
@@ -357,8 +358,8 @@ test "the list collapses when the row cannot fit every workspace" {
 }
 
 test "the workspace label ignores git branch and dirty state" {
-    var snapshot: client.WorkspaceListSnapshot = .{};
-    const entries = [_]client.EntryInput{
+    var snapshot: data.WorkspaceListSnapshot = .{};
+    const entries = [_]data.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1, .branch = "main", .dirty = true },
         .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1, .branch = "main" },
     };
@@ -369,7 +370,7 @@ test "the workspace label ignores git branch and dirty state" {
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .hovered = null,
     };
 
@@ -395,8 +396,8 @@ test "the workspace label ignores git branch and dirty state" {
 }
 
 test "the active name replaces only the active workspace snapshot name" {
-    var snapshot: client.WorkspaceListSnapshot = .{};
-    const entries = [_]client.EntryInput{
+    var snapshot: data.WorkspaceListSnapshot = .{};
+    const entries = [_]data.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1 },
     };
@@ -422,12 +423,12 @@ test "the telar mark toggles the sidebar and dims while it is hidden" {
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .hovered = null,
         .icon_theme = .nerd_font,
         .icon_plan = &plan,
     };
-    const workspaces: client.WorkspaceListSnapshot = .{};
+    const workspaces: data.WorkspaceListSnapshot = .{};
     const input: TopBarInput = .{
         .area = buffer.area(),
         .sidebar_visible = true,
@@ -440,10 +441,10 @@ test "the telar mark toggles the sidebar and dims while it is hidden" {
 
     render(&context, input);
     try std.testing.expect(plan.len >= 1);
-    try std.testing.expectEqual(client.Icon.telar_mark, plan.slice()[0].icon);
+    try std.testing.expectEqual(data.icons.Icon.telar_mark, plan.slice()[0].icon);
     try std.testing.expectEqual(@as(u16, 2), plan.slice()[0].area.w);
     try std.testing.expectEqual(widget.Action.toggle_sidebar, hits.at(1, 0).?);
-    try std.testing.expectEqualDeep(client.theme_support.default_theme.palette.accent, buffer.at(1, 0).?.style.fg);
+    try std.testing.expectEqualDeep(data.theme_support.default_theme.palette.accent, buffer.at(1, 0).?.style.fg);
 
     plan.reset();
     hits = .{};
@@ -451,9 +452,9 @@ test "the telar mark toggles the sidebar and dims while it is hidden" {
     hidden.sidebar_visible = false;
     render(&context, hidden);
     try std.testing.expect(plan.len >= 1);
-    try std.testing.expectEqual(client.Icon.telar_mark, plan.slice()[0].icon);
+    try std.testing.expectEqual(data.icons.Icon.telar_mark, plan.slice()[0].icon);
     try std.testing.expectEqual(widget.Action.toggle_sidebar, hits.at(1, 0).?);
-    try std.testing.expectEqualDeep(client.theme_support.default_theme.palette.subtext0, buffer.at(1, 0).?.style.fg);
+    try std.testing.expectEqualDeep(data.theme_support.default_theme.palette.subtext0, buffer.at(1, 0).?.style.fg);
 }
 
 test "proxy badge reserves the right edge before workspace navigation" {
@@ -463,10 +464,10 @@ test "proxy badge reserves the right edge before workspace navigation" {
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .hovered = null,
     };
-    const workspaces: client.WorkspaceListSnapshot = .{};
+    const workspaces: data.WorkspaceListSnapshot = .{};
 
     render(&context, .{
         .area = buffer.area(),
@@ -480,7 +481,7 @@ test "proxy badge reserves the right edge before workspace navigation" {
 
     const badge_x = @as(usize, buffer.w) - 2;
     try std.testing.expectEqualStrings(
-        client.Icon.proxy_active.unicodeGlyph(),
+        data.icons.Icon.proxy_active.unicodeGlyph(),
         buffer.cells[badge_x].text(),
     );
     try std.testing.expect(hits.at(@intCast(badge_x), 0) == null);
@@ -493,10 +494,10 @@ test "wildcard proxy scope renders a distinct warning badge" {
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .hovered = null,
     };
-    const workspaces: client.WorkspaceListSnapshot = .{};
+    const workspaces: data.WorkspaceListSnapshot = .{};
 
     render(&context, .{
         .area = buffer.area(),
@@ -510,8 +511,8 @@ test "wildcard proxy scope renders a distinct warning badge" {
     });
 
     const badge = buffer.at(18, 0).?;
-    try std.testing.expectEqualStrings(client.Icon.proxy_active.unicodeGlyph(), badge.text());
-    try std.testing.expectEqualDeep(client.theme_support.default_theme.palette.red, badge.style.fg);
+    try std.testing.expectEqualStrings(data.icons.Icon.proxy_active.unicodeGlyph(), badge.text());
+    try std.testing.expectEqualDeep(data.theme_support.default_theme.palette.red, badge.style.fg);
 }
 
 test "installed system trust keeps a yellow badge while the proxy is off" {
@@ -521,10 +522,10 @@ test "installed system trust keeps a yellow badge while the proxy is off" {
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .hovered = null,
     };
-    const workspaces: client.WorkspaceListSnapshot = .{};
+    const workspaces: data.WorkspaceListSnapshot = .{};
 
     render(&context, .{
         .area = buffer.area(),
@@ -538,8 +539,8 @@ test "installed system trust keeps a yellow badge while the proxy is off" {
     });
 
     const badge = buffer.at(18, 0).?;
-    try std.testing.expectEqualStrings(client.Icon.proxy_active.unicodeGlyph(), badge.text());
-    try std.testing.expectEqualDeep(client.theme_support.default_theme.palette.yellow, badge.style.fg);
+    try std.testing.expectEqualStrings(data.icons.Icon.proxy_active.unicodeGlyph(), badge.text());
+    try std.testing.expectEqualDeep(data.theme_support.default_theme.palette.yellow, badge.style.fg);
 }
 
 test "configured right content stops before the permanent proxy badge" {
@@ -549,13 +550,13 @@ test "configured right content stops before the permanent proxy badge" {
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .hovered = null,
     };
-    const workspaces: client.WorkspaceListSnapshot = .{};
-    var content: client.Content = .{};
+    const workspaces: data.WorkspaceListSnapshot = .{};
+    var content: data.Content = .{};
     try content.append(.{ .text = "quota", .style = .{ .foreground = .{ .palette = .accent } } });
-    const right: client.Slot = .{ .content = content };
+    const right: data.bar_values.Slot = .{ .content = content };
 
     render(&context, .{
         .area = buffer.area(),
@@ -571,11 +572,11 @@ test "configured right content stops before the permanent proxy badge" {
     try std.testing.expectEqualStrings("q", buffer.at(32, 0).?.text());
     try std.testing.expectEqualStrings("a", buffer.at(36, 0).?.text());
     try std.testing.expectEqualStrings(
-        client.Icon.proxy_active.unicodeGlyph(),
+        data.icons.Icon.proxy_active.unicodeGlyph(),
         buffer.at(38, 0).?.text(),
     );
     try std.testing.expectEqualDeep(
-        client.theme_support.default_theme.palette.accent,
+        data.theme_support.default_theme.palette.accent,
         buffer.at(32, 0).?.style.fg,
     );
 }
@@ -587,11 +588,11 @@ test "workspace navigation starts right after the telar mark" {
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .hovered = null,
     };
-    var workspaces: client.WorkspaceListSnapshot = .{};
-    const entries = [_]client.EntryInput{
+    var workspaces: data.WorkspaceListSnapshot = .{};
+    const entries = [_]data.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
     };
     _ = try workspaces.replace(.{ .revision = 1, .entries = &entries });

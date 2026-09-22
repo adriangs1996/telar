@@ -57,10 +57,10 @@ frontend never import each other, and `telar-gui` never imports
 
 | Package          | Owns                                                                                                                               |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `model`          | reusable values and bounded state; depends only on core; public API in `src/model/model.zig`                                       |
+| `model`          | reusable values, disposable state and its transitions; public API in `src/model/model.zig`                                       |
 | `telar-core`     | cells, buffers, geometry and wire values shared across processes                                                                   |
 | `telar-backend`  | children, PTYs, terminal emulation, history and runtime authority                                                                  |
-| `telar-client`   | disposable model, operations, input policy, configuration, plugins, local transport, resource retention and presentation contracts |
+| `telar-client`   | client assembly, operations, input policy, configuration services, plugins, transport, resource retention and presentation contracts |
 | `telar-frontend` | TUI assembly, host terminal, decoder, compositor, diff, pacing and Kitty delivery                                                  |
 | `telar-gui`      | native chrome: glyph atlas and quad frames drawn by a Metal backend on macOS and a Wayland/Vulkan backend on Linux                 |
 

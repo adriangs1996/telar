@@ -1,3 +1,4 @@
+const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const SidebarInput = @import("SidebarInput.zig");
@@ -7,6 +8,6 @@ const AgentLineInput = @This();
 sidebar: SidebarInput,
 semantic: *Semantic,
 y: u16,
-agent: *const client.Agent,
+agent: *const data.Agent,
 line: u2,
 background: core.Color,

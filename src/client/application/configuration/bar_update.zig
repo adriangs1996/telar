@@ -1,23 +1,22 @@
 //! Application policy for one configured bar-source result.
 
-const ContentType = @import("../../bars/Content.zig");
+const data = @import("model");
 const Failure = @import("Failure.zig");
-const BarUpdateCommitType = @import("../../model/BarUpdateCommit.zig");
 
 pub const Result = union(enum) {
-    content: ContentType,
+    content: data.Content,
     failed: Failure,
 };
 
 pub const Outcome = union(enum) {
-    updated: BarUpdateCommitType,
+    updated: data.BarUpdateCommit,
     unchanged,
     stale,
     failed: anyerror,
 };
 
-fn contentWith(text: []const u8) ContentType {
-    var content: ContentType = .{};
+fn contentWith(text: []const u8) data.Content {
+    var content: data.Content = .{};
     content.append(.{ .text = text }) catch unreachable;
 
     return content;

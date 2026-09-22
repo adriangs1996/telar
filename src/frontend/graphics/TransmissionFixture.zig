@@ -1,3 +1,4 @@
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const kitty_delivery = @import("kitty_delivery.zig");
@@ -15,7 +16,7 @@ pub const metadata: core.Image = .{
     .byte_len = 512 * 256 * 4,
 };
 
-model: client.MultiplexerModel,
+model: data.MultiplexerModel,
 store: kitty_delivery.Store,
 
 pub fn init(pixels: []const u8) !TransmissionFixture {
@@ -24,7 +25,7 @@ pub fn init(pixels: []const u8) !TransmissionFixture {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     errdefer model.deinit();
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
     var store = kitty_delivery.Store.init(std.testing.allocator);

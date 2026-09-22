@@ -5,18 +5,18 @@ const Hit = @import("LinkHit.zig");
 const Gesture = @This();
 
 pressed: ?Hit = null,
-version: client.Version = .{},
+version: data.Version = .{},
 
 /// Acquires the complete gesture without dispatching an external operation.
 /// Example: `gesture.begin(hit, app.model.version());`
-pub fn begin(gesture: *Gesture, hit: Hit, version: client.Version) void {
+pub fn begin(gesture: *Gesture, hit: Hit, version: data.Version) void {
     gesture.pressed = hit;
     gesture.version = version;
 }
 
 /// A release opens only the unchanged target. Cancellation never opens a URL.
 /// Example: `const target = gesture.finish(current_hit, app.model.version());`
-pub fn finish(gesture: *Gesture, current: ?Hit, version: client.Version) ?data.LinkTarget {
+pub fn finish(gesture: *Gesture, current: ?Hit, version: data.Version) ?data.LinkTarget {
     gesture.validate(current, version);
     const pressed = gesture.pressed orelse return null;
     gesture.pressed = null;
@@ -26,7 +26,7 @@ pub fn finish(gesture: *Gesture, current: ?Hit, version: client.Version) ?data.L
 
 /// Navigation or an intervening target change cancels, even if later restored.
 /// Example: `gesture.validate(hover.link, app.model.version());`
-pub fn validate(gesture: *Gesture, current: ?Hit, version: client.Version) void {
+pub fn validate(gesture: *Gesture, current: ?Hit, version: data.Version) void {
     const pressed = gesture.pressed orelse return;
     const same_context = gesture.version.workspace == version.workspace and gesture.version.active_tab == version.active_tab and
         gesture.version.tabs == version.tabs and gesture.version.panes == version.panes and gesture.version.host == version.host and

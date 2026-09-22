@@ -1,6 +1,7 @@
 //! Cell painting of a thread surface: the agent header, the transcript area
 //! and the composer line. The GUI paints the same projection natively.
 
+const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const std = @import("std");
@@ -80,7 +81,7 @@ test "thread surface paints header, body and composer inside its area" {
     var buffer = try core.Buffer.init(std.testing.allocator, 30, 6);
     defer buffer.deinit();
     buffer.clear(.{});
-    const palette: client.Palette = client.theme_support.default_theme.palette;
+    const palette: data.Palette = data.theme_support.default_theme.palette;
     const area: core.Rect = .{ .x = 1, .y = 1, .w = 26, .h = 4 };
 
     paint(&buffer, area, .{ .view = .{ .pane_id = @enumFromInt(1), .agent = null, .composer = "hi" }, .palette = &palette });

@@ -201,7 +201,7 @@ fn drawAgentTitle(context: *ContextType, line_input: AgentLineInput, area: core.
     const mark_area: core.Rect = .{ .x = area.x, .y = area.y, .w = 2, .h = 2 };
     const icon_style: core.Style = .{ .fg = context.palette.accent, .bg = background };
     const glyph = agent.iconGlyph();
-    const artwork = client.Icon.forProvider(agent.provider);
+    const artwork = data.icons.Icon.forProvider(agent.provider);
     if (glyph.len != 0) {
         _ = context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x, .y = area.y }, .text = glyph, .max_width = 1, .style = icon_style });
     } else if (input.transparent and artwork != null) {
@@ -252,7 +252,7 @@ fn drawAgentLocation(context: *ContextType, input: AgentLocationInput) void {
     } });
 }
 
-fn projectedPaneIndex(input: SidebarInput, agent: *const client.Agent) u16 {
+fn projectedPaneIndex(input: SidebarInput, agent: *const data.Agent) u16 {
     const active = input.active_model orelse return agent.pane_index;
     const location = active.location orelse return agent.pane_index;
     if (!std.meta.eql(location, agent.location)) {
@@ -324,7 +324,7 @@ fn statusWidth(status: core.AgentStatus) u16 {
     return core.measure(statusLabel(status)) + 2;
 }
 
-fn statusIcon(status: core.AgentStatus, animation_frame: u8) client.Icon {
+fn statusIcon(status: core.AgentStatus, animation_frame: u8) data.icons.Icon {
     return switch (status) {
         .unknown => .agent_unknown,
         .working => icons_module.working(animation_frame),
@@ -432,8 +432,8 @@ test "empty snapshot renders the minions header" {
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
-    const snapshot: client.AgentSnapshot = .{};
-    const palette = client.theme_support.default_theme.palette;
+    const snapshot: data.AgentSnapshot = .{};
+    const palette = data.theme_support.default_theme.palette;
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -454,7 +454,7 @@ test "empty snapshot renders the minions header" {
 }
 
 test "agent snapshot renders compact selectable rows and status" {
-    var snapshot: client.AgentSnapshot = .{};
+    var snapshot: data.AgentSnapshot = .{};
     const agent_entries = [_]data.AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
         .location = .{
@@ -477,7 +477,7 @@ test "agent snapshot renders compact selectable rows and status" {
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
-    const palette = client.theme_support.default_theme.palette;
+    const palette = data.theme_support.default_theme.palette;
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -508,11 +508,11 @@ test "active layout projects pane indices without mutating runtime agent state" 
     };
     const first: core.PaneId = @enumFromInt(41);
     const second: core.PaneId = @enumFromInt(42);
-    var active = client.MultiplexerModel.init(std.testing.allocator);
+    var active = data.MultiplexerModel.init(std.testing.allocator);
     defer active.deinit();
     try active.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
     try active.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = .{ .w = 80, .h = 24 } });
-    var snapshot: client.AgentSnapshot = .{};
+    var snapshot: data.AgentSnapshot = .{};
     const agent: data.AgentInput = .{
         .key = .{ .pane_id = second, .pane_generation = 1 },
         .location = location,
@@ -537,7 +537,7 @@ test "active layout projects pane indices without mutating runtime agent state" 
 }
 
 test "agent without pane focus remains unhighlighted" {
-    var snapshot: client.AgentSnapshot = .{};
+    var snapshot: data.AgentSnapshot = .{};
     const agent: data.AgentInput = .{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
         .location = .{
@@ -554,7 +554,7 @@ test "agent without pane focus remains unhighlighted" {
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
-    const palette = client.theme_support.default_theme.palette;
+    const palette = data.theme_support.default_theme.palette;
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -574,7 +574,7 @@ test "agent without pane focus remains unhighlighted" {
 }
 
 test "transparent Codex row publishes an official provider mark" {
-    var snapshot: client.AgentSnapshot = .{};
+    var snapshot: data.AgentSnapshot = .{};
     const agent_entries = [_]data.AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
         .location = .{
@@ -591,7 +591,7 @@ test "transparent Codex row publishes an official provider mark" {
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
-    const palette = client.theme_support.default_theme.palette;
+    const palette = data.theme_support.default_theme.palette;
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -610,7 +610,7 @@ test "transparent Codex row publishes an official provider mark" {
 }
 
 test "graphical focus exposes only the four rounded card corners" {
-    var snapshot: client.AgentSnapshot = .{};
+    var snapshot: data.AgentSnapshot = .{};
     const agent_entries = [_]data.AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
         .location = .{
@@ -627,7 +627,7 @@ test "graphical focus exposes only the four rounded card corners" {
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
-    const palette = client.theme_support.default_theme.palette;
+    const palette = data.theme_support.default_theme.palette;
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -655,7 +655,7 @@ test "graphical focus exposes only the four rounded card corners" {
 }
 
 test "hover covers the complete three-row agent card" {
-    var snapshot: client.AgentSnapshot = .{};
+    var snapshot: data.AgentSnapshot = .{};
     const agent: data.AgentInput = .{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
         .location = .{
@@ -672,7 +672,7 @@ test "hover covers the complete three-row agent card" {
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
-    const palette = client.theme_support.default_theme.palette;
+    const palette = data.theme_support.default_theme.palette;
     const action: widget.Action = .{ .sidebar_focus_agent = agent.key };
     var context: ContextType = .{
         .buffer = &buffer,
@@ -720,13 +720,13 @@ test "partial card scroll preserves visible rows, spacing, and hit targets" {
             .status = .working,
         },
     };
-    var snapshot: client.AgentSnapshot = .{};
+    var snapshot: data.AgentSnapshot = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     var buffer = try core.Buffer.init(std.testing.allocator, 48, 7);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{ .scroll = 1 };
-    const palette = client.theme_support.default_theme.palette;
+    const palette = data.theme_support.default_theme.palette;
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -788,7 +788,7 @@ test "42 and 62 column cards reserve status before truncating context" {
         .display_name = "Claude Code",
         .status = .blocked,
     };
-    var snapshot: client.AgentSnapshot = .{};
+    var snapshot: data.AgentSnapshot = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &.{agent} });
     const widths = [_]u16{ 42, 62 };
     for (widths) |width| {
@@ -796,7 +796,7 @@ test "42 and 62 column cards reserve status before truncating context" {
         defer buffer.deinit();
         var hits: widget.Hits = .{};
         var state: State = .{};
-        const palette = client.theme_support.default_theme.palette;
+        const palette = data.theme_support.default_theme.palette;
         var context: ContextType = .{
             .buffer = &buffer,
             .hits = &hits,

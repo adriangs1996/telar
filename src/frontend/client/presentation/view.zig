@@ -28,14 +28,14 @@ const attachment_preview_module = @import("../../widgets/attachment_preview.zig"
 const kitty_codec = @import("../../graphics/kitty_codec.zig");
 const toast_module = @import("../../widgets/toast.zig");
 
-pub const empty_agent_snapshot: client.AgentSnapshot = .{};
-pub const empty_history_palette: client.HistoryPaletteState = .{};
-pub const empty_suggestion: client.SuggestionState = .{};
+pub const empty_agent_snapshot: data.AgentSnapshot = .{};
+pub const empty_history_palette: data.HistoryPaletteState = .{};
+pub const empty_suggestion: data.SuggestionState = .{};
 pub const empty_path_completion: data.PathCompletionState = .{};
 pub const empty_notifications: data.Center = .{};
-pub const empty_workspace_list: client.WorkspaceListSnapshot = .{};
+pub const empty_workspace_list: data.WorkspaceListSnapshot = .{};
 pub const empty_pane_labels: PlanType = .{};
-pub const default_bars_state: client.State = .{};
+pub const default_bars_state: data.BarsState = .{};
 
 pub fn promptKind(prompt: ?*const data.Prompt) tab_rename_module.Kind {
     const current = prompt orelse return .rename_tab;
@@ -70,8 +70,8 @@ pub fn promptField(prompt: ?*data.Prompt) ?*tab_rename_module.Field {
 /// Computes the deterministic result set and renders the visible window with
 /// the clamped selection highlighted, scrolled so the selection stays visible.
 pub fn renderGotoPicker(context: *ContextType, application: core.Rect, sources: PickerSources) GotoPickerOutput {
-    var results: client.Results = .{};
-    const match_sources: client.Sources = .{
+    var results: data.Results = .{};
+    const match_sources: data.Sources = .{
         .agents = sources.agents,
         .workspaces = sources.workspaces,
         .tabs = sources.tabs,
@@ -83,7 +83,7 @@ pub fn renderGotoPicker(context: *ContextType, application: core.Rect, sources: 
         return renderHistoryPalette(context, application, sources);
     }
 
-    client.collect(match_sources, sources.prompt.paletteQuery(), &results);
+    data.goto_picker.collect(match_sources, sources.prompt.paletteQuery(), &results);
 
     const total: u16 = results.len;
     const selected: u16 = if (total == 0) 0 else @min(sources.prompt.selection(), total - 1);
@@ -93,8 +93,8 @@ pub fn renderGotoPicker(context: *ContextType, application: core.Rect, sources: 
     var rows: [goto_picker_module.max_rows]RowType = undefined;
     for (0..window) |offset| {
         const index = start + offset;
-        var label: [client.max_label_bytes]u8 = undefined;
-        const text = client.describe(match_sources, results.slice()[index].item, &label);
+        var label: [data.goto_picker.max_label_bytes]u8 = undefined;
+        const text = data.goto_picker.describe(match_sources, results.slice()[index].item, &label);
         var row: RowType = .{ .selected = index == selected };
         const len = @min(text.len, goto_picker_module.max_row_bytes);
         @memcpy(row.text[0..len], text[0..len]);
@@ -251,7 +251,7 @@ test "mouse pointer distinguishes clickable chrome panes and sidebar resizing" {
     var state = try StateType.init(std.testing.allocator, 80, 24);
     defer state.deinit();
 
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     const area: core.Rect = .{ .w = 1, .h = 1 };
     state.pointer_position = .{ .x = 0, .y = 0 };
@@ -298,7 +298,7 @@ test "sidebar separator drag reports exact preferred widths" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
-    var model = client.MultiplexerModel.init(gpa);
+    var model = data.MultiplexerModel.init(gpa);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -334,7 +334,7 @@ test "sidebar separator drag reports exact preferred widths" {
 test "empty production sidebar has no task controls" {
     var state = try StateType.init(std.testing.allocator, 100, 30);
     defer state.deinit();
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -354,7 +354,7 @@ test "the inline new-context form shows both fields and the selected completion 
     var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
     state.toggleSidebar();
-    var model = client.MultiplexerModel.init(gpa);
+    var model = data.MultiplexerModel.init(gpa);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -411,7 +411,7 @@ test "workbench clicks return focus intent without mutating pane layout" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var model = client.MultiplexerModel.init(gpa);
+    var model = data.MultiplexerModel.init(gpa);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -512,7 +512,7 @@ test "sidebar agent snapshots version changed hover only once" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var model = client.MultiplexerModel.init(gpa);
+    var model = data.MultiplexerModel.init(gpa);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -528,7 +528,7 @@ test "sidebar agent snapshots version changed hover only once" {
         .provider = .codex,
         .status = .blocked,
     }};
-    var snapshot: client.AgentSnapshot = .{};
+    var snapshot: data.AgentSnapshot = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     var screen = try ScreenType.init(gpa, 100, 30);
     defer screen.deinit();
@@ -563,7 +563,7 @@ test "focused agent image preview reserves space below its pane and opens a moda
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var model = client.MultiplexerModel.init(gpa);
+    var model = data.MultiplexerModel.init(gpa);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -583,14 +583,14 @@ test "focused agent image preview reserves space below its pane and opens a moda
         .provider = .codex,
         .status = .ready,
     }};
-    var snapshot: client.AgentSnapshot = .{};
+    var snapshot: data.AgentSnapshot = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     const target: data.AttachmentTarget = .{
         .pane_id = agent_entries[0].key.pane_id,
         .pane_generation = agent_entries[0].key.pane_generation,
     };
     try std.testing.expect(!state.syncAttachmentTarget(target));
-    const capture = try gpa.create(client.Capture);
+    const capture = try gpa.create(data.Capture);
     capture.* = .{
         .request = .{ .target = target, .sequence = 1 },
         .png = try gpa.dupe(u8, "png"),
@@ -697,14 +697,14 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
     const shell_pane: core.PaneId = @enumFromInt(3);
     const workspace_pane: core.PaneId = @enumFromInt(4);
 
-    var first_model = client.MultiplexerModel.init(gpa);
+    var first_model = data.MultiplexerModel.init(gpa);
     defer first_model.deinit();
     try first_model.addRoot(.{ .pane_id = first_pane, .location = first_location, .size = .{ .cols = 34, .rows = 27 } });
     try first_model.split(.{ .existing_pane = first_pane, .new_pane = second_pane, .location = first_location, .axis = .horizontal, .area = state.workbench() });
     try first_model.split(.{ .existing_pane = second_pane, .new_pane = shell_pane, .location = first_location, .axis = .vertical, .area = state.workbench() });
     try std.testing.expect(first_model.focusPane(first_pane));
 
-    var second_model = client.MultiplexerModel.init(gpa);
+    var second_model = data.MultiplexerModel.init(gpa);
     defer second_model.deinit();
     try second_model.addRoot(.{ .pane_id = workspace_pane, .location = second_location, .size = .{ .cols = 38, .rows = 27 } });
 
@@ -731,7 +731,7 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
             .status = .ready,
         },
     };
-    var snapshot: client.AgentSnapshot = .{};
+    var snapshot: data.AgentSnapshot = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     var screen = try ScreenType.init(gpa, 100, 30);
     defer screen.deinit();
@@ -764,7 +764,7 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
     var state = try StateType.init(std.testing.allocator, 100, 30);
     defer state.deinit();
     try state.configureSidebar(.kitty_hybrid, .{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -778,7 +778,7 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
         .provider = .claude,
         .status = .ready,
     }};
-    var snapshot: client.AgentSnapshot = .{};
+    var snapshot: data.AgentSnapshot = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     var screen = try ScreenType.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
@@ -801,11 +801,11 @@ test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
     var state = try StateType.initWithAppearance(
         std.testing.allocator,
         .{ .width = 100, .height = 30 },
-        .{ .theme = client.theme_support.default_theme, .icons = .nerd_font },
+        .{ .theme = data.theme_support.default_theme, .icons = .nerd_font },
     );
     defer state.deinit();
     try state.configureSidebar(.automatic, .{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -836,11 +836,11 @@ test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
     var state = try StateType.initWithAppearance(
         std.testing.allocator,
         .{ .width = 100, .height = 30 },
-        .{ .theme = client.theme_support.default_theme, .icons = .nerd_font },
+        .{ .theme = data.theme_support.default_theme, .icons = .nerd_font },
     );
     defer state.deinit();
     try state.configureSidebar(.automatic, .{ .support = .unsupported, .cell_width = 10, .cell_height = 20 });
-    var model = client.MultiplexerModel.init(std.testing.allocator);
+    var model = data.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -869,7 +869,7 @@ test "fullscreen labels keep small-font text across focus changes and fall back 
     var state = try StateType.init(gpa, 100, 24);
     defer state.deinit();
     try state.configureSidebar(.cells, .{ .support = .supported, .cell_width = 22, .cell_height = 58 });
-    var model = client.MultiplexerModel.init(gpa);
+    var model = data.MultiplexerModel.init(gpa);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -953,7 +953,7 @@ test "cell rendering leaves toast rasterization to the media pass" {
     var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
     try state.configureSidebar(.cells, .{ .support = .supported, .cell_width = 22, .cell_height = 58 });
-    var model = client.MultiplexerModel.init(gpa);
+    var model = data.MultiplexerModel.init(gpa);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -999,7 +999,7 @@ test "client chrome uses Shade by default" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var model = client.MultiplexerModel.init(gpa);
+    var model = data.MultiplexerModel.init(gpa);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1025,14 +1025,14 @@ test "client chrome uses Shade by default" {
     try std.testing.expectEqualDeep(state.palette().panel_bg, screen.back.cells[top_start].style.bg);
     try std.testing.expectEqualDeep(state.palette().accent, screen.back.cells[top_start].style.fg);
     try std.testing.expect(!screen.back.cells[top_start].style.flags.inverse);
-    try std.testing.expectEqual(client.theme_support.Builtin.shade, state.theme.base);
+    try std.testing.expectEqual(data.theme_support.Builtin.shade, state.theme.base);
 }
 
 test "configuration diagnostics stay inside the bottom bar" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var model = client.MultiplexerModel.init(gpa);
+    var model = data.MultiplexerModel.init(gpa);
     defer model.deinit();
     var screen = try ScreenType.init(gpa, 80, 24);
     defer screen.deinit();
@@ -1063,9 +1063,9 @@ test "configuration diagnostics stay inside the bottom bar" {
 
 test "terminal theme leaves client chrome backgrounds to the host terminal" {
     const gpa = std.testing.allocator;
-    var state = try StateType.initWithTheme(gpa, .{ .width = 80, .height = 24 }, client.theme_support.builtin(.terminal));
+    var state = try StateType.initWithTheme(gpa, .{ .width = 80, .height = 24 }, data.theme_support.builtin(.terminal));
     defer state.deinit();
-    var model = client.MultiplexerModel.init(gpa);
+    var model = data.MultiplexerModel.init(gpa);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1100,7 +1100,7 @@ test "clickable toast restores pane cells after its exit animation" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
-    var model = client.MultiplexerModel.init(gpa);
+    var model = data.MultiplexerModel.init(gpa);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1171,18 +1171,18 @@ test "changing themes invalidates client chrome" {
     state.dirty = false;
     state.hovered = .active_workspace;
 
-    state.setTheme(client.theme_support.builtin(.catppuccin));
+    state.setTheme(data.theme_support.builtin(.catppuccin));
 
     try std.testing.expect(state.dirty);
     try std.testing.expect(state.hovered == null);
-    try std.testing.expectEqual(client.theme_support.Builtin.catppuccin, state.theme.base);
+    try std.testing.expectEqual(data.theme_support.Builtin.catppuccin, state.theme.base);
 }
 
 test "tab bar renders ordered labels and clicks carry runtime ids" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var tabs = client.TabsModel.init(gpa);
+    var tabs = data.TabsModel.init(gpa);
     defer tabs.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     try tabs.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
@@ -1244,7 +1244,7 @@ test "tab bar marks the tab whose pane is fullscreen" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var tabs = client.TabsModel.init(gpa);
+    var tabs = data.TabsModel.init(gpa);
     defer tabs.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     const logs: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(9) };
@@ -1300,15 +1300,15 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var model = client.MultiplexerModel.init(gpa);
+    var model = data.MultiplexerModel.init(gpa);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 27 } });
-    var workspaces: client.WorkspaceListSnapshot = .{};
-    const entries = [_]client.EntryInput{
+    var workspaces: data.WorkspaceListSnapshot = .{};
+    const entries = [_]data.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1 },
     };

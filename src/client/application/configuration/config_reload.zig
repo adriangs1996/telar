@@ -1,6 +1,6 @@
 //! Application use case for adopting one client configuration generation.
 
-const ModelType = @import("../../model/Model.zig");
+const data = @import("model");
 const client_diagnostic = @import("client_diagnostic.zig");
 
 pub const Event = enum {
@@ -21,6 +21,6 @@ pub const Failure = enum {
     pane_geometry,
 };
 
-fn installDiagnostic(model: *ModelType) !void {
+fn installDiagnostic(model: *data.Model) !void {
     _ = try model.replaceDiagnostic(client_diagnostic.formatted("previous configuration failed", .{}));
 }

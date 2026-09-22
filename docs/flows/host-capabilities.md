@@ -122,7 +122,7 @@ fallback, so a failed timer changes no capability state.
 
 ## Validation
 
-- `src/client/model/Model.zig` proves independent probes, selective expiry,
+- `src/model/state/Model.zig` proves independent probes, selective expiry,
   pixel precedence, atomic geometry and validation before mutation.
 - `src/frontend/client/tests/host_resources.zig` proves commit-before-delivery,
   no-op suppression and graphics/grid/cell-size ordering through the existing
@@ -130,7 +130,7 @@ fallback, so a failed timer changes no capability state.
 - The owner test in `src/client/AttachedClient.zig` checks empty and stale commits
   before any host port can be accessed.
 - `src/client/operations/panes/pane_graphics.zig` owns bounded fallback
-  traversal; `src/client/model/tests/input_and_frames.zig` and
+  traversal; `src/model/state/tests/input_and_frames.zig` and
   `src/frontend/client/tests/graphics_and_clipboard.zig` cover fallback ownership,
   repeated values and graphics recovery.
 - `src/frontend/client/controllers/host/host_capabilities.zig` owns terminal reply translation

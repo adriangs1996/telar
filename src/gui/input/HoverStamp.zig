@@ -1,11 +1,12 @@
 //! Every dependency of native hit testing, independent of GPU preparation.
+const data = @import("model");
 const client = @import("telar-client");
 const GuiClient = @import("../GuiClient.zig");
 const Stamp = @This();
 
 cell: [2]u16,
 mods: u32,
-model: client.Version,
+model: data.Version,
 geometry: u64,
 chrome: u64,
 chrome_gesture: ?u8,

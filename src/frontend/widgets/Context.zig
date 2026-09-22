@@ -1,3 +1,4 @@
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const context_support = @import("context_support.zig");
@@ -10,9 +11,9 @@ const Context = @This();
 
 buffer: *core.Buffer,
 hits: *context_support.Hits,
-palette: *const client.Palette,
+palette: *const data.Palette,
 hovered: ?context_support.Action,
-icon_theme: client.Theme = .unicode,
+icon_theme: data.icons.Theme = .unicode,
 icon_plan: ?*PlanType = null,
 
 pub fn isHovered(context: *const Context, action: context_support.Action) bool {

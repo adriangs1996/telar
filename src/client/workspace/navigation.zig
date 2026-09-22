@@ -2,12 +2,10 @@
 
 const core = @import("telar-core");
 const data = @import("model");
-const History = @import("History.zig");
 const std = @import("std");
-const Layouts = @import("Layouts.zig");
 
 test "workspace bookmarks replace the last focused tab and pane" {
-    var history: History = .{};
+    var history: data.NavigationHistory = .{};
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(3) };
     history.remember(.{
         .location = .{ .workspace = workspace, .tab_id = @enumFromInt(4) },
@@ -26,7 +24,7 @@ test "workspace bookmarks replace the last focused tab and pane" {
 }
 
 test "live layout retention stays bounded and replaces existing tabs before eviction" {
-    var layouts: Layouts = .{};
+    var layouts: data.SavedLayouts = .{};
     var layout: data.WorkspaceLayout = .{};
     const pane: core.PaneId = @enumFromInt(5);
     try layout.addRoot(pane);
@@ -58,7 +56,7 @@ test "live layout retention stays bounded and replaces existing tabs before evic
 }
 
 test "saved layouts are keyed by complete tab identity" {
-    var layouts: Layouts = .{};
+    var layouts: data.SavedLayouts = .{};
     var first: data.WorkspaceLayout = .{};
     try first.addRoot(@enumFromInt(5));
     const location: core.TabLocation = .{

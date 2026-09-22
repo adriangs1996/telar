@@ -1,9 +1,9 @@
 //! Single-flight presentation identity. Preparation never retires model damage.
 
+const data = @import("model");
 const LifecycleState = @import("LifecycleState.zig");
 const ObservationType = @import("Observation.zig");
 const std = @import("std");
-const PresentationCommitType = @import("../panes/PresentationCommit.zig");
 
 pub const Token = enum(u64) { _ };
 pub const Outcome = enum { delivered, failed, cancelled };
@@ -32,7 +32,7 @@ test "delivery returns only captured frames even after receiving newer model sta
     const old: ObservationType = .{ .model = .{ .frame = 1 } };
     const newer: ObservationType = .{ .model = .{ .frame = 2 } };
     _ = state.observe(old);
-    var commit: PresentationCommitType = .{ .len = 1 };
+    var commit: data.PresentationCommit = .{ .len = 1 };
     commit.panes[0] = .{ .pane_id = @enumFromInt(1), .frame_id = 7, .attached = true };
     const token = try state.begin(.{ .observation = old, .commit = commit });
     _ = state.observe(newer);

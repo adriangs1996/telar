@@ -15,7 +15,7 @@ now_ns: u64 = 0,
 /// Reconciles clocks only on snapshot changes; ordinary paints advance one
 /// monotonic timestamp. Storage is bounded and never borrows the model.
 /// Example: `ages.observe(projection.agents, now_ns);`
-pub fn observe(ages: *AgentAges, snapshot: *const client.AgentSnapshot, now_ns: u64) void {
+pub fn observe(ages: *AgentAges, snapshot: *const data.AgentSnapshot, now_ns: u64) void {
     ages.now_ns = @max(ages.now_ns, now_ns);
     const mark = SnapshotMark.of(snapshot);
     if (ages.mark.eql(mark)) {
@@ -38,7 +38,7 @@ pub fn observe(ages: *AgentAges, snapshot: *const client.AgentSnapshot, now_ns: 
 
 /// Reads the same elapsed age for every occurrence of an agent in a frame.
 /// Example: `const seconds = ages.seconds(agent);`
-pub fn seconds(ages: *const AgentAges, agent: *const client.Agent) u32 {
+pub fn seconds(ages: *const AgentAges, agent: *const data.Agent) u32 {
     const age = ages.find(agent.key) orelse return agent.statusAgeSeconds();
     return age.seconds(ages.now_ns);
 }
@@ -60,7 +60,7 @@ fn find(ages: *const AgentAges, key: data.AgentKey) ?*const StatusAge {
 }
 
 test "status clocks keep subsecond progress through frequent snapshots and reordering" {
-    var snapshot: client.AgentSnapshot = .{};
+    var snapshot: data.AgentSnapshot = .{};
     var ages: AgentAges = .{};
     const first: data.AgentInput = .{
         .key = .{
@@ -98,7 +98,7 @@ test "status clocks keep subsecond progress through frequent snapshots and reord
 }
 
 test "status clocks reset for new intervals generations removals and replicas" {
-    var snapshot: client.AgentSnapshot = .{};
+    var snapshot: data.AgentSnapshot = .{};
     var ages: AgentAges = .{};
     var input: data.AgentInput = .{
         .key = .{

@@ -1,11 +1,10 @@
 const data = @import("model");
-const GenericBinding = @import("GenericBinding.zig").Type;
 const GenericRouter = @import("GenericRouter.zig").Type;
 const Capture = @import("Capture.zig");
 const std = @import("std");
 
 pub const Action = enum { next, detach };
-const Binding = GenericBinding(Action, 4);
+const Binding = data.GenericBinding(Action, 4);
 const Router = GenericRouter(Action, .{ .max_bindings = 8, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 }, void);
 
 test "native key routing needs no decoder and retains binding ownership through release" {

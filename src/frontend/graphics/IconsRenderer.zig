@@ -1,3 +1,4 @@
+const data = @import("model");
 const client = @import("telar-client");
 const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
@@ -100,10 +101,10 @@ pub fn prepare(renderer: *Renderer, marks: []const MarkType) !void {
         const wanted = icons.slotFromMark(mark);
         if (icons.isWorkingIcon(mark.icon)) {
             inline for (.{
-                client.Icon.agent_working_0,
-                client.Icon.agent_working_1,
-                client.Icon.agent_working_2,
-                client.Icon.agent_working_3,
+                data.icons.Icon.agent_working_0,
+                data.icons.Icon.agent_working_1,
+                data.icons.Icon.agent_working_2,
+                data.icons.Icon.agent_working_3,
             }) |frame| {
                 _ = try icons.ensureSlot(&next_slots, &next_slot_count, .{
                     .icon = frame,

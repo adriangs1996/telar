@@ -11,7 +11,7 @@ reported_s: u32,
 age_ns: u64,
 sampled_ns: u64,
 
-pub fn init(agent: *const client.Agent, now_ns: u64) StatusAge {
+pub fn init(agent: *const data.Agent, now_ns: u64) StatusAge {
     return .{
         .key = agent.key,
         .status = agent.status,
@@ -25,7 +25,7 @@ pub fn init(agent: *const client.Agent, now_ns: u64) StatusAge {
 /// Keeps fractional progress across reports for the same status. A changed
 /// status, provider or decreasing reported age starts a new interval.
 /// Example: `age.observe(agent, now_ns);`
-pub fn observe(age: *StatusAge, agent: *const client.Agent, now_ns: u64) void {
+pub fn observe(age: *StatusAge, agent: *const data.Agent, now_ns: u64) void {
     var next = init(agent, now_ns);
     if (std.meta.eql(age.key, next.key) and age.status == next.status and
         age.provider == next.provider and next.reported_s >= age.reported_s)

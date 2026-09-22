@@ -5,6 +5,7 @@
 //! run again against the new cell size. Nothing here allocates on a warm
 //! frame: placement copies one cell and a lookup starts at most once per
 //! workspace per page.
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -69,7 +70,7 @@ pub fn refresh(favicons: *Favicons, gpa: std.mem.Allocator, page: *SpritePage) v
 /// The next workspace of the list that still needs a lookup, registering
 /// new workspaces and evicting departed ones when the table is full.
 /// Example: `if (favicons.next(model.workspaceListSnapshot())) |want| try request(want);`
-pub fn next(favicons: *Favicons, workspaces: *const client.WorkspaceListSnapshot) ?Want {
+pub fn next(favicons: *Favicons, workspaces: *const data.WorkspaceListSnapshot) ?Want {
     for (0..workspaces.count) |index| {
         const workspace = workspaces.workspaceAt(index);
         const entry = favicons.find(workspace) orelse favicons.register(workspace, workspaces) orelse continue;
@@ -128,7 +129,7 @@ fn find(favicons: *Favicons, workspace: core.WorkspaceId) ?*Entry {
 
 // Entries outlive their workspace so a page cell is never placed twice;
 // they leave only when the table is full and a new workspace arrives.
-fn register(favicons: *Favicons, workspace: core.WorkspaceId, workspaces: *const client.WorkspaceListSnapshot) ?*Entry {
+fn register(favicons: *Favicons, workspace: core.WorkspaceId, workspaces: *const data.WorkspaceListSnapshot) ?*Entry {
     if (favicons.count == capacity) {
         var kept: u8 = 0;
         for (favicons.entries[0..favicons.count]) |entry| {

@@ -1,3 +1,4 @@
+const data = @import("model");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
@@ -5,7 +6,7 @@ const FormButton = @import("FormButton.zig");
 const ChangeReviewButton = @This();
 
 area: Rect,
-pane: *const client.Pane,
+pane: *const data.Pane,
 placement: enum { pane_header, fullscreen, top_bar } = .pane_header,
 
 /// Reserves visible header space before registering its delivered action.

@@ -74,9 +74,9 @@ Departure and preflight use bounded stores and add no queue. Arrival makes the
 normal pane buffer/bootstrap allocations before committing. Runtime panes
 survive client failure and reconnect.
 
-Source: `src/client/AttachedClient.zig`, `src/client/model/Model.zig`,
-and `src/client/workspace/History.zig`.
+Source: `src/client/AttachedClient.zig`, `src/model/state/Model.zig`,
+and `src/model/workspace/NavigationHistory.zig`.
 Tests: `src/frontend/client/tests/synchronization.zig`,
 `workspace_lifecycle.zig`, `notifications_and_agents.zig`, and
-`src/client/model/tests/workspaces.zig` cover preflight, partial failure,
+`src/model/state/tests/workspaces.zig` cover preflight, partial failure,
 bookmarks/layout round trips, empty-state presentation, arrival and bounded retry.

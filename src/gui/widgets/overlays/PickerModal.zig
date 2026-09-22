@@ -1,3 +1,4 @@
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Modal = @import("Modal.zig");
@@ -16,9 +17,9 @@ pub fn draw(widget: PickerModal, canvas: *Canvas) !void {
     const projection = widget.projection.*;
     const prompt = projection.prompt.?;
     const palette = canvas.theme.palette;
-    const sources: client.Sources = .{ .agents = projection.agents, .workspaces = projection.workspaces, .tabs = projection.tabs };
-    var results: client.Results = .{};
-    client.collect(sources, prompt.field.text(), &results);
+    const sources: data.Sources = .{ .agents = projection.agents, .workspaces = projection.workspaces, .tabs = projection.tabs };
+    var results: data.Results = .{};
+    data.goto_picker.collect(sources, prompt.field.text(), &results);
     try modal.draw(canvas);
 
     const content = modal.content();
@@ -36,8 +37,8 @@ pub fn draw(widget: PickerModal, canvas: *Canvas) !void {
             try canvas.fill(row, palette.surface1);
         }
 
-        var storage: [client.max_label_bytes]u8 = undefined;
-        const label = client.describe(sources, results.slice()[index].item, &storage);
+        var storage: [data.goto_picker.max_label_bytes]u8 = undefined;
+        const label = data.goto_picker.describe(sources, results.slice()[index].item, &storage);
         try canvas.text(row, .{ .text = label, .color = if (index == selected) palette.accent else palette.text, .bold = index == selected });
     }
 

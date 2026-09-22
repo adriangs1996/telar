@@ -143,7 +143,7 @@ different pane or the runtime event loop.
 
 ## Validation
 
-- `src/client/model/Model.zig` proves active-target resolution, paste
+- `src/model/state/Model.zig` proves active-target resolution, paste
   identity and framing capture, exact release, attachment checks and exclusive
   modes.
 - `src/model/application/input/pane_paste.zig` proves start rollback,

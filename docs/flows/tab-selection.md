@@ -40,5 +40,5 @@ and is scheduled only by the host adapter.
 Source: `src/client/AttachedClient.zig` and
 `AttachedClient.zig` in the same directory.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig`, `pane_lifecycle.zig`,
-`src/client/model/tests/tabs.zig`, and `src/client/workspace/` tests cover target
+`src/model/state/tests/tabs.zig`, and `src/client/workspace/` tests cover target
 resolution, no-ops, wire order, exact ownership and canonical repair.

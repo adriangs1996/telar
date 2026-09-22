@@ -1,3 +1,4 @@
+const data = @import("model");
 const Quad_module = @import("../render/Quad.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -128,7 +129,7 @@ test "Braille chrome preserves blank columns clipping colors and configured grid
     for ([_]f32{ 1, 2 }) |scale| {
         renderer.config.font = .{ .size = 22, .line_height = 0.75, .letter_spacing = -5, .thicken = true };
         _ = try renderer.measure(.{ .width = 800, .height = 600, .scale = scale });
-        var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = .{ 8, 12 }, .theme = client.theme_support.default_theme };
+        var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = .{ 8, 12 }, .theme = data.theme_support.default_theme };
         const area: core.Rect = .{ .x = 2, .y = 1, .w = 3, .h = 1 };
         const bounds = canvas.rect(area);
         const width: f32 = @floatFromInt(renderer.metrics.cell_width);

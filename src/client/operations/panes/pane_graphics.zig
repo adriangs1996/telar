@@ -1,14 +1,13 @@
 //! Reconciles retained resources and semantic fallbacks using concrete dependencies.
 
 const data = @import("model");
-const Model = @import("../../model/Model.zig");
 const GraphicsRetention = @import("../../graphics/GraphicsRetention.zig");
 
 const std = @import("std");
 const core = @import("telar-core");
 
 /// Reconciles all fallbacks when host support changes. Example: `syncFallbacks(model, graphics);`
-pub fn syncFallbacks(model: *Model, graphics: GraphicsRetention) void {
+pub fn syncFallbacks(model: *data.Model, graphics: GraphicsRetention) void {
     const fallback_required = model.hostCapabilities().images != .supported;
     var inspected: usize = 0;
     var tabs = model.workspace.tabIterator();

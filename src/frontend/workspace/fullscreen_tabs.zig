@@ -1,5 +1,6 @@
 //! Pane labels drawn inside the fullscreen border, in layout display order.
 
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Input = @import("Input.zig");
@@ -97,7 +98,7 @@ test "fullscreen tabs label every pane and highlight only the focused pane" {
     var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     buffer.fill(buffer.area(), .{ .glyph = "─", .style = .{} });
-    const palette = &client.theme_support.default_theme.palette;
+    const palette = &data.theme_support.default_theme.palette;
     const used = draw(&buffer, .{
         .area = buffer.area(),
         .names = &.{ "nvim", "claude", "" },
@@ -123,7 +124,7 @@ test "fullscreen tabs label every pane and highlight only the focused pane" {
 test "fullscreen tabs keep focus visible at every width within fixed pane bounds" {
     var buffer = try core.Buffer.init(std.testing.allocator, 82, 3);
     defer buffer.deinit();
-    const palette = &client.theme_support.default_theme.palette;
+    const palette = &data.theme_support.default_theme.palette;
     const names = [_][]const u8{"long-foreground-process-name"} ** core.max_panes_per_tab;
     for (0..names.len) |focused| {
         for (0..79) |width| {
@@ -162,7 +163,7 @@ test "fullscreen label plans retain bounded truncated Unicode text" {
                 .area = area,
                 .names = names,
                 .focused = focused,
-                .palette = &client.theme_support.default_theme.palette,
+                .palette = &data.theme_support.default_theme.palette,
             });
             try std.testing.expect(result.width <= width);
             var selected: usize = 0;
@@ -184,7 +185,7 @@ test "fullscreen tabs truncate Unicode names at grapheme boundaries" {
         .area = buffer.area(),
         .names = &.{ "界界界界界", "e\u{301}ditor-long" },
         .focused = 1,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
     });
 
     try std.testing.expectEqualStrings("界", buffer.at(3, 0).?.text());

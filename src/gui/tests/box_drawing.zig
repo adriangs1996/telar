@@ -1,3 +1,4 @@
+const data = @import("model");
 const Quad_module = @import("../render/Quad.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -142,7 +143,7 @@ test "chrome box strokes follow line height letter spacing and scale through the
             _ = try renderer.measure(.{ .width = 800, .height = 600, .scale = scale });
             var quads = QuadList.init(std.testing.allocator);
             defer quads.deinit();
-            var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = .{ 7, 11 }, .theme = client.theme_support.default_theme };
+            var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = .{ 7, 11 }, .theme = data.theme_support.default_theme };
             const area: core.Rect = .{ .x = 1, .y = 2, .w = 3, .h = 1 };
             const bounds = canvas.rect(area);
             try canvas.text(area, .{ .text = "│ │", .faint = true });

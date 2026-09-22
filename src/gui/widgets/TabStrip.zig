@@ -1,5 +1,6 @@
 //! The right-aligned tab group inside navigation. The active tab always fits
 //! and uses a neutral open-bottom shape, with attention represented by dots.
+const data = @import("model");
 const action_module = @import("action.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -205,7 +206,7 @@ fn width(strip: TabStrip, canvas: *Canvas, index: usize) !f32 {
     return @ceil(std.math.clamp(measured + icon_space + 2 * chrome.px(inset) + dot_space, chrome.px(96), chrome.px(180)));
 }
 
-fn drawIcon(canvas: *Canvas, icon: client.Icon, bounds: Rect) !void {
+fn drawIcon(canvas: *Canvas, icon: data.icons.Icon, bounds: Rect) !void {
     const provider: core.AgentProvider = switch (icon) {
         .provider_claude => .claude,
         .provider_codex => .codex,
@@ -220,7 +221,7 @@ fn drawIcon(canvas: *Canvas, icon: client.Icon, bounds: Rect) !void {
     try canvas.iconAt(bounds, .{ .text = icon.nerdGlyph(), .color = canvas.theme.palette.subtext0, .face = .sans, .size = .body });
 }
 
-fn text(storage: []u8, value: *const client.Tab, index: usize) []const u8 {
+fn text(storage: []u8, value: *const data.Tab, index: usize) []const u8 {
     return std.fmt.bufPrint(storage, "{d} {s}{s}", .{ index + 1, value.labelSlice(), if (value.model.layout.isFullscreen()) " \u{26f6}" else "" }) catch unreachable;
 }
 
@@ -245,7 +246,7 @@ pub fn firstVisible(active_index: usize, widths: []const f32, fit: StripFit) usi
 
 const inset: f32 = 12;
 
-fn previewOrder(order: []usize, tabs: *const client.TabsModel, move: client.TabMoveIntent) void {
+fn previewOrder(order: []usize, tabs: *const data.TabsModel, move: client.TabMoveIntent) void {
     if (!std.meta.eql(tabs.workspace, @as(?core.WorkspaceLocation, move.location.workspace))) {
         return;
     }

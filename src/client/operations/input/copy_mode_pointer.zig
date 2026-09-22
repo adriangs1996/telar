@@ -5,7 +5,6 @@ const core = @import("telar-core");
 const CopyModePointerCommand = @import("../../application/input/CopyModePointerCommand.zig");
 const copy_mode_pointer = @import("../../application/input/copy_mode_pointer.zig");
 const Client = @import("../../AttachedClient.zig");
-const MultiplexerModel = @import("../../workspace/MultiplexerModel.zig");
 const CopyModePointerContext = @import("CopyModePointerContext.zig");
 
 /// Gives copy mode first refusal for one cell-based pointer event.
@@ -13,7 +12,7 @@ const CopyModePointerContext = @import("CopyModePointerContext.zig");
 /// ```zig
 /// if (try apply(client, model, event)) return;
 /// ```
-pub fn apply(client: *Client, model: *MultiplexerModel, event: data.Mouse) !bool {
+pub fn apply(client: *Client, model: *data.MultiplexerModel, event: data.Mouse) !bool {
     var context: CopyModePointerContext = .{
         .client = client,
         .model = model,

@@ -1,13 +1,12 @@
 const data = @import("model");
 const std = @import("std");
-const GenericBinding = @import("GenericBinding.zig").Type;
 
 pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_keys: usize) type {
     if (max_bindings == 0 or max_bindings > std.math.maxInt(u16)) {
         @compileError("max_bindings must fit in a non-zero u16");
     }
 
-    const BindingType = GenericBinding(Action, max_keys);
+    const BindingType = data.GenericBinding(Action, max_keys);
     return struct {
         bindings: [max_bindings]BindingType = undefined,
         order: [max_bindings]u16 = undefined,

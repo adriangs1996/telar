@@ -1,8 +1,8 @@
 //! Wires semantic view interactions to existing client use cases.
 
+const data = @import("model");
 const view_interaction = @import("../../application/input/view_interaction.zig");
 const Client = @import("../../AttachedClient.zig");
-const MultiplexerModel = @import("../../workspace/MultiplexerModel.zig");
 const ViewInteractionCommand = @import("../../application/input/ViewInteractionCommand.zig");
 const ViewInteractionOutcome = @import("../../application/input/ViewInteractionOutcome.zig");
 const ViewInteractionsContext = @import("ViewInteractionsContext.zig");
@@ -14,7 +14,7 @@ const IntentOutcomeType = @import("../../application/input/IntentOutcome.zig");
 /// ```zig
 /// const outcome = try apply(client, model, interaction);
 /// ```
-pub fn apply(client: *Client, model: *MultiplexerModel, interaction: ViewInteractionCommand) !ViewInteractionOutcome {
+pub fn apply(client: *Client, model: *data.MultiplexerModel, interaction: ViewInteractionCommand) !ViewInteractionOutcome {
     var context: ViewInteractionsContext = .{
         .client = client,
         .model = model,

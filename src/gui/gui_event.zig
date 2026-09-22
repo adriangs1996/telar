@@ -14,7 +14,7 @@ pub const Message = union(enum) {
     notification_tick: anyerror!void,
     bar_tick: anyerror!void,
     bar_command: client.BarUpdatesCompletion,
-    plugin_result: client.PluginActionsCompletion,
+    plugin_result: shared_model.PluginActionsCompletion,
     path_completion: shared_model.PathCompletionCompletion,
     favicon: client.FaviconCompletion,
     diagram_ready,

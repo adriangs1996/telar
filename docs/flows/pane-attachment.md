@@ -52,5 +52,5 @@ The flow uses fixed request/outbox capacity and at most one pending attachment
 per pane. Tests in `src/frontend/client/tests/pane_lifecycle.zig`,
 `synchronization.zig` and `notifications_and_agents.zig` cover real correlation,
 late responses, ordering, recovery and failed recovery delivery. Model tests
-in `src/client/model/tests/panes.zig` and `tabs.zig` cover exact plans and
+in `src/model/state/tests/panes.zig` and `tabs.zig` cover exact plans and
 active-only confirmation.

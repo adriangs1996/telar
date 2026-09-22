@@ -42,6 +42,6 @@ and publishes the runtime notice. Reconnect rebuilds labels from snapshots.
 Source: `src/client/AttachedClient.zig` and
 `AttachedClient.inputPrompt`.
 Tests: `src/frontend/client/tests/renaming_and_telemetry.zig`,
-`tab_lifecycle.zig`, `src/client/model/tests/tabs.zig`, and
-`src/client/connection/outbox_support.zig` cover prompt lifetime, owned bytes,
+`tab_lifecycle.zig`, `src/model/state/tests/tabs.zig`, and
+`src/model/connection/outbox_support.zig` cover prompt lifetime, owned bytes,
 correlation, canonical no-ops and presentation boundaries.

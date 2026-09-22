@@ -1,4 +1,5 @@
 //! Resolved colors passed as data to the isolated diagram renderer.
+const data = @import("model");
 const client = @import("telar-client");
 const colors = @import("../render/cell_colors.zig");
 const Color = @import("../render/Color.zig");
@@ -9,7 +10,7 @@ fg: [3]u8,
 accent: [3]u8,
 
 /// Example: `const theme = Theme.init(canvas.theme);`
-pub fn init(theme: client.ColorTheme) Theme {
+pub fn init(theme: data.ColorTheme) Theme {
     const background = theme.terminal.background;
     const foreground = theme.terminal.foreground;
     return .{

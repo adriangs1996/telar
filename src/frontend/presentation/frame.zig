@@ -1,11 +1,12 @@
 //! Applies protocol frames to the client's terminal screen.
 
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const ScreenType = @import("Screen.zig");
 const std = @import("std");
 
-pub fn apply(screen: *ScreenType, frame: core.FrameView) !client.Applied {
+pub fn apply(screen: *ScreenType, frame: core.FrameView) !data.Applied {
     if (frame.base_frame_id == 0 and
         !screen.sizeMatches(frame.cols, frame.rows))
     {
@@ -14,7 +15,7 @@ pub fn apply(screen: *ScreenType, frame: core.FrameView) !client.Applied {
         return error.PatchSizeMismatch;
     }
 
-    var applied: client.Applied = .{};
+    var applied: data.Applied = .{};
     var spans = frame.spans();
     while (try spans.next()) |span| {
         applied.spans += 1;

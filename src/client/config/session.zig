@@ -4,7 +4,6 @@ const data = @import("model");
 const lua_api = @import("lua-api");
 const RuntimeSnapshotType = @import("RuntimeSnapshot.zig");
 const value = @import("lua_value.zig");
-const config_model = @import("model.zig");
 const std = @import("std");
 const OptionalBoolean = @import("OptionalBoolean.zig");
 
@@ -42,7 +41,7 @@ pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnos
         diagnostic.set("config.runtime.session.path is invalid", .{});
         return error.InvalidConfig;
     };
-    if (path.len == 0 or path.len > config_model.max_history_path_bytes or std.mem.indexOfScalar(u8, path, 0) != null) {
+    if (path.len == 0 or path.len > data.config_values.max_history_path_bytes or std.mem.indexOfScalar(u8, path, 0) != null) {
         diagnostic.set("config.runtime.session.path is invalid", .{});
         return error.InvalidConfig;
     }

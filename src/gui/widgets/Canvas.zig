@@ -1,5 +1,6 @@
 //! Native chrome drawing over the terminal atlas and the host's measured grid.
 //! Every primitive is clipped to its supplied area; no widget owns GPU resources.
+const data = @import("model");
 const GlyphAtlas = @import("../text/GlyphAtlas.zig");
 const assets = @import("assets");
 const QuadList = @import("../render/QuadList.zig");
@@ -30,7 +31,7 @@ atlas: *@import("../text/GlyphAtlas.zig"),
 quads: *@import("../render/QuadList.zig"),
 metrics: @import("../TerminalMetrics.zig"),
 origin: [2]u32,
-theme: client.ColorTheme,
+theme: data.ColorTheme,
 background_opacity: f32 = 1,
 /// Shared presentation time and next wake request; null for static consumers.
 animation: ?*@import("../animation/FrameClock.zig") = null,
@@ -414,7 +415,7 @@ test "chrome text clips graphemes preserves metrics and reuses the terminal atla
         .quads = &quads,
         .origin = .{ 8, 12 },
         .metrics = .{ .cell_width = 12, .cell_height = 24, .baseline = 18, .pixel_height = 16 },
-        .theme = client.theme_support.default_theme,
+        .theme = data.theme_support.default_theme,
     };
     const area: core.Rect = .{ .x = 2, .y = 3, .w = 3, .h = 1 };
     const label: Label = .{ .text = "e\u{301}界hidden", .underline = true };
@@ -442,7 +443,7 @@ test "fallback icons fit each chrome column with negative letter spacing" {
     _ = try renderer.measure(.{ .width = 800, .height = 600, .scale = 2 });
     var quads = QuadList.init(std.testing.allocator);
     defer quads.deinit();
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = .{ 8, 12 }, .theme = client.theme_support.default_theme };
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = .{ 8, 12 }, .theme = data.theme_support.default_theme };
     const area: core.Rect = .{ .x = 1, .y = 1, .w = 3, .h = 1 };
     try canvas.text(area, .{ .text = "\u{f07b}\u{f02db} " });
     try std.testing.expectEqual(@as(usize, 2), quads.items().len);
@@ -460,7 +461,7 @@ test "chrome icons track label size preserve aspect and reuse cached glyphs" {
     defer atlas.deinit();
     var quads = QuadList.init(std.testing.allocator);
     defer quads.deinit();
-    var canvas: Canvas = .{ .atlas = &atlas, .quads = &quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 }, .theme = client.theme_support.default_theme };
+    var canvas: Canvas = .{ .atlas = &atlas, .quads = &quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 }, .theme = data.theme_support.default_theme };
     for ([_]u16{ 11, 22, 33 }) |size| {
         canvas.chrome.small = size;
         const bounds: Rect = .{ .x = 20, .y = 30, .width = 60, .height = 60 };

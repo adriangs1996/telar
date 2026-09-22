@@ -5,5 +5,5 @@ const Preparation = @This();
 
 area: core.Rect,
 center: *const data.Center,
-palette: *const client.Palette,
-icon_theme: client.Theme = .unicode,
+palette: *const data.Palette,
+icon_theme: data.icons.Theme = .unicode,

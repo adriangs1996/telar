@@ -81,7 +81,7 @@ test "native chrome geometry gives the workbench every grid cell of every host" 
 test "native chrome maps tabs workspaces and sidebar controls to stable identities" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var workspaces: client.WorkspaceListSnapshot = .{};
+    var workspaces: data.WorkspaceListSnapshot = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/telar", .tab_count = 1 },
         .{ .workspace = @enumFromInt(9), .name = "server", .path = "/server", .tab_count = 1 },
@@ -130,7 +130,7 @@ test "native agent targets retain generation through scroll and snapshot replace
     defer fixture.deinit();
     // A short band forces the cards to scroll below their header.
     try fixture.resize(120, 9);
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     const entries = [_]data.AgentInput{
         .{ .key = .{ .pane_id = @enumFromInt(51), .pane_generation = 4 }, .location = Session.location, .pane_index = 1, .provider = .codex, .status = .working, .display_name = "Codex", .session_title = "Implement GUI", .workspace_label = "telar", .cwd_label = "/telar" },
         .{ .key = .{ .pane_id = @enumFromInt(52), .pane_generation = 8 }, .location = Session.location, .pane_index = 2, .provider = .claude, .status = .blocked, .display_name = "Claude" },
@@ -260,7 +260,7 @@ test "native pane presses focus before forwarding and chrome cancellation releas
 test "native workspace visibility follows available width and tiny bars stay within viewport" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var workspaces: client.WorkspaceListSnapshot = .{};
+    var workspaces: data.WorkspaceListSnapshot = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = @enumFromInt(1), .name = "long workspace one", .path = "/one", .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "long workspace two", .path = "/two", .tab_count = 1 },
@@ -290,8 +290,8 @@ test "native workspace visibility follows available width and tiny bars stay wit
 test "native configured bar segments preserve colors decorations and faint ink" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var state: client.State = .{};
-    var content: client.Content = .{};
+    var state: data.BarsState = .{};
+    var content: data.Content = .{};
     try content.append(.{ .text = "Styled", .style = .{
         .foreground = .{ .value = .{ .rgb = .{ 255, 0, 0 } } },
         .background = .{ .value = .{ .rgb = .{ 0, 255, 0 } } },
@@ -324,7 +324,7 @@ test "native configured bar segments preserve colors decorations and faint ink" 
 test "native sidebar ignores configured footer slots" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    var state: client.State = .{};
+    var state: data.BarsState = .{};
     var projection = fixture.projection();
     projection.bar_state = &state;
     try fixture.paint(projection);
@@ -332,7 +332,7 @@ test "native sidebar ignores configured footer slots" {
     const before = try std.testing.allocator.dupe(Quad.Quad, renderer.quads.items());
     defer std.testing.allocator.free(before);
 
-    var content: client.Content = .{};
+    var content: data.Content = .{};
     try content.append(.{ .text = "footer", .style = .{ .background = .{ .value = .{ .rgb = .{ 0, 0, 255 } } } } });
     state.layout.sidebar_footer = .{ .{ .content = content }, .empty, .metrics };
     try fixture.paint(projection);

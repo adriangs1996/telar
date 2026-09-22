@@ -1,6 +1,6 @@
-const CallbackRefType = @import("../bars/CallbackRef.zig");
+const data = @import("model");
 const BarCallbackContext = @import("BarCallbackContext.zig");
 const BarInvocation = @This();
 
-reference: CallbackRefType,
+reference: data.CallbackRef,
 context: BarCallbackContext,

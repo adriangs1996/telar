@@ -5,7 +5,6 @@ const PendingDeletionType = @import("PendingDeletion.zig");
 const catalog = @import("catalog.zig");
 const SnapshotType = @import("AttachmentSnapshot.zig");
 const ItemType = @import("Item.zig");
-const CaptureType = @import("Capture.zig");
 const MarkerScreenType = @import("MarkerScreen.zig");
 const markers = @import("markers.zig");
 const DeletionProbeType = @import("DeletionProbe.zig");
@@ -170,7 +169,7 @@ pub fn Type(comptime Delivery: type) type {
             return result;
         }
 
-        pub fn adopt(store: *Self, capture: *CaptureType) !void {
+        pub fn adopt(store: *Self, capture: *model_data.Capture) !void {
             if (capture.png.len == 0 or capture.png.len > model_data.attachment_types.max_png_bytes or
                 capture.width == 0 or capture.height == 0)
             {

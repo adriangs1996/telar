@@ -1,3 +1,4 @@
+const data = @import("model");
 const builtin = @import("builtin");
 const native = @import("../native/native.zig");
 const input_support = @import("input_support.zig");
@@ -7,7 +8,6 @@ const Session = @import("Session.zig");
 const Quad = @import("../render/Quad.zig").Quad;
 
 test "named theme reload changes chrome terminal colors and cursor without replacing the atlas" {
-    const client = @import("telar-client");
     var fixture = try Fixture.init("return { api_version = 2, theme = 'vesper' }", null);
     defer fixture.deinit();
     const session = fixture.session;
@@ -21,7 +21,7 @@ test "named theme reload changes chrome terminal colors and cursor without repla
     try std.testing.expect(try reload.apply(session.gui, &session.gui.renderer));
     try session.gui.resize(try session.gui.renderer.measure(Fixture.viewport), session.gui.renderer.theme);
     try present(session);
-    try std.testing.expectEqualDeep(client.theme_support.builtin(.catppuccin), session.gui.theme);
+    try std.testing.expectEqualDeep(data.theme_support.builtin(.catppuccin), session.gui.theme);
     try std.testing.expectEqualDeep(session.gui.theme.terminal, session.gui.renderer.theme);
     try std.testing.expectEqual(pixels, session.gui.renderer.atlas.?.pixels.ptr);
     try std.testing.expectEqual(version, session.gui.renderer.atlas_version);

@@ -28,7 +28,7 @@ allocator: std.mem.Allocator,
 /// renderer without one never looks for installed faces.
 io: ?std.Io = null,
 config: client.GuiConfig = .{},
-theme: client.TerminalTheme = client.theme_support.default_theme.terminal,
+theme: data.TerminalTheme = data.theme_support.default_theme.terminal,
 font: FontSource = .{},
 atlas: ?GlyphAtlas = null,
 /// Built with the atlas for the same display scale; favicons land in it
@@ -56,7 +56,7 @@ sprites_version: u32 = 0,
 last_sprites_version: u32 = 0,
 background: Color = .black,
 foreground: Color = .white,
-last_theme: ?client.TerminalTheme = null,
+last_theme: ?data.TerminalTheme = null,
 cursor_on: bool = true,
 focused: bool = true,
 
@@ -185,12 +185,12 @@ pub fn begin(renderer: *Renderer) void {
 
 /// Terminal-only preparation for renderer probes. The GUI composes its complete
 /// widget list in Scene instead. Example: `try renderer.prepare(projection);`
-pub fn prepare(renderer: *Renderer, projection: client.Projection) !client.PresentationCommit {
+pub fn prepare(renderer: *Renderer, projection: client.Projection) !data.PresentationCommit {
     renderer.begin();
     const model = projection.model orelse return .{};
     var layout: data.LayoutSnapshot = .{};
     model.layout.snapshot(projection.geometry.area, &layout);
-    var commit: client.PresentationCommit = .{ .location = model.location };
+    var commit: data.PresentationCommit = .{ .location = model.location };
     for (layout.views()) |view| {
         if (view.surface != .terminal) {
             continue;

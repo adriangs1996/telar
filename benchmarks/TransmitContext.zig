@@ -1,3 +1,4 @@
+const data = @import("model");
 const frontend = @import("telar-frontend");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -14,14 +15,14 @@ const raw_len = width * height * 4;
 
 gpa: std.mem.Allocator,
 store: frontend.Store,
-model: client.MultiplexerModel,
+model: data.MultiplexerModel,
 output: []u8,
 
 pub fn init(gpa: std.mem.Allocator, zlib: bool) !TransmitContext {
     var store = frontend.Store.init(gpa);
     errdefer store.deinit();
     store.delivery.host_zlib = zlib;
-    var model = client.MultiplexerModel.init(gpa);
+    var model = data.MultiplexerModel.init(gpa);
     errdefer model.deinit();
     const pane_id: core.PaneId = @enumFromInt(1);
     try model.addRoot(.{

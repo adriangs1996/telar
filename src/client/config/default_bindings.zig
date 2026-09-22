@@ -1,14 +1,12 @@
 //! Built-in keymap, kept declarative and separate from input dispatch.
 
 const data = @import("model");
-const GenericBinding = @import("../input/GenericBinding.zig").Type;
-const config_model = @import("model.zig");
 const Resolved = @import("Resolved.zig");
 const GenericKeymap = @import("../input/GenericKeymap.zig").Type;
 const std = @import("std");
 
 pub const count = 42;
-pub const Binding = GenericBinding(data.Action, config_model.max_binding_keys);
+pub const Binding = data.GenericBinding(data.Action, data.config_values.max_binding_keys);
 
 pub fn load(prefix: data.Key) ![count]Binding {
     return .{
@@ -83,7 +81,7 @@ pub fn load(prefix: data.Key) ![count]Binding {
 /// of the other. Dropping prefix conflicts too keeps the merged keymap free
 /// of the ambiguity the router rejects; every other default is appended.
 pub fn resolve(prefix: data.Key, configured: []const Binding) !Resolved {
-    if (configured.len > config_model.max_bindings) {
+    if (configured.len > data.config_values.max_bindings) {
         return error.TooManyBindings;
     }
 
@@ -103,7 +101,7 @@ pub fn resolve(prefix: data.Key, configured: []const Binding) !Resolved {
         if (overridden) {
             continue;
         }
-        if (resolved.len == config_model.max_bindings) {
+        if (resolved.len == data.config_values.max_bindings) {
             return error.TooManyBindings;
         }
         resolved.bindings[resolved.len] = default.*;
@@ -118,7 +116,7 @@ pub fn resolve(prefix: data.Key, configured: []const Binding) !Resolved {
 /// would reject fails here instead of at interactive startup.
 pub fn validate(prefix: data.Key, configured: []const Binding) !void {
     const resolved = try resolve(prefix, configured);
-    _ = try GenericKeymap(data.Action, config_model.max_bindings, config_model.max_binding_keys)
+    _ = try GenericKeymap(data.Action, data.config_values.max_bindings, data.config_values.max_binding_keys)
         .init(resolved.slice());
 }
 
@@ -240,7 +238,7 @@ test "resolving bindings enforces the router capacity" {
     const testing = std.testing;
     const prefix = try data.chord.parseKey("ctrl+s");
     const configured = try Binding.parse(&.{"ctrl+d"}, .detach);
-    const bindings: [config_model.max_bindings]Binding = @splat(configured);
+    const bindings: [data.config_values.max_bindings]Binding = @splat(configured);
 
     try testing.expectError(error.TooManyBindings, resolve(prefix, &bindings));
 }

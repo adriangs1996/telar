@@ -1,4 +1,5 @@
 //! A native progress capsule in pane chrome, never over terminal contents.
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -10,7 +11,7 @@ const ProgressMotions = @import("ProgressMotions.zig");
 const Clock = @import("../animation/FrameClock.zig");
 const Progress = @This();
 
-pane: *const client.Pane,
+pane: *const data.Pane,
 area: Rect,
 motions: ?*ProgressMotions = null,
 /// Tabs retain a ring when there is no room for a percentage beside the name.

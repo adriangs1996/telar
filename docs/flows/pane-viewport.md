@@ -43,7 +43,7 @@ operations do not invalidate presentation caches or schedule draws.
 This work performs bounded arithmetic and at most one viewport enqueue.
 Client death discards the attachment projection without changing the PTY.
 Source: `src/client/AttachedClient.zig`.
-Tests: `src/client/model/tests/input_and_frames.zig`,
+Tests: `src/model/state/tests/input_and_frames.zig`,
 `src/frontend/client/tests/host_interaction.zig`, `input.zig` and
 `mouse_selection.zig`; runtime attachment tests cover pinning and live-screen
 restoration.

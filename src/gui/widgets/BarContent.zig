@@ -1,3 +1,4 @@
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -6,7 +7,7 @@ const Strip = @import("Strip.zig");
 const Label = @import("Label.zig");
 const BarContent = @This();
 
-content: *const client.Content,
+content: *const data.Content,
 area: core.Rect,
 
 /// Draws validated Lua segments with the same palette roles as terminal cells.
@@ -59,7 +60,7 @@ pub fn draw(content: BarContent, canvas: *Canvas) !void {
     }
 }
 
-fn color(canvas: *const Canvas, value: client.Color) core.Color {
+fn color(canvas: *const Canvas, value: data.bar_values.Color) core.Color {
     return switch (value) {
         .value => |literal| literal,
         .palette => |role| switch (role) {
@@ -70,7 +71,7 @@ fn color(canvas: *const Canvas, value: client.Color) core.Color {
 
 /// Measures GUI icon slots, including Nerd Font glyphs embedded in Lua text.
 /// Example: `const columns = BarContent.columns(content);`
-pub fn columns(content: *const client.Content) u16 {
+pub fn columns(content: *const data.Content) u16 {
     var count: u16 = 0;
     for (content.slice()) |segment| {
         if (segment.icon != null) {

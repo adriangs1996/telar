@@ -1,45 +1,39 @@
-const icons = @import("../layout/icons.zig");
 const sidebar_rendering_module = @import("sidebar_rendering.zig");
 const data = @import("model");
-const ThemeType = @import("../appearance/Theme.zig");
-const theme_module = @import("../appearance/theme_support.zig");
-const model = @import("model.zig");
-const ConfigurationType = @import("../bars/Configuration.zig");
 const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
-const PluginSpec = @import("PluginSpec.zig");
 const Snapshot = @This();
 
-theme: ThemeType = theme_module.default_theme,
+theme: data.ColorTheme = data.theme_support.default_theme,
 gui: @import("GuiConfig.zig") = .{},
-icon_theme: icons.Theme = .unicode,
+icon_theme: data.icons.Theme = .unicode,
 sidebar_rendering: sidebar_rendering_module.SidebarRendering = .automatic,
 sidebar_visible: bool = true,
 pane_gaps: bool = true,
-editor_bytes: [model.max_editor_bytes]u8 = undefined,
+editor_bytes: [data.config_values.max_editor_bytes]u8 = undefined,
 editor_len: u16 = 0,
-window_title_bytes: [model.max_window_title_bytes]u8 = undefined,
+window_title_bytes: [data.config_values.max_window_title_bytes]u8 = undefined,
 window_title_len: u8 = 0,
 sound: data.SoundPolicy = .{},
 notification_delivery: data.NotificationDelivery = .telar,
 history_show_agent_commands: bool = false,
 history_enter_runs: bool = false,
 history_match_fts: bool = false,
-theme_light: ?ThemeType = null,
-theme_dark: ?ThemeType = null,
-bars: ConfigurationType = .{},
+theme_light: ?data.ColorTheme = null,
+theme_dark: ?data.ColorTheme = null,
+bars: data.BarConfiguration = .{},
 prefix: data.Key = data.keybind.default_prefix,
 input_escape_timeout_ns: u64 = data.keybind.default_escape_timeout_ns,
 input_sequence_timeout_ns: u64 = data.keybind.default_sequence_timeout_ns,
-bindings: [model.max_bindings]model.ConfiguredBinding = undefined,
-bindings_prefixed: [model.max_bindings]bool = undefined,
+bindings: [data.config_values.max_bindings]data.config_values.ConfiguredBinding = undefined,
+bindings_prefixed: [data.config_values.max_bindings]bool = undefined,
 binding_count: u16 = 0,
 runtime: RuntimeSnapshot = .{},
-plugins: [model.max_plugins]PluginSpec = undefined,
+plugins: [data.config_values.max_plugins]data.PluginSpec = undefined,
 plugin_count: u8 = 0,
 
 /// Resolves a complete theme with identical CLI/appearance precedence for both hosts.
 /// Example: `const theme = snapshot.resolveTheme(.dark, null);`
-pub fn resolveTheme(snapshot: *const Snapshot, appearance: data.HostAppearance, locked: ?ThemeType) ThemeType {
+pub fn resolveTheme(snapshot: *const Snapshot, appearance: data.HostAppearance, locked: ?data.ColorTheme) data.ColorTheme {
     return locked orelse (switch (appearance) {
         .unknown => null,
         .light => snapshot.theme_light,
@@ -47,7 +41,7 @@ pub fn resolveTheme(snapshot: *const Snapshot, appearance: data.HostAppearance, 
     } orelse snapshot.theme);
 }
 
-pub fn bindingSlice(snapshot: *const Snapshot) []const model.ConfiguredBinding {
+pub fn bindingSlice(snapshot: *const Snapshot) []const data.config_values.ConfiguredBinding {
     return snapshot.bindings[0..snapshot.binding_count];
 }
 

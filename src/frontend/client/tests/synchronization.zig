@@ -257,7 +257,7 @@ test "workspace handoff capacity failure preserves the source model" {
     try harness.bootstrap();
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
-    while (client.runtime_transport.outbox.len < client_module.capacity - 1) {
+    while (client.runtime_transport.outbox.len < data.outbox_support.capacity - 1) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version_before = client.model.version();
@@ -276,7 +276,7 @@ test "workspace handoff capacity failure preserves the source model" {
     try std.testing.expect(client.navigation_history.find(TestHarness.bootstrap_location.workspace) == null);
     try std.testing.expectEqual(next_request_id, client.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectEqual(client_module.capacity - 1, @as(usize, client.runtime_transport.outbox.len));
+    try std.testing.expectEqual(data.outbox_support.capacity - 1, @as(usize, client.runtime_transport.outbox.len));
 }
 
 test "workspace handoff request exhaustion preserves the source model" {
@@ -319,7 +319,7 @@ test "workspace handoff reserves its focus-out message" {
     const focus_in = try harness.nextClientMessage(&buffer);
     try std.testing.expect(focus_in == .pane_input);
     try std.testing.expectEqualStrings("\x1b[I", focus_in.pane_input.bytes);
-    while (client.runtime_transport.outbox.len < client_module.capacity - 2) {
+    while (client.runtime_transport.outbox.len < data.outbox_support.capacity - 2) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version = client.model.version();
@@ -350,7 +350,7 @@ test "workspace handoff reserves its captured paste closing marker" {
     const opening = try harness.nextClientMessage(&buffer);
     try std.testing.expect(opening == .pane_input);
     try std.testing.expectEqualStrings("\x1b[200~", opening.pane_input.bytes);
-    while (client.runtime_transport.outbox.len < client_module.capacity - 2) {
+    while (client.runtime_transport.outbox.len < data.outbox_support.capacity - 2) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version = client.model.version();
@@ -913,7 +913,7 @@ test "tab snapshot consumes an incompatible continuation before rejection" {
             .tab_snapshot = snapshot,
         },
     ));
-    try std.testing.expectEqualDeep(client_module.Version{}, client.model.version());
+    try std.testing.expectEqualDeep(data.Version{}, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
@@ -943,7 +943,7 @@ test "tab snapshot consumes a mismatched location before rejection" {
         ),
     );
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectEqualDeep(client_module.Version{}, client.model.version());
+    try std.testing.expectEqualDeep(data.Version{}, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
@@ -970,7 +970,7 @@ test "tab snapshot consumes correlation before a model rejection" {
         ),
     );
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectEqualDeep(client_module.Version{}, client.model.version());
+    try std.testing.expectEqualDeep(data.Version{}, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
@@ -1043,7 +1043,7 @@ test "workspace snapshot consumes an incompatible continuation before rejection"
             .workspace_snapshot = snapshot,
         },
     ));
-    try std.testing.expectEqualDeep(client_module.Version{}, client.model.version());
+    try std.testing.expectEqualDeep(data.Version{}, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
@@ -1078,7 +1078,7 @@ test "workspace snapshot consumes a mismatched workspace before rejection" {
         ),
     );
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectEqualDeep(client_module.Version{}, client.model.version());
+    try std.testing.expectEqualDeep(data.Version{}, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
@@ -1113,7 +1113,7 @@ test "workspace snapshot consumes correlation before a model rejection" {
         ),
     );
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectEqualDeep(client_module.Version{}, client.model.version());
+    try std.testing.expectEqualDeep(data.Version{}, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
@@ -1374,7 +1374,7 @@ test "resync outbox failure releases its snapshot correlation so a later notice 
     try std.testing.expectEqualDeep(version, client.model.version());
     try harness.settle();
     var outgoing: [256]u8 = undefined;
-    for (0..client_module.capacity) |_| {
+    for (0..data.outbox_support.capacity) |_| {
         try std.testing.expect((try harness.nextClientMessage(&outgoing)) == .detach_pane);
     }
 

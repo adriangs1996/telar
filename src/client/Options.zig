@@ -1,11 +1,6 @@
 const data = @import("model");
-const icons = @import("layout/icons.zig");
 const sidebar_rendering_module = @import("config/sidebar_rendering.zig");
 const core = @import("telar-core");
-const model = @import("config/model.zig");
-const ThemeType = @import("appearance/Theme.zig");
-const theme_support = @import("appearance/theme_support.zig");
-const LayoutType = @import("bars/BarLayout.zig");
 const GenerationType = @import("config/Generation.zig");
 const RegistryType = @import("plugins/Registry.zig");
 const std = @import("std");
@@ -17,15 +12,15 @@ endpoint: []const u8,
 /// Process environment used to expand `~` and `$VAR` in typed directories.
 environ: std.process.Environ = .empty,
 prefix: data.Key = data.keybind.default_prefix,
-bindings: []const model.ConfiguredBinding = &.{},
-theme: ThemeType = theme_support.default_theme,
+bindings: []const data.config_values.ConfiguredBinding = &.{},
+theme: data.ColorTheme = data.theme_support.default_theme,
 gui: @import("config/GuiConfig.zig") = .{},
-icon_theme: icons.Theme = .unicode,
+icon_theme: data.icons.Theme = .unicode,
 sidebar_rendering: sidebar_rendering_module.SidebarRendering = .automatic,
 sidebar_visible: bool = true,
 pane_gaps: bool = true,
 sound: data.SoundPolicy = .{},
-bars: LayoutType = .{},
+bars: data.BarLayout = .{},
 host_shared_memory: bool = false,
 input_escape_timeout_ns: u64 = data.keybind.default_escape_timeout_ns,
 input_sequence_timeout_ns: u64 = data.keybind.default_sequence_timeout_ns,

@@ -191,7 +191,7 @@ new notifications after reconciliation.
 - `src/frontend/notifications/` proves bounds, owned text, duplicate
   refresh, replacement, elapsed-time transitions, stale interaction and UTF-8
   handling.
-- `src/client/model/Model.zig` proves isolated notification versioning and
+- `src/model/state/Model.zig` proves isolated notification versioning and
   immutable snapshot access.
 - `src/model/application/notifications/notifications.zig` proves commit-before-
   timer-before-navigation ordering, delivery policy, stale interaction

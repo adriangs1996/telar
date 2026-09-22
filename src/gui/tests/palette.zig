@@ -233,7 +233,7 @@ test "suggestion states retain bounded controls and repaint without allocations"
     defer fixture.deinit();
     fixture.model.name_prompt.begin(.{ .palette = .suggest });
     _ = fixture.model.name_prompt.apply(.{ .insert = "find favicon" });
-    for ([_]@FieldType(client.SuggestionState, "phase"){ .idle, .waiting, .ready, .failed }) |phase| {
+    for ([_]@FieldType(data.SuggestionState, "phase"){ .idle, .waiting, .ready, .failed }) |phase| {
         fixture.model.suggestion.begin();
         if (phase != .idle) {
             fixture.model.suggestion.expect(8);

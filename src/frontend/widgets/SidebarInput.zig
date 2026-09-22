@@ -5,9 +5,9 @@ const State = @import("State.zig");
 const Input = @This();
 
 area: core.Rect,
-snapshot: *const client.AgentSnapshot,
+snapshot: *const data.AgentSnapshot,
 state: *State,
-active_model: ?*const client.MultiplexerModel = null,
+active_model: ?*const data.MultiplexerModel = null,
 focused_agent: ?data.AgentKey = null,
 transparent: bool,
 rounded_focus: bool = false,

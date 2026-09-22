@@ -20,7 +20,7 @@ pub fn begin(motions: *ProgressMotions) void {
 
 /// Samples one pane without retaining model pointers or scheduling idle frames.
 /// Example: `const filled = motions.fraction(pane, &clock);`
-pub fn fraction(motions: *ProgressMotions, pane: *const client.Pane, clock: *FrameClock) f32 {
+pub fn fraction(motions: *ProgressMotions, pane: *const data.Pane, clock: *FrameClock) f32 {
     const key: data.AgentKey = .{
         .pane_id = pane.id,
         .pane_generation = pane.attachment_generation,
@@ -77,8 +77,8 @@ fn remove(motions: *ProgressMotions, key: data.AgentKey) void {
     motions.seen[index] = motions.seen[motions.len];
 }
 
-fn testPane() !client.Pane {
-    return client.Pane.init(std.testing.allocator, .{
+fn testPane() !data.Pane {
+    return data.Pane.init(std.testing.allocator, .{
         .spec = .{
             .pane_id = @enumFromInt(1),
             .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },

@@ -54,7 +54,7 @@ selection. See [Client layout persistence](client-layout-persistence.md).
 
 ## Validation
 
-- `src/client/model/Model.zig` resolves exact generations and local or
+- `src/model/state/Model.zig` resolves exact generations and local or
   remote plans without exposing the agent replica.
 - `src/client/AttachedClient.zig` applies selection before
   focus and calls the concrete tab, focus and handoff operations.

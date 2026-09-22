@@ -161,7 +161,7 @@ fn captureSupported(_: *anyopaque) bool {
     return capture_module.platformSupported();
 }
 
-fn startCapture(context: *anyopaque, request: client_module.CaptureRequest) !void {
+fn startCapture(context: *anyopaque, request: data.CaptureRequest) !void {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
 
     try TerminalClient.of(client).inbox.start(.clipboard_image, .{ executeCapture, .{
@@ -171,7 +171,7 @@ fn startCapture(context: *anyopaque, request: client_module.CaptureRequest) !voi
     } });
 }
 
-fn executeCapture(gpa: std.mem.Allocator, request: client_module.CaptureRequest, orphan: *?*client_module.Capture) client_module.operations.ClipboardImageCompletion {
+fn executeCapture(gpa: std.mem.Allocator, request: data.CaptureRequest, orphan: *?*data.Capture) client_module.operations.ClipboardImageCompletion {
     return .{
         .execution_id = @enumFromInt(request.sequence),
         .result = capture_module.captureClipboard(gpa, request, orphan),
@@ -228,13 +228,13 @@ fn region(context: *anyopaque) data.Region {
     return TerminalClient.of(client).view.geometry();
 }
 
-fn setTheme(context: *anyopaque, theme: client_module.ColorTheme) void {
+fn setTheme(context: *anyopaque, theme: data.ColorTheme) void {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
 
     TerminalClient.of(client).view.setTheme(theme);
 }
 
-fn setIconTheme(context: *anyopaque, theme: client_module.Theme) void {
+fn setIconTheme(context: *anyopaque, theme: data.icons.Theme) void {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
 
     TerminalClient.of(client).view.setIconTheme(theme);
@@ -337,7 +337,7 @@ pub fn attachmentShelf(client: *client_module.AttachedClient) client_module.Atta
     };
 }
 
-fn adoptAttachment(context: *anyopaque, value: *client_module.Capture) !bool {
+fn adoptAttachment(context: *anyopaque, value: *data.Capture) !bool {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
 
     return TerminalClient.of(client).view.adoptAttachment(value);
@@ -492,7 +492,7 @@ fn startPluginWorker(context: *anyopaque, job: client_module.PluginActionsJob) !
     try TerminalClient.of(client).inbox.start(.plugin_result, .{ executePluginWorker, .{ client.io, client.gpa, job } });
 }
 
-fn executePluginWorker(io: std.Io, gpa: std.mem.Allocator, job: client_module.PluginActionsJob) client_module.PluginActionsCompletion {
+fn executePluginWorker(io: std.Io, gpa: std.mem.Allocator, job: client_module.PluginActionsJob) data.PluginActionsCompletion {
     return .{
         .execution_id = job.execution_id,
         .result = client_module.executeWorker(io, gpa, job.request),

@@ -1,6 +1,6 @@
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
-const Model = @import("model/Model.zig");
 const Client = @import("AttachedClient.zig");
 /// Preserves native reader admission and terminal copy-mode behavior.
 /// Example: `try agentReaders(enterCopyMode);`
@@ -8,7 +8,7 @@ pub fn agentReaders(comptime enter: fn (*Client) bool) !void {
     const app = try std.testing.allocator.create(Client);
     defer std.testing.allocator.destroy(app);
     app.* = undefined;
-    app.model = Model.init(std.testing.allocator, true);
+    app.model = data.Model.init(std.testing.allocator, true);
     defer app.model.deinit();
     const pane_id: core.PaneId = @enumFromInt(1);
     try app.model.workspace.bootstrap(

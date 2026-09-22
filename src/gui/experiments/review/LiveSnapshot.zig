@@ -1,4 +1,5 @@
 //! Owned immutable response prepared entirely off the input and rendering paths.
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const LiveResponse = @import("LiveResponse.zig");
@@ -10,7 +11,7 @@ pub const max_bytes = 256 * 1024;
 allocator: std.mem.Allocator,
 parsed: std.json.Parsed(LiveResponse),
 revisions: [2]client.ChangeReviewRevision = @splat(.{}),
-roles: [2][syntax_limits.source_bytes]client.SyntaxRole = undefined,
+roles: [2][syntax_limits.source_bytes]data.role.Role = undefined,
 
 /// Retains all JSON strings and computes syntax before publishing the snapshot.
 /// Example: `const snapshot = try LiveSnapshot.parse(io, allocator, bytes);`

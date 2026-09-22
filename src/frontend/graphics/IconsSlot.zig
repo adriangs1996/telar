@@ -1,7 +1,8 @@
+const data = @import("model");
 const client = @import("telar-client");
 const Slot = @This();
 
-icon: client.Icon,
+icon: data.icons.Icon,
 foreground: [3]u8,
 background: [3]u8,
 /// Cells the slot spans sideways. Glyphs take one; artwork may take two

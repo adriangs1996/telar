@@ -1,3 +1,4 @@
+const data = @import("model");
 const thread_selection = @import("../widgets/interaction/thread_selection.zig");
 const input_support = @import("input_support.zig");
 const std = @import("std");
@@ -340,7 +341,7 @@ test "animated return to the live tail adopts the latest snapshot without anothe
     const session = try fixture();
     defer session.deinit();
     const pane = session.gui.app.model.activeTabModel().?.find(Session.pane_id).?;
-    const window = try std.testing.allocator.create(client.AgentHistoryWindow);
+    const window = try std.testing.allocator.create(data.AgentHistoryWindow);
     window.start(pane.agent_thread.?, pane.history_generation);
     window.pages[0].has_before = false;
     pane.agent_history = window;

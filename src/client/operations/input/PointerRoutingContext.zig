@@ -1,6 +1,6 @@
+const data = @import("model");
 const Client = @import("../../AttachedClient.zig");
-const MultiplexerModel = @import("../../workspace/MultiplexerModel.zig");
 const Context = @This();
 
 client: *Client,
-model: ?*MultiplexerModel = null,
+model: ?*data.MultiplexerModel = null,

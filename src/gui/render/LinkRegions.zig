@@ -1,18 +1,19 @@
 //! Borrows one pane while enumerating the visible spans of its hovered link.
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Hit = @import("../input/LinkHit.zig");
 const Regions = @This();
 
 hit: *const Hit,
-pane: *const client.Pane,
+pane: *const data.Pane,
 metadata: core.TextMetadataView,
 runs: core.TextLinkRuns,
 row: u32,
 
 /// OSC 8 highlights every run of an identity; plain URLs follow soft wraps.
 /// Example: `var regions = Regions.init(hit, pane);`
-pub fn init(hit: *const Hit, pane: *const client.Pane) Regions {
+pub fn init(hit: *const Hit, pane: *const data.Pane) Regions {
     const metadata = pane.text_metadata.view();
     return .{ .hit = hit, .pane = pane, .metadata = metadata, .runs = metadata.runs(), .row = @max(hit.scroll_offset, hit.match.start.y) };
 }

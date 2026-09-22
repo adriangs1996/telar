@@ -1,8 +1,7 @@
-const CommandExecution = @import("CommandExecution.zig");
-const CommandType = @import("../../bars/BarCommand.zig");
+const data = @import("model");
 const OutputType = @import("../../bars/Output.zig");
 const CommandOutput = @This();
 
-execution: CommandExecution,
-command: CommandType,
+execution: data.CommandExecution,
+command: data.BarCommand,
 output: OutputType,

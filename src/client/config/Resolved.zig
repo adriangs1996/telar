@@ -1,8 +1,8 @@
-const config_model = @import("model.zig");
+const data = @import("model");
 const default_bindings = @import("default_bindings.zig");
 const Resolved = @This();
 
-bindings: [config_model.max_bindings]default_bindings.Binding = undefined,
+bindings: [data.config_values.max_bindings]default_bindings.Binding = undefined,
 len: u16 = 0,
 
 pub fn slice(resolved: *const Resolved) []const default_bindings.Binding {

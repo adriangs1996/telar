@@ -187,7 +187,6 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         .{ .path = "src/client/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/backend/history/escape.zig" },
         .{ .path = "src/backend/runtime/observability/system_metrics.zig" },
-        .{ .path = "src/client/workspace/workspace_list.zig" },
         .{ .path = "src/backend/proxy_test.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/pane/blit.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/pane/damage.zig" },

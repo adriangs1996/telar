@@ -1,15 +1,14 @@
 //! Captures layout versions and serializes model state into caller-owned buffers.
+const data = @import("model");
 const core = @import("telar-core");
-const Model = @import("../model/Model.zig");
 
-const Version = @import("Version.zig");
 const std = @import("std");
 
 /// Captures revisions of loaded tabs; an empty workspace has no export.
 /// Example: `const version = client_layouts.captureVersion(model) orelse return;`
-pub fn captureVersion(model: *Model) ?Version {
+pub fn captureVersion(model: *data.Model) ?data.LayoutSyncVersion {
     const active_tab = model.activeTabLocation() orelse return null;
-    var version: Version = .{
+    var version: data.LayoutSyncVersion = .{
         .chrome = model.version().chrome,
         .active_tab = active_tab,
     };
@@ -34,7 +33,7 @@ pub fn captureVersion(model: *Model) ?Version {
 
 /// Writes a bounded layout snapshot into caller-owned node and tab buffers.
 /// Example: `const update = client_layouts.buildUpdate(model, &nodes, &tabs) orelse return;`
-pub fn buildUpdate(model: *Model, nodes: *[core.max_client_layout_nodes]core.ClientLayoutNode, output: *[core.max_client_layout_tabs]core.ClientTabLayout) ?core.ClientLayoutUpdate {
+pub fn buildUpdate(model: *data.Model, nodes: *[core.max_client_layout_nodes]core.ClientLayoutNode, output: *[core.max_client_layout_tabs]core.ClientTabLayout) ?core.ClientLayoutUpdate {
     const active_tab = model.activeTabLocation() orelse return null;
     var scratch: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
     var node_count: usize = 0;

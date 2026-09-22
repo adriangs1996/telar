@@ -59,7 +59,7 @@ test "resolved configuration adoption crosses delivery before watcher rearm" {
     try std.testing.expectEqual(@as(u64, 1), outcome.adopted.generation);
     try std.testing.expect(client.lua_generation == generation);
     try std.testing.expectEqual(@as(i128, 19), client.reload.mtime_ns);
-    try std.testing.expectEqual(client_module.Version{
+    try std.testing.expectEqual(data.Version{
         .configuration = 1,
         .notifications = 1,
     }, client.model.version());
@@ -121,7 +121,7 @@ test "configuration adoption swaps ownership after commit and presents by versio
     try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
 
     // Check adoption before queued notification ticks can advance its revision.
-    try std.testing.expectEqual(client_module.Version{
+    try std.testing.expectEqual(data.Version{
         .configuration = 2,
         .diagnostic = 2,
         .notifications = 2,
@@ -173,7 +173,7 @@ test "configuration adoption keeps new ownership after geometry failure" {
     try std.testing.expect(!client.model.sidebarVisible());
     try std.testing.expect(!client.model.paneGaps());
     try std.testing.expect(!TerminalClient.of(client).view.sidebar_requested);
-    try std.testing.expectEqual(@as(usize, client_module.capacity), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, data.outbox_support.capacity), client.runtime_transport.outbox.len);
 }
 
 test "a configuration version alone schedules presenter observation" {
@@ -189,7 +189,7 @@ test "a configuration version alone schedules presenter observation" {
         .pane_gaps = true,
     });
 
-    try std.testing.expectEqual(client_module.Version{ .configuration = 1 }, client.model.version());
+    try std.testing.expectEqual(data.Version{ .configuration = 1 }, client.model.version());
     try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
@@ -326,7 +326,7 @@ test "plugin completion applies one authorized batch through model observation" 
 
     const exit = try client.completePluginAction(.{
         .execution_id = execution.id,
-        .result = client_module.WorkerResult{
+        .result = data.WorkerResult{
             .package_index = 0,
             .plugin_id = installed.action.plugin,
             .digest = installed.digest,
@@ -369,7 +369,7 @@ test "plugin completion from an old configuration is consumed without effects" {
 
     const exit = try client.completePluginAction(.{
         .execution_id = execution.id,
-        .result = client_module.WorkerResult{
+        .result = data.WorkerResult{
             .package_index = 0,
             .plugin_id = installed.action.plugin,
             .digest = installed.digest,
@@ -401,7 +401,7 @@ test "plugin authorization denial consumes the run before publishing failure" {
 
     const exit = try client.completePluginAction(.{
         .execution_id = execution.id,
-        .result = client_module.WorkerResult{
+        .result = data.WorkerResult{
             .package_index = 0,
             .plugin_id = installed.action.plugin,
             .digest = installed.digest,
@@ -749,7 +749,7 @@ test "attachment modal captures semantic keys until escape closes it" {
     try harness.bootstrap();
     const client = harness.client;
     const target = try support.installTestingAttachmentTarget(client, 1);
-    const capture = try client.gpa.create(client_module.Capture);
+    const capture = try client.gpa.create(data.Capture);
     capture.* = .{
         .request = .{ .target = target, .sequence = 81 },
         .png = try client.gpa.dupe(u8, "png"),
@@ -978,7 +978,7 @@ test "bar configuration excludes Lua sources from a different model generation" 
         },
     );
     try std.testing.expect(client.barConfiguration() == null);
-    client.bar_updates.pending_callbacks = client_module.Position.bottom_left.bit();
+    client.bar_updates.pending_callbacks = data.bar_values.Position.bottom_left.bit();
     try client.synchronizeBars();
     try std.testing.expectEqual(@as(u8, 0), client.bar_updates.pending_callbacks);
     try std.testing.expect(client.bar_updates.nextDeadline() == null);

@@ -78,7 +78,7 @@ pub fn desiredWidth(metrics: ?Metrics) u16 {
     return width;
 }
 
-fn iconWidth(icon: client.Icon) u16 {
+fn iconWidth(icon: data.icons.Icon) u16 {
     return @max(@as(u16, 1), core.measure(icon.unicodeGlyph()));
 }
 
@@ -219,7 +219,7 @@ test "mode bars render prefix and copy hints" {
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .hovered = null,
     };
     var hints: client.Hints = .{};

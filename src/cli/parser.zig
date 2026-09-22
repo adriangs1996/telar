@@ -1,5 +1,6 @@
 //! CLI command selection; each grammar owns its options and validation.
 
+const data = @import("model");
 const client_module = @import("telar-client");
 const core = @import("telar-core");
 const DiagnosticsOptions = @import("arguments/DiagnosticsOptions.zig");
@@ -179,7 +180,7 @@ test "CLI defaults to the configured shell" {
     const cli = try Cli.parse(&args, .empty);
     try std.testing.expect(cli == .run);
     try std.testing.expect(cli.run.command.argv[0] != null);
-    try std.testing.expectEqual(client_module.theme_support.Builtin.shade, cli.run.theme.base);
+    try std.testing.expectEqual(data.theme_support.Builtin.shade, cli.run.theme.base);
 }
 
 test "CLI forwards a command without a shell" {
@@ -200,14 +201,14 @@ test "CLI delimiter permits option-shaped commands" {
 test "CLI selects a built-in theme before the command" {
     const args = [_][*:0]const u8{ "telar", "--theme=catppuccin", "/bin/sh" };
     const cli = try Cli.parse(&args, .empty);
-    try std.testing.expectEqual(client_module.theme_support.Builtin.catppuccin, cli.run.theme.base);
+    try std.testing.expectEqual(data.theme_support.Builtin.catppuccin, cli.run.theme.base);
     try std.testing.expectEqualStrings("/bin/sh", std.mem.span(cli.run.command.file));
 }
 
 test "CLI runs the default shell when only a theme is provided" {
     const args = [_][*:0]const u8{ "telar", "--theme", "tokyonight" };
     const cli = try Cli.parse(&args, .empty);
-    try std.testing.expectEqual(client_module.theme_support.Builtin.tokyo_night, cli.run.theme.base);
+    try std.testing.expectEqual(data.theme_support.Builtin.tokyo_night, cli.run.theme.base);
     try std.testing.expect(cli.run.command.argv[0] != null);
 }
 

@@ -157,7 +157,7 @@ fn levelColor(context: *const ContextType, level: data.NotificationLevel) core.C
 
 test "toast cards register activation and a separate close target" {
     const std = std_module;
-    const theme = client.theme_support;
+    const theme = data.theme_support;
     var buffer = try core.Buffer.init(std.testing.allocator, 80, 24);
     defer buffer.deinit();
     var hits: widget.Hits = .{};

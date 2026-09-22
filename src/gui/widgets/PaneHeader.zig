@@ -15,8 +15,8 @@ const ChangeReviewButton = @import("ChangeReviewButton.zig");
 const PaneHeader = @This();
 
 context: *const Context,
-pane: *const client.Pane,
-agent: ?*const client.Agent,
+pane: *const data.Pane,
+agent: ?*const data.Agent,
 index: u16,
 area: Rect,
 
@@ -102,7 +102,7 @@ fn workingLabel(storage: []u8, seconds: u32) []const u8 {
 }
 
 test "pane header duration advances with the card clock between runtime reports" {
-    var agents: client.AgentSnapshot = .{};
+    var agents: data.AgentSnapshot = .{};
     const input: data.AgentInput = .{
         .key = .{
             .pane_id = @enumFromInt(1),

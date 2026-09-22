@@ -1,4 +1,5 @@
 //! Composes and draws one widget list during a synchronous semantic-model borrow.
+const data = @import("model");
 const ImagePreview = @import("../widgets/overlays/ImagePreview.zig");
 const client = @import("telar-client");
 const Canvas = @import("../widgets/Canvas.zig");
@@ -10,7 +11,7 @@ const Scene = @This();
 terminal: *@import("TerminalRenderer.zig"),
 chrome: *@import("../widgets/Chrome.zig"),
 overlays: *@import("../widgets/overlays/Overlays.zig"),
-theme: client.ColorTheme,
+theme: data.ColorTheme,
 link: ?*const @import("../input/LinkHit.zig") = null,
 widgets: ?*@import("../widgets/interaction/State.zig") = null,
 diagrams: ?*@import("../diagrams/Store.zig") = null,
@@ -19,7 +20,7 @@ review: ?*ReviewWidget = null,
 
 /// Nothing retained by a layer may borrow the projection after this returns.
 /// Example: `const commit = try scene.prepare(projection);`
-pub fn prepare(scene: *Scene, projection: client.Projection) !client.PresentationCommit {
+pub fn prepare(scene: *Scene, projection: client.Projection) !data.PresentationCommit {
     const renderer = scene.terminal;
     renderer.begin();
     scene.chrome.animation.begin(scene.chrome.now_ns);

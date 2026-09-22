@@ -1,6 +1,7 @@
 //! Slice 7 of the GUI visual language: three chrome text sizes derived from
 //! the terminal size, scaled by `gui.chrome.scale`, shaped side by side in
 //! one atlas without touching the cell grid.
+const data = @import("model");
 const QuadList = @import("../render/QuadList.zig");
 const label_size = @import("../widgets/label_size.zig");
 const std = @import("std");
@@ -106,7 +107,7 @@ test "the chrome scale enlarges chrome labels and cards but not the PTY grid" {
         const base_card = CardGeometry.derive(base, renderer.metrics);
         var quads = QuadList.init(std.testing.allocator);
         defer quads.deinit();
-        var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = client.theme_support.default_theme, .chrome = base, .viewport = renderer.viewport };
+        var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = data.theme_support.default_theme, .chrome = base, .viewport = renderer.viewport };
         const base_width = try canvas.measure(.{ .text = "agents", .face = .sans, .size = .body });
 
         renderer.config.chrome = .{ .scale = 1.5 };

@@ -1,4 +1,5 @@
 //! Called only by the observation worker. Rendering consumes retained roles.
+const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
 const client = @import("telar-client");
@@ -16,7 +17,7 @@ extern fn telar_syntax_prepare(language: [*:0]const u8) u32;
 allocator: std.mem.Allocator,
 io: std.Io,
 text: []const u8,
-roles: []client.SyntaxRole,
+roles: []data.role.Role,
 spans: []CapturedSpan = &.{},
 language: client.syntax_language.Language = .plain,
 started: std.Io.Timestamp = .{ .nanoseconds = 0 },

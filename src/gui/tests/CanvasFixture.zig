@@ -1,4 +1,5 @@
 //! A chrome canvas over the embedded JetBrains Mono atlas, without a session.
+const data = @import("model");
 const assets = @import("assets");
 const ChromeMetrics = @import("../widgets/ChromeMetrics.zig");
 const std = @import("std");
@@ -31,7 +32,7 @@ pub fn canvas(fixture: *Fixture) Canvas {
         .quads = &fixture.quads,
         .origin = .{ 8, 12 },
         .metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 },
-        .theme = client.theme_support.default_theme,
+        .theme = data.theme_support.default_theme,
         .chrome = ChromeMetrics.resolve(.{}, 1),
     };
 }

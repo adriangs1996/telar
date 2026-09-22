@@ -7,6 +7,7 @@
 //! host paints, including one Telar does not know. Cell fallbacks remain
 //! underneath every placement.
 
+const data = @import("model");
 const assets = @import("assets");
 const client = @import("telar-client");
 const std = @import("std");
@@ -72,7 +73,7 @@ pub fn ensureSlot(slots: *[ui_icons.max_marks]IconsSlot, count: *u8, wanted: Ico
     return added;
 }
 
-pub fn isWorkingIcon(icon: client.Icon) bool {
+pub fn isWorkingIcon(icon: data.icons.Icon) bool {
     return switch (icon) {
         .agent_working_0,
         .agent_working_1,
@@ -245,8 +246,8 @@ test "embedded subset rasterizes every configured Nerd Font icon" {
     defer renderer.deinit();
     try std.testing.expect(renderer.text != null);
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var marks: [std.meta.fields(client.Icon).len]MarkType = undefined;
-    inline for (std.meta.fields(client.Icon), 0..) |field, index| {
+    var marks: [std.meta.fields(data.icons.Icon).len]MarkType = undefined;
+    inline for (std.meta.fields(data.icons.Icon), 0..) |field, index| {
         marks[index] = .{
             .area = .{ .x = @intCast(index), .w = 1, .h = 1 },
             .icon = @enumFromInt(field.value),

@@ -140,7 +140,7 @@ test "shelf publishes one bounded image placement and two hit targets" {
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &client.theme_support.default_theme.palette,
+        .palette = &data.theme_support.default_theme.palette,
         .hovered = null,
     };
     var snapshot: client.AttachmentSnapshot = .{ .len = 1 };
@@ -154,7 +154,7 @@ test "cell modal draws a connected border" {
     var buffer = try core.Buffer.init(std.testing.allocator, 40, 10);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    const palette = &client.theme_support.default_theme.palette;
+    const palette = &data.theme_support.default_theme.palette;
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -190,7 +190,7 @@ test "graphical modal leaves corner cells to its rounded frame" {
     defer buffer.deinit();
     buffer.fill(buffer.area(), .{ .glyph = ".", .style = .{} });
     var hits: widget.Hits = .{};
-    const palette = &client.theme_support.default_theme.palette;
+    const palette = &data.theme_support.default_theme.palette;
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,

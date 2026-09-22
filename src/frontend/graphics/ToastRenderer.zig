@@ -498,7 +498,7 @@ fn renderSlot(renderer: *Renderer, rendering: SlotRender) !void {
         _ = try icons.drawText(.{
             .surface = surface,
             .origin = .{ .x = close_x, .y = toast.baseline(icons.metrics(), 0, renderer.cell_height) },
-            .text = client.Icon.close.nerdGlyph(),
+            .text = data.icons.Icon.close.nerdGlyph(),
             .color = accent,
             .max_width = @as(u32, renderer.cell_width) * 2,
         });
@@ -506,7 +506,7 @@ fn renderSlot(renderer: *Renderer, rendering: SlotRender) !void {
         _ = try text.drawText(.{
             .surface = surface,
             .origin = .{ .x = close_x, .y = toast.baseline(metrics, 0, renderer.cell_height) },
-            .text = client.Icon.close.unicodeGlyph(),
+            .text = data.icons.Icon.close.unicodeGlyph(),
             .color = accent,
             .max_width = @as(u32, renderer.cell_width) * 2,
         });

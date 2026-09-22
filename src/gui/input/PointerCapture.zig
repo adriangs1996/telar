@@ -68,7 +68,7 @@ pub fn deliver(capture: *Capture, app: *client.AttachedClient, event: data.Mouse
     projected.y = std.math.clamp(event.y, content.y, content.y + content.h - 1);
     projected.raw_x = std.math.clamp(event.raw_x, @as(u32, content.x) * capture.cell_width, @as(u32, content.x + content.w) * capture.cell_width - 1);
     projected.raw_y = std.math.clamp(event.raw_y, @as(u32, content.y) * capture.cell_height, @as(u32, content.y + content.h) * capture.cell_height - 1);
-    const plan = client.MultiplexerModel.paneMousePlan(pane, content);
+    const plan = data.MultiplexerModel.paneMousePlan(pane, content);
     if (plan.pane_id != capture.pane_id or !plan.protocol.sgr or plan.protocol.tracking == .none or plan.protocol.tracking == .x10 or (event.kind == .drag and plan.protocol.tracking == .normal)) {
         return;
     }

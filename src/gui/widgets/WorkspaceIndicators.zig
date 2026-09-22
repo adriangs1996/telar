@@ -1,5 +1,6 @@
 //! Compact numbered project marks in runtime order, with no tab-like surfaces.
 //! Overflow is used only when the available pixels cannot hold every project.
+const data = @import("model");
 const AgentCard = @import("AgentCard.zig");
 const std = @import("std");
 const client = @import("telar-client");
@@ -163,7 +164,7 @@ fn drawAttention(indicators: WorkspaceIndicators, canvas: *Canvas, color: core.C
 
 fn hiddenDot(indicators: WorkspaceIndicators, canvas: *const Canvas, range: [2]usize) ?core.Color {
     const projection = indicators.context.projection;
-    var urgent: ?*const client.Agent = null;
+    var urgent: ?*const data.Agent = null;
     for (projection.agents.slice()) |*agent| {
         if (!attention.needsInput(agent.status)) {
             continue;

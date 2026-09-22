@@ -54,9 +54,9 @@ with the default expanded list; no runtime process or PTY is affected.
 
 ## Proof
 
-- `src/client/model/Model.zig` proves collapse ownership, no-op assignment
+- `src/model/state/Model.zig` proves collapse ownership, no-op assignment
   and chrome-revision isolation.
-- `src/client/model/tests/configuration_and_host.zig` proves the use
+- `src/model/state/tests/configuration_and_host.zig` proves the use
   case changes only committed client state.
 - `src/frontend/client/presentation/view.zig` proves top-bar clicks return intent without
   mutating the projection.

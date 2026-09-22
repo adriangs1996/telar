@@ -1,3 +1,4 @@
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const kitty_protocol = @import("kitty_protocol");
@@ -72,7 +73,7 @@ pub fn configure(renderer: *Renderer, configuration: client.SidebarRendererInput
 /// Rasterizes the bounded, owned label snapshot only on the media pass.
 /// Position-only changes reuse the image; text, focus or theme replace it.
 /// Example: `renderer.prepare(plan, palette);`.
-pub fn prepare(renderer: *Renderer, plan: *const PlanType, palette: *const client.Palette) void {
+pub fn prepare(renderer: *Renderer, plan: *const PlanType, palette: *const data.Palette) void {
     const key = renderer.renderKey(plan, palette) orelse {
         renderer.hide();
         return;
@@ -107,7 +108,7 @@ pub fn prepare(renderer: *Renderer, plan: *const PlanType, palette: *const clien
 
 /// Only exact text, focus, theme and geometry may replace fallback cells.
 /// Example: `if (renderer.covers(plan, palette)) hideCellLabels();`.
-pub fn covers(renderer: *const Renderer, plan: *const PlanType, palette: *const client.Palette) bool {
+pub fn covers(renderer: *const Renderer, plan: *const PlanType, palette: *const data.Palette) bool {
     const key = renderer.renderKey(plan, palette) orelse return false;
     return renderer.matches(plan, key) and !renderer.failed and !renderer.transferInProgress() and
         renderer.image_emitted and !renderer.image_dirty and renderer.generation == renderer.emitted_generation and
@@ -118,7 +119,7 @@ pub fn covers(renderer: *const Renderer, plan: *const PlanType, palette: *const 
 /// Keeps small-font text visible while only its selection is being replaced.
 /// Unlike covers, this permits the previous focus but never stale text or geometry.
 /// Example: `if (renderer.coversText(plan, palette)) hideCellLabels();`.
-pub fn coversText(renderer: *const Renderer, plan: *const PlanType, palette: *const client.Palette) bool {
+pub fn coversText(renderer: *const Renderer, plan: *const PlanType, palette: *const data.Palette) bool {
     const key = renderer.renderKey(plan, palette) orelse return false;
     return !renderer.failed and renderer.image_emitted and
         std.meta.eql(renderer.desired, @as(?core.Rect, plan.area)) and renderer.emittedTextMatches(plan, key);
@@ -126,7 +127,7 @@ pub fn coversText(renderer: *const Renderer, plan: *const PlanType, palette: *co
 
 /// Retires stale text before the next cell frame, without rasterization.
 /// Example: `renderer.observe(plan, palette);`.
-pub fn observe(renderer: *Renderer, plan: *const PlanType, palette: *const client.Palette) void {
+pub fn observe(renderer: *Renderer, plan: *const PlanType, palette: *const data.Palette) void {
     const key = renderer.renderKey(plan, palette) orelse {
         renderer.hide();
         return;
@@ -272,7 +273,7 @@ fn matches(renderer: *const Renderer, plan: *const PlanType, key: Key) bool {
     return renderer.key != null and std.meta.eql(renderer.key.?, key) and renderer.plan.sameContent(plan);
 }
 
-fn renderKey(renderer: *const Renderer, plan: *const PlanType, palette: *const client.Palette) ?Key {
+fn renderKey(renderer: *const Renderer, plan: *const PlanType, palette: *const data.Palette) ?Key {
     if (!renderer.supported or renderer.cell_width == 0 or renderer.cell_height < 8 or renderer.cell_height > 256 or
         plan.len == 0 or plan.len > core.max_panes_per_tab or plan.area.h != 1 or plan.area.w == 0 or
         palette.accent != .rgb or palette.surface_dim != .rgb or palette.subtext0 != .rgb)

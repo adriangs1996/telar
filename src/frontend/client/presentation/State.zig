@@ -33,8 +33,8 @@ const State = @This();
 scratch: core.Buffer,
 regions: LayoutRegions,
 geometry_state: client.WorkspaceState,
-theme: client.ColorTheme,
-icon_theme: client.Theme,
+theme: data.ColorTheme,
+icon_theme: data.icons.Theme,
 hits: context_support.Hits = .{},
 tab_drag: @import("TabDrag.zig") = .{},
 sidebar_requested: bool = true,
@@ -64,7 +64,7 @@ cell_height_px: u16 = 0,
 modal_overlay_area: core.Rect = .{},
 
 pub fn init(gpa: std.mem.Allocator, width: u16, height: u16) !State {
-    return initWithTheme(gpa, .{ .width = width, .height = height }, client.theme_support.default_theme);
+    return initWithTheme(gpa, .{ .width = width, .height = height }, data.theme_support.default_theme);
 }
 
 /// Initializes view state with a selected color theme.
@@ -72,7 +72,7 @@ pub fn init(gpa: std.mem.Allocator, width: u16, height: u16) !State {
 /// ```zig
 /// var view = try State.initWithTheme(gpa, .{ .width = 80, .height = 24 }, theme);
 /// ```
-pub fn initWithTheme(gpa: std.mem.Allocator, dimensions: Dimensions, selected_theme: client.ColorTheme) !State {
+pub fn initWithTheme(gpa: std.mem.Allocator, dimensions: Dimensions, selected_theme: data.ColorTheme) !State {
     return initWithAppearance(gpa, dimensions, .{ .theme = selected_theme });
 }
 
@@ -150,17 +150,17 @@ fn recalculateRegions(state: *State, width: u16, height: u16) void {
     state.geometry_state.update(state.regions.workbench);
 }
 
-pub fn palette(state: *const State) *const client.Palette {
+pub fn palette(state: *const State) *const data.Palette {
     return &state.theme.palette;
 }
 
-pub fn setTheme(state: *State, selected_theme: client.ColorTheme) void {
+pub fn setTheme(state: *State, selected_theme: data.ColorTheme) void {
     state.theme = selected_theme;
     state.hovered = null;
     state.dirty = true;
 }
 
-pub fn setIconTheme(state: *State, selected_theme: client.Theme) void {
+pub fn setIconTheme(state: *State, selected_theme: data.icons.Theme) void {
     if (state.icon_theme == selected_theme) {
         return;
     }
@@ -328,7 +328,7 @@ pub fn syncAttachmentTarget(state: *State, target: ?data.AttachmentTarget) bool 
     return change.layout_changed;
 }
 
-pub fn adoptAttachment(state: *State, capture: *client.Capture) !bool {
+pub fn adoptAttachment(state: *State, capture: *data.Capture) !bool {
     const had_items = state.attachment_store.hasVisibleItems();
     try state.attachment_store.adopt(capture);
     const has_items = state.attachment_store.hasVisibleItems();

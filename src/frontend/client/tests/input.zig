@@ -21,7 +21,7 @@ test "closing a preview deletes its matching atomic image marker" {
     const client = harness.client;
     const target = try support.installTestingAttachmentTarget(client, 1);
     for (1..3) |sequence| {
-        const capture = try client.gpa.create(client_module.Capture);
+        const capture = try client.gpa.create(data.Capture);
         capture.* = .{
             .request = .{ .target = target, .sequence = sequence },
             .png = try client.gpa.dupe(u8, "png"),
@@ -66,7 +66,7 @@ test "child marker deletion and prompt submission retire paired previews" {
     try harness.bootstrap();
     const client = harness.client;
     const target = try support.installTestingAttachmentTarget(client, 1);
-    const capture = try client.gpa.create(client_module.Capture);
+    const capture = try client.gpa.create(data.Capture);
     capture.* = .{
         .request = .{ .target = target, .sequence = 1 },
         .png = try client.gpa.dupe(u8, "png"),
@@ -108,7 +108,7 @@ test "Claude marker disappearance in a committed frame retires its paired previe
     try harness.bootstrap();
     const client = harness.client;
     const target = try support.installTestingAttachmentProvider(client, 1, .claude);
-    const capture = try client.gpa.create(client_module.Capture);
+    const capture = try client.gpa.create(data.Capture);
     capture.* = .{
         .request = .{ .target = target, .sequence = 1, .marker_policy = .stable_number },
         .png = try client.gpa.dupe(u8, "png"),
@@ -156,7 +156,7 @@ test "Claude marker disappearance in a committed frame retires its paired previe
 const pi_test_path = "/var/folders/8x/abc/T/pi-clipboard-3f2a9c1e-7b4d-4e8f-9a0b-1c2d3e4f5a6b.png";
 
 fn adoptPiPreview(client: *client_module.AttachedClient, target: data.AttachmentTarget) !void {
-    const capture = try client.gpa.create(client_module.Capture);
+    const capture = try client.gpa.create(data.Capture);
     capture.* = .{
         .request = .{ .target = target, .sequence = 1, .marker_policy = .pasted_path },
         .png = try client.gpa.dupe(u8, "png"),
@@ -719,7 +719,7 @@ test "a held global scroll cannot move a newly focused pane or resume after retu
     const other = model.find(second).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 100, .offset = 100 };
     other.scroll = .{ .total_rows = @as(u32, other.buffer.h) + 100, .offset = 100 };
-    const binding = try client_module.config_model.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up });
+    const binding = try data.config_values.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up });
     TerminalClient.of(client).host_input.replaceRouter(client.io, try host_inputs.Router.init(&.{binding}));
     const repeated = "\x1b[45::45;3:2u";
 
@@ -797,7 +797,7 @@ test "held global scroll paces SGR reports without forwarding the binding chord"
     const client = harness.client;
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     pane.mouse = .{ .tracking = .normal, .sgr = true };
-    const binding = try client_module.config_model.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up });
+    const binding = try data.config_values.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up });
     TerminalClient.of(client).host_input.replaceRouter(client.io, try host_inputs.Router.init(&.{binding}));
     const version = client.model.version();
     const repeated = "\x1b[45::45;3:2u";
